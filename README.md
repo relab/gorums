@@ -20,8 +20,8 @@ implemented using Gorums can be found
 
 ### Documentation
 
-* [Student/user guide](https://github.com/relab/gorums-dev/blob/master/doc/userguide.md)
-* [Developer guide](https://github.com/relab/gorums-dev/blob/master/doc/devguide.md)
+* [Student/user guide](doc/userguide.md)
+* [Developer guide](doc/devguide.md)
 
 ### References
 
