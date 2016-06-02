@@ -53,10 +53,6 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-var (
-	byteArrayType = reflect.TypeOf([]byte{})
-)
-
 // Marshaler is a configurable object for converting between
 // protocol buffer objects and a JSON representation for them.
 type Marshaler struct {
@@ -233,12 +229,14 @@ func (m *Marshaler) marshalObject(out *errWriter, v proto.Message, indent, typeU
 	}
 
 	// Handle proto2 extensions.
-	if ep, ok := v.(extendableProto); ok {
+	if ep, ok := v.(proto.Message); ok {
 		extensions := proto.RegisteredExtensions(v)
-		extensionMap := ep.ExtensionMap()
 		// Sort extensions for stable output.
-		ids := make([]int32, 0, len(extensionMap))
-		for id := range extensionMap {
+		ids := make([]int32, 0, len(extensions))
+		for id, desc := range extensions {
+			if !proto.HasExtension(ep, desc) {
+				continue
+			}
 			ids = append(ids, id)
 		}
 		sort.Sort(int32Slice(ids))
@@ -372,7 +370,7 @@ func (m *Marshaler) marshalValue(out *errWriter, prop *proto.Properties, v refle
 	v = reflect.Indirect(v)
 
 	// Handle repeated elements.
-	if v.Type() != byteArrayType && v.Kind() == reflect.Slice {
+	if v.Kind() == reflect.Slice && v.Type().Elem().Kind() != reflect.Uint8 {
 		out.write("[")
 		comma := ""
 		for i := 0; i < v.Len(); i++ {
@@ -682,7 +680,7 @@ func unmarshalValue(target reflect.Value, inputValue json.RawMessage, prop *prot
 	}
 
 	// Handle arrays (which aren't encoded bytes)
-	if targetType != byteArrayType && targetType.Kind() == reflect.Slice {
+	if targetType.Kind() == reflect.Slice && targetType.Elem().Kind() != reflect.Uint8 {
 		var slc []json.RawMessage
 		if err := json.Unmarshal(inputValue, &slc); err != nil {
 			return err
@@ -765,13 +763,6 @@ func acceptedJSONFieldNames(prop *proto.Properties) fieldNames {
 		opts.camel = prop.JSONName
 	}
 	return opts
-}
-
-// extendableProto is an interface implemented by any protocol buffer that may be extended.
-type extendableProto interface {
-	proto.Message
-	ExtensionRangeArray() []proto.ExtensionRange
-	ExtensionMap() map[int32]proto.Extension
 }
 
 // Writer wrapper inspired by https://blog.golang.org/errors-are-values

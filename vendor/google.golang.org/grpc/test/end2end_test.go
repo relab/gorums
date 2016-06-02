@@ -130,6 +130,9 @@ func newPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error) {
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	md, ok := metadata.FromContext(ctx)
 	if ok {
+		if _, exists := md[":authority"]; !exists {
+			return nil, grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
+		}
 		if err := grpc.SendHeader(ctx, md); err != nil {
 			return nil, fmt.Errorf("grpc.SendHeader(%v, %v) = %v, want %v", ctx, md, err, nil)
 		}
@@ -167,6 +170,7 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	if err != nil {
 		return nil, err
 	}
+
 	return &testpb.SimpleResponse{
 		Payload: payload,
 	}, nil
@@ -174,8 +178,11 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 
 func (s *testServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
 	if md, ok := metadata.FromContext(stream.Context()); ok {
-		// For testing purpose, returns an error if there is attached metadata.
-		if len(md) > 0 {
+		if _, exists := md[":authority"]; !exists {
+			return grpc.Errorf(codes.DataLoss, "expected an :authority metadata: %v", md)
+		}
+		// For testing purpose, returns an error if there is attached metadata except for authority.
+		if len(md) > 1 {
 			return grpc.Errorf(codes.DataLoss, "got extra metadata")
 		}
 	}
@@ -1595,6 +1602,61 @@ func testExceedMaxStreamsLimit(t *testing.T, e env) {
 	}
 }
 
+func TestStreamsQuotaRecovery(t *testing.T) {
+	defer leakCheck(t)()
+	for _, e := range listTestEnv() {
+		testStreamsQuotaRecovery(t, e)
+	}
+}
+
+func testStreamsQuotaRecovery(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.declareLogNoise(
+		"http2Client.notifyError got notified that the client transport was broken",
+		"Conn.resetTransport failed to create client transport",
+		"grpc: the client connection is closing",
+	)
+	te.maxStream = 1 // Allows 1 live stream.
+	te.startServer()
+	defer te.tearDown()
+
+	cc := te.clientConn()
+	tc := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tc.StreamingInputCall(ctx); err != nil {
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
+	}
+	// Loop until the new max stream setting is effective.
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, err := tc.StreamingInputCall(ctx)
+		if err == nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		if grpc.Code(err) == codes.DeadlineExceeded {
+			break
+		}
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %d", tc, err, codes.DeadlineExceeded)
+	}
+	cancel()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithCancel(context.Background())
+			if _, err := tc.StreamingInputCall(ctx); err != nil {
+				t.Errorf("%v.StreamingInputCall(_) = _, %v, want _, <nil>", tc, err)
+			}
+			cancel()
+		}()
+	}
+	wg.Wait()
+}
+
 func TestCompressServerHasNoSupport(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
@@ -1621,8 +1683,8 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 		ResponseSize: proto.Int32(respSize),
 		Payload:      payload,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code %d", err, codes.InvalidArgument)
+	if _, err := tc.UnaryCall(context.Background(), req); err == nil || grpc.Code(err) != codes.Unimplemented {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code %d", err, codes.Unimplemented)
 	}
 	// Streaming RPC
 	stream, err := tc.FullDuplexCall(context.Background())
@@ -1646,8 +1708,8 @@ func testCompressServerHasNoSupport(t *testing.T, e env) {
 	if err := stream.Send(sreq); err != nil {
 		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
 	}
-	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.InvalidArgument {
-		t.Fatalf("%v.Recv() = %v, want error code %d", stream, err, codes.InvalidArgument)
+	if _, err := stream.Recv(); err == nil || grpc.Code(err) != codes.Unimplemented {
+		t.Fatalf("%v.Recv() = %v, want error code %d", stream, err, codes.Unimplemented)
 	}
 }
 
@@ -1678,7 +1740,8 @@ func testCompressOK(t *testing.T, e env) {
 		ResponseSize: proto.Int32(respSize),
 		Payload:      payload,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err != nil {
+	ctx := metadata.NewContext(context.Background(), metadata.Pairs("something", "something"))
+	if _, err := tc.UnaryCall(ctx, req); err != nil {
 		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, <nil>", err)
 	}
 	// Streaming RPC
@@ -1736,6 +1799,10 @@ func testUnaryServerInterceptor(t *testing.T, e env) {
 func TestStreamServerInterceptor(t *testing.T) {
 	defer leakCheck(t)()
 	for _, e := range listTestEnv() {
+		// TODO(bradfitz): Temporarily skip this env due to #619.
+		if e.name == "handler-tls" {
+			continue
+		}
 		testStreamServerInterceptor(t, e)
 	}
 }
@@ -1946,6 +2013,7 @@ func interestingGoroutines() (gs []string) {
 			strings.Contains(stack, "testing.Main(") ||
 			strings.Contains(stack, "runtime.goexit") ||
 			strings.Contains(stack, "created by runtime.gc") ||
+			strings.Contains(stack, "created by google3/base/go/log.init") ||
 			strings.Contains(stack, "interestingGoroutines") ||
 			strings.Contains(stack, "runtime.MHeap_Scavenger") ||
 			strings.Contains(stack, "signal.signal_recv") ||

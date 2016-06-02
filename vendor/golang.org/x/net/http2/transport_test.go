@@ -13,13 +13,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"reflect"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -50,6 +50,51 @@ func TestTransportExternal(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	res.Write(os.Stdout)
+}
+
+func startH2cServer(t *testing.T) net.Listener {
+	h2Server := &Server{}
+	l := newLocalListener(t)
+	go func() {
+		conn, err := l.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		h2Server.ServeConn(conn, &ServeConnOpts{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, "Hello, %v", r.URL.Path)
+		})})
+	}()
+	return l
+}
+
+func TestTransportH2c(t *testing.T) {
+	l := startH2cServer(t)
+	defer l.Close()
+	req, err := http.NewRequest("GET", "http://"+l.Addr().String()+"/foobar", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := &Transport{
+		AllowHTTP: true,
+		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+			return net.Dial(network, addr)
+		},
+	}
+	res, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ProtoMajor != 2 {
+		t.Fatal("proto not h2c")
+	}
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(body), "Hello, /foobar"; got != want {
+		t.Fatalf("response got %v, want %v", got, want)
+	}
 }
 
 func TestTransport(t *testing.T) {
@@ -101,6 +146,7 @@ func TestTransport(t *testing.T) {
 		t.Errorf("Body = %q; want %q", slurp, body)
 	}
 }
+
 func onSameConn(t *testing.T, modReq func(*http.Request)) bool {
 	st := newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, r.RemoteAddr)
@@ -740,7 +786,6 @@ func testTransportReqBodyAfterResponse(t *testing.T, status int) {
 				return fmt.Errorf("Unexpected client frame %v", f)
 			}
 		}
-		return nil
 	}
 	ct.run()
 }
@@ -762,12 +807,12 @@ func TestTransportFullDuplex(t *testing.T) {
 	pr, pw := io.Pipe()
 	req, err := http.NewRequest("PUT", st.ts.URL, ioutil.NopCloser(pr))
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	req.ContentLength = -1
 	res, err := c.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode != 200 {
@@ -1531,7 +1576,6 @@ func testTransportResponseHeaderTimeout(t *testing.T, body bool) {
 				}
 			}
 		}
-		return nil
 	}
 	ct.run()
 }
@@ -1666,6 +1710,68 @@ func TestTransportRejectsConnHeaders(t *testing.T) {
 	}
 }
 
+// golang.org/issue/14048
+func TestTransportFailsOnInvalidHeaders(t *testing.T) {
+	st := newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
+		var got []string
+		for k := range r.Header {
+			got = append(got, k)
+		}
+		sort.Strings(got)
+		w.Header().Set("Got-Header", strings.Join(got, ","))
+	}, optOnlyServer)
+	defer st.Close()
+
+	tests := [...]struct {
+		h       http.Header
+		wantErr string
+	}{
+		0: {
+			h:       http.Header{"with space": {"foo"}},
+			wantErr: `invalid HTTP header name "with space"`,
+		},
+		1: {
+			h:       http.Header{"name": {"Брэд"}},
+			wantErr: "", // okay
+		},
+		2: {
+			h:       http.Header{"имя": {"Brad"}},
+			wantErr: `invalid HTTP header name "имя"`,
+		},
+		3: {
+			h:       http.Header{"foo": {"foo\x01bar"}},
+			wantErr: `invalid HTTP header value "foo\x01bar" for header "foo"`,
+		},
+	}
+
+	tr := &Transport{TLSClientConfig: tlsConfigInsecure}
+	defer tr.CloseIdleConnections()
+
+	for i, tt := range tests {
+		req, _ := http.NewRequest("GET", st.ts.URL, nil)
+		req.Header = tt.h
+		res, err := tr.RoundTrip(req)
+		var bad bool
+		if tt.wantErr == "" {
+			if err != nil {
+				bad = true
+				t.Errorf("case %d: error = %v; want no error", i, err)
+			}
+		} else {
+			if !strings.Contains(fmt.Sprint(err), tt.wantErr) {
+				bad = true
+				t.Errorf("case %d: error = %v; want error %q", i, err, tt.wantErr)
+			}
+		}
+		if err == nil {
+			if bad {
+				t.Logf("case %d: server got headers %q", i, res.Header.Get("Got-Header"))
+			}
+			res.Body.Close()
+		}
+	}
+}
+
 // Tests that gzipReader doesn't crash on a second Read call following
 // the first Read call's gzip.NewReader returning an error.
 func TestGzipReader_DoubleReadCrash(t *testing.T) {
@@ -1796,7 +1902,57 @@ func TestTransportReadHeadResponse(t *testing.T) {
 			<-clientDone
 			return nil
 		}
-		return nil
 	}
 	ct.run()
+}
+
+type neverEnding byte
+
+func (b neverEnding) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = byte(b)
+	}
+	return len(p), nil
+}
+
+// golang.org/issue/15425: test that a handler closing the request
+// body doesn't terminate the stream to the peer. (It just stops
+// readability from the handler's side, and eventually the client
+// runs out of flow control tokens)
+func TestTransportHandlerBodyClose(t *testing.T) {
+	const bodySize = 10 << 20
+	st := newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
+		r.Body.Close()
+		io.Copy(w, io.LimitReader(neverEnding('A'), bodySize))
+	}, optOnlyServer)
+	defer st.Close()
+
+	tr := &Transport{TLSClientConfig: tlsConfigInsecure}
+	defer tr.CloseIdleConnections()
+
+	g0 := runtime.NumGoroutine()
+
+	const numReq = 10
+	for i := 0; i < numReq; i++ {
+		req, err := http.NewRequest("POST", st.ts.URL, struct{ io.Reader }{io.LimitReader(neverEnding('A'), bodySize)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := tr.RoundTrip(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		n, err := io.Copy(ioutil.Discard, res.Body)
+		res.Body.Close()
+		if n != bodySize || err != nil {
+			t.Fatalf("req#%d: Copy = %d, %v; want %d, nil", i, n, err, bodySize)
+		}
+	}
+	tr.CloseIdleConnections()
+
+	gd := runtime.NumGoroutine() - g0
+	if gd > numReq/2 {
+		t.Errorf("appeared to leak goroutines")
+	}
+
 }
