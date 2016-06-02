@@ -14,6 +14,8 @@ import (
 
 	rpc "github.com/relab/gorums/dev"
 
+	"golang.org/x/net/context"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -23,6 +25,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
 	grpclog.SetLogger(silentLogger)
+	grpc.EnableTracing = false
 	res := m.Run()
 	os.Exit(res)
 }
@@ -415,39 +418,135 @@ func TestManagerClose(t *testing.T) {
 	}
 }
 
-func BenchmarkRead1KLocal(b *testing.B)                { benchmarkRead(b, 1<<10, false, false, false) }
-func BenchmarkRead1KRemote(b *testing.B)               { benchmarkRead(b, 1<<10, false, false, true) }
-func BenchmarkRead1KParallelLocal(b *testing.B)        { benchmarkRead(b, 1<<10, true, false, false) }
-func BenchmarkRead1KParallelRemote(b *testing.B)       { benchmarkRead(b, 1<<10, true, false, true) }
-func BenchmarkRead1KFutureLocal(b *testing.B)          { benchmarkRead(b, 1<<10, false, true, false) }
-func BenchmarkRead1KFutureRemote(b *testing.B)         { benchmarkRead(b, 1<<10, false, true, true) }
-func BenchmarkRead1KFutureParallelLocal(b *testing.B)  { benchmarkRead(b, 1<<10, true, true, false) }
-func BenchmarkRead1KFutureParallelRemote(b *testing.B) { benchmarkRead(b, 1<<10, true, true, true) }
+///////////////////////////////////////////////////////////////
 
-func BenchmarkRead64KLocal(b *testing.B)                { benchmarkRead(b, 1<<16, false, false, false) }
-func BenchmarkRead64KRemote(b *testing.B)               { benchmarkRead(b, 1<<16, false, false, true) }
-func BenchmarkRead64KParallelLocal(b *testing.B)        { benchmarkRead(b, 1<<16, true, false, false) }
-func BenchmarkRead64KParallelRemote(b *testing.B)       { benchmarkRead(b, 1<<16, true, false, true) }
-func BenchmarkRead64KFutureLocal(b *testing.B)          { benchmarkRead(b, 1<<16, false, true, false) }
-func BenchmarkRead64KFutureRemote(b *testing.B)         { benchmarkRead(b, 1<<16, false, true, true) }
-func BenchmarkRead64KFutureParallelLocal(b *testing.B)  { benchmarkRead(b, 1<<16, true, true, false) }
-func BenchmarkRead64KFutureParallelRemote(b *testing.B) { benchmarkRead(b, 1<<16, true, true, true) }
+func BenchmarkRead1KQ1N3Local(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, false, false, false, false)
+}
+
+func BenchmarkRead1KQ1N3Remote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, false, false, false, true)
+}
+
+func BenchmarkRead1KQ1N3ParallelLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, false, true, false, false)
+}
+
+func BenchmarkRead1KQ1N3ParallelRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, false, true, false, true)
+}
+
+func BenchmarkRead1KQ1N3FutureLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, false, false, true, false)
+}
+
+func BenchmarkRead1KQ1N3FutureRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, false, false, true, true)
+}
+
+func BenchmarkRead1KQ1N3FutureParallelLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, false, true, true, false)
+}
+
+func BenchmarkRead1KQ1N3FutureParallelRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, false, true, true, true)
+}
+
+///////////////////////////////////////////////////////////////
+
+func BenchmarkRead1KQ2N3Local(b *testing.B) {
+	benchmarkRead(b, 1<<10, 2, false, false, false, false)
+}
+
+func BenchmarkRead1KQ2N3Remote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 2, false, false, false, true)
+}
+
+func BenchmarkRead1KQ2N3ParallelLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 2, false, true, false, false)
+}
+
+func BenchmarkRead1KQ2N3ParallelRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 2, false, true, false, true)
+}
+
+func BenchmarkRead1KQ2N3FutureLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 2, false, false, true, false)
+}
+
+func BenchmarkRead1KQ2N3FutureRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 2, false, false, true, true)
+}
+
+func BenchmarkRead1KQ2N3FutureParallelLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 2, false, true, true, false)
+}
+
+func BenchmarkRead1KQ2N3FutureParallelRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 2, false, true, true, true)
+}
+
+///////////////////////////////////////////////////////////////
+
+func BenchmarkRead1KQ1N1Local(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, true, false, false, false)
+}
+
+func BenchmarkRead1KQ1N1Remote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, true, false, false, true)
+}
+
+func BenchmarkRead1KQ1N1ParallelLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, true, true, false, false)
+}
+
+func BenchmarkRead1KQ1N1ParallelRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, true, true, false, true)
+}
+
+func BenchmarkRead1KQ1N1FutureLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, true, false, true, false)
+}
+
+func BenchmarkRead1KQ1N1FutureRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, true, false, true, true)
+}
+
+func BenchmarkRead1KQ1N1FutureParallelLocal(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, true, true, true, false)
+}
+
+func BenchmarkRead1KQ1N1FutureParallelRemote(b *testing.B) {
+	benchmarkRead(b, 1<<10, 1, true, true, true, true)
+}
+
+///////////////////////////////////////////////////////////////
 
 var replySink *rpc.ReadReply
 
-func benchmarkRead(b *testing.B, size int, parallel, future, remote bool) {
+func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote bool) {
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
 			{":8080", rpc.NewRegisterBench()},
-			{":8081", rpc.NewRegisterBench()},
-			{":8082", rpc.NewRegisterBench()},
+		}
+		if !single {
+			rservers = append(
+				rservers,
+				regServer{":8081", rpc.NewRegisterBench()},
+				regServer{":8082", rpc.NewRegisterBench()},
+			)
 		}
 	} else {
 		rservers = []regServer{
 			{"pitter31:8080", nil},
-			{"pitter32:8080", nil},
-			{"pitter33:8080", nil},
+		}
+		if !single {
+			rservers = append(
+				rservers,
+				regServer{"pitter32:8080", nil},
+				regServer{"pitter33:8080", nil},
+			)
 		}
 	}
 
@@ -471,12 +570,12 @@ func benchmarkRead(b *testing.B, size int, parallel, future, remote bool) {
 
 	ids := mgr.NodeIDs()
 
-	readConfig, err := mgr.NewConfiguration(ids, 1, timeout)
+	readConfig, err := mgr.NewConfiguration(ids, rq, timeout)
 	if err != nil {
 		b.Fatalf("error creating read config: %v", err)
 	}
 
-	writeConfig, err := mgr.NewConfiguration(ids, 3, timeout)
+	writeConfig, err := mgr.NewConfiguration(ids, len(rservers), timeout)
 	if err != nil {
 		b.Fatalf("error creating write config: %v", err)
 	}
@@ -534,6 +633,73 @@ func benchmarkRead(b *testing.B, size int, parallel, future, remote bool) {
 				if err != nil {
 					b.Fatalf("read future rpc call error: %v", err)
 				}
+			}
+		}
+	}
+}
+
+func BenchmarkRead1KGRPCLocal(b *testing.B)          { benchReadGRPC(b, 1<<10, false, false) }
+func BenchmarkRead1KGRPCRemote(b *testing.B)         { benchReadGRPC(b, 1<<10, false, true) }
+func BenchmarkRead1KGRPCParallelLocal(b *testing.B)  { benchReadGRPC(b, 1<<10, true, false) }
+func BenchmarkRead1KGRPCParallelRemote(b *testing.B) { benchReadGRPC(b, 1<<10, true, true) }
+
+var grpcReplySink *rpc.State
+
+func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
+	var rservers []regServer
+	if !remote {
+		rservers = []regServer{
+			{":8080", rpc.NewRegisterBench()},
+		}
+	} else {
+		rservers = []regServer{
+			{"pitter33:8080", nil},
+		}
+	}
+
+	servers, _, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	defer stopGrpcServe(allServers)
+
+	conn, err := grpc.Dial(servers.addrs()[0], grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
+	if err != nil {
+		b.Fatalf("grpc dial: %v", err)
+	}
+	closeListeners(allServers)
+
+	state := &rpc.State{
+		Value:     strings.Repeat("x", size),
+		Timestamp: time.Now().UnixNano(),
+	}
+
+	rclient := rpc.NewRegisterClient(conn)
+	ctx := context.Background()
+
+	reply, err := rclient.Write(ctx, state)
+	if err != nil {
+		b.Fatalf("write rpc call error: %v", err)
+	}
+	if !reply.New {
+		b.Fatalf("intital write reply was not marked as new")
+	}
+
+	b.SetBytes(int64(state.Size()))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	if parallel {
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				grpcReplySink, err = rclient.Read(ctx, &rpc.ReadRequest{})
+				if err != nil {
+					b.Fatalf("read rpc call error: %v", err)
+				}
+			}
+		})
+	} else {
+		for i := 0; i < b.N; i++ {
+			grpcReplySink, err = rclient.Read(ctx, &rpc.ReadRequest{})
+			if err != nil {
+				b.Fatalf("read rpc call error: %v", err)
 			}
 		}
 	}
