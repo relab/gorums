@@ -4,101 +4,92 @@
 		{
 			"importpath": "github.com/gogo/protobuf",
 			"repository": "https://github.com/gogo/protobuf",
-			"revision": "7883e1468d48d969e1c3ce4bcde89b6a7dd4adc4",
+			"vcs": "git",
+			"revision": "2752d97bbd91927dd1c43296dbf8700e50e2708c",
 			"branch": "master"
-		},
-		{
-			"importpath": "github.com/gogo/protobuf/proto/testdata",
-			"repository": "https://github.com/gogo/protobuf",
-			"revision": "7883e1468d48d969e1c3ce4bcde89b6a7dd4adc4",
-			"branch": "master",
-			"path": "/proto/testdata"
 		},
 		{
 			"importpath": "github.com/golang/glog",
 			"repository": "https://github.com/golang/glog",
+			"vcs": "git",
 			"revision": "23def4e6c14b4da8ac2ed8007337bc5eb5007998",
 			"branch": "master"
 		},
 		{
 			"importpath": "github.com/golang/protobuf",
 			"repository": "https://github.com/golang/protobuf",
-			"revision": "3b06fc7a4cad73efce5fe6217ab6c33e7231ab4a",
+			"vcs": "git",
+			"revision": "3852dcfda249c2097355a6aabb199a28d97b30df",
 			"branch": "master"
-		},
-		{
-			"importpath": "github.com/golang/protobuf/proto",
-			"repository": "https://github.com/golang/protobuf",
-			"revision": "3b06fc7a4cad73efce5fe6217ab6c33e7231ab4a",
-			"branch": "master",
-			"path": "/proto"
-		},
-		{
-			"importpath": "github.com/golang/protobuf/proto/testdata",
-			"repository": "https://github.com/golang/protobuf",
-			"revision": "3b06fc7a4cad73efce5fe6217ab6c33e7231ab4a",
-			"branch": "master",
-			"path": "/proto/testdata"
 		},
 		{
 			"importpath": "golang.org/x/net/context",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "c4c3ea71919de159c9e246d7be66deb7f0a39a58",
+			"vcs": "git",
+			"revision": "b400c2eff1badec7022a8c8f5bea058b6315eed7",
 			"branch": "master",
 			"path": "/context"
 		},
 		{
 			"importpath": "golang.org/x/net/http2",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "c4c3ea71919de159c9e246d7be66deb7f0a39a58",
+			"vcs": "git",
+			"revision": "b400c2eff1badec7022a8c8f5bea058b6315eed7",
 			"branch": "master",
 			"path": "/http2"
 		},
 		{
 			"importpath": "golang.org/x/net/internal/timeseries",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "c4c3ea71919de159c9e246d7be66deb7f0a39a58",
+			"vcs": "git",
+			"revision": "b400c2eff1badec7022a8c8f5bea058b6315eed7",
 			"branch": "master",
 			"path": "/internal/timeseries"
 		},
 		{
 			"importpath": "golang.org/x/net/lex/httplex",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "c4c3ea71919de159c9e246d7be66deb7f0a39a58",
+			"vcs": "git",
+			"revision": "b400c2eff1badec7022a8c8f5bea058b6315eed7",
 			"branch": "master",
 			"path": "/lex/httplex"
 		},
 		{
 			"importpath": "golang.org/x/net/trace",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "c4c3ea71919de159c9e246d7be66deb7f0a39a58",
+			"vcs": "git",
+			"revision": "b400c2eff1badec7022a8c8f5bea058b6315eed7",
 			"branch": "master",
 			"path": "/trace"
 		},
 		{
 			"importpath": "golang.org/x/oauth2",
 			"repository": "https://go.googlesource.com/oauth2",
-			"revision": "c406a4cc4ba462e5dc2f16225c5bd9488f9cbe10",
+			"vcs": "git",
+			"revision": "65a8d08c6292395d47053be10b3c5e91960def76",
 			"branch": "master"
 		},
 		{
 			"importpath": "google.golang.org/cloud/compute/metadata",
 			"repository": "https://code.googlesource.com/gocloud",
-			"revision": "1fbaa7ea974691031228bc481570e528b9404a80",
+			"vcs": "git",
+			"revision": "ebfe3819c9ab4acaf086ae57e4cbd7dee683baf0",
 			"branch": "master",
 			"path": "/compute/metadata"
 		},
 		{
 			"importpath": "google.golang.org/cloud/internal",
 			"repository": "https://code.googlesource.com/gocloud",
-			"revision": "1fbaa7ea974691031228bc481570e528b9404a80",
+			"vcs": "git",
+			"revision": "ebfe3819c9ab4acaf086ae57e4cbd7dee683baf0",
 			"branch": "master",
 			"path": "/internal"
 		},
 		{
 			"importpath": "google.golang.org/grpc",
 			"repository": "https://github.com/grpc/grpc-go",
-			"revision": "aecdccadd24d03e42d00ec82f6774a428fc63c30",
+			"vcs": "git",
+			"revision": "a0ff1e78a98cd140c2d18a0210ab0a2a183a2b4c",
 			"branch": "master"
 		}
 	]

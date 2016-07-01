@@ -73,6 +73,7 @@ type ServiceDesc struct {
 	HandlerType interface{}
 	Methods     []MethodDesc
 	Streams     []StreamDesc
+	Metadata    interface{}
 }
 
 // service consists of the information of the server serving this service and
@@ -81,6 +82,7 @@ type service struct {
 	server interface{} // the server for service methods
 	md     map[string]*MethodDesc
 	sd     map[string]*StreamDesc
+	mdata  interface{}
 }
 
 // Server is a gRPC server to serve RPC requests.
@@ -95,7 +97,7 @@ type Server struct {
 }
 
 type options struct {
-	creds                credentials.Credentials
+	creds                credentials.TransportCredentials
 	codec                Codec
 	cp                   Compressor
 	dc                   Decompressor
@@ -138,7 +140,7 @@ func MaxConcurrentStreams(n uint32) ServerOption {
 }
 
 // Creds returns a ServerOption that sets credentials for server connections.
-func Creds(c credentials.Credentials) ServerOption {
+func Creds(c credentials.TransportCredentials) ServerOption {
 	return func(o *options) {
 		o.creds = c
 	}
@@ -230,6 +232,7 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 		server: ss,
 		md:     make(map[string]*MethodDesc),
 		sd:     make(map[string]*StreamDesc),
+		mdata:  sd.Metadata,
 	}
 	for i := range sd.Methods {
 		d := &sd.Methods[i]
@@ -242,6 +245,35 @@ func (s *Server) register(sd *ServiceDesc, ss interface{}) {
 	s.m[sd.ServiceName] = srv
 }
 
+// ServiceInfo contains method names and metadata for a service.
+type ServiceInfo struct {
+	// Methods are method names only, without the service name or package name.
+	Methods []string
+	// Metadata is the metadata specified in ServiceDesc when registering service.
+	Metadata interface{}
+}
+
+// GetServiceInfo returns a map from service names to ServiceInfo.
+// Service names include the package names, in the form of <package>.<service>.
+func (s *Server) GetServiceInfo() map[string]*ServiceInfo {
+	ret := make(map[string]*ServiceInfo)
+	for n, srv := range s.m {
+		methods := make([]string, 0, len(srv.md)+len(srv.sd))
+		for m := range srv.md {
+			methods = append(methods, m)
+		}
+		for m := range srv.sd {
+			methods = append(methods, m)
+		}
+
+		ret[n] = &ServiceInfo{
+			Methods:  methods,
+			Metadata: srv.mdata,
+		}
+	}
+	return ret
+}
+
 var (
 	// ErrServerStopped indicates that the operation is now illegal because of
 	// the server being stopped.
@@ -249,11 +281,10 @@ var (
 )
 
 func (s *Server) useTransportAuthenticator(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	creds, ok := s.opts.creds.(credentials.TransportAuthenticator)
-	if !ok {
+	if s.opts.creds == nil {
 		return rawConn, nil, nil
 	}
-	return creds.ServerHandshake(rawConn)
+	return s.opts.creds.ServerHandshake(rawConn)
 }
 
 // Serve accepts incoming connections on the listener lis, creating a new

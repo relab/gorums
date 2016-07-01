@@ -1956,3 +1956,135 @@ func TestTransportHandlerBodyClose(t *testing.T) {
 	}
 
 }
+
+// https://golang.org/issue/15930
+func TestTransportFlowControl(t *testing.T) {
+	const (
+		total  = 100 << 20 // 100MB
+		bufLen = 1 << 16
+	)
+
+	var wrote int64 // updated atomically
+	st := newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
+		b := make([]byte, bufLen)
+		for wrote < total {
+			n, err := w.Write(b)
+			atomic.AddInt64(&wrote, int64(n))
+			if err != nil {
+				t.Errorf("ResponseWriter.Write error: %v", err)
+				break
+			}
+			w.(http.Flusher).Flush()
+		}
+	}, optOnlyServer)
+
+	tr := &Transport{TLSClientConfig: tlsConfigInsecure}
+	defer tr.CloseIdleConnections()
+	req, err := http.NewRequest("GET", st.ts.URL, nil)
+	if err != nil {
+		t.Fatal("NewRequest error:", err)
+	}
+	resp, err := tr.RoundTrip(req)
+	if err != nil {
+		t.Fatal("RoundTrip error:", err)
+	}
+	defer resp.Body.Close()
+
+	var read int64
+	b := make([]byte, bufLen)
+	for {
+		n, err := resp.Body.Read(b)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal("Read error:", err)
+		}
+		read += int64(n)
+
+		const max = transportDefaultStreamFlow
+		if w := atomic.LoadInt64(&wrote); -max > read-w || read-w > max {
+			t.Fatalf("Too much data inflight: server wrote %v bytes but client only received %v", w, read)
+		}
+
+		// Let the server get ahead of the client.
+		time.Sleep(1 * time.Millisecond)
+	}
+}
+
+// golang.org/issue/14627 -- if the server sends a GOAWAY frame, make
+// the Transport remember it and return it back to users (via
+// RoundTrip or request body reads) if needed (e.g. if the server
+// proceeds to close the TCP connection before the client gets its
+// response)
+func TestTransportUsesGoAwayDebugError_RoundTrip(t *testing.T) {
+	testTransportUsesGoAwayDebugError(t, false)
+}
+
+func TestTransportUsesGoAwayDebugError_Body(t *testing.T) {
+	testTransportUsesGoAwayDebugError(t, true)
+}
+
+func testTransportUsesGoAwayDebugError(t *testing.T, failMidBody bool) {
+	ct := newClientTester(t)
+	clientDone := make(chan struct{})
+
+	const goAwayErrCode = ErrCodeHTTP11Required // arbitrary
+	const goAwayDebugData = "some debug data"
+
+	ct.client = func() error {
+		defer close(clientDone)
+		req, _ := http.NewRequest("GET", "https://dummy.tld/", nil)
+		res, err := ct.tr.RoundTrip(req)
+		if failMidBody {
+			if err != nil {
+				return fmt.Errorf("unexpected client RoundTrip error: %v", err)
+			}
+			_, err = io.Copy(ioutil.Discard, res.Body)
+			res.Body.Close()
+		}
+		want := GoAwayError{
+			LastStreamID: 5,
+			ErrCode:      goAwayErrCode,
+			DebugData:    goAwayDebugData,
+		}
+		if !reflect.DeepEqual(err, want) {
+			t.Errorf("RoundTrip error = %T: %#v, want %T (%#T)", err, err, want, want)
+		}
+		return nil
+	}
+	ct.server = func() error {
+		ct.greet()
+		for {
+			f, err := ct.fr.ReadFrame()
+			if err != nil {
+				t.Logf("ReadFrame: %v", err)
+				return nil
+			}
+			hf, ok := f.(*HeadersFrame)
+			if !ok {
+				continue
+			}
+			if failMidBody {
+				var buf bytes.Buffer
+				enc := hpack.NewEncoder(&buf)
+				enc.WriteField(hpack.HeaderField{Name: ":status", Value: "200"})
+				enc.WriteField(hpack.HeaderField{Name: "content-length", Value: "123"})
+				ct.fr.WriteHeaders(HeadersFrameParam{
+					StreamID:      hf.StreamID,
+					EndHeaders:    true,
+					EndStream:     false,
+					BlockFragment: buf.Bytes(),
+				})
+			}
+			// Write two GOAWAY frames, to test that the Transport takes
+			// the interesting parts of both.
+			ct.fr.WriteGoAway(5, ErrCodeNo, []byte(goAwayDebugData))
+			ct.fr.WriteGoAway(5, goAwayErrCode, nil)
+			ct.sc.Close()
+			<-clientDone
+			return nil
+		}
+	}
+	ct.run()
+}
