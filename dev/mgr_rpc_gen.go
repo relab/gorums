@@ -10,33 +10,24 @@ import (
 )
 
 type readReply struct {
-	nid   int
+	nid   uint32
 	reply *State
 	err   error
 }
 
-func (m *Manager) read(cid int, args *ReadRequest) (*ReadReply, error) {
-	c, found := m.Configuration(cid)
-	if !found {
-		panic("exceptional: config not found")
-	}
-
+func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
 	var (
 		replyChan   = make(chan readReply, c.Size())
 		stopSignal  = make(chan struct{})
 		replyValues = make([]*State, 0, c.quorum)
 		errCount    int
 		quorum      bool
-		reply       = &ReadReply{NodeIDs: make([]int, 0, c.quorum)}
+		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.quorum)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
-	for _, nid := range c.nodes {
-		node, found := m.Node(nid)
-		if !found {
-			panic("execptional: node not found")
-		}
-		go func() {
+	for _, n := range c.nodes {
+		go func(node *Node) {
 			reply := new(State)
 			ce := make(chan error, 1)
 			start := time.Now()
@@ -65,7 +56,7 @@ func (m *Manager) read(cid int, args *ReadRequest) (*ReadReply, error) {
 			case <-stopSignal:
 				return
 			}
-		}()
+		}(n)
 	}
 
 	defer close(stopSignal)
@@ -115,33 +106,24 @@ func (m *Manager) read(cid int, args *ReadRequest) (*ReadReply, error) {
 }
 
 type writeReply struct {
-	nid   int
+	nid   uint32
 	reply *WriteResponse
 	err   error
 }
 
-func (m *Manager) write(cid int, args *State) (*WriteReply, error) {
-	c, found := m.Configuration(cid)
-	if !found {
-		panic("execptional: config not found")
-	}
-
+func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 	var (
 		replyChan   = make(chan writeReply, c.Size())
 		stopSignal  = make(chan struct{})
 		replyValues = make([]*WriteResponse, 0, c.quorum)
 		errCount    int
 		quorum      bool
-		reply       = &WriteReply{NodeIDs: make([]int, 0, c.quorum)}
+		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.quorum)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
-	for _, nid := range c.nodes {
-		node, found := m.Node(nid)
-		if !found {
-			panic("exceptional: node not found")
-		}
-		go func() {
+	for _, n := range c.nodes {
+		go func(node *Node) {
 			reply := new(WriteResponse)
 			ce := make(chan error, 1)
 			start := time.Now()
@@ -170,7 +152,7 @@ func (m *Manager) write(cid int, args *State) (*WriteReply, error) {
 			case <-stopSignal:
 				return
 			}
-		}()
+		}(n)
 	}
 
 	defer close(stopSignal)
@@ -200,15 +182,9 @@ func (m *Manager) write(cid int, args *State) (*WriteReply, error) {
 	}
 }
 
-func (m *Manager) writeAsync(cid int, args *State) error {
-	c, found := m.Configuration(cid)
-	if !found {
-		panic("execeptional: config not found")
-	}
-
-	for _, nid := range c.nodes {
-		// TODO: Only send if node.ConnState() == grpc.Connected?
-		go func(nodeID int) {
+func (m *Manager) writeAsync(c *Configuration, args *State) error {
+	for _, node := range c.nodes {
+		go func(nodeID uint32) {
 			stream := m.writeAsyncClients[nodeID]
 			if stream == nil {
 				panic("execeptional: node client stream not found")
@@ -220,7 +196,7 @@ func (m *Manager) writeAsync(cid int, args *State) error {
 			if m.logger != nil {
 				m.logger.Printf("%d: writeAsync stream send error: %v", nodeID, err)
 			}
-		}(nid)
+		}(node.id)
 	}
 
 	return nil

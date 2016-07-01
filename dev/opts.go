@@ -47,8 +47,8 @@ func WithSelfAddr(addr string) ManagerOption {
 // connect to the node with global id gid.  The node with the given
 // global id must be present in the list of node addresses provided to the
 // Manager.
-func WithSelfGid(gid uint32) ManagerOption {
+func WithSelfID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
-		o.selfGid = gid
+		o.selfID = id
 	}
 }

@@ -13,8 +13,7 @@ import (
 // can be made.
 type Node struct {
 	// Only assigned at creation.
-	id   int
-	gid  uint32
+	id   uint32
 	self bool
 	addr string
 	conn *grpc.ClientConn
@@ -33,14 +32,9 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 	return nil
 }
 
-// ID returns the local ID of m.
-func (n *Node) ID() int {
+// ID returns the ID of m.
+func (n *Node) ID() uint32 {
 	return n.id
-}
-
-// GlobalID returns the global id of m.
-func (n *Node) GlobalID() uint32 {
-	return n.gid
 }
 
 // Address returns network address of m.
@@ -52,8 +46,8 @@ func (n *Node) String() string {
 	n.Lock()
 	defer n.Unlock()
 	return fmt.Sprintf(
-		"node %d | gid: %d | addr: %s | latency: %v",
-		n.id, n.gid, n.addr, n.latency,
+		"node %d | addr: %s | latency: %v",
+		n.id, n.addr, n.latency,
 	)
 }
 
@@ -144,14 +138,9 @@ func (ms *MultiSorter) Less(i, j int) bool {
 	return ms.less[k](p, q)
 }
 
-// ID sorts nodes by their local identifier in increasing order.
+// ID sorts nodes by their identifier in increasing order.
 var ID = func(n1, n2 *Node) bool {
 	return n1.id < n2.id
-}
-
-// GlobalID sorts nodes by their global identifier in increasing order.
-var GlobalID = func(n1, n2 *Node) bool {
-	return n1.gid < n2.gid
 }
 
 // Latency sorts nodes by latency in increasing order. Latencies less then

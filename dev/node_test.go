@@ -10,26 +10,22 @@ import (
 func TestNodeSort(t *testing.T) {
 	nodes := []*Node{
 		{
-			id:      0,
-			gid:     100,
+			id:      100,
 			lastErr: nil,
 			latency: time.Second,
 		},
 		{
-			id:      3,
-			gid:     101,
+			id:      101,
 			lastErr: errors.New("some error"),
 			latency: 250 * time.Millisecond,
 		},
 		{
-			id:      2,
-			gid:     42,
+			id:      42,
 			lastErr: nil,
 			latency: 300 * time.Millisecond,
 		},
 		{
-			id:      5,
-			gid:     99,
+			id:      99,
 			lastErr: errors.New("some error"),
 			latency: 500 * time.Millisecond,
 		},
@@ -53,14 +49,6 @@ func TestNodeSort(t *testing.T) {
 		}
 	}
 
-	OrderedBy(GlobalID).Sort(nodes)
-	for i := n - 1; i > 0; i-- {
-		if nodes[i].gid < nodes[i-1].gid {
-			t.Error("by gid: not sorted")
-			printNodes(t, nodes)
-		}
-	}
-
 	OrderedBy(Error).Sort(nodes)
 	for i := n - 1; i > 0; i-- {
 		if nodes[i].lastErr == nil && nodes[i-1].lastErr != nil {
@@ -73,8 +61,8 @@ func TestNodeSort(t *testing.T) {
 func printNodes(t *testing.T, nodes []*Node) {
 	for i, n := range nodes {
 		nstr := fmt.Sprintf(
-			"%d: node %d | gid: %d | addr: %s | latency: %v | err: %v",
-			i, n.id, n.gid, n.addr, n.latency, n.lastErr)
+			"%d: node %d | addr: %s | latency: %v | err: %v",
+			i, n.id, n.addr, n.latency, n.lastErr)
 		t.Logf("%s", nstr)
 	}
 }

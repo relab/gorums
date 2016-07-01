@@ -36,9 +36,9 @@ func TestEqualGlobalConfigurationIDs(t *testing.T) {
 		t.Fatalf("error creating config two: %v", err)
 	}
 
-	if configOne.GlobalID() != configTwo.GlobalID() {
+	if configOne.ID() != configTwo.ID() {
 		t.Errorf("global configuration ids differ, %d != %d",
-			configOne.GlobalID(), configTwo.GlobalID())
+			configOne.ID(), configTwo.ID())
 	}
 }
 
@@ -62,11 +62,6 @@ func TestWithSelfAddrOption(t *testing.T) {
 		t.Errorf("got %d node ids from manager, want %d", len(ids), wantSize)
 	}
 
-	gids := mgr.NodeGlobalIDs()
-	if len(gids) != wantSize {
-		t.Errorf("got %d node ids from manager, want %d", len(ids), wantSize)
-	}
-
 	nodes := mgr.Nodes(false)
 	if len(nodes) != wantSize {
 		t.Errorf("got %d nodes from manager, want %d", len(nodes), wantSize)
@@ -87,13 +82,13 @@ func TestWithSelfAddrOption(t *testing.T) {
 func TestWithSelfGidOption(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
 	selfAddr := "localhost:8081"
-	selfGid, err := idutil.IDFromAddress(selfAddr)
+	selfID, err := idutil.IDFromAddress(selfAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantSize := len(addrs)
 
-	mgr, err := rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfGid(selfGid))
+	mgr, err := rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfID(selfID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,11 +103,6 @@ func TestWithSelfGidOption(t *testing.T) {
 		t.Errorf("got %d node ids from manager, want %d", len(ids), wantSize)
 	}
 
-	gids := mgr.NodeGlobalIDs()
-	if len(gids) != wantSize {
-		t.Errorf("got %d node gids from manager, want %d", len(gids), wantSize)
-	}
-
 	nodes := mgr.Nodes(false)
 	if len(nodes) != wantSize {
 		t.Errorf("got %d nodes from manager, want %d", len(nodes), wantSize)
@@ -123,10 +113,10 @@ func TestWithSelfGidOption(t *testing.T) {
 		t.Errorf("got %d nodes from manager, want %d", len(nodes), wantSize-1)
 	}
 
-	var notPresentGid uint32 = 42
-	_, err = rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfGid(notPresentGid))
+	var notPresentID uint32 = 42
+	_, err = rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfID(notPresentID))
 	if err == nil {
-		t.Error("got no manager creation error, want error due to invaild WithSelfGlobalID option")
+		t.Error("got no manager creation error, want error due to invaild WithSelfID option")
 	}
 }
 
@@ -142,7 +132,7 @@ func TestCreateConfiguration(t *testing.T) {
 		t.Errorf("got error creating configuration, want none (%v)", err)
 	}
 
-	cids := config.Nodes()
+	cids := config.NodeIDs()
 	if !equal(cids, ids) {
 		t.Errorf("ids from Manager (got %v) and ids from configuration containing all nodes (got %v) should be equal",
 			ids, cids)
@@ -157,12 +147,12 @@ func TestCreateConfiguration(t *testing.T) {
 func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
 	selfAddr := "localhost:8081"
-	selfGid, err := idutil.IDFromAddress(selfAddr)
+	selfID, err := idutil.IDFromAddress(selfAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	mgr, err := rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfGid(selfGid))
+	mgr, err := rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfID(selfID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +164,7 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 	}
 
 	nodes := mgr.Nodes(true)
-	var nids []int
+	var nids []uint32
 	for _, node := range nodes {
 		nids = append(nids, node.ID())
 	}
@@ -184,7 +174,7 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 		t.Errorf("got error creating configuration, want none (%v)", err)
 	}
 
-	cids := config.Nodes()
+	cids := config.NodeIDs()
 	if !equal(cids, nids) {
 		t.Errorf("ids from Manager (got %v) and ids from configuration containing all nodes (got %v) should be equal",
 			ids, cids)
@@ -196,7 +186,7 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 	}
 }
 
-func equal(a, b []int) bool {
+func equal(a, b []uint32) bool {
 	if len(a) != len(b) {
 		return false
 	}

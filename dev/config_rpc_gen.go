@@ -6,7 +6,7 @@ import "fmt"
 // It contains the id of each node in the quorum that replied and a single
 // reply.
 type ReadReply struct {
-	NodeIDs []int
+	NodeIDs []uint32
 	Reply   *State
 }
 
@@ -17,7 +17,7 @@ func (r ReadReply) String() string {
 // Read invokes a Read RPC on configuration c
 // and returns the result as a ReadReply.
 func (c *Configuration) Read(args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(c.id, args)
+	return c.mgr.read(c, args)
 }
 
 // ReadFuture is a reference to an asynchronous Read RPC invocation.
@@ -35,7 +35,7 @@ func (c *Configuration) ReadFuture(args *ReadRequest) *ReadFuture {
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.read(c.id, args)
+		f.reply, f.err = c.mgr.read(c, args)
 	}()
 	return f
 }
@@ -61,7 +61,7 @@ func (f *ReadFuture) Done() bool {
 // It contains the id of each node in the quorum that replied and a single
 // reply.
 type WriteReply struct {
-	NodeIDs []int
+	NodeIDs []uint32
 	Reply   *WriteResponse
 }
 
@@ -72,7 +72,7 @@ func (r WriteReply) String() string {
 // Write invokes a Write RPC on configuration c
 // and returns the result as a WriteReply.
 func (c *Configuration) Write(args *State) (*WriteReply, error) {
-	return c.mgr.write(c.id, args)
+	return c.mgr.write(c, args)
 }
 
 // WriteFuture is a reference to an asynchronous Write RPC invocation.
@@ -90,7 +90,7 @@ func (c *Configuration) WriteFuture(args *State) *WriteFuture {
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.write(c.id, args)
+		f.reply, f.err = c.mgr.write(c, args)
 	}()
 	return f
 }
@@ -116,5 +116,5 @@ func (f *WriteFuture) Done() bool {
 // The call has no return value and is invoked on every node in the
 // configuration.
 func (c *Configuration) WriteAsync(args *State) error {
-	return c.mgr.writeAsync(c.id, args)
+	return c.mgr.writeAsync(c, args)
 }

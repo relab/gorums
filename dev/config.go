@@ -8,27 +8,27 @@ import (
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	id      int
-	gid     uint32
-	nodes   []int
+	id      uint32
+	nodes   []*Node
 	mgr     *Manager
 	quorum  int
 	timeout time.Duration
 }
 
-// ID reports the local identifier for the configuration.
-func (c *Configuration) ID() int {
+// ID reports the identifier for the configuration.
+func (c *Configuration) ID() uint32 {
 	return c.id
 }
 
-// GlobalID reports the unique global identifier for the configuration.
-func (c *Configuration) GlobalID() uint32 {
-	return c.gid
-}
-
-// Nodes returns a slice containing the local ids of all the nodes in the
+// NodeIDs returns a slice containing the local ids of all the nodes in the
 // configuration.
-func (c *Configuration) Nodes() []int { return c.nodes }
+func (c *Configuration) NodeIDs() []uint32 {
+	ids := make([]uint32, len(c.nodes))
+	for i, node := range c.nodes {
+		ids[i] = node.ID()
+	}
+	return ids
+}
 
 // Quorum returns the quourm size for the configuration.
 func (c *Configuration) Quorum() int {
@@ -41,12 +41,12 @@ func (c *Configuration) Size() int {
 }
 
 func (c *Configuration) String() string {
-	return fmt.Sprintf("configuration %d | gid: %d", c.id, c.gid)
+	return fmt.Sprintf("configuration %d", c.id)
 }
 
 // Equal returns a boolean reporting whether a and b represents the same
 // configuration.
-func Equal(a, b *Configuration) bool { return a.gid == b.gid }
+func Equal(a, b *Configuration) bool { return a.id == b.id }
 
 // NewTestConfiguration returns a new configuration with quorum size q and
 // node size n. No other fields are set. Configurations returned from this
@@ -54,6 +54,6 @@ func Equal(a, b *Configuration) bool { return a.gid == b.gid }
 func NewTestConfiguration(q, n int) *Configuration {
 	return &Configuration{
 		quorum: q,
-		nodes:  make([]int, n),
+		nodes:  make([]*Node, n),
 	}
 }

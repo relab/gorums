@@ -12,7 +12,7 @@ type managerOptions struct {
 	logger       *log.Logger
 	noConnect    bool
 	selfAddr     string
-	selfGid      uint32
+	selfID       uint32
 
 	// Generated for each specific implementation
 	readqf  ReadQuorumFn

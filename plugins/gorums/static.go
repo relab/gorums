@@ -21,27 +21,27 @@ const staticResources = `
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	id	int
-	gid	uint32
-	nodes	[]int
+	id	uint32
+	nodes	[]*Node
 	mgr	*Manager
 	quorum	int
 	timeout	time.Duration
 }
 
-// ID reports the local identifier for the configuration.
-func (c *Configuration) ID() int {
+// ID reports the identifier for the configuration.
+func (c *Configuration) ID() uint32 {
 	return c.id
 }
 
-// GlobalID reports the unique global identifier for the configuration.
-func (c *Configuration) GlobalID() uint32 {
-	return c.gid
-}
-
-// Nodes returns a slice containing the local ids of all the nodes in the
+// NodeIDs returns a slice containing the local ids of all the nodes in the
 // configuration.
-func (c *Configuration) Nodes() []int	{ return c.nodes }
+func (c *Configuration) NodeIDs() []uint32 {
+	ids := make([]uint32, len(c.nodes))
+	for i, node := range c.nodes {
+		ids[i] = node.ID()
+	}
+	return ids
+}
 
 // Quorum returns the quourm size for the configuration.
 func (c *Configuration) Quorum() int {
@@ -54,12 +54,12 @@ func (c *Configuration) Size() int {
 }
 
 func (c *Configuration) String() string {
-	return fmt.Sprintf("configuration %d | gid: %d", c.id, c.gid)
+	return fmt.Sprintf("configuration %d", c.id)
 }
 
 // Equal returns a boolean reporting whether a and b represents the same
 // configuration.
-func Equal(a, b *Configuration) bool	{ return a.gid == b.gid }
+func Equal(a, b *Configuration) bool	{ return a.id == b.id }
 
 // NewTestConfiguration returns a new configuration with quorum size q and
 // node size n. No other fields are set. Configurations returned from this
@@ -67,7 +67,7 @@ func Equal(a, b *Configuration) bool	{ return a.gid == b.gid }
 func NewTestConfiguration(q, n int) *Configuration {
 	return &Configuration{
 		quorum:	q,
-		nodes:	make([]int, n),
+		nodes:	make([]*Node, n),
 	}
 }
 
@@ -136,46 +136,40 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		return nil, fmt.Errorf("could not create manager: no nodes provided")
 	}
 
-	m := new(Manager)
-	m.nodeGidToID = make(map[uint32]int)
-	m.configGidToID = make(map[uint32]int)
+	m := &Manager{
+		nodes:		make(map[uint32]*Node),
+		configs:	make(map[uint32]*Configuration),
+	}
 
 	for _, opt := range opts {
 		opt(&m.opts)
 	}
 
-	selfAddrIndex, selfGid, err := m.parseSelfOptions(nodeAddrs)
+	selfAddrIndex, selfID, err := m.parseSelfOptions(nodeAddrs)
 	if err != nil {
 		return nil, ManagerCreationError(err)
 	}
 
-	gidSeen := false
+	idSeen := false
 	for i, naddr := range nodeAddrs {
 		node, err2 := m.createNode(naddr)
 		if err2 != nil {
-			return nil, ManagerCreationError(err)
+			return nil, ManagerCreationError(err2)
 		}
-		m.nodes = append(m.nodes, node)
+		m.nodes[node.id] = node
 		if i == selfAddrIndex {
 			node.self = true
 			continue
 		}
-		if node.gid == selfGid {
+		if node.id == selfID {
 			node.self = true
-			gidSeen = true
+			idSeen = true
 		}
 	}
-	if selfGid != 0 && !gidSeen {
+	if selfID != 0 && !idSeen {
 		return nil, ManagerCreationError(
-			fmt.Errorf("WithSelfGid provided, but no node with gid %d found", selfGid),
+			fmt.Errorf("WithSelfID provided, but no node with id %d found", selfID),
 		)
-	}
-
-	OrderedBy(GlobalID).Sort(m.nodes)
-
-	for i, node := range m.nodes {
-		node.id = i
-		m.nodeGidToID[node.gid] = node.id
 	}
 
 	err = m.connectAll()
@@ -198,11 +192,11 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 }
 
 func (m *Manager) parseSelfOptions(addrs []string) (int, uint32, error) {
-	if m.opts.selfAddr != "" && m.opts.selfGid != 0 {
-		return 0, 0, fmt.Errorf("both WithSelfAddr and WithSelfGid provided")
+	if m.opts.selfAddr != "" && m.opts.selfID != 0 {
+		return 0, 0, fmt.Errorf("both WithSelfAddr and WithSelfID provided")
 	}
-	if m.opts.selfGid != 0 {
-		return -1, m.opts.selfGid, nil
+	if m.opts.selfID != 0 {
+		return -1, m.opts.selfID, nil
 	}
 	if m.opts.selfAddr == "" {
 		return -1, 0, nil
@@ -229,19 +223,17 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
-	gid := h.Sum32()
+	id := h.Sum32()
 
-	if _, nodeExists := m.nodeGidToID[gid]; nodeExists {
+	if _, found := m.nodes[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)
 	}
 
 	node := &Node{
-		gid:		gid,
+		id:		id,
 		addr:		tcpAddr.String(),
 		latency:	-1 * time.Second,
 	}
-
-	m.nodeGidToID[gid] = -1
 
 	return node, nil
 }
@@ -286,51 +278,23 @@ func (m *Manager) Close() {
 }
 
 // NodeIDs returns the identifier of each available node.
-func (m *Manager) NodeIDs() []int {
+func (m *Manager) NodeIDs() []uint32 {
 	m.RLock()
 	defer m.RUnlock()
-	ids := make([]int, len(m.nodes))
-	for i := range m.nodes {
-		ids[i] = i
+	ids := make([]uint32, 0, len(m.nodes))
+	for id := range m.nodes {
+		ids = append(ids, id)
 	}
+	sort.Sort(idSlice(ids))
 	return ids
 }
 
-// NodeGlobalIDs returns the global identifier of each available node.
-func (m *Manager) NodeGlobalIDs() []uint32 {
+// Node returns the node with the given identifier if present.
+func (m *Manager) Node(id uint32) (node *Node, found bool) {
 	m.RLock()
 	defer m.RUnlock()
-	gids := make([]uint32, len(m.nodeGidToID))
-	for gid, id := range m.nodeGidToID {
-		gids[id] = gid
-	}
-	return gids
-}
-
-// Node returns the node with the given local identifier if present.
-func (m *Manager) Node(id int) (node *Node, found bool) {
-	m.RLock()
-	defer m.RUnlock()
-	if id < 0 || id >= len(m.nodes) {
-		return nil, false
-	}
-	node = m.nodes[id]
-	if node == nil {
-		return nil, false
-	}
-	return node, true
-}
-
-// NodeFromGlobalID returns the node with the given global identifier if
-// present.
-func (m *Manager) NodeFromGlobalID(gid uint32) (node *Node, found bool) {
-	m.RLock()
-	defer m.RUnlock()
-	localID, found := m.nodeGidToID[gid]
-	if !found {
-		return nil, false
-	}
-	return m.Node(localID)
+	node, found = m.nodes[id]
+	return node, found
 }
 
 // Nodes returns a slice of each available node.
@@ -344,68 +308,41 @@ func (m *Manager) Nodes(excludeSelf bool) []*Node {
 		}
 		nodes = append(nodes, node)
 	}
+	OrderedBy(ID).Sort(nodes)
 	return nodes
 }
 
-// ConfigurationIDs returns the identifier of each available configuration.
-func (m *Manager) ConfigurationIDs() []int {
-	m.RLock()
-	defer m.RUnlock()
-	ids := make([]int, len(m.configs))
-	for i := range m.configs {
-		ids[i] = i
-	}
-	return ids
-}
-
-// ConfigurationGlobalIDs returns the global identifier of each available
+// ConfigurationDs returns the identifier of each available
 // configuration.
-func (m *Manager) ConfigurationGlobalIDs() []uint32 {
+func (m *Manager) ConfigurationIDs() []uint32 {
 	m.RLock()
 	defer m.RUnlock()
-	gids := make([]uint32, len(m.configGidToID))
-	for gid, id := range m.configGidToID {
-		gids[id] = gid
+	ids := make([]uint32, 0, len(m.configs))
+	for id := range m.configs {
+		ids = append(ids, id)
 	}
-	return gids
-}
-
-// Configuration returns the configuration with the given identifier if
-// present.
-func (m *Manager) Configuration(id int) (config *Configuration, found bool) {
-	m.RLock()
-	defer m.RUnlock()
-	if id < 0 || id >= len(m.configs) {
-		return nil, false
-	}
-	config = m.configs[id]
-	if config == nil {
-		return nil, false
-	}
-	return config, true
+	sort.Sort(idSlice(ids))
+	return ids
 }
 
 // ConfigurationFromGlobalID returns the configuration with the given global
 // identifier if present.
-func (m *Manager) ConfigurationFromGlobalID(gid uint32) (config *Configuration, found bool) {
+func (m *Manager) Configuration(id uint32) (config *Configuration, found bool) {
 	m.RLock()
 	defer m.RUnlock()
-	localID, found := m.configGidToID[gid]
-	if !found {
-		return nil, false
-	}
-	return m.Configuration(localID)
+	config, found = m.configs[id]
+	return config, found
 }
 
 // Configurations returns a slice of each available configuration.
 func (m *Manager) Configurations() []*Configuration {
 	m.RLock()
 	defer m.RUnlock()
-	cos := make([]*Configuration, len(m.configs))
-	for i := range m.configs {
-		cos[i] = m.configs[i]
+	configs := make([]*Configuration, 0, len(m.configs))
+	for _, conf := range m.configs {
+		configs = append(configs, conf)
 	}
-	return cos
+	return configs
 }
 
 // Size returns the number of nodes and configurations in the Manager.
@@ -424,7 +361,7 @@ func (m *Manager) AddNode(addr string) error {
 // NewConfiguration returns a new configuration given a set of node ids and
 // a quorum size. Any given gRPC call options will be used for every RPC
 // invocation on the configuration.
-func (m *Manager) NewConfiguration(ids []int, quorumSize int, timeout time.Duration) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, quorumSize int, timeout time.Duration) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -440,11 +377,8 @@ func (m *Manager) NewConfiguration(ids []int, quorumSize int, timeout time.Durat
 
 	var cnodes []*Node
 	for _, nid := range ids {
-		if nid < 0 || nid >= len(m.nodes) {
-			return nil, NodeNotFoundError(nid)
-		}
-		node := m.nodes[nid]
-		if node == nil {
+		node, found := m.nodes[nid]
+		if !found {
 			return nil, NodeNotFoundError(nid)
 		}
 		if node.self && m.selfSpecified() {
@@ -455,43 +389,43 @@ func (m *Manager) NewConfiguration(ids []int, quorumSize int, timeout time.Durat
 		cnodes = append(cnodes, node)
 	}
 
-	// Node ids are sorted by global id to
-	// ensure a globally consistent configuration id.
-	OrderedBy(GlobalID).Sort(cnodes)
+	// Node ids are sorted ensure a globally consistent configuration id.
+	OrderedBy(ID).Sort(cnodes)
 
 	h := fnv.New32a()
 	binary.Write(h, binary.LittleEndian, int64(quorumSize))
 	binary.Write(h, binary.LittleEndian, timeout)
 	for _, node := range cnodes {
-		binary.Write(h, binary.LittleEndian, node.gid)
+		binary.Write(h, binary.LittleEndian, node.id)
 	}
-	gcid := h.Sum32()
+	cid := h.Sum32()
 
-	cid, found := m.configGidToID[gcid]
+	conf, found := m.configs[cid]
 	if found {
-		if m.configs[cid] == nil {
-			panic(fmt.Sprintf("config with gcid %d and cid %d was nil", gcid, cid))
-		}
-		return m.configs[cid], nil
+		return conf, nil
 	}
-	cid = len(m.configs)
 
 	c := &Configuration{
 		id:		cid,
-		gid:		gcid,
-		nodes:		ids,
+		nodes:		cnodes,
 		mgr:		m,
 		quorum:		quorumSize,
 		timeout:	timeout,
 	}
-	m.configs = append(m.configs, c)
+	m.configs[cid] = c
 
 	return c, nil
 }
 
 func (m *Manager) selfSpecified() bool {
-	return m.opts.selfAddr != "" || m.opts.selfGid != 0
+	return m.opts.selfAddr != "" || m.opts.selfID != 0
 }
+
+type idSlice []uint32
+
+func (p idSlice) Len() int		{ return len(p) }
+func (p idSlice) Less(i, j int) bool	{ return p[i] < p[j] }
+func (p idSlice) Swap(i, j int)		{ p[i], p[j] = p[j], p[i] }
 
 /* node.go */
 
@@ -499,8 +433,7 @@ func (m *Manager) selfSpecified() bool {
 // can be made.
 type Node struct {
 	// Only assigned at creation.
-	id	int
-	gid	uint32
+	id	uint32
 	self	bool
 	addr	string
 	conn	*grpc.ClientConn
@@ -519,14 +452,9 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 	return nil
 }
 
-// ID returns the local ID of m.
-func (n *Node) ID() int {
+// ID returns the ID of m.
+func (n *Node) ID() uint32 {
 	return n.id
-}
-
-// GlobalID returns the global id of m.
-func (n *Node) GlobalID() uint32 {
-	return n.gid
 }
 
 // Address returns network address of m.
@@ -534,32 +462,12 @@ func (n *Node) Address() string {
 	return n.addr
 }
 
-// ConnState returns the state of the underlying gRPC client connection.
-func (n *Node) ConnState() (grpc.ConnectivityState, error) {
-	return n.conn.State()
-}
-
 func (n *Node) String() string {
 	n.Lock()
 	defer n.Unlock()
-	var connState string
-	if n.conn == nil {
-		connState = "nil"
-	} else {
-		cstate, err := n.conn.State()
-		if err != nil {
-			connState = err.Error()
-		} else {
-			connState = cstate.String()
-		}
-	}
 	return fmt.Sprintf(
-		"node %d | gid: %d | addr: %s | latency: %v | connstate: %v",
-		n.id,
-		n.gid,
-		n.addr,
-		n.latency,
-		connState,
+		"node %d | addr: %s | latency: %v",
+		n.id, n.addr, n.latency,
 	)
 }
 
@@ -650,14 +558,9 @@ func (ms *MultiSorter) Less(i, j int) bool {
 	return ms.less[k](p, q)
 }
 
-// ID sorts nodes by their local identifier in increasing order.
+// ID sorts nodes by their identifier in increasing order.
 var ID = func(n1, n2 *Node) bool {
 	return n1.id < n2.id
-}
-
-// GlobalID sorts nodes by their global identifier in increasing order.
-var GlobalID = func(n1, n2 *Node) bool {
-	return n1.gid < n2.gid
 }
 
 // Latency sorts nodes by latency in increasing order. Latencies less then
@@ -678,41 +581,6 @@ var Error = func(n1, n2 *Node) bool {
 	}
 	return true
 }
-
-// Connectivity sorts nodes by "best"/highest connectivity in increasing
-// order. The (gRPC) connectivity status is ranked as follows:
-// * Ready
-// * Connecting
-// * Idle
-// * TransientFailure
-// * Shutdown
-var Connectivity = func(n1, n2 *Node) bool {
-	n1State, n1Err := n1.conn.State()
-	n2State, n2Err := n2.conn.State()
-	switch {
-	case n1Err != nil && n2Err == nil:
-		return false
-	case n1Err != nil && n2Err != nil:
-		return true
-	case n1Err == nil && n2Err != nil:
-		return true
-	case n1State <= grpc.Ready && n2State <= grpc.Ready:
-		// Both are idle/connecting/ready.
-		return n1State < n2State
-	case n1State > grpc.Ready && n2State > grpc.Ready:
-		// Both are transient/shutdown.
-		return n1State > n2State
-	case n1State > grpc.Ready && n2State < grpc.Ready:
-		// n1 is transient/shutdown and n2 is idle/connecting/ready.
-		return true
-	default:
-		// n2 is transient/shutdown and n1 is idle/connecting/ready.
-		return false
-	}
-}
-
-// Temporary to suppress varcheck warning.
-var _ = Connectivity
 
 /* opts.go */
 
@@ -757,9 +625,9 @@ func WithSelfAddr(addr string) ManagerOption {
 // connect to the node with global id gid.  The node with the given
 // global id must be present in the list of node addresses provided to the
 // Manager.
-func WithSelfGid(gid uint32) ManagerOption {
+func WithSelfID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
-		o.selfGid = gid
+		o.selfID = id
 	}
 }
 
