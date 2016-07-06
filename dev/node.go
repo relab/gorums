@@ -48,32 +48,12 @@ func (n *Node) Address() string {
 	return n.addr
 }
 
-// ConnState returns the state of the underlying gRPC client connection.
-func (n *Node) ConnState() (grpc.ConnectivityState, error) {
-	return n.conn.State()
-}
-
 func (n *Node) String() string {
 	n.Lock()
 	defer n.Unlock()
-	var connState string
-	if n.conn == nil {
-		connState = "nil"
-	} else {
-		cstate, err := n.conn.State()
-		if err != nil {
-			connState = err.Error()
-		} else {
-			connState = cstate.String()
-		}
-	}
 	return fmt.Sprintf(
-		"node %d | gid: %d | addr: %s | latency: %v | connstate: %v",
-		n.id,
-		n.gid,
-		n.addr,
-		n.latency,
-		connState,
+		"node %d | gid: %d | addr: %s | latency: %v",
+		n.id, n.gid, n.addr, n.latency,
 	)
 }
 
@@ -192,38 +172,3 @@ var Error = func(n1, n2 *Node) bool {
 	}
 	return true
 }
-
-// Connectivity sorts nodes by "best"/highest connectivity in increasing
-// order. The (gRPC) connectivity status is ranked as follows:
-// * Ready
-// * Connecting
-// * Idle
-// * TransientFailure
-// * Shutdown
-var Connectivity = func(n1, n2 *Node) bool {
-	n1State, n1Err := n1.conn.State()
-	n2State, n2Err := n2.conn.State()
-	switch {
-	case n1Err != nil && n2Err == nil:
-		return false
-	case n1Err != nil && n2Err != nil:
-		return true
-	case n1Err == nil && n2Err != nil:
-		return true
-	case n1State <= grpc.Ready && n2State <= grpc.Ready:
-		// Both are idle/connecting/ready.
-		return n1State < n2State
-	case n1State > grpc.Ready && n2State > grpc.Ready:
-		// Both are transient/shutdown.
-		return n1State > n2State
-	case n1State > grpc.Ready && n2State < grpc.Ready:
-		// n1 is transient/shutdown and n2 is idle/connecting/ready.
-		return true
-	default:
-		// n2 is transient/shutdown and n1 is idle/connecting/ready.
-		return false
-	}
-}
-
-// Temporary to suppress varcheck warning.
-var _ = Connectivity
