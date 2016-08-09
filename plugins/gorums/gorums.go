@@ -142,20 +142,20 @@ func (g *gorums) embedStaticResources() {
 }
 
 type serviceMethod struct {
-	origName string
-	name     string
-	unexName string
-	rpcName  string
+	OrigName             string
+	MethodName           string
+	UnexportedMethodName string
+	rpcName              string
 
-	respName string
-	requName string
+	RespName string
+	ReqName  string
 
-	typeName     string
-	unexTypeName string
+	TypeName           string
+	UnexportedTypeName string
 
-	streaming bool
+	Streaming bool
 
-	servName string // Redundant, but keeps it simple.
+	ServName string // Redundant, but keeps it simple.
 }
 
 type smSlice []serviceMethod
@@ -163,14 +163,14 @@ type smSlice []serviceMethod
 func (p smSlice) Len() int      { return len(p) }
 func (p smSlice) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
 func (p smSlice) Less(i, j int) bool {
-	if p[i].servName < p[j].servName {
+	if p[i].ServName < p[j].ServName {
 		return true
-	} else if p[i].servName > p[j].servName {
+	} else if p[i].ServName > p[j].ServName {
 		return false
 	} else {
-		if p[i].origName < p[j].origName {
+		if p[i].OrigName < p[j].OrigName {
 			return true
-		} else if p[i].origName > p[j].origName {
+		} else if p[i].OrigName > p[j].OrigName {
 			return false
 		} else {
 			return false
@@ -189,27 +189,27 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) [
 			}
 
 			sm := serviceMethod{}
-			sm.origName = method.GetName()
-			sm.name = generator.CamelCase(sm.origName)
-			sm.rpcName = sm.name // sm.Name may be overwritten if method name conflict
-			sm.unexName = unexport(sm.name)
-			sm.respName = g.typeName(method.GetOutputType())
-			sm.requName = g.typeName(method.GetInputType())
-			sm.typeName = sm.name + "Reply"
-			sm.unexTypeName = unexport(sm.typeName)
-			sm.servName = service.GetName()
+			sm.OrigName = method.GetName()
+			sm.MethodName = generator.CamelCase(sm.OrigName)
+			sm.rpcName = sm.MethodName // sm.Name may be overwritten if method name conflict
+			sm.UnexportedMethodName = unexport(sm.MethodName)
+			sm.RespName = g.typeName(method.GetOutputType())
+			sm.ReqName = g.typeName(method.GetInputType())
+			sm.TypeName = sm.MethodName + "Reply"
+			sm.UnexportedTypeName = unexport(sm.TypeName)
+			sm.ServName = service.GetName()
 
-			if sm.typeName == sm.respName {
-				sm.typeName += "_"
+			if sm.TypeName == sm.RespName {
+				sm.TypeName += "_"
 			}
 
 			if method.GetClientStreaming() {
-				sm.streaming = true
+				sm.Streaming = true
 			}
 
-			methodsForName, _ := smethods[sm.name]
+			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, &sm)
-			smethods[sm.name] = methodsForName
+			smethods[sm.MethodName] = methodsForName
 		}
 	}
 
@@ -224,13 +224,13 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) [
 			continue
 		default:
 			for _, sm := range methodsForName {
-				sm.origName = sm.servName + sm.origName
-				sm.name = sm.servName + sm.name
-				sm.unexName = unexport(sm.name)
-				sm.typeName = sm.name + "Reply"
-				sm.unexTypeName = unexport(sm.typeName)
-				if sm.typeName == sm.respName {
-					sm.typeName += "_"
+				sm.OrigName = sm.ServName + sm.OrigName
+				sm.MethodName = sm.ServName + sm.MethodName
+				sm.UnexportedMethodName = unexport(sm.MethodName)
+				sm.TypeName = sm.MethodName + "Reply"
+				sm.UnexportedTypeName = unexport(sm.TypeName)
+				if sm.TypeName == sm.RespName {
+					sm.TypeName += "_"
 				}
 				allRewrittenFlat = append(allRewrittenFlat, *sm)
 			}
@@ -256,7 +256,7 @@ func (g *gorums) generateRPCConfig(smethods []serviceMethod) {
 	g.P("/* Configuration RPC specific */")
 	for _, method := range smethods {
 		g.P()
-		if method.streaming {
+		if method.Streaming {
 			g.generateConfigStreamMethod(method)
 		} else {
 			g.generateConfigReplyTypeAndMethod(method)
@@ -268,7 +268,7 @@ func (g *gorums) generateRPCMgr(pkgName string, smethods []serviceMethod) {
 	g.P()
 	g.P("/* Manager RPC specific */")
 	for _, method := range smethods {
-		if method.streaming {
+		if method.Streaming {
 			g.generateMgrStreamMethod(method)
 		} else {
 			g.generateMgrReplyTypeAndMethod(pkgName, method)
@@ -277,55 +277,55 @@ func (g *gorums) generateRPCMgr(pkgName string, smethods []serviceMethod) {
 }
 
 func (g *gorums) generateConfigReplyTypeAndMethod(sm serviceMethod) {
-	g.P("// ", sm.typeName, " encapsulates the reply from a ", sm.name, " RPC invocation.")
+	g.P("// ", sm.TypeName, " encapsulates the reply from a ", sm.MethodName, " RPC invocation.")
 	g.P("// It contains the id of each node in the quorum that replied and a single")
 	g.P("// reply.")
-	g.P("type ", sm.typeName, " struct {")
+	g.P("type ", sm.TypeName, " struct {")
 	g.P("NodeIDs []int")
-	g.P("Reply *", sm.respName)
+	g.P("Reply *", sm.RespName)
 	g.P("}")
 	g.P()
 
-	g.P("func (r ", sm.typeName, ") String() string {")
+	g.P("func (r ", sm.TypeName, ") String() string {")
 	g.P("return fmt.Sprintf(\"node ids: %v | answer: %v\", r.NodeIDs, r.Reply)")
 	g.P("}")
 	g.P()
 
-	g.P("// ", sm.typeName, " invokes a ", sm.name, " RPC on configuration c")
-	g.P("// and returns the result as a ", sm.typeName, ".")
-	g.P("func (c *Configuration) ", sm.name, "(args *", sm.requName, ") (*", sm.typeName, ", error) {")
-	g.P("return c.mgr.", sm.unexName, "(c.id, args)")
+	g.P("// ", sm.TypeName, " invokes a ", sm.MethodName, " RPC on configuration c")
+	g.P("// and returns the result as a ", sm.TypeName, ".")
+	g.P("func (c *Configuration) ", sm.MethodName, "(args *", sm.ReqName, ") (*", sm.TypeName, ", error) {")
+	g.P("return c.mgr.", sm.UnexportedMethodName, "(c.id, args)")
 	g.P("}")
 
-	g.P("// ", sm.name, "Future is a reference to an asynchronous ", sm.name, " RPC invocation.")
-	g.P("type ", sm.name, "Future struct {")
-	g.P("	reply *", sm.typeName)
+	g.P("// ", sm.MethodName, "Future is a reference to an asynchronous ", sm.MethodName, " RPC invocation.")
+	g.P("type ", sm.MethodName, "Future struct {")
+	g.P("	reply *", sm.TypeName)
 	g.P("	err   error")
 	g.P("	c     chan struct{}")
 	g.P("}")
 
-	g.P("// ", sm.name, "Future asynchronously invokes a ", sm.name, " RPC on configuration c and")
-	g.P("// returns a ", sm.name, "Future which can be used to inspect the RPC reply and error")
+	g.P("// ", sm.MethodName, "Future asynchronously invokes a ", sm.MethodName, " RPC on configuration c and")
+	g.P("// returns a ", sm.MethodName, "Future which can be used to inspect the RPC reply and error")
 	g.P("// when available.")
-	g.P("func (c *Configuration) ", sm.name, "Future(args *", sm.requName, ") *", sm.name, "Future {")
-	g.P("	f := new(", sm.name, "Future)")
+	g.P("func (c *Configuration) ", sm.MethodName, "Future(args *", sm.ReqName, ") *", sm.MethodName, "Future {")
+	g.P("	f := new(", sm.MethodName, "Future)")
 	g.P("	f.c = make(chan struct{}, 1)")
 	g.P("	go func() {")
 	g.P("		defer close(f.c)")
-	g.P("		f.reply, f.err = c.mgr.", sm.unexName, "(c.id, args)")
+	g.P("		f.reply, f.err = c.mgr.", sm.UnexportedMethodName, "(c.id, args)")
 	g.P("	}()")
 	g.P("	return f")
 	g.P("}")
 
-	g.P("// Get returns the reply and any error associated with the ", sm.name, "Future.")
+	g.P("// Get returns the reply and any error associated with the ", sm.MethodName, "Future.")
 	g.P("// The method blocks until a reply or error is available.")
-	g.P("func (f *", sm.name, "Future) Get() (*", sm.typeName, ", error) {")
+	g.P("func (f *", sm.MethodName, "Future) Get() (*", sm.TypeName, ", error) {")
 	g.P("	<-f.c")
 	g.P("	return f.reply, f.err")
 	g.P("}")
 
-	g.P("// Done reports if a reply or error is available for the ", sm.name, "Future.")
-	g.P("func (f *", sm.name, "Future) Done() bool {")
+	g.P("// Done reports if a reply or error is available for the ", sm.MethodName, "Future.")
+	g.P("func (f *", sm.MethodName, "Future) Done() bool {")
 	g.P("select {")
 	g.P("case <-f.c:")
 	g.P("return true")
@@ -337,24 +337,24 @@ func (g *gorums) generateConfigReplyTypeAndMethod(sm serviceMethod) {
 
 func (g *gorums) generateConfigStreamMethod(sm serviceMethod) {
 	g.P()
-	g.P("// ", sm.name, "invokes an asynchronous ", sm.name, " RPC on configuration c.")
+	g.P("// ", sm.MethodName, "invokes an asynchronous ", sm.MethodName, " RPC on configuration c.")
 	g.P("// The call has no return value and is invoked on every node in the")
 	g.P("// configuration.")
-	g.P("func (c *Configuration) ", sm.name, "(args *", sm.requName, ") error {")
-	g.P("return c.mgr.", sm.unexName, "(c.id, args)")
+	g.P("func (c *Configuration) ", sm.MethodName, "(args *", sm.ReqName, ") error {")
+	g.P("return c.mgr.", sm.UnexportedMethodName, "(c.id, args)")
 	g.P("}")
 }
 
 func (g *gorums) generateMgrReplyTypeAndMethod(pkgName string, sm serviceMethod) {
 	g.P()
-	g.P("type ", sm.unexTypeName, " struct {")
+	g.P("type ", sm.UnexportedTypeName, " struct {")
 	g.P("nid int")
-	g.P("reply *", sm.respName)
+	g.P("reply *", sm.RespName)
 	g.P("err error")
 	g.P("}")
 
 	g.P()
-	g.P("func (m *Manager) ", sm.unexName, "(cid int, args *", sm.requName, ") (*", sm.typeName, ", error) {")
+	g.P("func (m *Manager) ", sm.UnexportedMethodName, "(cid int, args *", sm.ReqName, ") (*", sm.TypeName, ", error) {")
 	g.P("c, found := m.Configuration(cid)")
 	g.P("if !found {")
 	g.P("panic(\"execptional: config not found\")")
@@ -362,12 +362,12 @@ func (g *gorums) generateMgrReplyTypeAndMethod(pkgName string, sm serviceMethod)
 	g.P()
 
 	g.P("var (")
-	g.P("replyChan = make(chan ", sm.unexTypeName, ", c.Size())")
+	g.P("replyChan = make(chan ", sm.UnexportedTypeName, ", c.Size())")
 	g.P("stopSignal  = make(chan struct{})")
-	g.P("replyValues = make([]*", sm.respName, ", 0, c.quorum)")
+	g.P("replyValues = make([]*", sm.RespName, ", 0, c.quorum)")
 	g.P("errCount int")
 	g.P("quorum bool")
-	g.P("reply = &", sm.typeName, "{NodeIDs: make([]int, 0, c.quorum)}")
+	g.P("reply = &", sm.TypeName, "{NodeIDs: make([]int, 0, c.quorum)}")
 	g.P("ctx, cancel = context.WithCancel(context.Background())")
 	g.P(")")
 	g.P()
@@ -378,14 +378,14 @@ func (g *gorums) generateMgrReplyTypeAndMethod(pkgName string, sm serviceMethod)
 	g.P("panic(\"exceptional: node not found\")")
 	g.P("}")
 	g.P("go func() {")
-	g.P("reply := new(", sm.respName, ")")
+	g.P("reply := new(", sm.RespName, ")")
 	g.P("ce := make(chan error, 1)")
 	g.P("start := time.Now()")
 	g.P("go func() {")
 	g.P("select {")
 	g.P("case ce <- grpc.Invoke(")
 	g.P("ctx,")
-	g.P("\"/", pkgName, ".", sm.servName, "/", sm.rpcName, "\",")
+	g.P("\"/", pkgName, ".", sm.ServName, "/", sm.rpcName, "\",")
 	g.P("args,")
 	g.P("reply,")
 	g.P("node.conn,")
@@ -402,7 +402,7 @@ func (g *gorums) generateMgrReplyTypeAndMethod(pkgName string, sm serviceMethod)
 	g.P("default:")
 	g.P("node.setLastErr(err)")
 	g.P("}")
-	g.P("replyChan <- ", sm.unexTypeName, "{node.id, reply, err}")
+	g.P("replyChan <- ", sm.UnexportedTypeName, "{node.id, reply, err}")
 	g.P("case <-stopSignal:")
 	g.P("return")
 	g.P("}")
@@ -425,7 +425,7 @@ func (g *gorums) generateMgrReplyTypeAndMethod(pkgName string, sm serviceMethod)
 	g.P()
 	g.P("replyValues = append(replyValues, r.reply)")
 	g.P("reply.NodeIDs = append(reply.NodeIDs, r.nid)")
-	g.P("if reply.Reply, quorum = m.", sm.unexName, "qf(c, replyValues); quorum {")
+	g.P("if reply.Reply, quorum = m.", sm.UnexportedMethodName, "qf(c, replyValues); quorum {")
 	g.P("return reply, nil")
 	g.P("}")
 	g.P("case <-time.After(c.timeout):")
@@ -442,7 +442,7 @@ func (g *gorums) generateMgrReplyTypeAndMethod(pkgName string, sm serviceMethod)
 }
 
 func (g *gorums) generateMgrStreamMethod(sm serviceMethod) {
-	g.P("func (m *Manager) ", sm.unexName, "(cid int, args *", sm.requName, ") error {")
+	g.P("func (m *Manager) ", sm.UnexportedMethodName, "(cid int, args *", sm.ReqName, ") error {")
 	g.P("c, found := m.Configuration(cid)")
 	g.P("if !found {")
 	g.P("panic(\"execeptional: config not found\")")
@@ -450,7 +450,7 @@ func (g *gorums) generateMgrStreamMethod(sm serviceMethod) {
 	g.P()
 	g.P("for _, nid := range c.nodes {")
 	g.P("go func(nodeID int) {")
-	g.P("stream := m.", sm.unexName, "Clients[nodeID]")
+	g.P("stream := m.", sm.UnexportedMethodName, "Clients[nodeID]")
 	g.P("if stream == nil {")
 	g.P("panic(\"execeptional: node client stream not found\")")
 	g.P("}")
@@ -459,7 +459,7 @@ func (g *gorums) generateMgrStreamMethod(sm serviceMethod) {
 	g.P("return")
 	g.P("}")
 	g.P("if m.logger != nil {")
-	g.P("m.logger.Printf(\"node %d: ", sm.unexName, " stream send error: %v\", nodeID, err)")
+	g.P("m.logger.Printf(\"node %d: ", sm.UnexportedMethodName, " stream send error: %v\", nodeID, err)")
 	g.P("}")
 	g.P("}(nid)")
 	g.P("}")
@@ -483,7 +483,7 @@ func (g *gorums) generateMgrTypeRelated(smethods []serviceMethod) {
 	g.generateMgrOptions(smethods)
 
 	for _, method := range smethods {
-		if method.streaming {
+		if method.Streaming {
 			continue
 		}
 		g.P()
@@ -507,17 +507,17 @@ func (g *gorums) generateMgrStruct(sms []serviceMethod) {
 	g.P("opts managerOptions")
 	g.P()
 	for _, sm := range sms {
-		if sm.streaming {
+		if sm.Streaming {
 			continue
 		}
-		g.P(sm.unexName, "qf ", sm.name, "QuorumFn")
+		g.P(sm.UnexportedMethodName, "qf ", sm.MethodName, "QuorumFn")
 	}
 	g.P()
 	for _, sm := range sms {
-		if !sm.streaming {
+		if !sm.Streaming {
 			continue
 		}
-		g.P(sm.unexName, "Clients []", sm.servName, "_", sm.name, "Client")
+		g.P(sm.UnexportedMethodName, "Clients []", sm.ServName, "_", sm.MethodName, "Client")
 	}
 	g.P("}")
 }
@@ -526,13 +526,13 @@ func (g *gorums) generateMgrSetDefaultQFuncs(sms []serviceMethod) {
 	g.P()
 	g.P("func (m *Manager) setDefaultQuorumFuncs() {")
 	for _, sm := range sms {
-		if sm.streaming {
+		if sm.Streaming {
 			continue
 		}
-		g.P("if m.opts.", sm.unexName, "qf != nil {")
-		g.P("m.", sm.unexName, "qf = m.opts.", sm.unexName, "qf")
+		g.P("if m.opts.", sm.UnexportedMethodName, "qf != nil {")
+		g.P("m.", sm.UnexportedMethodName, "qf = m.opts.", sm.UnexportedMethodName, "qf")
 		g.P("} else {")
-		g.P("m.", sm.unexName, "qf = func(c *Configuration, replies []*", sm.respName, ") (*", sm.respName, ", bool) {")
+		g.P("m.", sm.UnexportedMethodName, "qf = func(c *Configuration, replies []*", sm.RespName, ") (*", sm.RespName, ", bool) {")
 		g.P("if len(replies) < c.Quorum() {")
 		g.P("return nil, false")
 		g.P("}")
@@ -551,20 +551,20 @@ func (g *gorums) generateMgrCreateStreams(sms []serviceMethod) {
 	g.P("}")
 	g.P()
 	for _, sm := range sms {
-		if !sm.streaming {
+		if !sm.Streaming {
 			continue
 		}
 		g.P("for _, node := range m.nodes {")
 		g.P("if node.self {")
-		g.P("m.", sm.unexName, "Clients = append(m.", sm.unexName, "Clients, nil)")
+		g.P("m.", sm.UnexportedMethodName, "Clients = append(m.", sm.UnexportedMethodName, "Clients, nil)")
 		g.P("continue")
 		g.P("}")
-		g.P("client := New", sm.servName, "Client(node.conn)")
-		g.P(sm.unexName, "Client, err := client.", sm.name, "(context.Background())")
+		g.P("client := New", sm.ServName, "Client(node.conn)")
+		g.P(sm.UnexportedMethodName, "Client, err := client.", sm.MethodName, "(context.Background())")
 		g.P("if err != nil {")
 		g.P("return err")
 		g.P("}")
-		g.P("m.", sm.unexName, "Clients = append(m.", sm.unexName, "Clients, ", sm.unexName, "Client)")
+		g.P("m.", sm.UnexportedMethodName, "Clients = append(m.", sm.UnexportedMethodName, "Clients, ", sm.UnexportedMethodName, "Client)")
 		g.P("}")
 	}
 	g.P()
@@ -580,16 +580,16 @@ func (g *gorums) generateMgrCloseStreams(sms []serviceMethod) {
 	g.P("}")
 	g.P()
 	for _, sm := range sms {
-		if !sm.streaming {
+		if !sm.Streaming {
 			continue
 		}
-		g.P("for i, client := range m.", sm.unexName, "Clients {")
+		g.P("for i, client := range m.", sm.UnexportedMethodName, "Clients {")
 		g.P("_, err := client.CloseAndRecv()")
 		g.P("if err == nil {")
 		g.P("continue")
 		g.P("}")
 		g.P("if m.logger != nil {")
-		g.P("m.logger.Printf(\"node %d: error closing ", sm.unexName, " client: %v\", i, err)")
+		g.P("m.logger.Printf(\"node %d: error closing ", sm.UnexportedMethodName, " client: %v\", i, err)")
 		g.P("}")
 		g.P("}")
 	}
@@ -598,11 +598,11 @@ func (g *gorums) generateMgrCloseStreams(sms []serviceMethod) {
 
 func (g *gorums) generateQuorumFunctionType(sm serviceMethod) {
 	g.P()
-	g.P("// ", sm.name, "QuorumFn is used to pick a reply from the replies if there is a quorum.")
+	g.P("// ", sm.MethodName, "QuorumFn is used to pick a reply from the replies if there is a quorum.")
 	g.P("// If there was not enough replies to satisfy the quorum requirement,")
 	g.P("// then the function returns (nil, false). Otherwise, the function picks a")
 	g.P("// reply among the replies and returns (reply, true).")
-	g.P("type ", sm.name, "QuorumFn func(c *Configuration, replies []*", sm.respName, ") (*", sm.respName, ", bool)")
+	g.P("type ", sm.MethodName, "QuorumFn func(c *Configuration, replies []*", sm.RespName, ") (*", sm.RespName, ", bool)")
 }
 
 func (g *gorums) generateMgrOptions(sms []serviceMethod) {
@@ -615,22 +615,22 @@ func (g *gorums) generateMgrOptions(sms []serviceMethod) {
 	g.P("selfGid uint32")
 	g.P()
 	for _, sm := range sms {
-		if sm.streaming {
+		if sm.Streaming {
 			continue
 		}
-		g.P(sm.unexName, "qf ", sm.name, "QuorumFn")
+		g.P(sm.UnexportedMethodName, "qf ", sm.MethodName, "QuorumFn")
 	}
 	g.P("}")
 	g.P()
 	for _, sm := range sms {
-		if sm.streaming {
+		if sm.Streaming {
 			continue
 		}
-		g.P("// With", sm.name, "QuorumFunc returns a ManagerOption that sets a cumstom")
-		g.P("// ", sm.name, "QuorumFunc.")
-		g.P("func With", sm.name, "QuorumFunc(f ", sm.name, "QuorumFn) ManagerOption {")
+		g.P("// With", sm.MethodName, "QuorumFunc returns a ManagerOption that sets a cumstom")
+		g.P("// ", sm.MethodName, "QuorumFunc.")
+		g.P("func With", sm.MethodName, "QuorumFunc(f ", sm.MethodName, "QuorumFn) ManagerOption {")
 		g.P("return func(o *managerOptions) {")
-		g.P("o.", sm.unexName, "qf = f")
+		g.P("o.", sm.UnexportedMethodName, "qf = f")
 		g.P("}")
 		g.P("}")
 	}
