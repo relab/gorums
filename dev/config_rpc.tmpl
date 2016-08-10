@@ -1,0 +1,75 @@
+{{/* Remember to run 'go generate' after editing this file. */}}
+package {{.PackageName}}
+
+import "fmt"
+
+{{range $elm := .Services}}
+
+{{if .Streaming}}
+
+// {{.MethodName}} invokes an asynchronous {{.MethodName}} RPC on configuration c.
+// The call has no return value and is invoked on every node in the
+// configuration.
+func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) error {
+	return c.mgr.{{.UnexportedMethodName}}(c.id, args)
+}
+
+{{else -}}
+
+// {{.TypeName}} encapsulates the reply from a {{.MethodName}} RPC invocation.
+// It contains the id of each node in the quorum that replied and a single
+// reply.
+type {{.TypeName}} struct {
+	NodeIDs []int
+	Reply   *{{.RespName}}
+}
+
+func (r {{.TypeName}}) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+}
+
+// {{.MethodName}} invokes a {{.MethodName}} RPC on configuration c
+// and returns the result as a {{.TypeName}}.
+func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(c.id, args)
+}
+
+// {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} RPC invocation.
+type {{.MethodName}}Future struct {
+	reply *{{.TypeName}}
+	err   error
+	c     chan struct{}
+}
+
+// {{.MethodName}}Future asynchronously invokes a {{.MethodName}} RPC on configuration c and
+// returns a {{.MethodName}}Future which can be used to inspect the RPC reply and error
+// when available.
+func (c *Configuration) {{.MethodName}}Future(args *{{.ReqName}}) *{{.MethodName}}Future {
+	f := new({{.MethodName}}Future)
+	f.c = make(chan struct{}, 1)
+	go func() {
+		defer close(f.c)
+		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(c.id, args)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the {{.MethodName}}Future.
+// The method blocks until a reply or error is available.
+func (f *{{.MethodName}}Future) Get() (*{{.TypeName}}, error) {
+	<-f.c
+	return f.reply, f.err
+}
+
+// Done reports if a reply or error is available for the {{.MethodName}}Future.
+func (f *{{.MethodName}}Future) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
+{{- end -}}
+{{- end -}}
