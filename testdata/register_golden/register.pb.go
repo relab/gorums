@@ -779,9 +779,10 @@ func (m *Manager) writeAsync(cid int, args *State) error {
 type Configuration struct {
 	id      uint32
 	nodes   []*Node
+	n       int
 	mgr     *Manager
-	quorum  int
 	timeout time.Duration
+	qspec   QuorumSpec
 }
 
 // ID reports the identifier for the configuration.
@@ -799,14 +800,9 @@ func (c *Configuration) NodeIDs() []uint32 {
 	return ids
 }
 
-// Quorum returns the quourm size for the configuration.
-func (c *Configuration) Quorum() int {
-	return c.quorum
-}
-
 // Size returns the number of nodes in the configuration.
 func (c *Configuration) Size() int {
-	return len(c.nodes)
+	return c.n
 }
 
 func (c *Configuration) String() string {
@@ -822,8 +818,7 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 // constructor should only be used when testing quorum functions.
 func NewTestConfiguration(q, n int) *Configuration {
 	return &Configuration{
-		quorum: q,
-		nodes:  make([]*Node, n),
+		nodes: make([]*Node, n),
 	}
 }
 
@@ -941,8 +936,6 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	if m.opts.logger != nil {
 		m.logger = m.opts.logger
 	}
-
-	m.setDefaultQuorumFuncs()
 
 	return m, nil
 }
@@ -1114,18 +1107,15 @@ func (m *Manager) AddNode(addr string) error {
 	panic("not implemented")
 }
 
-// NewConfiguration returns a new configuration given a set of node ids and
-// a quorum size. Any given gRPC call options will be used for every RPC
-// invocation on the configuration.
-func (m *Manager) NewConfiguration(ids []uint32, quorumSize int, timeout time.Duration) (*Configuration, error) {
+// NewConfiguration returns a new configuration given quorum specification and
+// a timeout.
+func (m *Manager) NewConfiguration(qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
+	ids := qspec.IDs()
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
-	}
-	if quorumSize > len(ids) || quorumSize < 1 {
-		return nil, IllegalConfigError("invalid quourm size")
 	}
 	if timeout <= 0 {
 		return nil, IllegalConfigError("timeout must be positive")
@@ -1149,7 +1139,6 @@ func (m *Manager) NewConfiguration(ids []uint32, quorumSize int, timeout time.Du
 	OrderedBy(ID).Sort(cnodes)
 
 	h := fnv.New32a()
-	binary.Write(h, binary.LittleEndian, int64(quorumSize))
 	binary.Write(h, binary.LittleEndian, timeout)
 	for _, node := range cnodes {
 		binary.Write(h, binary.LittleEndian, node.id)
@@ -1164,8 +1153,9 @@ func (m *Manager) NewConfiguration(ids []uint32, quorumSize int, timeout time.Du
 	c := &Configuration{
 		id:      cid,
 		nodes:   cnodes,
+		n:       len(cnodes),
 		mgr:     m,
-		quorum:  quorumSize,
+		qspec:   qspec,
 		timeout: timeout,
 	}
 	m.configs[cid] = c
@@ -1339,6 +1329,15 @@ var Error = func(n1, n2 *Node) bool {
 }
 
 /* opts.go */
+
+type managerOptions struct {
+	// Used by every generated implementation
+	grpcDialOpts []grpc.DialOption
+	logger       *log.Logger
+	noConnect    bool
+	selfAddr     string
+	selfID       uint32
+}
 
 // ManagerOption provides a way to set different options on a new Manager.
 type ManagerOption func(*managerOptions)
