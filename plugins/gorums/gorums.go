@@ -81,6 +81,8 @@ func (g *gorums) typeName(str string) string {
 // P forwards to g.gen.P.
 func (g *gorums) P(args ...interface{}) { g.gen.P(args...) }
 
+// visit generates a _gen.go file if the supplied path is an .tmpl file.
+// Note that the function rely on data in global variable pkgData.
 func visit(path string, f os.FileInfo, err error) error {
 	if strings.HasSuffix(path, ".tmpl") {
 		name := strings.TrimSuffix(path, ".tmpl")
@@ -107,7 +109,6 @@ func visit(path string, f os.FileInfo, err error) error {
 
 type tmplData struct {
 	PackageName string
-	ServiceName string
 	Services    []serviceMethod
 }
 
@@ -120,7 +121,6 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	}
 	pkgData = tmplData{
 		PackageName: file.GetPackage(),
-		ServiceName: file.FileDescriptorProto.Service[0].GetName(),
 		Services:    g.generateServiceMethods(file.FileDescriptorProto.Service),
 	}
 	err := filepath.Walk(pkgData.PackageName, visit)
