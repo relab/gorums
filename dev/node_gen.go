@@ -19,7 +19,7 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
-	writeAsyncClient Register_WriteAsyncClient //TODO
+	writeAsyncClient Register_WriteAsyncClient
 
 	sync.Mutex
 	lastErr error
@@ -27,11 +27,11 @@ type Node struct {
 }
 
 func (n *Node) connect(opts ...grpc.DialOption) error {
-	conn, err := grpc.Dial(n.addr, opts...)
+	var err error
+	n.conn, err = grpc.Dial(n.addr, opts...)
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
-	n.conn = conn
 	client := NewRegisterClient(n.conn)
 	n.writeAsyncClient, err = client.WriteAsync(context.Background())
 	if err != nil {
@@ -41,11 +41,15 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 }
 
 func (n *Node) close() error {
-	_, err := n.writeAsyncClient.CloseAndRecv()
+	var err error
+	_, err = n.writeAsyncClient.CloseAndRecv()
+	err2 := n.conn.Close()
 	if err != nil {
 		return fmt.Errorf("stream close failed: %v", err)
+	} else if err2 != nil {
+		return fmt.Errorf("conn close failed: %v", err2)
 	}
-	return n.conn.Close()
+	return nil
 }
 
 // ID returns the ID of m.
