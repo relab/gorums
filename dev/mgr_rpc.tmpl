@@ -16,19 +16,15 @@ import (
 {{if .Streaming}}
 func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) error {
 	for _, node := range c.nodes {
-		go func(nodeID uint32) {
-			stream := m.{{.UnexportedMethodName}}Clients[nodeID]
-			if stream == nil {
-				panic("execeptional: node client stream not found")
-			}
-			err := stream.Send(args)
+		go func(n *Node) {
+			err := n.{{.UnexportedMethodName}}Client.Send(args)
 			if err == nil {
 				return
 			}
 			if m.logger != nil {
-				m.logger.Printf("%d: {{.UnexportedMethodName}} stream send error: %v", nodeID, err)
+				m.logger.Printf("%d: {{.UnexportedMethodName}} stream send error: %v", n.id, err)
 			}
-		}(node.id)
+		}(node)
 	}
 
 	return nil
