@@ -184,19 +184,15 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 
 func (m *Manager) writeAsync(c *Configuration, args *State) error {
 	for _, node := range c.nodes {
-		go func(nodeID uint32) {
-			stream := m.writeAsyncClients[nodeID]
-			if stream == nil {
-				panic("execeptional: node client stream not found")
-			}
-			err := stream.Send(args)
+		go func(n *Node) {
+			err := n.writeAsyncClient.Send(args)
 			if err == nil {
 				return
 			}
 			if m.logger != nil {
-				m.logger.Printf("%d: writeAsync stream send error: %v", nodeID, err)
+				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
 			}
-		}(node.id)
+		}(node)
 	}
 
 	return nil

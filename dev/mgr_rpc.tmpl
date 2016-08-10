@@ -14,15 +14,9 @@ import (
 {{range $elm := .Services}}
 
 {{if .Streaming}}
-func (m *Manager) {{.UnexportedMethodName}}(cid int, args *{{.ReqName}}) error {
-	c, found := m.Configuration(cid)
-	if !found {
-		panic("execeptional: config not found")
-	}
-
-	for _, nid := range c.nodes {
-		// TODO: Only send if node.ConnState() == grpc.Connected?
-		go func(nodeID int) {
+func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) error {
+	for _, node := range c.nodes {
+		go func(nodeID uint32) {
 			stream := m.{{.UnexportedMethodName}}Clients[nodeID]
 			if stream == nil {
 				panic("execeptional: node client stream not found")
@@ -34,7 +28,7 @@ func (m *Manager) {{.UnexportedMethodName}}(cid int, args *{{.ReqName}}) error {
 			if m.logger != nil {
 				m.logger.Printf("%d: {{.UnexportedMethodName}} stream send error: %v", nodeID, err)
 			}
-		}(nid)
+		}(node.id)
 	}
 
 	return nil
@@ -43,33 +37,24 @@ func (m *Manager) {{.UnexportedMethodName}}(cid int, args *{{.ReqName}}) error {
 {{else -}}
 
 type {{.UnexportedTypeName}} struct {
-	nid   int
+	nid   uint32
 	reply *{{.RespName}}
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(cid int, args *{{.ReqName}}) (*{{.TypeName}}, error) {
-	c, found := m.Configuration(cid)
-	if !found {
-		panic("exceptional: config not found")
-	}
-
+func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) (*{{.TypeName}}, error) {
 	var (
-		replyChan   = make(chan {{.UnexportedTypeName}}, c.Size())
+		replyChan   = make(chan {{.UnexportedTypeName}}, c.n)
 		stopSignal  = make(chan struct{})
-		replyValues = make([]*{{.RespName}}, 0, c.quorum)
+		replyValues = make([]*{{.RespName}}, 0, c.n)
 		errCount    int
 		quorum      bool
-		reply       = &{{.TypeName}}{NodeIDs: make([]int, 0, c.quorum)}
+		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
-	for _, nid := range c.nodes {
-		node, found := m.Node(nid)
-		if !found {
-			panic("execptional: node not found")
-		}
-		go func() {
+	for _, n := range c.nodes {
+		go func(node *Node) {
 			reply := new({{.RespName}})
 			ce := make(chan error, 1)
 			start := time.Now()
@@ -98,7 +83,7 @@ func (m *Manager) {{.UnexportedMethodName}}(cid int, args *{{.ReqName}}) (*{{.Ty
 			case <-stopSignal:
 				return
 			}
-		}()
+		}(n)
 	}
 
 	defer close(stopSignal)
@@ -114,7 +99,7 @@ func (m *Manager) {{.UnexportedMethodName}}(cid int, args *{{.ReqName}}) (*{{.Ty
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = m.{{.UnexportedMethodName}}qf(c, replyValues); quorum {
+			if reply.Reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
@@ -122,7 +107,7 @@ func (m *Manager) {{.UnexportedMethodName}}(cid int, args *{{.ReqName}}) (*{{.Ty
 		}
 
 	terminationCheck:
-		if errCount+len(replyValues) == c.Size() {
+		if errCount+len(replyValues) == c.n {
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
 

@@ -4,10 +4,25 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"log"
 	"net"
 	"sort"
+	"sync"
 	"time"
 )
+
+// Manager manages a pool of node configurations on which quorum remote
+// procedure calls can be made.
+type Manager struct {
+	sync.RWMutex
+
+	nodes   map[uint32]*Node
+	configs map[uint32]*Configuration
+
+	closeOnce sync.Once
+	logger    *log.Logger
+	opts      managerOptions
+}
 
 // NewManager attempts to connect to the given set of node addresses and if
 // successful returns a new Manager containing connections to those nodes.
@@ -53,11 +68,6 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	err = m.connectAll()
-	if err != nil {
-		return nil, ManagerCreationError(err)
-	}
-
-	err = m.createStreamClients()
 	if err != nil {
 		return nil, ManagerCreationError(err)
 	}
@@ -137,12 +147,12 @@ func (m *Manager) closeNodeConns() {
 		if node.self {
 			continue
 		}
-		err := node.conn.Close()
+		err := node.close()
 		if err == nil {
 			continue
 		}
 		if m.logger != nil {
-			m.logger.Printf("node %d: error closing connection: %v", node.id, err)
+			m.logger.Printf("node %d: error closing: %v", node.id, err)
 		}
 	}
 }
@@ -150,7 +160,6 @@ func (m *Manager) closeNodeConns() {
 // Close closes all node connections and any client streams.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
-		m.closeStreamClients()
 		m.closeNodeConns()
 	})
 }

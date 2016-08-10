@@ -1,6 +1,7 @@
 package dev
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -18,6 +19,8 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
+	writeAsyncClient Register_WriteAsyncClient //TODO
+
 	sync.Mutex
 	lastErr error
 	latency time.Duration
@@ -29,7 +32,20 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 	n.conn = conn
+	client := NewRegisterClient(n.conn)
+	n.writeAsyncClient, err = client.WriteAsync(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
 	return nil
+}
+
+func (n *Node) close() error {
+	_, err := n.writeAsyncClient.CloseAndRecv()
+	if err != nil {
+		return fmt.Errorf("stream close failed: %v", err)
+	}
+	return n.conn.Close()
 }
 
 // ID returns the ID of m.
