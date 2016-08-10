@@ -91,7 +91,7 @@ func visit(path string, f os.FileInfo, err error) error {
 		t := template.Must(template.ParseFiles(path))
 
 		// Create .go file for writing the template and data into.
-		w, err := os.Create(name + "_xen.go") //TODO fix dir path + _xen -> _gen
+		w, err := os.Create(name + "_gen.xo") //TODO fix .xo->.go
 		if err != nil {
 			return err
 		}
