@@ -35,12 +35,10 @@
 package gorums
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -86,19 +84,9 @@ func (g *gorums) P(args ...interface{}) { g.gen.P(args...) }
 func visit(path string, f os.FileInfo, err error) error {
 	if strings.HasSuffix(path, ".tmpl") {
 		name := strings.TrimSuffix(path, ".tmpl")
-		fmt.Fprintln(os.Stderr, "Generating: "+name)
+		log.Println("Processing: " + path)
 		// Create a new template and parse the service data into it.
 		t := template.Must(template.ParseFiles(path))
-
-		pkgData := struct {
-			PackageName string
-			ServiceName string
-			Services    []serviceMethod
-		}{
-			PackageName: "dev",      //TODO fix
-			ServiceName: "Register", //TODO fix
-			Services:    smethods,
-		}
 
 		// Create .go file for writing the template and data into.
 		w, err := os.Create(name + "_xen.go") //TODO fix dir path + _xen -> _gen
@@ -117,46 +105,35 @@ func visit(path string, f os.FileInfo, err error) error {
 	return nil
 }
 
-var smethods []serviceMethod
+type tmplData struct {
+	PackageName string
+	ServiceName string
+	Services    []serviceMethod
+}
+
+var pkgData tmplData
 
 // Generate generates code for the services in the given file.
 func (g *gorums) Generate(file *generator.FileDescriptor) {
 	if len(file.FileDescriptorProto.Service) == 0 {
 		return
 	}
-
-	smethods = g.generateServiceMethods(file.FileDescriptorProto.Service)
-
-	//TODO Debug code to be removed
-	w, err := os.Create("smethods.txt")
-	if err != nil {
-		log.Fatal(err)
+	pkgData = tmplData{
+		PackageName: file.GetPackage(),
+		ServiceName: file.FileDescriptorProto.Service[0].GetName(),
+		Services:    g.generateServiceMethods(file.FileDescriptorProto.Service),
 	}
-	for i, m := range smethods {
-		w.WriteString("Index " + strconv.Itoa(i) + "\n")
-		w.WriteString("------------------------- \n")
-		w.WriteString("OrigName             : " + m.OrigName + "\n")
-		w.WriteString("MethodName           : " + m.MethodName + "\n")
-		w.WriteString("UnexportedMethodName : " + m.UnexportedMethodName + "\n")
-		w.WriteString("RPCName              : " + m.RPCName + "\n")
-		w.WriteString("ReqName              : " + m.ReqName + "\n")
-		w.WriteString("RespName             : " + m.RespName + "\n")
-		w.WriteString("ServName             : " + m.ServName + "\n")
-		w.WriteString("TypeName             : " + m.TypeName + "\n")
-		w.WriteString("UnexportedTypeName   : " + m.UnexportedTypeName + "\n")
-		if m.Streaming {
-			w.WriteString("streaming\n")
-		}
-		w.WriteString("\n")
-	}
-
-	err = filepath.Walk("dev", visit) //TODO fix dir to be generic
+	err := filepath.Walk(pkgData.PackageName, visit)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	//TODO remove these once we know that things are working and don't need both _gen and _xen
+	smethods := pkgData.Services
 	g.generateMgrTypeRelated(smethods)
 	g.generateGorumsWrapperForService(file, smethods)
+
+	//KEEP THIS NEXT ONE
 	g.embedStaticResources()
 }
 
