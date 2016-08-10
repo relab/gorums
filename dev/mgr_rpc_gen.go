@@ -17,12 +17,12 @@ type readReply struct {
 
 func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
 	var (
-		replyChan   = make(chan readReply, c.Size())
+		replyChan   = make(chan readReply, c.n)
 		stopSignal  = make(chan struct{})
-		replyValues = make([]*State, 0, c.quorum)
+		replyValues = make([]*State, 0, c.n)
 		errCount    int
 		quorum      bool
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.quorum)}
+		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
@@ -90,7 +90,7 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = m.readqf(c, replyValues); quorum {
+			if reply.Reply, quorum = c.qspec.ReadQF(replyValues); quorum {
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
@@ -98,7 +98,7 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 		}
 
 	terminationCheck:
-		if errCount+len(replyValues) == c.Size() {
+		if errCount+len(replyValues) == c.n {
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
 
@@ -113,12 +113,12 @@ type writeReply struct {
 
 func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 	var (
-		replyChan   = make(chan writeReply, c.Size())
+		replyChan   = make(chan writeReply, c.n)
 		stopSignal  = make(chan struct{})
-		replyValues = make([]*WriteResponse, 0, c.quorum)
+		replyValues = make([]*WriteResponse, 0, c.n)
 		errCount    int
 		quorum      bool
-		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.quorum)}
+		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
@@ -168,7 +168,7 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = m.writeqf(c, replyValues); quorum {
+			if reply.Reply, quorum = c.qspec.WriteQF(replyValues); quorum {
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
@@ -176,7 +176,7 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 		}
 
 	terminationCheck:
-		if errCount+len(replyValues) == c.Size() {
+		if errCount+len(replyValues) == c.n {
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
 	}

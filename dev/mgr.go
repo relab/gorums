@@ -66,8 +66,6 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		m.logger = m.opts.logger
 	}
 
-	m.setDefaultQuorumFuncs()
-
 	return m, nil
 }
 
@@ -238,18 +236,15 @@ func (m *Manager) AddNode(addr string) error {
 	panic("not implemented")
 }
 
-// NewConfiguration returns a new configuration given a set of node ids and
-// a quorum size. Any given gRPC call options will be used for every RPC
-// invocation on the configuration.
-func (m *Manager) NewConfiguration(ids []uint32, quorumSize int, timeout time.Duration) (*Configuration, error) {
+// NewConfiguration returns a new configuration given quorum specification and
+// a timeout.
+func (m *Manager) NewConfiguration(qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
+	ids := qspec.IDs()
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
-	}
-	if quorumSize > len(ids) || quorumSize < 1 {
-		return nil, IllegalConfigError("invalid quourm size")
 	}
 	if timeout <= 0 {
 		return nil, IllegalConfigError("timeout must be positive")
@@ -273,7 +268,6 @@ func (m *Manager) NewConfiguration(ids []uint32, quorumSize int, timeout time.Du
 	OrderedBy(ID).Sort(cnodes)
 
 	h := fnv.New32a()
-	binary.Write(h, binary.LittleEndian, int64(quorumSize))
 	binary.Write(h, binary.LittleEndian, timeout)
 	for _, node := range cnodes {
 		binary.Write(h, binary.LittleEndian, node.id)
@@ -288,8 +282,9 @@ func (m *Manager) NewConfiguration(ids []uint32, quorumSize int, timeout time.Du
 	c := &Configuration{
 		id:      cid,
 		nodes:   cnodes,
+		n:       len(cnodes),
 		mgr:     m,
-		quorum:  quorumSize,
+		qspec:   qspec,
 		timeout: timeout,
 	}
 	m.configs[cid] = c

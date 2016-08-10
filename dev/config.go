@@ -10,9 +10,10 @@ import (
 type Configuration struct {
 	id      uint32
 	nodes   []*Node
+	n       int
 	mgr     *Manager
-	quorum  int
 	timeout time.Duration
+	qspec   QuorumSpec
 }
 
 // ID reports the identifier for the configuration.
@@ -30,14 +31,9 @@ func (c *Configuration) NodeIDs() []uint32 {
 	return ids
 }
 
-// Quorum returns the quourm size for the configuration.
-func (c *Configuration) Quorum() int {
-	return c.quorum
-}
-
 // Size returns the number of nodes in the configuration.
 func (c *Configuration) Size() int {
-	return len(c.nodes)
+	return c.n
 }
 
 func (c *Configuration) String() string {
@@ -53,7 +49,6 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 // constructor should only be used when testing quorum functions.
 func NewTestConfiguration(q, n int) *Configuration {
 	return &Configuration{
-		quorum: q,
-		nodes:  make([]*Node, n),
+		nodes: make([]*Node, n),
 	}
 }

@@ -19,9 +19,6 @@ type Manager struct {
 	logger    *log.Logger
 	opts      managerOptions
 
-	readqf  ReadQuorumFn
-	writeqf WriteQuorumFn
-
 	// Why are the stream clients put here?
 	// They should be in the node struct, but the node struct is now
 	// totally generic and does not need code generation (which is
@@ -31,29 +28,6 @@ type Manager struct {
 	//
 	// TODO: Put into Node type. Add _gen to node.go
 	writeAsyncClients map[uint32]Register_WriteAsyncClient
-}
-
-func (m *Manager) setDefaultQuorumFuncs() {
-	if m.opts.readqf != nil {
-		m.readqf = m.opts.readqf
-	} else {
-		m.readqf = func(c *Configuration, replies []*State) (*State, bool) {
-			if len(replies) < c.Quorum() {
-				return nil, false
-			}
-			return replies[0], true
-		}
-	}
-	if m.opts.writeqf != nil {
-		m.writeqf = m.opts.writeqf
-	} else {
-		m.writeqf = func(c *Configuration, replies []*WriteResponse) (*WriteResponse, bool) {
-			if len(replies) < c.Quorum() {
-				return nil, false
-			}
-			return replies[0], true
-		}
-	}
 }
 
 func (m *Manager) createStreamClients() error {

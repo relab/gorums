@@ -30,6 +30,86 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
+type MajorityQSpec struct {
+	ids []uint32
+	q   int
+}
+
+func NewMajorityQSpec(ids []uint32) *MajorityQSpec {
+	return &MajorityQSpec{
+		ids: ids,
+		q:   len(ids)/2 + 1,
+	}
+}
+
+func (mqs *MajorityQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
+	if len(replies) < mqs.q {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+func (mqs *MajorityQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+	if len(replies) < mqs.q {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+func (mqs *MajorityQSpec) IDs() []uint32 {
+	return mqs.ids
+}
+
+type RegisterQSpec struct {
+	ids    []uint32
+	rq, wq int
+}
+
+func NewRegisterQSpec(ids []uint32, rq, wq int) *RegisterQSpec {
+	return &RegisterQSpec{
+		ids: ids,
+		rq:  rq,
+		wq:  wq,
+	}
+}
+
+func (rqs *RegisterQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
+	if len(replies) < rqs.rq {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+func (rqs *RegisterQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+	if len(replies) < rqs.wq {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+func (rqs *RegisterQSpec) IDs() []uint32 {
+	return rqs.ids
+}
+
+type NeverQSpec struct {
+	ids []uint32
+}
+
+func NewNeverQSpec(ids []uint32) *NeverQSpec {
+	return &NeverQSpec{ids: ids}
+}
+func (mqs *NeverQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+	return nil, false
+}
+
+func (mqs *NeverQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
+	return nil, false
+}
+
+func (mqs *NeverQSpec) IDs() []uint32 {
+	return mqs.ids
+}
+
 func TestBasicRegister(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
@@ -43,21 +123,9 @@ func TestBasicRegister(t *testing.T) {
 	)
 	defer stopGrpcServe(allServers)
 
-	// Specify a custom quorum and picker function for the Read RPC method.
-	// The user may, as an example, want to sort the replies based on their
-	// timestamp.
-	rqfn := func(c *rpc.Configuration, replies []*rpc.State) (*rpc.State, bool) {
-		if len(replies) < c.Quorum() {
-			return nil, false
-		}
-		sort.Sort(ByTimestamp(replies))
-		return replies[len(replies)-1], true
-	}
-
 	mgr, err := rpc.NewManager(
 		servers.addrs(),
 		dialOpts,
-		rpc.WithReadQuorumFunc(rqfn),
 	)
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -68,14 +136,17 @@ func TestBasicRegister(t *testing.T) {
 	// Get all all available node ids
 	ids := mgr.NodeIDs()
 
+	// Quorum spec
+	qspec := NewRegisterQSpec(ids, 1, len(ids))
+
 	// A read configuration. Quorum=1, n=3
-	readConfig, err := mgr.NewConfiguration(ids, 1, time.Second)
+	readConfig, err := mgr.NewConfiguration(qspec, time.Second)
 	if err != nil {
 		t.Fatalf("error creating read config: %v", err)
 	}
 
-	// A write configuration. Quorum=2, n=3
-	writeConfig, err := mgr.NewConfiguration(ids, 2, time.Second)
+	// A write configuration. Quorum=majority (2), n=3
+	writeConfig, err := mgr.NewConfiguration(qspec, time.Second)
 	if err != nil {
 		t.Fatalf("error creating write config: %v", err)
 	}
@@ -125,15 +196,9 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	)
 	defer stopGrpcServe(allServers)
 
-	// Read quorum picker that never returns true.
-	rqfn := func(c *rpc.Configuration, replies []*rpc.State) (*rpc.State, bool) {
-		return nil, false
-	}
-
 	mgr, err := rpc.NewManager(
 		servers.addrs(),
 		dialOpts,
-		rpc.WithReadQuorumFunc(rqfn),
 	)
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -142,8 +207,9 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
+	qspec := NewNeverQSpec(ids)
 
-	readConfig, err := mgr.NewConfiguration(ids, 2, time.Second)
+	readConfig, err := mgr.NewConfiguration(qspec, time.Second)
 	if err != nil {
 		t.Fatalf("error creating read config: %v", err)
 	}
@@ -200,8 +266,9 @@ func TestSlowRegister(t *testing.T) {
 
 	ids := mgr.NodeIDs()
 	timeout := 25 * time.Millisecond
+	qspec := NewMajorityQSpec(ids)
 
-	readConfig, err := mgr.NewConfiguration(ids, 2, timeout)
+	readConfig, err := mgr.NewConfiguration(qspec, timeout)
 	if err != nil {
 		t.Fatalf("error creating read config: %v", err)
 	}
@@ -244,13 +311,14 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
+	qspec := NewRegisterQSpec(ids, 1, len(ids)/2+1)
 
-	readConfig, err := mgr.NewConfiguration(ids, 1, 25*time.Millisecond)
+	readConfig, err := mgr.NewConfiguration(qspec, 25*time.Millisecond)
 	if err != nil {
 		t.Fatalf("error creating read config: %v", err)
 	}
 
-	writeConfig, err := mgr.NewConfiguration(ids, 2, 25*time.Millisecond)
+	writeConfig, err := mgr.NewConfiguration(qspec, 25*time.Millisecond)
 	if err != nil {
 		t.Fatalf("error creating write config: %v", err)
 	}
@@ -319,13 +387,14 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
+	qspec := NewRegisterQSpec(ids, 1, len(ids)/2+1)
 
-	readConfig, err := mgr.NewConfiguration(ids, 1, 25*time.Millisecond)
+	readConfig, err := mgr.NewConfiguration(qspec, 25*time.Millisecond)
 	if err != nil {
 		t.Fatalf("error creating read config: %v", err)
 	}
 
-	writeConfig, err := mgr.NewConfiguration(ids, 2, 25*time.Millisecond)
+	writeConfig, err := mgr.NewConfiguration(qspec, 25*time.Millisecond)
 	if err != nil {
 		t.Fatalf("error creating write config: %v", err)
 	}
@@ -569,13 +638,14 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
+	qspec := NewRegisterQSpec(ids, rq, len(ids))
 
-	readConfig, err := mgr.NewConfiguration(ids, rq, timeout)
+	readConfig, err := mgr.NewConfiguration(qspec, timeout)
 	if err != nil {
 		b.Fatalf("error creating read config: %v", err)
 	}
 
-	writeConfig, err := mgr.NewConfiguration(ids, len(rservers), timeout)
+	writeConfig, err := mgr.NewConfiguration(qspec, timeout)
 	if err != nil {
 		b.Fatalf("error creating write config: %v", err)
 	}

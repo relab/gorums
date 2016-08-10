@@ -6,6 +6,15 @@ import (
 	"google.golang.org/grpc"
 )
 
+type managerOptions struct {
+	// Used by every generated implementation
+	grpcDialOpts []grpc.DialOption
+	logger       *log.Logger
+	noConnect    bool
+	selfAddr     string
+	selfID       uint32
+}
+
 // ManagerOption provides a way to set different options on a new Manager.
 type ManagerOption func(*managerOptions)
 
