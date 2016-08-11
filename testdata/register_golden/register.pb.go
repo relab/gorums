@@ -323,6 +323,8 @@ func (this *Empty) Equal(that interface{}) bool {
 	return true
 }
 
+/* Gorums Generator Plugin - generated from: dev/config_rpc.tmpl */
+
 // ReadReply encapsulates the reply from a Read RPC invocation.
 // It contains the id of each node in the quorum that replied and a single
 // reply.
@@ -439,6 +441,8 @@ func (f *WriteFuture) Done() bool {
 func (c *Configuration) WriteAsync(args *State) error {
 	return c.mgr.writeAsync(c, args)
 }
+
+/* Gorums Generator Plugin - generated from: dev/mgr_rpc.tmpl */
 
 type readReply struct {
 	nid   uint32
@@ -612,6 +616,8 @@ func (m *Manager) writeAsync(c *Configuration, args *State) error {
 	return nil
 }
 
+/* Gorums Generator Plugin - generated from: dev/node.tmpl */
+
 // Node encapsulates the state of a node on which a remote procedure call
 // can be made.
 type Node struct {
@@ -661,6 +667,8 @@ func (n *Node) close() error {
 	}
 	return nil
 }
+
+/* Gorums Generator Plugin - generated from: dev/qspec.tmpl */
 
 type QuorumSpec interface {
 	ReadQF(replies []*State) (*State, bool)

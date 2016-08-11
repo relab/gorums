@@ -112,13 +112,15 @@ func visit(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			log.Println("executing template:", err)
 		}
-		genDump = append(genDump, wb.String())
-		// log.Println(wb.String())
+		gg.P()
+		gg.P("/* Gorums Generator Plugin - generated from: ", path, " */")
+		gg.P()
+		gg.P(wb.String())
 	}
 	return nil
 }
 
-var genDump []string
+var gg *gorums
 
 type tmplData struct {
 	PackageName   string
@@ -133,18 +135,15 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	if len(file.FileDescriptorProto.Service) == 0 {
 		return
 	}
-	genDump = make([]string, 4) //four tmpl files
 	pkgData = tmplData{
 		PackageName:   file.GetPackage(),
 		Services:      g.generateServiceMethods(file.FileDescriptorProto.Service),
 		IgnoreImports: false,
 	}
+	gg = g
 	err := filepath.Walk(pkgData.PackageName, visit)
 	if err != nil {
 		log.Fatal(err)
-	}
-	for _, s := range genDump {
-		g.P(s)
 	}
 
 	//TODO remove these once we know that things are working and don't need both _gen and _xen
