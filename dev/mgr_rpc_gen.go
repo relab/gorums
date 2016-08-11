@@ -21,25 +21,32 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
-	for _, n := range c.nodes {
-		go func(node *Node) {
-			reply := new(State)
-			start := time.Now()
-			err := grpc.Invoke(
-				ctx,
-				"/dev.Register/Read",
-				args,
-				reply,
-				node.conn,
-			)
-			switch grpc.Code(err) { // nil -> codes.OK
-			case codes.OK, codes.Canceled:
-				node.setLatency(time.Since(start))
-			default:
-				node.setLastErr(err)
-			}
-			replyChan <- &readReply{node.id, reply, err}
-		}(n)
+	callGRPC := func(node *Node) {
+		reply := new(State)
+		start := time.Now()
+		err := grpc.Invoke(
+			ctx,
+			"/dev.Register/Read",
+			args,
+			reply,
+			node.conn,
+		)
+		switch grpc.Code(err) { // nil -> codes.OK
+		case codes.OK, codes.Canceled:
+			node.setLatency(time.Since(start))
+		default:
+			node.setLastErr(err)
+		}
+		replyChan <- &readReply{node.id, reply, err}
+	}
+
+	if len(c.nodes) == 1 {
+		// no need to create goroutine for calls on single node configurations
+		callGRPC(c.nodes[0])
+	} else {
+		for _, n := range c.nodes {
+			go callGRPC(n)
+		}
 	}
 
 	var (
