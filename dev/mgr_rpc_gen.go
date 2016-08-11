@@ -55,9 +55,6 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 		}(n)
 	}
 
-	defer close(stopSignal)
-	defer cancel()
-
 	var (
 		replyValues = make([]*State, 0, c.n)
 		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
@@ -94,14 +91,20 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.Reply, quorum = c.qspec.ReadQF(replyValues); quorum {
+				close(stopSignal)
+				cancel()
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
+			close(stopSignal)
+			cancel()
 			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
+			close(stopSignal)
+			cancel()
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
 
@@ -154,9 +157,6 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 		}(n)
 	}
 
-	defer close(stopSignal)
-	defer cancel()
-
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
 		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
@@ -175,14 +175,20 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.Reply, quorum = c.qspec.WriteQF(replyValues); quorum {
+				close(stopSignal)
+				cancel()
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
+			close(stopSignal)
+			cancel()
 			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
+			close(stopSignal)
+			cancel()
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
 	}
