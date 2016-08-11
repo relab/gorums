@@ -18,6 +18,27 @@ A collection of different algorithms for reconfigurable atomic storage
 implemented using Gorums can be found
 [here](https://github.com/relab/smartmerge).
 
+### Benchmarking
+
+TODO Clean this up:
+
+Ca. slik for en spesifik bencmark:
+Trenger: go get -u  golang.org/x/tools/cmd/benchcmp
+
+cd dev
+git checkout gorumsgen
+
+For nyeste commit med endringer:
+go test . -run=NONE -bench=Read1KQ1N1Local -benchtime=5s > new.txt
+
+Så bytte til forrige commit:
+git checkout HEAD~1
+
+go test . -run=NONE -bench=Read1KQ1N1Local -benchtime=5s > old.txt
+
+Compare:
+benchcmp old.txt new.txt
+
 ### Documentation
 
 * [Student/user guide](doc/userguide.md)

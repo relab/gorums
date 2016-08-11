@@ -41,7 +41,7 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 	}
 
 	if len(c.nodes) == 1 {
-		// no need to create goroutine for calls on single node configurations
+		// optimization: don't create goroutine for calls on single node config
 		callGRPC(c.nodes[0])
 	} else {
 		for _, n := range c.nodes {
@@ -55,24 +55,6 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 		errCount    int
 		quorum      bool
 	)
-
-	/*
-		Alternative for time.After in select below: stop rpc timeout timer explicitly.
-
-		See
-		https://github.com/kubernetes/kubernetes/pull/23210/commits/e4b369e1d74ac8f2d2a20afce92d93c804afa5d2
-		and
-		https://github.com/golang/go/issues/8898l
-
-		t := time.NewTimer(c.timeout)
-		defer t.Stop()
-
-		and change the corresponding select case below:
-
-		case <-t.C:
-
-		Actually gaven an +1% on the local read benchmark, so not implemted yet.
-	*/
 
 	for {
 
