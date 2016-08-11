@@ -151,7 +151,6 @@ func (m *Manager) closeNodeConns() {
 		if err == nil {
 			continue
 		}
-		fmt.Printf("node %d: error closing: %v", node.id, err)
 		if m.logger != nil {
 			m.logger.Printf("node %d: error closing: %v", node.id, err)
 		}
