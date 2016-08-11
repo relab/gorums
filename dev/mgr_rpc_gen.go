@@ -17,7 +17,7 @@ type readReply struct {
 
 func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
 	var (
-		replyChan   = make(chan readReply, c.n)
+		replyChan   = make(chan *readReply, c.n)
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
@@ -38,7 +38,7 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 			default:
 				node.setLastErr(err)
 			}
-			replyChan <- readReply{node.id, reply, err}
+			replyChan <- &readReply{node.id, reply, err}
 		}(n)
 	}
 
