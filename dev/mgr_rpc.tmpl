@@ -1,5 +1,7 @@
 {{/* FIXME: Remember to run 'go generate' after editing this file. */}}
 {{$pkgName := .PackageName}}
+
+{{- if not .IgnoreImports}}
 package {{$pkgName}}
 
 import (
@@ -10,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
+{{- end -}}
 
 {{range $elm := .Services}}
 

@@ -1,4 +1,6 @@
 {{/* FIXME: Remember to run 'go generate' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
 package {{.PackageName}}
 
 import (
@@ -9,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 )
+{{- end}}
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be made.

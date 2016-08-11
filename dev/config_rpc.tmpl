@@ -1,7 +1,10 @@
 {{/* FIXME: Remember to run 'go generate' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
 package {{.PackageName}}
 
 import "fmt"
+{{- end}}
 
 {{range $elm := .Services}}
 

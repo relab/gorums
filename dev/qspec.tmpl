@@ -1,11 +1,14 @@
 {{/* FIXME: Remember to run 'go generate' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
 package {{.PackageName}}
+{{- end}}
 
 type QuorumSpec interface {
 {{range $elm := .Services}}
-{{if not .Streaming}}
+{{- if not .Streaming}}
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
-{{end -}}
-{{end}}
+{{- end -}}
+{{- end}}
 	IDs() []uint32
 }
