@@ -5,11 +5,11 @@ package gorums
 
 var staticImports = []string{
 	"fmt",
-	"log",
 	"google.golang.org/grpc",
 	"sort",
 	"sync",
 	"net",
+	"log",
 	"hash/fnv",
 	"encoding/binary",
 	"time",
@@ -124,6 +124,19 @@ func ManagerCreationError(err error) error {
 
 /* mgr.go */
 
+// Manager manages a pool of node configurations on which quorum remote
+// procedure calls can be made.
+type Manager struct {
+	sync.RWMutex
+
+	nodes	map[uint32]*Node
+	configs	map[uint32]*Configuration
+
+	closeOnce	sync.Once
+	logger		*log.Logger
+	opts		managerOptions
+}
+
 // NewManager attempts to connect to the given set of node addresses and if
 // successful returns a new Manager containing connections to those nodes.
 func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
@@ -168,11 +181,6 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	err = m.connectAll()
-	if err != nil {
-		return nil, ManagerCreationError(err)
-	}
-
-	err = m.createStreamClients()
 	if err != nil {
 		return nil, ManagerCreationError(err)
 	}
@@ -252,12 +260,12 @@ func (m *Manager) closeNodeConns() {
 		if node.self {
 			continue
 		}
-		err := node.conn.Close()
+		err := node.close()
 		if err == nil {
 			continue
 		}
 		if m.logger != nil {
-			m.logger.Printf("node %d: error closing connection: %v", node.id, err)
+			m.logger.Printf("node %d: error closing: %v", node.id, err)
 		}
 	}
 }
@@ -265,7 +273,6 @@ func (m *Manager) closeNodeConns() {
 // Close closes all node connections and any client streams.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
-		m.closeStreamClients()
 		m.closeNodeConns()
 	})
 }
@@ -417,30 +424,7 @@ func (p idSlice) Len() int		{ return len(p) }
 func (p idSlice) Less(i, j int) bool	{ return p[i] < p[j] }
 func (p idSlice) Swap(i, j int)		{ p[i], p[j] = p[j], p[i] }
 
-/* node.go */
-
-// Node encapsulates the state of a node on which a remote procedure call
-// can be made.
-type Node struct {
-	// Only assigned at creation.
-	id	uint32
-	self	bool
-	addr	string
-	conn	*grpc.ClientConn
-
-	sync.Mutex
-	lastErr	error
-	latency	time.Duration
-}
-
-func (n *Node) connect(opts ...grpc.DialOption) error {
-	conn, err := grpc.Dial(n.addr, opts...)
-	if err != nil {
-		return fmt.Errorf("dialing node failed: %v", err)
-	}
-	n.conn = conn
-	return nil
-}
+/* node_func.go */
 
 // ID returns the ID of m.
 func (n *Node) ID() uint32 {

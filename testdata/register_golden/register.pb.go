@@ -323,141 +323,11 @@ func (this *Empty) Equal(that interface{}) bool {
 	return true
 }
 
-/* Manager type struct */
-
-// Manager manages a pool of node configurations on which quorum remote
-// procedure calls can be made.
-type Manager struct {
-	sync.RWMutex
-	nodes         []*Node
-	configs       []*Configuration
-	nodeGidToID   map[uint32]int
-	configGidToID map[uint32]int
-
-	closeOnce sync.Once
-	logger    *log.Logger
-	opts      managerOptions
-
-	readqf  ReadQuorumFn
-	writeqf WriteQuorumFn
-
-	writeAsyncClients []Register_WriteAsyncClient
-}
-
-/* Manager quorum functions */
-
-func (m *Manager) setDefaultQuorumFuncs() {
-	if m.opts.readqf != nil {
-		m.readqf = m.opts.readqf
-	} else {
-		m.readqf = func(c *Configuration, replies []*State) (*State, bool) {
-			if len(replies) < c.Quorum() {
-				return nil, false
-			}
-			return replies[0], true
-		}
-	}
-	if m.opts.writeqf != nil {
-		m.writeqf = m.opts.writeqf
-	} else {
-		m.writeqf = func(c *Configuration, replies []*WriteResponse) (*WriteResponse, bool) {
-			if len(replies) < c.Quorum() {
-				return nil, false
-			}
-			return replies[0], true
-		}
-	}
-}
-
-/* Manager create/close streams */
-
-func (m *Manager) createStreamClients() error {
-	if m.opts.noConnect {
-		return nil
-	}
-
-	for _, node := range m.nodes {
-		if node.self {
-			m.writeAsyncClients = append(m.writeAsyncClients, nil)
-			continue
-		}
-		client := NewRegisterClient(node.conn)
-		writeAsyncClient, err := client.WriteAsync(context.Background())
-		if err != nil {
-			return err
-		}
-		m.writeAsyncClients = append(m.writeAsyncClients, writeAsyncClient)
-	}
-
-	return nil
-}
-
-func (m *Manager) closeStreamClients() {
-	if m.opts.noConnect {
-		return
-	}
-
-	for i, client := range m.writeAsyncClients {
-		_, err := client.CloseAndRecv()
-		if err == nil {
-			continue
-		}
-		if m.logger != nil {
-			m.logger.Printf("node %d: error closing writeAsync client: %v", i, err)
-		}
-	}
-}
-
-/* Manager options */
-
-type managerOptions struct {
-	grpcDialOpts []grpc.DialOption
-	logger       *log.Logger
-	noConnect    bool
-	selfAddr     string
-	selfGid      uint32
-
-	readqf  ReadQuorumFn
-	writeqf WriteQuorumFn
-}
-
-// WithReadQuorumFunc returns a ManagerOption that sets a cumstom
-// ReadQuorumFunc.
-func WithReadQuorumFunc(f ReadQuorumFn) ManagerOption {
-	return func(o *managerOptions) {
-		o.readqf = f
-	}
-}
-
-// WithWriteQuorumFunc returns a ManagerOption that sets a cumstom
-// WriteQuorumFunc.
-func WithWriteQuorumFunc(f WriteQuorumFn) ManagerOption {
-	return func(o *managerOptions) {
-		o.writeqf = f
-	}
-}
-
-// ReadQuorumFn is used to pick a reply from the replies if there is a quorum.
-// If there was not enough replies to satisfy the quorum requirement,
-// then the function returns (nil, false). Otherwise, the function picks a
-// reply among the replies and returns (reply, true).
-type ReadQuorumFn func(c *Configuration, replies []*State) (*State, bool)
-
-// WriteQuorumFn is used to pick a reply from the replies if there is a quorum.
-// If there was not enough replies to satisfy the quorum requirement,
-// then the function returns (nil, false). Otherwise, the function picks a
-// reply among the replies and returns (reply, true).
-type WriteQuorumFn func(c *Configuration, replies []*WriteResponse) (*WriteResponse, bool)
-
-/* Gorums Client API */
-
-/* Configuration RPC specific */
-
 // ReadReply encapsulates the reply from a Read RPC invocation.
 // It contains the id of each node in the quorum that replied and a single
 // reply.
 type ReadReply struct {
-	NodeIDs []int
+	NodeIDs []uint32
 	Reply   *State
 }
 
@@ -465,10 +335,10 @@ func (r ReadReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
 }
 
-// ReadReply invokes a Read RPC on configuration c
+// Read invokes a Read RPC on configuration c
 // and returns the result as a ReadReply.
 func (c *Configuration) Read(args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(c.id, args)
+	return c.mgr.read(c, args)
 }
 
 // ReadFuture is a reference to an asynchronous Read RPC invocation.
@@ -486,7 +356,7 @@ func (c *Configuration) ReadFuture(args *ReadRequest) *ReadFuture {
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.read(c.id, args)
+		f.reply, f.err = c.mgr.read(c, args)
 	}()
 	return f
 }
@@ -512,7 +382,7 @@ func (f *ReadFuture) Done() bool {
 // It contains the id of each node in the quorum that replied and a single
 // reply.
 type WriteReply struct {
-	NodeIDs []int
+	NodeIDs []uint32
 	Reply   *WriteResponse
 }
 
@@ -520,10 +390,10 @@ func (r WriteReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
 }
 
-// WriteReply invokes a Write RPC on configuration c
+// Write invokes a Write RPC on configuration c
 // and returns the result as a WriteReply.
 func (c *Configuration) Write(args *State) (*WriteReply, error) {
-	return c.mgr.write(c.id, args)
+	return c.mgr.write(c, args)
 }
 
 // WriteFuture is a reference to an asynchronous Write RPC invocation.
@@ -541,7 +411,7 @@ func (c *Configuration) WriteFuture(args *State) *WriteFuture {
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.write(c.id, args)
+		f.reply, f.err = c.mgr.write(c, args)
 	}()
 	return f
 }
@@ -563,43 +433,32 @@ func (f *WriteFuture) Done() bool {
 	}
 }
 
-// WriteAsyncinvokes an asynchronous WriteAsync RPC on configuration c.
+// WriteAsync invokes an asynchronous WriteAsync RPC on configuration c.
 // The call has no return value and is invoked on every node in the
 // configuration.
 func (c *Configuration) WriteAsync(args *State) error {
-	return c.mgr.writeAsync(c.id, args)
+	return c.mgr.writeAsync(c, args)
 }
 
-/* Manager RPC specific */
-
 type readReply struct {
-	nid   int
+	nid   uint32
 	reply *State
 	err   error
 }
 
-func (m *Manager) read(cid int, args *ReadRequest) (*ReadReply, error) {
-	c, found := m.Configuration(cid)
-	if !found {
-		panic("execptional: config not found")
-	}
-
+func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
 	var (
-		replyChan   = make(chan readReply, c.Size())
+		replyChan   = make(chan readReply, c.n)
 		stopSignal  = make(chan struct{})
-		replyValues = make([]*State, 0, c.quorum)
+		replyValues = make([]*State, 0, c.n)
 		errCount    int
 		quorum      bool
-		reply       = &ReadReply{NodeIDs: make([]int, 0, c.quorum)}
+		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
-	for _, nid := range c.nodes {
-		node, found := m.Node(nid)
-		if !found {
-			panic("exceptional: node not found")
-		}
-		go func() {
+	for _, n := range c.nodes {
+		go func(node *Node) {
 			reply := new(State)
 			ce := make(chan error, 1)
 			start := time.Now()
@@ -618,8 +477,8 @@ func (m *Manager) read(cid int, args *ReadRequest) (*ReadReply, error) {
 			}()
 			select {
 			case err := <-ce:
-				switch grpc.Code(err) {
-				case codes.OK, codes.Aborted, codes.Canceled:
+				switch grpc.Code(err) { // nil -> codes.OK
+				case codes.OK, codes.Canceled:
 					node.setLatency(time.Since(start))
 				default:
 					node.setLastErr(err)
@@ -628,7 +487,7 @@ func (m *Manager) read(cid int, args *ReadRequest) (*ReadReply, error) {
 			case <-stopSignal:
 				return
 			}
-		}()
+		}(n)
 	}
 
 	defer close(stopSignal)
@@ -642,10 +501,9 @@ func (m *Manager) read(cid int, args *ReadRequest) (*ReadReply, error) {
 				errCount++
 				goto terminationCheck
 			}
-
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = m.readqf(c, replyValues); quorum {
+			if reply.Reply, quorum = c.qspec.ReadQF(replyValues); quorum {
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
@@ -653,40 +511,32 @@ func (m *Manager) read(cid int, args *ReadRequest) (*ReadReply, error) {
 		}
 
 	terminationCheck:
-		if errCount+len(replyValues) == c.Size() {
+		if errCount+len(replyValues) == c.n {
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
+
 	}
 }
 
 type writeReply struct {
-	nid   int
+	nid   uint32
 	reply *WriteResponse
 	err   error
 }
 
-func (m *Manager) write(cid int, args *State) (*WriteReply, error) {
-	c, found := m.Configuration(cid)
-	if !found {
-		panic("execptional: config not found")
-	}
-
+func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 	var (
-		replyChan   = make(chan writeReply, c.Size())
+		replyChan   = make(chan writeReply, c.n)
 		stopSignal  = make(chan struct{})
-		replyValues = make([]*WriteResponse, 0, c.quorum)
+		replyValues = make([]*WriteResponse, 0, c.n)
 		errCount    int
 		quorum      bool
-		reply       = &WriteReply{NodeIDs: make([]int, 0, c.quorum)}
+		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
-	for _, nid := range c.nodes {
-		node, found := m.Node(nid)
-		if !found {
-			panic("exceptional: node not found")
-		}
-		go func() {
+	for _, n := range c.nodes {
+		go func(node *Node) {
 			reply := new(WriteResponse)
 			ce := make(chan error, 1)
 			start := time.Now()
@@ -705,8 +555,8 @@ func (m *Manager) write(cid int, args *State) (*WriteReply, error) {
 			}()
 			select {
 			case err := <-ce:
-				switch grpc.Code(err) {
-				case codes.OK, codes.Aborted, codes.Canceled:
+				switch grpc.Code(err) { // nil -> codes.OK
+				case codes.OK, codes.Canceled:
 					node.setLatency(time.Since(start))
 				default:
 					node.setLastErr(err)
@@ -715,7 +565,7 @@ func (m *Manager) write(cid int, args *State) (*WriteReply, error) {
 			case <-stopSignal:
 				return
 			}
-		}()
+		}(n)
 	}
 
 	defer close(stopSignal)
@@ -729,10 +579,9 @@ func (m *Manager) write(cid int, args *State) (*WriteReply, error) {
 				errCount++
 				goto terminationCheck
 			}
-
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = m.writeqf(c, replyValues); quorum {
+			if reply.Reply, quorum = c.qspec.WriteQF(replyValues); quorum {
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
@@ -740,34 +589,83 @@ func (m *Manager) write(cid int, args *State) (*WriteReply, error) {
 		}
 
 	terminationCheck:
-		if errCount+len(replyValues) == c.Size() {
+		if errCount+len(replyValues) == c.n {
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
+
 	}
 }
-func (m *Manager) writeAsync(cid int, args *State) error {
-	c, found := m.Configuration(cid)
-	if !found {
-		panic("execeptional: config not found")
-	}
 
-	for _, nid := range c.nodes {
-		go func(nodeID int) {
-			stream := m.writeAsyncClients[nodeID]
-			if stream == nil {
-				panic("execeptional: node client stream not found")
-			}
-			err := stream.Send(args)
+func (m *Manager) writeAsync(c *Configuration, args *State) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.writeAsyncClient.Send(args)
 			if err == nil {
 				return
 			}
 			if m.logger != nil {
-				m.logger.Printf("node %d: writeAsync stream send error: %v", nodeID, err)
+				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
 			}
-		}(nid)
+		}(node)
 	}
 
 	return nil
+}
+
+// Node encapsulates the state of a node on which a remote procedure call
+// can be made.
+type Node struct {
+	// Only assigned at creation.
+	id   uint32
+	self bool
+	addr string
+	conn *grpc.ClientConn
+
+	writeAsyncClient Register_WriteAsyncClient
+
+	sync.Mutex
+	lastErr error
+	latency time.Duration
+}
+
+func (n *Node) connect(opts ...grpc.DialOption) error {
+	var err error
+	n.conn, err = grpc.Dial(n.addr, opts...)
+	if err != nil {
+		return fmt.Errorf("dialing node failed: %v", err)
+	}
+
+	//TODO suspected bug: if a connect fails below, it returns, leaving the conn above connected, leaking something.
+	//TODO fix client name to be clRegister
+
+	client := NewRegisterClient(n.conn)
+
+	n.writeAsyncClient, err = client.WriteAsync(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
+
+	return nil
+}
+
+func (n *Node) close() error {
+	var err error
+
+	_, err = n.writeAsyncClient.CloseAndRecv()
+
+	err2 := n.conn.Close()
+	if err != nil {
+		return fmt.Errorf("stream close failed: %v", err)
+	} else if err2 != nil {
+		return fmt.Errorf("conn close failed: %v", err2)
+	}
+	return nil
+}
+
+type QuorumSpec interface {
+	ReadQF(replies []*State) (*State, bool)
+	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
+	IDs() []uint32
 }
 
 /* Static resources */
@@ -880,6 +778,19 @@ func ManagerCreationError(err error) error {
 
 /* mgr.go */
 
+// Manager manages a pool of node configurations on which quorum remote
+// procedure calls can be made.
+type Manager struct {
+	sync.RWMutex
+
+	nodes   map[uint32]*Node
+	configs map[uint32]*Configuration
+
+	closeOnce sync.Once
+	logger    *log.Logger
+	opts      managerOptions
+}
+
 // NewManager attempts to connect to the given set of node addresses and if
 // successful returns a new Manager containing connections to those nodes.
 func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
@@ -924,11 +835,6 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	err = m.connectAll()
-	if err != nil {
-		return nil, ManagerCreationError(err)
-	}
-
-	err = m.createStreamClients()
 	if err != nil {
 		return nil, ManagerCreationError(err)
 	}
@@ -1008,12 +914,12 @@ func (m *Manager) closeNodeConns() {
 		if node.self {
 			continue
 		}
-		err := node.conn.Close()
+		err := node.close()
 		if err == nil {
 			continue
 		}
 		if m.logger != nil {
-			m.logger.Printf("node %d: error closing connection: %v", node.id, err)
+			m.logger.Printf("node %d: error closing: %v", node.id, err)
 		}
 	}
 }
@@ -1021,7 +927,6 @@ func (m *Manager) closeNodeConns() {
 // Close closes all node connections and any client streams.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
-		m.closeStreamClients()
 		m.closeNodeConns()
 	})
 }
@@ -1173,30 +1078,7 @@ func (p idSlice) Len() int           { return len(p) }
 func (p idSlice) Less(i, j int) bool { return p[i] < p[j] }
 func (p idSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
-/* node.go */
-
-// Node encapsulates the state of a node on which a remote procedure call
-// can be made.
-type Node struct {
-	// Only assigned at creation.
-	id   uint32
-	self bool
-	addr string
-	conn *grpc.ClientConn
-
-	sync.Mutex
-	lastErr error
-	latency time.Duration
-}
-
-func (n *Node) connect(opts ...grpc.DialOption) error {
-	conn, err := grpc.Dial(n.addr, opts...)
-	if err != nil {
-		return fmt.Errorf("dialing node failed: %v", err)
-	}
-	n.conn = conn
-	return nil
-}
+/* node_func.go */
 
 // ID returns the ID of m.
 func (n *Node) ID() uint32 {

@@ -112,11 +112,13 @@ func visit(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			log.Println("executing template:", err)
 		}
-		log.Println(pkgData.PackageName, pkgData.IgnoreImports)
-		log.Println(wb.String())
+		genDump = append(genDump, wb.String())
+		// log.Println(wb.String())
 	}
 	return nil
 }
+
+var genDump []string
 
 type tmplData struct {
 	PackageName   string
@@ -131,6 +133,7 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	if len(file.FileDescriptorProto.Service) == 0 {
 		return
 	}
+	genDump = make([]string, 4) //four tmpl files
 	pkgData = tmplData{
 		PackageName:   file.GetPackage(),
 		Services:      g.generateServiceMethods(file.FileDescriptorProto.Service),
@@ -140,11 +143,14 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	for _, s := range genDump {
+		g.P(s)
+	}
 
 	//TODO remove these once we know that things are working and don't need both _gen and _xen
-	smethods := pkgData.Services
-	g.generateMgrTypeRelated(smethods)
-	g.generateGorumsWrapperForService(file, smethods)
+	// smethods := pkgData.Services
+	// g.generateMgrTypeRelated(smethods)
+	// g.generateGorumsWrapperForService(file, smethods)
 
 	//KEEP THIS NEXT ONE
 	g.embedStaticResources()
