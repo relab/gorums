@@ -19,10 +19,6 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 	var (
 		replyChan   = make(chan readReply, c.n)
 		stopSignal  = make(chan struct{})
-		replyValues = make([]*State, 0, c.n)
-		errCount    int
-		quorum      bool
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
@@ -61,6 +57,13 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 
 	defer close(stopSignal)
 	defer cancel()
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
 
 	/*
 		Alternative for time.After in select below: stop rpc timeout timer explicitly.
@@ -115,10 +118,6 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 	var (
 		replyChan   = make(chan writeReply, c.n)
 		stopSignal  = make(chan struct{})
-		replyValues = make([]*WriteResponse, 0, c.n)
-		errCount    int
-		quorum      bool
-		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 		ctx, cancel = context.WithCancel(context.Background())
 	)
 
@@ -157,6 +156,13 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 
 	defer close(stopSignal)
 	defer cancel()
+
+	var (
+		replyValues = make([]*WriteResponse, 0, c.n)
+		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
 
 	for {
 
