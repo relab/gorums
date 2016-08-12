@@ -16,37 +16,11 @@ type readReply struct {
 }
 
 func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
-	var (
-		replyChan   = make(chan *readReply, c.n)
-		ctx, cancel = context.WithCancel(context.Background())
-	)
+	replyChan := make(chan *readReply, c.n)
+	ctx, cancel := context.WithCancel(context.Background())
 
-	callGRPC := func(node *Node) {
-		reply := new(State)
-		start := time.Now()
-		err := grpc.Invoke(
-			ctx,
-			"/dev.Register/Read",
-			args,
-			reply,
-			node.conn,
-		)
-		switch grpc.Code(err) { // nil -> codes.OK
-		case codes.OK, codes.Canceled:
-			node.setLatency(time.Since(start))
-		default:
-			node.setLastErr(err)
-		}
-		replyChan <- &readReply{node.id, reply, err}
-	}
-
-	if len(c.nodes) == 1 {
-		// optimization: don't create goroutine for calls on single node config
-		callGRPC(c.nodes[0])
-	} else {
-		for _, n := range c.nodes {
-			go callGRPC(n)
-		}
+	for _, n := range c.nodes {
+		go callGRPCRead(n, ctx, args, replyChan)
 	}
 
 	var (
@@ -82,6 +56,25 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 		}
 
 	}
+}
+
+func callGRPCRead(node *Node, ctx context.Context, args *ReadRequest, replyChan chan<- *readReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/Read",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- &readReply{node.id, reply, err}
 }
 
 type writeReply struct {
