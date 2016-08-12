@@ -16,7 +16,7 @@ type readReply struct {
 }
 
 func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
-	replyChan := make(chan *readReply, c.n)
+	replyChan := make(chan readReply, c.n)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	for _, n := range c.nodes {
@@ -31,7 +31,6 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 	)
 
 	for {
-
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
@@ -54,11 +53,10 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 			cancel()
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
-
 	}
 }
 
-func callGRPCRead(node *Node, ctx context.Context, args *ReadRequest, replyChan chan<- *readReply) {
+func callGRPCRead(node *Node, ctx context.Context, args *ReadRequest, replyChan chan<- readReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -74,7 +72,7 @@ func callGRPCRead(node *Node, ctx context.Context, args *ReadRequest, replyChan 
 	default:
 		node.setLastErr(err)
 	}
-	replyChan <- &readReply{node.id, reply, err}
+	replyChan <- readReply{node.id, reply, err}
 }
 
 type writeReply struct {
