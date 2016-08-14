@@ -1,7 +1,7 @@
 {{/* Remember to run 'make gengolden' after editing this file. */}}
 {{$pkgName := .PackageName}}
 
-{{- if not .IgnoreImports}}
+{{if not .IgnoreImports}}
 package {{$pkgName}}
 
 import (
@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 )
-{{- end -}}
+{{end}}
 
 {{range $elm := .Services}}
 
@@ -33,7 +33,7 @@ func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}
 	return nil
 }
 
-{{else -}}
+{{else}}
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -42,54 +42,21 @@ type {{.UnexportedTypeName}} struct {
 }
 
 func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) (*{{.TypeName}}, error) {
-	var (
-		replyChan   = make(chan {{.UnexportedTypeName}}, c.n)
-		stopSignal  = make(chan struct{})
-		replyValues = make([]*{{.RespName}}, 0, c.n)
-		errCount    int
-		quorum      bool
-		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
-		ctx, cancel = context.WithCancel(context.Background())
-	)
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	for _, n := range c.nodes {
-		go func(node *Node) {
-			reply := new({{.RespName}})
-			ce := make(chan error, 1)
-			start := time.Now()
-			go func() {
-				select {
-				case ce <- grpc.Invoke(
-					ctx,
-					"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
-					args,
-					reply,
-					node.conn,
-				):
-				case <-stopSignal:
-					return
-				}
-			}()
-			select {
-			case err := <-ce:
-				switch grpc.Code(err) { // nil -> codes.OK
-				case codes.OK, codes.Canceled:
-					node.setLatency(time.Since(start))
-				default:
-					node.setLastErr(err)
-				}
-				replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
-			case <-stopSignal:
-				return
-			}
-		}(n)
+		go callGRPC{{.MethodName}}(n, ctx, args, replyChan)
 	}
 
-	defer close(stopSignal)
-	defer cancel()
+	var (
+		replyValues = make([]*{{.RespName}}, 0, c.n)
+		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
 
 	for {
-
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
@@ -99,18 +66,39 @@ func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.Reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+				cancel()
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
+			cancel()
 			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
+			cancel()
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
-
 	}
+}
+
+func callGRPC{{.MethodName}}(node *Node, ctx context.Context, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.RespName}})
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
 }
 
 {{- end -}}
