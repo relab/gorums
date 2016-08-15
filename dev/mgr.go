@@ -199,7 +199,7 @@ func (m *Manager) Nodes(excludeSelf bool) []*Node {
 	return nodes
 }
 
-// ConfigurationDs returns the identifier of each available
+// ConfigurationIDs returns the identifier of each available
 // configuration.
 func (m *Manager) ConfigurationIDs() []uint32 {
 	m.RLock()
@@ -212,7 +212,7 @@ func (m *Manager) ConfigurationIDs() []uint32 {
 	return ids
 }
 
-// ConfigurationFromGlobalID returns the configuration with the given global
+// Configuration returns the configuration with the given global
 // identifier if present.
 func (m *Manager) Configuration(id uint32) (config *Configuration, found bool) {
 	m.RLock()
