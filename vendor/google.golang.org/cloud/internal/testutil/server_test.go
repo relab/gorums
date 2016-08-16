@@ -12,23 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build appengine
-
-package transport
+package testutil
 
 import (
-	"net"
-	"time"
+	"testing"
 
-	"golang.org/x/net/context"
-	"google.golang.org/appengine/socket"
-	"google.golang.org/grpc"
+	grpc "google.golang.org/grpc"
 )
 
-func init() {
-	appengineDialerHook = func(ctx context.Context) grpc.DialOption {
-		return grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-			return socket.DialTimeout(ctx, "tcp", addr, timeout)
-		})
+func TestNewServer(t *testing.T) {
+	srv, err := NewServer()
+	if err != nil {
+		t.Fatal(err)
 	}
+	srv.Start()
+	conn, err := grpc.Dial(srv.Addr, grpc.WithInsecure())
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Close()
+	srv.Close()
 }
