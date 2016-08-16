@@ -247,11 +247,10 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	ids := qspec.IDs()
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
 	}
