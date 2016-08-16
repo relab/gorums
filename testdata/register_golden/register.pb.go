@@ -648,10 +648,13 @@ func (n *Node) close() error {
 
 /* Gorums Generator Plugin - generated from: dev/qspec.tmpl */
 
+// QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
+
+	// ReadQF is the quorum function for the Read RPC method.
 	ReadQF(replies []*State) (*State, bool)
+	// WriteQF is the quorum function for the Write RPC method.
 	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
-	IDs() []uint32
 }
 
 /* Static resources */
@@ -1000,11 +1003,10 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	ids := qspec.IDs()
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
 	}
