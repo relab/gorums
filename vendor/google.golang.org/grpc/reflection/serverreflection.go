@@ -70,7 +70,7 @@ import (
 type serverReflectionServer struct {
 	s *grpc.Server
 	// TODO add more cache if necessary
-	serviceInfo map[string]*grpc.ServiceInfo // cache for s.GetServiceInfo()
+	serviceInfo map[string]grpc.ServiceInfo // cache for s.GetServiceInfo()
 }
 
 // Register registers the server reflection service on the given gRPC server.
@@ -214,19 +214,19 @@ func (s *serverReflectionServer) serviceMetadataForSymbol(name string) (interfac
 		return nil, fmt.Errorf("unknown symbol: %v", name)
 	}
 
-	// Search for method in info.
+	// Search the method name in info.Methods.
 	var found bool
 	for _, m := range info.Methods {
-		if m == name[pos+1:] {
+		if m.Name == name[pos+1:] {
 			found = true
 			break
 		}
 	}
-	if !found {
-		return nil, fmt.Errorf("unknown symbol: %v", name)
+	if found {
+		return info.Metadata, nil
 	}
 
-	return info.Metadata, nil
+	return nil, fmt.Errorf("unknown symbol: %v", name)
 }
 
 // fileDescEncodingContainingSymbol finds the file descriptor containing the given symbol,

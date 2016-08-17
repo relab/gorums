@@ -312,7 +312,7 @@ func (m *Manager) Nodes(excludeSelf bool) []*Node {
 	return nodes
 }
 
-// ConfigurationDs returns the identifier of each available
+// ConfigurationIDs returns the identifier of each available
 // configuration.
 func (m *Manager) ConfigurationIDs() []uint32 {
 	m.RLock()
@@ -325,7 +325,7 @@ func (m *Manager) ConfigurationIDs() []uint32 {
 	return ids
 }
 
-// ConfigurationFromGlobalID returns the configuration with the given global
+// Configuration returns the configuration with the given global
 // identifier if present.
 func (m *Manager) Configuration(id uint32) (config *Configuration, found bool) {
 	m.RLock()
@@ -360,11 +360,10 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	ids := qspec.IDs()
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
 	}
@@ -604,10 +603,9 @@ func WithSelfAddr(addr string) ManagerOption {
 	}
 }
 
-// WithSelfGid returns a ManagerOption which instructs the Manager not to
-// connect to the node with global id gid.  The node with the given
-// global id must be present in the list of node addresses provided to the
-// Manager.
+// WithSelfID returns a ManagerOption which instructs the Manager not to
+// connect to the node with the given id. The node must be present in the list
+// of node addresses provided to the Manager.
 func WithSelfID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
 		o.selfID = id

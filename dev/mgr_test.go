@@ -22,15 +22,16 @@ func TestEqualGlobalConfigurationIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	qspec := NewMajorityQSpec(mgrOne.NodeIDs())
+	ids := mgrOne.NodeIDs()
+	qspec := NewMajorityQSpec(len(ids))
 
 	// Create a configuration in each manager using all nodes.
 	// Global ids should be equal.
-	configOne, err := mgrOne.NewConfiguration(qspec, 1)
+	configOne, err := mgrOne.NewConfiguration(ids, qspec, 1)
 	if err != nil {
 		t.Fatalf("error creating config one: %v", err)
 	}
-	configTwo, err := mgrTwo.NewConfiguration(qspec, 1)
+	configTwo, err := mgrTwo.NewConfiguration(ids, qspec, 1)
 	if err != nil {
 		t.Fatalf("error creating config two: %v", err)
 	}
@@ -126,9 +127,9 @@ func TestCreateConfiguration(t *testing.T) {
 	}
 
 	ids := mgr.NodeIDs()
-	qspec := NewMajorityQSpec(ids)
+	qspec := NewMajorityQSpec(len(ids))
 
-	config, err := mgr.NewConfiguration(qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
 	if err != nil {
 		t.Errorf("got error creating configuration, want none (%v)", err)
 	}
@@ -159,9 +160,9 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 	}
 
 	ids := mgr.NodeIDs()
-	qspecOne := NewMajorityQSpec(mgr.NodeIDs())
+	qspecOne := NewMajorityQSpec(len(ids))
 
-	_, err = mgr.NewConfiguration(qspecOne, time.Second)
+	_, err = mgr.NewConfiguration(ids, qspecOne, time.Second)
 	if err == nil {
 		t.Error("expected error creating configuration with self, got none")
 	}
@@ -172,9 +173,9 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 		nids = append(nids, node.ID())
 	}
 
-	qspecTwo := NewMajorityQSpec(nids)
+	qspecTwo := NewMajorityQSpec(len(nids))
 
-	config, err := mgr.NewConfiguration(qspecTwo, time.Second)
+	config, err := mgr.NewConfiguration(nids, qspecTwo, time.Second)
 	if err != nil {
 		t.Errorf("got error creating configuration, want none (%v)", err)
 	}

@@ -81,7 +81,7 @@ type testStreamHandler struct {
 func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 	p := &parser{r: s}
 	for {
-		pf, req, err := p.recvMsg()
+		pf, req, err := p.recvMsg(math.MaxInt32)
 		if err == io.EOF {
 			break
 		}
@@ -234,7 +234,7 @@ func TestInvokeLargeErr(t *testing.T) {
 	var reply string
 	req := "hello"
 	err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
-	if _, ok := err.(rpcError); !ok {
+	if _, ok := err.(*rpcError); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}
 	if Code(err) != codes.Internal || len(ErrorDesc(err)) != sizeLargeErr {
@@ -250,7 +250,7 @@ func TestInvokeErrorSpecialChars(t *testing.T) {
 	var reply string
 	req := "weird error"
 	err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
-	if _, ok := err.(rpcError); !ok {
+	if _, ok := err.(*rpcError); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}
 	if got, want := ErrorDesc(err), weirdError; got != want {

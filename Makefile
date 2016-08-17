@@ -133,7 +133,7 @@ check:
 		grep -vE '("_"|.pb.go)' ; \
 	done
 	@echo "errcheck"
-	@errcheck -ignore 'encoding/binary:Write,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close' $(GORUMS_PKGS)
+	@errcheck -ignore 'bytes:WriteString,encoding/binary:Write,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close' $(GORUMS_PKGS)
 	@echo "ineffassign"
 	@for dir in $(GORUMS_DIRS); do \
 		ineffassign -n $$dir ; \

@@ -1,7 +1,22 @@
+// Copyright 2016 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package bundler
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 )
@@ -19,14 +34,14 @@ func TestBundlerCount1(t *testing.T) {
 		}
 	}
 	b.Close()
-	got := handler.bundles
+	got := handler.bundles()
 	want := [][]int{{0}, {1}, {2}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("bundles: got %v, want %v", got, want)
 	}
 	// All bundles should have been handled "immediately": much less
 	// than the delay threshold of 1s.
-	tgot := quantizeTimes(handler.times, 100*time.Millisecond)
+	tgot := quantizeTimes(handler.times(), 100*time.Millisecond)
 	twant := []int{0, 0, 0}
 	if !reflect.DeepEqual(tgot, twant) {
 		t.Errorf("times: got %v, want %v", tgot, twant)
@@ -37,28 +52,27 @@ func TestBundlerCount3(t *testing.T) {
 	handler := &testHandler{}
 	b := NewBundler(int(0), handler.handle)
 	b.BundleCountThreshold = 3
-	b.DelayThreshold = 1 * time.Millisecond
+	b.DelayThreshold = 100 * time.Millisecond
 	// Add 8 items.
 	// The first two bundles of 3 should both be handled quickly.
-	// The third bundle of 2 should not be handled for about 1 ms.
+	// The third bundle of 2 should not be handled for about DelayThreshold ms.
 	for i := 0; i < 8; i++ {
 		if err := b.Add(i, 1); err != nil {
 			t.Fatal(err)
 		}
 	}
-	time.Sleep(2 * b.DelayThreshold)
+	time.Sleep(5 * b.DelayThreshold)
 	// We should not need to close the bundler.
 
-	bgot := handler.bundles
+	bgot := handler.bundles()
 	bwant := [][]int{{0, 1, 2}, {3, 4, 5}, {6, 7}}
 	if !reflect.DeepEqual(bgot, bwant) {
 		t.Errorf("bundles: got %v, want %v", bgot, bwant)
 	}
 
-	tgot := quantizeTimes(handler.times, b.DelayThreshold)
-	twant := []int{0, 0, 1}
-	if !reflect.DeepEqual(tgot, twant) {
-		t.Errorf("times: got %v, want %v", tgot, twant)
+	tgot := quantizeTimes(handler.times(), b.DelayThreshold)
+	if len(tgot) != 3 || tgot[0] != 0 || tgot[1] != 0 || tgot[2] == 0 {
+		t.Errorf("times: got %v, want [0, 0, non-zero]", tgot)
 	}
 }
 
@@ -82,12 +96,12 @@ func TestBundlerByteThreshold(t *testing.T) {
 	// Passed byte threshold, but not limit: bundle = 3, 4, 5
 	add(6, 1)
 	b.Close()
-	bgot := handler.bundles
+	bgot := handler.bundles()
 	bwant := [][]int{{1, 2}, {3, 4, 5}, {6}}
 	if !reflect.DeepEqual(bgot, bwant) {
 		t.Errorf("bundles: got %v, want %v", bgot, bwant)
 	}
-	tgot := quantizeTimes(handler.times, b.DelayThreshold)
+	tgot := quantizeTimes(handler.times(), b.DelayThreshold)
 	twant := []int{0, 0, 0}
 	if !reflect.DeepEqual(tgot, twant) {
 		t.Errorf("times: got %v, want %v", tgot, twant)
@@ -115,12 +129,12 @@ func TestBundlerLimit(t *testing.T) {
 	add(6, 2)
 	// Exceeded byte limit: bundle = 5
 	b.Close()
-	bgot := handler.bundles
+	bgot := handler.bundles()
 	bwant := [][]int{{1, 2}, {3, 4}, {5}, {6}}
 	if !reflect.DeepEqual(bgot, bwant) {
 		t.Errorf("bundles: got %v, want %v", bgot, bwant)
 	}
-	tgot := quantizeTimes(handler.times, b.DelayThreshold)
+	tgot := quantizeTimes(handler.times(), b.DelayThreshold)
 	twant := []int{0, 0, 0, 0}
 	if !reflect.DeepEqual(tgot, twant) {
 		t.Errorf("times: got %v, want %v", tgot, twant)
@@ -149,13 +163,28 @@ func TestBundlerErrors(t *testing.T) {
 }
 
 type testHandler struct {
-	bundles [][]int
-	times   []time.Time
+	mu sync.Mutex
+	b  [][]int
+	t  []time.Time
+}
+
+func (t *testHandler) bundles() [][]int {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.b
+}
+
+func (t *testHandler) times() []time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.t
 }
 
 func (t *testHandler) handle(b interface{}) {
-	t.bundles = append(t.bundles, b.([]int))
-	t.times = append(t.times, time.Now())
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.b = append(t.b, b.([]int))
+	t.t = append(t.t, time.Now())
 }
 
 // Round times to the nearest q and express them as the number of q

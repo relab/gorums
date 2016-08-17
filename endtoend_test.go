@@ -32,6 +32,11 @@ var devFilesToCopy = []struct {
 		true,
 	},
 	{
+		"config_rpc_qspecs_test.go",
+		"", "",
+		true,
+	},
+	{
 		"node_test.go",
 		"", "",
 		false,

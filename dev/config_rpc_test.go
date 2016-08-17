@@ -30,86 +30,6 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-type MajorityQSpec struct {
-	ids []uint32
-	q   int
-}
-
-func NewMajorityQSpec(ids []uint32) *MajorityQSpec {
-	return &MajorityQSpec{
-		ids: ids,
-		q:   len(ids)/2 + 1,
-	}
-}
-
-func (mqs *MajorityQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
-	if len(replies) < mqs.q {
-		return nil, false
-	}
-	return replies[0], true
-}
-
-func (mqs *MajorityQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
-	if len(replies) < mqs.q {
-		return nil, false
-	}
-	return replies[0], true
-}
-
-func (mqs *MajorityQSpec) IDs() []uint32 {
-	return mqs.ids
-}
-
-type RegisterQSpec struct {
-	ids    []uint32
-	rq, wq int
-}
-
-func NewRegisterQSpec(ids []uint32, rq, wq int) *RegisterQSpec {
-	return &RegisterQSpec{
-		ids: ids,
-		rq:  rq,
-		wq:  wq,
-	}
-}
-
-func (rqs *RegisterQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
-	if len(replies) < rqs.rq {
-		return nil, false
-	}
-	return replies[0], true
-}
-
-func (rqs *RegisterQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
-	if len(replies) < rqs.wq {
-		return nil, false
-	}
-	return replies[0], true
-}
-
-func (rqs *RegisterQSpec) IDs() []uint32 {
-	return rqs.ids
-}
-
-type NeverQSpec struct {
-	ids []uint32
-}
-
-func NewNeverQSpec(ids []uint32) *NeverQSpec {
-	return &NeverQSpec{ids: ids}
-}
-func (mqs *NeverQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
-	return nil, false
-}
-
-func (mqs *NeverQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
-	return nil, false
-}
-
-func (mqs *NeverQSpec) IDs() []uint32 {
-	return mqs.ids
-}
-
 func TestBasicRegister(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
@@ -136,19 +56,12 @@ func TestBasicRegister(t *testing.T) {
 	// Get all all available node ids
 	ids := mgr.NodeIDs()
 
-	// Quorum spec
-	qspec := NewRegisterQSpec(ids, 1, len(ids))
+	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
+	qspec := NewRegisterByTimestampQSpec(2, len(ids))
 
-	// A read configuration. Quorum=1, n=3
-	readConfig, err := mgr.NewConfiguration(qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
 	if err != nil {
-		t.Fatalf("error creating read config: %v", err)
-	}
-
-	// A write configuration. Quorum=majority (2), n=3
-	writeConfig, err := mgr.NewConfiguration(qspec, time.Second)
-	if err != nil {
-		t.Fatalf("error creating write config: %v", err)
+		t.Fatalf("error creating config: %v", err)
 	}
 
 	// Test state
@@ -157,8 +70,8 @@ func TestBasicRegister(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	// Do write call
-	wreply, err := writeConfig.Write(state)
+	// Perfomr write call
+	wreply, err := config.Write(state)
 	if err != nil {
 		t.Fatalf("write rpc call error: %v", err)
 	}
@@ -168,7 +81,7 @@ func TestBasicRegister(t *testing.T) {
 	}
 
 	// Do read call
-	rreply, err := readConfig.Read(&rpc.ReadRequest{})
+	rreply, err := config.Read(&rpc.ReadRequest{})
 	if err != nil {
 		t.Fatalf("read rpc call error: %v", err)
 	}
@@ -207,16 +120,15 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	qspec := NewNeverQSpec(ids)
-
-	readConfig, err := mgr.NewConfiguration(qspec, time.Second)
+	qspec := NewNeverQSpec()
+	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
 	if err != nil {
-		t.Fatalf("error creating read config: %v", err)
+		t.Fatalf("error creating config: %v", err)
 	}
 
 	replyChan := make(chan error, 1)
 	go func() {
-		_, err = readConfig.Read(&rpc.ReadRequest{})
+		_, err = config.Read(&rpc.ReadRequest{})
 		replyChan <- err
 	}()
 	select {
@@ -266,14 +178,13 @@ func TestSlowRegister(t *testing.T) {
 
 	ids := mgr.NodeIDs()
 	timeout := 25 * time.Millisecond
-	qspec := NewMajorityQSpec(ids)
-
-	readConfig, err := mgr.NewConfiguration(qspec, timeout)
+	qspec := NewMajorityQSpec(len(ids))
+	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
 	if err != nil {
-		t.Fatalf("error creating read config: %v", err)
+		t.Fatalf("error creating config: %v", err)
 	}
 
-	_, err = readConfig.Read(&rpc.ReadRequest{})
+	_, err = config.Read(&rpc.ReadRequest{})
 	if err == nil {
 		t.Errorf("read rpc call: want error, got none")
 	}
@@ -311,16 +222,10 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(ids, 1, len(ids)/2+1)
-
-	readConfig, err := mgr.NewConfiguration(qspec, 25*time.Millisecond)
+	qspec := NewRegisterQSpec(1, len(ids)/2+1)
+	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
 	if err != nil {
-		t.Fatalf("error creating read config: %v", err)
-	}
-
-	writeConfig, err := mgr.NewConfiguration(qspec, 25*time.Millisecond)
-	if err != nil {
-		t.Fatalf("error creating write config: %v", err)
+		t.Fatalf("error creating config: %v", err)
 	}
 
 	state := &rpc.State{
@@ -329,7 +234,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 
 	// Write asynchronously.
-	wfuture := writeConfig.WriteFuture(state)
+	wfuture := config.WriteFuture(state)
 
 	// Wait for all writes to finish.
 	servers.waitForAllWrites()
@@ -350,7 +255,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 
 	// Read asynchronously.
-	rfuture := readConfig.ReadFuture(&rpc.ReadRequest{})
+	rfuture := config.ReadFuture(&rpc.ReadRequest{})
 
 	// Inspect read reply when available.
 	rreply, err := rfuture.Get()
@@ -387,16 +292,11 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(ids, 1, len(ids)/2+1)
+	qspec := NewRegisterQSpec(1, len(ids)/2+1)
 
-	readConfig, err := mgr.NewConfiguration(qspec, 25*time.Millisecond)
+	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
 	if err != nil {
-		t.Fatalf("error creating read config: %v", err)
-	}
-
-	writeConfig, err := mgr.NewConfiguration(qspec, 25*time.Millisecond)
-	if err != nil {
-		t.Fatalf("error creating write config: %v", err)
+		t.Fatalf("error creating config: %v", err)
 	}
 
 	stateOne := &rpc.State{
@@ -404,7 +304,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	wreply, err := writeConfig.Write(stateOne)
+	wreply, err := config.Write(stateOne)
 	if err != nil {
 		t.Fatalf("write rpc call error: %v", err)
 	}
@@ -417,7 +317,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		t.Error("write reply was not marked as new")
 	}
 
-	rreply, err := readConfig.Read(&rpc.ReadRequest{})
+	rreply, err := config.Read(&rpc.ReadRequest{})
 	if err != nil {
 		t.Fatalf("read rpc call error: %v", err)
 	}
@@ -432,7 +332,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 
 	// Write a value using the WriteAsync stream.
-	err = writeConfig.WriteAsync(stateTwo)
+	err = config.WriteAsync(stateTwo)
 	if err != nil {
 		t.Fatalf("write-async rpc call error: %v", err)
 	}
@@ -440,7 +340,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	// Wait for all writes to finish.
 	servers.waitForAllWrites()
 
-	rreply, err = readConfig.Read(&rpc.ReadRequest{})
+	rreply, err = config.Read(&rpc.ReadRequest{})
 	if err != nil {
 		t.Fatalf("read rpc call error: %v", err)
 	}
@@ -638,16 +538,10 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(ids, rq, len(ids))
-
-	readConfig, err := mgr.NewConfiguration(qspec, timeout)
+	qspec := NewRegisterQSpec(rq, len(ids))
+	config, err := mgr.NewConfiguration(ids, qspec, timeout)
 	if err != nil {
-		b.Fatalf("error creating read config: %v", err)
-	}
-
-	writeConfig, err := mgr.NewConfiguration(qspec, timeout)
-	if err != nil {
-		b.Fatalf("error creating write config: %v", err)
+		b.Fatalf("error creating config: %v", err)
 	}
 
 	state := &rpc.State{
@@ -655,7 +549,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	wreply, err := writeConfig.Write(state)
+	wreply, err := config.Write(state)
 	if err != nil {
 		b.Fatalf("write rpc call error: %v", err)
 	}
@@ -671,7 +565,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					replySink, err = readConfig.Read(&rpc.ReadRequest{})
+					replySink, err = config.Read(&rpc.ReadRequest{})
 					if err != nil {
 						b.Fatalf("read rpc call error: %v", err)
 					}
@@ -679,7 +573,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				replySink, err = readConfig.Read(&rpc.ReadRequest{})
+				replySink, err = config.Read(&rpc.ReadRequest{})
 				if err != nil {
 					b.Fatalf("read rpc call error: %v", err)
 				}
@@ -689,7 +583,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					rf := readConfig.ReadFuture(&rpc.ReadRequest{})
+					rf := config.ReadFuture(&rpc.ReadRequest{})
 					replySink, err = rf.Get()
 					if err != nil {
 						b.Fatalf("read future rpc call error: %v", err)
@@ -698,7 +592,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				rf := readConfig.ReadFuture(&rpc.ReadRequest{})
+				rf := config.ReadFuture(&rpc.ReadRequest{})
 				replySink, err = rf.Get()
 				if err != nil {
 					b.Fatalf("read future rpc call error: %v", err)
