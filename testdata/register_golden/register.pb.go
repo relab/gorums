@@ -323,7 +323,7 @@ func (this *Empty) Equal(that interface{}) bool {
 	return true
 }
 
-/* Gorums Generator Plugin - generated from: dev/config_rpc.tmpl */
+/* Gorums Generator Plugin - generated from: config_rpc_tmpl */
 
 // ReadReply encapsulates the reply from a Read RPC invocation.
 // It contains the id of each node in the quorum that replied and a single
@@ -442,7 +442,7 @@ func (c *Configuration) WriteAsync(args *State) error {
 	return c.mgr.writeAsync(c, args)
 }
 
-/* Gorums Generator Plugin - generated from: dev/mgr_rpc.tmpl */
+/* Gorums Generator Plugin - generated from: mgr_rpc_tmpl */
 
 type readReply struct {
 	nid   uint32
@@ -451,54 +451,21 @@ type readReply struct {
 }
 
 func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
-	var (
-		replyChan   = make(chan readReply, c.n)
-		stopSignal  = make(chan struct{})
-		replyValues = make([]*State, 0, c.n)
-		errCount    int
-		quorum      bool
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
-		ctx, cancel = context.WithCancel(context.Background())
-	)
+	replyChan := make(chan readReply, c.n)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	for _, n := range c.nodes {
-		go func(node *Node) {
-			reply := new(State)
-			ce := make(chan error, 1)
-			start := time.Now()
-			go func() {
-				select {
-				case ce <- grpc.Invoke(
-					ctx,
-					"/dev.Register/Read",
-					args,
-					reply,
-					node.conn,
-				):
-				case <-stopSignal:
-					return
-				}
-			}()
-			select {
-			case err := <-ce:
-				switch grpc.Code(err) { // nil -> codes.OK
-				case codes.OK, codes.Canceled:
-					node.setLatency(time.Since(start))
-				default:
-					node.setLastErr(err)
-				}
-				replyChan <- readReply{node.id, reply, err}
-			case <-stopSignal:
-				return
-			}
-		}(n)
+		go callGRPCRead(n, ctx, args, replyChan)
 	}
 
-	defer close(stopSignal)
-	defer cancel()
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
 
 	for {
-
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
@@ -508,18 +475,39 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.Reply, quorum = c.qspec.ReadQF(replyValues); quorum {
+				cancel()
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
+			cancel()
 			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
+			cancel()
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
-
 	}
+}
+
+func callGRPCRead(node *Node, ctx context.Context, args *ReadRequest, replyChan chan<- readReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/Read",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readReply{node.id, reply, err}
 }
 
 type writeReply struct {
@@ -529,54 +517,21 @@ type writeReply struct {
 }
 
 func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
-	var (
-		replyChan   = make(chan writeReply, c.n)
-		stopSignal  = make(chan struct{})
-		replyValues = make([]*WriteResponse, 0, c.n)
-		errCount    int
-		quorum      bool
-		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
-		ctx, cancel = context.WithCancel(context.Background())
-	)
+	replyChan := make(chan writeReply, c.n)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	for _, n := range c.nodes {
-		go func(node *Node) {
-			reply := new(WriteResponse)
-			ce := make(chan error, 1)
-			start := time.Now()
-			go func() {
-				select {
-				case ce <- grpc.Invoke(
-					ctx,
-					"/dev.Register/Write",
-					args,
-					reply,
-					node.conn,
-				):
-				case <-stopSignal:
-					return
-				}
-			}()
-			select {
-			case err := <-ce:
-				switch grpc.Code(err) { // nil -> codes.OK
-				case codes.OK, codes.Canceled:
-					node.setLatency(time.Since(start))
-				default:
-					node.setLastErr(err)
-				}
-				replyChan <- writeReply{node.id, reply, err}
-			case <-stopSignal:
-				return
-			}
-		}(n)
+		go callGRPCWrite(n, ctx, args, replyChan)
 	}
 
-	defer close(stopSignal)
-	defer cancel()
+	var (
+		replyValues = make([]*WriteResponse, 0, c.n)
+		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
 
 	for {
-
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
@@ -586,18 +541,39 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.Reply, quorum = c.qspec.WriteQF(replyValues); quorum {
+				cancel()
 				return reply, nil
 			}
 		case <-time.After(c.timeout):
+			cancel()
 			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
+			cancel()
 			return reply, IncompleteRPCError{errCount, len(replyValues)}
 		}
-
 	}
+}
+
+func callGRPCWrite(node *Node, ctx context.Context, args *State, replyChan chan<- writeReply) {
+	reply := new(WriteResponse)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/Write",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- writeReply{node.id, reply, err}
 }
 
 func (m *Manager) writeAsync(c *Configuration, args *State) error {
@@ -616,7 +592,7 @@ func (m *Manager) writeAsync(c *Configuration, args *State) error {
 	return nil
 }
 
-/* Gorums Generator Plugin - generated from: dev/node.tmpl */
+/* Gorums Generator Plugin - generated from: node_tmpl */
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be made.
@@ -668,7 +644,7 @@ func (n *Node) close() error {
 	return nil
 }
 
-/* Gorums Generator Plugin - generated from: dev/qspec.tmpl */
+/* Gorums Generator Plugin - generated from: qspec_tmpl */
 
 type QuorumSpec interface {
 	ReadQF(replies []*State) (*State, bool)
