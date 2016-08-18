@@ -41,17 +41,18 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 
-  //TODO suspected bug: if a connect fails below, it returns, leaving the conn above connected, leaking something.
-  //TODO fix client name to be clRegister
+  {{- /* Note that if a connect fails below, it returns, leaving the n.conn connected. */ -}}
+  {{- /* It is not clear what we should do in this case; should n.conn be closed when returning an error? */ -}}
+  {{- /* And will we ever have more than one clientServName? */ -}}
 
 {{$serviceName := ""}}
 {{range $elm := .Services}}
 {{if .Streaming}}
 {{if ne .ServName $serviceName}}
-    client := New{{.ServName}}Client(n.conn)
+    client{{.ServName}} := New{{.ServName}}Client(n.conn)
 {{$serviceName := .ServName}}
-{{end}}
-  	n.{{.UnexportedMethodName}}Client, err = client.{{.MethodName}}(context.Background())
+{{- end -}}
+  	n.{{.UnexportedMethodName}}Client, err = client{{.ServName}}.{{.MethodName}}(context.Background())
   	if err != nil {
   		return fmt.Errorf("stream creation failed: %v", err)
   	}
@@ -62,10 +63,10 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 
 func (n *Node) close() error {
   var err error
-{{range $elm := .Services}}
+{{- range $elm := .Services -}}
 {{if .Streaming}}
 	_, err = n.{{.UnexportedMethodName}}Client.CloseAndRecv()
-{{end}}
+{{- end -}}
 {{end}}
   err2 := n.conn.Close()
   if err != nil {
