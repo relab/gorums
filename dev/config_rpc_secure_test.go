@@ -45,7 +45,13 @@ func secsetup(t testing.TB, regServers []regServer, remote bool) (regServers, rp
 	}
 
 	servers := make([]*grpc.Server, len(regServers))
-	for i := range servers {
+	listeners := make([]net.Listener, len(regServers))
+	for i, rs := range regServers {
+		listeners[i], err = net.Listen("tcp", rs.addr)
+		if err != nil {
+			t.Fatalf("failed to listen: %v", err)
+		}
+
 		//TODO should load credentials from manager or something? or store them in Node?
 		creds, err := credentials.NewServerTLSFromFile(serverCertFile, serverKeyFile)
 		if err != nil {
@@ -53,31 +59,12 @@ func secsetup(t testing.TB, regServers []regServer, remote bool) (regServers, rp
 		}
 		opts := []grpc.ServerOption{grpc.Creds(creds)}
 		servers[i] = grpc.NewServer(opts...)
-	}
-	for i, server := range servers {
-		rpc.RegisterRegisterServer(server, regServers[i].implementation)
-	}
+		rpc.RegisterRegisterServer(servers[i], regServers[i].implementation)
 
-	listeners := make([]net.Listener, len(servers))
-
-	for i, rs := range regServers {
-		listeners[i], err = net.Listen("tcp", rs.addr)
-		if err != nil {
-			t.Fatalf("failed to listen: %v", err)
-		}
-	}
-	for i, server := range servers {
 		go func(i int, server *grpc.Server) {
 			_ = server.Serve(listeners[i])
-		}(i, server)
-	}
-
-	for i, listener := range listeners {
-		_, port, err := net.SplitHostPort(listener.Addr().String())
-		if err != nil {
-			t.Fatalf("failed to parse listener address: %v", err)
-		}
-		regServers[i].addr = "localhost:" + port
+		}(i, servers[i])
+		regServers[i].addr = "localhost" + rs.addr
 	}
 
 	stopGrpcServeFunc := func(n int) {
