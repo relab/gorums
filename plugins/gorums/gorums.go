@@ -98,7 +98,7 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 		Services:      g.generateServiceMethods(file.FileDescriptorProto.Service),
 		IgnoreImports: true,
 	}
-	for name, tmpl := range tmpls {
+	for name, tmpl := range templates {
 		// Create a new template and parse the service data into it.
 		t := template.Must(template.New(name).Parse(tmpl))
 		w := new(bytes.Buffer)

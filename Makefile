@@ -131,7 +131,8 @@ check:
 	@echo "golint"
 	@for pkg in $(GORUMS_PKGS); do \
 		! golint $$pkg | \
-		grep -vE '(\.pb\.go)' ; \
+		grep -vE '(\.pb\.go)' | \
+		grep -vE 'gorums/plugins/gorums/templates.go' ; \
 	done
 	@echo "goconst"
 	@for dir in $(GORUMS_DIRS); do \
