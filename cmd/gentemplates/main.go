@@ -28,6 +28,7 @@ func main() {
 	flag.Parse()
 
 	log.SetPrefix("genplugin: ")
+	log.SetFlags(0)
 	if !*verbose {
 		log.SetOutput(ioutil.Discard)
 	}
@@ -45,6 +46,7 @@ func main() {
 		if err != nil {
 			return err
 		}
+
 		_, fname := path.Split(fpath)
 		templateName := strings.Replace(fname, ".", "_", 1)
 		templates = append(templates, templateName)

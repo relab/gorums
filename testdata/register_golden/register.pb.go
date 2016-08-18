@@ -325,64 +325,7 @@ func (this *Empty) Equal(that interface{}) bool {
 	return true
 }
 
-/* Gorums Generator Plugin - generated from: node_tmpl */
-
-// Node encapsulates the state of a node on which a remote procedure call
-// can be made.
-type Node struct {
-	// Only assigned at creation.
-	id   uint32
-	self bool
-	addr string
-	conn *grpc.ClientConn
-
-	writeAsyncClient Register_WriteAsyncClient
-
-	sync.Mutex
-	lastErr error
-	latency time.Duration
-}
-
-func (n *Node) connect(opts ...grpc.DialOption) error {
-	var err error
-	n.conn, err = grpc.Dial(n.addr, opts...)
-	if err != nil {
-		return fmt.Errorf("dialing node failed: %v", err)
-	}
-
-	clientRegister := NewRegisterClient(n.conn)
-	n.writeAsyncClient, err = clientRegister.WriteAsync(context.Background())
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
-
-	return nil
-}
-
-func (n *Node) close() error {
-	var err error
-	_, err = n.writeAsyncClient.CloseAndRecv()
-	err2 := n.conn.Close()
-	if err != nil {
-		return fmt.Errorf("stream close failed: %v", err)
-	} else if err2 != nil {
-		return fmt.Errorf("conn close failed: %v", err2)
-	}
-	return nil
-}
-
-/* Gorums Generator Plugin - generated from: qspec_tmpl */
-
-// QuorumSpec is the interface that wraps every quorum function.
-type QuorumSpec interface {
-
-	// ReadQF is the quorum function for the Read RPC method.
-	ReadQF(replies []*State) (*State, bool)
-	// WriteQF is the quorum function for the Write RPC method.
-	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
-}
-
-/* Gorums Generator Plugin - generated from: config_rpc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: config_rpc_tmpl */
 
 // ReadReply encapsulates the reply from a Read RPC invocation.
 // It contains the id of each node in the quorum that replied and a single
@@ -501,7 +444,7 @@ func (c *Configuration) WriteAsync(args *State) error {
 	return c.mgr.writeAsync(c, args)
 }
 
-/* Gorums Generator Plugin - generated from: mgr_rpc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: mgr_rpc_tmpl */
 
 type readReply struct {
 	nid   uint32
@@ -649,6 +592,63 @@ func (m *Manager) writeAsync(c *Configuration, args *State) error {
 	}
 
 	return nil
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: node_tmpl */
+
+// Node encapsulates the state of a node on which a remote procedure call
+// can be made.
+type Node struct {
+	// Only assigned at creation.
+	id   uint32
+	self bool
+	addr string
+	conn *grpc.ClientConn
+
+	writeAsyncClient Register_WriteAsyncClient
+
+	sync.Mutex
+	lastErr error
+	latency time.Duration
+}
+
+func (n *Node) connect(opts ...grpc.DialOption) error {
+	var err error
+	n.conn, err = grpc.Dial(n.addr, opts...)
+	if err != nil {
+		return fmt.Errorf("dialing node failed: %v", err)
+	}
+
+	clientRegister := NewRegisterClient(n.conn)
+	n.writeAsyncClient, err = clientRegister.WriteAsync(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
+
+	return nil
+}
+
+func (n *Node) close() error {
+	var err error
+	_, err = n.writeAsyncClient.CloseAndRecv()
+	err2 := n.conn.Close()
+	if err != nil {
+		return fmt.Errorf("stream close failed: %v", err)
+	} else if err2 != nil {
+		return fmt.Errorf("conn close failed: %v", err2)
+	}
+	return nil
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: qspec_tmpl */
+
+// QuorumSpec is the interface that wraps every quorum function.
+type QuorumSpec interface {
+
+	// ReadQF is the quorum function for the Read RPC method.
+	ReadQF(replies []*State) (*State, bool)
+	// WriteQF is the quorum function for the Write RPC method.
+	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
 }
 
 /* Static resources */
