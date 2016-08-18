@@ -12,7 +12,7 @@ GORUMS_DEV_PKG_PATH		:= $(GORUMS_PKG_PATH)/$(DEV_PKG)
 
 GORUMS_STATIC_GO		:= $(PLUGINS_PKG)/$(PLUGIN_PKG)/static.go
 BUNDLE_MAIN_GO 			:= $(CMD_PKG)/$(BUNDLE_PKG)/main.go
-GENPLUGIN_MAIN_GO 		:= $(CMD_PKG)/genplugin/main.go
+GENPLUGIN_MAIN_GO 		:= $(CMD_PKG)/gentemplates/main.go
 
 PROTOC_PLUGIN_PKG		:= protoc-gen-gorums
 PROTOC_PLUGIN_PKG_PATH 		:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
