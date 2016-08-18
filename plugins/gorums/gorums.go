@@ -153,7 +153,6 @@ func (g *gorums) processTemplates() error {
 		g.P("/* 'gorums' plugin for protoc-gen-go - generated from: ", tmpl.name, " */")
 		g.P()
 		g.P(out.String())
-
 	}
 
 	return nil
@@ -233,7 +232,6 @@ func onlyClientStreamMethods(services []*pb.ServiceDescriptorProto) bool {
 				return false
 			}
 		}
-
 	}
 	return true
 }
