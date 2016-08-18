@@ -325,7 +325,7 @@ func (this *Empty) Equal(that interface{}) bool {
 	return true
 }
 
-/* Gorums Generator Plugin - generated from: config_rpc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: config_rpc_tmpl */
 
 // ReadReply encapsulates the reply from a Read RPC invocation.
 // It contains the id of each node in the quorum that replied and a single
@@ -444,7 +444,7 @@ func (c *Configuration) WriteAsync(args *State) error {
 	return c.mgr.writeAsync(c, args)
 }
 
-/* Gorums Generator Plugin - generated from: mgr_rpc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: mgr_rpc_tmpl */
 
 type readReply struct {
 	nid   uint32
@@ -594,7 +594,7 @@ func (m *Manager) writeAsync(c *Configuration, args *State) error {
 	return nil
 }
 
-/* Gorums Generator Plugin - generated from: node_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: node_tmpl */
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be made.
@@ -646,7 +646,7 @@ func (n *Node) close() error {
 	return nil
 }
 
-/* Gorums Generator Plugin - generated from: qspec_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: qspec_tmpl */
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
