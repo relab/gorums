@@ -31,7 +31,7 @@
 
 // Package gorums outputs a gorums client API in Go code.
 // It runs as a plugin for the Go protocol buffer compiler plugin.
-// It is linked in to protoc-gen-go.
+// It is linked in to protoc-gen-gorums.
 package gorums
 
 import (
