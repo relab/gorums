@@ -59,14 +59,12 @@ func main() {
 // Note that the function rely on data in global variable pkgData.
 func visit(fpath string, f os.FileInfo, err error) error {
 	if strings.HasSuffix(fpath, ".tmpl") {
-		_, fname := path.Split(fpath)
-		name := strings.TrimSuffix(fname, ".tmpl")
-		log.Println("Processing: " + fname)
 		b, err := ioutil.ReadFile(fpath)
 		if err != nil {
 			return err
 		}
-		tmplName := name + "_tmpl"
+		_, fname := path.Split(fpath)
+		tmplName := strings.Replace(fname, ".", "_", 1)
 		tmpls = append(tmpls, tmplName)
 
 		// for each new template file, write to the in-mem buffer
