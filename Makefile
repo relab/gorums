@@ -13,7 +13,7 @@ GORUMS_ENV_GENDEV		:= GORUMSGENDEV=1
 
 GORUMS_STATIC_GO		:= $(PLUGINS_PKG)/$(PLUGIN_PKG)/static.go
 BUNDLE_MAIN_GO 			:= $(CMD_PKG)/$(BUNDLE_PKG)/main.go
-GENPLUGIN_MAIN_GO 		:= $(CMD_PKG)/gentemplates/main.go
+GENTEMPLATES_MAIN_GO 		:= $(CMD_PKG)/gentemplates/main.go
 
 PROTOC_PLUGIN_PKG		:= protoc-gen-gorums
 PROTOC_PLUGIN_PKG_PATH 		:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
@@ -72,12 +72,12 @@ gendevproto: reinstallprotoc
 .PHONY: genstatic
 genstatic:
 	@echo creating static gorums plugin code bundle
-	go run $(BUNDLE_MAIN_GO) $(GORUMS_DEV_PKG_PATH) > $(GORUMS_STATIC_GO) 
+	@go run $(BUNDLE_MAIN_GO) $(GORUMS_DEV_PKG_PATH) > $(GORUMS_STATIC_GO)
 
 .PHONY: gentemplates
 gentemplates:
 	@echo creating templates for gorums plugin code bundle
-	go run $(GENPLUGIN_MAIN_GO)
+	@go run $(GENTEMPLATES_MAIN_GO)
 
 .PHONY: gengolden
 gengolden: genstatic gentemplates reinstallprotoc
