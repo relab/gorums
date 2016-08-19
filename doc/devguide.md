@@ -2,11 +2,23 @@
 
 The repository contains two main components:
 
-- **dev:** the development code with a concrete (register) implementation
-  for testing. The file also contains all the static code that will be bundled
-  together with the generated code.
+- **dev:** the development code with a concrete (register) implementation for
+  testing. The folder also contains templates for dynamic code and all the
+  static code that will be bundled together with the generated code.
 - **-plugins/gorums:** second order plugin to ```protoc-gen-gorums```
   binary.
+
+### Makefile
+
+The Makefile itself serves as documentation, inspect it for details. Important
+targets:
+
+* ```make gengolden```: Generate and update what should be the golden output for the
+  ```gorums``` plugin.
+
+* ```make gendev```: Generate and update ```_gen.go``` files from the dev templates.
+
+* ```make gengoldenanddev```: Combination of the two targets above.
 
 #### File Endings
 
@@ -55,3 +67,22 @@ There are three main tests for this project:
    output does not change unexpectedly.  The golden output file should be
    updated as described in the previous Workflow section if the output *is*
    expected to change.
+
+### Benchmarking
+
+The ```benchcmp``` program is recommended for comparing benchmarks:
+
+```
+go get -u  golang.org/x/tools/cmd/benchcmp
+```
+
+Example :
+
+```shell
+git checkout devel (or another branch)
+cd dev
+go test . -run=$$ -bench=Read1KQ2N3Local -benchtime=3s -count=10 > old.txt
+*make changes and regenerate _gen.go-files if needed*
+go test . -run=$$ -bench=Read1KQ2N3Local -benchtime=3s -count=10 > new.txt
+benchcmp old.txt new.txt
+```
