@@ -281,7 +281,7 @@ package {{.PackageName}}
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
-{{range $elm := .Services}}
+{{- range $elm := .Services}}
 {{- if not .Streaming}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} RPC method.
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
