@@ -9,6 +9,7 @@ GORUMS_FILES			:= $(shell find . -name '*.go' -not -path "*vendor*")
 GORUMS_DIRS 			:= $(shell find . -type d -not -path "*vendor*" -not -path "./.git*" -not -path "*testdata*")
 GORUMS_PKG_PATH	 		:= github.com/relab/gorums
 GORUMS_DEV_PKG_PATH		:= $(GORUMS_PKG_PATH)/$(DEV_PKG)
+GORUMS_ENV_GENDEV		:= GORUMSGENDEV=1
 
 GORUMS_STATIC_GO		:= $(PLUGINS_PKG)/$(PLUGIN_PKG)/static.go
 BUNDLE_MAIN_GO 			:= $(CMD_PKG)/$(BUNDLE_PKG)/main.go
@@ -21,8 +22,10 @@ PROTOC_PLUGIN_NAME 		:= gorums_out
 TESTDATA_REG			:= testdata/register_golden
 
 REG_PROTO_NAME			:= register.proto
+REG_PBGO_NAME			:= register.pb.go
 REG_PROTO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PROTO_NAME)
 REG_PROTO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PROTO_NAME)
+REG_PBGO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PBGO_NAME)
 
 .PHONY: all
 all: build test check
@@ -81,6 +84,19 @@ gengolden: genstatic gentemplates reinstallprotoc
 	@echo generating golden output
 	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
 	@protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+
+.PHONY: gendev
+gendev: genstatic gentemplates reinstallprotoc
+	@echo generating _gen.go files for dev
+	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
+	@$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+	@git checkout $(REG_PBGO_TEST_RPATH)
+
+.PHONY: gengoldenanddev
+gengoldenanddev: genstatic gentemplates reinstallprotoc
+	@echo generating golden output and _gen.go files for dev
+	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
+	@$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 
 .PHONY: profcpu
 profcpu:
