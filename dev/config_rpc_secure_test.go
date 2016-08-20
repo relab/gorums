@@ -23,8 +23,8 @@ const (
 
 //todo(meling) clean up this stuff; merge with other test setup function or something smart; perhaps splitting it up into separate functions will help with reuse.
 
-func secsetup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.ManagerOption, func(n int), func(n int)) {
-	if len(regServers) == 0 {
+func secsetup(t testing.TB, srvs regServers, remote bool) (rpc.ManagerOption, func(n int), func(n int)) {
+	if len(srvs) == 0 {
 		t.Fatal("setupServers: need at least one server")
 	}
 
@@ -41,30 +41,30 @@ func secsetup(t testing.TB, regServers []regServer, remote bool) (regServers, rp
 	dialOpts := rpc.WithGrpcDialOptions(grpcOpts...)
 
 	if remote {
-		return regServers, dialOpts, func(int) {}, func(int) {}
+		return dialOpts, func(int) {}, func(int) {}
 	}
 
-	servers := make([]*grpc.Server, len(regServers))
-	listeners := make([]net.Listener, len(regServers))
-	for i, rs := range regServers {
+	servers := make([]*grpc.Server, len(srvs))
+	listeners := make([]net.Listener, len(srvs))
+	for i, rs := range srvs {
 		listeners[i], err = net.Listen("tcp", rs.addr)
 		if err != nil {
 			t.Fatalf("failed to listen: %v", err)
 		}
 
-		//TODO should load credentials from manager or something? or store them in Node?
+		//todo(meling) should store credentials in Manager or Node
 		creds, err := credentials.NewServerTLSFromFile(serverCertFile, serverKeyFile)
 		if err != nil {
 			t.Fatalf("failed to generate credentials %v", err)
 		}
 		opts := []grpc.ServerOption{grpc.Creds(creds)}
 		servers[i] = grpc.NewServer(opts...)
-		rpc.RegisterRegisterServer(servers[i], regServers[i].implementation)
+		rpc.RegisterRegisterServer(servers[i], srvs[i].implementation)
 
 		go func(i int, server *grpc.Server) {
 			_ = server.Serve(listeners[i])
 		}(i, servers[i])
-		regServers[i].addr = "localhost" + rs.addr
+		srvs[i].addr = "localhost" + rs.addr
 	}
 
 	stopGrpcServeFunc := func(n int) {
@@ -87,21 +87,17 @@ func secsetup(t testing.TB, regServers []regServer, remote bool) (regServers, rp
 		}
 	}
 
-	return regServers, dialOpts, stopGrpcServeFunc, closeListenersFunc
+	return dialOpts, stopGrpcServeFunc, closeListenersFunc
 }
 
 func TestSecureRegister(t *testing.T) {
 	defer leakCheck(t)()
-
-	servers, dialOpts, stopGrpcServe, closeListeners := secsetup(
-		t,
-		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
-		},
-		false,
-	)
+	servers := regServers{
+		{":8080", rpc.NewRegisterBasic()},
+		{":8081", rpc.NewRegisterBasic()},
+		{":8082", rpc.NewRegisterBasic()},
+	}
+	dialOpts, stopGrpcServe, closeListeners := secsetup(t, servers, false)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
