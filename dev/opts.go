@@ -7,7 +7,6 @@ import (
 )
 
 type managerOptions struct {
-	// Used by every generated implementation
 	grpcDialOpts []grpc.DialOption
 	logger       *log.Logger
 	noConnect    bool

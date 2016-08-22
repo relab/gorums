@@ -1194,7 +1194,6 @@ var Error = func(n1, n2 *Node) bool {
 /* opts.go */
 
 type managerOptions struct {
-	// Used by every generated implementation
 	grpcDialOpts []grpc.DialOption
 	logger       *log.Logger
 	noConnect    bool
