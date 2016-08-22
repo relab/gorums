@@ -28,15 +28,9 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (rpc.ManagerOption, fu
 		t.Fatal("setupServers: need at least one server")
 	}
 
-	creds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
-	if err != nil {
-		t.Fatalf("failed to create credentials %v", err)
-	}
-
 	grpcOpts := []grpc.DialOption{
 		grpc.WithBlock(),
 		grpc.WithTimeout(50 * time.Millisecond),
-		grpc.WithTransportCredentials(creds),
 	}
 	dialOpts := rpc.WithGrpcDialOptions(grpcOpts...)
 
@@ -44,6 +38,7 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (rpc.ManagerOption, fu
 		return dialOpts, func(int) {}, func(int) {}
 	}
 
+	var err error
 	servers := make([]*grpc.Server, len(srvs))
 	listeners := make([]net.Listener, len(srvs))
 	for i, rs := range srvs {
@@ -100,9 +95,20 @@ func TestSecureRegister(t *testing.T) {
 	dialOpts, stopGrpcServe, closeListeners := secsetup(t, servers, false)
 	defer stopGrpcServe(allServers)
 
+	certPaths := map[string]string{
+		"localhost:8080": tlsDir + "ca.pem",
+		"localhost:8081": tlsDir + "ca.pem",
+		"localhost:8082": tlsDir + "ca.pem",
+	}
+
+	mgrOpts := []rpc.ManagerOption{
+		dialOpts,
+		rpc.WithCredentials(certPaths),
+	}
+
 	mgr, err := rpc.NewManager(
 		servers.addrs(),
-		dialOpts,
+		mgrOpts...,
 	)
 	if err != nil {
 		t.Fatalf("%v", err)

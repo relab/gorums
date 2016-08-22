@@ -9,6 +9,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/credentials"
 )
 
 // Manager manages a pool of node configurations on which quorum remote
@@ -123,6 +125,18 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		latency: -1 * time.Second,
 	}
 
+	if m.opts.certPaths != nil {
+		certPath, found := m.opts.certPaths[addr]
+		if !found {
+			return nil, fmt.Errorf("create node %s error: no certificate provided", addr)
+		}
+		var err2 error
+		node.creds, err2 = credentials.NewClientTLSFromFile(certPath, "x.test.youtube.com")
+		if err2 != nil {
+			return nil, fmt.Errorf("create node %s error: creating credentials: %v", addr, err)
+		}
+	}
+
 	return node, nil
 }
 
@@ -134,7 +148,7 @@ func (m *Manager) connectAll() error {
 		if node.self {
 			continue
 		}
-		err := node.connect(m.opts.grpcDialOpts...)
+		err := node.connect(m.opts.certPaths != nil, m.opts.grpcDialOpts...)
 		if err != nil {
 			return fmt.Errorf("connect node %s error: %v", node.addr, err)
 		}
