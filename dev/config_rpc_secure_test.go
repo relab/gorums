@@ -23,19 +23,13 @@ const (
 
 //todo(meling) clean up this stuff; merge with other test setup function or something smart; perhaps splitting it up into separate functions will help with reuse.
 
-func secsetup(t testing.TB, srvs regServers, remote bool) (rpc.ManagerOption, func(n int), func(n int)) {
+func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n int)) {
 	if len(srvs) == 0 {
 		t.Fatal("setupServers: need at least one server")
 	}
 
-	grpcOpts := []grpc.DialOption{
-		grpc.WithBlock(),
-		grpc.WithTimeout(50 * time.Millisecond),
-	}
-	dialOpts := rpc.WithGrpcDialOptions(grpcOpts...)
-
 	if remote {
-		return dialOpts, func(int) {}, func(int) {}
+		return func(int) {}, func(int) {}
 	}
 
 	var err error
@@ -82,7 +76,7 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (rpc.ManagerOption, fu
 		}
 	}
 
-	return dialOpts, stopGrpcServeFunc, closeListenersFunc
+	return stopGrpcServeFunc, closeListenersFunc
 }
 
 func TestSecureRegister(t *testing.T) {
@@ -92,24 +86,23 @@ func TestSecureRegister(t *testing.T) {
 		{":8081", rpc.NewRegisterBasic()},
 		{":8082", rpc.NewRegisterBasic()},
 	}
-	dialOpts, stopGrpcServe, closeListeners := secsetup(t, servers, false)
+	stopGrpcServe, closeListeners := secsetup(t, servers, false)
 	defer stopGrpcServe(allServers)
 
-	certPaths := map[string]string{
-		"localhost:8080": tlsDir + "ca.pem",
-		"localhost:8081": tlsDir + "ca.pem",
-		"localhost:8082": tlsDir + "ca.pem",
+	//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
+	clientCreds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+	if err != nil {
+		t.Errorf("error creating credentials: %v", err)
 	}
 
-	mgrOpts := []rpc.ManagerOption{
-		dialOpts,
-		rpc.WithCredentials(certPaths),
+	grpcOpts := []grpc.DialOption{
+		grpc.WithBlock(),
+		grpc.WithTimeout(50 * time.Millisecond),
+		grpc.WithTransportCredentials(clientCreds),
 	}
+	dialOpts := rpc.WithGrpcDialOptions(grpcOpts...)
 
-	mgr, err := rpc.NewManager(
-		servers.addrs(),
-		mgrOpts...,
-	)
+	mgr, err := rpc.NewManager(servers.addrs(), dialOpts)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}

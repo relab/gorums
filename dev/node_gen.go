@@ -10,18 +10,16 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be made.
 type Node struct {
 	// Only assigned at creation.
-	id    uint32
-	self  bool
-	addr  string
-	conn  *grpc.ClientConn
-	creds credentials.TransportCredentials
+	id   uint32
+	self bool
+	addr string
+	conn *grpc.ClientConn
 
 	writeAsyncClient Register_WriteAsyncClient
 
@@ -30,10 +28,7 @@ type Node struct {
 	latency time.Duration
 }
 
-func (n *Node) connect(useCreds bool, opts ...grpc.DialOption) error {
-	if useCreds {
-		opts = append(opts, grpc.WithTransportCredentials(n.creds))
-	}
+func (n *Node) connect(opts ...grpc.DialOption) error {
 	var err error
 	n.conn, err = grpc.Dial(n.addr, opts...)
 	if err != nil {

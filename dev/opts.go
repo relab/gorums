@@ -12,7 +12,6 @@ type managerOptions struct {
 	noConnect    bool
 	selfAddr     string
 	selfID       uint32
-	certPaths    map[string]string
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
@@ -58,11 +57,5 @@ func WithSelfAddr(addr string) ManagerOption {
 func WithSelfID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
 		o.selfID = id
-	}
-}
-
-func WithCredentials(certPaths map[string]string) ManagerOption {
-	return func(o *managerOptions) {
-		o.certPaths = certPaths
 	}
 }
