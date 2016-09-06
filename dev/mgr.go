@@ -9,6 +9,10 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc"
+
+	"github.com/gogo/protobuf/codec"
 )
 
 // Manager manages a pool of node configurations on which quorum remote
@@ -66,6 +70,11 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 			fmt.Errorf("WithSelfID provided, but no node with id %d found", selfID),
 		)
 	}
+
+	m.opts.grpcDialOpts = append(
+		m.opts.grpcDialOpts,
+		grpc.WithCodec(codec.New(1<<20)),
+	)
 
 	err = m.connectAll()
 	if err != nil {

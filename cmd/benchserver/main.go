@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/gogo/protobuf/codec"
 	"github.com/relab/gorums/dev"
 
 	"google.golang.org/grpc"
@@ -26,7 +27,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		grpc.CustomCodec(codec.New(1 << 20)),
+	)
 	dev.RegisterRegisterServer(grpcServer, dev.NewRegisterBench())
 	log.Fatal(grpcServer.Serve(l))
 }

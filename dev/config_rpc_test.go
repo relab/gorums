@@ -19,6 +19,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+
+	"github.com/gogo/protobuf/codec"
 )
 
 func TestMain(m *testing.M) {
@@ -689,7 +691,9 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.M
 
 	servers := make([]*grpc.Server, len(regServers))
 	for i := range servers {
-		servers[i] = grpc.NewServer()
+		servers[i] = grpc.NewServer(
+			grpc.CustomCodec(codec.New(1 << 20)),
+		)
 	}
 	for i, server := range servers {
 		rpc.RegisterRegisterServer(server, regServers[i].implementation)
