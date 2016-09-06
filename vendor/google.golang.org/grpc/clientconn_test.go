@@ -37,6 +37,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 )
@@ -64,6 +66,14 @@ func TestTLSDialTimeout(t *testing.T) {
 	}
 	if err != ErrClientConnTimeout {
 		t.Fatalf("grpc.Dial(_, _) = %v, %v, want %v", conn, err, ErrClientConnTimeout)
+	}
+}
+
+func TestDialContextCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure()); err != context.Canceled {
+		t.Fatalf("grpc.DialContext(%v, _) = _, %v, want _, %v", ctx, err, context.Canceled)
 	}
 }
 
