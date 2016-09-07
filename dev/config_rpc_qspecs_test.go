@@ -10,7 +10,7 @@ type MajorityQSpec struct {
 	q int
 }
 
-func NewMajorityQSpec(n int) *MajorityQSpec {
+func NewMajorityQSpec(n int) rpc.QuorumSpec {
 	return &MajorityQSpec{q: n/2 + 1}
 }
 
@@ -32,7 +32,7 @@ type RegisterQSpec struct {
 	rq, wq int
 }
 
-func NewRegisterQSpec(rq, wq int) *RegisterQSpec {
+func NewRegisterQSpec(rq, wq int) rpc.QuorumSpec {
 	return &RegisterQSpec{
 		rq: rq,
 		wq: wq,
@@ -57,7 +57,7 @@ type RegisterByTimestampQSpec struct {
 	rq, wq int
 }
 
-func NewRegisterByTimestampQSpec(rq, wq int) *RegisterByTimestampQSpec {
+func NewRegisterByTimestampQSpec(rq, wq int) rpc.QuorumSpec {
 	return &RegisterByTimestampQSpec{
 		rq: rq,
 		wq: wq,
@@ -81,9 +81,10 @@ func (rqs *RegisterByTimestampQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc
 
 type NeverQSpec struct{}
 
-func NewNeverQSpec() *NeverQSpec {
+func NewNeverQSpec() rpc.QuorumSpec {
 	return &NeverQSpec{}
 }
+
 func (mqs *NeverQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
 	return nil, false
 }
