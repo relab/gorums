@@ -35,3 +35,7 @@ Session.vim
 
 # binaries
 cmd/benchserver/benchserver
+cmd/benchclient/benchclient
+
+# bench output
+cmd/benchclient/*.txt
