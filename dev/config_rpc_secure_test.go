@@ -11,16 +11,21 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-//todo(meling) implement functionality to keep certs and keys in appropriate places.
-//todo(meling) figure out how to generate certs and keys (currently these are only google's certs and keys)
+// TODO(meling):
+//
+// Implement functionality to keep certs and keys in appropriate places.
+//
+// Figure out how to generate certs and keys (currently these are only
+// google's certs and keys).
+//
+// Clean up this stuff; merge with other test setup function or something
+// smart; perhaps splitting it up into separate functions will help with reuse.
 
 const (
 	tlsDir         = "../testdata/tls/"
 	serverCertFile = tlsDir + "server1.pem"
 	serverKeyFile  = tlsDir + "server1.key"
 )
-
-//todo(meling) clean up this stuff; merge with other test setup function or something smart; perhaps splitting it up into separate functions will help with reuse.
 
 func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n int)) {
 	if len(srvs) == 0 {
