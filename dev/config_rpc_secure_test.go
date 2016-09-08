@@ -15,7 +15,7 @@ import (
 //todo(meling) figure out how to generate certs and keys (currently these are only google's certs and keys)
 
 const (
-	tlsDir         = "../testdata/"
+	tlsDir         = "../testdata/tls/"
 	serverCertFile = tlsDir + "server1.pem"
 	serverKeyFile  = tlsDir + "server1.key"
 )
