@@ -18,6 +18,7 @@ func main() {
 		readq   = flag.Int("rq", 2, "read quorum size")
 		psize   = flag.Int("p", 1024, "payload size in bytes")
 		timeout = flag.Duration("t", time.Second, "QRPC timeout")
+		writera = flag.Int("wr", 0, "write ratio in percent (0-100)")
 
 		brrate = flag.Uint("brrate", 10000, "benchmark request rate")
 		bconns = flag.Uint("bconns", 1, "benchmark connections (separate gorums manager&config instances)")
@@ -38,15 +39,19 @@ func main() {
 	if *readq > len(addrs) || *readq < 0 {
 		dief("invalid read quorum value (rq=%d, n=%d)", *readq, len(addrs))
 	}
+	if *writera > 100 || *writera < 0 {
+		dief("invalid write ratio (%d)", *writera)
+	}
 
 	log.SetFlags(0)
 	log.SetPrefix("benchclient: ")
 
 	r := &gbench.RequesterFactory{
-		Addrs:       addrs,
-		ReadQuorum:  *readq,
-		PayloadSize: *psize,
-		QRPCTimeout: *timeout,
+		Addrs:             addrs,
+		ReadQuorum:        *readq,
+		PayloadSize:       *psize,
+		QRPCTimeout:       *timeout,
+		WriteRatioPercent: *writera,
 	}
 
 	benchmark := bench.NewBenchmark(r, uint64(*brrate), uint64(*bconns), *bdur)
@@ -59,8 +64,8 @@ func main() {
 	log.Print("done")
 
 	log.Printf(
-		"start time: %v | #servers: %d | read quorum: %d | payload size: %d bytes",
-		start, len(addrs), *readq, *psize,
+		"start time: %v | #servers: %d | read quorum: %d | payload size: %d bytes | write ratio: %d%%",
+		start, len(addrs), *readq, *psize, *writera,
 	)
 	log.Println("summary:", summary)
 

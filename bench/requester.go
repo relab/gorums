@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"strings"
 	"time"
 
@@ -18,13 +19,15 @@ func init() {
 	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
 	grpclog.SetLogger(silentLogger)
 	grpc.EnableTracing = false
+	rand.Seed(42)
 }
 
 type RequesterFactory struct {
-	Addrs       []string
-	ReadQuorum  int
-	PayloadSize int
-	QRPCTimeout time.Duration
+	Addrs             []string
+	ReadQuorum        int
+	PayloadSize       int
+	QRPCTimeout       time.Duration
+	WriteRatioPercent int
 }
 
 func (r *RequesterFactory) GetRequester(uint64) bench.Requester {
@@ -38,6 +41,7 @@ func (r *RequesterFactory) GetRequester(uint64) bench.Requester {
 		readq:       r.ReadQuorum,
 		payloadSize: r.PayloadSize,
 		timeout:     r.QRPCTimeout,
+		writeRatio:  r.WriteRatioPercent,
 	}
 }
 
@@ -47,9 +51,11 @@ type gorumsRequester struct {
 	readq       int
 	payloadSize int
 	timeout     time.Duration
+	writeRatio  int
 
 	mgr    *rpc.Manager
 	config *rpc.Configuration
+	state  *rpc.State
 }
 
 func (gr *gorumsRequester) Setup() error {
@@ -70,11 +76,11 @@ func (gr *gorumsRequester) Setup() error {
 	}
 
 	// Set initial state.
-	state := &rpc.State{
+	gr.state = &rpc.State{
 		Value:     strings.Repeat("x", gr.payloadSize),
 		Timestamp: time.Now().UnixNano(),
 	}
-	wreply, err := gr.config.Write(state)
+	wreply, err := gr.config.Write(gr.state)
 	if err != nil {
 		return fmt.Errorf("write rpc error: %v", err)
 	}
@@ -86,7 +92,23 @@ func (gr *gorumsRequester) Setup() error {
 }
 
 func (gr *gorumsRequester) Request() error {
-	_, err := gr.config.Read(&rpc.ReadRequest{})
+	var err error
+	switch gr.writeRatio {
+	case 0:
+		_, err = gr.config.Read(&rpc.ReadRequest{})
+	case 100:
+		gr.state.Timestamp = time.Now().UnixNano()
+		_, err = gr.config.Write(gr.state)
+	default:
+		x := rand.Intn(100)
+		if x < gr.writeRatio {
+			gr.state.Timestamp = time.Now().UnixNano()
+			_, err = gr.config.Write(gr.state)
+		} else {
+			_, err = gr.config.Read(&rpc.ReadRequest{})
+		}
+	}
+
 	return err
 }
 
