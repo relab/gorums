@@ -16,7 +16,6 @@ import (
 
 const (
 	tlsDir         = "../testdata/"
-	clientCertFile = tlsDir + "ca.pem"
 	serverCertFile = tlsDir + "server1.pem"
 	serverKeyFile  = tlsDir + "server1.key"
 )

@@ -22,6 +22,8 @@ func init() {
 	rand.Seed(42)
 }
 
+// RequesterFactory implements RequesterFactory by creating a Requester which
+// issues requests to a register using the Gorums framework.
 type RequesterFactory struct {
 	Addrs             []string
 	ReadQuorum        int
@@ -30,6 +32,7 @@ type RequesterFactory struct {
 	WriteRatioPercent int
 }
 
+// GetRequester returns a new Requester, called for each Benchmark connection.
 func (r *RequesterFactory) GetRequester(uint64) bench.Requester {
 	return &gorumsRequester{
 		addrs: r.Addrs,

@@ -74,7 +74,10 @@ func main() {
 		start.Year(), start.Month(), start.Day(),
 		start.Hour(), start.Minute(), start.Second(),
 	)
-	summary.GenerateLatencyDistribution(bench.Logarithmic, filename)
+	err = summary.GenerateLatencyDistribution(bench.Logarithmic, filename)
+	if err != nil {
+		log.Printf("error writing latency distribution to file: %v", err)
+	}
 }
 
 func dief(format string, a ...interface{}) {
