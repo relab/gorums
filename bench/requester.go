@@ -1,4 +1,4 @@
-package gbench
+package bench
 
 import (
 	"fmt"
