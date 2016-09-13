@@ -176,3 +176,7 @@ check:
 	@! misspell ./**/* | grep -vF '/vendor/'
 	@echo "staticcheck"
 	@staticcheck $(GORUMS_PKGS)
+
+.PHONY: updatedeps 
+updatedeps:
+	gvt update --all
