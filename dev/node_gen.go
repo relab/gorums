@@ -36,6 +36,7 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 	}
 
 	clientRegister := NewRegisterClient(n.conn)
+
 	n.writeAsyncClient, err = clientRegister.WriteAsync(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)

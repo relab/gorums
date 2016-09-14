@@ -266,6 +266,8 @@ type serviceMethod struct {
 	Streaming bool
 
 	ServName string // Redundant, but keeps it simple.
+
+	CreateClient bool // Quick-fix, revise later, see issue gorums-dev issue #40.
 }
 
 type smSlice []serviceMethod
@@ -349,6 +351,19 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) [
 	}
 
 	sort.Sort(smSlice(allRewrittenFlat))
+
+	// Quick-fix, revise later, see issue gorums-dev issue #40.
+	lastServName := ""
+	for i, method := range allRewrittenFlat {
+		if !method.Streaming {
+			continue
+		}
+		if method.ServName != lastServName {
+			method.CreateClient = true
+			allRewrittenFlat[i] = method
+			lastServName = method.ServName
+		}
+	}
 
 	return allRewrittenFlat
 }

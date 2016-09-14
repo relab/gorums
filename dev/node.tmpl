@@ -45,13 +45,12 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
   {{- /* It is not clear what we should do in this case; should n.conn be closed when returning an error? */ -}}
   {{- /* And will we ever have more than one clientServName? */ -}}
 
-{{$serviceName := ""}}
 {{range $elm := .Services}}
 {{if .Streaming}}
-{{if ne .ServName $serviceName}}
-    client{{.ServName}} := New{{.ServName}}Client(n.conn)
-{{$serviceName := .ServName}}
-{{- end -}}
+{{if .CreateClient}}
+	client{{.ServName}} := New{{.ServName}}Client(n.conn)
+{{end}}
+
   	n.{{.UnexportedMethodName}}Client, err = client{{.ServName}}.{{.MethodName}}(context.Background())
   	if err != nil {
   		return fmt.Errorf("stream creation failed: %v", err)
