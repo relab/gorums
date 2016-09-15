@@ -2,8 +2,6 @@ package gbench
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -12,15 +10,7 @@ import (
 	"github.com/tylertreat/bench"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 )
-
-func init() {
-	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
-	grpclog.SetLogger(silentLogger)
-	grpc.EnableTracing = false
-	rand.Seed(42)
-}
 
 // RequesterFactory implements RequesterFactory by creating a Requester which
 // issues requests to a register using the Gorums framework.
