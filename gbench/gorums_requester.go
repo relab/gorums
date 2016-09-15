@@ -12,9 +12,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-// RequesterFactory implements RequesterFactory by creating a Requester which
+// GorumsRequesterFactory implements RequesterFactory by creating a Requester which
 // issues requests to a register using the Gorums framework.
-type RequesterFactory struct {
+type GorumsRequesterFactory struct {
 	Addrs             []string
 	ReadQuorum        int
 	PayloadSize       int
@@ -23,7 +23,7 @@ type RequesterFactory struct {
 }
 
 // GetRequester returns a new Requester, called for each Benchmark connection.
-func (r *RequesterFactory) GetRequester(uint64) bench.Requester {
+func (r *GorumsRequesterFactory) GetRequester(uint64) bench.Requester {
 	return &gorumsRequester{
 		addrs: r.Addrs,
 		dialOpts: []grpc.DialOption{

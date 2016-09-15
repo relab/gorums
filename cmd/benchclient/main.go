@@ -46,7 +46,7 @@ func main() {
 	log.SetFlags(0)
 	log.SetPrefix("benchclient: ")
 
-	r := &gbench.RequesterFactory{
+	r := &gbench.GorumsRequesterFactory{
 		Addrs:             addrs,
 		ReadQuorum:        *readq,
 		PayloadSize:       *psize,
