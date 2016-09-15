@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	gbench "github.com/relab/gorums/bench"
+	"github.com/relab/gorums/gbench"
 	"github.com/tylertreat/bench"
 )
 
