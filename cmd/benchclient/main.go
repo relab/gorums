@@ -14,13 +14,15 @@ import (
 
 func main() {
 	var (
+		mode = flag.String("mode", "gorums", "mode: grpc | gorums")
+
 		saddrs  = flag.String("addrs", ":8080,:8081,:8082", "server addresses seperated by ','")
-		readq   = flag.Int("rq", 2, "read quorum size")
+		readq   = flag.Int("rq", 2, "read quorum size (gorums only)")
 		psize   = flag.Int("p", 1024, "payload size in bytes")
-		timeout = flag.Duration("t", time.Second, "QRPC timeout")
+		timeout = flag.Duration("t", time.Second, "(Q)RPC timeout")
 		writera = flag.Int("wr", 0, "write ratio in percent (0-100)")
 
-		brrate = flag.Uint("brrate", 10000, "benchmark request rate")
+		brrate = flag.Uint("brrate", 10000, "benchmark) request rate")
 		bconns = flag.Uint("bconns", 1, "benchmark connections (separate gorums manager&config instances)")
 		bdur   = flag.Duration("bdur", 30*time.Second, "benchmark duration")
 	)
@@ -32,30 +34,47 @@ func main() {
 	}
 	flag.Parse()
 
+	switch *mode {
+	case "gorums", "grpc":
+	default:
+		dief("unknown benchmark mode: %q", *mode)
+	}
 	addrs := strings.Split(*saddrs, ",")
 	if len(addrs) == 0 {
-		dief("no server addresses provided")
-	}
-	if *readq > len(addrs) || *readq < 0 {
-		dief("invalid read quorum value (rq=%d, n=%d)", *readq, len(addrs))
+		dief("no server address(es) provided")
 	}
 	if *writera > 100 || *writera < 0 {
 		dief("invalid write ratio (%d)", *writera)
+	}
+	if *mode == "gorums" && (*readq > len(addrs) || *readq < 0) {
+		dief("invalid read quorum value (rq=%d, n=%d)", *readq, len(addrs))
 	}
 
 	log.SetFlags(0)
 	log.SetPrefix("benchclient: ")
 
-	r := &gbench.GorumsRequesterFactory{
-		Addrs:             addrs,
-		ReadQuorum:        *readq,
-		PayloadSize:       *psize,
-		QRPCTimeout:       *timeout,
-		WriteRatioPercent: *writera,
+	var factory bench.RequesterFactory
+	switch *mode {
+	case "gorums":
+		factory = &gbench.GorumsRequesterFactory{
+			Addrs:             addrs,
+			ReadQuorum:        *readq,
+			PayloadSize:       *psize,
+			QRPCTimeout:       *timeout,
+			WriteRatioPercent: *writera,
+		}
+	case "grpc":
+		factory = &gbench.GrpcRequesterFactory{
+			Addr:              addrs[0],
+			PayloadSize:       *psize,
+			Timeout:           *timeout,
+			WriteRatioPercent: *writera,
+		}
 	}
 
-	benchmark := bench.NewBenchmark(r, uint64(*brrate), uint64(*bconns), *bdur)
+	benchmark := bench.NewBenchmark(factory, uint64(*brrate), uint64(*bconns), *bdur)
 	start := time.Now()
+	log.Println("mode is", *mode)
 	log.Print("starting benchmark run...")
 	summary, err := benchmark.Run()
 	if err != nil {
@@ -63,10 +82,14 @@ func main() {
 	}
 	log.Print("done")
 
-	log.Printf(
-		"start time: %v | #servers: %d | read quorum: %d | payload size: %d bytes | write ratio: %d%%",
-		start, len(addrs), *readq, *psize, *writera,
+	benchParams := fmt.Sprintf(
+		"start time: %v | #servers: %d | payload size: %d bytes | write ratio: %d%%",
+		start, len(addrs), *psize, *writera,
 	)
+	if *mode == "gorums" {
+		benchParams = fmt.Sprintf("%s | readq: %d", benchParams, *readq)
+	}
+	log.Print(benchParams)
 	log.Println("summary:", summary)
 
 	filename := fmt.Sprintf(
