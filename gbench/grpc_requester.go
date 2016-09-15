@@ -99,5 +99,7 @@ func (gr *grpcRequester) Request() error {
 }
 
 func (gr *grpcRequester) Teardown() error {
-	return gr.conn.Close()
+	gr.conn.Close()
+	gr.conn = nil
+	return nil
 }
