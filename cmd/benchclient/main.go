@@ -106,6 +106,22 @@ func main() {
 	if err != nil {
 		log.Printf("error writing latency distribution to file: %v", err)
 	}
+
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalln("error opening file:", err)
+	}
+	defer f.Close()
+
+	_, err = f.WriteString(benchParams)
+	if err != nil {
+		log.Fatalln("error writing paramterers to file:", err)
+	}
+
+	_, err = f.WriteString(summary.String())
+	if err != nil {
+		log.Fatalln("error writing summary to file:", err)
+	}
 }
 
 func dief(format string, a ...interface{}) {
