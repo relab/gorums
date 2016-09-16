@@ -85,8 +85,12 @@ func main() {
 	}
 
 	benchmark := bench.NewBenchmark(factory, uint64(*brrate), uint64(*bconns), *bdur)
+
 	start := time.Now()
 	log.Println("mode is", *mode)
+	if *mode == grpc {
+		log.Println("concurrent:", *grpcc)
+	}
 	log.Print("starting benchmark run...")
 	summary, err := benchmark.Run()
 	if err != nil {

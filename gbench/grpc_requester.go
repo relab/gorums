@@ -71,13 +71,14 @@ func (gr *grpcRequester) Setup() error {
 	gr.clients = make([]*client, len(gr.addrs))
 
 	for i := 0; i < len(gr.clients); i++ {
-		c := new(client)
 		conn, err := grpc.Dial(gr.addrs[i], gr.dialOpts...)
 		if err != nil {
 			return fmt.Errorf("error connecting to %q: %v", gr.addrs[i], err)
 		}
-		c.conn = conn
-		c.client = rpc.NewRegisterClient(c.conn)
+		gr.clients[i] = &client{
+			conn:   conn,
+			client: rpc.NewRegisterClient(conn),
+		}
 	}
 
 	// Set initial state.
@@ -89,10 +90,10 @@ func (gr *grpcRequester) Setup() error {
 	for i, c := range gr.clients {
 		wreply, err := c.client.Write(gr.ctx, gr.state)
 		if err != nil {
-			return fmt.Errorf("c%d: write rpc error: %v", i, err)
+			return fmt.Errorf("%s: write rpc error: %v", gr.addrs[i], err)
 		}
 		if !wreply.New {
-			return fmt.Errorf("c%d: intital write reply was not marked as new", i)
+			return fmt.Errorf("%s: intital write reply was not marked as new", gr.addrs[i])
 		}
 	}
 
