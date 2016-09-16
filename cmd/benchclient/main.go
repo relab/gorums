@@ -22,10 +22,12 @@ func main() {
 		mode = flag.String("mode", gorums, "mode: grpc | gorums")
 
 		saddrs  = flag.String("addrs", ":8080,:8081,:8082", "server addresses seperated by ','")
-		readq   = flag.Int("rq", 2, "read quorum size (gorums only)")
+		readq   = flag.Int("rq", 2, "read quorum size")
+		writeq  = flag.Int("wq", 2, "write quorum size")
 		psize   = flag.Int("p", 1024, "payload size in bytes")
 		timeout = flag.Duration("t", time.Second, "(Q)RPC timeout")
 		writera = flag.Int("wr", 0, "write ratio in percent (0-100)")
+		grpcc   = flag.Bool("grpcc", false, "run concurrent grpc")
 
 		brrate = flag.Uint("brrate", 10000, "benchmark) request rate")
 		bconns = flag.Uint("bconns", 1, "benchmark connections (separate gorums manager&config instances)")
@@ -51,8 +53,11 @@ func main() {
 	if *writera > 100 || *writera < 0 {
 		dief("invalid write ratio (%d)", *writera)
 	}
-	if *mode == gorums && (*readq > len(addrs) || *readq < 0) {
+	if *readq > len(addrs) || *readq < 0 {
 		dief("invalid read quorum value (rq=%d, n=%d)", *readq, len(addrs))
+	}
+	if *writeq > len(addrs) || *writeq < 0 {
+		dief("invalid write quorum value (wq=%d, n=%d)", *writeq, len(addrs))
 	}
 
 	log.SetFlags(0)
@@ -64,16 +69,18 @@ func main() {
 		factory = &gbench.GorumsRequesterFactory{
 			Addrs:             addrs,
 			ReadQuorum:        *readq,
+			WriteQuorum:       *writeq,
 			PayloadSize:       *psize,
 			QRPCTimeout:       *timeout,
 			WriteRatioPercent: *writera,
 		}
 	case grpc:
 		factory = &gbench.GrpcRequesterFactory{
-			Addr:              addrs[0],
+			Addrs:             addrs,
 			PayloadSize:       *psize,
 			Timeout:           *timeout,
 			WriteRatioPercent: *writera,
+			Concurrent:        *grpcc,
 		}
 	}
 

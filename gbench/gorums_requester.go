@@ -17,6 +17,7 @@ import (
 type GorumsRequesterFactory struct {
 	Addrs             []string
 	ReadQuorum        int
+	WriteQuorum       int
 	PayloadSize       int
 	QRPCTimeout       time.Duration
 	WriteRatioPercent int
@@ -25,26 +26,29 @@ type GorumsRequesterFactory struct {
 // GetRequester returns a new Requester, called for each Benchmark connection.
 func (r *GorumsRequesterFactory) GetRequester(uint64) bench.Requester {
 	return &gorumsRequester{
-		addrs: r.Addrs,
+		addrs:       r.Addrs,
+		readq:       r.ReadQuorum,
+		writeq:      r.WriteQuorum,
+		payloadSize: r.PayloadSize,
+		timeout:     r.QRPCTimeout,
+		writeRatio:  r.WriteRatioPercent,
 		dialOpts: []grpc.DialOption{
 			grpc.WithInsecure(),
 			grpc.WithBlock(),
 			grpc.WithTimeout(time.Second),
 		},
-		readq:       r.ReadQuorum,
-		payloadSize: r.PayloadSize,
-		timeout:     r.QRPCTimeout,
-		writeRatio:  r.WriteRatioPercent,
 	}
 }
 
 type gorumsRequester struct {
 	addrs       []string
-	dialOpts    []grpc.DialOption
 	readq       int
+	writeq      int
 	payloadSize int
 	timeout     time.Duration
 	writeRatio  int
+
+	dialOpts []grpc.DialOption
 
 	mgr    *rpc.Manager
 	config *rpc.Configuration
@@ -62,7 +66,7 @@ func (gr *gorumsRequester) Setup() error {
 	}
 
 	ids := gr.mgr.NodeIDs()
-	qspec := newRegisterQSpec(gr.readq, len(gr.addrs))
+	qspec := newRegisterQSpec(gr.readq, gr.writeq)
 	gr.config, err = gr.mgr.NewConfiguration(ids, qspec, gr.timeout)
 	if err != nil {
 		return err
