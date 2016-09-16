@@ -12,9 +12,14 @@ import (
 	"github.com/tylertreat/bench"
 )
 
+const (
+	gorums string = "gorums"
+	grpc   string = "grpc"
+)
+
 func main() {
 	var (
-		mode = flag.String("mode", "gorums", "mode: grpc | gorums")
+		mode = flag.String("mode", gorums, "mode: grpc | gorums")
 
 		saddrs  = flag.String("addrs", ":8080,:8081,:8082", "server addresses seperated by ','")
 		readq   = flag.Int("rq", 2, "read quorum size (gorums only)")
@@ -35,7 +40,7 @@ func main() {
 	flag.Parse()
 
 	switch *mode {
-	case "gorums", "grpc":
+	case gorums, grpc:
 	default:
 		dief("unknown benchmark mode: %q", *mode)
 	}
@@ -46,7 +51,7 @@ func main() {
 	if *writera > 100 || *writera < 0 {
 		dief("invalid write ratio (%d)", *writera)
 	}
-	if *mode == "gorums" && (*readq > len(addrs) || *readq < 0) {
+	if *mode == gorums && (*readq > len(addrs) || *readq < 0) {
 		dief("invalid read quorum value (rq=%d, n=%d)", *readq, len(addrs))
 	}
 
@@ -55,7 +60,7 @@ func main() {
 
 	var factory bench.RequesterFactory
 	switch *mode {
-	case "gorums":
+	case gorums:
 		factory = &gbench.GorumsRequesterFactory{
 			Addrs:             addrs,
 			ReadQuorum:        *readq,
@@ -63,7 +68,7 @@ func main() {
 			QRPCTimeout:       *timeout,
 			WriteRatioPercent: *writera,
 		}
-	case "grpc":
+	case grpc:
 		factory = &gbench.GrpcRequesterFactory{
 			Addr:              addrs[0],
 			PayloadSize:       *psize,

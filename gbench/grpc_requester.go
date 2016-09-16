@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// RequesterFactory implements RequesterFactory by creating a Requester which
+// GrpcRequesterFactory implements RequesterFactory by creating a Requester which
 // issues requests to a register using the gRPC framework.
 type GrpcRequesterFactory struct {
 	Addr              string
@@ -99,7 +99,7 @@ func (gr *grpcRequester) Request() error {
 }
 
 func (gr *grpcRequester) Teardown() error {
-	gr.conn.Close()
+	_ = gr.conn.Close()
 	gr.conn = nil
 	return nil
 }
