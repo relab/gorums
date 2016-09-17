@@ -1,29 +1,34 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/relab/gorums/gbench"
 	"github.com/tylertreat/bench"
+	"github.com/relab/gorums/gbench"
 )
 
 const (
 	gorums string = "gorums"
 	grpc   string = "grpc"
+	byzq   string = "byzq"
 )
 
 func main() {
 	var (
-		mode = flag.String("mode", gorums, "mode: grpc | gorums")
+		mode = flag.String("mode", gorums, "mode: grpc | gorums | byzq")
 
 		saddrs  = flag.String("addrs", ":8080,:8081,:8082", "server addresses seperated by ','")
 		readq   = flag.Int("rq", 2, "read quorum size")
 		writeq  = flag.Int("wq", 2, "write quorum size")
+		f       = flag.Int("f", 1, "byzq fault tolerance (this is ignored if addrs is provided)")
+		port    = flag.Int("port", 8080, "port where local server is listening")
 		psize   = flag.Int("p", 1024, "payload size in bytes")
 		timeout = flag.Duration("t", time.Second, "(Q)RPC timeout")
 		writera = flag.Int("wr", 0, "write ratio in percent (0-100)")
@@ -42,10 +47,27 @@ func main() {
 	flag.Parse()
 
 	switch *mode {
-	case gorums, grpc:
+	case gorums, grpc, byzq:
 	default:
 		dief("unknown benchmark mode: %q", *mode)
 	}
+
+	if *saddrs == "" {
+		// using local addresses only
+		if *f > 3 || *f < 1 {
+			dief("only f=1,2,3 is allowed")
+		}
+		n := 3**f + 1
+		var buf bytes.Buffer
+		for i := 0; i < n; i++ {
+			buf.WriteString(":")
+			buf.WriteString(strconv.Itoa(*port + i))
+			buf.WriteString(",")
+		}
+		b := buf.String()
+		*saddrs = b[:len(b)-1]
+	}
+
 	addrs := strings.Split(*saddrs, ",")
 	if len(addrs) == 0 {
 		dief("no server address(es) provided")
@@ -82,6 +104,13 @@ func main() {
 			WriteRatioPercent: *writera,
 			Concurrent:        *grpcc,
 		}
+	case byzq:
+		factory = &gbench.ByzqRequesterFactory{
+			Addrs:             addrs,
+			PayloadSize:       *psize,
+			QRPCTimeout:       *timeout,
+			WriteRatioPercent: *writera,
+		}
 	}
 
 	benchmark := bench.NewBenchmark(factory, uint64(*brrate), uint64(*bconns), *bdur)
@@ -102,9 +131,15 @@ func main() {
 		"start time: %v | #servers: %d | payload size: %d bytes | write ratio: %d%%",
 		start, len(addrs), *psize, *writera,
 	)
-	if *mode == "gorums" {
+	switch *mode {
+	case gorums:
 		benchParams = fmt.Sprintf("%s | readq: %d", benchParams, *readq)
+	case byzq:
+		benchParams = fmt.Sprintf("%s | readbyz: %d", benchParams, *readq)
 	}
+	// if *mode == "gorums" {
+	// 	benchParams = fmt.Sprintf("%s | readq: %d", benchParams, *readq)
+	// }
 	log.Print(benchParams)
 	log.Println("summary:", summary)
 
@@ -118,18 +153,18 @@ func main() {
 		log.Printf("error writing latency distribution to file: %v", err)
 	}
 
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Fatalln("error opening file:", err)
 	}
-	defer f.Close()
+	defer file.Close()
 
-	_, err = f.WriteString(benchParams)
+	_, err = file.WriteString(benchParams)
 	if err != nil {
 		log.Fatalln("error writing paramterers to file:", err)
 	}
 
-	_, err = f.WriteString(summary.String())
+	_, err = file.WriteString(summary.String())
 	if err != nil {
 		log.Fatalln("error writing summary to file:", err)
 	}
