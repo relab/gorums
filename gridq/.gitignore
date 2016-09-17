@@ -23,29 +23,7 @@ _testmain.go
 *.test
 *.prof
 
-# vim
-[._]*.s[a-w][a-z]
-[._]s[a-w][a-z]
-*.un~
-Session.vim
-.netrwhist
-*~
-
-*.xo
-
-# binary files
-cmd/benchclient/benchclient
-
-cmd/regserver/regserver
-
-cmd/byzserver/byzserver
-cmd/byzclient/byzclient
-
 cmd/gqserver/gqserver
 cmd/gqclient/gqclient
 
-# bench output
-cmd/bechclient/*.txt
-
-# key files
-priv-key.pem
+*.swp
