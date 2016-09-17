@@ -75,7 +75,7 @@ func (aq *AuthDataQ) verify(reply *Value) bool {
 // ReadQF returns nil and false until the supplied replies
 // constitute a Byzantine quorum, at which point the
 // method returns the single highest value and true.
-func (aq *AuthDataQ) ReadQF(replies []*Value) (*Value, bool) {
+func (aq *AuthDataQ) OrigReadQF(replies []*Value) (*Value, bool) {
 	if len(replies) <= aq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
@@ -167,7 +167,7 @@ func (aq *AuthDataQ) LReadQF(replies []*Value) (*Value, bool) {
 }
 
 // L2ReadQF returns Leanders QFunc version 2
-func (aq *AuthDataQ) L2ReadQF(replies []*Value) (*Value, bool) {
+func (aq *AuthDataQ) ReadQF(replies []*Value) (*Value, bool) {
 	if len(replies) < 1 {
 		return nil, false
 	}
