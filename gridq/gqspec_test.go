@@ -124,38 +124,38 @@ var qspecs = []struct {
 }{
 	{
 		"GQSort(3x3)",
-		&GQSort{
+		&gqSort{
 			rows:      grows,
 			cols:      gcols,
 			printGrid: false,
-			vgrid:     NewVisualGrid(grows, gcols),
+			vgrid:     newVisualGrid(grows, gcols),
 		},
 	},
 	{
 		"GQMap(3x3)",
-		&GQMap{
+		&gqMap{
 			rows:      grows,
 			cols:      gcols,
 			printGrid: false,
-			vgrid:     NewVisualGrid(grows, gcols),
+			vgrid:     newVisualGrid(grows, gcols),
 		},
 	},
 	{
 		"GQSliceOne(3x3)",
-		&GQSliceOne{
+		&gqSliceOne{
 			rows:      grows,
 			cols:      gcols,
 			printGrid: false,
-			vgrid:     NewVisualGrid(grows, gcols),
+			vgrid:     newVisualGrid(grows, gcols),
 		},
 	},
 	{
 		"GQSliceTwo(3x3)",
-		&GQSliceTwo{
+		&gqSliceTwo{
 			rows:      grows,
 			cols:      gcols,
 			printGrid: false,
-			vgrid:     NewVisualGrid(grows, gcols),
+			vgrid:     newVisualGrid(grows, gcols),
 		},
 	},
 }

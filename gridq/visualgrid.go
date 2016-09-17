@@ -5,20 +5,20 @@ import (
 	"sync"
 )
 
-type VisualGrid struct {
+type visualGrid struct {
 	sync.Mutex
 	grid       [][]rune
 	crow, ccol int
 }
 
-func NewVisualGrid(rows, cols int) *VisualGrid {
+func newVisualGrid(rows, cols int) *visualGrid {
 	grid := make([][]rune, rows)
 	cells := make([]rune, rows*cols)
 	for i := range grid {
 		grid[i], cells = cells[:cols], cells[cols:]
 	}
 
-	vgrid := &VisualGrid{
+	vgrid := &visualGrid{
 		grid: grid,
 		crow: -1,
 		ccol: -1,
@@ -27,7 +27,7 @@ func NewVisualGrid(rows, cols int) *VisualGrid {
 	return vgrid
 }
 
-func (vg *VisualGrid) SetRowQuorum(row uint32) {
+func (vg *visualGrid) SetRowQuorum(row uint32) {
 	vg.Lock()
 	defer vg.Unlock()
 	if int(row) == vg.crow {
@@ -46,7 +46,7 @@ func (vg *VisualGrid) SetRowQuorum(row uint32) {
 	}
 }
 
-func (vg *VisualGrid) SetColQuorum(col uint32) {
+func (vg *visualGrid) SetColQuorum(col uint32) {
 	vg.Lock()
 	defer vg.Unlock()
 	if int(col) == vg.ccol {
@@ -64,7 +64,7 @@ func (vg *VisualGrid) SetColQuorum(col uint32) {
 	}
 }
 
-func (vg *VisualGrid) print() {
+func (vg *visualGrid) print() {
 	vg.Lock()
 	defer vg.Unlock()
 	if vg.crow != -1 {

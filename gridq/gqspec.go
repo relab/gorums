@@ -2,28 +2,29 @@ package gridq
 
 import "sort"
 
+// NewGQSort returns a gird quorum specification (sort version).
 func NewGQSort(rows, cols int, printGrid bool) QuorumSpec {
-	return &GQSort{
+	return &gqSort{
 		rows:      rows,
 		cols:      cols,
 		printGrid: printGrid,
-		vgrid:     NewVisualGrid(rows, cols),
+		vgrid:     newVisualGrid(rows, cols),
 	}
 }
 
-type GQSort struct {
+type gqSort struct {
 	rows, cols int
 	printGrid  bool
-	vgrid      *VisualGrid
+	vgrid      *visualGrid
 }
 
 // ReadQF: All replicas from one row.
-func (gqs *GQSort) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
+func (gqs *gqSort) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 	if len(replies) < gqs.rows {
 		return nil, false
 	}
 
-	sort.Sort(ByRowTimestamp(replies))
+	sort.Sort(byRowTimestamp(replies))
 
 	qreplies := 1 // Counter for replies from the same row.
 	row := replies[0].Row
@@ -52,12 +53,12 @@ func (gqs *GQSort) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 }
 
 // WriteQF: One replica from each row.
-func (gqs *GQSort) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
+func (gqs *gqSort) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
 	if len(replies) < gqs.cols {
 		return nil, false
 	}
 
-	sort.Sort(ByColRow(replies))
+	sort.Sort(byColRow(replies))
 
 	qreplies := 1 // Counter for replies from the same row.
 	col := replies[0].Col
@@ -86,10 +87,20 @@ func (gqs *GQSort) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
 	panic("an invariant was not handled")
 }
 
-type GQMap struct {
+// NewGQMap returns a gird quorum specification (map version).
+func NewGQMap(rows, cols int, printGrid bool) QuorumSpec {
+	return &gqMap{
+		rows:      rows,
+		cols:      cols,
+		printGrid: printGrid,
+		vgrid:     newVisualGrid(rows, cols),
+	}
+}
+
+type gqMap struct {
 	rows, cols int
 	printGrid  bool
-	vgrid      *VisualGrid
+	vgrid      *visualGrid
 }
 
 // ReadQF: All replicas from one row.
@@ -97,7 +108,7 @@ type GQMap struct {
 // Note: It is not enough to just know that we have a quorum from a row, we also
 // need to know what replies forms the quorum (both in practice and to be fair
 // to GQSort above).
-func (gqm *GQMap) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
+func (gqm *gqMap) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 	if len(replies) < gqm.rows {
 		return nil, false
 	}
@@ -116,7 +127,7 @@ func (gqm *GQMap) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 				gqm.vgrid.SetRowQuorum(reply.Row)
 				gqm.vgrid.print()
 			}
-			sort.Sort(ByTimestamp(row))
+			sort.Sort(byTimestamp(row))
 			return row[len(row)-1], true
 		}
 		rowReplies[reply.Row] = row
@@ -126,18 +137,28 @@ func (gqm *GQMap) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 }
 
 // WriteQF: One replica from each row.
-func (gqm *GQMap) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
+func (gqm *gqMap) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
 	panic("not implemented, symmetric with read")
 }
 
-type GQSliceOne struct {
+// NewGQSliceOne returns a gird quorum specification (slice version I).
+func NewGQSliceOne(rows, cols int, printGrid bool) QuorumSpec {
+	return &gqSliceOne{
+		rows:      rows,
+		cols:      cols,
+		printGrid: printGrid,
+		vgrid:     newVisualGrid(rows, cols),
+	}
+}
+
+type gqSliceOne struct {
 	rows, cols int
 	printGrid  bool
-	vgrid      *VisualGrid
+	vgrid      *visualGrid
 }
 
 // ReadQF: All replicas from one row.
-func (gqs *GQSliceOne) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
+func (gqs *gqSliceOne) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 	if len(replies) < gqs.rows {
 		return nil, false
 	}
@@ -149,7 +170,7 @@ func (gqs *GQSliceOne) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 		if rowCount[reply.Row] >= gqs.rows {
 			start := int(reply.Row) * gqs.rows
 			repliesRM = repliesRM[start : start+gqs.rows]
-			sort.Sort(ByTimestamp(repliesRM))
+			sort.Sort(byTimestamp(repliesRM))
 			return repliesRM[len(repliesRM)-1], true
 		}
 	}
@@ -158,14 +179,24 @@ func (gqs *GQSliceOne) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 }
 
 // WriteQF: One replica from each row.
-func (gqs *GQSliceOne) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
+func (gqs *gqSliceOne) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
 	panic("not implemented, symmetric with read")
 }
 
-type GQSliceTwo struct {
+// NewGQSliceTwo returns a gird quorum specification (slice version II).
+func NewGQSliceTwo(rows, cols int, printGrid bool) QuorumSpec {
+	return &gqSliceTwo{
+		rows:      rows,
+		cols:      cols,
+		printGrid: printGrid,
+		vgrid:     newVisualGrid(rows, cols),
+	}
+}
+
+type gqSliceTwo struct {
 	rows, cols int
 	printGrid  bool
-	vgrid      *VisualGrid
+	vgrid      *visualGrid
 }
 
 type rowInfo struct {
@@ -174,7 +205,7 @@ type rowInfo struct {
 }
 
 // ReadQF: All replicas from one row.
-func (gqs *GQSliceTwo) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
+func (gqs *gqSliceTwo) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 	if len(replies) < gqs.rows {
 		return nil, false
 	}
@@ -204,6 +235,6 @@ func (gqs *GQSliceTwo) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
 }
 
 // WriteQF: One replica from each row.
-func (gqs *GQSliceTwo) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
+func (gqs *gqSliceTwo) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
 	panic("not implemented, symmetric with read")
 }
