@@ -104,7 +104,7 @@ var authReadQFTests = []struct {
 	{
 		"no quorum (I)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
 		},
 		nil,
 		false,
@@ -112,8 +112,8 @@ var authReadQFTests = []struct {
 	{
 		"no quorum (II)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
 		},
 		nil,
 		false,
@@ -121,9 +121,9 @@ var authReadQFTests = []struct {
 	{
 		"quorum (I)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
 		},
 		&Content{Key: "Winnie", Value: "Poop", Timestamp: 1},
 		true,
@@ -131,9 +131,9 @@ var authReadQFTests = []struct {
 	{
 		"quorum (II)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 2}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 2}},
+			{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
 		},
 		&Content{Key: "Winnie", Value: "Poo", Timestamp: 2},
 		true,
@@ -141,9 +141,9 @@ var authReadQFTests = []struct {
 	{
 		"quorum (III)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 2}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Pooop", Timestamp: 3}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 2}},
+			{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Pooop", Timestamp: 3}},
 		},
 		&Content{Key: "Winnie", Value: "Pooop", Timestamp: 3},
 		true,
@@ -151,10 +151,10 @@ var authReadQFTests = []struct {
 	{
 		"quorum (IV)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 2}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Pooop", Timestamp: 3}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poooop", Timestamp: 4}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 2}},
+			{C: &Content{Key: "Winnie", Value: "Poop", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Pooop", Timestamp: 3}},
+			{C: &Content{Key: "Winnie", Value: "Poooop", Timestamp: 4}},
 		},
 		&Content{Key: "Winnie", Value: "Poooop", Timestamp: 4},
 		true,
@@ -173,7 +173,7 @@ var authReadQFTests = []struct {
 	{
 		"quorum (VI)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
 			myVal,
 			myVal,
 			myVal,
@@ -184,8 +184,8 @@ var authReadQFTests = []struct {
 	{
 		"quorum (VII)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
 			myVal,
 			myVal,
 		},
@@ -195,9 +195,9 @@ var authReadQFTests = []struct {
 	{
 		"quorum (VIII)",
 		[]*Value{
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
-			&Value{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
+			{C: &Content{Key: "Winnie", Value: "Poo", Timestamp: 1}},
 			myVal,
 		},
 		myContent,
@@ -376,7 +376,7 @@ var authWriteQFTests = []struct {
 	{
 		"no quorum (I)",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
+			{Timestamp: 1},
 		},
 		nil,
 		false,
@@ -384,8 +384,8 @@ var authWriteQFTests = []struct {
 	{
 		"no quorum (II)",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
 		},
 		nil,
 		false,
@@ -393,10 +393,10 @@ var authWriteQFTests = []struct {
 	{
 		"no quorum (III)",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 2},
-			&WriteResponse{Timestamp: 3},
-			&WriteResponse{Timestamp: 4},
+			{Timestamp: 1},
+			{Timestamp: 2},
+			{Timestamp: 3},
+			{Timestamp: 4},
 		},
 		nil,
 		false,
@@ -404,10 +404,10 @@ var authWriteQFTests = []struct {
 	{
 		"no quorum (IV)",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 2},
-			&WriteResponse{Timestamp: 2},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 2},
+			{Timestamp: 2},
 		},
 		nil,
 		false,
@@ -415,9 +415,9 @@ var authWriteQFTests = []struct {
 	{
 		"quorum (I)",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
 		},
 		&WriteResponse{Timestamp: 1},
 		true,
@@ -425,10 +425,10 @@ var authWriteQFTests = []struct {
 	{
 		"quorum (II)",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
 		},
 		&WriteResponse{Timestamp: 1},
 		true,
@@ -436,10 +436,10 @@ var authWriteQFTests = []struct {
 	{
 		"quorum (III)",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 2},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 2},
 		},
 		&WriteResponse{Timestamp: 1},
 		true,
@@ -447,10 +447,10 @@ var authWriteQFTests = []struct {
 	{
 		"quorum (IV)",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 2},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
+			{Timestamp: 2},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
 		},
 		&WriteResponse{Timestamp: 1},
 		true,
@@ -458,9 +458,9 @@ var authWriteQFTests = []struct {
 	{
 		"best-case quorum",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
 		},
 		&WriteResponse{Timestamp: 1},
 		true,
@@ -468,10 +468,10 @@ var authWriteQFTests = []struct {
 	{
 		"worst-case quorum",
 		[]*WriteResponse{
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
-			&WriteResponse{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
+			{Timestamp: 1},
 		},
 		&WriteResponse{Timestamp: 1},
 		true,

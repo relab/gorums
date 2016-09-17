@@ -67,8 +67,8 @@ var byzReadQFTests = []struct {
 	{
 		"no quorum (I)",
 		[]*Value{
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
 		},
 		nil,
 		false,
@@ -76,9 +76,9 @@ var byzReadQFTests = []struct {
 	{
 		"no quorum (II)",
 		[]*Value{
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
 		},
 		nil,
 		false,
@@ -86,10 +86,10 @@ var byzReadQFTests = []struct {
 	{
 		"no quorum (III); default value",
 		[]*Value{
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: "3", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: "4", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "3", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "4", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
 		},
 		&defaultVal,
 		true,
@@ -97,11 +97,11 @@ var byzReadQFTests = []struct {
 	{
 		"no quorum (IV); default value",
 		[]*Value{
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: "3", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 2}},
-			&Value{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 3}},
-			&Value{C: &Content{Key: "winnie", Value: "4", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "3", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 2}},
+			{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 3}},
+			{C: &Content{Key: "winnie", Value: "4", Timestamp: 1}},
 		},
 		&defaultVal,
 		true,
@@ -110,12 +110,12 @@ var byzReadQFTests = []struct {
 		//todo: decide if #replies > n should be accepted ?
 		"no quorum (V); default value",
 		[]*Value{
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: "3", Timestamp: 2}},
-			&Value{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 3}},
-			&Value{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 2}},
-			&Value{C: &Content{Key: "winnie", Value: "4", Timestamp: 3}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "3", Timestamp: 2}},
+			{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 3}},
+			{C: &Content{Key: "winnie", Value: myVal.C.Value, Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 2}},
+			{C: &Content{Key: "winnie", Value: "4", Timestamp: 3}},
 		},
 		&defaultVal,
 		true,
@@ -134,7 +134,7 @@ var byzReadQFTests = []struct {
 	{
 		"quorum (II)",
 		[]*Value{
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
 			myVal,
 			myVal,
 			myVal,
@@ -157,8 +157,8 @@ var byzReadQFTests = []struct {
 	{
 		"quorum (IV)",
 		[]*Value{
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
 			myVal,
 			myVal,
 			myVal,
@@ -180,9 +180,9 @@ var byzReadQFTests = []struct {
 	{
 		"approx. worst-case quorum",
 		[]*Value{
-			&Value{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
-			&Value{C: &Content{Key: "winnie", Value: "4", Timestamp: 2}},
-			&Value{C: &Content{Key: "winnie", Value: "5", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "2", Timestamp: 1}},
+			{C: &Content{Key: "winnie", Value: "4", Timestamp: 2}},
+			{C: &Content{Key: "winnie", Value: "5", Timestamp: 1}},
 			myVal,
 			myVal,
 		},
