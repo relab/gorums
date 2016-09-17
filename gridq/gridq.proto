@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package gridq;
+
+service Register {
+	rpc Read(Empty) returns (ReadResponse) {}
+	rpc Write(State) returns (WriteResponse) {}
+}
+
+message State {
+	int64 value	= 1;
+	int64 timestamp = 2;
+} 
+
+message ReadResponse {
+	uint32 row 	= 1;
+	uint32 col	= 2; 
+	State state	= 3;
+}
+
+message WriteResponse {
+	uint32 row 	= 1;
+	uint32 col	= 2; 
+	bool written	= 3;
+}
+
+message Empty {}
+
