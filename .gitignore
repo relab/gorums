@@ -34,8 +34,8 @@ Session.vim
 *.xo
 
 # binaries
-cmd/benchserver/benchserver
-cmd/benchclient/benchclient
+cmd/regserver/regserver
+cmd/regclient/regclient
 
 # bench output
-cmd/benchclient/*.txt
+cmd/regclient/*.txt
