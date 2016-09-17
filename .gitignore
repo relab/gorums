@@ -34,14 +34,15 @@ Session.vim
 *.xo
 
 # binary files
+cmd/benchclient/benchclient
+
 cmd/regserver/regserver
-cmd/regclient/regclient
 
 cmd/byzserver/byzserver
 cmd/byzclient/byzclient
 
 # bench output
-cmd/regclient/*.txt
+cmd/bechclient/*.txt
 
 # key files
 priv-key.pem
