@@ -141,9 +141,9 @@ func main() {
 	log.Println("summary:", summary)
 
 	filename := fmt.Sprintf(
-		"%s-%04d%02d%02d-%02d%02d%02d.txt", *mode,
+		"%s-%04d%02d%02d-%02d%02d.txt", *mode,
 		start.Year(), start.Month(), start.Day(),
-		start.Hour(), start.Minute(), start.Second(),
+		start.Hour(), start.Minute(),
 	)
 	err = summary.GenerateLatencyDistribution(bench.Logarithmic, filename)
 	if err != nil {
