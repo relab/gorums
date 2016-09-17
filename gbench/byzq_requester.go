@@ -136,17 +136,17 @@ func (gr *byzqRequester) Request() error {
 		_, err = gr.config.Read(&rpc.Key{})
 	case 100:
 		gr.state.Timestamp = time.Now().UnixNano()
-		signedState, err := gr.qspec.Sign(gr.state)
-		if err != nil {
-			return err
+		signedState, err2 := gr.qspec.Sign(gr.state)
+		if err2 != nil {
+			return err2
 		}
 		_, err = gr.config.Write(signedState)
 	default:
 		x := rand.Intn(100)
 		if x < gr.writeRatio {
 			gr.state.Timestamp = time.Now().UnixNano()
-			signedState, err := gr.qspec.Sign(gr.state)
-			if err != nil {
+			signedState, err2 := gr.qspec.Sign(gr.state)
+			if err2 != nil {
 				return err
 			}
 			_, err = gr.config.Write(signedState)
