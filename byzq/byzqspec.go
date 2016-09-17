@@ -1,16 +1,12 @@
-package main
+package byzq
 
-import (
-	"fmt"
-
-	"github.com/relab/gorums/byzq"
-)
+import "fmt"
 
 // defaultVal is returned by the register when no quorum is reached.
 // It is considered safe to return this value, rather than returning
 // a reply that does not constitute a quorum.
-var defaultVal = byzq.Value{
-	C: &byzq.Content{Timestamp: -1},
+var defaultVal = Value{
+	C: &Content{Timestamp: -1},
 }
 
 // ByzQ todo(doc) does something useful?
@@ -33,13 +29,13 @@ func NewByzQ(n int) (*ByzQ, error) {
 // ReadQF returns nil and false until the supplied replies
 // constitute a Byzantine masking quorum, at which point the
 // method returns a single Value and true.
-func (bq *ByzQ) ReadQF(replies []*byzq.Value) (*byzq.Value, bool) {
+func (bq *ByzQ) ReadQF(replies []*Value) (*Value, bool) {
 	if len(replies) <= bq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
 	}
 	// filter out highest val that appears at least f times
-	same := make(map[byzq.Content]int)
+	same := make(map[Content]int)
 	highest := defaultVal
 	for _, reply := range replies {
 		same[*reply.C]++
@@ -56,7 +52,7 @@ func (bq *ByzQ) ReadQF(replies []*byzq.Value) (*byzq.Value, bool) {
 // WriteQF returns nil and false until the supplied replies
 // constitute a Byzantine masking quorum, at which point the
 // method returns a single write response and true.
-func (bq *ByzQ) WriteQF(replies []*byzq.WriteResponse) (*byzq.WriteResponse, bool) {
+func (bq *ByzQ) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
 	if len(replies) <= bq.q {
 		return nil, false
 	}

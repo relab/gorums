@@ -1,30 +1,13 @@
-package main
+package byzq
 
 import (
-	"io/ioutil"
-	"log"
-	"os"
 	"strings"
 	"testing"
-
-	. "github.com/relab/gorums/byzq"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 )
 
 // run tests with: go test -v
 
 // run benchmarks: go test -run=$$ -benchmem -benchtime=5s -bench=.
-
-func TestMain(m *testing.M) {
-	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
-	grpclog.SetLogger(silentLogger)
-	grpc.EnableTracing = false
-	res := m.Run()
-	os.Exit(res)
-}
-
 var byzQTests = []struct {
 	n   int
 	f   int // expected value
