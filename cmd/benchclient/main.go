@@ -144,7 +144,7 @@ func main() {
 	log.Println("summary:", summary)
 
 	filename := fmt.Sprintf(
-		"%s-%s-%04d%02d%02d-%02d%02d%02d.txt", *mode, params,
+		"%s-%s-%04d%02d%02d-%02d%02d.txt", *mode, params,
 		start.Year(), start.Month(), start.Day(),
 		start.Hour(), start.Minute(),
 	)
