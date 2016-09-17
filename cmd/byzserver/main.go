@@ -48,10 +48,10 @@ func main() {
 
 func serve(port int, keyFile string) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	defer l.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer l.Close()
 	if keyFile == "" {
 		log.Fatalln("required server keys not provided")
 	}
