@@ -22,7 +22,7 @@ type register struct {
 
 func main() {
 	port := flag.Int("port", 8080, "port to listen on")
-	f := flag.Int("f", 0, "fault tolerance, supported values f=1,2,3 (this is ignored if addrs is provided)")
+	f := flag.Int("f", 0, "fault tolerance")
 	key := flag.String("key", "", "public/private key file this server")
 
 	flag.Usage = func() {
