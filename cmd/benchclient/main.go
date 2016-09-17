@@ -54,8 +54,8 @@ func main() {
 
 	if *saddrs == "" {
 		// using local addresses only
-		if *f > 3 || *f < 1 {
-			dief("only f=1,2,3 is allowed")
+		if *f < 1 {
+			dief("must have f>0")
 		}
 		n := 3**f + 1
 		var buf bytes.Buffer
@@ -131,17 +131,20 @@ func main() {
 		"start time: %v | #servers: %d | payload size: %d bytes | write ratio: %d%%",
 		start, len(addrs), *psize, *writera,
 	)
+	params := fmt.Sprintf("N%02d-P%04d-WR%03d", len(addrs), *psize, *writera)
 	switch *mode {
 	case gorums:
 		benchParams = fmt.Sprintf("%s | readq: %d", benchParams, *readq)
+		params = fmt.Sprintf("%s-RQ%d", params, *readq)
 	case byzq:
 		benchParams = fmt.Sprintf("%s | f: %d", benchParams, *f)
+		params = fmt.Sprintf("%s-F%d", params, *f)
 	}
 	log.Print(benchParams)
 	log.Println("summary:", summary)
 
 	filename := fmt.Sprintf(
-		"%s-%04d%02d%02d-%02d%02d%02d.txt", *mode,
+		"%s-%s-%04d%02d%02d-%02d%02d%02d.txt", *mode, params,
 		start.Year(), start.Month(), start.Day(),
 		start.Hour(), start.Minute(), start.Second(),
 	)
