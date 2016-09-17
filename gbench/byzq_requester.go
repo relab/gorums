@@ -134,7 +134,7 @@ func (gr *byzqRequester) Request() error {
 	var err error
 	switch gr.writeRatio {
 	case 0:
-		_, err = gr.config.Read(&rpc.Key{})
+		_, err = gr.config.Read(&rpc.Key{Key: gr.state.Key})
 	case 100:
 		gr.state.Timestamp = gr.qspec.NewTS()
 		signedState, err2 := gr.qspec.Sign(gr.state)
@@ -152,7 +152,7 @@ func (gr *byzqRequester) Request() error {
 			}
 			_, err = gr.config.Write(signedState)
 		} else {
-			_, err = gr.config.Read(&rpc.Key{})
+			_, err = gr.config.Read(&rpc.Key{Key: gr.state.Key})
 		}
 	}
 
