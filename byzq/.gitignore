@@ -5,7 +5,7 @@
 
 # Folders
 _obj
-_test
+#_test
 
 # Architecture specific extensions/prefixes
 *.[568vq]
@@ -20,28 +20,14 @@ _cgo_export.*
 _testmain.go
 
 *.exe
-*.test
+#*.test
 *.prof
 
-# vim
-[._]*.s[a-w][a-z]
-[._]s[a-w][a-z]
-*.un~
-Session.vim
-.netrwhist
-*~
-
-*.xo
-
 # binary files
-cmd/regserver/regserver
-cmd/regclient/regclient
-
 cmd/byzserver/byzserver
 cmd/byzclient/byzclient
 
-# bench output
-cmd/regclient/*.txt
-
 # key files
 priv-key.pem
+
+

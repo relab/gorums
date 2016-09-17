@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package byzq;
+
+service Register {
+	rpc Read(Key) returns (Value) {}
+	rpc Write(Value) returns (WriteResponse) {}
+}
+
+// [Read, requestID]
+message Key {
+	string key = 1;
+}
+
+message Content {
+	string key = 1;
+	int64 timestamp = 2;
+	string value	= 3;
+}
+
+// [Value, requestID, ts, val, signature]
+// [Write, wts, val, signature]
+message Value {
+	Content c = 1;
+	bytes signatureR = 2;
+	bytes signatureS = 3;
+} 
+
+// [Ack, ts]
+message WriteResponse {
+	int64 timestamp = 1;
+}

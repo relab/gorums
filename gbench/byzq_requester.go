@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	rpc "github.com/relab/byzq"
+	rpc "github.com/relab/gorums/byzq"
 	"github.com/tylertreat/bench"
 
 	"google.golang.org/grpc"
