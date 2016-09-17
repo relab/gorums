@@ -68,7 +68,7 @@ func main() {
 	}
 	cols := len(addrs) / rows
 
-	fmt.Println("#addrs:", len(addrs), "rows:", rows, "cols:", cols, "\n")
+	fmt.Println("#addrs:", len(addrs), "rows:", rows, "cols:", cols)
 
 	mgr, err := gridq.NewManager(
 		addrs,
@@ -103,7 +103,7 @@ func main() {
 			fmt.Println("error writing value:", err)
 			os.Exit(2)
 		}
-		fmt.Println("write response:", wreply, "\n")
+		fmt.Println("write response:", wreply)
 
 		time.Sleep(2 * time.Second)
 
@@ -112,7 +112,7 @@ func main() {
 			fmt.Println("error reading value:", err)
 			os.Exit(2)
 		}
-		fmt.Println("read response:", rreply.Reply.State, "\n")
+		fmt.Println("read response:", rreply.Reply.State)
 
 		time.Sleep(3 * time.Second)
 	}
