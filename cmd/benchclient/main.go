@@ -141,7 +141,7 @@ func main() {
 	log.Println("summary:", summary)
 
 	filename := fmt.Sprintf(
-		"gorums-%04d%02d%02d-%02d%02d%02d.txt",
+		"%s-%04d%02d%02d-%02d%02d%02d.txt", *mode,
 		start.Year(), start.Month(), start.Day(),
 		start.Hour(), start.Minute(), start.Second(),
 	)
