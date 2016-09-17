@@ -136,14 +136,10 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 		if err == nil {
 			t.Errorf("want error, got none")
 		}
-		incompErr, ok := err.(rpc.IncompleteRPCError)
+		_, ok := err.(rpc.IncompleteRPCError)
 		if !ok {
 			t.Errorf("got error of type %T, want error of type %T",
 				err, rpc.IncompleteRPCError{})
-		}
-		wantErr := rpc.IncompleteRPCError{ErrCount: 0, ReplyCount: 3}
-		if incompErr != wantErr {
-			t.Errorf("got: %v, want: %v", incompErr, wantErr)
 		}
 	case <-time.After(time.Second):
 		t.Errorf("read rpc call: timeout, call did not return")
