@@ -135,7 +135,7 @@ func main() {
 	case gorums:
 		benchParams = fmt.Sprintf("%s | readq: %d", benchParams, *readq)
 	case byzq:
-		benchParams = fmt.Sprintf("%s | readbyz: %d", benchParams, *readq)
+		benchParams = fmt.Sprintf("%s | f: %d", benchParams, *f)
 	}
 	log.Print(benchParams)
 	log.Println("summary:", summary)

@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/big"
 	"sync"
+	"time"
 )
 
 // AuthDataQ is the quorum specification for the Authenticated-Data Byzantine quorum
@@ -31,9 +32,15 @@ func NewAuthDataQ(n int, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (*AuthDat
 	return &AuthDataQ{n, f, (n + f) / 2, priv, pub, 0}, nil
 }
 
-// IncWTS updates and returns the writer's timestamp wts. This is not thread safe.
+// IncWTS updates the writer's timestamp wts. This is not thread safe.
 func (aq *AuthDataQ) IncWTS() int64 {
 	aq.wts++
+	return aq.wts
+}
+
+// NewTS reads the system clock updates the writer's timestamp wts. This is not thread safe.
+func (aq *AuthDataQ) NewTS() int64 {
+	aq.wts = time.Now().UnixNano()
 	return aq.wts
 }
 
