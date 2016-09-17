@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tylertreat/bench"
 	"github.com/relab/gorums/gbench"
+	"github.com/tylertreat/bench"
 )
 
 const (
@@ -24,7 +24,7 @@ func main() {
 	var (
 		mode = flag.String("mode", gorums, "mode: grpc | gorums | byzq")
 
-		saddrs  = flag.String("addrs", ":8080,:8081,:8082", "server addresses seperated by ','")
+		saddrs  = flag.String("addrs", "", "server addresses seperated by ','")
 		readq   = flag.Int("rq", 2, "read quorum size")
 		writeq  = flag.Int("wq", 2, "write quorum size")
 		f       = flag.Int("f", 1, "byzq fault tolerance (this is ignored if addrs is provided)")
@@ -137,9 +137,6 @@ func main() {
 	case byzq:
 		benchParams = fmt.Sprintf("%s | readbyz: %d", benchParams, *readq)
 	}
-	// if *mode == "gorums" {
-	// 	benchParams = fmt.Sprintf("%s | readq: %d", benchParams, *readq)
-	// }
 	log.Print(benchParams)
 	log.Println("summary:", summary)
 

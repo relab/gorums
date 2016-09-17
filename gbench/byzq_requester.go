@@ -1,6 +1,8 @@
 package gbench
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -37,7 +39,6 @@ type byzqRequester struct {
 	payloadSize int
 	timeout     time.Duration
 	writeRatio  int
-	keyFile     string
 
 	mgr    *rpc.Manager
 	config *rpc.Configuration
@@ -45,18 +46,46 @@ type byzqRequester struct {
 	state  *rpc.Content
 }
 
+const certPEM = `-----BEGIN CERTIFICATE-----
+MIICSjCCAbOgAwIBAgIJAJHGGR4dGioHMA0GCSqGSIb3DQEBCwUAMFYxCzAJBgNV
+BAYTAkFVMRMwEQYDVQQIEwpTb21lLVN0YXRlMSEwHwYDVQQKExhJbnRlcm5ldCBX
+aWRnaXRzIFB0eSBMdGQxDzANBgNVBAMTBnRlc3RjYTAeFw0xNDExMTEyMjMxMjla
+Fw0yNDExMDgyMjMxMjlaMFYxCzAJBgNVBAYTAkFVMRMwEQYDVQQIEwpTb21lLVN0
+YXRlMSEwHwYDVQQKExhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQxDzANBgNVBAMT
+BnRlc3RjYTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAwEDfBV5MYdlHVHJ7
++L4nxrZy7mBfAVXpOc5vMYztssUI7mL2/iYujiIXM+weZYNTEpLdjyJdu7R5gGUu
+g1jSVK/EPHfc74O7AyZU34PNIP4Sh33N+/A5YexrNgJlPY+E3GdVYi4ldWJjgkAd
+Qah2PH5ACLrIIC6tRka9hcaBlIECAwEAAaMgMB4wDAYDVR0TBAUwAwEB/zAOBgNV
+HQ8BAf8EBAMCAgQwDQYJKoZIhvcNAQELBQADgYEAHzC7jdYlzAVmddi/gdAeKPau
+sPBG/C2HCWqHzpCUHcKuvMzDVkY/MP2o6JIW2DBbY64bO/FceExhjcykgaYtCH/m
+oIU63+CFOTtR7otyQAWHqXa7q4SbCDlG7DyRFxqG0txPtGvy12lgldA2+RgcigQG
+Dfcog5wrJytaQ6UA0wE=
+-----END CERTIFICATE-----`
+
+const keyPEM = `-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIANyDBAupB6O86ORJ1u95Cz6C+lz3x2WKOFntJNIesvioAoGCCqGSM49
+AwEHoUQDQgAE+pBXRIe0CI3vcdJwSvU37RoTqlPqEve3fcC36f0pY/X9c9CsgkFK
+/sHuBztq9TlUfC0REC81NRqRgs6DTYJ/4Q==
+-----END EC PRIVATE KEY-----`
+
 func (gr *byzqRequester) Setup() error {
 	var err error
 	//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
-	clientCreds, err := credentials.NewClientTLSFromFile("cert/ca.pem", "x.test.youtube.com")
-	if err != nil {
-		return err
+	cp := x509.NewCertPool()
+	if !cp.AppendCertsFromPEM([]byte(certPEM)) {
+		return fmt.Errorf("credentials: failed to append certificates")
 	}
+	clientCreds := credentials.NewTLS(&tls.Config{ServerName: "x.test.youtube.com", RootCAs: cp})
+
+	// clientCreds, err := credentials.NewClientTLSFromFile("cert/ca.pem", "x.test.youtube.com")
+	// if err != nil {
+	// 	return err
+	// }
 	gr.mgr, err = rpc.NewManager(
 		gr.addrs,
 		rpc.WithGrpcDialOptions(
 			grpc.WithBlock(),
-			grpc.WithTimeout(1*time.Millisecond),
+			grpc.WithTimeout(time.Second),
 			grpc.WithTransportCredentials(clientCreds),
 		),
 	)
@@ -64,7 +93,7 @@ func (gr *byzqRequester) Setup() error {
 		return err
 	}
 
-	key, err := rpc.ReadKeyfile(gr.keyFile)
+	key, err := rpc.ParseKey(keyPEM)
 	if err != nil {
 		return err
 	}
