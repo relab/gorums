@@ -146,7 +146,7 @@ func main() {
 	filename := fmt.Sprintf(
 		"%s-%s-%04d%02d%02d-%02d%02d%02d.txt", *mode, params,
 		start.Year(), start.Month(), start.Day(),
-		start.Hour(), start.Minute(), start.Second(),
+		start.Hour(), start.Minute(),
 	)
 	err = summary.GenerateLatencyDistribution(bench.Logarithmic, filename)
 	if err != nil {
