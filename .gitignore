@@ -45,7 +45,7 @@ cmd/gqserver/gqserver
 cmd/gqclient/gqclient
 
 # bench output
-cmd/bechclient/*.txt
+cmd/benchclient/*.txt
 
 # key files
 priv-key.pem
