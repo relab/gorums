@@ -21,9 +21,12 @@ type register struct {
 }
 
 func main() {
-	port := flag.Int("port", 8080, "port to listen on")
-	f := flag.Int("f", 0, "fault tolerance")
-	key := flag.String("key", "", "public/private key file this server")
+	var (
+		port   = flag.Int("port", 8080, "port to listen on")
+		f      = flag.Int("f", 0, "fault tolerance")
+		noauth = flag.Bool("noauth", false, "don't use authenticated channels")
+		key    = flag.String("key", "", "public/private key file this server")
+	)
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [OPTIONS]\n", os.Args[0])
@@ -37,16 +40,16 @@ func main() {
 		done := make(chan bool)
 		n := 3**f + 1
 		for i := 0; i < n; i++ {
-			go serve(*port+i, *key)
+			go serve(*port+i, *key, *noauth)
 		}
 		// wait indefinitely
 		<-done
 	}
 	// run only one server
-	serve(*port, *key)
+	serve(*port, *key, *noauth)
 }
 
-func serve(port int, keyFile string) {
+func serve(port int, keyFile string, noauth bool) {
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatal(err)
@@ -55,11 +58,14 @@ func serve(port int, keyFile string) {
 	if keyFile == "" {
 		log.Fatalln("required server keys not provided")
 	}
-	creds, err := credentials.NewServerTLSFromFile(keyFile+".pem", keyFile+".key")
-	if err != nil {
-		log.Fatalf("failed to load credentials %v", err)
+	opts := []grpc.ServerOption{}
+	if !noauth {
+		creds, err := credentials.NewServerTLSFromFile(keyFile+".pem", keyFile+".key")
+		if err != nil {
+			log.Fatalf("failed to load credentials %v", err)
+		}
+		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
-	opts := []grpc.ServerOption{grpc.Creds(creds)}
 	grpcServer := grpc.NewServer(opts...)
 	smap := make(map[string]byzq.Value)
 	byzq.RegisterRegisterServer(grpcServer, &register{state: smap})

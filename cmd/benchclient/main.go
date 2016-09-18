@@ -28,6 +28,7 @@ func main() {
 		readq   = flag.Int("rq", 2, "read quorum size")
 		writeq  = flag.Int("wq", 2, "write quorum size")
 		f       = flag.Int("f", 1, "byzq fault tolerance (this is ignored if addrs is provided)")
+		noauth  = flag.Bool("noauth", false, "don't use authenticated channels")
 		port    = flag.Int("port", 8080, "port where local server is listening")
 		psize   = flag.Int("p", 1024, "payload size in bytes")
 		timeout = flag.Duration("t", time.Second, "(Q)RPC timeout")
@@ -110,6 +111,7 @@ func main() {
 			PayloadSize:       *psize,
 			QRPCTimeout:       *timeout,
 			WriteRatioPercent: *writera,
+			NoAuth:            *noauth,
 		}
 	}
 

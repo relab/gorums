@@ -18,12 +18,15 @@ import (
 )
 
 func main() {
-	port := flag.Int("port", 8080, "port where local server is listening")
-	saddrs := flag.String("addrs", "", "server addresses separated by ','")
-	f := flag.Int("f", 1, "fault tolerance, supported values f=1,2,3 (this is ignored if addrs is provided)")
-	generate := flag.Bool("generate", false, "generate public/private key-pair and save to file provided by -key")
-	writer := flag.Bool("writer", false, "set this client to be writer only (default is reader only)")
-	keyFile := flag.String("key", "priv-key.pem", "private key file to be used for signatures")
+	var (
+		port     = flag.Int("port", 8080, "port where local server is listening")
+		saddrs   = flag.String("addrs", "", "server addresses separated by ','")
+		f        = flag.Int("f", 1, "fault tolerance, supported values f=1,2,3 (this is ignored if addrs is provided)")
+		noauth   = flag.Bool("noauth", false, "don't use authenticated channels")
+		generate = flag.Bool("generate", false, "generate public/private key-pair and save to file provided by -key")
+		writer   = flag.Bool("writer", false, "set this client to be writer only (default is reader only)")
+		keyFile  = flag.String("key", "priv-key.pem", "private key file to be used for signatures")
+	)
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [OPTIONS]\n", os.Args[0])
@@ -63,10 +66,16 @@ func main() {
 	}
 	log.Printf("#addrs: %d (%v)", len(addrs), *saddrs)
 
-	//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
-	clientCreds, err := credentials.NewClientTLSFromFile("cert/ca.pem", "x.test.youtube.com")
-	if err != nil {
-		dief("error creating credentials: %v", err)
+	var secDialOption grpc.DialOption
+	if *noauth {
+		secDialOption = grpc.WithInsecure()
+	} else {
+		//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
+		clientCreds, err := credentials.NewClientTLSFromFile("cert/ca.pem", "x.test.youtube.com")
+		if err != nil {
+			dief("error creating credentials: %v", err)
+		}
+		secDialOption = grpc.WithTransportCredentials(clientCreds)
 	}
 
 	key, err := byzq.ReadKeyfile(*keyFile)
@@ -79,7 +88,7 @@ func main() {
 		byzq.WithGrpcDialOptions(
 			grpc.WithBlock(),
 			grpc.WithTimeout(0*time.Millisecond),
-			grpc.WithTransportCredentials(clientCreds),
+			secDialOption,
 		),
 	)
 	if err != nil {

@@ -22,6 +22,7 @@ type ByzqRequesterFactory struct {
 	PayloadSize       int
 	QRPCTimeout       time.Duration
 	WriteRatioPercent int
+	NoAuth            bool
 }
 
 // GetRequester returns a new Requester, called for each Benchmark connection.
@@ -31,6 +32,7 @@ func (r *ByzqRequesterFactory) GetRequester(uint64) bench.Requester {
 		payloadSize: r.PayloadSize,
 		timeout:     r.QRPCTimeout,
 		writeRatio:  r.WriteRatioPercent,
+		noauth:      r.NoAuth,
 	}
 }
 
@@ -39,6 +41,7 @@ type byzqRequester struct {
 	payloadSize int
 	timeout     time.Duration
 	writeRatio  int
+	noauth      bool
 
 	mgr    *rpc.Manager
 	config *rpc.Configuration
@@ -70,23 +73,31 @@ AwEHoUQDQgAE+pBXRIe0CI3vcdJwSvU37RoTqlPqEve3fcC36f0pY/X9c9CsgkFK
 
 func (gr *byzqRequester) Setup() error {
 	var err error
-	//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
-	cp := x509.NewCertPool()
-	if !cp.AppendCertsFromPEM([]byte(certPEM)) {
-		return fmt.Errorf("credentials: failed to append certificates")
-	}
-	clientCreds := credentials.NewTLS(&tls.Config{ServerName: "x.test.youtube.com", RootCAs: cp})
 
-	// clientCreds, err := credentials.NewClientTLSFromFile("cert/ca.pem", "x.test.youtube.com")
-	// if err != nil {
-	// 	return err
-	// }
+	var secDialOption grpc.DialOption
+	if gr.noauth {
+		secDialOption = grpc.WithInsecure()
+	} else {
+		//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
+		cp := x509.NewCertPool()
+		if !cp.AppendCertsFromPEM([]byte(certPEM)) {
+			return fmt.Errorf("credentials: failed to append certificates")
+		}
+		clientCreds := credentials.NewTLS(&tls.Config{ServerName: "x.test.youtube.com", RootCAs: cp})
+
+		// clientCreds, err := credentials.NewClientTLSFromFile("cert/ca.pem", "x.test.youtube.com")
+		// if err != nil {
+		// 	return err
+		// }
+		secDialOption = grpc.WithTransportCredentials(clientCreds)
+	}
+
 	gr.mgr, err = rpc.NewManager(
 		gr.addrs,
 		rpc.WithGrpcDialOptions(
 			grpc.WithBlock(),
 			grpc.WithTimeout(time.Second),
-			grpc.WithTransportCredentials(clientCreds),
+			secDialOption,
 		),
 	)
 	if err != nil {
