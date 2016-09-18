@@ -35,7 +35,7 @@ func main() {
 		writera = flag.Int("wr", 0, "write ratio in percent (0-100)")
 		grpcc   = flag.Bool("grpcc", false, "run concurrent grpc")
 
-		brrate = flag.Uint("brrate", 10000, "benchmark) request rate")
+		brrate = flag.Uint("brrate", 0, "benchmark) request rate")
 		bconns = flag.Uint("bconns", 1, "benchmark connections (separate gorums manager&config instances)")
 		bdur   = flag.Duration("bdur", 30*time.Second, "benchmark duration")
 	)
