@@ -38,7 +38,7 @@ func (aq *AuthDataQ) IncWTS() int64 {
 	return aq.wts
 }
 
-// NewTS reads the system clock updates the writer's timestamp wts. This is not thread safe.
+// NewTS reads the system clock and updates the writer's timestamp wts. This is not thread safe.
 func (aq *AuthDataQ) NewTS() int64 {
 	aq.wts = time.Now().UnixNano()
 	return aq.wts
@@ -72,10 +72,29 @@ func (aq *AuthDataQ) verify(reply *Value) bool {
 	return ecdsa.Verify(aq.pub, msgHash[:], r, s)
 }
 
-// ReadQF returns nil and false until the supplied replies
-// constitute a Byzantine quorum, at which point the
-// method returns the single highest value and true.
-func (aq *AuthDataQ) OrigReadQF(replies []*Value) (*Value, bool) {
+// NoSignVerificationReadQF returns nil and false until the supplied replies
+// constitute a Byzantine quorum, at which point the method returns the
+// single highest value and true.
+func (aq *AuthDataQ) ReadQF(replies []*Value) (*Value, bool) {
+	if len(replies) <= aq.q {
+		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
+		return nil, false
+	}
+	var highest *Value
+	for _, reply := range replies {
+		if highest != nil && reply.C.Timestamp <= highest.C.Timestamp {
+			continue
+		}
+		highest = reply
+	}
+	// returns reply with the highest timestamp, or nil if no replies were verified
+	return highest, true
+}
+
+// SequentialVerifyReadQF returns nil and false until the supplied replies
+// constitute a Byzantine quorum, at which point the method returns the
+// single highest value and true.
+func (aq *AuthDataQ) SequentialVerifyReadQF(replies []*Value) (*Value, bool) {
 	if len(replies) <= aq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
@@ -93,8 +112,10 @@ func (aq *AuthDataQ) OrigReadQF(replies []*Value) (*Value, bool) {
 	return highest, true
 }
 
-// HReadQF returns Hein's QFunc version 1
-func (aq *AuthDataQ) HReadQF(replies []*Value) (*Value, bool) {
+// ConcurrentVerifyWGReadQF returns nil and false until the supplied replies
+// constitute a Byzantine quorum, at which point the method returns the
+// single highest value and true.
+func (aq *AuthDataQ) ConcurrentVerifyWGReadQF(replies []*Value) (*Value, bool) {
 	if len(replies) <= aq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
@@ -129,8 +150,10 @@ func (aq *AuthDataQ) HReadQF(replies []*Value) (*Value, bool) {
 	return highest, true
 }
 
-// LReadQF returns Leanders QFunc version 1
-func (aq *AuthDataQ) LReadQF(replies []*Value) (*Value, bool) {
+// ConcurrentVerifyIndexChanReadQF returns nil and false until the supplied replies
+// constitute a Byzantine quorum, at which point the method returns the
+// single highest value and true.
+func (aq *AuthDataQ) ConcurrentVerifyIndexChanReadQF(replies []*Value) (*Value, bool) {
 	if len(replies) <= aq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
@@ -166,8 +189,10 @@ func (aq *AuthDataQ) LReadQF(replies []*Value) (*Value, bool) {
 	return highest, true
 }
 
-// L2ReadQF returns Leanders QFunc version 2
-func (aq *AuthDataQ) ReadQF(replies []*Value) (*Value, bool) {
+// VerfiyLastReplyFirstReadQF returns nil and false until the supplied replies
+// constitute a Byzantine quorum, at which point the method returns the
+// single highest value and true.
+func (aq *AuthDataQ) VerfiyLastReplyFirstReadQF(replies []*Value) (*Value, bool) {
 	if len(replies) < 1 {
 		return nil, false
 	}
