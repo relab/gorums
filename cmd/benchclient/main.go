@@ -137,8 +137,9 @@ func main() {
 		benchParams = fmt.Sprintf("%s | readq: %d", benchParams, *readq)
 		params = fmt.Sprintf("%s-RQ%d", params, *readq)
 	case byzq:
-		benchParams = fmt.Sprintf("%s | f: %d", benchParams, len(addrs)-1/3)
-		params = fmt.Sprintf("%s-F%d", params, len(addrs)-1/3)
+		ft := (len(addrs) - 1) / 3
+		benchParams = fmt.Sprintf("%s | f: %d", benchParams, ft)
+		params = fmt.Sprintf("%s-F%d", params, ft)
 	}
 	log.Print(benchParams)
 	log.Println("summary:", summary)
