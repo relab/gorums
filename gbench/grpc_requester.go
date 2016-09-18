@@ -121,12 +121,14 @@ func (gr *grpcRequester) singleReq(write bool) error {
 
 func (gr *grpcRequester) concurrentReq(write bool) error {
 	if write {
-		return gr.writeConcurrent()
+		_, err := gr.writeConcurrent()
+		return err
 	}
-	return gr.readConcurrent()
+	_, err := gr.readConcurrent()
+	return err
 }
 
-func (gr *grpcRequester) writeConcurrent() error {
+func (gr *grpcRequester) writeConcurrent() (*rpc.WriteResponse, error) {
 	replies := make(chan *rpc.WriteResponse, gr.writeq)
 	ctx, cancel := context.WithCancel(context.Background())
 	for _, c := range gr.clients {
@@ -134,7 +136,7 @@ func (gr *grpcRequester) writeConcurrent() error {
 			gr.state.Timestamp = time.Now().UnixNano()
 			rep, err := c.client.Write(ctx, gr.state)
 			if err != nil {
-
+				panic("write error")
 			}
 			replies <- rep
 		}(c)
@@ -142,20 +144,22 @@ func (gr *grpcRequester) writeConcurrent() error {
 	count := 0
 	for {
 		select {
-		case <-replies:
+		case reply := <-replies:
 			count++
 			if count >= gr.writeq {
 				cancel()
-				return nil
+				return reply, nil
 			}
 		case <-time.After(gr.timeout):
 			cancel()
-			return fmt.Errorf("write timeout")
+			return nil, fmt.Errorf("write timeout")
 		}
 	}
+
+	return nil, fmt.Errorf("should not be reached")
 }
 
-func (gr *grpcRequester) readConcurrent() error {
+func (gr *grpcRequester) readConcurrent() (*rpc.State, error) {
 	replies := make(chan *rpc.State, gr.readq)
 	ctx, cancel := context.WithCancel(context.Background())
 	for _, c := range gr.clients {
@@ -163,7 +167,7 @@ func (gr *grpcRequester) readConcurrent() error {
 			gr.state.Timestamp = time.Now().UnixNano()
 			rep, err := c.client.Read(ctx, &rpc.ReadRequest{})
 			if err != nil {
-
+				panic("read error")
 			}
 			replies <- rep
 		}(c)
@@ -171,17 +175,19 @@ func (gr *grpcRequester) readConcurrent() error {
 	count := 0
 	for {
 		select {
-		case <-replies:
+		case reply := <-replies:
 			count++
 			if count >= gr.readq {
 				cancel()
-				return nil
+				return reply, nil
 			}
 		case <-time.After(gr.timeout):
 			cancel()
-			return fmt.Errorf("read timeout")
+			return nil, fmt.Errorf("read timeout")
 		}
 	}
+
+	return nil, fmt.Errorf("should not be reached")
 }
 
 func (gr *grpcRequester) Teardown() error {
