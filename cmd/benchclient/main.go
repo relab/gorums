@@ -140,8 +140,12 @@ func main() {
 		params = fmt.Sprintf("%s-RQ%d", params, *readq)
 	case byzq:
 		ft := (len(addrs) - 1) / 3
-		benchParams = fmt.Sprintf("%s | f: %d", benchParams, ft)
-		params = fmt.Sprintf("%s-F%d", params, ft)
+		a := "auth"
+		if *noauth {
+			a = "noauth"
+		}
+		benchParams = fmt.Sprintf("%s | f: %d | %s", benchParams, ft, a)
+		params = fmt.Sprintf("%s-F%d-%s", params, ft, a)
 	}
 	log.Print(benchParams)
 	log.Println("summary:", summary)
