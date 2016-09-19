@@ -130,64 +130,49 @@ func (gr *grpcRequester) concurrentReq(write bool) error {
 
 func (gr *grpcRequester) writeConcurrent() (*rpc.WriteResponse, error) {
 	replies := make(chan *rpc.WriteResponse, gr.writeq)
-	ctx, cancel := context.WithCancel(context.Background())
 	for _, c := range gr.clients {
 		go func(c *client) {
 			gr.state.Timestamp = time.Now().UnixNano()
-			rep, err := c.client.Write(ctx, gr.state)
+			rep, err := c.client.Write(gr.ctx, gr.state)
 			if err != nil {
 				panic("write error")
 			}
 			replies <- rep
 		}(c)
 	}
+
 	count := 0
-	for {
-		select {
-		case reply := <-replies:
-			count++
-			if count >= gr.writeq {
-				cancel()
-				return reply, nil
-			}
-		case <-time.After(gr.timeout):
-			cancel()
-			return nil, fmt.Errorf("write timeout")
+	for reply := range replies {
+		count++
+		if count >= gr.writeq {
+			return reply, nil
 		}
 	}
 
-	return nil, fmt.Errorf("should not be reached")
+	return nil, fmt.Errorf("write incomplete")
 }
 
 func (gr *grpcRequester) readConcurrent() (*rpc.State, error) {
 	replies := make(chan *rpc.State, gr.readq)
-	ctx, cancel := context.WithCancel(context.Background())
 	for _, c := range gr.clients {
 		go func(c *client) {
-			gr.state.Timestamp = time.Now().UnixNano()
-			rep, err := c.client.Read(ctx, &rpc.ReadRequest{})
+			rep, err := c.client.Read(gr.ctx, &rpc.ReadRequest{})
 			if err != nil {
 				panic("read error")
 			}
 			replies <- rep
 		}(c)
 	}
+
 	count := 0
-	for {
-		select {
-		case reply := <-replies:
-			count++
-			if count >= gr.readq {
-				cancel()
-				return reply, nil
-			}
-		case <-time.After(gr.timeout):
-			cancel()
-			return nil, fmt.Errorf("read timeout")
+	for reply := range replies {
+		count++
+		if count >= gr.readq {
+			return reply, nil
 		}
 	}
 
-	return nil, fmt.Errorf("should not be reached")
+	return nil, fmt.Errorf("read incomplete")
 }
 
 func (gr *grpcRequester) Teardown() error {
