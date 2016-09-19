@@ -129,7 +129,7 @@ func (gr *grpcRequester) concurrentReq(write bool) error {
 }
 
 func (gr *grpcRequester) writeConcurrent() (*rpc.WriteResponse, error) {
-	replies := make(chan *rpc.WriteResponse, gr.writeq)
+	replies := make(chan *rpc.WriteResponse, len(gr.clients))
 	for _, c := range gr.clients {
 		go func(c *client) {
 			gr.state.Timestamp = time.Now().UnixNano()
@@ -153,7 +153,7 @@ func (gr *grpcRequester) writeConcurrent() (*rpc.WriteResponse, error) {
 }
 
 func (gr *grpcRequester) readConcurrent() (*rpc.State, error) {
-	replies := make(chan *rpc.State, gr.readq)
+	replies := make(chan *rpc.State, len(gr.clients))
 	for _, c := range gr.clients {
 		go func(c *client) {
 			rep, err := c.client.Read(gr.ctx, &rpc.ReadRequest{})
