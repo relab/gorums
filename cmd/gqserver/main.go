@@ -19,7 +19,7 @@ import (
 )
 
 type register struct {
-	sync.RWMutex
+	sync.Mutex
 	row, col uint32
 	state    gridq.State
 	sleep    bool
@@ -29,7 +29,7 @@ func main() {
 	var (
 		port  = flag.String("port", "8080", "port to listen on")
 		id    = flag.String("id", "", "id using the form 'row:col'")
-		sleep = flag.Bool("sleep", true, "random sleep (0-30ms) before processing any request")
+		sleep = flag.Bool("sleep", false, "random sleep (0-30ms) before processing any request")
 	)
 
 	flag.Usage = func() {
@@ -89,10 +89,9 @@ func parseRowCol(id string) (uint32, uint32, error) {
 }
 
 func (r *register) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadResponse, error) {
-	r.randSleep()
-	r.RLock()
+	r.Lock()
 	state := r.state
-	r.RUnlock()
+	r.Unlock()
 	return &gridq.ReadResponse{
 		Row:   r.row,
 		Col:   r.col,
@@ -101,21 +100,12 @@ func (r *register) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadRespons
 }
 
 func (r *register) Write(ctx context.Context, s *gridq.State) (*gridq.WriteResponse, error) {
-	r.randSleep()
 	wresp := &gridq.WriteResponse{}
 	r.Lock()
 	if s.Timestamp > r.state.Timestamp {
 		r.state = *s
-		wresp.Written = true
+		wresp.New = true
 	}
 	r.Unlock()
 	return wresp, nil
-}
-
-func (r *register) randSleep() {
-	if !r.sleep {
-		return
-	}
-	dur := time.Duration(rand.Intn(30)) * time.Millisecond
-	time.Sleep(dur)
 }

@@ -19,7 +19,7 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-const val = 42
+const val = "42"
 
 var gridReadQFTests = []struct {
 	name    string
@@ -95,9 +95,9 @@ var gridReadQFTests = []struct {
 	{
 		"best-case quorum",
 		[]*ReadResponse{
-			{Row: 0, Col: 0, State: &State{Timestamp: 2, Value: 9}},
+			{Row: 0, Col: 0, State: &State{Timestamp: 2, Value: "9"}},
 			{Row: 0, Col: 1, State: &State{Timestamp: 3, Value: val}},
-			{Row: 0, Col: 2, State: &State{Timestamp: 1, Value: 3}},
+			{Row: 0, Col: 2, State: &State{Timestamp: 1, Value: "3"}},
 		},
 		true,
 	},
@@ -105,12 +105,12 @@ var gridReadQFTests = []struct {
 		"approx. worst-case quorum",
 		[]*ReadResponse{
 			{Row: 1, Col: 0, State: &State{}},
-			{Row: 2, Col: 1, State: &State{Timestamp: 2, Value: 9}},
+			{Row: 2, Col: 1, State: &State{Timestamp: 2, Value: "9"}},
 			{Row: 0, Col: 1, State: &State{}},
 			{Row: 1, Col: 1, State: &State{}},
 			{Row: 2, Col: 0, State: &State{Timestamp: 3, Value: val}},
 			{Row: 0, Col: 0, State: &State{}},
-			{Row: 2, Col: 2, State: &State{Timestamp: 1, Value: 3}},
+			{Row: 2, Col: 2, State: &State{Timestamp: 1, Value: "3"}},
 		},
 		true,
 	},

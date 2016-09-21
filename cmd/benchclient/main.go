@@ -18,11 +18,12 @@ const (
 	gorums string = "gorums"
 	grpc   string = "grpc"
 	byzq   string = "byzq"
+	gridq  string = "gridq"
 )
 
 func main() {
 	var (
-		mode = flag.String("mode", gorums, "mode: grpc | gorums | byzq")
+		mode = flag.String("mode", gorums, "mode: grpc | gorums | byzq | gridq")
 
 		saddrs  = flag.String("addrs", "", "server addresses seperated by ','")
 		readq   = flag.Int("rq", 2, "read quorum size")
@@ -48,7 +49,7 @@ func main() {
 	flag.Parse()
 
 	switch *mode {
-	case gorums, grpc, byzq:
+	case gorums, grpc, byzq, gridq:
 	default:
 		dief("unknown benchmark mode: %q", *mode)
 	}
@@ -112,6 +113,15 @@ func main() {
 			QRPCTimeout:       *timeout,
 			WriteRatioPercent: *writera,
 			NoAuth:            *noauth,
+		}
+	case gridq:
+		factory = &gbench.GridQRequesterFactory{
+			Addrs:             addrs,
+			ReadQuorum:        *readq,
+			WriteQuorum:       *writeq,
+			PayloadSize:       *psize,
+			QRPCTimeout:       *timeout,
+			WriteRatioPercent: *writera,
 		}
 	}
 

@@ -3,6 +3,79 @@ package gridq
 import "sort"
 
 // NewGQSort returns a gird quorum specification (sort version).
+func NewGQSortX(rows, cols int) QuorumSpec {
+	return &gqSortX{
+		rows: rows,
+		cols: cols,
+	}
+}
+
+type gqSortX struct {
+	rows, cols int
+}
+
+// ReadQF: All replicas from one row.
+func (gqs *gqSortX) ReadQF(replies []*ReadResponse) (*ReadResponse, bool) {
+	if len(replies) < gqs.rows {
+		return nil, false
+	}
+
+	sort.Sort(byRowTimestamp(replies))
+
+	qreplies := 1 // Counter for replies from the same row.
+	row := replies[0].Row
+	for i := 1; i < len(replies); i++ {
+		if replies[i].Row != row {
+			qreplies = 1
+			row = replies[i].Row
+			left := len(replies) - i - 1
+			if qreplies+left < gqs.rows {
+				// Not enough replies left.
+				return nil, false
+			}
+			continue
+		}
+		qreplies++
+		if qreplies == gqs.rows {
+			return replies[i-gqs.rows+1], true
+		}
+	}
+
+	panic("an invariant was not handled")
+}
+
+// WriteQF: One replica from each row.
+func (gqs *gqSortX) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
+	if len(replies) < gqs.cols {
+		return nil, false
+	}
+
+	sort.Sort(byColRow(replies))
+
+	qreplies := 1 // Counter for replies from the same row.
+	col := replies[0].Col
+	for i := 1; i < len(replies); i++ {
+		if replies[i].Col != col {
+			qreplies = 1
+			col = replies[i].Col
+			left := len(replies) - i - 1
+			if qreplies+left < gqs.cols {
+				// Not enough replies left.
+				return nil, false
+			}
+			continue
+		}
+		qreplies++
+		if qreplies == gqs.cols {
+			// WriteResponses don't have timestamps.
+			return replies[i], true
+		}
+	}
+
+	panic("an invariant was not handled")
+}
+
+// NewGQSort returns a gird quorum specification (sort version).
 func NewGQSort(rows, cols int, printGrid bool) QuorumSpec {
 	return &gqSort{
 		rows:      rows,
