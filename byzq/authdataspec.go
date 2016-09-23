@@ -72,7 +72,7 @@ func (aq *AuthDataQ) verify(reply *Value) bool {
 	return ecdsa.Verify(aq.pub, msgHash[:], r, s)
 }
 
-// NoSignVerificationReadQF returns nil and false until the supplied replies
+// ReadQF returns nil and false until the supplied replies
 // constitute a Byzantine quorum, at which point the method returns the
 // single highest value and true.
 func (aq *AuthDataQ) ReadQF(replies []*Value) (*Value, bool) {
