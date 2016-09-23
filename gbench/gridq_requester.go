@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// GorumsRequesterFactory implements RequesterFactory by creating a Requester which
+// GridQRequesterFactory implements RequesterFactory by creating a Requester which
 // issues requests to a register using the Gorums framework.
 type GridQRequesterFactory struct {
 	Addrs             []string
