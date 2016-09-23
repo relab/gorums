@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -30,6 +29,7 @@ func main() {
 		srows      = flag.Int("rows", 0, "number of rows")
 		predefined = flag.String("predef", "", "predefined grids ('2x2' or '3x3') for local testing")
 		printGrid  = flag.Bool("gprid", true, "print quorums to screen")
+		psize      = flag.Int("p", 1024, "payload size in bytes")
 	)
 
 	flag.Usage = func() {
@@ -93,7 +93,7 @@ func main() {
 
 	for {
 		state := &gridq.State{
-			Value:     int64(rand.Intn(1 << 8)),
+			Value:     strings.Repeat("x", *psize),
 			Timestamp: time.Now().Unix(),
 		}
 
