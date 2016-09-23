@@ -66,7 +66,7 @@ func (gr *gridqRequester) Setup() error {
 	}
 
 	ids := gr.mgr.NodeIDs()
-	qspec := rpc.NewGQSortX(gr.readq, gr.writeq)
+	qspec := rpc.NewGQSortNoVis(gr.readq, gr.writeq)
 	gr.config, err = gr.mgr.NewConfiguration(ids, qspec, gr.timeout)
 	if err != nil {
 		return err

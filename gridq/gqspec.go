@@ -2,8 +2,8 @@ package gridq
 
 import "sort"
 
-// NewGQSort returns a gird quorum specification (sort version).
-func NewGQSortX(rows, cols int) QuorumSpec {
+// NewGQSortNoVis returns a gird quorum specification (sort version, no grid visualisation).
+func NewGQSortNoVis(rows, cols int) QuorumSpec {
 	return &gqSortX{
 		rows: rows,
 		cols: cols,
