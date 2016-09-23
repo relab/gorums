@@ -173,7 +173,7 @@ check:
 	@echo "interfacer"
 	@interfacer $(GORUMS_PKGS)
 	@echo "missspell"
-	@! misspell ./**/* | grep -vF '/vendor/'
+	@! misspell ./**/* | grep -vF 'vendor'
 	@echo "staticcheck"
 	@staticcheck $(GORUMS_PKGS)
 
