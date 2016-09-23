@@ -25,7 +25,7 @@ func main() {
 	var (
 		mode = flag.String("mode", gorums, "mode: grpc | gorums | byzq | gridq")
 
-		saddrs  = flag.String("addrs", "", "server addresses seperated by ','")
+		saddrs  = flag.String("addrs", "", "server addresses separated by ','")
 		readq   = flag.Int("rq", 2, "read quorum size")
 		writeq  = flag.Int("wq", 2, "write quorum size")
 		f       = flag.Int("f", 1, "byzq fault tolerance (this is ignored if addrs is provided)")

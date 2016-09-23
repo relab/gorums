@@ -17,7 +17,7 @@ type ByzQ struct {
 }
 
 // NewByzQ returns a Byzantine masking quorum specification or nil and an error
-// if the quorum requirements are not satisifed.
+// if the quorum requirements are not satisfied.
 func NewByzQ(n int) (*ByzQ, error) {
 	f := (n - 1) / 4
 	if f < 1 {

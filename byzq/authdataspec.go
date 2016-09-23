@@ -23,7 +23,7 @@ type AuthDataQ struct {
 }
 
 // NewAuthDataQ returns a Byzantine masking quorum specification or nil and an error
-// if the quorum requirements are not satisifed.
+// if the quorum requirements are not satisfied.
 func NewAuthDataQ(n int, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (*AuthDataQ, error) {
 	f := (n - 1) / 3
 	if f < 1 {
