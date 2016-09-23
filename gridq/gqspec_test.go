@@ -171,11 +171,11 @@ func TestGridReadQF(t *testing.T) {
 				}
 				if rquorum {
 					if reply == nil || reply.State == nil {
-						t.Fatalf("got nil as quorum value, want %d", val)
+						t.Fatalf("got nil as quorum value, want %s", val)
 					}
 					gotVal := reply.State.Value
 					if gotVal != val {
-						t.Errorf("got %d, want %d as quorum value", gotVal, val)
+						t.Errorf("got %s, want %s as quorum value", gotVal, val)
 					}
 				}
 			})
