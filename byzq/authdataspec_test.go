@@ -239,7 +239,7 @@ func TestAuthDataQ(t *testing.T) {
 			}
 		}
 
-		t.Run(fmt.Sprintf("ReadQF(4,1) %s", test.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("(NoSignVerification)ReadQF(4,1) %s", test.name), func(t *testing.T) {
 			reply, byzquorum := qspec.ReadQF(test.replies)
 			if byzquorum != test.rq {
 				t.Errorf("got %t, want %t", byzquorum, test.rq)
@@ -255,8 +255,23 @@ func TestAuthDataQ(t *testing.T) {
 			}
 		})
 
-		t.Run(fmt.Sprintf("LReadQF(4,1) %s", test.name), func(t *testing.T) {
-			reply, byzquorum := qspec.LReadQF(test.replies)
+		t.Run(fmt.Sprintf("ConcurrentVerifyIndexChanReadQF(4,1) %s", test.name), func(t *testing.T) {
+			reply, byzquorum := qspec.ConcurrentVerifyIndexChanReadQF(test.replies)
+			if byzquorum != test.rq {
+				t.Errorf("got %t, want %t", byzquorum, test.rq)
+			}
+			if reply != nil {
+				if !reply.C.Equal(test.expected) {
+					t.Errorf("got %v, want %v as quorum reply", reply.C, test.expected)
+				}
+			} else {
+				if test.expected != nil {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
+				}
+			}
+		})
+		t.Run(fmt.Sprintf("VerfiyLastReplyFirstReadQF(4,1) %s", test.name), func(t *testing.T) {
+			reply, byzquorum := qspec.VerfiyLastReplyFirstReadQF(test.replies)
 			if byzquorum != test.rq {
 				t.Errorf("got %t, want %t", byzquorum, test.rq)
 			}
@@ -271,24 +286,8 @@ func TestAuthDataQ(t *testing.T) {
 			}
 		})
 
-		t.Run(fmt.Sprintf("L2ReadQF(4,1) %s", test.name), func(t *testing.T) {
-			reply, byzquorum := qspec.L2ReadQF(test.replies)
-			if byzquorum != test.rq {
-				t.Errorf("got %t, want %t", byzquorum, test.rq)
-			}
-			if reply != nil {
-				if !reply.C.Equal(test.expected) {
-					t.Errorf("got %v, want %v as quorum reply", reply.C, test.expected)
-				}
-			} else {
-				if test.expected != nil {
-					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
-				}
-			}
-		})
-
-		t.Run(fmt.Sprintf("HReadQF(4,1) %s", test.name), func(t *testing.T) {
-			reply, byzquorum := qspec.HReadQF(test.replies)
+		t.Run(fmt.Sprintf("ConcurrentVerifyWGReadQF(4,1) %s", test.name), func(t *testing.T) {
+			reply, byzquorum := qspec.ConcurrentVerifyWGReadQF(test.replies)
 			if byzquorum != test.rq {
 				t.Errorf("got %t, want %t", byzquorum, test.rq)
 			}
@@ -321,7 +320,7 @@ func BenchmarkAuthDataQ(b *testing.B) {
 			}
 		}
 
-		b.Run(fmt.Sprintf("ReadQF(4,1) %s", test.name), func(b *testing.B) {
+		b.Run(fmt.Sprintf("(NoSignVerification)ReadQF(4,1) %s", test.name), func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
@@ -329,27 +328,26 @@ func BenchmarkAuthDataQ(b *testing.B) {
 			}
 		})
 
-		b.Run(fmt.Sprintf("LReadQF(4,1) %s", test.name), func(b *testing.B) {
+		b.Run(fmt.Sprintf("ConcurrentVerifyIndexChanReadQF(4,1) %s", test.name), func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				qspec.LReadQF(test.replies)
+				qspec.ConcurrentVerifyIndexChanReadQF(test.replies)
+			}
+		})
+		b.Run(fmt.Sprintf("VerfiyLastReplyFirstReadQF(4,1) %s", test.name), func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				qspec.VerfiyLastReplyFirstReadQF(test.replies)
 			}
 		})
 
-		b.Run(fmt.Sprintf("L2ReadQF(4,1) %s", test.name), func(b *testing.B) {
+		b.Run(fmt.Sprintf("ConcurrentVerifyWGReadQF(4,1) %s", test.name), func(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				qspec.L2ReadQF(test.replies)
-			}
-		})
-
-		b.Run(fmt.Sprintf("HReadQF(4,1) %s", test.name), func(b *testing.B) {
-			b.ReportAllocs()
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				qspec.HReadQF(test.replies)
+				qspec.ConcurrentVerifyWGReadQF(test.replies)
 			}
 		})
 	}
