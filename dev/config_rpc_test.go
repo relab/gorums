@@ -598,6 +598,147 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	}
 }
 
+///////////////////////////////////////////////////////////////
+
+func BenchmarkWrite1KQ2N3Local(b *testing.B) {
+	benchmarkWrite(b, 1<<10, 2, false, false, false, false)
+}
+
+func BenchmarkWrite1KQ2N3Remote(b *testing.B) {
+	benchmarkWrite(b, 1<<10, 2, false, false, false, true)
+}
+
+func BenchmarkWrite1KQ2N3ParallelLocal(b *testing.B) {
+	benchmarkWrite(b, 1<<10, 2, false, true, false, false)
+}
+
+func BenchmarkWrite1KQ2N3ParallelRemote(b *testing.B) {
+	benchmarkWrite(b, 1<<10, 2, false, true, false, true)
+}
+
+func BenchmarkWrite1KQ2N3FutureLocal(b *testing.B) {
+	benchmarkWrite(b, 1<<10, 2, false, false, true, false)
+}
+
+func BenchmarkWrite1KQ2N3FutureRemote(b *testing.B) {
+	benchmarkWrite(b, 1<<10, 2, false, false, true, true)
+}
+
+func BenchmarkWrite1KQ2N3FutureParallelLocal(b *testing.B) {
+	benchmarkWrite(b, 1<<10, 2, false, true, true, false)
+}
+
+func BenchmarkWrited1KQ2N3FutureParallelRemote(b *testing.B) {
+	benchmarkWrite(b, 1<<10, 2, false, true, true, true)
+}
+
+///////////////////////////////////////////////////////////////
+
+var wreplySink *rpc.WriteReply
+
+func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote bool) {
+	var rservers []regServer
+	if !remote {
+		rservers = []regServer{
+			{":8080", rpc.NewRegisterBench()},
+		}
+		if !single {
+			rservers = append(
+				rservers,
+				regServer{":8081", rpc.NewRegisterBench()},
+				regServer{":8082", rpc.NewRegisterBench()},
+			)
+		}
+	} else {
+		rservers = []regServer{
+			{"pitter31:8080", nil},
+		}
+		if !single {
+			rservers = append(
+				rservers,
+				regServer{"pitter32:8080", nil},
+				regServer{"pitter33:8080", nil},
+			)
+		}
+	}
+
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	defer stopGrpcServe(allServers)
+
+	timeout := 50 * time.Millisecond
+	if remote {
+		timeout = timeout * 20 // 1000 ms
+	}
+
+	mgr, err := rpc.NewManager(
+		servers.addrs(),
+		dialOpts,
+	)
+	if err != nil {
+		b.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+	closeListeners(allServers)
+
+	ids := mgr.NodeIDs()
+	qspec := NewRegisterQSpec(0, wq)
+	config, err := mgr.NewConfiguration(ids, qspec, timeout)
+	if err != nil {
+		b.Fatalf("error creating config: %v", err)
+	}
+
+	state := &rpc.State{
+		Value:     strings.Repeat("x", size),
+		Timestamp: time.Now().UnixNano(),
+	}
+
+	b.SetBytes(int64(state.Size()))
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	if !future {
+		if parallel {
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					wreplySink, err = config.Write(state)
+					if err != nil {
+						b.Fatalf("write rpc call error: %v", err)
+					}
+				}
+			})
+		} else {
+			for i := 0; i < b.N; i++ {
+				wreplySink, err = config.Write(state)
+				if err != nil {
+					b.Fatalf("write rpc call error: %v", err)
+				}
+			}
+		}
+	} else {
+		if parallel {
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					rf := config.WriteFuture(state)
+					wreplySink, err = rf.Get()
+					if err != nil {
+						b.Fatalf("write future rpc call error: %v", err)
+					}
+				}
+			})
+		} else {
+			for i := 0; i < b.N; i++ {
+				rf := config.WriteFuture(state)
+				wreplySink, err = rf.Get()
+				if err != nil {
+					b.Fatalf("write future rpc call error: %v", err)
+				}
+			}
+		}
+	}
+}
+
+///////////////////////////////////////////////////////////////
+
 func BenchmarkRead1KGRPCLocal(b *testing.B)          { benchReadGRPC(b, 1<<10, false, false) }
 func BenchmarkRead1KGRPCRemote(b *testing.B)         { benchReadGRPC(b, 1<<10, false, true) }
 func BenchmarkRead1KGRPCParallelLocal(b *testing.B)  { benchReadGRPC(b, 1<<10, true, false) }
