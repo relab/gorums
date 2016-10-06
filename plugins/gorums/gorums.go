@@ -62,6 +62,7 @@ type gorums struct {
 	templates []tmpl
 	pkgData   struct {
 		PackageName   string
+		Clients       []string
 		Services      []serviceMethod
 		IgnoreImports bool
 	}
@@ -127,7 +128,7 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	}
 
 	g.pkgData.PackageName = file.GetPackage()
-	g.pkgData.Services = g.generateServiceMethods(file.FileDescriptorProto.Service)
+	g.pkgData.Clients, g.pkgData.Services = g.generateServiceMethods(file.FileDescriptorProto.Service)
 
 	g.pkgData.IgnoreImports = true
 	if err := g.processTemplates(); err != nil {
@@ -266,8 +267,6 @@ type serviceMethod struct {
 	Streaming bool
 
 	ServName string // Redundant, but keeps it simple.
-
-	CreateClient bool // Quick-fix, revise later, see issue gorums-dev issue #40.
 }
 
 type smSlice []serviceMethod
@@ -290,9 +289,11 @@ func (p smSlice) Less(i, j int) bool {
 	}
 }
 
-func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) []serviceMethod {
+func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) ([]string, []serviceMethod) {
+	clients := make([]string, len(services))
 	smethods := make(map[string][]*serviceMethod)
-	for _, service := range services {
+	for i, service := range services {
+		clients[i] = service.GetName() + "Client"
 		for _, method := range service.Method {
 			if method.GetServerStreaming() {
 				err := fmt.Errorf(
@@ -352,18 +353,5 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) [
 
 	sort.Sort(smSlice(allRewrittenFlat))
 
-	// Quick-fix, revise later, see issue gorums-dev issue #40.
-	lastServName := ""
-	for i, method := range allRewrittenFlat {
-		if !method.Streaming {
-			continue
-		}
-		if method.ServName != lastServName {
-			method.CreateClient = true
-			allRewrittenFlat[i] = method
-			lastServName = method.ServName
-		}
-	}
-
-	return allRewrittenFlat
+	return clients, allRewrittenFlat
 }

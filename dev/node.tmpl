@@ -23,9 +23,14 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
-{{range $elm := .Services}}
+
+{{range .Clients}}
+	{{.}} {{.}}
+{{end}}
+
+{{range .Services}}
 {{if .Streaming}}
-	{{.UnexportedMethodName}}Client {{.ServName}}_{{.MethodName}}Client
+	{{.MethodName}}Client {{.ServName}}_{{.MethodName}}Client
 {{end}}
 {{end}}
 
@@ -35,43 +40,40 @@ type Node struct {
 }
 
 func (n *Node) connect(opts ...grpc.DialOption) error {
-  var err error
+  	var err error
 	n.conn, err = grpc.Dial(n.addr, opts...)
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 
-  {{- /* Note that if a connect fails below, it returns, leaving the n.conn connected. */ -}}
-  {{- /* It is not clear what we should do in this case; should n.conn be closed when returning an error? */ -}}
-  {{- /* And will we ever have more than one clientServName? */ -}}
-
-{{range $elm := .Services}}
-{{if .Streaming}}
-{{if .CreateClient}}
-	client{{.ServName}} := New{{.ServName}}Client(n.conn)
+{{range .Clients}}
+	n.{{.}} = New{{.}}(n.conn)
 {{end}}
 
-  	n.{{.UnexportedMethodName}}Client, err = client{{.ServName}}.{{.MethodName}}(context.Background())
+{{range .Services}}
+{{if .Streaming}}
+  	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
   	if err != nil {
   		return fmt.Errorf("stream creation failed: %v", err)
   	}
 {{end}}
 {{end -}}
+
 	return nil
 }
 
 func (n *Node) close() error {
-  var err error
-{{- range $elm := .Services -}}
+	// TODO: Log error, mainly care about the connection error below.
+        // We should log this error, but we currently don't have access to the
+        // logger in the manager.
+{{- range .Services -}}
 {{if .Streaming}}
-	_, err = n.{{.UnexportedMethodName}}Client.CloseAndRecv()
+	_, _ = n.{{.MethodName}}Client.CloseAndRecv()
 {{- end -}}
 {{end}}
-  err2 := n.conn.Close()
-  if err != nil {
-    return fmt.Errorf("stream close failed: %v", err)
-  } else if err2 != nil {
-    return fmt.Errorf("conn close failed: %v", err2)
-  }
-  return nil
+	
+	if err := n.conn.Close(); err != nil {
+                return fmt.Errorf("conn close error: %v", err)
+        }	
+	return nil
 }

@@ -21,7 +21,9 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
-	writeAsyncClient Register_WriteAsyncClient
+	RegisterClient RegisterClient
+
+	WriteAsyncClient Register_WriteAsyncClient
 
 	sync.Mutex
 	lastErr error
@@ -35,9 +37,9 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 
-	clientRegister := NewRegisterClient(n.conn)
+	n.RegisterClient = NewRegisterClient(n.conn)
 
-	n.writeAsyncClient, err = clientRegister.WriteAsync(context.Background())
+	n.WriteAsyncClient, err = n.RegisterClient.WriteAsync(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
@@ -46,13 +48,13 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 }
 
 func (n *Node) close() error {
-	var err error
-	_, err = n.writeAsyncClient.CloseAndRecv()
-	err2 := n.conn.Close()
-	if err != nil {
-		return fmt.Errorf("stream close failed: %v", err)
-	} else if err2 != nil {
-		return fmt.Errorf("conn close failed: %v", err2)
+	// TODO: Log error, mainly care about the connection error below.
+	// We should log this error, but we currently don't have access to the
+	// logger in the manager.
+	_, _ = n.WriteAsyncClient.CloseAndRecv()
+
+	if err := n.conn.Close(); err != nil {
+		return fmt.Errorf("conn close error: %v", err)
 	}
 	return nil
 }

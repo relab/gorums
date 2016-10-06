@@ -96,6 +96,56 @@ func TestBasicRegister(t *testing.T) {
 	}
 }
 
+func TestSingleServerRPC(t *testing.T) {
+	defer leakCheck(t)()
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(
+		t,
+		[]regServer{
+			{":8080", rpc.NewRegisterBasic()},
+			{":8081", rpc.NewRegisterBasic()},
+			{":8082", rpc.NewRegisterBasic()},
+		},
+		false,
+	)
+	defer stopGrpcServe(allServers)
+
+	mgr, err := rpc.NewManager(
+		servers.addrs(),
+		dialOpts,
+	)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+	closeListeners(allServers)
+
+	state := &rpc.State{
+		Value:     "42",
+		Timestamp: time.Now().UnixNano(),
+	}
+
+	nodes := mgr.Nodes(false)
+	ctx := context.Background()
+	for _, node := range nodes {
+		wreply, err := node.RegisterClient.Write(ctx, state)
+		if err != nil {
+			t.Fatalf("write rpc call error: %v", err)
+		}
+		t.Logf("wreply: %v\n", wreply)
+		if !wreply.New {
+			t.Error("write reply was not marked as new")
+		}
+
+		rreply, err := node.RegisterClient.Read(ctx, &rpc.ReadRequest{})
+		if err != nil {
+			t.Fatalf("read rpc call error: %v", err)
+		}
+		if rreply.Value != state.Value {
+			t.Errorf("read reply: want state %v, got %v", state, rreply.Value)
+		}
+	}
+}
+
 func TestExitHandleRepliesLoop(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(

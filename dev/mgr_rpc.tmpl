@@ -21,7 +21,7 @@ import (
 func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.{{.UnexportedMethodName}}Client.Send(args)
+			err := n.{{.MethodName}}Client.Send(args)
 			if err == nil {
 				return
 			}

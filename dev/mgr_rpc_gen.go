@@ -147,7 +147,7 @@ func callGRPCWrite(node *Node, ctx context.Context, args *State, replyChan chan<
 func (m *Manager) writeAsync(c *Configuration, args *State) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.writeAsyncClient.Send(args)
+			err := n.WriteAsyncClient.Send(args)
 			if err == nil {
 				return
 			}
