@@ -1,11 +1,17 @@
 syntax = "proto3";
 
+import "gorumsproto/gorums.proto";
+
 package dev;
 
 service Register {
 	rpc Read(ReadRequest) returns (State) {}
 	rpc Write(State) returns (WriteResponse) {}
 	rpc WriteAsync(stream State) returns (Empty) {}
+
+	rpc ReadNoQRPC(ReadRequest) returns (State) {
+		 option (gorumsproto.method_no_qrpc) = true;
+	}
 }
 
 message State {

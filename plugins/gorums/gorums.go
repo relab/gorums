@@ -46,6 +46,10 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/relab/gorums/gorumsproto"
+
+	"github.com/gogo/protobuf/proto"
+	descriptor "github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	pb "github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
 )
@@ -295,6 +299,9 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 	for i, service := range services {
 		clients[i] = service.GetName() + "Client"
 		for _, method := range service.Method {
+			if hasNoQRPCExtension(method) {
+				continue
+			}
 			if method.GetServerStreaming() {
 				err := fmt.Errorf(
 					"%s - %s: server streaming not supported by gorums",
@@ -354,4 +361,21 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 	sort.Sort(smSlice(allRewrittenFlat))
 
 	return clients, allRewrittenFlat
+}
+
+func hasNoQRPCExtension(method *descriptor.MethodDescriptorProto) bool {
+	if method.Options == nil {
+		return false
+	}
+	value, err := proto.GetExtension(method.Options, gorumsproto.E_MethodNoQrpc)
+	if err != nil {
+		return false
+	}
+	if value == nil {
+		return false
+	}
+	if value.(*bool) == nil {
+		return false
+	}
+	return true
 }

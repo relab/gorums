@@ -131,12 +131,11 @@ func TestSingleServerRPC(t *testing.T) {
 		if err != nil {
 			t.Fatalf("write rpc call error: %v", err)
 		}
-		t.Logf("wreply: %v\n", wreply)
 		if !wreply.New {
 			t.Error("write reply was not marked as new")
 		}
 
-		rreply, err := node.RegisterClient.Read(ctx, &rpc.ReadRequest{})
+		rreply, err := node.RegisterClient.ReadNoQRPC(ctx, &rpc.ReadRequest{})
 		if err != nil {
 			t.Fatalf("read rpc call error: %v", err)
 		}

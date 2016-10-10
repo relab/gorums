@@ -71,6 +71,11 @@ func (r *RegisterServerBasic) WriteAsync(stream Register_WriteAsyncServer) error
 	}
 }
 
+// ReadNoQRPC implements the ReadNoQRPC method from the RegisterServer interface.
+func (r *RegisterServerBasic) ReadNoQRPC(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return r.Read(ctx, rq)
+}
+
 // ReadExecuted returns when r has has completed a read.
 func (r *RegisterServerBasic) ReadExecuted() {
 	<-r.readExecutedChan
@@ -105,6 +110,11 @@ func (r *RegisterServerError) Write(ctx context.Context, s *State) (*WriteRespon
 // WriteAsync implements the WriteAsync method from the RegisterServer interface.
 func (r *RegisterServerError) WriteAsync(stream Register_WriteAsyncServer) error {
 	return r.err
+}
+
+// ReadNoQRPC implements the ReadNoQRPC method from the RegisterServer interface.
+func (r *RegisterServerError) ReadNoQRPC(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return r.Read(ctx, rq)
 }
 
 // ReadExecuted never returns since r always returns an error for Read.
@@ -146,6 +156,12 @@ func (r *RegisterServerSlow) Write(ctx context.Context, s *State) (*WriteRespons
 func (r *RegisterServerSlow) WriteAsync(stream Register_WriteAsyncServer) error {
 	// There are no replies to wait for.
 	return r.realServer.WriteAsync(stream)
+}
+
+// ReadNoQRPC implements the ReadNoQRPC method from the RegisterServer interface.
+func (r *RegisterServerSlow) ReadNoQRPC(ctx context.Context, rq *ReadRequest) (*State, error) {
+	time.Sleep(r.delay)
+	return r.Read(ctx, rq)
 }
 
 // ReadExecuted returns when r has has completed a read.
@@ -201,6 +217,11 @@ func (r *RegisterServerBench) WriteAsync(stream Register_WriteAsyncServer) error
 			return err
 		}
 	}
+}
+
+// ReadNoQRPC implements the ReadNoQRPC method from the RegisterServer interface.
+func (r *RegisterServerBench) ReadNoQRPC(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return r.ReadNoQRPC(ctx, rq)
 }
 
 // ReadExecuted is a no-op.
