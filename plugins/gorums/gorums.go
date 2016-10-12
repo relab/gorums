@@ -46,7 +46,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/relab/gorums/gorumsproto"
+	gorumsproto "github.com/relab/gorums"
 
 	"github.com/gogo/protobuf/proto"
 	descriptor "github.com/gogo/protobuf/protoc-gen-gogo/descriptor"

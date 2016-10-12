@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "gorumsproto/gorums.proto";
+import "gorums.proto";
 
 package dev;
 
@@ -10,7 +10,7 @@ service Register {
 	rpc WriteAsync(stream State) returns (Empty) {}
 
 	rpc ReadNoQRPC(ReadRequest) returns (State) {
-		 option (gorumsproto.method_no_qrpc) = true;
+		 option (gorums.method_no_qrpc) = true;
 	}
 }
 

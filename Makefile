@@ -8,6 +8,7 @@ GORUMS_PKGS 			:= $(shell go list ./... | grep -v /vendor/)
 GORUMS_FILES			:= $(shell find . -name '*.go' -not -path "*vendor*")
 GORUMS_DIRS 			:= $(shell find . -type d -not -path "*vendor*" -not -path "./.git*" -not -path "*testdata*")
 GORUMS_PKG_PATH	 		:= github.com/relab/gorums
+GORUMS_PROTO_NAME		:= gorums.proto
 GORUMS_DEV_PKG_PATH		:= $(GORUMS_PKG_PATH)/$(DEV_PKG)
 GORUMS_ENV_GENDEV		:= GORUMSGENDEV=1
 
@@ -26,6 +27,8 @@ REG_PBGO_NAME			:= register.pb.go
 REG_PROTO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PROTO_NAME)
 REG_PROTO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PROTO_NAME)
 REG_PBGO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PBGO_NAME)
+
+GOGOPROTO_ALIAS 		:= google/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 
 .PHONY: all
 all: build test check
@@ -68,6 +71,11 @@ reinstallprotoc:
 gendevproto: reinstallprotoc
 	@echo generating gorumsdev register proto
 	@protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
+
+.PHONY: gengorumsprotoopts
+gengorumsprotoopts:
+	@echo generating gorums proto options
+	@protoc --$(PROTOC_PLUGIN_NAME)=M$(GOGOPROTO_ALIAS):../../../ $(GORUMS_PROTO_NAME)
 
 .PHONY: genstatic
 genstatic:

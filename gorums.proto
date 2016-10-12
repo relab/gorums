@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package gorumsproto;
+package gorums;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/relab/gorums/gorumsproto";
+option go_package = "github.com/relab/gorums";
 
 extend google.protobuf.MethodOptions {
 	bool method_no_qrpc = 50000;
