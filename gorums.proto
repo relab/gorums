@@ -9,3 +9,7 @@ option go_package = "github.com/relab/gorums";
 extend google.protobuf.MethodOptions {
 	bool qrpc = 50000;
 }
+
+extend google.protobuf.MethodOptions {
+	bool broadcast = 50001;
+}
