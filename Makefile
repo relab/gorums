@@ -70,17 +70,17 @@ reinstallprotoc:
 .PHONY: devproto
 devproto: reinstallprotoc
 	@echo generating gorumsdev register proto
-	@protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
+	protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
 
 .PHONY: gorumsprotoopts
 gorumsprotoopts:
 	@echo generating gorums proto options
-	@protoc --$(PROTOC_PLUGIN_NAME)=M$(GOGOPROTO_ALIAS):../../../ $(GORUMS_PROTO_NAME)
+	protoc --$(PROTOC_PLUGIN_NAME)=M$(GOGOPROTO_ALIAS):../../../ $(GORUMS_PROTO_NAME)
 
 .PHONY: static
 static:
 	@echo creating static gorums plugin code bundle
-	@go run $(BUNDLE_MAIN_GO) $(GORUMS_DEV_PKG_PATH) > $(GORUMS_STATIC_GO)
+	go run $(BUNDLE_MAIN_GO) $(GORUMS_DEV_PKG_PATH) > $(GORUMS_STATIC_GO)
 
 .PHONY: templates
 templates:
@@ -90,21 +90,21 @@ templates:
 .PHONY: golden
 golden: static templates reinstallprotoc
 	@echo generating golden output
-	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
-	@protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
+	protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 
 .PHONY: dev
 dev: static templates reinstallprotoc
 	@echo generating _gen.go files for dev
-	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
-	@$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
-	@git checkout $(REG_PBGO_TEST_RPATH)
+	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
+	$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+	git checkout $(REG_PBGO_TEST_RPATH)
 
 .PHONY: goldenanddev
 goldenanddev: static templates reinstallprotoc
 	@echo generating golden output and _gen.go files for dev
-	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
-	@$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
+	$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 
 .PHONY: profcpu
 profcpu:
