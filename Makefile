@@ -67,40 +67,40 @@ reinstallprotoc:
 	@echo installing protoc-gen-gorums with gorums plugin linked
 	@go install $(PROTOC_PLUGIN_PKG_PATH)
 
-.PHONY: gendevproto
+.PHONY: devproto
 gendevproto: reinstallprotoc
 	@echo generating gorumsdev register proto
 	@protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
 
-.PHONY: gengorumsprotoopts
+.PHONY: gorumsprotoopts
 gengorumsprotoopts:
 	@echo generating gorums proto options
 	@protoc --$(PROTOC_PLUGIN_NAME)=M$(GOGOPROTO_ALIAS):../../../ $(GORUMS_PROTO_NAME)
 
-.PHONY: genstatic
+.PHONY: static
 genstatic:
 	@echo creating static gorums plugin code bundle
 	@go run $(BUNDLE_MAIN_GO) $(GORUMS_DEV_PKG_PATH) > $(GORUMS_STATIC_GO)
 
-.PHONY: gentemplates
+.PHONY: templates
 gentemplates:
 	@echo creating templates for gorums plugin code bundle
 	@go run $(GENTEMPLATES_MAIN_GO)
 
-.PHONY: gengolden
+.PHONY: golden
 gengolden: genstatic gentemplates reinstallprotoc
 	@echo generating golden output
 	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
 	@protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 
-.PHONY: gendev
+.PHONY: dev
 gendev: genstatic gentemplates reinstallprotoc
 	@echo generating _gen.go files for dev
 	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
 	@$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 	@git checkout $(REG_PBGO_TEST_RPATH)
 
-.PHONY: gengoldenanddev
+.PHONY: goldenanddev
 gengoldenanddev: genstatic gentemplates reinstallprotoc
 	@echo generating golden output and _gen.go files for dev
 	@cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
