@@ -5,7 +5,7 @@ fault-tolerant quorum-based protocols. Gorums allows to group replicas into one
 or more _configurations_. A configuration also holds information on how many
 replicas are necessary to form a quorum. Gorums enables programmers to invoke
 remote procedure calls (RPCs) on the replicas in a configuration and wait for
-responses from a quorum. We call this a quorum remote procedure call (QRPC).
+responses from a quorum. We call this a _quorum call_.
 
 Gorums uses code generation to produce an RPC library that clients can use to
 invoke QRPCs. Gorums is a wrapper around the [gRPC](http://www.grpc.io/)
@@ -25,5 +25,5 @@ implemented using Gorums can be found
 
 ### References
 
-[1] Tormod E. Lea, Leander Jehl, and Hein Meling. Gorums: _A Framework for
-    Implementing Reconfigurable Quorum-based Systems._ In submission.
+[1] Tormod E. Lea, Leander Jehl, and Hein Meling. Gorums: _New Abstractions for
+    Implementing Quorum-based Systems._ In submission.
