@@ -864,7 +864,7 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.M
 
 	grpcOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithTimeout(50 * time.Millisecond),
+		grpc.WithTimeout(time.Second),
 		grpc.WithInsecure(),
 	}
 	dialOpts := rpc.WithGrpcDialOptions(grpcOpts...)
