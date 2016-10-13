@@ -7,5 +7,5 @@ import "google/protobuf/descriptor.proto";
 option go_package = "github.com/relab/gorums";
 
 extend google.protobuf.MethodOptions {
-	bool method_no_qrpc = 50000;
+	bool qrpc = 50000;
 }
