@@ -75,7 +75,7 @@ func TestGolden(t *testing.T) {
 	// Compute the original checksum.
 	goldenSum := sum(t, "testdata/register_golden/register.pb.go")
 	// Run the proto compiler.
-	run(t, "protoc", "--gorums_out=plugins=grpc+gorums:"+os.TempDir(), "testdata/register_golden/register.proto")
+	run(t, "protoc", "-I=../../../:.", "--gorums_out=plugins=grpc+gorums:"+os.TempDir(), "testdata/register_golden/register.proto")
 	newFile := filepath.Join(os.TempDir(), "testdata/register_golden/register.pb.go")
 	defer os.Remove(newFile)
 	// Compute the new checksum.

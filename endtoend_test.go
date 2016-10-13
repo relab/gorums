@@ -59,7 +59,7 @@ func TestEndToEnd(t *testing.T) {
 	defer os.RemoveAll(testdataFolderPath)
 
 	// Run the proto compiler
-	run(t, "protoc", "--gorums_out=plugins=grpc+gorums:testdata", "dev/register.proto")
+	run(t, "protoc", "-I=../../../:.", "--gorums_out=plugins=grpc+gorums:testdata", "dev/register.proto")
 
 	// Set file paths.
 	for i, file := range devFilesToCopy {

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "gorums.proto";
+import "github.com/relab/gorums/gorums.proto";
 
 package dev;
 

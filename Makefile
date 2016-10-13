@@ -19,6 +19,7 @@ GENTEMPLATES_MAIN_GO 		:= $(CMD_PKG)/gentemplates/main.go
 PROTOC_PLUGIN_PKG		:= protoc-gen-gorums
 PROTOC_PLUGIN_PKG_PATH 		:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
 PROTOC_PLUGIN_NAME 		:= gorums_out
+PROTOC_I_FLAG			:= ../../../:.
 
 TESTDATA_REG			:= testdata/register_golden
 
@@ -70,7 +71,7 @@ reinstallprotoc:
 .PHONY: devproto
 devproto: reinstallprotoc
 	@echo generating gorumsdev register proto
-	protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
+	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
 
 .PHONY: gorumsprotoopts
 gorumsprotoopts:
@@ -91,20 +92,20 @@ templates:
 golden: static templates reinstallprotoc
 	@echo generating golden output
 	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
-	protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 
 .PHONY: dev
 dev: static templates reinstallprotoc
 	@echo generating _gen.go files for dev
 	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
-	$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 	git checkout $(REG_PBGO_TEST_RPATH)
 
 .PHONY: goldenanddev
 goldenanddev: static templates reinstallprotoc
 	@echo generating golden output and _gen.go files for dev
 	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
-	$(GORUMS_ENV_GENDEV) protoc --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 
 .PHONY: profcpu
 profcpu:
