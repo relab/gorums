@@ -5,13 +5,19 @@ import "gorums.proto";
 package dev;
 
 service Register {
-	rpc Read(ReadRequest) returns (State) {}
-	rpc Write(State) returns (WriteResponse) {}
-	rpc WriteAsync(stream State) returns (Empty) {}
-
-	rpc ReadNoQRPC(ReadRequest) returns (State) {
-		 option (gorums.method_no_qrpc) = true;
+	rpc Read(ReadRequest) returns (State) {
+		option (gorums.qrpc) = true;
 	}
+
+	rpc Write(State) returns (WriteResponse) {
+		option (gorums.qrpc) = true;
+	}
+
+	rpc WriteAsync(stream State) returns (Empty) {
+		option (gorums.qrpc) = true;
+	}
+
+	rpc ReadNoQRPC(ReadRequest) returns (State) {}
 }
 
 message State {

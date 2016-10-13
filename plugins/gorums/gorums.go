@@ -299,13 +299,14 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 	for i, service := range services {
 		clients[i] = service.GetName() + "Client"
 		for _, method := range service.Method {
-			if hasNoQRPCExtension(method) {
+			if !hasQRPCExtension(method) {
 				continue
 			}
 			if method.GetServerStreaming() {
 				err := fmt.Errorf(
 					"%s - %s: server streaming not supported by gorums",
-					service.GetName(), method.GetName())
+					service.GetName(), method.GetName(),
+				)
 				die(err)
 			}
 
@@ -363,11 +364,11 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 	return clients, allRewrittenFlat
 }
 
-func hasNoQRPCExtension(method *descriptor.MethodDescriptorProto) bool {
+func hasQRPCExtension(method *descriptor.MethodDescriptorProto) bool {
 	if method.Options == nil {
 		return false
 	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_MethodNoQrpc)
+	value, err := proto.GetExtension(method.Options, gorumsproto.E_Qrpc)
 	if err != nil {
 		return false
 	}
