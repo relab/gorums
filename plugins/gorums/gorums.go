@@ -46,10 +46,6 @@ import (
 	"strings"
 	"text/template"
 
-	gorumsproto "github.com/relab/gorums"
-
-	"github.com/gogo/protobuf/proto"
-	descriptor "github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	pb "github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 	"github.com/gogo/protobuf/protoc-gen-gogo/generator"
 )
@@ -242,7 +238,7 @@ func onlyClientStreamMethods(services []*pb.ServiceDescriptorProto) bool {
 }
 
 func die(err error) {
-	fmt.Println("gorums:", err)
+	fmt.Fprintf(os.Stderr, "gorums: %v\n", err)
 	os.Exit(2)
 }
 
@@ -299,14 +295,11 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 	for i, service := range services {
 		clients[i] = service.GetName() + "Client"
 		for _, method := range service.Method {
-			if !hasQRPCExtension(method) {
+			skip, err := verify(service.GetName(), method)
+			if skip {
 				continue
 			}
-			if method.GetServerStreaming() {
-				err := fmt.Errorf(
-					"%s - %s: server streaming not supported by gorums",
-					service.GetName(), method.GetName(),
-				)
+			if err != nil {
 				die(err)
 			}
 
@@ -320,15 +313,12 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			sm.TypeName = sm.MethodName + "Reply"
 			sm.UnexportedTypeName = unexport(sm.TypeName)
 			sm.ServName = service.GetName()
-
 			if sm.TypeName == sm.RespName {
 				sm.TypeName += "_"
 			}
-
 			if method.GetClientStreaming() {
 				sm.Streaming = true
 			}
-
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, &sm)
 			smethods[sm.MethodName] = methodsForName
@@ -364,19 +354,29 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 	return clients, allRewrittenFlat
 }
 
-func hasQRPCExtension(method *descriptor.MethodDescriptorProto) bool {
-	if method.Options == nil {
-		return false
+func verify(service string, method *pb.MethodDescriptorProto) (skip bool, err error) {
+	qrpc := hasQRPCExtension(method)
+	bcast := hasBcastExtension(method)
+	if !qrpc && !bcast {
+		return true, nil
 	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_Qrpc)
-	if err != nil {
-		return false
+	if qrpc && bcast {
+		return false, fmt.Errorf(
+			"%s.%s: illegal combination combination of options: both 'qrcp' and 'broadcast'",
+			service, method.GetName(),
+		)
 	}
-	if value == nil {
-		return false
+	if bcast && !method.GetClientStreaming() {
+		return false, fmt.Errorf(
+			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
+			service, method.GetName(),
+		)
 	}
-	if value.(*bool) == nil {
-		return false
+	if method.GetServerStreaming() {
+		return false, fmt.Errorf(
+			"%s.%s: server-client streams are not supported by gorums",
+			service, method.GetName(),
+		)
 	}
-	return true
+	return false, nil
 }

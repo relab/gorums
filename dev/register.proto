@@ -14,7 +14,7 @@ service Register {
 	}
 
 	rpc WriteAsync(stream State) returns (Empty) {
-		option (gorums.qrpc) = true;
+		option (gorums.broadcast) = true;
 	}
 
 	rpc ReadNoQRPC(ReadRequest) returns (State) {}
