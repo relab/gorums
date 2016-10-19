@@ -32,7 +32,7 @@ REG_PBGO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PBGO_NAME)
 GOGOPROTO_ALIAS 		:= google/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 
 .PHONY: all
-all: build test check
+all: build test
 
 .PHONY: build
 build:
