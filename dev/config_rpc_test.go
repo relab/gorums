@@ -2,6 +2,7 @@ package dev_test
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,9 +37,9 @@ func TestBasicRegister(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
@@ -101,9 +103,9 @@ func TestSingleServerRPC(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
@@ -150,9 +152,9 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
@@ -201,9 +203,9 @@ func TestSlowRegister(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterSlow(time.Second)},
-			{":8081", rpc.NewRegisterSlow(time.Second)},
-			{":8082", rpc.NewRegisterError(someErr)},
+			{impl: rpc.NewRegisterSlow(time.Second)},
+			{impl: rpc.NewRegisterSlow(time.Second)},
+			{impl: rpc.NewRegisterError(someErr)},
 			// Q=2 below, one error server, two slow servers
 			// -> must timeout with one error received.
 		},
@@ -248,9 +250,9 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
@@ -318,9 +320,9 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
@@ -400,9 +402,9 @@ func TestManagerClose(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
@@ -542,24 +544,24 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{":8080", rpc.NewRegisterBench()},
+			{impl: rpc.NewRegisterBench()},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{":8081", rpc.NewRegisterBench()},
-				regServer{":8082", rpc.NewRegisterBench()},
+				regServer{impl: rpc.NewRegisterBench()},
+				regServer{impl: rpc.NewRegisterBench()},
 			)
 		}
 	} else {
 		rservers = []regServer{
-			{"pitter31:8080", nil},
+			{addr: "pitter31:8080"},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{"pitter32:8080", nil},
-				regServer{"pitter33:8080", nil},
+				regServer{},
+				regServer{},
 			)
 		}
 	}
@@ -689,24 +691,24 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{":8080", rpc.NewRegisterBench()},
+			{impl: rpc.NewRegisterBench()},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{":8081", rpc.NewRegisterBench()},
-				regServer{":8082", rpc.NewRegisterBench()},
+				regServer{impl: rpc.NewRegisterBench()},
+				regServer{impl: rpc.NewRegisterBench()},
 			)
 		}
 	} else {
 		rservers = []regServer{
-			{"pitter31:8080", nil},
+			{addr: "pitter31:8080"},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{"pitter32:8080", nil},
-				regServer{"pitter33:8080", nil},
+				regServer{},
+				regServer{},
 			)
 		}
 	}
@@ -799,11 +801,11 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{":8080", rpc.NewRegisterBench()},
+			{impl: rpc.NewRegisterBench()},
 		}
 	} else {
 		rservers = []regServer{
-			{"pitter33:8080", nil},
+			{addr: "pitter33:8080"},
 		}
 	}
 
@@ -857,6 +859,11 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 
 const allServers = -1
 
+var portSupplier = struct {
+	p int
+	sync.Mutex
+}{p: 8080}
+
 func setup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.ManagerOption, func(n int), func(n int)) {
 	if len(regServers) == 0 {
 		t.Fatal("setupServers: need at least one server")
@@ -876,9 +883,13 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.M
 	servers := make([]*grpc.Server, len(regServers))
 	for i := range servers {
 		servers[i] = grpc.NewServer()
-	}
-	for i, server := range servers {
-		rpc.RegisterRegisterServer(server, regServers[i].implementation)
+		rpc.RegisterRegisterServer(servers[i], regServers[i].impl)
+		if regServers[i].addr == "" {
+			portSupplier.Lock()
+			regServers[i].addr = fmt.Sprintf(":%d", portSupplier.p)
+			portSupplier.p++
+			portSupplier.Unlock()
+		}
 	}
 
 	listeners := make([]net.Listener, len(servers))
@@ -928,8 +939,8 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.M
 }
 
 type regServer struct {
-	addr           string
-	implementation rpc.RegisterTestServer
+	impl rpc.RegisterTestServer
+	addr string
 }
 
 type regServers []regServer
@@ -944,7 +955,7 @@ func (rs regServers) addrs() []string {
 
 func (rs regServers) waitForAllWrites() {
 	for _, server := range rs {
-		server.implementation.WriteExecuted()
+		server.impl.WriteExecuted()
 	}
 }
 

@@ -1,6 +1,7 @@
 package dev_test
 
 import (
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -40,6 +41,12 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 	servers := make([]*grpc.Server, len(srvs))
 	listeners := make([]net.Listener, len(srvs))
 	for i, rs := range srvs {
+		if rs.addr == "" {
+			portSupplier.Lock()
+			rs.addr = fmt.Sprintf(":%d", portSupplier.p)
+			portSupplier.p++
+			portSupplier.Unlock()
+		}
 		listeners[i], err = net.Listen("tcp", rs.addr)
 		if err != nil {
 			t.Fatalf("failed to listen: %v", err)
@@ -52,7 +59,7 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 		}
 		opts := []grpc.ServerOption{grpc.Creds(creds)}
 		servers[i] = grpc.NewServer(opts...)
-		rpc.RegisterRegisterServer(servers[i], srvs[i].implementation)
+		rpc.RegisterRegisterServer(servers[i], srvs[i].impl)
 
 		go func(i int, server *grpc.Server) {
 			_ = server.Serve(listeners[i])
@@ -86,9 +93,9 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 func TestSecureRegister(t *testing.T) {
 	defer leakCheck(t)()
 	servers := regServers{
-		{":8080", rpc.NewRegisterBasic()},
-		{":8081", rpc.NewRegisterBasic()},
-		{":8082", rpc.NewRegisterBasic()},
+		{impl: rpc.NewRegisterBasic()},
+		{impl: rpc.NewRegisterBasic()},
+		{impl: rpc.NewRegisterBasic()},
 	}
 	stopGrpcServe, closeListeners := secsetup(t, servers, false)
 	defer stopGrpcServe(allServers)
