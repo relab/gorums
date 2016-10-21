@@ -89,7 +89,7 @@ func TestBasicRegister(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != state.Value {
-		t.Errorf("read reply: want state %v, got %v", state, rreply.Reply)
+		t.Fatalf("read reply: want state %v, got %v", state, rreply.Reply)
 	}
 
 	nodes := mgr.Nodes(false)
@@ -134,7 +134,7 @@ func TestSingleServerRPC(t *testing.T) {
 			t.Fatalf("write rpc call error: %v", err)
 		}
 		if !wreply.New {
-			t.Error("write reply was not marked as new")
+			t.Fatalf("write reply was not marked as new")
 		}
 
 		rreply, err := node.RegisterClient.ReadNoQRPC(ctx, &rpc.ReadRequest{})
@@ -142,7 +142,7 @@ func TestSingleServerRPC(t *testing.T) {
 			t.Fatalf("read rpc call error: %v", err)
 		}
 		if rreply.Value != state.Value {
-			t.Errorf("read reply: want state %v, got %v", state, rreply.Value)
+			t.Fatalf("read reply: want state %v, got %v", state, rreply.Value)
 		}
 	}
 }
@@ -185,15 +185,14 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	select {
 	case err := <-replyChan:
 		if err == nil {
-			t.Errorf("want error, got none")
+			t.Fatalf("want error, got none")
 		}
 		_, ok := err.(rpc.IncompleteRPCError)
 		if !ok {
-			t.Errorf("got error of type %T, want error of type %T",
-				err, rpc.IncompleteRPCError{})
+			t.Fatalf("got error of type %T, want error of type %T", err, rpc.IncompleteRPCError{})
 		}
 	case <-time.After(time.Second):
-		t.Errorf("read rpc call: timeout, call did not return")
+		t.Fatalf("read rpc call: timeout, call did not return")
 	}
 }
 
@@ -233,15 +232,15 @@ func TestSlowRegister(t *testing.T) {
 
 	_, err = config.Read(&rpc.ReadRequest{})
 	if err == nil {
-		t.Errorf("read rpc call: want error, got none")
+		t.Fatalf("read rpc call: want error, got none")
 	}
 	timeoutErr, ok := err.(rpc.TimeoutRPCError)
 	if !ok {
-		t.Errorf("got error of type %T, want error of type %T", err, rpc.TimeoutRPCError{})
+		t.Fatalf("got error of type %T, want error of type %T", err, rpc.TimeoutRPCError{})
 	}
 	wantErr := rpc.TimeoutRPCError{Waited: timeout, ErrCount: 1, RepliesCount: 0}
 	if timeoutErr != wantErr {
-		t.Errorf("got: %v, want: %v", timeoutErr, wantErr)
+		t.Fatalf("got: %v, want: %v", timeoutErr, wantErr)
 	}
 }
 
@@ -292,7 +291,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 	t.Logf("wreply: %v\n", wreply)
 	if !wreply.Reply.New {
-		t.Error("write future reply was not marked as new")
+		t.Fatalf("write future reply was not marked as new")
 	}
 
 	// Done should report true.
@@ -311,7 +310,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != state.Value {
-		t.Errorf("read future reply:\nwant:\n%v,\ngot:\n%v", state, rreply.Reply)
+		t.Fatalf("read future reply:\nwant:\n%v,\ngot:\n%v", state, rreply.Reply)
 	}
 }
 
@@ -361,7 +360,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 
 	t.Logf("wreply: %v\n", wreply)
 	if !wreply.Reply.New {
-		t.Error("write reply was not marked as new")
+		t.Fatal("write reply was not marked as new")
 	}
 
 	rreply, err := config.Read(&rpc.ReadRequest{})
@@ -370,7 +369,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != stateOne.Value {
-		t.Errorf("read reply:\nwant:\n%v,\ngot:\n%v", stateOne, rreply.Reply)
+		t.Fatalf("read reply:\nwant:\n%v,\ngot:\n%v", stateOne, rreply.Reply)
 	}
 
 	stateTwo := &rpc.State{
@@ -393,7 +392,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != stateTwo.Value {
-		t.Errorf("read reply:\nwant:\n%v\ngot:\n%v", stateTwo, rreply.Reply)
+		t.Fatalf("read reply:\nwant:\n%v\ngot:\n%v", stateTwo, rreply.Reply)
 	}
 }
 
@@ -430,7 +429,7 @@ func TestManagerClose(t *testing.T) {
 	select {
 	case <-closeReturnedChan:
 	case <-time.After(timeoutDur):
-		t.Errorf("mgr.Close() timed out, waited %v", timeoutDur)
+		t.Fatalf("mgr.Close() timed out, waited %v", timeoutDur)
 	}
 }
 
