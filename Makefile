@@ -49,6 +49,12 @@ testrace: reinstallprotoc
 	@echo go test -race:
 	@go test -v -race -cpu=1,2,4 $(GORUMS_PKGS)
 
+.PHONY: stresstestdev
+stresstestdev:
+	go get -u golang.org/x/tools/cmd/stress
+	cd dev; go test -c
+	cd dev; stress -p=1 ./dev.test
+
 .PHONY: benchlocal
 benchlocal:
 	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Local$$ -benchtime=5s
