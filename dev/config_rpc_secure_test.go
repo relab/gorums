@@ -108,7 +108,7 @@ func TestSecureRegister(t *testing.T) {
 
 	grpcOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithTimeout(50 * time.Millisecond),
+		grpc.WithTimeout(time.Second),
 		grpc.WithTransportCredentials(clientCreds),
 	}
 	dialOpts := rpc.WithGrpcDialOptions(grpcOpts...)
