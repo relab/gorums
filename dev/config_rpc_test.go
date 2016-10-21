@@ -269,7 +269,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(1, len(ids)/2+1)
+	qspec := NewRegisterQSpec(1, len(ids))
 	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
@@ -339,7 +339,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(1, len(ids)/2+1)
+	qspec := NewRegisterQSpec(1, len(ids))
 
 	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
 	if err != nil {
@@ -953,6 +953,13 @@ func (rs regServers) addrs() []string {
 	return addrs
 }
 
+// waitForAllWrites must only be called when
+// all servers in rs performs the write operation.
+// Calling this method when only using a subset of servers
+// is an error.
+//
+// TODO: Adjust this to allow waiting for a
+// subset of writes.
 func (rs regServers) waitForAllWrites() {
 	for _, server := range rs {
 		server.impl.WriteExecuted()
