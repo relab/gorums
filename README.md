@@ -8,7 +8,7 @@ remote procedure calls (RPCs) on the replicas in a configuration and wait for
 responses from a quorum. We call this a _quorum call_.
 
 Gorums uses code generation to produce an RPC library that clients can use to
-invoke QRPCs. Gorums is a wrapper around the [gRPC](http://www.grpc.io/)
+invoke quorum calls. Gorums is a wrapper around the [gRPC](http://www.grpc.io/)
 library. Services are defined using the protocol buffers interface definition
 language.
 
