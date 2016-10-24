@@ -43,6 +43,7 @@ func TestBasicRegister(t *testing.T) {
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -53,7 +54,6 @@ func TestBasicRegister(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	// Get all all available node ids
 	ids := mgr.NodeIDs()
@@ -109,6 +109,7 @@ func TestSingleServerRPC(t *testing.T) {
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -119,7 +120,7 @@ func TestSingleServerRPC(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
+	//closeListeners(allServers)
 
 	state := &rpc.State{
 		Value:     "42",
@@ -158,6 +159,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -168,7 +170,6 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	qspec := NewNeverQSpec()
@@ -189,7 +190,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 		}
 		_, ok := err.(rpc.IncompleteRPCError)
 		if !ok {
-			t.Fatalf("got error of type %T, want error of type %T", err, rpc.IncompleteRPCError{})
+			t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.IncompleteRPCError{}, err)
 		}
 	case <-time.After(time.Second):
 		t.Fatalf("read rpc call: timeout, call did not return")
@@ -210,6 +211,7 @@ func TestSlowRegister(t *testing.T) {
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -220,7 +222,6 @@ func TestSlowRegister(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	timeout := 25 * time.Millisecond
@@ -236,7 +237,7 @@ func TestSlowRegister(t *testing.T) {
 	}
 	timeoutErr, ok := err.(rpc.TimeoutRPCError)
 	if !ok {
-		t.Fatalf("got error of type %T, want error of type %T", err, rpc.TimeoutRPCError{})
+		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.TimeoutRPCError{}, err)
 	}
 	wantErr := rpc.TimeoutRPCError{Waited: timeout, ErrCount: 1, RepliesCount: 0}
 	if timeoutErr != wantErr {
@@ -255,6 +256,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -265,7 +267,6 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(1, len(ids))
@@ -325,6 +326,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -335,7 +337,6 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(1, len(ids))
@@ -407,6 +408,7 @@ func TestManagerClose(t *testing.T) {
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -416,7 +418,6 @@ func TestManagerClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	closeListeners(allServers)
 
 	const timeoutDur = time.Second
 	closeReturnedChan := make(chan struct{}, 1)
@@ -566,6 +567,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	}
 
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	timeout := 50 * time.Millisecond
@@ -581,7 +583,6 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		b.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(rq, len(ids))
@@ -713,6 +714,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 	}
 
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	timeout := 50 * time.Millisecond
@@ -728,7 +730,6 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 		b.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(0, wq)
@@ -809,13 +810,13 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	}
 
 	servers, _, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	conn, err := grpc.Dial(servers.addrs()[0], grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	if err != nil {
 		b.Fatalf("grpc dial: %v", err)
 	}
-	closeListeners(allServers)
 
 	state := &rpc.State{
 		Value:     strings.Repeat("x", size),
