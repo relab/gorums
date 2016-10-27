@@ -23,7 +23,7 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	for _, n := range c.nodes {
-		go callGRPCRead(n, ctx, args, replyChan)
+		go callGRPCRead(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -59,7 +59,7 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 	}
 }
 
-func callGRPCRead(node *Node, ctx context.Context, args *ReadRequest, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -89,7 +89,7 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	for _, n := range c.nodes {
-		go callGRPCWrite(n, ctx, args, replyChan)
+		go callGRPCWrite(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -125,7 +125,7 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 	}
 }
 
-func callGRPCWrite(node *Node, ctx context.Context, args *State, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<- writeReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(

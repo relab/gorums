@@ -133,7 +133,7 @@ func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}
 	ctx, cancel := context.WithCancel(context.Background())
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(n, ctx, args, replyChan)
+		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -169,7 +169,7 @@ func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}
 	}
 }
 
-func callGRPC{{.MethodName}}(node *Node, ctx context.Context, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	reply := new({{.RespName}})
 	start := time.Now()
 	err := grpc.Invoke(
