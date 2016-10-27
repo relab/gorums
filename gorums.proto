@@ -11,7 +11,7 @@ extend google.protobuf.MethodOptions {
 }
 
 extend google.protobuf.MethodOptions {
-	bool broadcast = 50001;
+	bool multicast = 50001;
 }
 
 extend google.protobuf.MethodOptions {

@@ -24,11 +24,11 @@ func hasQRPCExtension(method *descriptor.MethodDescriptorProto) bool {
 	return true
 }
 
-func hasBcastExtension(method *descriptor.MethodDescriptorProto) bool {
+func hasMcastExtension(method *descriptor.MethodDescriptorProto) bool {
 	if method.Options == nil {
 		return false
 	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_Broadcast)
+	value, err := proto.GetExtension(method.Options, gorumsproto.E_Multicast)
 	if err != nil {
 		return false
 	}

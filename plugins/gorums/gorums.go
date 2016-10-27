@@ -356,17 +356,17 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 
 func verify(service string, method *pb.MethodDescriptorProto) (skip bool, err error) {
 	qrpc := hasQRPCExtension(method)
-	bcast := hasBcastExtension(method)
-	if !qrpc && !bcast {
+	mcast := hasMcastExtension(method)
+	if !qrpc && !mcast {
 		return true, nil
 	}
-	if qrpc && bcast {
+	if qrpc && mcast {
 		return false, fmt.Errorf(
 			"%s.%s: illegal combination combination of options: both 'qrcp' and 'broadcast'",
 			service, method.GetName(),
 		)
 	}
-	if bcast && !method.GetClientStreaming() {
+	if mcast && !method.GetClientStreaming() {
 		return false, fmt.Errorf(
 			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
 			service, method.GetName(),
