@@ -139,6 +139,9 @@ func rewriteGoFile(name, old, new string) error {
 	}
 	fset = token.NewFileSet()
 	f, err = parser.ParseFile(fset, name, &buffer, parser.ParseComments)
+	if err != nil {
+		return err
+	}
 	ast.SortImports(fset, f)
 
 	tpath := name + ".temp"
