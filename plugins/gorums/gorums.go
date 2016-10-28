@@ -264,7 +264,7 @@ type serviceMethod struct {
 	TypeName           string
 	UnexportedTypeName string
 
-	Streaming bool
+	Multicast bool
 
 	ServName string // Redundant, but keeps it simple.
 }
@@ -317,7 +317,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 				sm.TypeName += "_"
 			}
 			if method.GetClientStreaming() {
-				sm.Streaming = true
+				sm.Multicast = true
 			}
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, &sm)

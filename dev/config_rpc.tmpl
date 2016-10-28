@@ -9,7 +9,7 @@ import "fmt"
 
 {{range $elm := .Services}}
 
-{{if .Streaming}}
+{{if .Multicast}}
 
 // {{.MethodName}} invokes an asynchronous {{.MethodName}} RPC on configuration c.
 // The call has no return value and is invoked on every node in the

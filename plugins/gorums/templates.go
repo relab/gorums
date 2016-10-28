@@ -14,7 +14,7 @@ import "fmt"
 
 {{range $elm := .Services}}
 
-{{if .Streaming}}
+{{if .Multicast}}
 
 // {{.MethodName}} invokes an asynchronous {{.MethodName}} RPC on configuration c.
 // The call has no return value and is invoked on every node in the
@@ -103,7 +103,7 @@ import (
 
 {{range $elm := .Services}}
 
-{{if .Streaming}}
+{{if .Multicast}}
 func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
@@ -223,7 +223,7 @@ type Node struct {
 {{end}}
 
 {{range .Services}}
-{{if .Streaming}}
+{{if .Multicast}}
 	{{.MethodName}}Client {{.ServName}}_{{.MethodName}}Client
 {{end}}
 {{end}}
@@ -245,7 +245,7 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 {{end}}
 
 {{range .Services}}
-{{if .Streaming}}
+{{if .Multicast}}
   	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
   	if err != nil {
   		return fmt.Errorf("stream creation failed: %v", err)
@@ -261,7 +261,7 @@ func (n *Node) close() error {
         // We should log this error, but we currently don't have access to the
         // logger in the manager.
 {{- range .Services -}}
-{{if .Streaming}}
+{{if .Multicast}}
 	_, _ = n.{{.MethodName}}Client.CloseAndRecv()
 {{- end -}}
 {{end}}
@@ -283,7 +283,7 @@ package {{.PackageName}}
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
 {{- range $elm := .Services}}
-{{- if not .Streaming}}
+{{- if not .Multicast}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} RPC method.
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
 {{- end -}}

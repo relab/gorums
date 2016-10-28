@@ -29,7 +29,7 @@ type Node struct {
 {{end}}
 
 {{range .Services}}
-{{if .Streaming}}
+{{if .Multicast}}
 	{{.MethodName}}Client {{.ServName}}_{{.MethodName}}Client
 {{end}}
 {{end}}
@@ -51,7 +51,7 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 {{end}}
 
 {{range .Services}}
-{{if .Streaming}}
+{{if .Multicast}}
   	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
   	if err != nil {
   		return fmt.Errorf("stream creation failed: %v", err)
@@ -67,7 +67,7 @@ func (n *Node) close() error {
         // We should log this error, but we currently don't have access to the
         // logger in the manager.
 {{- range .Services -}}
-{{if .Streaming}}
+{{if .Multicast}}
 	_, _ = n.{{.MethodName}}Client.CloseAndRecv()
 {{- end -}}
 {{end}}
