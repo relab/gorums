@@ -40,3 +40,20 @@ func hasMcastExtension(method *descriptor.MethodDescriptorProto) bool {
 	}
 	return true
 }
+
+func hasFutureExtension(method *descriptor.MethodDescriptorProto) bool {
+	if method.Options == nil {
+		return false
+	}
+	value, err := proto.GetExtension(method.Options, gorumsproto.E_Future)
+	if err != nil {
+		return false
+	}
+	if value == nil {
+		return false
+	}
+	if value.(*bool) == nil {
+		return false
+	}
+	return true
+}

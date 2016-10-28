@@ -43,6 +43,8 @@ func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) (*{{.TypeName}}, err
 	return c.mgr.{{.UnexportedMethodName}}(c, args)
 }
 
+{{if .GenFuture}}
+
 // {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} RPC invocation.
 type {{.MethodName}}Future struct {
 	reply *{{.TypeName}}
@@ -80,6 +82,7 @@ func (f *{{.MethodName}}Future) Done() bool {
 	}
 }
 
+{{- end -}}
 {{- end -}}
 {{- end -}}
 `
