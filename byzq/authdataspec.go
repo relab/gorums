@@ -11,8 +11,8 @@ import (
 	"time"
 )
 
-// AuthDataQ is the quorum specification for the Authenticated-Data Byzantine quorum
-// algorithm described in RSDP, Algorithm 4.15, page 181.
+// AuthDataQ is the quorum specification for the Authenticated-Data Byzantine
+// Quorum algorithm described in RSDP, Algorithm 4.15, page 181.
 type AuthDataQ struct {
 	n    int               // size of system
 	f    int               // tolerable number of failures
@@ -22,8 +22,10 @@ type AuthDataQ struct {
 	wts  int64             // writer's timestamp
 }
 
-// NewAuthDataQ returns a Byzantine masking quorum specification or nil and an error
+// NewAuthDataQ returns a quorum specification or nil and an error
 // if the quorum requirements are not satisfied.
+// Pre-condition: n>3f and f>0
+// Post-condition:
 func NewAuthDataQ(n int, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (*AuthDataQ, error) {
 	f := (n - 1) / 3
 	if f < 1 {
@@ -234,6 +236,7 @@ func (aq *AuthDataQ) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
 	if len(replies) <= aq.q {
 		return nil, false
 	}
+	//TODO(Hein) this is not needed since gRPC/Gorums provides request/reply matching
 	cnt := 0
 	var reply *WriteResponse
 	for _, r := range replies {

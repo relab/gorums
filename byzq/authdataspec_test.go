@@ -46,6 +46,10 @@ var authQTests = []struct {
 	q   int // expected value
 	err string
 }{
+	{-1, 0, 1, "Byzantine quorum require n>3f replicas; only got n=-1, yielding f=0"},
+	{0, 0, 1, "Byzantine quorum require n>3f replicas; only got n=0, yielding f=0"},
+	{1, 0, 1, "Byzantine quorum require n>3f replicas; only got n=1, yielding f=0"},
+	{2, 0, 2, "Byzantine quorum require n>3f replicas; only got n=2, yielding f=0"},
 	{3, 0, 2, "Byzantine quorum require n>3f replicas; only got n=3, yielding f=0"},
 	{4, 1, 2, ""},
 	{5, 1, 3, ""},

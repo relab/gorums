@@ -18,10 +18,12 @@ var curve = elliptic.P256()
 // ParseKey takes a PEM formatted string and returns a private key.
 func ParseKey(pemKey string) (*ecdsa.PrivateKey, error) {
 	block, _ := pem.Decode([]byte(pemKey))
+	//TODO(hein) Is this correct way? Does Decode return err?
 	if block == nil {
 		return nil, fmt.Errorf("no block to decode")
 	}
 	key, err := x509.ParseECPrivateKey(block.Bytes)
+	//TODO(Hein) Do we need to create a new error here?
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse key from pem block: %v\n %v", err, key)
 	}
@@ -54,7 +56,7 @@ func GenerateKeyfile(keyFile string) error {
 
 	ec, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
-		return fmt.Errorf("failed to marshal key from pem block: %v\n %v", err, key)
+		return fmt.Errorf("failed to marshal key to pem block: %v\n %v", err, key)
 	}
 
 	err = pem.Encode(f, &pem.Block{
