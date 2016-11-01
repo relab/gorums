@@ -2,7 +2,6 @@ package dev_test
 
 import (
 	"testing"
-	"time"
 
 	rpc "github.com/relab/gorums/dev"
 	"github.com/relab/gorums/idutil"
@@ -27,11 +26,11 @@ func TestEqualGlobalConfigurationIDs(t *testing.T) {
 
 	// Create a configuration in each manager using all nodes.
 	// Global ids should be equal.
-	configOne, err := mgrOne.NewConfiguration(ids, qspec, 1)
+	configOne, err := mgrOne.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config one: %v", err)
 	}
-	configTwo, err := mgrTwo.NewConfiguration(ids, qspec, 1)
+	configTwo, err := mgrTwo.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config two: %v", err)
 	}
@@ -129,7 +128,7 @@ func TestCreateConfiguration(t *testing.T) {
 	ids := mgr.NodeIDs()
 	qspec := NewMajorityQSpec(len(ids))
 
-	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Errorf("got error creating configuration, want none (%v)", err)
 	}
@@ -162,7 +161,7 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 	ids := mgr.NodeIDs()
 	qspecOne := NewMajorityQSpec(len(ids))
 
-	_, err = mgr.NewConfiguration(ids, qspecOne, time.Second)
+	_, err = mgr.NewConfiguration(ids, qspecOne)
 	if err == nil {
 		t.Error("expected error creating configuration with self, got none")
 	}
@@ -175,7 +174,7 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 
 	qspecTwo := NewMajorityQSpec(len(nids))
 
-	config, err := mgr.NewConfiguration(nids, qspecTwo, time.Second)
+	config, err := mgr.NewConfiguration(nids, qspecTwo)
 	if err != nil {
 		t.Errorf("got error creating configuration, want none (%v)", err)
 	}

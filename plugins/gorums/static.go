@@ -6,13 +6,13 @@ package gorums
 var staticImports = []string{
 	"fmt",
 	"google.golang.org/grpc",
+	"time",
 	"sort",
 	"sync",
 	"net",
 	"log",
 	"hash/fnv",
 	"encoding/binary",
-	"time",
 }
 
 const staticResources = `
@@ -25,7 +25,6 @@ type Configuration struct {
 	nodes	[]*Node
 	n	int
 	mgr	*Manager
-	timeout	time.Duration
 	qspec	QuorumSpec
 }
 
@@ -83,31 +82,6 @@ func (e ConfigNotFoundError) Error() string {
 	return fmt.Sprintf("configuration not found: %d", e)
 }
 
-// An IncompleteRPCError reports that a quorum RPC call failed.
-type IncompleteRPCError struct {
-	ErrCount, ReplyCount int
-}
-
-func (e IncompleteRPCError) Error() string {
-	return fmt.Sprintf(
-		"incomplete rpc (errors: %d, replies: %d)",
-		e.ErrCount, e.ReplyCount,
-	)
-}
-
-// An TimeoutRPCError reports that a quorum RPC call timed out.
-type TimeoutRPCError struct {
-	Waited			time.Duration
-	ErrCount, RepliesCount	int
-}
-
-func (e TimeoutRPCError) Error() string {
-	return fmt.Sprintf(
-		"rpc timed out: waited %v (errors: %d, replies: %d)",
-		e.Waited, e.ErrCount, e.RepliesCount,
-	)
-}
-
 // An IllegalConfigError reports that a specified configuration could not be
 // created.
 type IllegalConfigError string
@@ -120,6 +94,19 @@ func (e IllegalConfigError) Error() string {
 // created due to err.
 func ManagerCreationError(err error) error {
 	return fmt.Errorf("could not create manager: %s", err.Error())
+}
+
+// A QuorumCallError reports that a quorum RPC call failed.
+type QuorumCallError struct {
+	Reason			string
+	ErrCount, ReplyCount	int
+}
+
+func (e QuorumCallError) Error() string {
+	return fmt.Sprintf(
+		"quorum call error: %s (errors: %d, replies: %d)",
+		e.Reason, e.ErrCount, e.ReplyCount,
+	)
 }
 
 /* mgr.go */
@@ -360,15 +347,12 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
-	}
-	if timeout <= 0 {
-		return nil, IllegalConfigError("timeout must be positive")
 	}
 
 	var cnodes []*Node
@@ -389,7 +373,6 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.
 	OrderedBy(ID).Sort(cnodes)
 
 	h := fnv.New32a()
-	binary.Write(h, binary.LittleEndian, timeout)
 	for _, node := range cnodes {
 		binary.Write(h, binary.LittleEndian, node.id)
 	}
@@ -401,12 +384,11 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.
 	}
 
 	c := &Configuration{
-		id:		cid,
-		nodes:		cnodes,
-		n:		len(cnodes),
-		mgr:		m,
-		qspec:		qspec,
-		timeout:	timeout,
+		id:	cid,
+		nodes:	cnodes,
+		n:	len(cnodes),
+		mgr:	m,
+		qspec:	qspec,
 	}
 	m.configs[cid] = c
 

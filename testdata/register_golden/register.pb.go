@@ -342,8 +342,8 @@ func (r ReadReply) String() string {
 
 // Read invokes a Read RPC on configuration c
 // and returns the result as a ReadReply.
-func (c *Configuration) Read(args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(c, args)
+func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
+	return c.mgr.read(ctx, c, args)
 }
 
 // ReadFuture is a reference to an asynchronous Read RPC invocation.
@@ -356,12 +356,12 @@ type ReadFuture struct {
 // ReadFuture asynchronously invokes a Read RPC on configuration c and
 // returns a ReadFuture which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) ReadFuture(args *ReadRequest) *ReadFuture {
+func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
 	f := new(ReadFuture)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.read(c, args)
+		f.reply, f.err = c.mgr.read(ctx, c, args)
 	}()
 	return f
 }
@@ -397,8 +397,8 @@ func (r WriteReply) String() string {
 
 // Write invokes a Write RPC on configuration c
 // and returns the result as a WriteReply.
-func (c *Configuration) Write(args *State) (*WriteReply, error) {
-	return c.mgr.write(c, args)
+func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
+	return c.mgr.write(ctx, c, args)
 }
 
 // WriteFuture is a reference to an asynchronous Write RPC invocation.
@@ -411,12 +411,12 @@ type WriteFuture struct {
 // WriteFuture asynchronously invokes a Write RPC on configuration c and
 // returns a WriteFuture which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) WriteFuture(args *State) *WriteFuture {
+func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
 	f := new(WriteFuture)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.write(c, args)
+		f.reply, f.err = c.mgr.write(ctx, c, args)
 	}()
 	return f
 }
@@ -441,8 +441,8 @@ func (f *WriteFuture) Done() bool {
 // WriteAsync invokes an asynchronous WriteAsync RPC on configuration c.
 // The call has no return value and is invoked on every node in the
 // configuration.
-func (c *Configuration) WriteAsync(args *State) error {
-	return c.mgr.writeAsync(c, args)
+func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
+	return c.mgr.writeAsync(ctx, c, args)
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_rpc_tmpl */
@@ -453,12 +453,12 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
+func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (*ReadReply, error) {
 	replyChan := make(chan readReply, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, args, replyChan)
+		go callGRPCRead(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -481,15 +481,14 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
@@ -519,12 +518,12 @@ type writeReply struct {
 	err   error
 }
 
-func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
+func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*WriteReply, error) {
 	replyChan := make(chan writeReply, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCWrite(ctx, n, args, replyChan)
+		go callGRPCWrite(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -547,15 +546,14 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
@@ -579,7 +577,7 @@ func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<
 	replyChan <- writeReply{node.id, reply, err}
 }
 
-func (m *Manager) writeAsync(c *Configuration, args *State) error {
+func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.WriteAsyncClient.Send(args)
@@ -661,12 +659,11 @@ type QuorumSpec interface {
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	id      uint32
-	nodes   []*Node
-	n       int
-	mgr     *Manager
-	timeout time.Duration
-	qspec   QuorumSpec
+	id    uint32
+	nodes []*Node
+	n     int
+	mgr   *Manager
+	qspec QuorumSpec
 }
 
 // ID reports the identifier for the configuration.
@@ -723,31 +720,6 @@ func (e ConfigNotFoundError) Error() string {
 	return fmt.Sprintf("configuration not found: %d", e)
 }
 
-// An IncompleteRPCError reports that a quorum RPC call failed.
-type IncompleteRPCError struct {
-	ErrCount, ReplyCount int
-}
-
-func (e IncompleteRPCError) Error() string {
-	return fmt.Sprintf(
-		"incomplete rpc (errors: %d, replies: %d)",
-		e.ErrCount, e.ReplyCount,
-	)
-}
-
-// An TimeoutRPCError reports that a quorum RPC call timed out.
-type TimeoutRPCError struct {
-	Waited                 time.Duration
-	ErrCount, RepliesCount int
-}
-
-func (e TimeoutRPCError) Error() string {
-	return fmt.Sprintf(
-		"rpc timed out: waited %v (errors: %d, replies: %d)",
-		e.Waited, e.ErrCount, e.RepliesCount,
-	)
-}
-
 // An IllegalConfigError reports that a specified configuration could not be
 // created.
 type IllegalConfigError string
@@ -760,6 +732,19 @@ func (e IllegalConfigError) Error() string {
 // created due to err.
 func ManagerCreationError(err error) error {
 	return fmt.Errorf("could not create manager: %s", err.Error())
+}
+
+// A QuorumCallError reports that a quorum RPC call failed.
+type QuorumCallError struct {
+	Reason               string
+	ErrCount, ReplyCount int
+}
+
+func (e QuorumCallError) Error() string {
+	return fmt.Sprintf(
+		"quorum call error: %s (errors: %d, replies: %d)",
+		e.Reason, e.ErrCount, e.ReplyCount,
+	)
 }
 
 /* mgr.go */
@@ -1000,15 +985,12 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
-	}
-	if timeout <= 0 {
-		return nil, IllegalConfigError("timeout must be positive")
 	}
 
 	var cnodes []*Node
@@ -1029,7 +1011,6 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.
 	OrderedBy(ID).Sort(cnodes)
 
 	h := fnv.New32a()
-	binary.Write(h, binary.LittleEndian, timeout)
 	for _, node := range cnodes {
 		binary.Write(h, binary.LittleEndian, node.id)
 	}
@@ -1041,12 +1022,11 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.
 	}
 
 	c := &Configuration{
-		id:      cid,
-		nodes:   cnodes,
-		n:       len(cnodes),
-		mgr:     m,
-		qspec:   qspec,
-		timeout: timeout,
+		id:    cid,
+		nodes: cnodes,
+		n:     len(cnodes),
+		mgr:   m,
+		qspec: qspec,
 	}
 	m.configs[cid] = c
 

@@ -1,9 +1,6 @@
 package dev
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 // A NodeNotFoundError reports that a specified node could not be found.
 type NodeNotFoundError uint32
@@ -20,31 +17,6 @@ func (e ConfigNotFoundError) Error() string {
 	return fmt.Sprintf("configuration not found: %d", e)
 }
 
-// An IncompleteRPCError reports that a quorum RPC call failed.
-type IncompleteRPCError struct {
-	ErrCount, ReplyCount int
-}
-
-func (e IncompleteRPCError) Error() string {
-	return fmt.Sprintf(
-		"incomplete rpc (errors: %d, replies: %d)",
-		e.ErrCount, e.ReplyCount,
-	)
-}
-
-// An TimeoutRPCError reports that a quorum RPC call timed out.
-type TimeoutRPCError struct {
-	Waited                 time.Duration
-	ErrCount, RepliesCount int
-}
-
-func (e TimeoutRPCError) Error() string {
-	return fmt.Sprintf(
-		"rpc timed out: waited %v (errors: %d, replies: %d)",
-		e.Waited, e.ErrCount, e.RepliesCount,
-	)
-}
-
 // An IllegalConfigError reports that a specified configuration could not be
 // created.
 type IllegalConfigError string
@@ -57,4 +29,17 @@ func (e IllegalConfigError) Error() string {
 // created due to err.
 func ManagerCreationError(err error) error {
 	return fmt.Errorf("could not create manager: %s", err.Error())
+}
+
+// A QuorumCallError reports that a quorum RPC call failed.
+type QuorumCallError struct {
+	Reason               string
+	ErrCount, ReplyCount int
+}
+
+func (e QuorumCallError) Error() string {
+	return fmt.Sprintf(
+		"quorum call error: %s (errors: %d, replies: %d)",
+		e.Reason, e.ErrCount, e.ReplyCount,
+	)
 }

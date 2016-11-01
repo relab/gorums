@@ -1,6 +1,7 @@
 package dev_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -126,7 +127,7 @@ func TestSecureRegister(t *testing.T) {
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
 	qspec := NewRegisterByTimestampQSpec(2, len(ids))
 
-	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -137,8 +138,10 @@ func TestSecureRegister(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	// Perfomr write call
-	wreply, err := config.Write(state)
+	// Perform write call
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	wreply, err := config.Write(ctx, state)
 	if err != nil {
 		t.Fatalf("write rpc call error: %v", err)
 	}
@@ -148,7 +151,9 @@ func TestSecureRegister(t *testing.T) {
 	}
 
 	// Do read call
-	rreply, err := config.Read(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
 		t.Fatalf("read rpc call error: %v", err)
 	}

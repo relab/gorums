@@ -61,7 +61,7 @@ func TestBasicRegister(t *testing.T) {
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
 	qspec := NewRegisterByTimestampQSpec(2, len(ids))
 
-	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -72,8 +72,10 @@ func TestBasicRegister(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	// Perfomr write call
-	wreply, err := config.Write(state)
+	// Perform write call
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	wreply, err := config.Write(ctx, state)
 	if err != nil {
 		t.Fatalf("write rpc call error: %v", err)
 	}
@@ -83,7 +85,9 @@ func TestBasicRegister(t *testing.T) {
 	}
 
 	// Do read call
-	rreply, err := config.Read(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
 		t.Fatalf("read rpc call error: %v", err)
 	}
@@ -173,14 +177,16 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 
 	ids := mgr.NodeIDs()
 	qspec := NewNeverQSpec()
-	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
 
 	replyChan := make(chan error, 1)
 	go func() {
-		_, err = config.Read(&rpc.ReadRequest{})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, err = config.Read(ctx, &rpc.ReadRequest{})
 		replyChan <- err
 	}()
 	select {
@@ -188,9 +194,9 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 		if err == nil {
 			t.Fatalf("want error, got none")
 		}
-		_, ok := err.(rpc.IncompleteRPCError)
+		_, ok := err.(rpc.QuorumCallError)
 		if !ok {
-			t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.IncompleteRPCError{}, err)
+			t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.QuorumCallError{}, err)
 		}
 	case <-time.After(time.Second):
 		t.Fatalf("read rpc call: timeout, call did not return")
@@ -224,22 +230,23 @@ func TestSlowRegister(t *testing.T) {
 	defer mgr.Close()
 
 	ids := mgr.NodeIDs()
-	timeout := 25 * time.Millisecond
 	qspec := NewMajorityQSpec(len(ids))
-	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
 
-	_, err = config.Read(&rpc.ReadRequest{})
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	_, err = config.Read(ctx, &rpc.ReadRequest{})
 	if err == nil {
 		t.Fatalf("read rpc call: want error, got none")
 	}
-	timeoutErr, ok := err.(rpc.TimeoutRPCError)
+	timeoutErr, ok := err.(rpc.QuorumCallError)
 	if !ok {
-		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.TimeoutRPCError{}, err)
+		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.QuorumCallError{}, err)
 	}
-	wantErr := rpc.TimeoutRPCError{Waited: timeout, ErrCount: 1, RepliesCount: 0}
+	wantErr := rpc.QuorumCallError{Reason: "context deadline exceeded", ErrCount: 1, ReplyCount: 0}
 	if timeoutErr != wantErr {
 		t.Fatalf("got: %v, want: %v", timeoutErr, wantErr)
 	}
@@ -270,7 +277,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(1, len(ids))
-	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -281,7 +288,9 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 
 	// Write asynchronously.
-	wfuture := config.WriteFuture(state)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	wfuture := config.WriteFuture(ctx, state)
 
 	// Wait for all writes to finish.
 	servers.waitForAllWrites()
@@ -302,7 +311,9 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 
 	// Read asynchronously.
-	rfuture := config.ReadFuture(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	rfuture := config.ReadFuture(ctx, &rpc.ReadRequest{})
 
 	// Inspect read reply when available.
 	rreply, err := rfuture.Get()
@@ -341,7 +352,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(1, len(ids))
 
-	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -351,7 +362,9 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	wreply, err := config.Write(stateOne)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	wreply, err := config.Write(ctx, stateOne)
 	if err != nil {
 		t.Fatalf("write rpc call error: %v", err)
 	}
@@ -364,7 +377,9 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		t.Fatal("write reply was not marked as new")
 	}
 
-	rreply, err := config.Read(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
 		t.Fatalf("read rpc call error: %v", err)
 	}
@@ -379,7 +394,9 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 
 	// Write a value using the WriteAsync stream.
-	err = config.WriteAsync(stateTwo)
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	err = config.WriteAsync(ctx, stateTwo)
 	if err != nil {
 		t.Fatalf("write-async rpc call error: %v", err)
 	}
@@ -387,7 +404,9 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	// Wait for all writes to finish.
 	servers.waitForAllWrites()
 
-	rreply, err = config.Read(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	rreply, err = config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
 		t.Fatalf("read rpc call error: %v", err)
 	}
@@ -570,11 +589,6 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	timeout := 50 * time.Millisecond
-	if remote {
-		timeout = timeout * 20 // 1000 ms
-	}
-
 	mgr, err := rpc.NewManager(
 		servers.addrs(),
 		dialOpts,
@@ -586,7 +600,8 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(rq, len(ids))
-	config, err := mgr.NewConfiguration(ids, qspec, timeout)
+	ctx := context.Background()
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		b.Fatalf("error creating config: %v", err)
 	}
@@ -596,7 +611,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	wreply, err := config.Write(state)
+	wreply, err := config.Write(ctx, state)
 	if err != nil {
 		b.Fatalf("write rpc call error: %v", err)
 	}
@@ -612,7 +627,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					replySink, err = config.Read(&rpc.ReadRequest{})
+					replySink, err = config.Read(ctx, &rpc.ReadRequest{})
 					if err != nil {
 						b.Fatalf("read rpc call error: %v", err)
 					}
@@ -620,7 +635,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				replySink, err = config.Read(&rpc.ReadRequest{})
+				replySink, err = config.Read(ctx, &rpc.ReadRequest{})
 				if err != nil {
 					b.Fatalf("read rpc call error: %v", err)
 				}
@@ -630,7 +645,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					rf := config.ReadFuture(&rpc.ReadRequest{})
+					rf := config.ReadFuture(ctx, &rpc.ReadRequest{})
 					replySink, err = rf.Get()
 					if err != nil {
 						b.Fatalf("read future rpc call error: %v", err)
@@ -639,7 +654,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				rf := config.ReadFuture(&rpc.ReadRequest{})
+				rf := config.ReadFuture(ctx, &rpc.ReadRequest{})
 				replySink, err = rf.Get()
 				if err != nil {
 					b.Fatalf("read future rpc call error: %v", err)
@@ -717,11 +732,6 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	timeout := 50 * time.Millisecond
-	if remote {
-		timeout = timeout * 20 // 1000 ms
-	}
-
 	mgr, err := rpc.NewManager(
 		servers.addrs(),
 		dialOpts,
@@ -733,7 +743,8 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(0, wq)
-	config, err := mgr.NewConfiguration(ids, qspec, timeout)
+	ctx := context.Background()
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		b.Fatalf("error creating config: %v", err)
 	}
@@ -751,7 +762,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					wreplySink, err = config.Write(state)
+					wreplySink, err = config.Write(ctx, state)
 					if err != nil {
 						b.Fatalf("write rpc call error: %v", err)
 					}
@@ -759,7 +770,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				wreplySink, err = config.Write(state)
+				wreplySink, err = config.Write(ctx, state)
 				if err != nil {
 					b.Fatalf("write rpc call error: %v", err)
 				}
@@ -769,7 +780,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					rf := config.WriteFuture(state)
+					rf := config.WriteFuture(ctx, state)
 					wreplySink, err = rf.Get()
 					if err != nil {
 						b.Fatalf("write future rpc call error: %v", err)
@@ -778,7 +789,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				rf := config.WriteFuture(state)
+				rf := config.WriteFuture(ctx, state)
 				wreplySink, err = rf.Get()
 				if err != nil {
 					b.Fatalf("write future rpc call error: %v", err)

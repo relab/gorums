@@ -18,12 +18,12 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
+func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (*ReadReply, error) {
 	replyChan := make(chan readReply, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, args, replyChan)
+		go callGRPCRead(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -46,15 +46,14 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
@@ -84,12 +83,12 @@ type writeReply struct {
 	err   error
 }
 
-func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
+func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*WriteReply, error) {
 	replyChan := make(chan writeReply, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCWrite(ctx, n, args, replyChan)
+		go callGRPCWrite(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -112,15 +111,14 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
@@ -144,7 +142,7 @@ func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<
 	replyChan <- writeReply{node.id, reply, err}
 }
 
-func (m *Manager) writeAsync(c *Configuration, args *State) error {
+func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.WriteAsyncClient.Send(args)

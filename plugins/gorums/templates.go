@@ -9,7 +9,12 @@ const config_rpc_tmpl = `
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
 
-import "fmt"
+import (
+	"fmt"
+
+	"golang.org/x/net/context"
+)
+
 {{- end}}
 
 {{range $elm := .Services}}
@@ -19,8 +24,8 @@ import "fmt"
 // {{.MethodName}} invokes an asynchronous {{.MethodName}} RPC on configuration c.
 // The call has no return value and is invoked on every node in the
 // configuration.
-func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) error {
-	return c.mgr.{{.UnexportedMethodName}}(c, args)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) error {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
 {{else -}}
@@ -39,8 +44,8 @@ func (r {{.TypeName}}) String() string {
 
 // {{.MethodName}} invokes a {{.MethodName}} RPC on configuration c
 // and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(c, args)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
 {{if .GenFuture}}
@@ -55,12 +60,12 @@ type {{.MethodName}}Future struct {
 // {{.MethodName}}Future asynchronously invokes a {{.MethodName}} RPC on configuration c and
 // returns a {{.MethodName}}Future which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) {{.MethodName}}Future(args *{{.ReqName}}) *{{.MethodName}}Future {
+func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.ReqName}}) *{{.MethodName}}Future {
 	f := new({{.MethodName}}Future)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(c, args)
+		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 	}()
 	return f
 }
@@ -107,7 +112,7 @@ import (
 {{range $elm := .Services}}
 
 {{if .Multicast}}
-func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) error {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.{{.MethodName}}Client.Send(args)
@@ -131,12 +136,12 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) (*{{.TypeName}}, error) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) (*{{.TypeName}}, error) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
+		go callGRPC{{.MethodName}}(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -159,15 +164,14 @@ func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
