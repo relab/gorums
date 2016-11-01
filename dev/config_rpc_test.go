@@ -453,6 +453,52 @@ func TestManagerClose(t *testing.T) {
 	}
 }
 
+func TestQuorumCallCancel(t *testing.T) {
+	defer leakCheck(t)()
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(
+		t,
+		[]regServer{
+			{impl: rpc.NewRegisterSlow(time.Second)},
+			{impl: rpc.NewRegisterSlow(time.Second)},
+			{impl: rpc.NewRegisterSlow(time.Second)},
+		},
+		false,
+	)
+	defer closeListeners(allServers)
+	defer stopGrpcServe(allServers)
+
+	mgr, err := rpc.NewManager(
+		servers.addrs(),
+		dialOpts,
+	)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+
+	ids := mgr.NodeIDs()
+	qspec := NewMajorityQSpec(len(ids))
+	config, err := mgr.NewConfiguration(ids, qspec)
+	if err != nil {
+		t.Fatalf("error creating config: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	cancel() // Main point: cancel at once, not defer.
+	_, err = config.Read(ctx, &rpc.ReadRequest{})
+	if err == nil {
+		t.Fatalf("read rpc call: want error, got none")
+	}
+	err, ok := err.(rpc.QuorumCallError)
+	if !ok {
+		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.QuorumCallError{}, err)
+	}
+	wantErr := rpc.QuorumCallError{Reason: "context canceled", ErrCount: 0, ReplyCount: 0}
+	if err != wantErr {
+		t.Fatalf("got: %v, want: %v", err, wantErr)
+	}
+}
+
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkRead1KQ1N3Local(b *testing.B) {
