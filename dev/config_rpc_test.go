@@ -77,7 +77,7 @@ func TestBasicRegister(t *testing.T) {
 	defer cancel()
 	wreply, err := config.Write(ctx, state)
 	if err != nil {
-		t.Fatalf("write rpc call error: %v", err)
+		t.Fatalf("write quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
 	if !wreply.Reply.New {
@@ -89,7 +89,7 @@ func TestBasicRegister(t *testing.T) {
 	defer cancel()
 	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read rpc call error: %v", err)
+		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != state.Value {
@@ -136,7 +136,7 @@ func TestSingleServerRPC(t *testing.T) {
 	for _, node := range nodes {
 		wreply, err := node.RegisterClient.Write(ctx, state)
 		if err != nil {
-			t.Fatalf("write rpc call error: %v", err)
+			t.Fatalf("write quorum call error: %v", err)
 		}
 		if !wreply.New {
 			t.Fatalf("write reply was not marked as new")
@@ -144,7 +144,7 @@ func TestSingleServerRPC(t *testing.T) {
 
 		rreply, err := node.RegisterClient.ReadNoQRPC(ctx, &rpc.ReadRequest{})
 		if err != nil {
-			t.Fatalf("read rpc call error: %v", err)
+			t.Fatalf("read quorum call error: %v", err)
 		}
 		if rreply.Value != state.Value {
 			t.Fatalf("read reply: want state %v, got %v", state, rreply.Value)
@@ -199,7 +199,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 			t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.QuorumCallError{}, err)
 		}
 	case <-time.After(time.Second):
-		t.Fatalf("read rpc call: timeout, call did not return")
+		t.Fatalf("read quorum call: timeout, call did not return")
 	}
 }
 
@@ -240,7 +240,7 @@ func TestSlowRegister(t *testing.T) {
 	defer cancel()
 	_, err = config.Read(ctx, &rpc.ReadRequest{})
 	if err == nil {
-		t.Fatalf("read rpc call: want error, got none")
+		t.Fatalf("read quorum call: want error, got none")
 	}
 	timeoutErr, ok := err.(rpc.QuorumCallError)
 	if !ok {
@@ -297,7 +297,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 
 	wreply, err := wfuture.Get()
 	if err != nil {
-		t.Fatalf("write future rpc call error: %v", err)
+		t.Fatalf("write future quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
 	if !wreply.Reply.New {
@@ -318,7 +318,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	// Inspect read reply when available.
 	rreply, err := rfuture.Get()
 	if err != nil {
-		t.Fatalf("read future rpc call error: %v", err)
+		t.Fatalf("read future quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != state.Value {
@@ -366,7 +366,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	defer cancel()
 	wreply, err := config.Write(ctx, stateOne)
 	if err != nil {
-		t.Fatalf("write rpc call error: %v", err)
+		t.Fatalf("write quorum call error: %v", err)
 	}
 
 	// Drain all writers after synchronous call.
@@ -381,7 +381,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	defer cancel()
 	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read rpc call error: %v", err)
+		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != stateOne.Value {
@@ -398,7 +398,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	defer cancel()
 	err = config.WriteAsync(ctx, stateTwo)
 	if err != nil {
-		t.Fatalf("write-async rpc call error: %v", err)
+		t.Fatalf("write-async quorum call error: %v", err)
 	}
 
 	// Wait for all writes to finish.
@@ -408,7 +408,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	defer cancel()
 	rreply, err = config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read rpc call error: %v", err)
+		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != stateTwo.Value {
@@ -487,7 +487,7 @@ func TestQuorumCallCancel(t *testing.T) {
 	cancel() // Main point: cancel at once, not defer.
 	_, err = config.Read(ctx, &rpc.ReadRequest{})
 	if err == nil {
-		t.Fatalf("read rpc call: want error, got none")
+		t.Fatalf("read quorum call: want error, got none")
 	}
 	err, ok := err.(rpc.QuorumCallError)
 	if !ok {
@@ -659,7 +659,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 
 	wreply, err := config.Write(ctx, state)
 	if err != nil {
-		b.Fatalf("write rpc call error: %v", err)
+		b.Fatalf("write quorum call error: %v", err)
 	}
 	if !wreply.Reply.New {
 		b.Fatalf("intital write reply was not marked as new")
@@ -675,7 +675,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 				for pb.Next() {
 					replySink, err = config.Read(ctx, &rpc.ReadRequest{})
 					if err != nil {
-						b.Fatalf("read rpc call error: %v", err)
+						b.Fatalf("read quorum call error: %v", err)
 					}
 				}
 			})
@@ -683,7 +683,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 			for i := 0; i < b.N; i++ {
 				replySink, err = config.Read(ctx, &rpc.ReadRequest{})
 				if err != nil {
-					b.Fatalf("read rpc call error: %v", err)
+					b.Fatalf("read quorum call error: %v", err)
 				}
 			}
 		}
@@ -694,7 +694,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 					rf := config.ReadFuture(ctx, &rpc.ReadRequest{})
 					replySink, err = rf.Get()
 					if err != nil {
-						b.Fatalf("read future rpc call error: %v", err)
+						b.Fatalf("read future quorum call error: %v", err)
 					}
 				}
 			})
@@ -703,7 +703,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 				rf := config.ReadFuture(ctx, &rpc.ReadRequest{})
 				replySink, err = rf.Get()
 				if err != nil {
-					b.Fatalf("read future rpc call error: %v", err)
+					b.Fatalf("read future quorum call error: %v", err)
 				}
 			}
 		}
@@ -810,7 +810,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 				for pb.Next() {
 					wreplySink, err = config.Write(ctx, state)
 					if err != nil {
-						b.Fatalf("write rpc call error: %v", err)
+						b.Fatalf("write quorum call error: %v", err)
 					}
 				}
 			})
@@ -818,7 +818,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 			for i := 0; i < b.N; i++ {
 				wreplySink, err = config.Write(ctx, state)
 				if err != nil {
-					b.Fatalf("write rpc call error: %v", err)
+					b.Fatalf("write quorum call error: %v", err)
 				}
 			}
 		}
@@ -829,7 +829,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 					rf := config.WriteFuture(ctx, state)
 					wreplySink, err = rf.Get()
 					if err != nil {
-						b.Fatalf("write future rpc call error: %v", err)
+						b.Fatalf("write future quorum call error: %v", err)
 					}
 				}
 			})
@@ -838,7 +838,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 				rf := config.WriteFuture(ctx, state)
 				wreplySink, err = rf.Get()
 				if err != nil {
-					b.Fatalf("write future rpc call error: %v", err)
+					b.Fatalf("write future quorum call error: %v", err)
 				}
 			}
 		}
@@ -885,7 +885,7 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 
 	reply, err := rclient.Write(ctx, state)
 	if err != nil {
-		b.Fatalf("write rpc call error: %v", err)
+		b.Fatalf("write quorum call error: %v", err)
 	}
 	if !reply.New {
 		b.Fatalf("intital write reply was not marked as new")
@@ -900,7 +900,7 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 			for pb.Next() {
 				grpcReplySink, err = rclient.Read(ctx, &rpc.ReadRequest{})
 				if err != nil {
-					b.Fatalf("read rpc call error: %v", err)
+					b.Fatalf("read quorum call error: %v", err)
 				}
 			}
 		})
@@ -908,7 +908,7 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 		for i := 0; i < b.N; i++ {
 			grpcReplySink, err = rclient.Read(ctx, &rpc.ReadRequest{})
 			if err != nil {
-				b.Fatalf("read rpc call error: %v", err)
+				b.Fatalf("read quorum call error: %v", err)
 			}
 		}
 	}

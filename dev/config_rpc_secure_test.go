@@ -143,7 +143,7 @@ func TestSecureRegister(t *testing.T) {
 	defer cancel()
 	wreply, err := config.Write(ctx, state)
 	if err != nil {
-		t.Fatalf("write rpc call error: %v", err)
+		t.Fatalf("write quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
 	if !wreply.Reply.New {
@@ -155,7 +155,7 @@ func TestSecureRegister(t *testing.T) {
 	defer cancel()
 	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read rpc call error: %v", err)
+		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Reply.Value != state.Value {
