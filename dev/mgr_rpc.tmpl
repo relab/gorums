@@ -62,7 +62,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 		case r := <-replyChan:
 			if r.err != nil {
 				errCount++
-				goto terminationCheck
+				break
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
@@ -74,7 +74,6 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
 			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}

@@ -473,7 +473,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 		case r := <-replyChan:
 			if r.err != nil {
 				errCount++
-				goto terminationCheck
+				break
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
@@ -485,7 +485,6 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
 			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
@@ -538,7 +537,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*Wr
 		case r := <-replyChan:
 			if r.err != nil {
 				errCount++
-				goto terminationCheck
+				break
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
@@ -550,7 +549,6 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*Wr
 			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
 			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
