@@ -42,7 +42,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.ReadQF(replyValues); quorum {
+			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}
@@ -106,7 +106,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*Wr
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.WriteQF(replyValues); quorum {
+			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}

@@ -333,11 +333,11 @@ func (this *Empty) Equal(that interface{}) bool {
 // reply.
 type ReadReply struct {
 	NodeIDs []uint32
-	Reply   *State
+	*State
 }
 
 func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
 // Read invokes a Read RPC on configuration c
@@ -388,11 +388,11 @@ func (f *ReadFuture) Done() bool {
 // reply.
 type WriteReply struct {
 	NodeIDs []uint32
-	Reply   *WriteResponse
+	*WriteResponse
 }
 
 func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
 // Write invokes a Write RPC on configuration c
@@ -477,7 +477,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.ReadQF(replyValues); quorum {
+			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}
@@ -541,7 +541,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*Wr
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.WriteQF(replyValues); quorum {
+			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}

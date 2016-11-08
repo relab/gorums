@@ -35,11 +35,11 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 // reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
-	Reply   *{{.RespName}}
+	*{{.RespName}}
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
 }
 
 // {{.MethodName}} invokes a {{.MethodName}} RPC on configuration c
@@ -160,7 +160,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}

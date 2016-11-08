@@ -84,7 +84,7 @@ func (gr *gorumsRequester) Setup() error {
 	if err != nil {
 		return fmt.Errorf("write rpc error: %v", err)
 	}
-	if !wreply.Reply.New {
+	if !wreply.New {
 		return fmt.Errorf("intital write reply was not marked as new")
 	}
 

@@ -30,11 +30,11 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 // reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
-	Reply   *{{.RespName}}
+	*{{.RespName}}
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
 }
 
 // {{.MethodName}} invokes a {{.MethodName}} RPC on configuration c

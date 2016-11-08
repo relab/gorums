@@ -14,11 +14,11 @@ import (
 // reply.
 type ReadReply struct {
 	NodeIDs []uint32
-	Reply   *State
+	*State
 }
 
 func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
 // Read invokes a Read RPC on configuration c
@@ -69,11 +69,11 @@ func (f *ReadFuture) Done() bool {
 // reply.
 type WriteReply struct {
 	NodeIDs []uint32
-	Reply   *WriteResponse
+	*WriteResponse
 }
 
 func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
 // Write invokes a Write RPC on configuration c

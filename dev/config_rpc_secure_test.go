@@ -146,7 +146,7 @@ func TestSecureRegister(t *testing.T) {
 		t.Fatalf("write quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
-	if !wreply.Reply.New {
+	if !wreply.New {
 		t.Error("write reply was not marked as new")
 	}
 
@@ -158,8 +158,8 @@ func TestSecureRegister(t *testing.T) {
 		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != state.Value {
-		t.Errorf("read reply: want state %v, got %v", state, rreply.Reply)
+	if rreply.Value != state.Value {
+		t.Errorf("read reply: want state %v, got %v", state, rreply.State)
 	}
 
 	nodes := mgr.Nodes(false)

@@ -80,7 +80,7 @@ func TestBasicRegister(t *testing.T) {
 		t.Fatalf("write quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
-	if !wreply.Reply.New {
+	if !wreply.New {
 		t.Error("write reply was not marked as new")
 	}
 
@@ -92,8 +92,8 @@ func TestBasicRegister(t *testing.T) {
 		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != state.Value {
-		t.Fatalf("read reply: want state %v, got %v", state, rreply.Reply)
+	if rreply.Value != state.Value {
+		t.Fatalf("read reply: want state %v, got %v", state, rreply.State)
 	}
 
 	nodes := mgr.Nodes(false)
@@ -300,7 +300,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 		t.Fatalf("write future quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
-	if !wreply.Reply.New {
+	if !wreply.New {
 		t.Fatalf("write future reply was not marked as new")
 	}
 
@@ -321,8 +321,8 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 		t.Fatalf("read future quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != state.Value {
-		t.Fatalf("read future reply:\nwant:\n%v,\ngot:\n%v", state, rreply.Reply)
+	if rreply.Value != state.Value {
+		t.Fatalf("read future reply:\nwant:\n%v,\ngot:\n%v", state, rreply.State)
 	}
 }
 
@@ -373,7 +373,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	servers.waitForAllWrites()
 
 	t.Logf("wreply: %v\n", wreply)
-	if !wreply.Reply.New {
+	if !wreply.New {
 		t.Fatal("write reply was not marked as new")
 	}
 
@@ -384,8 +384,8 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != stateOne.Value {
-		t.Fatalf("read reply:\nwant:\n%v,\ngot:\n%v", stateOne, rreply.Reply)
+	if rreply.Value != stateOne.Value {
+		t.Fatalf("read reply:\nwant:\n%v,\ngot:\n%v", stateOne, rreply.State)
 	}
 
 	stateTwo := &rpc.State{
@@ -411,8 +411,8 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != stateTwo.Value {
-		t.Fatalf("read reply:\nwant:\n%v\ngot:\n%v", stateTwo, rreply.Reply)
+	if rreply.Value != stateTwo.Value {
+		t.Fatalf("read reply:\nwant:\n%v\ngot:\n%v", stateTwo, rreply.State)
 	}
 }
 
@@ -661,7 +661,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	if err != nil {
 		b.Fatalf("write quorum call error: %v", err)
 	}
-	if !wreply.Reply.New {
+	if !wreply.New {
 		b.Fatalf("intital write reply was not marked as new")
 	}
 
