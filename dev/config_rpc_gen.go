@@ -3,24 +3,28 @@
 
 package dev
 
-import "fmt"
+import (
+	"fmt"
+
+	"golang.org/x/net/context"
+)
 
 // ReadReply encapsulates the reply from a Read RPC invocation.
 // It contains the id of each node in the quorum that replied and a single
 // reply.
 type ReadReply struct {
 	NodeIDs []uint32
-	Reply   *State
+	*State
 }
 
 func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
 // Read invokes a Read RPC on configuration c
 // and returns the result as a ReadReply.
-func (c *Configuration) Read(args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(c, args)
+func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
+	return c.mgr.read(ctx, c, args)
 }
 
 // ReadFuture is a reference to an asynchronous Read RPC invocation.
@@ -33,12 +37,12 @@ type ReadFuture struct {
 // ReadFuture asynchronously invokes a Read RPC on configuration c and
 // returns a ReadFuture which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) ReadFuture(args *ReadRequest) *ReadFuture {
+func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
 	f := new(ReadFuture)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.read(c, args)
+		f.reply, f.err = c.mgr.read(ctx, c, args)
 	}()
 	return f
 }
@@ -65,17 +69,17 @@ func (f *ReadFuture) Done() bool {
 // reply.
 type WriteReply struct {
 	NodeIDs []uint32
-	Reply   *WriteResponse
+	*WriteResponse
 }
 
 func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
 // Write invokes a Write RPC on configuration c
 // and returns the result as a WriteReply.
-func (c *Configuration) Write(args *State) (*WriteReply, error) {
-	return c.mgr.write(c, args)
+func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
+	return c.mgr.write(ctx, c, args)
 }
 
 // WriteFuture is a reference to an asynchronous Write RPC invocation.
@@ -88,12 +92,12 @@ type WriteFuture struct {
 // WriteFuture asynchronously invokes a Write RPC on configuration c and
 // returns a WriteFuture which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) WriteFuture(args *State) *WriteFuture {
+func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
 	f := new(WriteFuture)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.write(c, args)
+		f.reply, f.err = c.mgr.write(ctx, c, args)
 	}()
 	return f
 }
@@ -118,6 +122,6 @@ func (f *WriteFuture) Done() bool {
 // WriteAsync invokes an asynchronous WriteAsync RPC on configuration c.
 // The call has no return value and is invoked on every node in the
 // configuration.
-func (c *Configuration) WriteAsync(args *State) error {
-	return c.mgr.writeAsync(c, args)
+func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
+	return c.mgr.writeAsync(ctx, c, args)
 }

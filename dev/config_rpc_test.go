@@ -2,6 +2,7 @@ package dev_test
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,12 +37,13 @@ func TestBasicRegister(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -51,7 +54,6 @@ func TestBasicRegister(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	// Get all all available node ids
 	ids := mgr.NodeIDs()
@@ -59,7 +61,7 @@ func TestBasicRegister(t *testing.T) {
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
 	qspec := NewRegisterByTimestampQSpec(2, len(ids))
 
-	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -70,24 +72,28 @@ func TestBasicRegister(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	// Perfomr write call
-	wreply, err := config.Write(state)
+	// Perform write call
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	wreply, err := config.Write(ctx, state)
 	if err != nil {
-		t.Fatalf("write rpc call error: %v", err)
+		t.Fatalf("write quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
-	if !wreply.Reply.New {
+	if !wreply.New {
 		t.Error("write reply was not marked as new")
 	}
 
 	// Do read call
-	rreply, err := config.Read(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read rpc call error: %v", err)
+		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != state.Value {
-		t.Errorf("read reply: want state %v, got %v", state, rreply.Reply)
+	if rreply.Value != state.Value {
+		t.Fatalf("read reply: want state %v, got %v", state, rreply.State)
 	}
 
 	nodes := mgr.Nodes(false)
@@ -101,12 +107,13 @@ func TestSingleServerRPC(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -117,7 +124,7 @@ func TestSingleServerRPC(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
+	//closeListeners(allServers)
 
 	state := &rpc.State{
 		Value:     "42",
@@ -129,18 +136,18 @@ func TestSingleServerRPC(t *testing.T) {
 	for _, node := range nodes {
 		wreply, err := node.RegisterClient.Write(ctx, state)
 		if err != nil {
-			t.Fatalf("write rpc call error: %v", err)
+			t.Fatalf("write quorum call error: %v", err)
 		}
 		if !wreply.New {
-			t.Error("write reply was not marked as new")
+			t.Fatalf("write reply was not marked as new")
 		}
 
 		rreply, err := node.RegisterClient.ReadNoQRPC(ctx, &rpc.ReadRequest{})
 		if err != nil {
-			t.Fatalf("read rpc call error: %v", err)
+			t.Fatalf("read quorum call error: %v", err)
 		}
 		if rreply.Value != state.Value {
-			t.Errorf("read reply: want state %v, got %v", state, rreply.Value)
+			t.Fatalf("read reply: want state %v, got %v", state, rreply.Value)
 		}
 	}
 }
@@ -150,12 +157,13 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -166,32 +174,32 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	qspec := NewNeverQSpec()
-	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
 
 	replyChan := make(chan error, 1)
 	go func() {
-		_, err = config.Read(&rpc.ReadRequest{})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, err = config.Read(ctx, &rpc.ReadRequest{})
 		replyChan <- err
 	}()
 	select {
 	case err := <-replyChan:
 		if err == nil {
-			t.Errorf("want error, got none")
+			t.Fatalf("want error, got none")
 		}
-		_, ok := err.(rpc.IncompleteRPCError)
+		_, ok := err.(rpc.QuorumCallError)
 		if !ok {
-			t.Errorf("got error of type %T, want error of type %T",
-				err, rpc.IncompleteRPCError{})
+			t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.QuorumCallError{}, err)
 		}
 	case <-time.After(time.Second):
-		t.Errorf("read rpc call: timeout, call did not return")
+		t.Fatalf("read quorum call: timeout, call did not return")
 	}
 }
 
@@ -201,14 +209,15 @@ func TestSlowRegister(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterSlow(time.Second)},
-			{":8081", rpc.NewRegisterSlow(time.Second)},
-			{":8082", rpc.NewRegisterError(someErr)},
+			{impl: rpc.NewRegisterSlow(time.Second)},
+			{impl: rpc.NewRegisterSlow(time.Second)},
+			{impl: rpc.NewRegisterError(someErr)},
 			// Q=2 below, one error server, two slow servers
 			// -> must timeout with one error received.
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -219,27 +228,27 @@ func TestSlowRegister(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	timeout := 25 * time.Millisecond
 	qspec := NewMajorityQSpec(len(ids))
-	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
 
-	_, err = config.Read(&rpc.ReadRequest{})
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	_, err = config.Read(ctx, &rpc.ReadRequest{})
 	if err == nil {
-		t.Errorf("read rpc call: want error, got none")
+		t.Fatalf("read quorum call: want error, got none")
 	}
-	timeoutErr, ok := err.(rpc.TimeoutRPCError)
+	timeoutErr, ok := err.(rpc.QuorumCallError)
 	if !ok {
-		t.Errorf("got error of type %T, want error of type %T", err, rpc.TimeoutRPCError{})
+		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.QuorumCallError{}, err)
 	}
-	wantErr := rpc.TimeoutRPCError{Waited: timeout, ErrCount: 1, RepliesCount: 0}
+	wantErr := rpc.QuorumCallError{Reason: "context deadline exceeded", ErrCount: 1, ReplyCount: 0}
 	if timeoutErr != wantErr {
-		t.Errorf("got: %v, want: %v", timeoutErr, wantErr)
+		t.Fatalf("got: %v, want: %v", timeoutErr, wantErr)
 	}
 }
 
@@ -248,12 +257,13 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -264,11 +274,10 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(1, len(ids)/2+1)
-	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
+	qspec := NewRegisterQSpec(1, len(ids))
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -279,18 +288,20 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 
 	// Write asynchronously.
-	wfuture := config.WriteFuture(state)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	wfuture := config.WriteFuture(ctx, state)
 
 	// Wait for all writes to finish.
 	servers.waitForAllWrites()
 
 	wreply, err := wfuture.Get()
 	if err != nil {
-		t.Fatalf("write future rpc call error: %v", err)
+		t.Fatalf("write future quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
-	if !wreply.Reply.New {
-		t.Error("write future reply was not marked as new")
+	if !wreply.New {
+		t.Fatalf("write future reply was not marked as new")
 	}
 
 	// Done should report true.
@@ -300,16 +311,18 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 
 	// Read asynchronously.
-	rfuture := config.ReadFuture(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	rfuture := config.ReadFuture(ctx, &rpc.ReadRequest{})
 
 	// Inspect read reply when available.
 	rreply, err := rfuture.Get()
 	if err != nil {
-		t.Fatalf("read future rpc call error: %v", err)
+		t.Fatalf("read future quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != state.Value {
-		t.Errorf("read future reply:\nwant:\n%v,\ngot:\n%v", state, rreply.Reply)
+	if rreply.Value != state.Value {
+		t.Fatalf("read future reply:\nwant:\n%v,\ngot:\n%v", state, rreply.State)
 	}
 }
 
@@ -318,12 +331,13 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -334,12 +348,11 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(1, len(ids)/2+1)
+	qspec := NewRegisterQSpec(1, len(ids))
 
-	config, err := mgr.NewConfiguration(ids, qspec, 25*time.Millisecond)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -349,26 +362,30 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	wreply, err := config.Write(stateOne)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	wreply, err := config.Write(ctx, stateOne)
 	if err != nil {
-		t.Fatalf("write rpc call error: %v", err)
+		t.Fatalf("write quorum call error: %v", err)
 	}
 
 	// Drain all writers after synchronous call.
 	servers.waitForAllWrites()
 
 	t.Logf("wreply: %v\n", wreply)
-	if !wreply.Reply.New {
-		t.Error("write reply was not marked as new")
+	if !wreply.New {
+		t.Fatal("write reply was not marked as new")
 	}
 
-	rreply, err := config.Read(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read rpc call error: %v", err)
+		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != stateOne.Value {
-		t.Errorf("read reply:\nwant:\n%v,\ngot:\n%v", stateOne, rreply.Reply)
+	if rreply.Value != stateOne.Value {
+		t.Fatalf("read reply:\nwant:\n%v,\ngot:\n%v", stateOne, rreply.State)
 	}
 
 	stateTwo := &rpc.State{
@@ -377,21 +394,25 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 
 	// Write a value using the WriteAsync stream.
-	err = config.WriteAsync(stateTwo)
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	err = config.WriteAsync(ctx, stateTwo)
 	if err != nil {
-		t.Fatalf("write-async rpc call error: %v", err)
+		t.Fatalf("write-async quorum call error: %v", err)
 	}
 
 	// Wait for all writes to finish.
 	servers.waitForAllWrites()
 
-	rreply, err = config.Read(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
+	defer cancel()
+	rreply, err = config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read rpc call error: %v", err)
+		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != stateTwo.Value {
-		t.Errorf("read reply:\nwant:\n%v\ngot:\n%v", stateTwo, rreply.Reply)
+	if rreply.Value != stateTwo.Value {
+		t.Fatalf("read reply:\nwant:\n%v\ngot:\n%v", stateTwo, rreply.State)
 	}
 }
 
@@ -400,12 +421,13 @@ func TestManagerClose(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{":8080", rpc.NewRegisterBasic()},
-			{":8081", rpc.NewRegisterBasic()},
-			{":8082", rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
+			{impl: rpc.NewRegisterBasic()},
 		},
 		false,
 	)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	mgr, err := rpc.NewManager(
@@ -415,7 +437,6 @@ func TestManagerClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	closeListeners(allServers)
 
 	const timeoutDur = time.Second
 	closeReturnedChan := make(chan struct{}, 1)
@@ -428,7 +449,53 @@ func TestManagerClose(t *testing.T) {
 	select {
 	case <-closeReturnedChan:
 	case <-time.After(timeoutDur):
-		t.Errorf("mgr.Close() timed out, waited %v", timeoutDur)
+		t.Fatalf("mgr.Close() timed out, waited %v", timeoutDur)
+	}
+}
+
+func TestQuorumCallCancel(t *testing.T) {
+	defer leakCheck(t)()
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(
+		t,
+		[]regServer{
+			{impl: rpc.NewRegisterSlow(time.Second)},
+			{impl: rpc.NewRegisterSlow(time.Second)},
+			{impl: rpc.NewRegisterSlow(time.Second)},
+		},
+		false,
+	)
+	defer closeListeners(allServers)
+	defer stopGrpcServe(allServers)
+
+	mgr, err := rpc.NewManager(
+		servers.addrs(),
+		dialOpts,
+	)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+
+	ids := mgr.NodeIDs()
+	qspec := NewMajorityQSpec(len(ids))
+	config, err := mgr.NewConfiguration(ids, qspec)
+	if err != nil {
+		t.Fatalf("error creating config: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	cancel() // Main point: cancel at once, not defer.
+	_, err = config.Read(ctx, &rpc.ReadRequest{})
+	if err == nil {
+		t.Fatalf("read quorum call: want error, got none")
+	}
+	err, ok := err.(rpc.QuorumCallError)
+	if !ok {
+		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, rpc.QuorumCallError{}, err)
+	}
+	wantErr := rpc.QuorumCallError{Reason: "context canceled", ErrCount: 0, ReplyCount: 0}
+	if err != wantErr {
+		t.Fatalf("got: %v, want: %v", err, wantErr)
 	}
 }
 
@@ -542,35 +609,31 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{":8080", rpc.NewRegisterBench()},
+			{impl: rpc.NewRegisterBench()},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{":8081", rpc.NewRegisterBench()},
-				regServer{":8082", rpc.NewRegisterBench()},
+				regServer{impl: rpc.NewRegisterBench()},
+				regServer{impl: rpc.NewRegisterBench()},
 			)
 		}
 	} else {
 		rservers = []regServer{
-			{"pitter31:8080", nil},
+			{addr: "pitter31:8080"},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{"pitter32:8080", nil},
-				regServer{"pitter33:8080", nil},
+				regServer{},
+				regServer{},
 			)
 		}
 	}
 
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
-
-	timeout := 50 * time.Millisecond
-	if remote {
-		timeout = timeout * 20 // 1000 ms
-	}
 
 	mgr, err := rpc.NewManager(
 		servers.addrs(),
@@ -580,11 +643,11 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		b.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(rq, len(ids))
-	config, err := mgr.NewConfiguration(ids, qspec, timeout)
+	ctx := context.Background()
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		b.Fatalf("error creating config: %v", err)
 	}
@@ -594,11 +657,11 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	wreply, err := config.Write(state)
+	wreply, err := config.Write(ctx, state)
 	if err != nil {
-		b.Fatalf("write rpc call error: %v", err)
+		b.Fatalf("write quorum call error: %v", err)
 	}
-	if !wreply.Reply.New {
+	if !wreply.New {
 		b.Fatalf("intital write reply was not marked as new")
 	}
 
@@ -610,17 +673,17 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					replySink, err = config.Read(&rpc.ReadRequest{})
+					replySink, err = config.Read(ctx, &rpc.ReadRequest{})
 					if err != nil {
-						b.Fatalf("read rpc call error: %v", err)
+						b.Fatalf("read quorum call error: %v", err)
 					}
 				}
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				replySink, err = config.Read(&rpc.ReadRequest{})
+				replySink, err = config.Read(ctx, &rpc.ReadRequest{})
 				if err != nil {
-					b.Fatalf("read rpc call error: %v", err)
+					b.Fatalf("read quorum call error: %v", err)
 				}
 			}
 		}
@@ -628,19 +691,19 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					rf := config.ReadFuture(&rpc.ReadRequest{})
+					rf := config.ReadFuture(ctx, &rpc.ReadRequest{})
 					replySink, err = rf.Get()
 					if err != nil {
-						b.Fatalf("read future rpc call error: %v", err)
+						b.Fatalf("read future quorum call error: %v", err)
 					}
 				}
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				rf := config.ReadFuture(&rpc.ReadRequest{})
+				rf := config.ReadFuture(ctx, &rpc.ReadRequest{})
 				replySink, err = rf.Get()
 				if err != nil {
-					b.Fatalf("read future rpc call error: %v", err)
+					b.Fatalf("read future quorum call error: %v", err)
 				}
 			}
 		}
@@ -689,35 +752,31 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{":8080", rpc.NewRegisterBench()},
+			{impl: rpc.NewRegisterBench()},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{":8081", rpc.NewRegisterBench()},
-				regServer{":8082", rpc.NewRegisterBench()},
+				regServer{impl: rpc.NewRegisterBench()},
+				regServer{impl: rpc.NewRegisterBench()},
 			)
 		}
 	} else {
 		rservers = []regServer{
-			{"pitter31:8080", nil},
+			{addr: "pitter31:8080"},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{"pitter32:8080", nil},
-				regServer{"pitter33:8080", nil},
+				regServer{},
+				regServer{},
 			)
 		}
 	}
 
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
-
-	timeout := 50 * time.Millisecond
-	if remote {
-		timeout = timeout * 20 // 1000 ms
-	}
 
 	mgr, err := rpc.NewManager(
 		servers.addrs(),
@@ -727,11 +786,11 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 		b.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	closeListeners(allServers)
 
 	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(0, wq)
-	config, err := mgr.NewConfiguration(ids, qspec, timeout)
+	ctx := context.Background()
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		b.Fatalf("error creating config: %v", err)
 	}
@@ -749,17 +808,17 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					wreplySink, err = config.Write(state)
+					wreplySink, err = config.Write(ctx, state)
 					if err != nil {
-						b.Fatalf("write rpc call error: %v", err)
+						b.Fatalf("write quorum call error: %v", err)
 					}
 				}
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				wreplySink, err = config.Write(state)
+				wreplySink, err = config.Write(ctx, state)
 				if err != nil {
-					b.Fatalf("write rpc call error: %v", err)
+					b.Fatalf("write quorum call error: %v", err)
 				}
 			}
 		}
@@ -767,19 +826,19 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 		if parallel {
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					rf := config.WriteFuture(state)
+					rf := config.WriteFuture(ctx, state)
 					wreplySink, err = rf.Get()
 					if err != nil {
-						b.Fatalf("write future rpc call error: %v", err)
+						b.Fatalf("write future quorum call error: %v", err)
 					}
 				}
 			})
 		} else {
 			for i := 0; i < b.N; i++ {
-				rf := config.WriteFuture(state)
+				rf := config.WriteFuture(ctx, state)
 				wreplySink, err = rf.Get()
 				if err != nil {
-					b.Fatalf("write future rpc call error: %v", err)
+					b.Fatalf("write future quorum call error: %v", err)
 				}
 			}
 		}
@@ -799,22 +858,22 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{":8080", rpc.NewRegisterBench()},
+			{impl: rpc.NewRegisterBench()},
 		}
 	} else {
 		rservers = []regServer{
-			{"pitter33:8080", nil},
+			{addr: "pitter33:8080"},
 		}
 	}
 
 	servers, _, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
 	conn, err := grpc.Dial(servers.addrs()[0], grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	if err != nil {
 		b.Fatalf("grpc dial: %v", err)
 	}
-	closeListeners(allServers)
 
 	state := &rpc.State{
 		Value:     strings.Repeat("x", size),
@@ -826,7 +885,7 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 
 	reply, err := rclient.Write(ctx, state)
 	if err != nil {
-		b.Fatalf("write rpc call error: %v", err)
+		b.Fatalf("write quorum call error: %v", err)
 	}
 	if !reply.New {
 		b.Fatalf("intital write reply was not marked as new")
@@ -841,7 +900,7 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 			for pb.Next() {
 				grpcReplySink, err = rclient.Read(ctx, &rpc.ReadRequest{})
 				if err != nil {
-					b.Fatalf("read rpc call error: %v", err)
+					b.Fatalf("read quorum call error: %v", err)
 				}
 			}
 		})
@@ -849,13 +908,18 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 		for i := 0; i < b.N; i++ {
 			grpcReplySink, err = rclient.Read(ctx, &rpc.ReadRequest{})
 			if err != nil {
-				b.Fatalf("read rpc call error: %v", err)
+				b.Fatalf("read quorum call error: %v", err)
 			}
 		}
 	}
 }
 
 const allServers = -1
+
+var portSupplier = struct {
+	p int
+	sync.Mutex
+}{p: 8080}
 
 func setup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.ManagerOption, func(n int), func(n int)) {
 	if len(regServers) == 0 {
@@ -876,9 +940,13 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.M
 	servers := make([]*grpc.Server, len(regServers))
 	for i := range servers {
 		servers[i] = grpc.NewServer()
-	}
-	for i, server := range servers {
-		rpc.RegisterRegisterServer(server, regServers[i].implementation)
+		rpc.RegisterRegisterServer(servers[i], regServers[i].impl)
+		if regServers[i].addr == "" {
+			portSupplier.Lock()
+			regServers[i].addr = fmt.Sprintf(":%d", portSupplier.p)
+			portSupplier.p++
+			portSupplier.Unlock()
+		}
 	}
 
 	listeners := make([]net.Listener, len(servers))
@@ -928,8 +996,8 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, rpc.M
 }
 
 type regServer struct {
-	addr           string
-	implementation rpc.RegisterTestServer
+	impl rpc.RegisterTestServer
+	addr string
 }
 
 type regServers []regServer
@@ -942,9 +1010,16 @@ func (rs regServers) addrs() []string {
 	return addrs
 }
 
+// waitForAllWrites must only be called when
+// all servers in rs performs the write operation.
+// Calling this method when only using a subset of servers
+// is an error.
+//
+// TODO: Adjust this to allow waiting for a
+// subset of writes.
 func (rs regServers) waitForAllWrites() {
 	for _, server := range rs {
-		server.implementation.WriteExecuted()
+		server.impl.WriteExecuted()
 	}
 }
 

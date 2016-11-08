@@ -7,14 +7,16 @@ package dev;
 service Register {
 	rpc Read(ReadRequest) returns (State) {
 		option (gorums.qrpc) = true;
+		option (gorums.future) = true;
 	}
 
 	rpc Write(State) returns (WriteResponse) {
 		option (gorums.qrpc) = true;
+		option (gorums.future) = true;
 	}
 
 	rpc WriteAsync(stream State) returns (Empty) {
-		option (gorums.broadcast) = true;
+		option (gorums.multicast) = true;
 	}
 
 	rpc ReadNoQRPC(ReadRequest) returns (State) {}

@@ -1,6 +1,8 @@
 package dev_test
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -40,6 +42,12 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 	servers := make([]*grpc.Server, len(srvs))
 	listeners := make([]net.Listener, len(srvs))
 	for i, rs := range srvs {
+		if rs.addr == "" {
+			portSupplier.Lock()
+			rs.addr = fmt.Sprintf(":%d", portSupplier.p)
+			portSupplier.p++
+			portSupplier.Unlock()
+		}
 		listeners[i], err = net.Listen("tcp", rs.addr)
 		if err != nil {
 			t.Fatalf("failed to listen: %v", err)
@@ -52,7 +60,7 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 		}
 		opts := []grpc.ServerOption{grpc.Creds(creds)}
 		servers[i] = grpc.NewServer(opts...)
-		rpc.RegisterRegisterServer(servers[i], srvs[i].implementation)
+		rpc.RegisterRegisterServer(servers[i], srvs[i].impl)
 
 		go func(i int, server *grpc.Server) {
 			_ = server.Serve(listeners[i])
@@ -86,9 +94,9 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 func TestSecureRegister(t *testing.T) {
 	defer leakCheck(t)()
 	servers := regServers{
-		{":8080", rpc.NewRegisterBasic()},
-		{":8081", rpc.NewRegisterBasic()},
-		{":8082", rpc.NewRegisterBasic()},
+		{impl: rpc.NewRegisterBasic()},
+		{impl: rpc.NewRegisterBasic()},
+		{impl: rpc.NewRegisterBasic()},
 	}
 	stopGrpcServe, closeListeners := secsetup(t, servers, false)
 	defer stopGrpcServe(allServers)
@@ -101,7 +109,7 @@ func TestSecureRegister(t *testing.T) {
 
 	grpcOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithTimeout(50 * time.Millisecond),
+		grpc.WithTimeout(time.Second),
 		grpc.WithTransportCredentials(clientCreds),
 	}
 	dialOpts := rpc.WithGrpcDialOptions(grpcOpts...)
@@ -119,7 +127,7 @@ func TestSecureRegister(t *testing.T) {
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
 	qspec := NewRegisterByTimestampQSpec(2, len(ids))
 
-	config, err := mgr.NewConfiguration(ids, qspec, time.Second)
+	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -130,24 +138,28 @@ func TestSecureRegister(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	// Perfomr write call
-	wreply, err := config.Write(state)
+	// Perform write call
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	wreply, err := config.Write(ctx, state)
 	if err != nil {
-		t.Fatalf("write rpc call error: %v", err)
+		t.Fatalf("write quorum call error: %v", err)
 	}
 	t.Logf("wreply: %v\n", wreply)
-	if !wreply.Reply.New {
+	if !wreply.New {
 		t.Error("write reply was not marked as new")
 	}
 
 	// Do read call
-	rreply, err := config.Read(&rpc.ReadRequest{})
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read rpc call error: %v", err)
+		t.Fatalf("read quorum call error: %v", err)
 	}
 	t.Logf("rreply: %v\n", rreply)
-	if rreply.Reply.Value != state.Value {
-		t.Errorf("read reply: want state %v, got %v", state, rreply.Reply)
+	if rreply.Value != state.Value {
+		t.Errorf("read reply: want state %v, got %v", state, rreply.State)
 	}
 
 	nodes := mgr.Nodes(false)

@@ -264,7 +264,8 @@ type serviceMethod struct {
 	TypeName           string
 	UnexportedTypeName string
 
-	Streaming bool
+	GenFuture bool
+	Multicast bool
 
 	ServName string // Redundant, but keeps it simple.
 }
@@ -317,8 +318,10 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 				sm.TypeName += "_"
 			}
 			if method.GetClientStreaming() {
-				sm.Streaming = true
+				sm.Multicast = true
 			}
+			sm.GenFuture = hasFutureExtension(method)
+
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, &sm)
 			smethods[sm.MethodName] = methodsForName
@@ -356,27 +359,33 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 
 func verify(service string, method *pb.MethodDescriptorProto) (skip bool, err error) {
 	qrpc := hasQRPCExtension(method)
-	bcast := hasBcastExtension(method)
-	if !qrpc && !bcast {
+	mcast := hasMcastExtension(method)
+	future := hasFutureExtension(method)
+
+	switch {
+	case !qrpc && !mcast:
 		return true, nil
-	}
-	if qrpc && bcast {
+	case qrpc && mcast:
 		return false, fmt.Errorf(
 			"%s.%s: illegal combination combination of options: both 'qrcp' and 'broadcast'",
 			service, method.GetName(),
 		)
-	}
-	if bcast && !method.GetClientStreaming() {
+	case future && !qrpc:
+		return false, fmt.Errorf(
+			"%s.%s: illegal combination combination of options: 'future' but not 'qrpc'",
+			service, method.GetName(),
+		)
+	case mcast && !method.GetClientStreaming():
 		return false, fmt.Errorf(
 			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
 			service, method.GetName(),
 		)
-	}
-	if method.GetServerStreaming() {
+	case method.GetServerStreaming():
 		return false, fmt.Errorf(
 			"%s.%s: server-client streams are not supported by gorums",
 			service, method.GetName(),
 		)
+	default:
+		return false, nil
 	}
-	return false, nil
 }

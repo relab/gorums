@@ -9,18 +9,23 @@ const config_rpc_tmpl = `
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
 
-import "fmt"
+import (
+	"fmt"
+
+	"golang.org/x/net/context"
+)
+
 {{- end}}
 
 {{range $elm := .Services}}
 
-{{if .Streaming}}
+{{if .Multicast}}
 
 // {{.MethodName}} invokes an asynchronous {{.MethodName}} RPC on configuration c.
 // The call has no return value and is invoked on every node in the
 // configuration.
-func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) error {
-	return c.mgr.{{.UnexportedMethodName}}(c, args)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) error {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
 {{else -}}
@@ -30,18 +35,20 @@ func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) error {
 // reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
-	Reply   *{{.RespName}}
+	*{{.RespName}}
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
 }
 
 // {{.MethodName}} invokes a {{.MethodName}} RPC on configuration c
 // and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(c, args)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
+
+{{if .GenFuture}}
 
 // {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} RPC invocation.
 type {{.MethodName}}Future struct {
@@ -53,12 +60,12 @@ type {{.MethodName}}Future struct {
 // {{.MethodName}}Future asynchronously invokes a {{.MethodName}} RPC on configuration c and
 // returns a {{.MethodName}}Future which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) {{.MethodName}}Future(args *{{.ReqName}}) *{{.MethodName}}Future {
+func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.ReqName}}) *{{.MethodName}}Future {
 	f := new({{.MethodName}}Future)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(c, args)
+		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 	}()
 	return f
 }
@@ -82,6 +89,7 @@ func (f *{{.MethodName}}Future) Done() bool {
 
 {{- end -}}
 {{- end -}}
+{{- end -}}
 `
 
 const mgr_rpc_tmpl = `
@@ -103,8 +111,8 @@ import (
 
 {{range $elm := .Services}}
 
-{{if .Streaming}}
-func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) error {
+{{if .Multicast}}
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.{{.MethodName}}Client.Send(args)
@@ -128,12 +136,12 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}) (*{{.TypeName}}, error) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) (*{{.TypeName}}, error) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(n, ctx, args, replyChan)
+		go callGRPC{{.MethodName}}(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -148,28 +156,26 @@ func (m *Manager) {{.UnexportedMethodName}}(c *Configuration, args *{{.ReqName}}
 		case r := <-replyChan:
 			if r.err != nil {
 				errCount++
-				goto terminationCheck
+				break
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPC{{.MethodName}}(node *Node, ctx context.Context, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	reply := new({{.RespName}})
 	start := time.Now()
 	err := grpc.Invoke(
@@ -223,7 +229,7 @@ type Node struct {
 {{end}}
 
 {{range .Services}}
-{{if .Streaming}}
+{{if .Multicast}}
 	{{.MethodName}}Client {{.ServName}}_{{.MethodName}}Client
 {{end}}
 {{end}}
@@ -245,7 +251,7 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 {{end}}
 
 {{range .Services}}
-{{if .Streaming}}
+{{if .Multicast}}
   	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
   	if err != nil {
   		return fmt.Errorf("stream creation failed: %v", err)
@@ -261,7 +267,7 @@ func (n *Node) close() error {
         // We should log this error, but we currently don't have access to the
         // logger in the manager.
 {{- range .Services -}}
-{{if .Streaming}}
+{{if .Multicast}}
 	_, _ = n.{{.MethodName}}Client.CloseAndRecv()
 {{- end -}}
 {{end}}
@@ -283,7 +289,7 @@ package {{.PackageName}}
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
 {{- range $elm := .Services}}
-{{- if not .Streaming}}
+{{- if not .Multicast}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} RPC method.
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
 {{- end -}}

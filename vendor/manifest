@@ -13,7 +13,7 @@
 			"importpath": "github.com/gogo/protobuf",
 			"repository": "https://github.com/gogo/protobuf",
 			"vcs": "git",
-			"revision": "99cb9b23110011cc45571c901ecae6f6f5e65cd3",
+			"revision": "a9cd0c35b97daf74d0ebf3514c5254814b2703b4",
 			"branch": "master",
 			"notests": true
 		},
@@ -21,7 +21,7 @@
 			"importpath": "github.com/golang/protobuf/proto",
 			"repository": "https://github.com/golang/protobuf",
 			"vcs": "git",
-			"revision": "df1d3ca07d2d07bba352d5b73c4313b4e2a6203e",
+			"revision": "98fa357170587e470c5f27d3c3ea0947b71eb455",
 			"branch": "master",
 			"path": "/proto",
 			"notests": true
@@ -38,7 +38,7 @@
 			"importpath": "golang.org/x/net/context",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "cf4effbb9db1f3ef07f7e1891402991b6afbb276",
+			"revision": "4bb47a1098b37d69980d96237e2ae4ff56bb5a95",
 			"branch": "master",
 			"path": "/context",
 			"notests": true
@@ -47,7 +47,7 @@
 			"importpath": "golang.org/x/net/http2",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "cf4effbb9db1f3ef07f7e1891402991b6afbb276",
+			"revision": "4bb47a1098b37d69980d96237e2ae4ff56bb5a95",
 			"branch": "master",
 			"path": "/http2",
 			"notests": true
@@ -56,7 +56,7 @@
 			"importpath": "golang.org/x/net/idna",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "cf4effbb9db1f3ef07f7e1891402991b6afbb276",
+			"revision": "4bb47a1098b37d69980d96237e2ae4ff56bb5a95",
 			"branch": "master",
 			"path": "/idna",
 			"notests": true
@@ -65,7 +65,7 @@
 			"importpath": "golang.org/x/net/internal/timeseries",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "cf4effbb9db1f3ef07f7e1891402991b6afbb276",
+			"revision": "4bb47a1098b37d69980d96237e2ae4ff56bb5a95",
 			"branch": "master",
 			"path": "/internal/timeseries",
 			"notests": true
@@ -74,7 +74,7 @@
 			"importpath": "golang.org/x/net/lex/httplex",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "cf4effbb9db1f3ef07f7e1891402991b6afbb276",
+			"revision": "4bb47a1098b37d69980d96237e2ae4ff56bb5a95",
 			"branch": "master",
 			"path": "/lex/httplex",
 			"notests": true
@@ -83,7 +83,7 @@
 			"importpath": "golang.org/x/net/trace",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "cf4effbb9db1f3ef07f7e1891402991b6afbb276",
+			"revision": "4bb47a1098b37d69980d96237e2ae4ff56bb5a95",
 			"branch": "master",
 			"path": "/trace",
 			"notests": true
@@ -92,7 +92,7 @@
 			"importpath": "google.golang.org/grpc",
 			"repository": "https://github.com/grpc/grpc-go",
 			"vcs": "git",
-			"revision": "9eaed1a74af580b44448989c8ed830bc210bddf4",
+			"revision": "3235584c703acd8af8ab25132618c987c5606b66",
 			"branch": "master",
 			"notests": true
 		}

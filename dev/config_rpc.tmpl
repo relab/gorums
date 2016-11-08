@@ -4,18 +4,23 @@
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
 
-import "fmt"
+import (
+	"fmt"
+
+	"golang.org/x/net/context"
+)
+
 {{- end}}
 
 {{range $elm := .Services}}
 
-{{if .Streaming}}
+{{if .Multicast}}
 
 // {{.MethodName}} invokes an asynchronous {{.MethodName}} RPC on configuration c.
 // The call has no return value and is invoked on every node in the
 // configuration.
-func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) error {
-	return c.mgr.{{.UnexportedMethodName}}(c, args)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) error {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
 {{else -}}
@@ -25,18 +30,20 @@ func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) error {
 // reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
-	Reply   *{{.RespName}}
+	*{{.RespName}}
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
 }
 
 // {{.MethodName}} invokes a {{.MethodName}} RPC on configuration c
 // and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(args *{{.ReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(c, args)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
+
+{{if .GenFuture}}
 
 // {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} RPC invocation.
 type {{.MethodName}}Future struct {
@@ -48,12 +55,12 @@ type {{.MethodName}}Future struct {
 // {{.MethodName}}Future asynchronously invokes a {{.MethodName}} RPC on configuration c and
 // returns a {{.MethodName}}Future which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) {{.MethodName}}Future(args *{{.ReqName}}) *{{.MethodName}}Future {
+func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.ReqName}}) *{{.MethodName}}Future {
 	f := new({{.MethodName}}Future)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(c, args)
+		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 	}()
 	return f
 }
@@ -75,5 +82,6 @@ func (f *{{.MethodName}}Future) Done() bool {
 	}
 }
 
+{{- end -}}
 {{- end -}}
 {{- end -}}

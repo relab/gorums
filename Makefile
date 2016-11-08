@@ -31,8 +31,20 @@ REG_PBGO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PBGO_NAME)
 
 GOGOPROTO_ALIAS 		:= google/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 
+CHECKTOOLS			:= 	golang.org/x/tools/cmd/goimports \
+					github.com/golang/lint/golint \
+					github.com/jgautheron/goconst/cmd/goconst \
+					github.com/kisielk/errcheck \
+					github.com/gordonklaus/ineffassign \
+					github.com/mdempsky/unconvert \
+					honnef.co/go/unused/cmd/unused \
+					honnef.co/go/simple/cmd/gosimple \
+					honnef.co/go/staticcheck/cmd/staticcheck \
+					github.com/mvdan/interfacer/cmd/interfacer \
+					github.com/client9/misspell/cmd/misspell
+
 .PHONY: all
-all: build test check
+all: build test
 
 .PHONY: build
 build:
@@ -48,6 +60,12 @@ test: reinstallprotoc
 testrace: reinstallprotoc
 	@echo go test -race:
 	@go test -v -race -cpu=1,2,4 $(GORUMS_PKGS)
+
+.PHONY: stresstestdev
+stresstestdev:
+	go get -u golang.org/x/tools/cmd/stress
+	cd dev; go test -c
+	cd dev; stress -p=1 ./dev.test
 
 .PHONY: benchlocal
 benchlocal:
@@ -128,20 +146,14 @@ getgvt:
 
 .PHONY: getchecktools
 getchecktools:
-	go get -u golang.org/x/tools/cmd/goimports
-	go get -u github.com/golang/lint/golint
-	go get -u github.com/jgautheron/goconst/cmd/goconst
-	go get -u github.com/kisielk/errcheck
-	go get -u github.com/gordonklaus/ineffassign
-	go get -u github.com/mdempsky/unconvert
-	go get -u honnef.co/go/unused/cmd/unused
-	go get -u honnef.co/go/simple/cmd/gosimple
-	go get -u honnef.co/go/staticcheck/cmd/staticcheck
-	go get -u github.com/mvdan/interfacer/cmd/interfacer
-	go get -u github.com/client9/misspell/cmd/misspell
+	go get $(CHECKTOOLS)
+
+.PHONY: getchecktoolsu
+getchecktoolsu:
+	go get -u $(CHECKTOOLS)
 
 .PHONY: check
-check:
+check: getchecktools
 	@echo static analysis tools:
 	@echo "gofmt (simplify)"
 	@! gofmt -s -l $(GORUMS_FILES) | grep -vF 'No Exceptions'

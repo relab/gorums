@@ -333,17 +333,17 @@ func (this *Empty) Equal(that interface{}) bool {
 // reply.
 type ReadReply struct {
 	NodeIDs []uint32
-	Reply   *State
+	*State
 }
 
 func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
 // Read invokes a Read RPC on configuration c
 // and returns the result as a ReadReply.
-func (c *Configuration) Read(args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(c, args)
+func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
+	return c.mgr.read(ctx, c, args)
 }
 
 // ReadFuture is a reference to an asynchronous Read RPC invocation.
@@ -356,12 +356,12 @@ type ReadFuture struct {
 // ReadFuture asynchronously invokes a Read RPC on configuration c and
 // returns a ReadFuture which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) ReadFuture(args *ReadRequest) *ReadFuture {
+func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
 	f := new(ReadFuture)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.read(c, args)
+		f.reply, f.err = c.mgr.read(ctx, c, args)
 	}()
 	return f
 }
@@ -388,17 +388,17 @@ func (f *ReadFuture) Done() bool {
 // reply.
 type WriteReply struct {
 	NodeIDs []uint32
-	Reply   *WriteResponse
+	*WriteResponse
 }
 
 func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
 // Write invokes a Write RPC on configuration c
 // and returns the result as a WriteReply.
-func (c *Configuration) Write(args *State) (*WriteReply, error) {
-	return c.mgr.write(c, args)
+func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
+	return c.mgr.write(ctx, c, args)
 }
 
 // WriteFuture is a reference to an asynchronous Write RPC invocation.
@@ -411,12 +411,12 @@ type WriteFuture struct {
 // WriteFuture asynchronously invokes a Write RPC on configuration c and
 // returns a WriteFuture which can be used to inspect the RPC reply and error
 // when available.
-func (c *Configuration) WriteFuture(args *State) *WriteFuture {
+func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
 	f := new(WriteFuture)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.write(c, args)
+		f.reply, f.err = c.mgr.write(ctx, c, args)
 	}()
 	return f
 }
@@ -441,8 +441,8 @@ func (f *WriteFuture) Done() bool {
 // WriteAsync invokes an asynchronous WriteAsync RPC on configuration c.
 // The call has no return value and is invoked on every node in the
 // configuration.
-func (c *Configuration) WriteAsync(args *State) error {
-	return c.mgr.writeAsync(c, args)
+func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
+	return c.mgr.writeAsync(ctx, c, args)
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_rpc_tmpl */
@@ -453,12 +453,12 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) {
+func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (*ReadReply, error) {
 	replyChan := make(chan readReply, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCRead(n, ctx, args, replyChan)
+		go callGRPCRead(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -473,28 +473,26 @@ func (m *Manager) read(c *Configuration, args *ReadRequest) (*ReadReply, error) 
 		case r := <-replyChan:
 			if r.err != nil {
 				errCount++
-				goto terminationCheck
+				break
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.ReadQF(replyValues); quorum {
+			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCRead(node *Node, ctx context.Context, args *ReadRequest, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -519,12 +517,12 @@ type writeReply struct {
 	err   error
 }
 
-func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
+func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*WriteReply, error) {
 	replyChan := make(chan writeReply, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCWrite(n, ctx, args, replyChan)
+		go callGRPCWrite(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -539,28 +537,26 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 		case r := <-replyChan:
 			if r.err != nil {
 				errCount++
-				goto terminationCheck
+				break
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.WriteQF(replyValues); quorum {
+			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCWrite(node *Node, ctx context.Context, args *State, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<- writeReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -579,7 +575,7 @@ func callGRPCWrite(node *Node, ctx context.Context, args *State, replyChan chan<
 	replyChan <- writeReply{node.id, reply, err}
 }
 
-func (m *Manager) writeAsync(c *Configuration, args *State) error {
+func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.WriteAsyncClient.Send(args)
@@ -661,12 +657,11 @@ type QuorumSpec interface {
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	id      uint32
-	nodes   []*Node
-	n       int
-	mgr     *Manager
-	timeout time.Duration
-	qspec   QuorumSpec
+	id    uint32
+	nodes []*Node
+	n     int
+	mgr   *Manager
+	qspec QuorumSpec
 }
 
 // ID reports the identifier for the configuration.
@@ -723,31 +718,6 @@ func (e ConfigNotFoundError) Error() string {
 	return fmt.Sprintf("configuration not found: %d", e)
 }
 
-// An IncompleteRPCError reports that a quorum RPC call failed.
-type IncompleteRPCError struct {
-	ErrCount, ReplyCount int
-}
-
-func (e IncompleteRPCError) Error() string {
-	return fmt.Sprintf(
-		"incomplete rpc (errors: %d, replies: %d)",
-		e.ErrCount, e.ReplyCount,
-	)
-}
-
-// An TimeoutRPCError reports that a quorum RPC call timed out.
-type TimeoutRPCError struct {
-	Waited                 time.Duration
-	ErrCount, RepliesCount int
-}
-
-func (e TimeoutRPCError) Error() string {
-	return fmt.Sprintf(
-		"rpc timed out: waited %v (errors: %d, replies: %d)",
-		e.Waited, e.ErrCount, e.RepliesCount,
-	)
-}
-
 // An IllegalConfigError reports that a specified configuration could not be
 // created.
 type IllegalConfigError string
@@ -760,6 +730,19 @@ func (e IllegalConfigError) Error() string {
 // created due to err.
 func ManagerCreationError(err error) error {
 	return fmt.Errorf("could not create manager: %s", err.Error())
+}
+
+// A QuorumCallError reports that a quorum RPC call failed.
+type QuorumCallError struct {
+	Reason               string
+	ErrCount, ReplyCount int
+}
+
+func (e QuorumCallError) Error() string {
+	return fmt.Sprintf(
+		"quorum call error: %s (errors: %d, replies: %d)",
+		e.Reason, e.ErrCount, e.ReplyCount,
+	)
 }
 
 /* mgr.go */
@@ -1000,15 +983,12 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
-	}
-	if timeout <= 0 {
-		return nil, IllegalConfigError("timeout must be positive")
 	}
 
 	var cnodes []*Node
@@ -1029,7 +1009,6 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.
 	OrderedBy(ID).Sort(cnodes)
 
 	h := fnv.New32a()
-	binary.Write(h, binary.LittleEndian, timeout)
 	for _, node := range cnodes {
 		binary.Write(h, binary.LittleEndian, node.id)
 	}
@@ -1041,12 +1020,11 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.
 	}
 
 	c := &Configuration{
-		id:      cid,
-		nodes:   cnodes,
-		n:       len(cnodes),
-		mgr:     m,
-		qspec:   qspec,
-		timeout: timeout,
+		id:    cid,
+		nodes: cnodes,
+		n:     len(cnodes),
+		mgr:   m,
+		qspec: qspec,
 	}
 	m.configs[cid] = c
 
@@ -1468,74 +1446,74 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 	Metadata: fileDescriptorRegister,
 }
 
-func (m *State) Marshal() (data []byte, err error) {
+func (m *State) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *State) MarshalTo(data []byte) (int, error) {
+func (m *State) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Value) > 0 {
-		data[i] = 0xa
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintRegister(data, i, uint64(len(m.Value)))
-		i += copy(data[i:], m.Value)
+		i = encodeVarintRegister(dAtA, i, uint64(len(m.Value)))
+		i += copy(dAtA[i:], m.Value)
 	}
 	if m.Timestamp != 0 {
-		data[i] = 0x10
+		dAtA[i] = 0x10
 		i++
-		i = encodeVarintRegister(data, i, uint64(m.Timestamp))
+		i = encodeVarintRegister(dAtA, i, uint64(m.Timestamp))
 	}
 	return i, nil
 }
 
-func (m *WriteResponse) Marshal() (data []byte, err error) {
+func (m *WriteResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *WriteResponse) MarshalTo(data []byte) (int, error) {
+func (m *WriteResponse) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.New {
-		data[i] = 0x8
+		dAtA[i] = 0x8
 		i++
 		if m.New {
-			data[i] = 1
+			dAtA[i] = 1
 		} else {
-			data[i] = 0
+			dAtA[i] = 0
 		}
 		i++
 	}
 	return i, nil
 }
 
-func (m *ReadRequest) Marshal() (data []byte, err error) {
+func (m *ReadRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *ReadRequest) MarshalTo(data []byte) (int, error) {
+func (m *ReadRequest) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -1543,17 +1521,17 @@ func (m *ReadRequest) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func (m *Empty) Marshal() (data []byte, err error) {
+func (m *Empty) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Empty) MarshalTo(data []byte) (int, error) {
+func (m *Empty) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -1561,31 +1539,31 @@ func (m *Empty) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func encodeFixed64Register(data []byte, offset int, v uint64) int {
-	data[offset] = uint8(v)
-	data[offset+1] = uint8(v >> 8)
-	data[offset+2] = uint8(v >> 16)
-	data[offset+3] = uint8(v >> 24)
-	data[offset+4] = uint8(v >> 32)
-	data[offset+5] = uint8(v >> 40)
-	data[offset+6] = uint8(v >> 48)
-	data[offset+7] = uint8(v >> 56)
+func encodeFixed64Register(dAtA []byte, offset int, v uint64) int {
+	dAtA[offset] = uint8(v)
+	dAtA[offset+1] = uint8(v >> 8)
+	dAtA[offset+2] = uint8(v >> 16)
+	dAtA[offset+3] = uint8(v >> 24)
+	dAtA[offset+4] = uint8(v >> 32)
+	dAtA[offset+5] = uint8(v >> 40)
+	dAtA[offset+6] = uint8(v >> 48)
+	dAtA[offset+7] = uint8(v >> 56)
 	return offset + 8
 }
-func encodeFixed32Register(data []byte, offset int, v uint32) int {
-	data[offset] = uint8(v)
-	data[offset+1] = uint8(v >> 8)
-	data[offset+2] = uint8(v >> 16)
-	data[offset+3] = uint8(v >> 24)
+func encodeFixed32Register(dAtA []byte, offset int, v uint32) int {
+	dAtA[offset] = uint8(v)
+	dAtA[offset+1] = uint8(v >> 8)
+	dAtA[offset+2] = uint8(v >> 16)
+	dAtA[offset+3] = uint8(v >> 24)
 	return offset + 4
 }
-func encodeVarintRegister(data []byte, offset int, v uint64) int {
+func encodeVarintRegister(dAtA []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
-		data[offset] = uint8(v&0x7f | 0x80)
+		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
-	data[offset] = uint8(v)
+	dAtA[offset] = uint8(v)
 	return offset + 1
 }
 func (m *State) Size() (n int) {
@@ -1682,8 +1660,8 @@ func valueToStringRegister(v interface{}) string {
 	pv := reflect.Indirect(rv).Interface()
 	return fmt.Sprintf("*%v", pv)
 }
-func (m *State) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *State) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1695,7 +1673,7 @@ func (m *State) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1723,7 +1701,7 @@ func (m *State) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1738,7 +1716,7 @@ func (m *State) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Value = string(data[iNdEx:postIndex])
+			m.Value = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
@@ -1752,7 +1730,7 @@ func (m *State) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				m.Timestamp |= (int64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1761,7 +1739,7 @@ func (m *State) Unmarshal(data []byte) error {
 			}
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRegister(data[iNdEx:])
+			skippy, err := skipRegister(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1780,8 +1758,8 @@ func (m *State) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *WriteResponse) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *WriteResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1793,7 +1771,7 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1821,7 +1799,7 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1831,7 +1809,7 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 			m.New = bool(v != 0)
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRegister(data[iNdEx:])
+			skippy, err := skipRegister(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1850,8 +1828,8 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *ReadRequest) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *ReadRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1863,7 +1841,7 @@ func (m *ReadRequest) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1881,7 +1859,7 @@ func (m *ReadRequest) Unmarshal(data []byte) error {
 		switch fieldNum {
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRegister(data[iNdEx:])
+			skippy, err := skipRegister(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1900,8 +1878,8 @@ func (m *ReadRequest) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Empty) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Empty) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1913,7 +1891,7 @@ func (m *Empty) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1931,7 +1909,7 @@ func (m *Empty) Unmarshal(data []byte) error {
 		switch fieldNum {
 		default:
 			iNdEx = preIndex
-			skippy, err := skipRegister(data[iNdEx:])
+			skippy, err := skipRegister(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1950,8 +1928,8 @@ func (m *Empty) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func skipRegister(data []byte) (n int, err error) {
-	l := len(data)
+func skipRegister(dAtA []byte) (n int, err error) {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		var wire uint64
@@ -1962,7 +1940,7 @@ func skipRegister(data []byte) (n int, err error) {
 			if iNdEx >= l {
 				return 0, io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1980,7 +1958,7 @@ func skipRegister(data []byte) (n int, err error) {
 					return 0, io.ErrUnexpectedEOF
 				}
 				iNdEx++
-				if data[iNdEx-1] < 0x80 {
+				if dAtA[iNdEx-1] < 0x80 {
 					break
 				}
 			}
@@ -1997,7 +1975,7 @@ func skipRegister(data []byte) (n int, err error) {
 				if iNdEx >= l {
 					return 0, io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				length |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2020,7 +1998,7 @@ func skipRegister(data []byte) (n int, err error) {
 					if iNdEx >= l {
 						return 0, io.ErrUnexpectedEOF
 					}
-					b := data[iNdEx]
+					b := dAtA[iNdEx]
 					iNdEx++
 					innerWire |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
@@ -2031,7 +2009,7 @@ func skipRegister(data []byte) (n int, err error) {
 				if innerWireType == 4 {
 					break
 				}
-				next, err := skipRegister(data[start:])
+				next, err := skipRegister(dAtA[start:])
 				if err != nil {
 					return 0, err
 				}
@@ -2058,27 +2036,27 @@ var (
 func init() { proto.RegisterFile("testdata/register_golden/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 339 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x90, 0xb1, 0x4e, 0xeb, 0x30,
-	0x14, 0x86, 0xe3, 0x9b, 0xe6, 0xde, 0xf6, 0x5c, 0x55, 0xaa, 0x2c, 0x86, 0xa8, 0x42, 0x56, 0x89,
-	0x90, 0xa8, 0x50, 0x49, 0x25, 0x18, 0x99, 0x00, 0xb1, 0x56, 0x60, 0x10, 0x8c, 0x28, 0x6d, 0x8e,
-	0x42, 0xa4, 0x26, 0x0e, 0xb1, 0xd3, 0xaa, 0x5b, 0x47, 0x46, 0x1e, 0x83, 0x17, 0xe8, 0x03, 0xb0,
-	0x31, 0x76, 0x64, 0x6c, 0xcd, 0xc2, 0xc8, 0x23, 0xa0, 0xba, 0x05, 0xb5, 0x13, 0x93, 0xcf, 0xf9,
-	0xfd, 0xd9, 0xe7, 0xd3, 0x81, 0x3d, 0x85, 0x52, 0x85, 0x81, 0x0a, 0xda, 0x39, 0x46, 0xb1, 0x54,
-	0x98, 0xdf, 0x45, 0xa2, 0x1f, 0x62, 0xfa, 0xd3, 0xfb, 0x59, 0x2e, 0x94, 0xa0, 0x76, 0x88, 0x83,
-	0xfa, 0x6e, 0x14, 0xab, 0xfb, 0xa2, 0xeb, 0xf7, 0x44, 0xd2, 0xce, 0xb1, 0x1f, 0x74, 0xdb, 0x91,
-	0xc8, 0x8b, 0x44, 0xae, 0x8e, 0x25, 0xea, 0x1d, 0x83, 0x73, 0xa5, 0x02, 0x85, 0x74, 0x0b, 0x9c,
-	0x9b, 0xa0, 0x5f, 0xa0, 0x4b, 0x1a, 0xa4, 0x59, 0xe1, 0xce, 0x60, 0xd1, 0xd0, 0x6d, 0xa8, 0x5c,
-	0xc7, 0x09, 0x4a, 0x15, 0x24, 0x99, 0xfb, 0xa7, 0x41, 0x9a, 0x36, 0xaf, 0xa8, 0xef, 0xc0, 0xdb,
-	0x81, 0xea, 0x6d, 0x1e, 0x2b, 0xe4, 0x28, 0x33, 0x91, 0x4a, 0xa4, 0x35, 0xb0, 0x3b, 0x38, 0x34,
-	0x5f, 0x94, 0xb9, 0x9d, 0xe2, 0xd0, 0xab, 0xc2, 0x7f, 0x8e, 0x41, 0xc8, 0xf1, 0xa1, 0x40, 0xa9,
-	0xbc, 0x7f, 0xe0, 0x9c, 0x27, 0x99, 0x1a, 0x1d, 0xbe, 0x10, 0x28, 0xf3, 0x95, 0x35, 0xdd, 0x87,
-	0xd2, 0x02, 0xa2, 0x35, 0x3f, 0xc4, 0x81, 0xbf, 0xc6, 0xd7, 0xc1, 0x24, 0xc6, 0xd0, 0x2b, 0x8d,
-	0x27, 0x2e, 0xa1, 0x07, 0xe0, 0x98, 0x99, 0x74, 0xed, 0xaa, 0x4e, 0x4d, 0xbd, 0xe1, 0xb2, 0xc2,
-	0x5b, 0x00, 0x26, 0x3e, 0x91, 0xa3, 0xb4, 0xb7, 0xf1, 0x66, 0x59, 0x1b, 0x1b, 0xaf, 0xf4, 0x38,
-	0x71, 0x49, 0xd3, 0xd0, 0x8b, 0xe9, 0x1d, 0x71, 0xc9, 0x2f, 0xce, 0x7e, 0xd1, 0xb1, 0x4e, 0x5b,
-	0xd3, 0x39, 0xb3, 0xde, 0xe6, 0xcc, 0x9a, 0xcd, 0x19, 0x19, 0x6b, 0x46, 0x9e, 0x35, 0x23, 0xaf,
-	0x9a, 0x91, 0xa9, 0x66, 0x64, 0xa6, 0x19, 0xf9, 0xd0, 0xcc, 0xfa, 0xd4, 0x8c, 0x3c, 0xbd, 0x33,
-	0xab, 0xfb, 0xd7, 0x2c, 0xfc, 0xe8, 0x2b, 0x00, 0x00, 0xff, 0xff, 0x81, 0x9c, 0x62, 0xff, 0xc6,
-	0x01, 0x00, 0x00,
+	// 341 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x90, 0xbd, 0x4e, 0x2a, 0x41,
+	0x14, 0xc7, 0xf7, 0xdc, 0x65, 0xef, 0x85, 0x73, 0x43, 0x42, 0x26, 0x16, 0x1b, 0x62, 0x26, 0xb8,
+	0x31, 0x91, 0x82, 0x2c, 0x51, 0x4b, 0x2b, 0x35, 0xb6, 0x44, 0x47, 0xa3, 0xa5, 0x59, 0xd8, 0x93,
+	0x75, 0x13, 0xf6, 0xc3, 0x9d, 0x59, 0x08, 0x1d, 0xa5, 0x25, 0x8f, 0xe1, 0x0b, 0xf0, 0x0e, 0xda,
+	0x51, 0x5a, 0xc2, 0xda, 0x58, 0xfa, 0x08, 0x86, 0x01, 0x0d, 0x54, 0x56, 0x73, 0x3e, 0x7e, 0xff,
+	0x99, 0x5f, 0x06, 0x0f, 0x14, 0x49, 0xe5, 0x7b, 0xca, 0x6b, 0x67, 0x14, 0x84, 0x52, 0x51, 0x76,
+	0x1f, 0x24, 0x7d, 0x9f, 0xe2, 0x9f, 0xde, 0x4d, 0xb3, 0x44, 0x25, 0xcc, 0xf4, 0x69, 0x50, 0xdf,
+	0x0f, 0x42, 0xf5, 0x90, 0x77, 0xdd, 0x5e, 0x12, 0xb5, 0x33, 0xea, 0x7b, 0xdd, 0x76, 0x90, 0x64,
+	0x79, 0x24, 0xd7, 0xc7, 0x0a, 0x75, 0x4e, 0xd0, 0xba, 0x56, 0x9e, 0x22, 0xb6, 0x83, 0xd6, 0xad,
+	0xd7, 0xcf, 0xc9, 0x86, 0x06, 0x34, 0x2b, 0xc2, 0x1a, 0x2c, 0x1b, 0xb6, 0x8b, 0x95, 0x9b, 0x30,
+	0x22, 0xa9, 0xbc, 0x28, 0xb5, 0xff, 0x34, 0xa0, 0x69, 0x8a, 0x8a, 0xfa, 0x1e, 0x38, 0x7b, 0x58,
+	0xbd, 0xcb, 0x42, 0x45, 0x82, 0x64, 0x9a, 0xc4, 0x92, 0x58, 0x0d, 0xcd, 0x0e, 0x0d, 0xf5, 0x15,
+	0x65, 0x61, 0xc6, 0x34, 0x74, 0xaa, 0xf8, 0x5f, 0x90, 0xe7, 0x0b, 0x7a, 0xcc, 0x49, 0x2a, 0xe7,
+	0x1f, 0x5a, 0x17, 0x51, 0xaa, 0x46, 0x47, 0xaf, 0x80, 0x65, 0xb1, 0xb6, 0x66, 0x2e, 0x96, 0x96,
+	0x10, 0xab, 0xb9, 0x3e, 0x0d, 0xdc, 0x0d, 0xbe, 0x8e, 0x7a, 0xa2, 0x0d, 0x9d, 0xf2, 0x78, 0x6a,
+	0xc3, 0x64, 0x6a, 0x03, 0x3b, 0x44, 0x4b, 0xbf, 0xcb, 0x36, 0xd6, 0x75, 0xa6, 0xeb, 0x2d, 0x9f,
+	0x8d, 0x48, 0x0b, 0x51, 0xaf, 0x4e, 0xe5, 0x28, 0xee, 0x6d, 0xe5, 0x56, 0xb5, 0xb6, 0x72, 0x4a,
+	0x4f, 0x53, 0x1b, 0x9a, 0x9a, 0x5e, 0x5a, 0x74, 0x92, 0x2b, 0x71, 0x79, 0xfe, 0x8b, 0x96, 0x71,
+	0xd6, 0x9a, 0x2d, 0xb8, 0xf1, 0xb6, 0xe0, 0xc6, 0x7c, 0xc1, 0x61, 0x5c, 0x70, 0x78, 0x2e, 0x38,
+	0xbc, 0x14, 0x1c, 0x66, 0x05, 0x87, 0x79, 0xc1, 0xe1, 0xa3, 0xe0, 0xc6, 0x67, 0xc1, 0x61, 0xf2,
+	0xce, 0x8d, 0xee, 0x5f, 0xfd, 0xf1, 0xc7, 0x5f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xc6, 0xb2, 0x09,
+	0x2b, 0xce, 0x01, 0x00, 0x00,
 }
