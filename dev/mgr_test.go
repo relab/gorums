@@ -3,7 +3,7 @@ package dev_test
 import (
 	"testing"
 
-	rpc "github.com/relab/gorums/dev"
+	qc "github.com/relab/gorums/dev"
 	"github.com/relab/gorums/idutil"
 )
 
@@ -12,11 +12,11 @@ func TestEqualGlobalConfigurationIDs(t *testing.T) {
 	addrsOne := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
 	addrsTwo := []string{"localhost:8081", "localhost:8082", "localhost:8080"}
 
-	mgrOne, err := rpc.NewManager(addrsOne, rpc.WithNoConnect())
+	mgrOne, err := qc.NewManager(addrsOne, qc.WithNoConnect())
 	if err != nil {
 		t.Fatal(err)
 	}
-	mgrTwo, err := rpc.NewManager(addrsTwo, rpc.WithNoConnect())
+	mgrTwo, err := qc.NewManager(addrsTwo, qc.WithNoConnect())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestWithSelfAddrOption(t *testing.T) {
 	selfAddr := "localhost:8081"
 	wantSize := len(addrs)
 
-	mgr, err := rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfAddr(selfAddr))
+	mgr, err := qc.NewManager(addrs, qc.WithNoConnect(), qc.WithSelfAddr(selfAddr))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestWithSelfAddrOption(t *testing.T) {
 	}
 
 	notPresentAddr := "localhost:8083"
-	_, err = rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfAddr(notPresentAddr))
+	_, err = qc.NewManager(addrs, qc.WithNoConnect(), qc.WithSelfAddr(notPresentAddr))
 	if err == nil {
 		t.Error("got no manager creation error, want error due to invaild WithSelf option")
 	}
@@ -86,7 +86,7 @@ func TestWithSelfGidOption(t *testing.T) {
 	}
 	wantSize := len(addrs)
 
-	mgr, err := rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfID(selfID))
+	mgr, err := qc.NewManager(addrs, qc.WithNoConnect(), qc.WithSelfID(selfID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestWithSelfGidOption(t *testing.T) {
 	}
 
 	var notPresentID uint32 = 42
-	_, err = rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfID(notPresentID))
+	_, err = qc.NewManager(addrs, qc.WithNoConnect(), qc.WithSelfID(notPresentID))
 	if err == nil {
 		t.Error("got no manager creation error, want error due to invaild WithSelfID option")
 	}
@@ -120,7 +120,7 @@ func TestWithSelfGidOption(t *testing.T) {
 
 func TestCreateConfiguration(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
-	mgr, err := rpc.NewManager(addrs, rpc.WithNoConnect())
+	mgr, err := qc.NewManager(addrs, qc.WithNoConnect())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mgr, err := rpc.NewManager(addrs, rpc.WithNoConnect(), rpc.WithSelfID(selfID))
+	mgr, err := qc.NewManager(addrs, qc.WithNoConnect(), qc.WithSelfID(selfID))
 	if err != nil {
 		t.Fatal(err)
 	}

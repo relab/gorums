@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	rpc "github.com/relab/gorums/dev"
+	qc "github.com/relab/gorums/dev"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -60,7 +60,7 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 		}
 		opts := []grpc.ServerOption{grpc.Creds(creds)}
 		servers[i] = grpc.NewServer(opts...)
-		rpc.RegisterRegisterServer(servers[i], srvs[i].impl)
+		qc.RegisterRegisterServer(servers[i], srvs[i].impl)
 
 		go func(i int, server *grpc.Server) {
 			_ = server.Serve(listeners[i])
@@ -94,9 +94,9 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 func TestSecureRegister(t *testing.T) {
 	defer leakCheck(t)()
 	servers := regServers{
-		{impl: rpc.NewRegisterBasic()},
-		{impl: rpc.NewRegisterBasic()},
-		{impl: rpc.NewRegisterBasic()},
+		{impl: qc.NewRegisterBasic()},
+		{impl: qc.NewRegisterBasic()},
+		{impl: qc.NewRegisterBasic()},
 	}
 	stopGrpcServe, closeListeners := secsetup(t, servers, false)
 	defer stopGrpcServe(allServers)
@@ -112,9 +112,9 @@ func TestSecureRegister(t *testing.T) {
 		grpc.WithTimeout(time.Second),
 		grpc.WithTransportCredentials(clientCreds),
 	}
-	dialOpts := rpc.WithGrpcDialOptions(grpcOpts...)
+	dialOpts := qc.WithGrpcDialOptions(grpcOpts...)
 
-	mgr, err := rpc.NewManager(servers.addrs(), dialOpts)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -133,7 +133,7 @@ func TestSecureRegister(t *testing.T) {
 	}
 
 	// Test state
-	state := &rpc.State{
+	state := &qc.State{
 		Value:     "42",
 		Timestamp: time.Now().UnixNano(),
 	}
@@ -153,7 +153,7 @@ func TestSecureRegister(t *testing.T) {
 	// Do read call
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	rreply, err := config.Read(ctx, &rpc.ReadRequest{})
+	rreply, err := config.Read(ctx, &qc.ReadRequest{})
 	if err != nil {
 		t.Fatalf("read quorum call error: %v", err)
 	}

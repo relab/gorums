@@ -3,29 +3,29 @@ package dev_test
 import (
 	"sort"
 
-	rpc "github.com/relab/gorums/dev"
+	qc "github.com/relab/gorums/dev"
 )
 
 type MajorityQSpec struct {
 	q int
 }
 
-func NewMajorityQSpec(n int) rpc.QuorumSpec {
+func NewMajorityQSpec(n int) qc.QuorumSpec {
 	return &MajorityQSpec{q: n/2 + 1}
 }
 
-func (mqs *MajorityQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
+func (mqs *MajorityQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
 	if len(replies) < mqs.q {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (mqs *MajorityQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, int, bool) {
+func (mqs *MajorityQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
-func (mqs *MajorityQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+func (mqs *MajorityQSpec) WriteQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	if len(replies) < mqs.q {
 		return nil, false
 	}
@@ -36,25 +36,25 @@ type RegisterQSpec struct {
 	rq, wq int
 }
 
-func NewRegisterQSpec(rq, wq int) rpc.QuorumSpec {
+func NewRegisterQSpec(rq, wq int) qc.QuorumSpec {
 	return &RegisterQSpec{
 		rq: rq,
 		wq: wq,
 	}
 }
 
-func (rqs *RegisterQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
+func (rqs *RegisterQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
 	if len(replies) < rqs.rq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *RegisterQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, int, bool) {
+func (rqs *RegisterQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
-func (rqs *RegisterQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+func (rqs *RegisterQSpec) WriteQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	if len(replies) < rqs.wq {
 		return nil, false
 	}
@@ -70,14 +70,14 @@ type RegisterByTimestampQSpec struct {
 	rq, wq int
 }
 
-func NewRegisterByTimestampQSpec(rq, wq int) rpc.QuorumSpec {
+func NewRegisterByTimestampQSpec(rq, wq int) qc.QuorumSpec {
 	return &RegisterByTimestampQSpec{
 		rq: rq,
 		wq: wq,
 	}
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
+func (rqs *RegisterByTimestampQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
 	if len(replies) < rqs.rq {
 		return nil, false
 	}
@@ -85,9 +85,9 @@ func (rqs *RegisterByTimestampQSpec) ReadQF(replies []*rpc.State) (*rpc.State, b
 	return replies[len(replies)-1], true
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, int, bool) {
+func (rqs *RegisterByTimestampQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
 	if len(replies) == 0 {
-		return nil, rpc.LevelNotSet, false
+		return nil, qc.LevelNotSet, false
 	}
 	sort.Sort(ByTimestamp(replies))
 	if len(replies) < rqs.rq {
@@ -96,7 +96,7 @@ func (rqs *RegisterByTimestampQSpec) ReadCorrectableQF(replies []*rpc.State) (*r
 	return replies[len(replies)-1], LevelStrong, true
 }
 
-func (rqs *RegisterByTimestampQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+func (rqs *RegisterByTimestampQSpec) WriteQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	if len(replies) < rqs.wq {
 		return nil, false
 	}
@@ -105,18 +105,18 @@ func (rqs *RegisterByTimestampQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc
 
 type NeverQSpec struct{}
 
-func NewNeverQSpec() rpc.QuorumSpec {
+func NewNeverQSpec() qc.QuorumSpec {
 	return &NeverQSpec{}
 }
 
-func (mqs *NeverQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
+func (mqs *NeverQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
 	return nil, false
 }
 
-func (mqs *NeverQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, int, bool) {
-	return nil, rpc.LevelNotSet, false
+func (mqs *NeverQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
+	return nil, qc.LevelNotSet, false
 }
 
-func (mqs *NeverQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+func (mqs *NeverQSpec) WriteQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	return nil, false
 }
