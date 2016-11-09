@@ -561,6 +561,137 @@ func TestBasicCorrectable(t *testing.T) {
 	}
 }
 
+func TestCorrectableWithLevels(t *testing.T) {
+	defer leakCheck(t)()
+
+	stateOne := &qc.State{
+		Value:     "42",
+		Timestamp: 1,
+	}
+	stateTwo := &qc.State{
+		Value:     "99",
+		Timestamp: 100,
+	}
+
+	// We need the specific implementation so we call the Unlock method.
+	regServersImplementation := []*qc.RegisterServerLockedWithState{
+		qc.NewRegisterServerLockedWithState(stateOne),
+		qc.NewRegisterServerLockedWithState(stateTwo),
+		qc.NewRegisterServerLockedWithState(stateTwo),
+	}
+
+	regServersInterface := []regServer{
+		{impl: regServersImplementation[0]},
+		{impl: regServersImplementation[1]},
+		{impl: regServersImplementation[2]},
+	}
+
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(
+		t,
+		regServersInterface,
+		false,
+	)
+	defer closeListeners(allServers)
+	defer stopGrpcServe(allServers)
+
+	mgr, err := qc.NewManager(
+		servers.addrs(),
+		dialOpts,
+	)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+
+	ids := mgr.NodeIDs()
+	majority := len(ids)/2 + 1
+	qspec := NewRegisterByTimestampQSpec(majority, majority)
+	config, err := mgr.NewConfiguration(ids, qspec)
+	if err != nil {
+		t.Fatalf("error creating config: %v", err)
+	}
+
+	ctx := context.Background()
+	correctable := config.ReadCorrectable(ctx, &qc.ReadRequest{})
+
+	// Watch for level 1 ("weak") for this quorum specification.
+	levelOneChan := correctable.Watch(LevelWeak)
+	waitTimeout := time.Second
+
+	// Initial check: no server has replied yet.
+
+	// Check that the level 1 watch channel is not done.
+	select {
+	case <-levelOneChan:
+		t.Fatalf("read correctable: level 1 (weak) chan was closed before any reply was received")
+	default:
+	}
+
+	// Check that Done() is not done.
+	select {
+	case <-correctable.Done():
+		t.Fatalf("read correctable: Done() was done before any reply was received")
+	default:
+	}
+
+	// Check that Get() returns nil, LevelNotSet, nil
+	reply, level, err := correctable.Get()
+	if err != nil {
+		t.Fatalf("read correctable: intial get: got unexpected error: %v", err)
+	}
+	if level != qc.LevelNotSet {
+		t.Fatalf("read correctable: intial get: got level %v, want %v", level, qc.LevelNotSet)
+	}
+	if reply != nil {
+		t.Fatal("read correctable: initial get: got reply, want none")
+	}
+
+	// Unlock server with lowest timestamp for state.
+	regServersImplementation[0].Unlock()
+
+	// Wait for level 1 (weak) notification.
+	select {
+	case <-levelOneChan:
+	case <-time.After(waitTimeout):
+		t.Fatalf("read correctable: waiting for levelOneChan timed out (waited %v)", waitTimeout)
+	}
+
+	// Check that Get() returns stateOne, LevelWeak, nil
+	reply, level, err = correctable.Get()
+	if err != nil {
+		t.Fatalf("read correctable: get after one reply: got unexpected error: %v", err)
+	}
+	if level != LevelWeak {
+		t.Fatalf("read correctable: get after one reply: got level %v, want %v", level, LevelWeak)
+	}
+	if reply.State.Value != stateOne.Value {
+		t.Fatalf("read correctable: get after one reply:\ngot reply:\n%v\nwant:\n%v", reply.State.Value, stateOne.Value)
+	}
+
+	// Unlock both of the two servers with the highest timestamp for state.
+	regServersImplementation[1].Unlock()
+	regServersImplementation[2].Unlock()
+
+	// Wait Done channels notification.
+	select {
+	case <-correctable.Done():
+	case <-time.After(waitTimeout):
+		t.Fatalf("read correctable: waiting for Done channel timed out (waited %v)", waitTimeout)
+	}
+
+	// Check that Get() returns stateTwo, LevelStrong, nil
+	reply, level, err = correctable.Get()
+	if err != nil {
+		t.Fatalf("read correctable: get after done call: got unexpected error: %v", err)
+	}
+	if level != LevelStrong {
+		t.Fatalf("read correctable: get after done call: got level %v, want %v", level, LevelStrong)
+	}
+	if reply.State.Value != stateTwo.Value {
+		t.Fatalf("read correctable: get after done call:\ngot reply:\n%v\nwant:\n%v", reply.State.Value, stateTwo.Value)
+	}
+}
+
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkRead1KQ1N3Local(b *testing.B) {
