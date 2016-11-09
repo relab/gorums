@@ -7,7 +7,7 @@ import (
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 )
 
-func hasQRPCExtension(method *descriptor.MethodDescriptorProto) bool {
+func hasQuorumCallExtension(method *descriptor.MethodDescriptorProto) bool {
 	if method.Options == nil {
 		return false
 	}

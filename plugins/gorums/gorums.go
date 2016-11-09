@@ -264,8 +264,9 @@ type serviceMethod struct {
 	TypeName           string
 	UnexportedTypeName string
 
+	QuorumCall  bool
 	Correctable bool
-	GenFuture   bool
+	Future      bool
 	Multicast   bool
 
 	ServName string // Redundant, but keeps it simple.
@@ -297,15 +298,14 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 	for i, service := range services {
 		clients[i] = service.GetName() + "Client"
 		for _, method := range service.Method {
-			skip, err := verify(service.GetName(), method)
-			if skip {
-				continue
-			}
+			sm, err := verifyExtensionsAndCreate(service.GetName(), method)
 			if err != nil {
 				die(err)
 			}
+			if sm == nil {
+				continue
+			}
 
-			sm := serviceMethod{}
 			sm.OrigName = method.GetName()
 			sm.MethodName = generator.CamelCase(sm.OrigName)
 			sm.RPCName = sm.MethodName // sm.MethodName may be overwritten if method name conflict
@@ -318,14 +318,9 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			if sm.TypeName == sm.RespName {
 				sm.TypeName += "_"
 			}
-			if method.GetClientStreaming() {
-				sm.Multicast = true
-			}
-			sm.GenFuture = hasFutureExtension(method)
-			sm.Correctable = hasCorrectableExtension(method)
 
 			methodsForName, _ := smethods[sm.MethodName]
-			methodsForName = append(methodsForName, &sm)
+			methodsForName = append(methodsForName, sm)
 			smethods[sm.MethodName] = methodsForName
 		}
 	}
@@ -359,36 +354,40 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 	return clients, allRewrittenFlat
 }
 
-func verify(service string, method *pb.MethodDescriptorProto) (skip bool, err error) {
-	qrpc := hasQRPCExtension(method)
-	corr := hasCorrectableExtension(method)
-	mcast := hasMcastExtension(method)
-	future := hasFutureExtension(method)
+func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto) (*serviceMethod, error) {
+	sm := &serviceMethod{
+		QuorumCall:  hasQuorumCallExtension(method),
+		Future:      hasFutureExtension(method),
+		Correctable: hasCorrectableExtension(method),
+	}
+	if method.GetClientStreaming() {
+		sm.Multicast = true
+	}
 
 	switch {
-	case !qrpc && !corr && !mcast:
-		return true, nil
-	case (qrpc || corr) && mcast:
-		return false, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: both 'qrpc/correctable' and 'broadcast'",
-			service, method.GetName(),
-		)
-	case future && !qrpc:
-		return false, fmt.Errorf(
+	case sm.Future && !sm.QuorumCall:
+		return nil, fmt.Errorf(
 			"%s.%s: illegal combination combination of options: 'future' but not 'qrpc'",
 			service, method.GetName(),
 		)
-	case mcast && !method.GetClientStreaming():
-		return false, fmt.Errorf(
+	case !sm.QuorumCall && !sm.Correctable && !sm.Multicast:
+		return nil, nil
+	case (sm.QuorumCall || sm.Correctable) && sm.Multicast:
+		return nil, fmt.Errorf(
+			"%s.%s: illegal combination combination of options: both 'qrpc/correctable' and 'broadcast'",
+			service, method.GetName(),
+		)
+	case sm.Multicast && !method.GetClientStreaming():
+		return nil, fmt.Errorf(
 			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
 			service, method.GetName(),
 		)
 	case method.GetServerStreaming():
-		return false, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"%s.%s: server-client streams are not supported by gorums",
 			service, method.GetName(),
 		)
 	default:
-		return false, nil
+		return sm, nil
 	}
 }

@@ -8,14 +8,14 @@ package {{.PackageName}}
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
 {{- range $elm := .Services}}
-{{- if not .Multicast}}
+{{- if .QuorumCall}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} RPC method.
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
+{{end}}
 
-{{ if .Correctable}}
+{{if .Correctable}}
 	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}} Correctable RPC method.
 	{{.MethodName}}CorrectableQF(replies []*{{.RespName}}) (*{{.RespName}}, int, bool)
 {{end}}
 {{- end -}}
-{{- end}}
 }

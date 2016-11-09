@@ -24,7 +24,8 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
-{{else -}}
+{{- end -}}
+{{if .QuorumCall}}
 
 // {{.TypeName}} encapsulates the reply from a {{.MethodName}} RPC invocation.
 // It contains the id of each node in the quorum that replied and a single
@@ -43,8 +44,9 @@ func (r {{.TypeName}}) String() string {
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
+{{- end -}}
 
-{{if .GenFuture}}
+{{if .Future}}
 
 // {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} RPC invocation.
 type {{.MethodName}}Future struct {
@@ -177,6 +179,5 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 	c.mu.Unlock()
 }
 
-{{- end -}}
 {{- end -}}
 {{- end -}}

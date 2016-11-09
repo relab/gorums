@@ -34,7 +34,8 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	return nil
 }
 
-{{else}}
+{{- end -}}
+{{if .QuorumCall}}
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -100,6 +101,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}
 	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
 }
 
+{{- end -}}
 {{if .Correctable}}
 
 func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.ReqName}}) {
@@ -151,6 +153,5 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 	}
 }
 
-{{- end -}}
 {{- end -}}
 {{- end -}}

@@ -29,7 +29,8 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
-{{else -}}
+{{- end -}}
+{{if .QuorumCall}}
 
 // {{.TypeName}} encapsulates the reply from a {{.MethodName}} RPC invocation.
 // It contains the id of each node in the quorum that replied and a single
@@ -48,8 +49,9 @@ func (r {{.TypeName}}) String() string {
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
+{{- end -}}
 
-{{if .GenFuture}}
+{{if .Future}}
 
 // {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} RPC invocation.
 type {{.MethodName}}Future struct {
@@ -184,7 +186,6 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 
 {{- end -}}
 {{- end -}}
-{{- end -}}
 `
 
 const mgr_rpc_tmpl = `
@@ -223,7 +224,8 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	return nil
 }
 
-{{else}}
+{{- end -}}
+{{if .QuorumCall}}
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -289,6 +291,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}
 	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
 }
 
+{{- end -}}
 {{if .Correctable}}
 
 func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.ReqName}}) {
@@ -340,7 +343,6 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 	}
 }
 
-{{- end -}}
 {{- end -}}
 {{- end -}}
 `
@@ -436,16 +438,16 @@ package {{.PackageName}}
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
 {{- range $elm := .Services}}
-{{- if not .Multicast}}
+{{- if .QuorumCall}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} RPC method.
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
+{{end}}
 
-{{ if .Correctable}}
+{{if .Correctable}}
 	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}} Correctable RPC method.
 	{{.MethodName}}CorrectableQF(replies []*{{.RespName}}) (*{{.RespName}}, int, bool)
 {{end}}
 {{- end -}}
-{{- end}}
 }
 `
 
