@@ -250,3 +250,54 @@ func (r *RegisterServerBench) ReadExecuted() {}
 
 // WriteExecuted is no-op.
 func (r *RegisterServerBench) WriteExecuted() {}
+
+// RegisterServerLockedWithState represents a register server with an initial
+// state that does not reply to any requests before it's unlocked.
+type RegisterServerLockedWithState struct {
+	lock       chan struct{}
+	realServer RegisterTestServer
+}
+
+// NewRegisterServerLockedWithState returns a new locked register server with an initial state.
+func NewRegisterServerLockedWithState(state *State) *RegisterServerLockedWithState {
+	return &RegisterServerLockedWithState{
+		lock:       make(chan struct{}),
+		realServer: NewRegisterBasicWithState(state),
+	}
+}
+
+func (r *RegisterServerLockedWithState) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
+	<-r.lock
+	return r.realServer.Read(ctx, rq)
+}
+
+func (r *RegisterServerLockedWithState) Write(ctx context.Context, s *State) (*WriteResponse, error) {
+	<-r.lock
+	return r.realServer.Write(ctx, s)
+}
+
+// WriteAsync implements the WriteAsync method from the RegisterServer interface.
+func (r *RegisterServerLockedWithState) WriteAsync(stream Register_WriteAsyncServer) error {
+	<-r.lock
+	return r.realServer.WriteAsync(stream)
+}
+
+// ReadNoQRPC implements the ReadNoQRPC method from the RegisterServer interface.
+func (r *RegisterServerLockedWithState) ReadNoQRPC(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return r.Read(ctx, rq)
+}
+
+// ReadExecuted returns when r has has completed a read.
+func (r *RegisterServerLockedWithState) ReadExecuted() {
+	r.realServer.ReadExecuted()
+}
+
+// WriteExecuted returns when r has has completed a write.
+func (r *RegisterServerLockedWithState) WriteExecuted() {
+	r.realServer.WriteExecuted()
+}
+
+// Unlock unlocks the register server.
+func (r *RegisterServerLockedWithState) Unlock() {
+	close(r.lock)
+}
