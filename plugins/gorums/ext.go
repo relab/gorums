@@ -29,7 +29,7 @@ func hasCorrectableExtension(method *descriptor.MethodDescriptorProto) bool {
 	return checkExtensionBoolValue(value)
 }
 
-func hasMcastExtension(method *descriptor.MethodDescriptorProto) bool {
+func hasMulticastExtension(method *descriptor.MethodDescriptorProto) bool {
 	if method.Options == nil {
 		return false
 	}

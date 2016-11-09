@@ -359,9 +359,7 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		QuorumCall:  hasQuorumCallExtension(method),
 		Future:      hasFutureExtension(method),
 		Correctable: hasCorrectableExtension(method),
-	}
-	if method.GetClientStreaming() {
-		sm.Multicast = true
+		Multicast:   hasMulticastExtension(method),
 	}
 
 	switch {
