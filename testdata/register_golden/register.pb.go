@@ -389,7 +389,7 @@ func (f *ReadFuture) Done() bool {
 // when available.
 func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
 	corr := &ReadCorrectable{
-		level:  -1,
+		level:  LevelNotSet,
 		donech: make(chan struct{}),
 	}
 	go func() {

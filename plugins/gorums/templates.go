@@ -98,7 +98,7 @@ func (f *{{.MethodName}}Future) Done() bool {
 // when available.
 func (c *Configuration) {{.MethodName}}Correctable(ctx context.Context, args *ReadRequest) *{{.MethodName}}Correctable {
 	corr := &{{.MethodName}}Correctable{
-		level:  -1,
+		level:  LevelNotSet,
 		donech: make(chan struct{}),
 	}
 	go func() {
