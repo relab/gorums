@@ -246,9 +246,9 @@ func TestSlowRegister(t *testing.T) {
 	if !ok {
 		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, qc.QuorumCallError{}, err)
 	}
-	wantErr := qc.QuorumCallError{Reason: "context deadline exceeded", ErrCount: 1, ReplyCount: 0}
-	if timeoutErr != wantErr {
-		t.Fatalf("got: %v, want: %v", timeoutErr, wantErr)
+	wantErrReason := "context deadline exceeded"
+	if timeoutErr.Reason != wantErrReason {
+		t.Fatalf("got error reason: %v, want: %v", timeoutErr.Reason, wantErrReason)
 	}
 }
 
