@@ -93,7 +93,7 @@ func TestBasicRegister(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Value != state.Value {
-		t.Fatalf("read reply: want state %v, got %v", state, rreply.State)
+		t.Fatalf("read reply: got state %v, want state %v", rreply.State, state)
 	}
 
 	nodes := mgr.Nodes(false)
@@ -147,7 +147,7 @@ func TestSingleServerRPC(t *testing.T) {
 			t.Fatalf("read quorum call error: %v", err)
 		}
 		if rreply.Value != state.Value {
-			t.Fatalf("read reply: want state %v, got %v", state, rreply.Value)
+			t.Fatalf("read reply: got state %v, want %v", rreply.Value, state)
 		}
 	}
 }
@@ -192,7 +192,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	select {
 	case err := <-replyChan:
 		if err == nil {
-			t.Fatalf("want error, got none")
+			t.Fatalf("got no error, want one")
 		}
 		_, ok := err.(qc.QuorumCallError)
 		if !ok {
@@ -240,7 +240,7 @@ func TestSlowRegister(t *testing.T) {
 	defer cancel()
 	_, err = config.Read(ctx, &qc.ReadRequest{})
 	if err == nil {
-		t.Fatalf("read quorum call: want error, got none")
+		t.Fatalf("read quorum call: got no error, want none")
 	}
 	timeoutErr, ok := err.(qc.QuorumCallError)
 	if !ok {
@@ -322,7 +322,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Value != state.Value {
-		t.Fatalf("read future reply:\nwant:\n%v,\ngot:\n%v", state, rreply.State)
+		t.Fatalf("read future reply:\ngot:\n%v\nwant:\n%v", rreply.State, state)
 	}
 }
 
@@ -385,7 +385,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Value != stateOne.Value {
-		t.Fatalf("read reply:\nwant:\n%v,\ngot:\n%v", stateOne, rreply.State)
+		t.Fatalf("read reply:\ngot:\n%v\nwant:\n%v", rreply.State, stateOne)
 	}
 
 	stateTwo := &qc.State{
@@ -412,7 +412,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Value != stateTwo.Value {
-		t.Fatalf("read reply:\nwant:\n%v\ngot:\n%v", stateTwo, rreply.State)
+		t.Fatalf("read reply:\ngot:\n%v\nwant:\n%v", rreply.State, stateTwo)
 	}
 }
 
@@ -487,7 +487,7 @@ func TestQuorumCallCancel(t *testing.T) {
 	cancel() // Main point: cancel at once, not defer.
 	_, err = config.Read(ctx, &qc.ReadRequest{})
 	if err == nil {
-		t.Fatalf("read quorum call: want error, got none")
+		t.Fatalf("read quorum call: got no error, want one")
 	}
 	err, ok := err.(qc.QuorumCallError)
 	if !ok {
@@ -495,7 +495,7 @@ func TestQuorumCallCancel(t *testing.T) {
 	}
 	wantErr := qc.QuorumCallError{Reason: "context canceled", ErrCount: 0, ReplyCount: 0}
 	if err != wantErr {
-		t.Fatalf("got: %v, want: %v", err, wantErr)
+		t.Fatalf("got error: %v, want: %v", err, wantErr)
 	}
 }
 
