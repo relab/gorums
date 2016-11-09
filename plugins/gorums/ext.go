@@ -15,13 +15,7 @@ func hasQRPCExtension(method *descriptor.MethodDescriptorProto) bool {
 	if err != nil {
 		return false
 	}
-	if value == nil {
-		return false
-	}
-	if value.(*bool) == nil {
-		return false
-	}
-	return true
+	return checkExtensionBoolValue(value)
 }
 
 func hasCorrectableExtension(method *descriptor.MethodDescriptorProto) bool {
@@ -32,13 +26,7 @@ func hasCorrectableExtension(method *descriptor.MethodDescriptorProto) bool {
 	if err != nil {
 		return false
 	}
-	if value == nil {
-		return false
-	}
-	if value.(*bool) == nil {
-		return false
-	}
-	return true
+	return checkExtensionBoolValue(value)
 }
 
 func hasMcastExtension(method *descriptor.MethodDescriptorProto) bool {
@@ -49,13 +37,7 @@ func hasMcastExtension(method *descriptor.MethodDescriptorProto) bool {
 	if err != nil {
 		return false
 	}
-	if value == nil {
-		return false
-	}
-	if value.(*bool) == nil {
-		return false
-	}
-	return true
+	return checkExtensionBoolValue(value)
 }
 
 func hasFutureExtension(method *descriptor.MethodDescriptorProto) bool {
@@ -66,6 +48,10 @@ func hasFutureExtension(method *descriptor.MethodDescriptorProto) bool {
 	if err != nil {
 		return false
 	}
+	return checkExtensionBoolValue(value)
+}
+
+func checkExtensionBoolValue(value interface{}) bool {
 	if value == nil {
 		return false
 	}
