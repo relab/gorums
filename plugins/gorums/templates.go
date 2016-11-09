@@ -11,6 +11,7 @@ package {{.PackageName}}
 
 import (
 	"fmt"
+	"sync"
 
 	"golang.org/x/net/context"
 )
@@ -85,6 +86,100 @@ func (f *{{.MethodName}}Future) Done() bool {
 	default:
 		return false
 	}
+}
+
+{{- end -}}
+
+{{if .Correctable}}
+
+// {{.MethodName}}Correctable asynchronously invokes a
+// correctable {{.MethodName}} quorum call on configuration c and returns a
+// {{.MethodName}}Correctable which can be used to inspect any repies or errors
+// when available.
+func (c *Configuration) {{.MethodName}}Correctable(ctx context.Context, args *ReadRequest) *{{.MethodName}}Correctable {
+	corr := &{{.MethodName}}Correctable{
+		level:  -1,
+		donech: make(chan struct{}),
+	}
+	go func() {
+		c.mgr.{{.UnexportedMethodName}}Correctable(ctx, c, corr, args)
+	}()
+	return corr
+}
+
+// {{.MethodName}}Correctable is a reference to a correctable {{.MethodName}} quorum call.
+type {{.MethodName}}Correctable struct {
+	mu       sync.Mutex
+	reply    *{{.TypeName}}
+	level    int
+	err      error
+	done     bool
+	watchers []struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+
+// Get returns the reply, level and any error associated with the
+// {{.MethodName}}Correctable. The method does not block until a (possibly
+// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// reply has yet been received. The Done or Watch methods should be used to
+// ensure a reply is available.
+func (c *{{.MethodName}}Correctable) Get() (*{{.TypeName}}, int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.reply, c.level, c.err
+}
+
+// Done returns a channel that's closed when the {{.MethodName}} correctable
+// quorum call is done. A call is considered done when the quorum function has
+// signaled that a quorum of replies was received or that the call returned an
+// error.
+func (c *{{.MethodName}}Correctable) Done() <-chan struct{} {
+	return c.donech
+}
+
+// Watch returns a channel that's closed when a reply or error at or above the
+// specified level is available.
+func (c *{{.MethodName}}Correctable) Watch(level int) <-chan struct{} {
+	ch := make(chan struct{})
+	c.mu.Lock()
+	if level < c.level {
+		close(ch)
+		c.mu.Unlock()
+		return ch
+	}
+	c.watchers = append(c.watchers, struct {
+		level int
+		ch    chan struct{}
+	}{level, ch})
+	c.mu.Unlock()
+	return ch
+}
+
+func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err error, done bool) {
+	c.mu.Lock()
+	if c.done {
+		c.mu.Unlock()
+		panic("set(...) called on a done correctable")
+	}
+	c.reply, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			close(watcher.ch)
+		}
+		c.mu.Unlock()
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+		}
+		c.watchers = c.watchers[i+1:]
+	}
+	c.mu.Unlock()
 }
 
 {{- end -}}
@@ -194,6 +289,58 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}
 	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
 }
 
+{{if .Correctable}}
+
+func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.ReqName}}) {
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+	newCtx, cancel := context.WithCancel(ctx)
+
+	for _, n := range c.nodes {
+		go callGRPC{{.MethodName}}(newCtx, n, args, replyChan)
+	}
+
+	var (
+		replyValues     = make([]*{{.RespName}}, 0, c.n)
+		reply           = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      	= LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(replyValues)
+			if quorum {
+				cancel()
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-newCtx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			cancel()
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+{{- end -}}
 {{- end -}}
 {{- end -}}
 `
@@ -292,6 +439,11 @@ type QuorumSpec interface {
 {{- if not .Multicast}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} RPC method.
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
+
+{{ if .Correctable}}
+	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}} Correctable RPC method.
+	{{.MethodName}}CorrectableQF(replies []*{{.RespName}}) (*{{.RespName}}, int, bool)
+{{end}}
 {{- end -}}
 {{- end}}
 }

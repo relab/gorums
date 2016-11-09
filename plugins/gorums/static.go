@@ -109,6 +109,12 @@ func (e QuorumCallError) Error() string {
 	)
 }
 
+/* level.go */
+
+// LevelNotSet is the zero value level used to indicate that no level (and
+// thereby no reply) has been set for a correctable quorum call.
+const LevelNotSet = -1
+
 /* mgr.go */
 
 // Manager manages a pool of node configurations on which quorum remote

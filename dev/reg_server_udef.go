@@ -35,6 +35,18 @@ func NewRegisterBasic() *RegisterServerBasic {
 	}
 }
 
+// NewRegisterBasicWithState returns a new basic register server with an initial
+// state set.
+func NewRegisterBasicWithState(state *State) *RegisterServerBasic {
+	return &RegisterServerBasic{
+		state: *state,
+		// Use an appropriate larger buffer size if we construct test
+		// scenarios where it's needed.
+		writeExecutedChan: make(chan struct{}, 32),
+		readExecutedChan:  make(chan struct{}, 32),
+	}
+}
+
 func (r *RegisterServerBasic) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
 	r.RLock()
 	defer r.RUnlock()
@@ -139,6 +151,15 @@ func NewRegisterSlow(dur time.Duration) *RegisterServerSlow {
 	return &RegisterServerSlow{
 		delay:      dur,
 		realServer: NewRegisterBasic(),
+	}
+}
+
+// NewRegisterSlowWithState returns a new slow register server with an initial
+// state set.
+func NewRegisterSlowWithState(dur time.Duration, state *State) *RegisterServerSlow {
+	return &RegisterServerSlow{
+		delay:      dur,
+		realServer: NewRegisterBasicWithState(state),
 	}
 }
 

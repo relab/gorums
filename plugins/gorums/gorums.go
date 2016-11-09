@@ -264,8 +264,9 @@ type serviceMethod struct {
 	TypeName           string
 	UnexportedTypeName string
 
-	GenFuture bool
-	Multicast bool
+	Correctable bool
+	GenFuture   bool
+	Multicast   bool
 
 	ServName string // Redundant, but keeps it simple.
 }
@@ -321,6 +322,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 				sm.Multicast = true
 			}
 			sm.GenFuture = hasFutureExtension(method)
+			sm.Correctable = hasCorrectableExtension(method)
 
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, &sm)
@@ -359,15 +361,16 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 
 func verify(service string, method *pb.MethodDescriptorProto) (skip bool, err error) {
 	qrpc := hasQRPCExtension(method)
+	corr := hasCorrectableExtension(method)
 	mcast := hasMcastExtension(method)
 	future := hasFutureExtension(method)
 
 	switch {
-	case !qrpc && !mcast:
+	case !qrpc && !corr && !mcast:
 		return true, nil
-	case qrpc && mcast:
+	case (qrpc || corr) && mcast:
 		return false, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: both 'qrcp' and 'broadcast'",
+			"%s.%s: illegal combination combination of options: both 'qrpc/correctable' and 'broadcast'",
 			service, method.GetName(),
 		)
 	case future && !qrpc:

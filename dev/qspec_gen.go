@@ -7,6 +7,10 @@ package dev
 type QuorumSpec interface {
 	// ReadQF is the quorum function for the Read RPC method.
 	ReadQF(replies []*State) (*State, bool)
+
+	// ReadCorrectableQF is the quorum function for the Read Correctable RPC method.
+	ReadCorrectableQF(replies []*State) (*State, int, bool)
+
 	// WriteQF is the quorum function for the Write RPC method.
 	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
 }

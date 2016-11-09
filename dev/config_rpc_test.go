@@ -499,6 +499,68 @@ func TestQuorumCallCancel(t *testing.T) {
 	}
 }
 
+func TestBasicCorrectable(t *testing.T) {
+	defer leakCheck(t)()
+
+	stateOne := &rpc.State{
+		Value:     "42",
+		Timestamp: 1,
+	}
+	stateTwo := &rpc.State{
+		Value:     "99",
+		Timestamp: 100,
+	}
+
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(
+		t,
+		[]regServer{
+			{impl: rpc.NewRegisterSlowWithState(5*time.Millisecond, stateOne)},
+			{impl: rpc.NewRegisterSlowWithState(20*time.Millisecond, stateTwo)},
+			{impl: rpc.NewRegisterSlowWithState(500*time.Millisecond, stateTwo)},
+		},
+		false,
+	)
+	defer closeListeners(allServers)
+	defer stopGrpcServe(allServers)
+
+	mgr, err := rpc.NewManager(
+		servers.addrs(),
+		dialOpts,
+	)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+
+	ids := mgr.NodeIDs()
+	majority := len(ids)/2 + 1
+	qspec := NewRegisterByTimestampQSpec(majority, majority)
+	config, err := mgr.NewConfiguration(ids, qspec)
+	if err != nil {
+		t.Fatalf("error creating config: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	correctable := config.ReadCorrectable(ctx, &rpc.ReadRequest{})
+
+	select {
+	case <-correctable.Done():
+		reply, level, err := correctable.Get()
+		if err != nil {
+			t.Fatalf("read correctable call error: %v", err)
+		}
+		if level != LevelStrong {
+			t.Fatalf("read correctable: got level %v, want %v", level, LevelStrong)
+		}
+		if reply.State.Value != stateTwo.Value {
+			t.Fatalf("read correctable reply:\ngot:\n%v\nwant:\n%v", reply.State, stateTwo)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("correctable was not done and call did not timeout using context")
+	}
+}
+
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkRead1KQ1N3Local(b *testing.B) {

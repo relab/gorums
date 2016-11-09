@@ -76,6 +76,55 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 	replyChan <- readReply{node.id, reply, err}
 }
 
+func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
+	replyChan := make(chan readReply, c.n)
+	newCtx, cancel := context.WithCancel(ctx)
+
+	for _, n := range c.nodes {
+		go callGRPCRead(newCtx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      = LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			reply.State, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
+			if quorum {
+				cancel()
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-newCtx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			cancel()
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
 type writeReply struct {
 	nid   uint32
 	reply *WriteResponse

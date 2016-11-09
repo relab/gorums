@@ -11,9 +11,13 @@ extend google.protobuf.MethodOptions {
 }
 
 extend google.protobuf.MethodOptions {
-	bool multicast = 50001;
+	bool correctable = 50001;
 }
 
 extend google.protobuf.MethodOptions {
-	bool future = 50002;
+	bool multicast = 50010;
+}
+
+extend google.protobuf.MethodOptions {
+	bool future = 50020;
 }

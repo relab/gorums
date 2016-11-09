@@ -7,6 +7,7 @@ package dev;
 service Register {
 	rpc Read(ReadRequest) returns (State) {
 		option (gorums.qrpc) = true;
+		option (gorums.correctable) = true;
 		option (gorums.future) = true;
 	}
 
