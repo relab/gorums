@@ -326,6 +326,9 @@ func (this *Empty) Equal(that interface{}) bool {
 	return true
 }
 
+//  Reference Gorums specific imports to suppress errors if they are not otherwise used.
+var _ = codes.OK
+
 /* 'gorums' plugin for protoc-gen-go - generated from: config_rpc_tmpl */
 
 // ReadReply encapsulates the reply from a Read RPC invocation.

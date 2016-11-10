@@ -130,6 +130,8 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	g.pkgData.PackageName = file.GetPackage()
 	g.pkgData.Clients, g.pkgData.Services = g.generateServiceMethods(file.FileDescriptorProto.Service)
 
+	g.referenceToSuppressErrs()
+
 	g.pkgData.IgnoreImports = true
 	if err := g.processTemplates(); err != nil {
 		die(err)
@@ -141,6 +143,12 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	}
 
 	g.embedStaticResources()
+}
+
+func (g *gorums) referenceToSuppressErrs() {
+	g.P()
+	g.P("//  Reference Gorums specific imports to suppress errors if they are not otherwise used.")
+	g.P("var _ = codes.OK")
 }
 
 func (g *gorums) processTemplates() error {
@@ -212,10 +220,8 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 		}
 		g.P("\"", simport, "\"")
 	}
-	if !onlyClientStreamMethods(file.FileDescriptorProto.Service) {
-		g.P()
-		g.P("\"google.golang.org/grpc/codes\"")
-	}
+	g.P()
+	g.P("\"google.golang.org/grpc/codes\"")
 	g.P(")")
 }
 
@@ -224,17 +230,6 @@ var ignoreImport = map[string]bool{
 	"math": true,
 	"golang.org/x/net/context": true,
 	"google.golang.org/grpc":   true,
-}
-
-func onlyClientStreamMethods(services []*pb.ServiceDescriptorProto) bool {
-	for _, service := range services {
-		for _, method := range service.Method {
-			if !method.GetClientStreaming() {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func die(err error) {
