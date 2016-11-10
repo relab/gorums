@@ -114,7 +114,8 @@ func (c *ReadCorrectable) Done() <-chan struct{} {
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
-// specified level is available.
+// specified level is available. If the call is done, the channel is closed
+// disregardless of the specified level.
 func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
