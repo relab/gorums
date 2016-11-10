@@ -44,7 +44,7 @@ func hasFutureExtension(method *descriptor.MethodDescriptorProto) bool {
 	if method.Options == nil {
 		return false
 	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_Future)
+	value, err := proto.GetExtension(method.Options, gorumsproto.E_QcFuture)
 	if err != nil {
 		return false
 	}

@@ -8,12 +8,12 @@ service Register {
 	rpc Read(ReadRequest) returns (State) {
 		option (gorums.qc) = true;
 		option (gorums.correctable) = true;
-		option (gorums.future) = true;
+		option (gorums.qc_future) = true;
 	}
 
 	rpc Write(State) returns (WriteResponse) {
 		option (gorums.qc) = true;
-		option (gorums.future) = true;
+		option (gorums.qc_future) = true;
 	}
 
 	rpc WriteAsync(stream State) returns (Empty) {

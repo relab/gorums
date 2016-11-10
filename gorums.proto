@@ -19,5 +19,5 @@ extend google.protobuf.MethodOptions {
 }
 
 extend google.protobuf.MethodOptions {
-	bool future = 50020;
+	bool qc_future = 50020;
 }
