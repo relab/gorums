@@ -11,7 +11,7 @@ func hasQuorumCallExtension(method *descriptor.MethodDescriptorProto) bool {
 	if method.Options == nil {
 		return false
 	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_Qrpc)
+	value, err := proto.GetExtension(method.Options, gorumsproto.E_Qc)
 	if err != nil {
 		return false
 	}
