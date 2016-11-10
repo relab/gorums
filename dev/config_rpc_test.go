@@ -548,16 +548,16 @@ func TestBasicCorrectable(t *testing.T) {
 	case <-correctable.Done():
 		reply, level, err := correctable.Get()
 		if err != nil {
-			t.Fatalf("read correctable call error: %v", err)
+			t.Fatalf("read correctable call: get: got error: %v, want none", err)
 		}
 		if level != LevelStrong {
-			t.Fatalf("read correctable: got level %v, want %v", level, LevelStrong)
+			t.Fatalf("read correctable: get: got level %v, want %v", level, LevelStrong)
 		}
 		if reply.State.Value != stateTwo.Value {
-			t.Fatalf("read correctable reply:\ngot:\n%v\nwant:\n%v", reply.State, stateTwo)
+			t.Fatalf("read correctable: get: reply:\ngot:\n%v\nwant:\n%v", reply.State, stateTwo)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatalf("correctable was not done and call did not timeout using context")
+		t.Fatalf("read correctable: was not done and call did not timeout using context")
 	}
 }
 
@@ -634,13 +634,13 @@ func TestCorrectableWithLevels(t *testing.T) {
 	default:
 	}
 
-	// Check that Get() returns nil, LevelNotSet, nil
+	// Check that Get() returns nil, LevelNotSet, nil.
 	reply, level, err := correctable.Get()
 	if err != nil {
-		t.Fatalf("read correctable: intial get: got unexpected error: %v", err)
+		t.Fatalf("read correctable: initial get: got unexpected error: %v", err)
 	}
 	if level != qc.LevelNotSet {
-		t.Fatalf("read correctable: intial get: got level %v, want %v", level, qc.LevelNotSet)
+		t.Fatalf("read correctable: initial get: got level %v, want %v", level, qc.LevelNotSet)
 	}
 	if reply != nil {
 		t.Fatal("read correctable: initial get: got reply, want none")
@@ -656,7 +656,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 		t.Fatalf("read correctable: waiting for levelOneChan timed out (waited %v)", waitTimeout)
 	}
 
-	// Check that Get() returns stateOne, LevelWeak, nil
+	// Check that Get() returns stateOne, LevelWeak, nil.
 	reply, level, err = correctable.Get()
 	if err != nil {
 		t.Fatalf("read correctable: get after one reply: got unexpected error: %v", err)
@@ -672,14 +672,14 @@ func TestCorrectableWithLevels(t *testing.T) {
 	regServersImplementation[1].Unlock()
 	regServersImplementation[2].Unlock()
 
-	// Wait Done channels notification.
+	// Wait for Done channel notification.
 	select {
 	case <-correctable.Done():
 	case <-time.After(waitTimeout):
 		t.Fatalf("read correctable: waiting for Done channel timed out (waited %v)", waitTimeout)
 	}
 
-	// Check that Get() returns stateTwo, LevelStrong, nil
+	// Check that Get() returns stateTwo, LevelStrong, nil.
 	reply, level, err = correctable.Get()
 	if err != nil {
 		t.Fatalf("read correctable: get after done call: got unexpected error: %v", err)
