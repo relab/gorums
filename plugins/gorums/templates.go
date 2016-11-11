@@ -22,9 +22,9 @@ import (
 
 {{if .Multicast}}
 
-// {{.MethodName}} invokes an asynchronous {{.MethodName}} RPC on configuration c.
-// The call has no return value and is invoked on every node in the
-// configuration.
+// {{.MethodName}} is a one-way multicast operation, where args is sent to
+// every node in configuration c. The call is asynchronous and has no response
+// return value.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) error {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
@@ -446,7 +446,7 @@ type QuorumSpec interface {
 {{end}}
 
 {{if .Correctable}}
-	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}} 
+	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}}
 	// correctable quorum call method.
 	{{.MethodName}}CorrectableQF(replies []*{{.RespName}}) (*{{.RespName}}, int, bool)
 {{end}}

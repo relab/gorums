@@ -530,9 +530,9 @@ func (f *WriteFuture) Done() bool {
 	}
 }
 
-// WriteAsync invokes an asynchronous WriteAsync RPC on configuration c.
-// The call has no return value and is invoked on every node in the
-// configuration.
+// WriteAsync is a one-way multicast operation, where args is sent to
+// every node in configuration c. The call is asynchronous and has no response
+// return value.
 func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
 	return c.mgr.writeAsync(ctx, c, args)
 }
