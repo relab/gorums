@@ -20,7 +20,7 @@ type GorumsRequesterFactory struct {
 	ReadQuorum        int
 	WriteQuorum       int
 	PayloadSize       int
-	QRPCTimeout       time.Duration
+	QCTimeout         time.Duration
 	WriteRatioPercent int
 }
 
@@ -31,7 +31,7 @@ func (r *GorumsRequesterFactory) GetRequester(uint64) bench.Requester {
 		readq:       r.ReadQuorum,
 		writeq:      r.WriteQuorum,
 		payloadSize: r.PayloadSize,
-		timeout:     r.QRPCTimeout,
+		timeout:     r.QCTimeout,
 		writeRatio:  r.WriteRatioPercent,
 		dialOpts: []grpc.DialOption{
 			grpc.WithInsecure(),

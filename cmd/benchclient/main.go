@@ -32,7 +32,7 @@ func main() {
 		noauth  = flag.Bool("noauth", false, "don't use authenticated channels")
 		port    = flag.Int("port", 8080, "port where local server is listening")
 		psize   = flag.Int("p", 1024, "payload size in bytes")
-		timeout = flag.Duration("t", time.Second, "(Q)RPC timeout")
+		timeout = flag.Duration("t", time.Second, "call timeout")
 		writera = flag.Int("wr", 0, "write ratio in percent (0-100)")
 		grpcc   = flag.Bool("grpcc", false, "run concurrent grpc")
 
@@ -95,7 +95,7 @@ func main() {
 			ReadQuorum:        *readq,
 			WriteQuorum:       *writeq,
 			PayloadSize:       *psize,
-			QRPCTimeout:       *timeout,
+			QCTimeout:         *timeout,
 			WriteRatioPercent: *writera,
 		}
 	case grpc:
@@ -110,7 +110,7 @@ func main() {
 		factory = &gbench.ByzqRequesterFactory{
 			Addrs:             addrs,
 			PayloadSize:       *psize,
-			QRPCTimeout:       *timeout,
+			QCTimeout:         *timeout,
 			WriteRatioPercent: *writera,
 			NoAuth:            *noauth,
 		}
@@ -120,7 +120,7 @@ func main() {
 			ReadQuorum:        *readq,
 			WriteQuorum:       *writeq,
 			PayloadSize:       *psize,
-			QRPCTimeout:       *timeout,
+			QCTimeout:         *timeout,
 			WriteRatioPercent: *writera,
 		}
 	}

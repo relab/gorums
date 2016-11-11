@@ -20,7 +20,7 @@ import (
 type ByzqRequesterFactory struct {
 	Addrs             []string
 	PayloadSize       int
-	QRPCTimeout       time.Duration
+	QCTimeout         time.Duration
 	WriteRatioPercent int
 	NoAuth            bool
 }
@@ -30,7 +30,7 @@ func (r *ByzqRequesterFactory) GetRequester(uint64) bench.Requester {
 	return &byzqRequester{
 		addrs:       r.Addrs,
 		payloadSize: r.PayloadSize,
-		timeout:     r.QRPCTimeout,
+		timeout:     r.QCTimeout,
 		writeRatio:  r.WriteRatioPercent,
 		noauth:      r.NoAuth,
 	}
