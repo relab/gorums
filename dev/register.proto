@@ -20,7 +20,7 @@ service Register {
 		option (gorums.multicast) = true;
 	}
 
-	rpc ReadNoQRPC(ReadRequest) returns (State) {}
+	rpc ReadNoQC(ReadRequest) returns (State) {}
 }
 
 message State {

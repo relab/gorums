@@ -142,7 +142,7 @@ func TestSingleServerRPC(t *testing.T) {
 			t.Fatalf("write reply was not marked as new")
 		}
 
-		rreply, err := node.RegisterClient.ReadNoQRPC(ctx, &qc.ReadRequest{})
+		rreply, err := node.RegisterClient.ReadNoQC(ctx, &qc.ReadRequest{})
 		if err != nil {
 			t.Fatalf("read quorum call error: %v", err)
 		}
