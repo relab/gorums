@@ -124,7 +124,6 @@ func TestSingleServerRPC(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	defer mgr.Close()
-	//closeListeners(allServers)
 
 	state := &qc.State{
 		Value:     "42",
