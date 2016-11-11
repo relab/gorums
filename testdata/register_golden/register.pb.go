@@ -331,9 +331,8 @@ var _ = codes.OK
 
 /* 'gorums' plugin for protoc-gen-go - generated from: config_rpc_tmpl */
 
-// ReadReply encapsulates the reply from a Read RPC invocation.
-// It contains the id of each node in the quorum that replied and a single
-// reply.
+// ReadReply encapsulates the reply from a Read quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
 type ReadReply struct {
 	NodeIDs []uint32
 	*State
@@ -343,22 +342,22 @@ func (r ReadReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
-// Read invokes a Read RPC on configuration c
+// Read invokes a Read quorum call on configuration c
 // and returns the result as a ReadReply.
 func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
 	return c.mgr.read(ctx, c, args)
 }
 
-// ReadFuture is a reference to an asynchronous Read RPC invocation.
+// ReadFuture is a reference to an asynchronous Read quorum call invocation.
 type ReadFuture struct {
 	reply *ReadReply
 	err   error
 	c     chan struct{}
 }
 
-// ReadFuture asynchronously invokes a Read RPC on configuration c and
-// returns a ReadFuture which can be used to inspect the RPC reply and error
-// when available.
+// ReadFuture asynchronously invokes a Read quorum call
+// on configuration c and returns a ReadFuture which can be used to
+// inspect the quorum call reply and error when available.
 func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
 	f := new(ReadFuture)
 	f.c = make(chan struct{}, 1)
@@ -376,7 +375,7 @@ func (f *ReadFuture) Get() (*ReadReply, error) {
 	return f.reply, f.err
 }
 
-// Done reports if a reply or error is available for the ReadFuture.
+// Done reports if a reply and/or error is available for the ReadFuture.
 func (f *ReadFuture) Done() bool {
 	select {
 	case <-f.c:
@@ -419,7 +418,7 @@ type ReadCorrectable struct {
 // ReadCorrectable. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
-// ensure a reply is available.
+// ensure that a reply is available.
 func (c *ReadCorrectable) Get() (*ReadReply, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -477,9 +476,8 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 	c.mu.Unlock()
 }
 
-// WriteReply encapsulates the reply from a Write RPC invocation.
-// It contains the id of each node in the quorum that replied and a single
-// reply.
+// WriteReply encapsulates the reply from a Write quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
 type WriteReply struct {
 	NodeIDs []uint32
 	*WriteResponse
@@ -489,22 +487,22 @@ func (r WriteReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
-// Write invokes a Write RPC on configuration c
+// Write invokes a Write quorum call on configuration c
 // and returns the result as a WriteReply.
 func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
 	return c.mgr.write(ctx, c, args)
 }
 
-// WriteFuture is a reference to an asynchronous Write RPC invocation.
+// WriteFuture is a reference to an asynchronous Write quorum call invocation.
 type WriteFuture struct {
 	reply *WriteReply
 	err   error
 	c     chan struct{}
 }
 
-// WriteFuture asynchronously invokes a Write RPC on configuration c and
-// returns a WriteFuture which can be used to inspect the RPC reply and error
-// when available.
+// WriteFuture asynchronously invokes a Write quorum call
+// on configuration c and returns a WriteFuture which can be used to
+// inspect the quorum call reply and error when available.
 func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
 	f := new(WriteFuture)
 	f.c = make(chan struct{}, 1)
@@ -522,7 +520,7 @@ func (f *WriteFuture) Get() (*WriteReply, error) {
 	return f.reply, f.err
 }
 
-// Done reports if a reply or error is available for the WriteFuture.
+// Done reports if a reply and/or error is available for the WriteFuture.
 func (f *WriteFuture) Done() bool {
 	select {
 	case <-f.c:
@@ -879,7 +877,7 @@ func ManagerCreationError(err error) error {
 	return fmt.Errorf("could not create manager: %s", err.Error())
 }
 
-// A QuorumCallError reports that a quorum RPC call failed.
+// A QuorumCallError is used to report that a quorum call failed.
 type QuorumCallError struct {
 	Reason               string
 	ErrCount, ReplyCount int

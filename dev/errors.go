@@ -31,7 +31,7 @@ func ManagerCreationError(err error) error {
 	return fmt.Errorf("could not create manager: %s", err.Error())
 }
 
-// A QuorumCallError reports that a quorum RPC call failed.
+// A QuorumCallError is used to report that a quorum call failed.
 type QuorumCallError struct {
 	Reason               string
 	ErrCount, ReplyCount int

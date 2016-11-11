@@ -25,11 +25,11 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 }
 
 {{- end -}}
+
 {{if .QuorumCall}}
 
-// {{.TypeName}} encapsulates the reply from a {{.MethodName}} RPC invocation.
-// It contains the id of each node in the quorum that replied and a single
-// reply.
+// {{.TypeName}} encapsulates the reply from a {{.MethodName}} quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
 	*{{.RespName}}
@@ -39,7 +39,7 @@ func (r {{.TypeName}}) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
 }
 
-// {{.MethodName}} invokes a {{.MethodName}} RPC on configuration c
+// {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
 // and returns the result as a {{.TypeName}}.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
@@ -48,16 +48,16 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 
 {{if .Future}}
 
-// {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} RPC invocation.
+// {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} quorum call invocation.
 type {{.MethodName}}Future struct {
 	reply *{{.TypeName}}
 	err   error
 	c     chan struct{}
 }
 
-// {{.MethodName}}Future asynchronously invokes a {{.MethodName}} RPC on configuration c and
-// returns a {{.MethodName}}Future which can be used to inspect the RPC reply and error
-// when available.
+// {{.MethodName}}Future asynchronously invokes a {{.MethodName}} quorum call
+// on configuration c and returns a {{.MethodName}}Future which can be used to
+// inspect the quorum call reply and error when available.
 func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.ReqName}}) *{{.MethodName}}Future {
 	f := new({{.MethodName}}Future)
 	f.c = make(chan struct{}, 1)
@@ -75,7 +75,7 @@ func (f *{{.MethodName}}Future) Get() (*{{.TypeName}}, error) {
 	return f.reply, f.err
 }
 
-// Done reports if a reply or error is available for the {{.MethodName}}Future.
+// Done reports if a reply and/or error is available for the {{.MethodName}}Future.
 func (f *{{.MethodName}}Future) Done() bool {
 	select {
 	case <-f.c:
@@ -122,7 +122,7 @@ type {{.MethodName}}Correctable struct {
 // {{.MethodName}}Correctable. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
-// ensure a reply is available.
+// ensure that a reply is available.
 func (c *{{.MethodName}}Correctable) Get() (*{{.TypeName}}, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
