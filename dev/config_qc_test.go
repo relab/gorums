@@ -610,15 +610,20 @@ func TestCorrectableWithLevels(t *testing.T) {
 		t.Fatalf("error creating config: %v", err)
 	}
 
+	waitTimeout := time.Second
+
 	ctx := context.Background()
 	correctable := config.ReadCorrectable(ctx, &qc.ReadRequest{})
 
 	// Watch for level 1 ("weak") for this quorum specification.
 	levelOneChan := correctable.Watch(LevelWeak)
-	waitTimeout := time.Second
+
+	// Watch for level 5 (undefined). Higher than any level used in the
+	// quorum function. The channel should still be closed when the call
+	// completes.
+	levelFiveChan := correctable.Watch(5)
 
 	// Initial check: no server has replied yet.
-
 	// Check that the level 1 watch channel is not done.
 	select {
 	case <-levelOneChan:
@@ -688,6 +693,13 @@ func TestCorrectableWithLevels(t *testing.T) {
 	}
 	if reply.State.Value != stateTwo.Value {
 		t.Fatalf("read correctable: get after done call:\ngot reply:\n%v\nwant:\n%v", reply.State.Value, stateTwo.Value)
+	}
+
+	// Check that channel for level 5 (undefined) notification is closed.
+	select {
+	case <-levelFiveChan:
+	default:
+		t.Fatal("read correctable: call is complete but levelFive notification channel was not closed", waitTimeout)
 	}
 }
 

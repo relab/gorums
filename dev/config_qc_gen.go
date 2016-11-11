@@ -86,7 +86,7 @@ type ReadCorrectable struct {
 	level    int
 	err      error
 	done     bool
-	watchers []struct {
+	watchers []*struct {
 		level int
 		ch    chan struct{}
 	}
@@ -123,7 +123,7 @@ func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
 		c.mu.Unlock()
 		return ch
 	}
-	c.watchers = append(c.watchers, struct {
+	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
@@ -141,7 +141,9 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
-			close(watcher.ch)
+			if watcher != nil {
+				close(watcher.ch)
+			}
 		}
 		c.mu.Unlock()
 		return
@@ -149,8 +151,8 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 	for i := range c.watchers {
 		if c.watchers[i].level <= level {
 			close(c.watchers[i].ch)
+			c.watchers[i] = nil
 		}
-		c.watchers = c.watchers[i+1:]
 	}
 	c.mu.Unlock()
 }

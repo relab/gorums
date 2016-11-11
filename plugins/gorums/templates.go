@@ -116,7 +116,7 @@ type {{.MethodName}}Correctable struct {
 	level    int
 	err      error
 	done     bool
-	watchers []struct {
+	watchers []*struct {
 		level int
 		ch    chan struct{}
 	}
@@ -153,7 +153,7 @@ func (c *{{.MethodName}}Correctable) Watch(level int) <-chan struct{} {
 		c.mu.Unlock()
 		return ch
 	}
-	c.watchers = append(c.watchers, struct {
+	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
@@ -171,7 +171,9 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
-			close(watcher.ch)
+			if watcher != nil {
+				close(watcher.ch)
+			}
 		}
 		c.mu.Unlock()
 		return
@@ -179,8 +181,8 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 	for i := range c.watchers {
 		if c.watchers[i].level <= level {
 			close(c.watchers[i].ch)
+			c.watchers[i] = nil
 		}
-		c.watchers = c.watchers[i+1:]
 	}
 	c.mu.Unlock()
 }
