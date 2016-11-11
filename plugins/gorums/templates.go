@@ -3,7 +3,7 @@
 
 package gorums
 
-const config_rpc_tmpl = `
+const config_qc_tmpl = `
 {{/* Remember to run 'make gengolden' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
@@ -189,7 +189,7 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 {{- end -}}
 `
 
-const mgr_rpc_tmpl = `
+const mgr_qc_tmpl = `
 {{/* Remember to run 'make gengolden' after editing this file. */}}
 {{$pkgName := .PackageName}}
 
@@ -455,8 +455,8 @@ type QuorumSpec interface {
 `
 
 var templates = map[string]string{
-	"config_rpc_tmpl": config_rpc_tmpl,
-	"mgr_rpc_tmpl":    mgr_rpc_tmpl,
-	"node_tmpl":       node_tmpl,
-	"qspec_tmpl":      qspec_tmpl,
+	"config_qc_tmpl": config_qc_tmpl,
+	"mgr_qc_tmpl":    mgr_qc_tmpl,
+	"node_tmpl":      node_tmpl,
+	"qspec_tmpl":     qspec_tmpl,
 }

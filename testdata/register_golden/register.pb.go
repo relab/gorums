@@ -329,7 +329,7 @@ func (this *Empty) Equal(that interface{}) bool {
 //  Reference Gorums specific imports to suppress errors if they are not otherwise used.
 var _ = codes.OK
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_rpc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: config_qc_tmpl */
 
 // ReadReply encapsulates the reply from a Read quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
@@ -537,7 +537,7 @@ func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
 	return c.mgr.writeAsync(ctx, c, args)
 }
 
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_rpc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: mgr_qc_tmpl */
 
 type readReply struct {
 	nid   uint32

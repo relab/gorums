@@ -27,12 +27,12 @@ var devFilesToCopy = []struct {
 	rewriteImport     bool
 }{
 	{
-		"config_rpc_test.go",
+		"config_qc_test.go",
 		"", "",
 		true,
 	},
 	{
-		"config_rpc_qspecs_test.go",
+		"config_qc_qspecs_test.go",
 		"", "",
 		true,
 	},
