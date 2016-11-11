@@ -5,12 +5,15 @@ package dev
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
-	// ReadQF is the quorum function for the Read RPC method.
+	// ReadQF is the quorum function for the Read
+	// quorum call method.
 	ReadQF(replies []*State) (*State, bool)
 
-	// ReadCorrectableQF is the quorum function for the Read Correctable RPC method.
+	// ReadCorrectableQF is the quorum function for the Read
+	// correctable quorum call method.
 	ReadCorrectableQF(replies []*State) (*State, int, bool)
 
-	// WriteQF is the quorum function for the Write RPC method.
+	// WriteQF is the quorum function for the Write
+	// quorum call method.
 	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
 }

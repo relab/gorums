@@ -9,12 +9,14 @@ package {{.PackageName}}
 type QuorumSpec interface {
 {{- range $elm := .Services}}
 {{- if .QuorumCall}}
-	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} RPC method.
+	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
+	// quorum call method.
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
 {{end}}
 
 {{if .Correctable}}
-	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}} Correctable RPC method.
+	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}}
+	// correctable quorum call method.
 	{{.MethodName}}CorrectableQF(replies []*{{.RespName}}) (*{{.RespName}}, int, bool)
 {{end}}
 {{- end -}}
