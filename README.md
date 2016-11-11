@@ -1,11 +1,12 @@
 # gorums
 
-Gorums [1] is a framework for simplifying the design and implementation of
-fault-tolerant quorum-based protocols. Gorums allows to group replicas into one
-or more _configurations_. A configuration also holds information on how many
-replicas are necessary to form a quorum. Gorums enables programmers to invoke
-remote procedure calls (RPCs) on the replicas in a configuration and wait for
-responses from a quorum. We call this a _quorum call_.
+Gorums [1] is a novel framework for building fault tolerant distributed systems.
+Gorums offers a flexible and simple quorum call abstraction, used to communicate
+with a set of processes, and to collect and process their responses. Gorums
+provides separate abstractions for (a) selecting processes for a quorum call
+and (b) processing replies. These abstractions simplify the main control flow
+of protocol implementations, especially for quorum-based systems, where only a
+subset of the replies to a quorum call need to be processed.
 
 Gorums uses code generation to produce an RPC library that clients can use to
 invoke quorum calls. Gorums is a wrapper around the [gRPC](http://www.grpc.io/)
