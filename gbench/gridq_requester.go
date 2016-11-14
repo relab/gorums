@@ -1,6 +1,7 @@
 package gbench
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -67,7 +68,7 @@ func (gr *gridqRequester) Setup() error {
 
 	ids := gr.mgr.NodeIDs()
 	qspec := rpc.NewGQSortNoVis(gr.readq, gr.writeq)
-	gr.config, err = gr.mgr.NewConfiguration(ids, qspec, gr.timeout)
+	gr.config, err = gr.mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		return err
 	}
@@ -77,11 +78,11 @@ func (gr *gridqRequester) Setup() error {
 		Value:     strings.Repeat("x", gr.payloadSize),
 		Timestamp: time.Now().UnixNano(),
 	}
-	wreply, err := gr.config.Write(gr.state)
+	wreply, err := gr.config.Write(context.Background(), gr.state)
 	if err != nil {
 		return fmt.Errorf("write rpc error: %v", err)
 	}
-	if !wreply.Reply.New {
+	if !wreply.New {
 		return fmt.Errorf("intital write reply was not marked as new")
 	}
 
@@ -90,19 +91,21 @@ func (gr *gridqRequester) Setup() error {
 
 func (gr *gridqRequester) Request() error {
 	var err error
+	ctx, cancel := context.WithTimeout(context.Background(), gr.timeout)
+	defer cancel()
 	switch gr.writeRatio {
 	case 0:
-		_, err = gr.config.Read(&rpc.Empty{})
+		_, err = gr.config.Read(ctx, &rpc.Empty{})
 	case 100:
 		gr.state.Timestamp = time.Now().UnixNano()
-		_, err = gr.config.Write(gr.state)
+		_, err = gr.config.Write(ctx, gr.state)
 	default:
 		x := rand.Intn(100)
 		if x < gr.writeRatio {
 			gr.state.Timestamp = time.Now().UnixNano()
-			_, err = gr.config.Write(gr.state)
+			_, err = gr.config.Write(ctx, gr.state)
 		} else {
-			_, err = gr.config.Read(&rpc.Empty{})
+			_, err = gr.config.Read(ctx, &rpc.Empty{})
 		}
 	}
 

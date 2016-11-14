@@ -1,6 +1,7 @@
 package gbench
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -115,7 +116,7 @@ func (gr *byzqRequester) Setup() error {
 		return err
 	}
 
-	gr.config, err = gr.mgr.NewConfiguration(ids, gr.qspec, gr.timeout)
+	gr.config, err = gr.mgr.NewConfiguration(ids, gr.qspec)
 	if err != nil {
 		return err
 	}
@@ -131,11 +132,11 @@ func (gr *byzqRequester) Setup() error {
 	if err != nil {
 		return err
 	}
-	ack, err := gr.config.Write(signedState)
+	ack, err := gr.config.Write(context.Background(), signedState)
 	if err != nil {
 		return fmt.Errorf("write rpc error: %v", err)
 	}
-	if ack.Reply.Timestamp == 0 {
+	if ack.Timestamp == 0 {
 		return fmt.Errorf("intital write reply was not marked as new")
 	}
 	return nil
@@ -143,16 +144,18 @@ func (gr *byzqRequester) Setup() error {
 
 func (gr *byzqRequester) Request() error {
 	var err error
+	ctx, cancel := context.WithTimeout(context.Background(), gr.timeout)
+	defer cancel()
 	switch gr.writeRatio {
 	case 0:
-		_, err = gr.config.Read(&rpc.Key{Key: gr.state.Key})
+		_, err = gr.config.Read(ctx, &rpc.Key{Key: gr.state.Key})
 	case 100:
 		gr.state.Timestamp = gr.qspec.NewTS()
 		signedState, err2 := gr.qspec.Sign(gr.state)
 		if err2 != nil {
 			return err2
 		}
-		_, err = gr.config.Write(signedState)
+		_, err = gr.config.Write(ctx, signedState)
 	default:
 		x := rand.Intn(100)
 		if x < gr.writeRatio {
@@ -161,9 +164,9 @@ func (gr *byzqRequester) Request() error {
 			if err2 != nil {
 				return err
 			}
-			_, err = gr.config.Write(signedState)
+			_, err = gr.config.Write(ctx, signedState)
 		} else {
-			_, err = gr.config.Read(&rpc.Key{Key: gr.state.Key})
+			_, err = gr.config.Read(ctx, &rpc.Key{Key: gr.state.Key})
 		}
 	}
 
