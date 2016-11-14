@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -31,6 +32,7 @@ func main() {
 		predefined = flag.String("predef", "", "predefined grids ('2x2' or '3x3') for local testing")
 		printGrid  = flag.Bool("gprid", true, "print quorums to screen")
 		psize      = flag.Int("p", 1024, "payload size in bytes")
+		trace      = flag.Bool("t", false, "enable tracing")
 	)
 
 	flag.Usage = func() {
@@ -71,13 +73,22 @@ func main() {
 
 	fmt.Println("#addrs:", len(addrs), "rows:", rows, "cols:", cols)
 
-	mgr, err := gridq.NewManager(
-		addrs,
+	mgrOpts := []gridq.ManagerOption{
 		gridq.WithGrpcDialOptions(
 			grpc.WithBlock(),
 			grpc.WithInsecure(),
 			grpc.WithTimeout(5*time.Second),
 		),
+	}
+	if *trace {
+		mgrOpts = append(mgrOpts, gridq.WithTracing())
+		go func() {
+			http.ListenAndServe(":9090", nil)
+		}()
+	}
+	mgr, err := gridq.NewManager(
+		addrs,
+		mgrOpts...,
 	)
 	if err != nil {
 		dief("error creating manager: %v", err)
