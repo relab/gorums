@@ -221,6 +221,8 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 		g.P("\"", simport, "\"")
 	}
 	g.P()
+	g.P("\"golang.org/x/net/trace\"")
+	g.P()
 	g.P("\"google.golang.org/grpc/codes\"")
 	g.P(")")
 }
@@ -230,6 +232,7 @@ var ignoreImport = map[string]bool{
 	"math":                     true,
 	"strings":                  true,
 	"golang.org/x/net/context": true,
+	"golang.org/x/net/trace":   true,
 	"google.golang.org/grpc":   true,
 }
 

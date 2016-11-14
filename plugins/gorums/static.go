@@ -189,6 +189,10 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		m.logger = m.opts.logger
 	}
 
+	if m.eventLog != nil {
+		m.eventLog.Printf("ready")
+	}
+
 	return m, nil
 }
 

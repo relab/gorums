@@ -23,13 +23,14 @@ import _ "github.com/relab/gorums"
 
 import (
 	"encoding/binary"
-	"golang.org/x/net/trace"
 	"hash/fnv"
 	"log"
 	"net"
 	"sort"
 	"sync"
 	"time"
+
+	"golang.org/x/net/trace"
 
 	"google.golang.org/grpc/codes"
 )
@@ -763,6 +764,10 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 
 	if m.opts.logger != nil {
 		m.logger = m.opts.logger
+	}
+
+	if m.eventLog != nil {
+		m.eventLog.Printf("ready")
 	}
 
 	return m, nil
