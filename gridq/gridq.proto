@@ -1,10 +1,16 @@
 syntax = "proto3";
 
+import "github.com/relab/gorums/gorums.proto";
+
 package gridq;
 
 service Register {
-	rpc Read(Empty) returns (ReadResponse) {}
-	rpc Write(State) returns (WriteResponse) {}
+	rpc Read(Empty) returns (ReadResponse) {
+		option (gorums.qc) = true;
+	}
+	rpc Write(State) returns (WriteResponse) {
+		option (gorums.qc) = true;
+	}
 }
 
 message State {

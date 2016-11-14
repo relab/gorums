@@ -19,9 +19,11 @@ package gridq
 import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
 import math "math"
+import _ "github.com/relab/gorums"
 
 import (
 	"encoding/binary"
+	"golang.org/x/net/trace"
 	"hash/fnv"
 	"log"
 	"net"
@@ -367,119 +369,46 @@ func (this *Empty) Equal(that interface{}) bool {
 	return true
 }
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_rpc_tmpl */
+//  Reference Gorums specific imports to suppress errors if they are not otherwise used.
+var _ = codes.OK
 
-// ReadReply encapsulates the reply from a Read RPC invocation.
-// It contains the id of each node in the quorum that replied and a single
-// reply.
+/* 'gorums' plugin for protoc-gen-go - generated from: config_qc_tmpl */
+
+// ReadReply encapsulates the reply from a Read quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
 type ReadReply struct {
 	NodeIDs []uint32
-	Reply   *ReadResponse
+	*ReadResponse
 }
 
 func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.ReadResponse)
 }
 
-// Read invokes a Read RPC on configuration c
+// Read invokes a Read quorum call on configuration c
 // and returns the result as a ReadReply.
-func (c *Configuration) Read(args *Empty) (*ReadReply, error) {
-	return c.mgr.read(c, args)
+func (c *Configuration) Read(ctx context.Context, args *Empty) (*ReadReply, error) {
+	return c.mgr.read(ctx, c, args)
 }
 
-// ReadFuture is a reference to an asynchronous Read RPC invocation.
-type ReadFuture struct {
-	reply *ReadReply
-	err   error
-	c     chan struct{}
-}
-
-// ReadFuture asynchronously invokes a Read RPC on configuration c and
-// returns a ReadFuture which can be used to inspect the RPC reply and error
-// when available.
-func (c *Configuration) ReadFuture(args *Empty) *ReadFuture {
-	f := new(ReadFuture)
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.read(c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the ReadFuture.
-// The method blocks until a reply or error is available.
-func (f *ReadFuture) Get() (*ReadReply, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply or error is available for the ReadFuture.
-func (f *ReadFuture) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-
-// WriteReply encapsulates the reply from a Write RPC invocation.
-// It contains the id of each node in the quorum that replied and a single
-// reply.
+// WriteReply encapsulates the reply from a Write quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
 type WriteReply struct {
 	NodeIDs []uint32
-	Reply   *WriteResponse
+	*WriteResponse
 }
 
 func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
-// Write invokes a Write RPC on configuration c
+// Write invokes a Write quorum call on configuration c
 // and returns the result as a WriteReply.
-func (c *Configuration) Write(args *State) (*WriteReply, error) {
-	return c.mgr.write(c, args)
+func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
+	return c.mgr.write(ctx, c, args)
 }
 
-// WriteFuture is a reference to an asynchronous Write RPC invocation.
-type WriteFuture struct {
-	reply *WriteReply
-	err   error
-	c     chan struct{}
-}
-
-// WriteFuture asynchronously invokes a Write RPC on configuration c and
-// returns a WriteFuture which can be used to inspect the RPC reply and error
-// when available.
-func (c *Configuration) WriteFuture(args *State) *WriteFuture {
-	f := new(WriteFuture)
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.write(c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the WriteFuture.
-// The method blocks until a reply or error is available.
-func (f *WriteFuture) Get() (*WriteReply, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply or error is available for the WriteFuture.
-func (f *WriteFuture) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_rpc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: mgr_qc_tmpl */
 
 type readReply struct {
 	nid   uint32
@@ -487,12 +416,12 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(c *Configuration, args *Empty) (*ReadReply, error) {
+func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (*ReadReply, error) {
 	replyChan := make(chan readReply, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCRead(n, ctx, args, replyChan)
+		go callGRPCRead(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -507,28 +436,26 @@ func (m *Manager) read(c *Configuration, args *Empty) (*ReadReply, error) {
 		case r := <-replyChan:
 			if r.err != nil {
 				errCount++
-				goto terminationCheck
+				break
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.ReadQF(replyValues); quorum {
+			if reply.ReadResponse, quorum = c.qspec.ReadQF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCRead(node *Node, ctx context.Context, args *Empty, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, node *Node, args *Empty, replyChan chan<- readReply) {
 	reply := new(ReadResponse)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -553,12 +480,12 @@ type writeReply struct {
 	err   error
 }
 
-func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
+func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*WriteReply, error) {
 	replyChan := make(chan writeReply, c.n)
-	ctx, cancel := context.WithCancel(context.Background())
+	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCWrite(n, ctx, args, replyChan)
+		go callGRPCWrite(newCtx, n, args, replyChan)
 	}
 
 	var (
@@ -573,28 +500,26 @@ func (m *Manager) write(c *Configuration, args *State) (*WriteReply, error) {
 		case r := <-replyChan:
 			if r.err != nil {
 				errCount++
-				goto terminationCheck
+				break
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if reply.Reply, quorum = c.qspec.WriteQF(replyValues); quorum {
+			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
 				cancel()
 				return reply, nil
 			}
-		case <-time.After(c.timeout):
-			cancel()
-			return reply, TimeoutRPCError{c.timeout, errCount, len(replyValues)}
+		case <-newCtx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-	terminationCheck:
 		if errCount+len(replyValues) == c.n {
 			cancel()
-			return reply, IncompleteRPCError{errCount, len(replyValues)}
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCWrite(node *Node, ctx context.Context, args *State, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<- writeReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -624,6 +549,8 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
+	RegisterClient RegisterClient
+
 	sync.Mutex
 	lastErr error
 	latency time.Duration
@@ -636,16 +563,18 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 
+	n.RegisterClient = NewRegisterClient(n.conn)
+
 	return nil
 }
 
 func (n *Node) close() error {
-	var err error
-	err2 := n.conn.Close()
-	if err != nil {
-		return fmt.Errorf("stream close failed: %v", err)
-	} else if err2 != nil {
-		return fmt.Errorf("conn close failed: %v", err2)
+	// TODO: Log error, mainly care about the connection error below.
+	// We should log this error, but we currently don't have access to the
+	// logger in the manager.
+
+	if err := n.conn.Close(); err != nil {
+		return fmt.Errorf("conn close error: %v", err)
 	}
 	return nil
 }
@@ -654,9 +583,12 @@ func (n *Node) close() error {
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
-	// ReadQF is the quorum function for the Read RPC method.
+	// ReadQF is the quorum function for the Read
+	// quorum call method.
 	ReadQF(replies []*ReadResponse) (*ReadResponse, bool)
-	// WriteQF is the quorum function for the Write RPC method.
+
+	// WriteQF is the quorum function for the Write
+	// quorum call method.
 	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
 }
 
@@ -667,12 +599,11 @@ type QuorumSpec interface {
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	id      uint32
-	nodes   []*Node
-	n       int
-	mgr     *Manager
-	timeout time.Duration
-	qspec   QuorumSpec
+	id    uint32
+	nodes []*Node
+	n     int
+	mgr   *Manager
+	qspec QuorumSpec
 }
 
 // ID reports the identifier for the configuration.
@@ -729,31 +660,6 @@ func (e ConfigNotFoundError) Error() string {
 	return fmt.Sprintf("configuration not found: %d", e)
 }
 
-// An IncompleteRPCError reports that a quorum RPC call failed.
-type IncompleteRPCError struct {
-	ErrCount, ReplyCount int
-}
-
-func (e IncompleteRPCError) Error() string {
-	return fmt.Sprintf(
-		"incomplete rpc (errors: %d, replies: %d)",
-		e.ErrCount, e.ReplyCount,
-	)
-}
-
-// An TimeoutRPCError reports that a quorum RPC call timed out.
-type TimeoutRPCError struct {
-	Waited                 time.Duration
-	ErrCount, RepliesCount int
-}
-
-func (e TimeoutRPCError) Error() string {
-	return fmt.Sprintf(
-		"rpc timed out: waited %v (errors: %d, replies: %d)",
-		e.Waited, e.ErrCount, e.RepliesCount,
-	)
-}
-
 // An IllegalConfigError reports that a specified configuration could not be
 // created.
 type IllegalConfigError string
@@ -768,15 +674,34 @@ func ManagerCreationError(err error) error {
 	return fmt.Errorf("could not create manager: %s", err.Error())
 }
 
+// A QuorumCallError is used to report that a quorum call failed.
+type QuorumCallError struct {
+	Reason               string
+	ErrCount, ReplyCount int
+}
+
+func (e QuorumCallError) Error() string {
+	return fmt.Sprintf(
+		"quorum call error: %s (errors: %d, replies: %d)",
+		e.Reason, e.ErrCount, e.ReplyCount,
+	)
+}
+
+/* level.go */
+
+// LevelNotSet is the zero value level used to indicate that no level (and
+// thereby no reply) has been set for a correctable quorum call.
+const LevelNotSet = -1
+
 /* mgr.go */
 
 // Manager manages a pool of node configurations on which quorum remote
 // procedure calls can be made.
 type Manager struct {
-	sync.RWMutex
-
-	nodes   map[uint32]*Node
-	configs map[uint32]*Configuration
+	sync.Mutex
+	nodes    map[uint32]*Node
+	configs  map[uint32]*Configuration
+	eventLog trace.EventLog
 
 	closeOnce sync.Once
 	logger    *log.Logger
@@ -824,6 +749,11 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		return nil, ManagerCreationError(
 			fmt.Errorf("WithSelfID provided, but no node with id %d found", selfID),
 		)
+	}
+
+	if m.opts.trace {
+		title := strings.Join(nodeAddrs, ",")
+		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
 	err = m.connectAll()
@@ -889,12 +819,18 @@ func (m *Manager) connectAll() error {
 	if m.opts.noConnect {
 		return nil
 	}
+
+	if m.eventLog != nil {
+		m.eventLog.Printf("connecting")
+	}
+
 	for _, node := range m.nodes {
 		if node.self {
 			continue
 		}
 		err := node.connect(m.opts.grpcDialOpts...)
 		if err != nil {
+			m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
 			return fmt.Errorf("connect node %s error: %v", node.addr, err)
 		}
 	}
@@ -919,14 +855,17 @@ func (m *Manager) closeNodeConns() {
 // Close closes all node connections and any client streams.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
+		if m.eventLog != nil {
+			m.eventLog.Printf("closing")
+		}
 		m.closeNodeConns()
 	})
 }
 
 // NodeIDs returns the identifier of each available node.
 func (m *Manager) NodeIDs() []uint32 {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
 	for id := range m.nodes {
 		ids = append(ids, id)
@@ -937,16 +876,16 @@ func (m *Manager) NodeIDs() []uint32 {
 
 // Node returns the node with the given identifier if present.
 func (m *Manager) Node(id uint32) (node *Node, found bool) {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	node, found = m.nodes[id]
 	return node, found
 }
 
 // Nodes returns a slice of each available node.
 func (m *Manager) Nodes(excludeSelf bool) []*Node {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	var nodes []*Node
 	for _, node := range m.nodes {
 		if excludeSelf && node.self {
@@ -961,8 +900,8 @@ func (m *Manager) Nodes(excludeSelf bool) []*Node {
 // ConfigurationIDs returns the identifier of each available
 // configuration.
 func (m *Manager) ConfigurationIDs() []uint32 {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	ids := make([]uint32, 0, len(m.configs))
 	for id := range m.configs {
 		ids = append(ids, id)
@@ -974,16 +913,16 @@ func (m *Manager) ConfigurationIDs() []uint32 {
 // Configuration returns the configuration with the given global
 // identifier if present.
 func (m *Manager) Configuration(id uint32) (config *Configuration, found bool) {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	config, found = m.configs[id]
 	return config, found
 }
 
 // Configurations returns a slice of each available configuration.
 func (m *Manager) Configurations() []*Configuration {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	configs := make([]*Configuration, 0, len(m.configs))
 	for _, conf := range m.configs {
 		configs = append(configs, conf)
@@ -993,8 +932,8 @@ func (m *Manager) Configurations() []*Configuration {
 
 // Size returns the number of nodes and configurations in the Manager.
 func (m *Manager) Size() (nodes, configs int) {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	return len(m.nodes), len(m.configs)
 }
 
@@ -1006,15 +945,12 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.Duration) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
-	}
-	if timeout <= 0 {
-		return nil, IllegalConfigError("timeout must be positive")
 	}
 
 	var cnodes []*Node
@@ -1035,7 +971,6 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.
 	OrderedBy(ID).Sort(cnodes)
 
 	h := fnv.New32a()
-	binary.Write(h, binary.LittleEndian, timeout)
 	for _, node := range cnodes {
 		binary.Write(h, binary.LittleEndian, node.id)
 	}
@@ -1047,12 +982,11 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, timeout time.
 	}
 
 	c := &Configuration{
-		id:      cid,
-		nodes:   cnodes,
-		n:       len(cnodes),
-		mgr:     m,
-		qspec:   qspec,
-		timeout: timeout,
+		id:    cid,
+		nodes: cnodes,
+		n:     len(cnodes),
+		mgr:   m,
+		qspec: qspec,
 	}
 	m.configs[cid] = c
 
@@ -1207,6 +1141,7 @@ type managerOptions struct {
 	grpcDialOpts []grpc.DialOption
 	logger       *log.Logger
 	noConnect    bool
+	trace        bool
 	selfAddr     string
 	selfID       uint32
 }
@@ -1254,6 +1189,14 @@ func WithSelfAddr(addr string) ManagerOption {
 func WithSelfID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
 		o.selfID = id
+	}
+}
+
+// WithTracing controls whether to trace qourum calls for this Manager instance
+// using the golang.org/x/net/trace package.
+func WithTracing() ManagerOption {
+	return func(o *managerOptions) {
+		o.trace = true
 	}
 }
 
@@ -1373,65 +1316,65 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 	Metadata: fileDescriptorGridq,
 }
 
-func (m *State) Marshal() (data []byte, err error) {
+func (m *State) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *State) MarshalTo(data []byte) (int, error) {
+func (m *State) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if len(m.Value) > 0 {
-		data[i] = 0xa
+		dAtA[i] = 0xa
 		i++
-		i = encodeVarintGridq(data, i, uint64(len(m.Value)))
-		i += copy(data[i:], m.Value)
+		i = encodeVarintGridq(dAtA, i, uint64(len(m.Value)))
+		i += copy(dAtA[i:], m.Value)
 	}
 	if m.Timestamp != 0 {
-		data[i] = 0x10
+		dAtA[i] = 0x10
 		i++
-		i = encodeVarintGridq(data, i, uint64(m.Timestamp))
+		i = encodeVarintGridq(dAtA, i, uint64(m.Timestamp))
 	}
 	return i, nil
 }
 
-func (m *ReadResponse) Marshal() (data []byte, err error) {
+func (m *ReadResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *ReadResponse) MarshalTo(data []byte) (int, error) {
+func (m *ReadResponse) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.Row != 0 {
-		data[i] = 0x8
+		dAtA[i] = 0x8
 		i++
-		i = encodeVarintGridq(data, i, uint64(m.Row))
+		i = encodeVarintGridq(dAtA, i, uint64(m.Row))
 	}
 	if m.Col != 0 {
-		data[i] = 0x10
+		dAtA[i] = 0x10
 		i++
-		i = encodeVarintGridq(data, i, uint64(m.Col))
+		i = encodeVarintGridq(dAtA, i, uint64(m.Col))
 	}
 	if m.State != nil {
-		data[i] = 0x1a
+		dAtA[i] = 0x1a
 		i++
-		i = encodeVarintGridq(data, i, uint64(m.State.Size()))
-		n1, err := m.State.MarshalTo(data[i:])
+		i = encodeVarintGridq(dAtA, i, uint64(m.State.Size()))
+		n1, err := m.State.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
@@ -1440,55 +1383,55 @@ func (m *ReadResponse) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func (m *WriteResponse) Marshal() (data []byte, err error) {
+func (m *WriteResponse) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *WriteResponse) MarshalTo(data []byte) (int, error) {
+func (m *WriteResponse) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
 	_ = l
 	if m.Row != 0 {
-		data[i] = 0x8
+		dAtA[i] = 0x8
 		i++
-		i = encodeVarintGridq(data, i, uint64(m.Row))
+		i = encodeVarintGridq(dAtA, i, uint64(m.Row))
 	}
 	if m.Col != 0 {
-		data[i] = 0x10
+		dAtA[i] = 0x10
 		i++
-		i = encodeVarintGridq(data, i, uint64(m.Col))
+		i = encodeVarintGridq(dAtA, i, uint64(m.Col))
 	}
 	if m.New {
-		data[i] = 0x18
+		dAtA[i] = 0x18
 		i++
 		if m.New {
-			data[i] = 1
+			dAtA[i] = 1
 		} else {
-			data[i] = 0
+			dAtA[i] = 0
 		}
 		i++
 	}
 	return i, nil
 }
 
-func (m *Empty) Marshal() (data []byte, err error) {
+func (m *Empty) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
-	data = make([]byte, size)
-	n, err := m.MarshalTo(data)
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
 	if err != nil {
 		return nil, err
 	}
-	return data[:n], nil
+	return dAtA[:n], nil
 }
 
-func (m *Empty) MarshalTo(data []byte) (int, error) {
+func (m *Empty) MarshalTo(dAtA []byte) (int, error) {
 	var i int
 	_ = i
 	var l int
@@ -1496,31 +1439,31 @@ func (m *Empty) MarshalTo(data []byte) (int, error) {
 	return i, nil
 }
 
-func encodeFixed64Gridq(data []byte, offset int, v uint64) int {
-	data[offset] = uint8(v)
-	data[offset+1] = uint8(v >> 8)
-	data[offset+2] = uint8(v >> 16)
-	data[offset+3] = uint8(v >> 24)
-	data[offset+4] = uint8(v >> 32)
-	data[offset+5] = uint8(v >> 40)
-	data[offset+6] = uint8(v >> 48)
-	data[offset+7] = uint8(v >> 56)
+func encodeFixed64Gridq(dAtA []byte, offset int, v uint64) int {
+	dAtA[offset] = uint8(v)
+	dAtA[offset+1] = uint8(v >> 8)
+	dAtA[offset+2] = uint8(v >> 16)
+	dAtA[offset+3] = uint8(v >> 24)
+	dAtA[offset+4] = uint8(v >> 32)
+	dAtA[offset+5] = uint8(v >> 40)
+	dAtA[offset+6] = uint8(v >> 48)
+	dAtA[offset+7] = uint8(v >> 56)
 	return offset + 8
 }
-func encodeFixed32Gridq(data []byte, offset int, v uint32) int {
-	data[offset] = uint8(v)
-	data[offset+1] = uint8(v >> 8)
-	data[offset+2] = uint8(v >> 16)
-	data[offset+3] = uint8(v >> 24)
+func encodeFixed32Gridq(dAtA []byte, offset int, v uint32) int {
+	dAtA[offset] = uint8(v)
+	dAtA[offset+1] = uint8(v >> 8)
+	dAtA[offset+2] = uint8(v >> 16)
+	dAtA[offset+3] = uint8(v >> 24)
 	return offset + 4
 }
-func encodeVarintGridq(data []byte, offset int, v uint64) int {
+func encodeVarintGridq(dAtA []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
-		data[offset] = uint8(v&0x7f | 0x80)
+		dAtA[offset] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		offset++
 	}
-	data[offset] = uint8(v)
+	dAtA[offset] = uint8(v)
 	return offset + 1
 }
 func (m *State) Size() (n int) {
@@ -1638,8 +1581,8 @@ func valueToStringGridq(v interface{}) string {
 	pv := reflect.Indirect(rv).Interface()
 	return fmt.Sprintf("*%v", pv)
 }
-func (m *State) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *State) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1651,7 +1594,7 @@ func (m *State) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1679,7 +1622,7 @@ func (m *State) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				stringLen |= (uint64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1694,7 +1637,7 @@ func (m *State) Unmarshal(data []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Value = string(data[iNdEx:postIndex])
+			m.Value = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 0 {
@@ -1708,7 +1651,7 @@ func (m *State) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				m.Timestamp |= (int64(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1717,7 +1660,7 @@ func (m *State) Unmarshal(data []byte) error {
 			}
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGridq(data[iNdEx:])
+			skippy, err := skipGridq(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1736,8 +1679,8 @@ func (m *State) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *ReadResponse) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *ReadResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1749,7 +1692,7 @@ func (m *ReadResponse) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1777,7 +1720,7 @@ func (m *ReadResponse) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				m.Row |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1796,7 +1739,7 @@ func (m *ReadResponse) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				m.Col |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1815,7 +1758,7 @@ func (m *ReadResponse) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				msglen |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1832,13 +1775,13 @@ func (m *ReadResponse) Unmarshal(data []byte) error {
 			if m.State == nil {
 				m.State = &State{}
 			}
-			if err := m.State.Unmarshal(data[iNdEx:postIndex]); err != nil {
+			if err := m.State.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGridq(data[iNdEx:])
+			skippy, err := skipGridq(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1857,8 +1800,8 @@ func (m *ReadResponse) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *WriteResponse) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *WriteResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1870,7 +1813,7 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1898,7 +1841,7 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				m.Row |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1917,7 +1860,7 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				m.Col |= (uint32(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1936,7 +1879,7 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 				if iNdEx >= l {
 					return io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				v |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -1946,7 +1889,7 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 			m.New = bool(v != 0)
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGridq(data[iNdEx:])
+			skippy, err := skipGridq(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -1965,8 +1908,8 @@ func (m *WriteResponse) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func (m *Empty) Unmarshal(data []byte) error {
-	l := len(data)
+func (m *Empty) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		preIndex := iNdEx
@@ -1978,7 +1921,7 @@ func (m *Empty) Unmarshal(data []byte) error {
 			if iNdEx >= l {
 				return io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -1996,7 +1939,7 @@ func (m *Empty) Unmarshal(data []byte) error {
 		switch fieldNum {
 		default:
 			iNdEx = preIndex
-			skippy, err := skipGridq(data[iNdEx:])
+			skippy, err := skipGridq(dAtA[iNdEx:])
 			if err != nil {
 				return err
 			}
@@ -2015,8 +1958,8 @@ func (m *Empty) Unmarshal(data []byte) error {
 	}
 	return nil
 }
-func skipGridq(data []byte) (n int, err error) {
-	l := len(data)
+func skipGridq(dAtA []byte) (n int, err error) {
+	l := len(dAtA)
 	iNdEx := 0
 	for iNdEx < l {
 		var wire uint64
@@ -2027,7 +1970,7 @@ func skipGridq(data []byte) (n int, err error) {
 			if iNdEx >= l {
 				return 0, io.ErrUnexpectedEOF
 			}
-			b := data[iNdEx]
+			b := dAtA[iNdEx]
 			iNdEx++
 			wire |= (uint64(b) & 0x7F) << shift
 			if b < 0x80 {
@@ -2045,7 +1988,7 @@ func skipGridq(data []byte) (n int, err error) {
 					return 0, io.ErrUnexpectedEOF
 				}
 				iNdEx++
-				if data[iNdEx-1] < 0x80 {
+				if dAtA[iNdEx-1] < 0x80 {
 					break
 				}
 			}
@@ -2062,7 +2005,7 @@ func skipGridq(data []byte) (n int, err error) {
 				if iNdEx >= l {
 					return 0, io.ErrUnexpectedEOF
 				}
-				b := data[iNdEx]
+				b := dAtA[iNdEx]
 				iNdEx++
 				length |= (int(b) & 0x7F) << shift
 				if b < 0x80 {
@@ -2085,7 +2028,7 @@ func skipGridq(data []byte) (n int, err error) {
 					if iNdEx >= l {
 						return 0, io.ErrUnexpectedEOF
 					}
-					b := data[iNdEx]
+					b := dAtA[iNdEx]
 					iNdEx++
 					innerWire |= (uint64(b) & 0x7F) << shift
 					if b < 0x80 {
@@ -2096,7 +2039,7 @@ func skipGridq(data []byte) (n int, err error) {
 				if innerWireType == 4 {
 					break
 				}
-				next, err := skipGridq(data[start:])
+				next, err := skipGridq(dAtA[start:])
 				if err != nil {
 					return 0, err
 				}
@@ -2123,23 +2066,25 @@ var (
 func init() { proto.RegisterFile("gridq.proto", fileDescriptorGridq) }
 
 var fileDescriptorGridq = []byte{
-	// 287 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0x91, 0xb1, 0x4e, 0xf3, 0x30,
-	0x14, 0x85, 0x7d, 0xff, 0xfc, 0x86, 0xf6, 0xb6, 0x91, 0x2a, 0xd3, 0x21, 0xaa, 0xd0, 0x55, 0xe4,
-	0x29, 0x12, 0xd0, 0xa1, 0x8c, 0x6c, 0x48, 0x7d, 0x01, 0x23, 0xc1, 0x1c, 0xa8, 0xa9, 0x22, 0x35,
-	0x4d, 0x48, 0x0c, 0x15, 0x1b, 0x8f, 0xc0, 0x63, 0xf0, 0x28, 0x8c, 0x1d, 0x19, 0x1b, 0xb3, 0x30,
-	0xf2, 0x08, 0xc8, 0x4e, 0x11, 0x74, 0x64, 0x3b, 0xe7, 0xda, 0x3e, 0xe7, 0xb3, 0x2e, 0xf6, 0xe6,
-	0x55, 0x36, 0xbb, 0x1b, 0x97, 0x55, 0x61, 0x0a, 0xc1, 0xbd, 0x91, 0x67, 0xc8, 0x2f, 0x4c, 0x6a,
-	0xb4, 0x18, 0x22, 0x7f, 0x48, 0x17, 0xf7, 0x3a, 0x82, 0x18, 0x92, 0xae, 0x6a, 0x8d, 0x38, 0xc4,
-	0xae, 0xc9, 0x72, 0x5d, 0x9b, 0x34, 0x2f, 0xa3, 0x7f, 0x31, 0x24, 0x81, 0xfa, 0x19, 0xc8, 0x4b,
-	0xec, 0x2b, 0x9d, 0xce, 0x94, 0xae, 0xcb, 0x62, 0x59, 0x6b, 0x31, 0xc0, 0xa0, 0x2a, 0x56, 0x3e,
-	0x21, 0x54, 0x4e, 0xba, 0xc9, 0x4d, 0xb1, 0xf0, 0x2f, 0x43, 0xe5, 0xa4, 0x90, 0xc8, 0x6b, 0x57,
-	0x18, 0x05, 0x31, 0x24, 0xbd, 0x49, 0x7f, 0xdc, 0x42, 0x79, 0x08, 0xd5, 0x1e, 0xc9, 0x29, 0x86,
-	0x57, 0x55, 0x66, 0xf4, 0x9f, 0x82, 0x07, 0x18, 0x2c, 0xf5, 0xca, 0xc7, 0x76, 0x94, 0x93, 0x72,
-	0x1f, 0xf9, 0x34, 0x2f, 0xcd, 0xe3, 0xe4, 0x16, 0x3b, 0x4a, 0xcf, 0xb3, 0xda, 0xe8, 0x4a, 0x1c,
-	0xe1, 0x7f, 0xc7, 0x2c, 0xbe, 0x8b, 0xfd, 0x8d, 0xd1, 0xc1, 0xd6, 0xfd, 0xfe, 0x8e, 0x64, 0xe2,
-	0x04, 0xb9, 0x07, 0x11, 0x3b, 0x98, 0xa3, 0xe1, 0xd6, 0xed, 0x40, 0x4a, 0x76, 0x7e, 0xbc, 0x6e,
-	0x88, 0xbd, 0x35, 0xc4, 0x36, 0x0d, 0xc1, 0x93, 0x25, 0x78, 0xb1, 0x04, 0xaf, 0x96, 0x60, 0x6d,
-	0x09, 0x36, 0x96, 0xe0, 0xc3, 0x12, 0xfb, 0xb4, 0x04, 0xcf, 0xef, 0xc4, 0xae, 0xf7, 0xfc, 0x22,
-	0x4e, 0xbf, 0x02, 0x00, 0x00, 0xff, 0xff, 0x36, 0xbc, 0x9e, 0x24, 0x97, 0x01, 0x00, 0x00,
+	// 318 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0x91, 0x41, 0x4e, 0x3a, 0x31,
+	0x14, 0xc6, 0xe7, 0xfd, 0x87, 0xf9, 0x0b, 0x0f, 0x48, 0x48, 0x65, 0x31, 0x21, 0xa6, 0x21, 0x8d,
+	0x0b, 0x16, 0x06, 0x22, 0x2e, 0xdd, 0x99, 0x70, 0x81, 0x9a, 0xe8, 0x7a, 0x80, 0x66, 0x9c, 0x84,
+	0xa1, 0x63, 0x5b, 0x24, 0xee, 0x38, 0x82, 0xc7, 0xf0, 0x02, 0xde, 0xc1, 0x25, 0x4b, 0x97, 0x50,
+	0x37, 0x2e, 0x3d, 0x82, 0x69, 0x67, 0x8c, 0xb2, 0x74, 0xd5, 0xef, 0x7b, 0x7d, 0xef, 0x7b, 0xbf,
+	0xa6, 0xd8, 0x4c, 0x55, 0x36, 0xbf, 0x1f, 0x16, 0x4a, 0x1a, 0x49, 0x22, 0x6f, 0x7a, 0xa7, 0x69,
+	0x66, 0xee, 0x56, 0xd3, 0xe1, 0x4c, 0xe6, 0x23, 0x25, 0x16, 0xc9, 0x74, 0x94, 0x4a, 0xb5, 0xca,
+	0x75, 0x75, 0x94, 0xcd, 0xec, 0x12, 0xa3, 0x6b, 0x93, 0x18, 0x41, 0xba, 0x18, 0x3d, 0x24, 0x8b,
+	0x95, 0x88, 0xa1, 0x0f, 0x83, 0x06, 0x2f, 0x0d, 0x39, 0xc1, 0x86, 0xc9, 0x72, 0xa1, 0x4d, 0x92,
+	0x17, 0xf1, 0xbf, 0x3e, 0x0c, 0x42, 0xfe, 0x53, 0x60, 0x37, 0xd8, 0xe2, 0x22, 0x99, 0x73, 0xa1,
+	0x0b, 0xb9, 0xd4, 0x82, 0x74, 0x30, 0x54, 0x72, 0xed, 0x13, 0xda, 0xdc, 0x49, 0x57, 0x99, 0xc9,
+	0x85, 0x9f, 0x6c, 0x73, 0x27, 0x09, 0xc3, 0x48, 0xbb, 0x85, 0x71, 0xd8, 0x87, 0x41, 0x73, 0xdc,
+	0x1a, 0x96, 0xe8, 0x1e, 0x82, 0x97, 0x57, 0x6c, 0x82, 0xed, 0x5b, 0x95, 0x19, 0xf1, 0xa7, 0xe0,
+	0x0e, 0x86, 0x4b, 0xb1, 0xf6, 0xb1, 0x75, 0xee, 0x24, 0x3b, 0xc2, 0x68, 0x92, 0x17, 0xe6, 0x71,
+	0xbc, 0xc4, 0x3a, 0x17, 0x69, 0xa6, 0x8d, 0x50, 0x64, 0x84, 0x35, 0xc7, 0x4c, 0xbe, 0x17, 0xfb,
+	0x8e, 0xde, 0x71, 0xe5, 0x7e, 0x3f, 0x87, 0xd5, 0x36, 0x2f, 0x31, 0x90, 0x73, 0x8c, 0x3c, 0x0c,
+	0x39, 0x40, 0xed, 0x75, 0x2b, 0x77, 0x00, 0x5a, 0x8e, 0x5c, 0x9d, 0x6d, 0xf7, 0x34, 0x78, 0xdb,
+	0xd3, 0x60, 0xb7, 0xa7, 0xb0, 0xb1, 0x14, 0x9e, 0x2d, 0x85, 0x57, 0x4b, 0x61, 0x6b, 0x29, 0xec,
+	0x2c, 0x85, 0x0f, 0x4b, 0x83, 0x4f, 0x4b, 0xe1, 0xe9, 0x9d, 0x06, 0xd3, 0xff, 0xfe, 0x27, 0x2e,
+	0xbe, 0x02, 0x00, 0x00, 0xff, 0xff, 0x9f, 0x9b, 0x0d, 0x13, 0xc5, 0x01, 0x00, 0x00,
 }

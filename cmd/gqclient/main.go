@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -86,7 +87,7 @@ func main() {
 
 	gqspec := gridq.NewGQSort(rows, cols, *printGrid)
 
-	conf, err := mgr.NewConfiguration(ids, gqspec, time.Second)
+	conf, err := mgr.NewConfiguration(ids, gqspec)
 	if err != nil {
 		dief("error creating config: %v", err)
 	}
@@ -98,7 +99,7 @@ func main() {
 		}
 
 		fmt.Println("writing:", state)
-		wreply, err := conf.Write(state)
+		wreply, err := conf.Write(context.Background(), state)
 		if err != nil {
 			fmt.Println("error writing value:", err)
 			os.Exit(2)
@@ -107,12 +108,12 @@ func main() {
 
 		time.Sleep(2 * time.Second)
 
-		rreply, err := conf.Read(&gridq.Empty{})
+		rreply, err := conf.Read(context.Background(), &gridq.Empty{})
 		if err != nil {
 			fmt.Println("error reading value:", err)
 			os.Exit(2)
 		}
-		fmt.Println("read response:", rreply.Reply.State)
+		fmt.Println("read response:", rreply.State)
 
 		time.Sleep(3 * time.Second)
 	}

@@ -7,7 +7,7 @@ installprotocgorums:
 
 .PHONY: proto
 proto: installprotocgorums
-	protoc --$(PROTOC_PLUGIN)=plugins=grpc+gorums:. gridq.proto
+	protoc -I=../../../../:. --$(PROTOC_PLUGIN)=plugins=grpc+gorums:. gridq.proto
 
 .PHONY: bench 
 bench:
