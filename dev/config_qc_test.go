@@ -46,9 +46,13 @@ func TestBasicRegister(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
+	mgrOpts := []qc.ManagerOption{
+		dialOpts,
+		qc.WithTracing(),
+	}
 	mgr, err := qc.NewManager(
 		servers.addrs(),
-		dialOpts,
+		mgrOpts...,
 	)
 	if err != nil {
 		t.Fatalf("%v", err)

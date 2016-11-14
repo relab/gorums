@@ -36,6 +36,10 @@ func (c *Configuration) String() string {
 	return fmt.Sprintf("configuration %d", c.id)
 }
 
+func (c *Configuration) tstring() string {
+	return fmt.Sprintf("config-%d", c.id)
+}
+
 // Equal returns a boolean reporting whether a and b represents the same
 // configuration.
 func Equal(a, b *Configuration) bool { return a.id == b.id }

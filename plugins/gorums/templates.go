@@ -202,6 +202,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -236,9 +237,36 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) (*{{.TypeName}}, error) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) (r *{{.TypeName}}, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
+		defer ti.tr.Finish()
+		
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.{{.RespName}},
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 	newCtx, cancel := context.WithCancel(ctx)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
 
 	for _, n := range c.nodes {
 		go callGRPC{{.MethodName}}(newCtx, n, args, replyChan)
@@ -257,6 +285,9 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			if r.err != nil {
 				errCount++
 				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)

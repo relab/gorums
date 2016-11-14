@@ -5,6 +5,8 @@ package gorums
 
 var staticImports = []string{
 	"fmt",
+	"io",
+	"bytes",
 	"golang.org/x/net/trace",
 	"google.golang.org/grpc",
 	"time",
@@ -52,6 +54,10 @@ func (c *Configuration) Size() int {
 
 func (c *Configuration) String() string {
 	return fmt.Sprintf("configuration %d", c.id)
+}
+
+func (c *Configuration) tstring() string {
+	return fmt.Sprintf("config-%d", c.id)
 }
 
 // Equal returns a boolean reporting whether a and b represents the same
@@ -628,6 +634,60 @@ func WithTracing() ManagerOption {
 	return func(o *managerOptions) {
 		o.trace = true
 	}
+}
+
+/* trace.go */
+
+type traceInfo struct {
+	tr		trace.Trace
+	firstLine	firstLine
+}
+
+type firstLine struct {
+	deadline	time.Duration
+	cid		uint32
+}
+
+func (f *firstLine) String() string {
+	var line bytes.Buffer
+	io.WriteString(&line, "QC: to ")
+	fmt.Fprintf(&line, "%v deadline:", f.cid)
+	if f.deadline != 0 {
+		fmt.Fprint(&line, f.deadline)
+	} else {
+		io.WriteString(&line, "none")
+	}
+	return line.String()
+}
+
+type payload struct {
+	sent	bool
+	id	uint32
+	msg	interface{}
+}
+
+func (p payload) String() string {
+	if p.sent {
+		return fmt.Sprintf("sent: %v", p.msg)
+	}
+	return fmt.Sprintf("recv from %d: %v", p.id, p.msg)
+}
+
+type qcresult struct {
+	ids	[]uint32
+	reply	interface{}
+	err	error
+}
+
+func (q qcresult) String() string {
+	var out bytes.Buffer
+	io.WriteString(&out, "recv QC: ")
+	fmt.Fprintf(&out, "ids: %v, ", q.ids)
+	fmt.Fprintf(&out, "reply: %v ", q.reply)
+	if q.err != nil {
+		fmt.Fprintf(&out, "error: %v", q.err)
+	}
+	return out.String()
 }
 
 /* util.go */
