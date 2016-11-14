@@ -906,8 +906,7 @@ const LevelNotSet = -1
 // Manager manages a pool of node configurations on which quorum remote
 // procedure calls can be made.
 type Manager struct {
-	sync.RWMutex
-
+	sync.Mutex
 	nodes   map[uint32]*Node
 	configs map[uint32]*Configuration
 
@@ -1058,8 +1057,8 @@ func (m *Manager) Close() {
 
 // NodeIDs returns the identifier of each available node.
 func (m *Manager) NodeIDs() []uint32 {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
 	for id := range m.nodes {
 		ids = append(ids, id)
@@ -1070,16 +1069,16 @@ func (m *Manager) NodeIDs() []uint32 {
 
 // Node returns the node with the given identifier if present.
 func (m *Manager) Node(id uint32) (node *Node, found bool) {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	node, found = m.nodes[id]
 	return node, found
 }
 
 // Nodes returns a slice of each available node.
 func (m *Manager) Nodes(excludeSelf bool) []*Node {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	var nodes []*Node
 	for _, node := range m.nodes {
 		if excludeSelf && node.self {
@@ -1094,8 +1093,8 @@ func (m *Manager) Nodes(excludeSelf bool) []*Node {
 // ConfigurationIDs returns the identifier of each available
 // configuration.
 func (m *Manager) ConfigurationIDs() []uint32 {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	ids := make([]uint32, 0, len(m.configs))
 	for id := range m.configs {
 		ids = append(ids, id)
@@ -1107,16 +1106,16 @@ func (m *Manager) ConfigurationIDs() []uint32 {
 // Configuration returns the configuration with the given global
 // identifier if present.
 func (m *Manager) Configuration(id uint32) (config *Configuration, found bool) {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	config, found = m.configs[id]
 	return config, found
 }
 
 // Configurations returns a slice of each available configuration.
 func (m *Manager) Configurations() []*Configuration {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	configs := make([]*Configuration, 0, len(m.configs))
 	for _, conf := range m.configs {
 		configs = append(configs, conf)
@@ -1126,8 +1125,8 @@ func (m *Manager) Configurations() []*Configuration {
 
 // Size returns the number of nodes and configurations in the Manager.
 func (m *Manager) Size() (nodes, configs int) {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 	return len(m.nodes), len(m.configs)
 }
 
