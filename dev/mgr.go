@@ -153,7 +153,9 @@ func (m *Manager) connectAll() error {
 		}
 		err := node.connect(m.opts.grpcDialOpts...)
 		if err != nil {
-			m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
+			if m.eventLog != nil {
+				m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
+			}
 			return fmt.Errorf("connect node %s error: %v", node.addr, err)
 		}
 	}
