@@ -23,6 +23,7 @@ import _ "github.com/relab/gorums"
 
 import (
 	"encoding/binary"
+	"golang.org/x/net/trace"
 	"hash/fnv"
 	"log"
 	"net"
@@ -907,8 +908,9 @@ const LevelNotSet = -1
 // procedure calls can be made.
 type Manager struct {
 	sync.Mutex
-	nodes   map[uint32]*Node
-	configs map[uint32]*Configuration
+	nodes    map[uint32]*Node
+	configs  map[uint32]*Configuration
+	eventLog trace.EventLog
 
 	closeOnce sync.Once
 	logger    *log.Logger
@@ -956,6 +958,11 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		return nil, ManagerCreationError(
 			fmt.Errorf("WithSelfID provided, but no node with id %d found", selfID),
 		)
+	}
+
+	if m.opts.trace {
+		title := strings.Join(nodeAddrs, ",")
+		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
 	err = m.connectAll()
@@ -1021,12 +1028,18 @@ func (m *Manager) connectAll() error {
 	if m.opts.noConnect {
 		return nil
 	}
+
+	if m.eventLog != nil {
+		m.eventLog.Printf("connecting")
+	}
+
 	for _, node := range m.nodes {
 		if node.self {
 			continue
 		}
 		err := node.connect(m.opts.grpcDialOpts...)
 		if err != nil {
+			m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
 			return fmt.Errorf("connect node %s error: %v", node.addr, err)
 		}
 	}
@@ -1051,6 +1064,9 @@ func (m *Manager) closeNodeConns() {
 // Close closes all node connections and any client streams.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
+		if m.eventLog != nil {
+			m.eventLog.Printf("closing")
+		}
 		m.closeNodeConns()
 	})
 }
@@ -1334,6 +1350,7 @@ type managerOptions struct {
 	grpcDialOpts []grpc.DialOption
 	logger       *log.Logger
 	noConnect    bool
+	trace        bool
 	selfAddr     string
 	selfID       uint32
 }
@@ -1381,6 +1398,14 @@ func WithSelfAddr(addr string) ManagerOption {
 func WithSelfID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
 		o.selfID = id
+	}
+}
+
+// WithTracing controls whether to trace qourum calls for this Manager instance
+// using the golang.org/x/net/trace package.
+func WithTracing() ManagerOption {
+	return func(o *managerOptions) {
+		o.trace = true
 	}
 }
 

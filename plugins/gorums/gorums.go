@@ -226,8 +226,9 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 }
 
 var ignoreImport = map[string]bool{
-	"fmt":  true,
-	"math": true,
+	"fmt":                      true,
+	"math":                     true,
+	"strings":                  true,
 	"golang.org/x/net/context": true,
 	"google.golang.org/grpc":   true,
 }

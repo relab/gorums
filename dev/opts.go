@@ -10,6 +10,7 @@ type managerOptions struct {
 	grpcDialOpts []grpc.DialOption
 	logger       *log.Logger
 	noConnect    bool
+	trace        bool
 	selfAddr     string
 	selfID       uint32
 }
@@ -57,5 +58,13 @@ func WithSelfAddr(addr string) ManagerOption {
 func WithSelfID(id uint32) ManagerOption {
 	return func(o *managerOptions) {
 		o.selfID = id
+	}
+}
+
+// WithTracing controls whether to trace qourum calls for this Manager instance
+// using the golang.org/x/net/trace package.
+func WithTracing() ManagerOption {
+	return func(o *managerOptions) {
+		o.trace = true
 	}
 }

@@ -7,16 +7,20 @@ import (
 	"log"
 	"net"
 	"sort"
+	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/trace"
 )
 
 // Manager manages a pool of node configurations on which quorum remote
 // procedure calls can be made.
 type Manager struct {
 	sync.Mutex
-	nodes   map[uint32]*Node
-	configs map[uint32]*Configuration
+	nodes    map[uint32]*Node
+	configs  map[uint32]*Configuration
+	eventLog trace.EventLog
 
 	closeOnce sync.Once
 	logger    *log.Logger
@@ -66,6 +70,11 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		)
 	}
 
+	if m.opts.trace {
+		title := strings.Join(nodeAddrs, ",")
+		m.eventLog = trace.NewEventLog("gorums.Manager", title)
+	}
+
 	err = m.connectAll()
 	if err != nil {
 		return nil, ManagerCreationError(err)
@@ -73,6 +82,10 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 
 	if m.opts.logger != nil {
 		m.logger = m.opts.logger
+	}
+
+	if m.eventLog != nil {
+		m.eventLog.Printf("ready")
 	}
 
 	return m, nil
@@ -129,12 +142,18 @@ func (m *Manager) connectAll() error {
 	if m.opts.noConnect {
 		return nil
 	}
+
+	if m.eventLog != nil {
+		m.eventLog.Printf("connecting")
+	}
+
 	for _, node := range m.nodes {
 		if node.self {
 			continue
 		}
 		err := node.connect(m.opts.grpcDialOpts...)
 		if err != nil {
+			m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
 			return fmt.Errorf("connect node %s error: %v", node.addr, err)
 		}
 	}
@@ -159,6 +178,9 @@ func (m *Manager) closeNodeConns() {
 // Close closes all node connections and any client streams.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
+		if m.eventLog != nil {
+			m.eventLog.Printf("closing")
+		}
 		m.closeNodeConns()
 	})
 }
