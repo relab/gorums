@@ -1,10 +1,16 @@
 syntax = "proto3";
 
+import "github.com/relab/gorums/gorums.proto";
+
 package byzq;
 
 service Register {
-	rpc Read(Key) returns (Value) {}
-	rpc Write(Value) returns (WriteResponse) {}
+	rpc Read(Key) returns (Value) {
+		option (gorums.qc) = true;
+	}
+	rpc Write(Value) returns (WriteResponse) {
+		option (gorums.qc) = true;
+	}
 }
 
 // [Read, requestID]

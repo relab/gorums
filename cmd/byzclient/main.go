@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -101,7 +102,7 @@ func main() {
 	if err != nil {
 		dief("error creating quorum specification: %v", err)
 	}
-	conf, err := mgr.NewConfiguration(ids, qspec, time.Second)
+	conf, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		dief("error creating config: %v", err)
 	}
@@ -121,19 +122,19 @@ func main() {
 			if err != nil {
 				dief("failed to sign message: %v", err)
 			}
-			ack, err := conf.Write(signedState)
+			ack, err := conf.Write(context.Background(), signedState)
 			if err != nil {
 				dief("error writing: %v", err)
 			}
-			fmt.Println("WriteReturn " + ack.Reply.String())
+			fmt.Println("WriteReturn " + ack.String())
 			time.Sleep(100 * time.Second)
 		} else {
 			// Reader client
-			val, err := conf.Read(&byzq.Key{Key: registerState.Key})
+			val, err := conf.Read(context.Background(), &byzq.Key{Key: registerState.Key})
 			if err != nil {
 				dief("error reading: %v", err)
 			}
-			registerState = val.Reply.C
+			registerState = val.C
 			fmt.Println("ReadReturn: " + registerState.String())
 			time.Sleep(10000 * time.Millisecond)
 		}
