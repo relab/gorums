@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -83,7 +84,7 @@ func main() {
 	if *trace {
 		mgrOpts = append(mgrOpts, gridq.WithTracing())
 		go func() {
-			http.ListenAndServe(":9090", nil)
+			log.Println(http.ListenAndServe(":9090", nil))
 		}()
 	}
 	mgr, err := gridq.NewManager(
