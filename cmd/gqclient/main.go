@@ -114,18 +114,18 @@ func main() {
 		wreply, err := conf.Write(context.Background(), state)
 		if err != nil {
 			fmt.Println("error writing value:", err)
-			os.Exit(2)
+		} else {
+			fmt.Println("write response:", wreply)
 		}
-		fmt.Println("write response:", wreply)
 
 		time.Sleep(2 * time.Second)
 
 		rreply, err := conf.Read(context.Background(), &gridq.Empty{})
 		if err != nil {
 			fmt.Println("error reading value:", err)
-			os.Exit(2)
+		} else {
+			fmt.Println("read response:", rreply.State)
 		}
-		fmt.Println("read response:", rreply.State)
 
 		time.Sleep(3 * time.Second)
 	}
