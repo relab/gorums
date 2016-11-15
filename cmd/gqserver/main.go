@@ -26,7 +26,7 @@ type register struct {
 	row, col uint32
 	state    gridq.State
 
-	sleep   bool
+	doSleep bool
 	errRate int
 	err     error
 }
@@ -35,7 +35,7 @@ func main() {
 	var (
 		port  = flag.String("port", "8080", "port to listen on")
 		id    = flag.String("id", "", "id using the form 'row:col'")
-		sleep = flag.Bool("sleep", false, "random sleep (0-30ms) before processing any request")
+		sleep = flag.Bool("sleep", false, "random sleep, [0-100) ms, before processing any request")
 		erate = flag.Int("erate", 0, "reply with an error to x `percent` of requests")
 	)
 
@@ -78,7 +78,7 @@ func main() {
 	register := &register{
 		row:     row,
 		col:     col,
-		sleep:   *sleep,
+		doSleep: *sleep,
 		errRate: *erate,
 		err:     rerr,
 	}
@@ -106,6 +106,7 @@ func parseRowCol(id string) (uint32, uint32, error) {
 }
 
 func (r *register) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadResponse, error) {
+	r.sleep()
 	if err := r.returnErr(); err != nil {
 		return nil, err
 	}
@@ -120,6 +121,7 @@ func (r *register) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadRespons
 }
 
 func (r *register) Write(ctx context.Context, s *gridq.State) (*gridq.WriteResponse, error) {
+	r.sleep()
 	if err := r.returnErr(); err != nil {
 		return nil, err
 	}
@@ -141,4 +143,11 @@ func (r *register) returnErr() error {
 		return r.err
 	}
 	return nil
+}
+
+func (r *register) sleep() {
+	if !r.doSleep {
+		return
+	}
+	time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
 }
