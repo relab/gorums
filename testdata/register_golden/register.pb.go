@@ -595,6 +595,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 	for {
 		select {
 		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -603,7 +604,6 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
 				cancel()
 				return reply, nil
@@ -658,12 +658,12 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	for {
 		select {
 		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			reply.State, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
 			if quorum {
 				cancel()
@@ -738,6 +738,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	for {
 		select {
 		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -746,7 +747,6 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
 				cancel()
 				return reply, nil

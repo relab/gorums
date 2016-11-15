@@ -282,6 +282,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	for {
 		select {
 		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -290,7 +291,6 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 				cancel()
 				return reply, nil
@@ -348,12 +348,12 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 	for {
 		select {
 		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(replyValues)
 			if quorum {
 				cancel()
