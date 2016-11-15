@@ -463,6 +463,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (r *R
 	for {
 		select {
 		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -471,7 +472,6 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (r *R
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.ReadResponse, quorum = c.qspec.ReadQF(replyValues); quorum {
 				cancel()
 				return reply, nil
@@ -557,6 +557,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	for {
 		select {
 		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -565,7 +566,6 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
 				cancel()
 				return reply, nil
@@ -1286,7 +1286,7 @@ type firstLine struct {
 
 func (f *firstLine) String() string {
 	var line bytes.Buffer
-	io.WriteString(&line, "QC: to ")
+	io.WriteString(&line, "QC: to config")
 	fmt.Fprintf(&line, "%v deadline:", f.cid)
 	if f.deadline != 0 {
 		fmt.Fprint(&line, f.deadline)
@@ -1317,11 +1317,11 @@ type qcresult struct {
 
 func (q qcresult) String() string {
 	var out bytes.Buffer
-	io.WriteString(&out, "recv QC: ")
+	io.WriteString(&out, "recv QC reply: ")
 	fmt.Fprintf(&out, "ids: %v, ", q.ids)
 	fmt.Fprintf(&out, "reply: %v ", q.reply)
 	if q.err != nil {
-		fmt.Fprintf(&out, "error: %v", q.err)
+		fmt.Fprintf(&out, ", error: %v", q.err)
 	}
 	return out.String()
 }
