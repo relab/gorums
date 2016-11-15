@@ -16,13 +16,19 @@ import (
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 )
+
+var rerr = grpc.Errorf(codes.Internal, "something very wrong happened")
 
 type register struct {
 	sync.Mutex
 	row, col uint32
 	state    gridq.State
-	sleep    bool
+
+	sleep   bool
+	errRate int
+	err     error
 }
 
 func main() {
@@ -30,6 +36,7 @@ func main() {
 		port  = flag.String("port", "8080", "port to listen on")
 		id    = flag.String("id", "", "id using the form 'row:col'")
 		sleep = flag.Bool("sleep", false, "random sleep (0-30ms) before processing any request")
+		erate = flag.Int("erate", 0, "reply with an error to x `percent` of requests")
 	)
 
 	flag.Usage = func() {
@@ -41,6 +48,12 @@ func main() {
 
 	if *id == "" {
 		fmt.Fprintf(os.Stderr, "no id given\n")
+		flag.Usage()
+		os.Exit(2)
+	}
+
+	if *erate < 0 || *erate > 100 {
+		fmt.Fprintf(os.Stderr, "error rate most be a percentage (0-100), got %d\n", *erate)
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -58,12 +71,16 @@ func main() {
 		os.Exit(2)
 	}
 
-	rand.Seed(time.Now().Unix())
+	if *sleep || *erate != 0 {
+		rand.Seed(time.Now().Unix())
+	}
 
 	register := &register{
-		row:   row,
-		col:   col,
-		sleep: *sleep,
+		row:     row,
+		col:     col,
+		sleep:   *sleep,
+		errRate: *erate,
+		err:     rerr,
 	}
 
 	grpcServer := grpc.NewServer()
@@ -89,6 +106,9 @@ func parseRowCol(id string) (uint32, uint32, error) {
 }
 
 func (r *register) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadResponse, error) {
+	if err := r.returnErr(); err != nil {
+		return nil, err
+	}
 	r.Lock()
 	state := r.state
 	r.Unlock()
@@ -100,6 +120,9 @@ func (r *register) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadRespons
 }
 
 func (r *register) Write(ctx context.Context, s *gridq.State) (*gridq.WriteResponse, error) {
+	if err := r.returnErr(); err != nil {
+		return nil, err
+	}
 	wresp := &gridq.WriteResponse{}
 	r.Lock()
 	if s.Timestamp > r.state.Timestamp {
@@ -108,4 +131,14 @@ func (r *register) Write(ctx context.Context, s *gridq.State) (*gridq.WriteRespo
 	}
 	r.Unlock()
 	return wresp, nil
+}
+
+func (r *register) returnErr() error {
+	if r.errRate == 0 {
+		return nil
+	}
+	if x := rand.Intn(100); x < r.errRate {
+		return r.err
+	}
+	return nil
 }
