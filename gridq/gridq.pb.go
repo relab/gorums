@@ -22,6 +22,7 @@ import math "math"
 import _ "github.com/relab/gorums"
 
 import (
+	"bytes"
 	"encoding/binary"
 	"hash/fnv"
 	"log"
@@ -417,9 +418,36 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (*ReadReply, error) {
+func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (r *ReadReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.ReadResponse,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
 	replyChan := make(chan readReply, c.n)
 	newCtx, cancel := context.WithCancel(ctx)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
 
 	for _, n := range c.nodes {
 		go callGRPCRead(newCtx, n, args, replyChan)
@@ -438,6 +466,9 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (*Rea
 			if r.err != nil {
 				errCount++
 				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
@@ -481,9 +512,36 @@ type writeReply struct {
 	err   error
 }
 
-func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*WriteReply, error) {
+func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.WriteResponse,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
 	replyChan := make(chan writeReply, c.n)
 	newCtx, cancel := context.WithCancel(ctx)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
 
 	for _, n := range c.nodes {
 		go callGRPCWrite(newCtx, n, args, replyChan)
@@ -502,6 +560,9 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (*Wr
 			if r.err != nil {
 				errCount++
 				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.NodeIDs = append(reply.NodeIDs, r.nid)
@@ -629,6 +690,10 @@ func (c *Configuration) Size() int {
 
 func (c *Configuration) String() string {
 	return fmt.Sprintf("configuration %d", c.id)
+}
+
+func (c *Configuration) tstring() string {
+	return fmt.Sprintf("config-%d", c.id)
 }
 
 // Equal returns a boolean reporting whether a and b represents the same
@@ -835,7 +900,9 @@ func (m *Manager) connectAll() error {
 		}
 		err := node.connect(m.opts.grpcDialOpts...)
 		if err != nil {
-			m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
+			if m.eventLog != nil {
+				m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
+			}
 			return fmt.Errorf("connect node %s error: %v", node.addr, err)
 		}
 	}
@@ -1203,6 +1270,60 @@ func WithTracing() ManagerOption {
 	return func(o *managerOptions) {
 		o.trace = true
 	}
+}
+
+/* trace.go */
+
+type traceInfo struct {
+	tr        trace.Trace
+	firstLine firstLine
+}
+
+type firstLine struct {
+	deadline time.Duration
+	cid      uint32
+}
+
+func (f *firstLine) String() string {
+	var line bytes.Buffer
+	io.WriteString(&line, "QC: to ")
+	fmt.Fprintf(&line, "%v deadline:", f.cid)
+	if f.deadline != 0 {
+		fmt.Fprint(&line, f.deadline)
+	} else {
+		io.WriteString(&line, "none")
+	}
+	return line.String()
+}
+
+type payload struct {
+	sent bool
+	id   uint32
+	msg  interface{}
+}
+
+func (p payload) String() string {
+	if p.sent {
+		return fmt.Sprintf("sent: %v", p.msg)
+	}
+	return fmt.Sprintf("recv from %d: %v", p.id, p.msg)
+}
+
+type qcresult struct {
+	ids   []uint32
+	reply interface{}
+	err   error
+}
+
+func (q qcresult) String() string {
+	var out bytes.Buffer
+	io.WriteString(&out, "recv QC: ")
+	fmt.Fprintf(&out, "ids: %v, ", q.ids)
+	fmt.Fprintf(&out, "reply: %v ", q.reply)
+	if q.err != nil {
+		fmt.Fprintf(&out, "error: %v", q.err)
+	}
+	return out.String()
 }
 
 /* util.go */
