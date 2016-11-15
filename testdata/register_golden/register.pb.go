@@ -1495,7 +1495,7 @@ type firstLine struct {
 
 func (f *firstLine) String() string {
 	var line bytes.Buffer
-	io.WriteString(&line, "QC: to ")
+	io.WriteString(&line, "QC: to config")
 	fmt.Fprintf(&line, "%v deadline:", f.cid)
 	if f.deadline != 0 {
 		fmt.Fprint(&line, f.deadline)
@@ -1526,11 +1526,11 @@ type qcresult struct {
 
 func (q qcresult) String() string {
 	var out bytes.Buffer
-	io.WriteString(&out, "recv QC: ")
+	io.WriteString(&out, "recv QC reply: ")
 	fmt.Fprintf(&out, "ids: %v, ", q.ids)
 	fmt.Fprintf(&out, "reply: %v ", q.reply)
 	if q.err != nil {
-		fmt.Fprintf(&out, "error: %v", q.err)
+		fmt.Fprintf(&out, ", error: %v", q.err)
 	}
 	return out.String()
 }

@@ -56,7 +56,7 @@ func (q qcresult) String() string {
 	fmt.Fprintf(&out, "ids: %v, ", q.ids)
 	fmt.Fprintf(&out, "reply: %v ", q.reply)
 	if q.err != nil {
-		fmt.Fprintf(&out, "error: %v", q.err)
+		fmt.Fprintf(&out, ", error: %v", q.err)
 	}
 	return out.String()
 }
