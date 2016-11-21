@@ -264,10 +264,11 @@ type serviceMethod struct {
 	TypeName           string
 	UnexportedTypeName string
 
-	QuorumCall  bool
-	Correctable bool
-	Future      bool
-	Multicast   bool
+	QuorumCall    bool
+	Correctable   bool
+	CorrectablePR bool
+	Future        bool
+	Multicast     bool
 
 	ServName string // Redundant, but keeps it simple.
 }
@@ -356,10 +357,11 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 
 func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto) (*serviceMethod, error) {
 	sm := &serviceMethod{
-		QuorumCall:  hasQuorumCallExtension(method),
-		Future:      hasFutureExtension(method),
-		Correctable: hasCorrectableExtension(method),
-		Multicast:   hasMulticastExtension(method),
+		QuorumCall:    hasQuorumCallExtension(method),
+		Future:        hasFutureExtension(method),
+		Correctable:   hasCorrectableExtension(method),
+		CorrectablePR: hasCorrectablePRExtension(method),
+		Multicast:     hasMulticastExtension(method),
 	}
 
 	switch {
@@ -380,9 +382,9 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
 			service, method.GetName(),
 		)
-	case method.GetServerStreaming():
+	case method.GetServerStreaming() && !sm.CorrectablePR:
 		return nil, fmt.Errorf(
-			"%s.%s: server-client streams are not supported by gorums",
+			"%s.%s: server-client streams only supported for 'correctable' option",
 			service, method.GetName(),
 		)
 	default:

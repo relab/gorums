@@ -29,6 +29,17 @@ func hasCorrectableExtension(method *descriptor.MethodDescriptorProto) bool {
 	return checkExtensionBoolValue(value)
 }
 
+func hasCorrectablePRExtension(method *descriptor.MethodDescriptorProto) bool {
+	if method.Options == nil {
+		return false
+	}
+	value, err := proto.GetExtension(method.Options, gorumsproto.E_CorrectablePr)
+	if err != nil {
+		return false
+	}
+	return checkExtensionBoolValue(value)
+}
+
 func hasMulticastExtension(method *descriptor.MethodDescriptorProto) bool {
 	if method.Options == nil {
 		return false
