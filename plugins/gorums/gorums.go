@@ -370,9 +370,9 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 			"%s.%s: illegal combination combination of options: 'future' but not 'qrpc'",
 			service, method.GetName(),
 		)
-	case !sm.QuorumCall && !sm.Correctable && !sm.Multicast:
+	case !sm.QuorumCall && !sm.Correctable && !sm.CorrectablePR && !sm.Multicast:
 		return nil, nil
-	case (sm.QuorumCall || sm.Correctable) && sm.Multicast:
+	case (sm.QuorumCall || sm.Correctable || sm.CorrectablePR) && sm.Multicast:
 		return nil, fmt.Errorf(
 			"%s.%s: illegal combination combination of options: both 'qrpc/correctable' and 'broadcast'",
 			service, method.GetName(),
