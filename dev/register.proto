@@ -11,6 +11,10 @@ service Register {
 		option (gorums.qc_future) = true;
 	}
 
+	rpc ReadCorrectablePR(ReadRequest) returns (stream State) {
+		option (gorums.correctable_pr) = true;
+	}
+
 	rpc Write(State) returns (WriteResponse) {
 		option (gorums.qc) = true;
 		option (gorums.qc_future) = true;
