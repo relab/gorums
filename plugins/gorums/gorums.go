@@ -212,6 +212,10 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 		return
 	}
 
+	if hasMessageWithByteField(file) {
+		ignoreImport["bytes"] = true
+	}
+
 	sort.Strings(staticImports)
 	g.P("import (")
 	for _, simport := range staticImports {
@@ -225,6 +229,17 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 	g.P()
 	g.P("\"google.golang.org/grpc/codes\"")
 	g.P(")")
+}
+
+func hasMessageWithByteField(file *generator.FileDescriptor) bool {
+	for _, msg := range file.Messages() {
+		for _, field := range msg.Field {
+			if field.IsBytes() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 var ignoreImport = map[string]bool{
