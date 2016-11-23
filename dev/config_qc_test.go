@@ -179,8 +179,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	defer mgr.Close()
 
 	ids := mgr.NodeIDs()
-	qspec := NewNeverQSpec()
-	config, err := mgr.NewConfiguration(ids, qspec)
+	config, err := mgr.NewConfiguration(ids, &NeverQSpec{})
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
@@ -578,9 +577,9 @@ func TestCorrectableWithLevels(t *testing.T) {
 
 	// We need the specific implementation so we call the Unlock method.
 	regServersImplementation := []*qc.RegisterServerLockedWithState{
-		qc.NewRegisterServerLockedWithState(stateOne),
-		qc.NewRegisterServerLockedWithState(stateTwo),
-		qc.NewRegisterServerLockedWithState(stateTwo),
+		qc.NewRegisterServerLockedWithState(stateOne, 0),
+		qc.NewRegisterServerLockedWithState(stateTwo, 0),
+		qc.NewRegisterServerLockedWithState(stateTwo, 0),
 	}
 
 	regServersInterface := []regServer{
@@ -615,7 +614,6 @@ func TestCorrectableWithLevels(t *testing.T) {
 	}
 
 	waitTimeout := time.Second
-
 	ctx := context.Background()
 	correctable := config.ReadCorrectable(ctx, &qc.ReadRequest{})
 
@@ -704,6 +702,169 @@ func TestCorrectableWithLevels(t *testing.T) {
 	case <-levelFiveChan:
 	default:
 		t.Fatal("read correctable: call is complete but levelFive notification channel was not closed", waitTimeout)
+	}
+}
+
+func TestCorrectablePrelim(t *testing.T) {
+	defer leakCheck(t)()
+
+	stateOne := &qc.State{
+		Value:     "42",
+		Timestamp: 1,
+	}
+	stateTwo := &qc.State{
+		Value:     "99",
+		Timestamp: 100,
+	}
+
+	// We need the specific implementation so we call the Unlock and PerformReadTwoChan methods.
+	regServersImplementation := []*qc.RegisterServerLockedWithState{
+		qc.NewRegisterServerLockedWithState(stateOne, 2),
+		qc.NewRegisterServerLockedWithState(stateTwo, 2),
+		qc.NewRegisterServerLockedWithState(stateTwo, 0),
+	}
+
+	regServersInterface := []regServer{
+		{impl: regServersImplementation[0]},
+		{impl: regServersImplementation[1]},
+		{impl: regServersImplementation[2]},
+	}
+
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(
+		t,
+		regServersInterface,
+		false,
+	)
+	defer closeListeners(allServers)
+	defer stopGrpcServe(allServers)
+
+	mgr, err := qc.NewManager(
+		servers.addrs(),
+		dialOpts,
+	)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+
+	ids := mgr.NodeIDs()
+	config, err := mgr.NewConfiguration(ids, &ReadTwoTestQSpec{})
+	if err != nil {
+		t.Fatalf("error creating config: %v", err)
+	}
+
+	waitTimeout := time.Second
+	ctx := context.Background()
+	correctable := config.ReadTwoCorrectablePrelim(ctx, &qc.ReadRequest{})
+
+	// Unlock all servers.
+	regServersImplementation[0].Unlock()
+	regServersImplementation[1].Unlock()
+	regServersImplementation[2].Unlock()
+
+	// It should be possible to reduce code duplication below.
+	// TODO: DRY.
+
+	// 0.1: Check that Done() is not done.
+	select {
+	case <-correctable.Done():
+		t.Fatalf("read correctablae prelim: Done() was done before any reply was received")
+	default:
+	}
+
+	// 0.2: Check that Get() returns nil, LevelNotSet, nil.
+	reply, level, err := correctable.Get()
+	if err != nil {
+		t.Fatalf("read correctable prelim: initial get: got unexpected error: %v", err)
+	}
+	if level != qc.LevelNotSet {
+		t.Fatalf("read correctable prelim: initial get: got level %v, want %v", level, qc.LevelNotSet)
+	}
+	if reply != nil {
+		t.Fatal("read correctable prelim: initial get: got reply, want none")
+	}
+
+	regServersImplementation[0].PerformReadTwoChan() <- struct{}{}
+
+	// 1.1: Check that Done() is not done.
+	select {
+	case <-correctable.Done():
+		t.Fatalf("read correctablae prelim: Done() was done at level 1")
+	default:
+	}
+
+	// 1.2: Check that Get() returns stateTwo, 3, nil.
+	reply, level, err = correctable.Get()
+	if err != nil {
+		t.Fatalf("read correctable prelim: get (1): got unexpected error: %v", err)
+	}
+	if level != 1 {
+		t.Fatalf("read correctable prelim: get (1): got level %v, want %v", level, 1)
+	}
+	if reply.Value != stateTwo.Value {
+		t.Fatalf("read correctable prelim: get (1):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
+	}
+	regServersImplementation[0].PerformReadTwoChan() <- struct{}{}
+
+	// 2.2: Check that Done() is not done.
+	select {
+	case <-correctable.Done():
+		t.Fatalf("read correctablae prelim: Done() was done at level 2")
+	default:
+	}
+
+	// 2.2: Check that Get() returns stateTwo, 3, nil.
+	reply, level, err = correctable.Get()
+	if err != nil {
+		t.Fatalf("read correctable prelim: get (2): got unexpected error: %v", err)
+	}
+	if level != 2 {
+		t.Fatalf("read correctable prelim: get (2): got level %v, want %v", level, 2)
+	}
+	if reply.Value != stateTwo.Value {
+		t.Fatalf("read correctable prelim: get (2):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
+	}
+
+	regServersImplementation[1].PerformReadTwoChan() <- struct{}{}
+
+	// 3.1: Check that Done() is not done.
+	select {
+	case <-correctable.Done():
+		t.Fatalf("read correctablae prelim: Done() was done at level 3")
+	default:
+	}
+
+	// 3.2: Check that Get() returns stateTwo, 3, nil.
+	reply, level, err = correctable.Get()
+	if err != nil {
+		t.Fatalf("read correctable prelim: get (3): got unexpected error: %v", err)
+	}
+	if level != 4 {
+		t.Fatalf("read correctable prelim: get (3): got level %v, want %v", level, 3)
+	}
+	if reply.Value != stateTwo.Value {
+		t.Fatalf("read correctable prelim: get (3):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
+	}
+
+	regServersImplementation[1].PerformReadTwoChan() <- struct{}{}
+
+	// 4.1: Check that Done() is done.
+	select {
+	case <-correctable.Done():
+	case <-time.After(waitTimeout):
+		t.Fatalf("read correctable prelim: waiting for Done channel timed out (waited %v)", waitTimeout)
+	}
+
+	// 4.2: Check that Get() returns stateTwo, 4, nil.
+	reply, level, err = correctable.Get()
+	if err != nil {
+		t.Fatalf("read correctable prelim: final get: got unexpected error: %v", err)
+	}
+	if level != 4 {
+		t.Fatalf("read correctable prelim: final get: got level %v, want %v", level, 4)
+	}
+	if reply.Value != stateTwo.Value {
+		t.Fatalf("read correctable prelim: get after done call:\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
 	}
 }
 

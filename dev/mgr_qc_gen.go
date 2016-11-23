@@ -4,6 +4,7 @@
 package dev
 
 import (
+	"io"
 	"time"
 
 	"golang.org/x/net/context"
@@ -151,6 +152,83 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 		if errCount+len(replyValues) == c.n {
 			cancel()
 			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
+	replyChan := make(chan readReply, c.n)
+	newCtx, cancel := context.WithCancel(ctx)
+
+	for _, n := range c.nodes {
+		go callGRPCReadTwoStream(newCtx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n*2)
+		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      = LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			addIfNotPresent(r.nid, reply.NodeIDs)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
+			if quorum {
+				cancel()
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-newCtx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount == c.n { // Can't rely on reply count.
+			cancel()
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
+	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], node.conn, "/dev.Register/ReadTwo")
+	if err != nil {
+		replyChan <- readReply{node.id, nil, err}
+		return
+	}
+	x := &registerReadTwoClient{stream}
+	if err := x.ClientStream.SendMsg(args); err != nil {
+		replyChan <- readReply{node.id, nil, err}
+		return
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		replyChan <- readReply{node.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := x.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- readReply{node.id, reply, err}
+		if err != nil {
 			return
 		}
 	}
