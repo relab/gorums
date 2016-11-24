@@ -349,6 +349,6 @@ func (r *RegisterServerLockedWithState) Unlock() {
 	close(r.lock)
 }
 
-func (r *RegisterServerLockedWithState) PerformReadTwoChan() chan<- struct{} {
-	return r.readTwoLockChan
+func (r *RegisterServerLockedWithState) PerformSingleReadTwo() {
+	r.readTwoLockChan <- struct{}{}
 }

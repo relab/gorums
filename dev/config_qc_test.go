@@ -757,6 +757,13 @@ func TestCorrectablePrelim(t *testing.T) {
 	ctx := context.Background()
 	correctable := config.ReadTwoCorrectablePrelim(ctx, &qc.ReadRequest{})
 
+	// We need these watchers for testing to know that a server has replied and
+	// gorums has processed the reply.
+	levelOneChan := correctable.Watch(1)
+	levelTwoChan := correctable.Watch(2)
+	levelThreeChan := correctable.Watch(3)
+	levelFourChan := correctable.Watch(4)
+
 	// Unlock all servers.
 	regServersImplementation[0].Unlock()
 	regServersImplementation[1].Unlock()
@@ -784,7 +791,14 @@ func TestCorrectablePrelim(t *testing.T) {
 		t.Fatal("read correctable prelim: initial get: got reply, want none")
 	}
 
-	regServersImplementation[0].PerformReadTwoChan() <- struct{}{}
+	regServersImplementation[0].PerformSingleReadTwo()
+
+	// Wait for level 1 notification.
+	select {
+	case <-levelOneChan:
+	case <-time.After(waitTimeout):
+		t.Fatalf("read correctable prelim: waiting for levelOneChan timed out (waited %v)", waitTimeout)
+	}
 
 	// 1.1: Check that Done() is not done.
 	select {
@@ -801,10 +815,18 @@ func TestCorrectablePrelim(t *testing.T) {
 	if level != 1 {
 		t.Fatalf("read correctable prelim: get (1): got level %v, want %v", level, 1)
 	}
-	if reply.Value != stateTwo.Value {
-		t.Fatalf("read correctable prelim: get (1):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
+	if reply.Value != stateOne.Value {
+		t.Fatalf("read correctable prelim: get (1):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateOne.Value)
 	}
-	regServersImplementation[0].PerformReadTwoChan() <- struct{}{}
+
+	regServersImplementation[0].PerformSingleReadTwo()
+
+	// Wait for level 2 notification.
+	select {
+	case <-levelTwoChan:
+	case <-time.After(waitTimeout):
+		t.Fatalf("read correctable prelim: waiting for levelTwoChan timed out (waited %v)", waitTimeout)
+	}
 
 	// 2.2: Check that Done() is not done.
 	select {
@@ -821,11 +843,18 @@ func TestCorrectablePrelim(t *testing.T) {
 	if level != 2 {
 		t.Fatalf("read correctable prelim: get (2): got level %v, want %v", level, 2)
 	}
-	if reply.Value != stateTwo.Value {
-		t.Fatalf("read correctable prelim: get (2):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
+	if reply.Value != stateOne.Value {
+		t.Fatalf("read correctable prelim: get (2):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateOne.Value)
 	}
 
-	regServersImplementation[1].PerformReadTwoChan() <- struct{}{}
+	regServersImplementation[1].PerformSingleReadTwo()
+
+	// Wait for level 3 notification.
+	select {
+	case <-levelThreeChan:
+	case <-time.After(waitTimeout):
+		t.Fatalf("read correctable prelim: waiting for levelThreeChan timed out (waited %v)", waitTimeout)
+	}
 
 	// 3.1: Check that Done() is not done.
 	select {
@@ -839,14 +868,21 @@ func TestCorrectablePrelim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read correctable prelim: get (3): got unexpected error: %v", err)
 	}
-	if level != 4 {
+	if level != 3 {
 		t.Fatalf("read correctable prelim: get (3): got level %v, want %v", level, 3)
 	}
 	if reply.Value != stateTwo.Value {
 		t.Fatalf("read correctable prelim: get (3):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
 	}
 
-	regServersImplementation[1].PerformReadTwoChan() <- struct{}{}
+	regServersImplementation[1].PerformSingleReadTwo()
+
+	// Wait for level 4 notification.
+	select {
+	case <-levelFourChan:
+	case <-time.After(waitTimeout):
+		t.Fatalf("read correctable prelim: waiting for levelFourChan timed out (waited %v)", waitTimeout)
+	}
 
 	// 4.1: Check that Done() is done.
 	select {
