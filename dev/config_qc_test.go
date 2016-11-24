@@ -670,8 +670,8 @@ func TestCorrectableWithLevels(t *testing.T) {
 	if level != LevelWeak {
 		t.Fatalf("read correctable: get after one reply: got level %v, want %v", level, LevelWeak)
 	}
-	if reply.State.Value != stateOne.Value {
-		t.Fatalf("read correctable: get after one reply:\ngot reply:\n%v\nwant:\n%v", reply.State.Value, stateOne.Value)
+	if reply.Value != stateOne.Value {
+		t.Fatalf("read correctable: get after one reply:\ngot reply:\n%v\nwant:\n%v", reply.Value, stateOne.Value)
 	}
 
 	// Unlock both of the two servers with the highest timestamp for state.
@@ -693,8 +693,8 @@ func TestCorrectableWithLevels(t *testing.T) {
 	if level != LevelStrong {
 		t.Fatalf("read correctable: get after done call: got level %v, want %v", level, LevelStrong)
 	}
-	if reply.State.Value != stateTwo.Value {
-		t.Fatalf("read correctable: get after done call:\ngot reply:\n%v\nwant:\n%v", reply.State.Value, stateTwo.Value)
+	if reply.Value != stateTwo.Value {
+		t.Fatalf("read correctable: get after done call:\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
 	}
 
 	// Check that channel for level 5 (undefined) notification is closed.
