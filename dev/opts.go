@@ -62,7 +62,8 @@ func WithSelfID(id uint32) ManagerOption {
 }
 
 // WithTracing controls whether to trace qourum calls for this Manager instance
-// using the golang.org/x/net/trace package.
+// using the golang.org/x/net/trace package. Tracing is currently only supported
+// for regular quorum calls.
 func WithTracing() ManagerOption {
 	return func(o *managerOptions) {
 		o.trace = true
