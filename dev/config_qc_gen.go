@@ -254,7 +254,7 @@ func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error
 		return
 	}
 	for i := range c.watchers {
-		if c.watchers[i].level <= level {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
 			close(c.watchers[i].ch)
 			c.watchers[i] = nil
 		}
