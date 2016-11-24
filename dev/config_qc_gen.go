@@ -157,6 +157,17 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 	c.mu.Unlock()
 }
 
+// ReadTwoReply encapsulates the reply from a Read quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type ReadTwoReply struct {
+	NodeIDs []uint32
+	*State
+}
+
+func (r ReadTwoReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
+}
+
 // ReadTwoCorrectablePR asynchronously invokes a correctable Read quorum call
 // with server side preliminary reply support on configuration c and returns a
 // ReadCorrectable which can be used to inspect any repies or errors
@@ -176,7 +187,7 @@ func (c *Configuration) ReadTwoCorrectablePrelim(ctx context.Context, args *Read
 // with server side preliminary reply support.
 type ReadTwoCorrectablePrelim struct {
 	mu       sync.Mutex
-	reply    *ReadReply
+	reply    *ReadTwoReply
 	level    int
 	err      error
 	done     bool
@@ -188,11 +199,11 @@ type ReadTwoCorrectablePrelim struct {
 }
 
 // Get returns the reply, level and any error associated with the
-// ReadCorrectable. The method does not block until a (possibly
+// ReadTwoCorrectablePremlim. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadTwoCorrectablePrelim) Get() (*ReadReply, int, error) {
+func (c *ReadTwoCorrectablePrelim) Get() (*ReadTwoReply, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
@@ -225,7 +236,7 @@ func (c *ReadTwoCorrectablePrelim) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *ReadTwoCorrectablePrelim) set(reply *ReadReply, level int, err error, done bool) {
+func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error, done bool) {
 	c.mu.Lock()
 	if c.done {
 		c.mu.Unlock()

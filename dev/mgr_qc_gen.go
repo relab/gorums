@@ -167,7 +167,7 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 
 	var (
 		replyValues = make([]*State, 0, c.n*2)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
+		reply       = &ReadTwoReply{NodeIDs: make([]uint32, 0, c.n)}
 		clevel      = LevelNotSet
 		rlevel      int
 		errCount    int
