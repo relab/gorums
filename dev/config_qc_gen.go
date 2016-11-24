@@ -168,7 +168,7 @@ func (r ReadTwoReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
-// ReadTwoCorrectablePR asynchronously invokes a correctable Read quorum call
+// ReadTwoCorrectablePR asynchronously invokes a correctable ReadTwo quorum call
 // with server side preliminary reply support on configuration c and returns a
 // ReadCorrectable which can be used to inspect any repies or errors
 // when available.
