@@ -143,6 +143,10 @@ func (rqs *registerQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, i
 	panic("not implemented")
 }
 
+func (rqs *registerQSpec) ReadTwoCorrectablePrelimQF(replies []*rpc.State) (*rpc.State, int, bool) {
+	panic("not implemented")
+}
+
 func (rqs *registerQSpec) WriteQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
 	if len(replies) < rqs.wq {
 		return nil, false
