@@ -481,6 +481,111 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 	c.mu.Unlock()
 }
 
+// ReadTwoReply encapsulates the reply from a correctable ReadTwo quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type ReadTwoReply struct {
+	NodeIDs []uint32
+	*State
+}
+
+func (r ReadTwoReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
+}
+
+// ReadTwoCorrectablePrelim asynchronously invokes a correctable ReadTwo quorum call
+// with server side preliminary reply support on configuration c and returns a
+// ReadTwoCorrectablePrelim which can be used to inspect any repies or errors
+// when available.
+func (c *Configuration) ReadTwoCorrectablePrelim(ctx context.Context, args *ReadRequest) *ReadTwoCorrectablePrelim {
+	corr := &ReadTwoCorrectablePrelim{
+		level:  LevelNotSet,
+		donech: make(chan struct{}),
+	}
+	go func() {
+		c.mgr.readTwoCorrectablePrelim(ctx, c, corr, args)
+	}()
+	return corr
+}
+
+// ReadTwoCorrectablePrelim is a reference to a correctable Read quorum call
+// with server side preliminary reply support.
+type ReadTwoCorrectablePrelim struct {
+	mu       sync.Mutex
+	reply    *ReadTwoReply
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+
+// Get returns the reply, level and any error associated with the
+// ReadTwoCorrectablePremlim. The method does not block until a (possibly
+// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// reply has yet been received. The Done or Watch methods should be used to
+// ensure that a reply is available.
+func (c *ReadTwoCorrectablePrelim) Get() (*ReadTwoReply, int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.reply, c.level, c.err
+}
+
+// Done returns a channel that's closed when the correctable ReadTwo
+// quorum call is done. A call is considered done when the quorum function has
+// signaled that a quorum of replies was received or that the call returned an
+// error.
+func (c *ReadTwoCorrectablePrelim) Done() <-chan struct{} {
+	return c.donech
+}
+
+// Watch returns a channel that's closed when a reply or error at or above the
+// specified level is available. If the call is done, the channel is closed
+// disregardless of the specified level.
+func (c *ReadTwoCorrectablePrelim) Watch(level int) <-chan struct{} {
+	ch := make(chan struct{})
+	c.mu.Lock()
+	if level < c.level {
+		close(ch)
+		c.mu.Unlock()
+		return ch
+	}
+	c.watchers = append(c.watchers, &struct {
+		level int
+		ch    chan struct{}
+	}{level, ch})
+	c.mu.Unlock()
+	return ch
+}
+
+func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error, done bool) {
+	c.mu.Lock()
+	if c.done {
+		c.mu.Unlock()
+		panic("set(...) called on a done correctable")
+	}
+	c.reply, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			if watcher != nil {
+				close(watcher.ch)
+			}
+		}
+		c.mu.Unlock()
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+			c.watchers[i] = nil
+		}
+	}
+	c.mu.Unlock()
+}
+
 // WriteReply encapsulates the reply from a Write quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type WriteReply struct {
@@ -687,6 +792,81 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	}
 }
 
+type readTwoReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
+func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
+	replyChan := make(chan readTwoReply, c.n)
+	newCtx, cancel := context.WithCancel(ctx)
+
+	for _, n := range c.nodes {
+		go callGRPCReadTwoStream(newCtx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n*2)
+		reply       = &ReadTwoReply{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      = LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
+			if quorum {
+				cancel()
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-newCtx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount == c.n { // Can't rely on reply count.
+			cancel()
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
+	x := NewRegisterClient(node.conn)
+	y, err := x.ReadTwo(ctx, args)
+	if err != nil {
+		replyChan <- readTwoReply{node.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- readTwoReply{node.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
 type writeReply struct {
 	nid   uint32
 	reply *WriteResponse
@@ -857,6 +1037,10 @@ type QuorumSpec interface {
 	// ReadCorrectableQF is the quorum function for the Read
 	// correctable quorum call method.
 	ReadCorrectableQF(replies []*State) (*State, int, bool)
+
+	// ReadTwoCorrectablePrelimQF is the quorum function for the ReadTwo
+	// correctable prelim quourm call method.
+	ReadTwoCorrectablePrelimQF(replies []*State) (*State, int, bool)
 
 	// WriteQF is the quorum function for the Write
 	// quorum call method.
@@ -1474,7 +1658,8 @@ func WithSelfID(id uint32) ManagerOption {
 }
 
 // WithTracing controls whether to trace qourum calls for this Manager instance
-// using the golang.org/x/net/trace package.
+// using the golang.org/x/net/trace package. Tracing is currently only supported
+// for regular quorum calls.
 func WithTracing() ManagerOption {
 	return func(o *managerOptions) {
 		o.trace = true
@@ -1546,18 +1731,28 @@ func contains(addr string, addrs []string) (found bool, index int) {
 	return false, -1
 }
 
+func appendIfNotPresent(set []uint32, x uint32) []uint32 {
+	for _, y := range set {
+		if y == x {
+			return set
+		}
+	}
+	return append(set, x)
+}
+
 // Reference imports to suppress errors if they are not otherwise used.
 var _ context.Context
 var _ grpc.ClientConn
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion3
+const _ = grpc.SupportPackageIsVersion4
 
 // Client API for Register service
 
 type RegisterClient interface {
 	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error)
 	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
 	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
 	ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
@@ -1580,6 +1775,38 @@ func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc
 	return out, nil
 }
 
+func (c *registerClient) ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], c.cc, "/dev.Register/ReadTwo", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &registerReadTwoClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Register_ReadTwoClient interface {
+	Recv() (*State, error)
+	grpc.ClientStream
+}
+
+type registerReadTwoClient struct {
+	grpc.ClientStream
+}
+
+func (x *registerReadTwoClient) Recv() (*State, error) {
+	m := new(State)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *registerClient) Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
 	err := grpc.Invoke(ctx, "/dev.Register/Write", in, out, c.cc, opts...)
@@ -1590,7 +1817,7 @@ func (c *registerClient) Write(ctx context.Context, in *State, opts ...grpc.Call
 }
 
 func (c *registerClient) WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], c.cc, "/dev.Register/WriteAsync", opts...)
+	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[1], c.cc, "/dev.Register/WriteAsync", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1636,6 +1863,7 @@ func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...
 
 type RegisterServer interface {
 	Read(context.Context, *ReadRequest) (*State, error)
+	ReadTwo(*ReadRequest, Register_ReadTwoServer) error
 	Write(context.Context, *State) (*WriteResponse, error)
 	WriteAsync(Register_WriteAsyncServer) error
 	ReadNoQC(context.Context, *ReadRequest) (*State, error)
@@ -1661,6 +1889,27 @@ func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(inter
 		return srv.(RegisterServer).Read(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadTwo_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ReadRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(RegisterServer).ReadTwo(m, &registerReadTwoServer{stream})
+}
+
+type Register_ReadTwoServer interface {
+	Send(*State) error
+	grpc.ServerStream
+}
+
+type registerReadTwoServer struct {
+	grpc.ServerStream
+}
+
+func (x *registerReadTwoServer) Send(m *State) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _Register_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1744,12 +1993,17 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
+			StreamName:    "ReadTwo",
+			Handler:       _Register_ReadTwo_Handler,
+			ServerStreams: true,
+		},
+		{
 			StreamName:    "WriteAsync",
 			Handler:       _Register_WriteAsync_Handler,
 			ClientStreams: true,
 		},
 	},
-	Metadata: fileDescriptorRegister,
+	Metadata: "testdata/register_golden/register.proto",
 }
 
 func (m *State) Marshal() (dAtA []byte, err error) {
@@ -2342,27 +2596,28 @@ var (
 func init() { proto.RegisterFile("testdata/register_golden/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 345 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x90, 0xb1, 0x4e, 0x32, 0x41,
-	0x10, 0xc7, 0x6f, 0x3e, 0xb8, 0x4f, 0x18, 0x25, 0x21, 0x1b, 0x8b, 0x0b, 0x31, 0x1b, 0xbc, 0x98,
-	0x48, 0x0c, 0x39, 0x22, 0x96, 0x56, 0x6a, 0x6c, 0x49, 0x3c, 0x8d, 0x96, 0x66, 0xe1, 0x26, 0xe7,
-	0x25, 0x1c, 0x77, 0xde, 0xee, 0x61, 0xe8, 0x28, 0x2d, 0x7d, 0x04, 0x4b, 0x5f, 0x00, 0x9f, 0xc1,
-	0xc4, 0x86, 0xd2, 0x12, 0xce, 0xc6, 0xd2, 0x47, 0x30, 0x2c, 0xa8, 0x50, 0x59, 0xed, 0x7f, 0x66,
-	0x7f, 0xb3, 0xfb, 0xcb, 0xe0, 0xae, 0x22, 0xa9, 0x3c, 0xa1, 0x44, 0x23, 0x21, 0x3f, 0x90, 0x8a,
-	0x92, 0x6b, 0x3f, 0xea, 0x7a, 0xd4, 0xfb, 0xa9, 0x9d, 0x38, 0x89, 0x54, 0xc4, 0x72, 0x1e, 0xf5,
-	0x2b, 0x3b, 0x7e, 0xa0, 0x6e, 0xd2, 0xb6, 0xd3, 0x89, 0xc2, 0x46, 0x42, 0x5d, 0xd1, 0x6e, 0xf8,
-	0x51, 0x92, 0x86, 0x72, 0x71, 0xcc, 0x51, 0xfb, 0x10, 0xcd, 0x73, 0x25, 0x14, 0xb1, 0x4d, 0x34,
-	0x2f, 0x45, 0x37, 0x25, 0x0b, 0xaa, 0x50, 0x2b, 0xba, 0xf3, 0x82, 0x6d, 0x61, 0xf1, 0x22, 0x08,
-	0x49, 0x2a, 0x11, 0xc6, 0xd6, 0xbf, 0x2a, 0xd4, 0x72, 0xee, 0x6f, 0xc3, 0xde, 0xc6, 0xd2, 0x55,
-	0x12, 0x28, 0x72, 0x49, 0xc6, 0x51, 0x4f, 0x12, 0x2b, 0x63, 0xae, 0x45, 0x77, 0xfa, 0x89, 0x82,
-	0x3b, 0x8b, 0x76, 0x09, 0xd7, 0x5d, 0x12, 0x9e, 0x4b, 0xb7, 0x29, 0x49, 0x65, 0xaf, 0xa1, 0x79,
-	0x1a, 0xc6, 0x6a, 0xd0, 0x7c, 0x05, 0x2c, 0xb8, 0x0b, 0x6b, 0xd6, 0xc4, 0xfc, 0x0c, 0x62, 0x65,
-	0xc7, 0xa3, 0xbe, 0xb3, 0xc4, 0x57, 0x50, 0x77, 0xb4, 0xa1, 0xbd, 0x31, 0x1c, 0x59, 0x70, 0x3f,
-	0xb2, 0xe0, 0xf1, 0xd9, 0x02, 0xb6, 0x8f, 0xa6, 0xfe, 0x9b, 0x2d, 0x21, 0x15, 0xa6, 0xf3, 0x8a,
-	0x93, 0x5d, 0x18, 0x7e, 0x8f, 0xd4, 0x11, 0xf5, 0xd5, 0x91, 0x1c, 0xf4, 0x3a, 0x2b, 0x73, 0xf3,
-	0xac, 0xcd, 0xec, 0xfc, 0x78, 0x64, 0x41, 0x0d, 0xd8, 0xde, 0x4c, 0x50, 0x78, 0xad, 0xe8, 0xec,
-	0xe4, 0x0f, 0x31, 0xe3, 0xb8, 0x3e, 0x9e, 0x72, 0xe3, 0x6d, 0xca, 0x8d, 0xc9, 0x94, 0xc3, 0x30,
-	0xe3, 0xf0, 0x94, 0x71, 0x78, 0xc9, 0x38, 0x8c, 0x33, 0x0e, 0x93, 0x8c, 0xc3, 0x47, 0xc6, 0x8d,
-	0xcf, 0x8c, 0xc3, 0xc3, 0x3b, 0x37, 0xda, 0xff, 0xf5, 0xea, 0x0f, 0xbe, 0x02, 0x00, 0x00, 0xff,
-	0xff, 0x6d, 0xf0, 0xae, 0xcc, 0xd0, 0x01, 0x00, 0x00,
+	// 366 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x91, 0x31, 0x6f, 0xda, 0x40,
+	0x14, 0xc7, 0xfd, 0x0a, 0x2e, 0x70, 0x2d, 0x12, 0x3a, 0x75, 0xb0, 0x50, 0x75, 0xa2, 0x56, 0xa5,
+	0xa2, 0x0a, 0xd9, 0x2d, 0x1d, 0x3b, 0xb5, 0x55, 0x57, 0xa4, 0x38, 0x28, 0x19, 0xa3, 0x03, 0x3f,
+	0x39, 0x96, 0x30, 0xe7, 0xf8, 0xce, 0x20, 0x36, 0xc6, 0x8c, 0x7c, 0x84, 0x8c, 0xf9, 0x02, 0xce,
+	0x67, 0xc8, 0xc8, 0x98, 0x11, 0x9c, 0x25, 0x63, 0x3e, 0x40, 0x86, 0xc8, 0x07, 0x49, 0x60, 0x62,
+	0xba, 0xff, 0x7b, 0xef, 0xff, 0xee, 0x7e, 0x7f, 0x1d, 0xf9, 0xa6, 0x50, 0x2a, 0x9f, 0x2b, 0xee,
+	0x26, 0x18, 0x84, 0x52, 0x61, 0x72, 0x16, 0x88, 0x91, 0x8f, 0xe3, 0xd7, 0xda, 0x89, 0x13, 0xa1,
+	0x04, 0x2d, 0xf9, 0x38, 0x69, 0x7e, 0x0d, 0x42, 0x75, 0x9e, 0x0e, 0x9c, 0xa1, 0x88, 0xdc, 0x04,
+	0x47, 0x7c, 0xe0, 0x06, 0x22, 0x49, 0x23, 0xb9, 0x3d, 0x36, 0x56, 0xfb, 0x37, 0x31, 0x8f, 0x15,
+	0x57, 0x48, 0x3f, 0x11, 0xf3, 0x84, 0x8f, 0x52, 0xb4, 0xa0, 0x05, 0xed, 0x9a, 0xb7, 0x29, 0xe8,
+	0x67, 0x52, 0xeb, 0x87, 0x11, 0x4a, 0xc5, 0xa3, 0xd8, 0x7a, 0xd7, 0x82, 0x76, 0xc9, 0x7b, 0x6b,
+	0xd8, 0x5f, 0x48, 0xfd, 0x34, 0x09, 0x15, 0x7a, 0x28, 0x63, 0x31, 0x96, 0x48, 0x1b, 0xa4, 0xd4,
+	0xc3, 0xa9, 0xbe, 0xa2, 0xea, 0x15, 0xd2, 0xae, 0x93, 0x0f, 0x1e, 0x72, 0xdf, 0xc3, 0x8b, 0x14,
+	0xa5, 0xb2, 0x2b, 0xc4, 0xfc, 0x1f, 0xc5, 0x6a, 0xd6, 0x7d, 0x02, 0x52, 0xf5, 0xb6, 0xd4, 0xb4,
+	0x4b, 0xca, 0x85, 0x89, 0x36, 0x1c, 0x1f, 0x27, 0xce, 0x8e, 0xbf, 0x49, 0x74, 0x47, 0x13, 0xda,
+	0x1f, 0xe7, 0x99, 0x05, 0x97, 0x99, 0x05, 0x57, 0x37, 0x16, 0x50, 0x97, 0x54, 0x0a, 0x63, 0x7f,
+	0x2a, 0x0e, 0xac, 0x95, 0x17, 0x99, 0x05, 0x3f, 0x80, 0xfe, 0x24, 0xa6, 0x86, 0xa5, 0x3b, 0xc3,
+	0x26, 0xd5, 0x7a, 0x2f, 0x84, 0x5d, 0x9d, 0xbf, 0xbc, 0xd1, 0x21, 0x44, 0x8f, 0xfe, 0xc8, 0xd9,
+	0x78, 0xb8, 0xb7, 0xb7, 0xd1, 0x3a, 0x8a, 0x5d, 0x5e, 0x66, 0x16, 0xb4, 0x81, 0x7e, 0x2f, 0x12,
+	0x71, 0xbf, 0x27, 0x8e, 0xfe, 0x1d, 0x40, 0x32, 0xfe, 0x76, 0x96, 0x6b, 0x66, 0xdc, 0xad, 0x99,
+	0xb1, 0x5a, 0x33, 0x98, 0xe7, 0x0c, 0xae, 0x73, 0x06, 0xb7, 0x39, 0x83, 0x65, 0xce, 0x60, 0x95,
+	0x33, 0x78, 0xc8, 0x99, 0xf1, 0x98, 0x33, 0x58, 0xdc, 0x33, 0x63, 0xf0, 0x5e, 0xff, 0xd5, 0xaf,
+	0xe7, 0x00, 0x00, 0x00, 0xff, 0xff, 0x11, 0xce, 0x69, 0xa8, 0x01, 0x02, 0x00, 0x00,
 }

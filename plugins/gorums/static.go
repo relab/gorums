@@ -629,7 +629,8 @@ func WithSelfID(id uint32) ManagerOption {
 }
 
 // WithTracing controls whether to trace qourum calls for this Manager instance
-// using the golang.org/x/net/trace package.
+// using the golang.org/x/net/trace package. Tracing is currently only supported
+// for regular quorum calls.
 func WithTracing() ManagerOption {
 	return func(o *managerOptions) {
 		o.trace = true
@@ -699,5 +700,14 @@ func contains(addr string, addrs []string) (found bool, index int) {
 		}
 	}
 	return false, -1
+}
+
+func appendIfNotPresent(set []uint32, x uint32) []uint32 {
+	for _, y := range set {
+		if y == x {
+			return set
+		}
+	}
+	return append(set, x)
 }
 `
