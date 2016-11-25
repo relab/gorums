@@ -90,11 +90,7 @@ func (r *RegisterServerBasic) ReadNoQC(ctx context.Context, rq *ReadRequest) (*S
 
 // ReadTwo implements the ReadTwo method from the RegisterServer interface.
 func (r *RegisterServerBasic) ReadTwo(rq *ReadRequest, rrts Register_ReadTwoServer) error {
-	err := rrts.Send(&r.state)
-	if err != nil {
-		return err
-	}
-	return nil
+	return rrts.Send(&r.state)
 }
 
 // ReadExecuted returns when r has has completed a read.
