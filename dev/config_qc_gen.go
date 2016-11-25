@@ -168,7 +168,7 @@ func (r ReadTwoReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
-// ReadTwoCorrectablePR asynchronously invokes a correctable ReadTwo quorum call
+// ReadTwoCorrectablePrelim asynchronously invokes a correctable ReadTwo quorum call
 // with server side preliminary reply support on configuration c and returns a
 // ReadCorrectable which can be used to inspect any repies or errors
 // when available.
@@ -183,7 +183,7 @@ func (c *Configuration) ReadTwoCorrectablePrelim(ctx context.Context, args *Read
 	return corr
 }
 
-// ReadTwoCorrectable is a reference to a correctable Read quorum call
+// ReadTwoCorrectablePrelim is a reference to a correctable Read quorum call
 // with server side preliminary reply support.
 type ReadTwoCorrectablePrelim struct {
 	mu       sync.Mutex

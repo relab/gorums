@@ -345,6 +345,8 @@ func (r *RegisterServerLockedWithState) Unlock() {
 	close(r.lock)
 }
 
+// PerformSingleReadTwo lets the register server send a single reply from a
+// single ReadTwo method handler.
 func (r *RegisterServerLockedWithState) PerformSingleReadTwo() {
 	r.readTwoLockChan <- struct{}{}
 }
