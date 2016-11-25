@@ -4,7 +4,7 @@
 package gorums
 
 const config_qc_tmpl = `
-{{/* Remember to run 'make gengolden' after editing this file. */}}
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
@@ -31,7 +31,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 
 {{- end -}}
 
-{{if .QuorumCall}}
+{{if or (.QuorumCall) (.Future) (.Correctable)}}
 
 // {{.TypeName}} encapsulates the reply from a {{.MethodName}} quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
@@ -43,7 +43,9 @@ type {{.TypeName}} struct {
 func (r {{.TypeName}}) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
 }
+{{- end -}}
 
+{{if .QuorumCall}}
 // {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
 // and returns the result as a {{.TypeName}}.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
@@ -134,7 +136,7 @@ func (c *{{.MethodName}}Correctable) Get() (*{{.TypeName}}, int, error) {
 	return c.reply, c.level, c.err
 }
 
-// Done returns a channel that's closed when the {{.MethodName}} correctable
+// Done returns a channel that's closed when the correctable {{.MethodName}}
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
@@ -179,7 +181,7 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 		return
 	}
 	for i := range c.watchers {
-		if c.watchers[i].level <= level {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
 			close(c.watchers[i].ch)
 			c.watchers[i] = nil
 		}
@@ -302,7 +304,7 @@ func (c *{{.MethodName}}CorrectablePrelim) set(reply *{{.TypeName}}, level int, 
 `
 
 const mgr_qc_tmpl = `
-{{/* Remember to run 'make gengolden' after editing this file. */}}
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
 {{$pkgName := .PackageName}}
 
 {{if not .IgnoreImports}}
@@ -575,7 +577,7 @@ func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.Req
 `
 
 const node_tmpl = `
-{{/* Remember to run 'make gengolden' after editing this file. */}}
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
@@ -656,7 +658,7 @@ func (n *Node) close() error {
 `
 
 const qspec_tmpl = `
-{{/* Remember to run 'make gengolden' after editing this file. */}}
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}

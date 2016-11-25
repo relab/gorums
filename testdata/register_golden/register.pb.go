@@ -428,7 +428,7 @@ func (c *ReadCorrectable) Get() (*ReadReply, int, error) {
 	return c.reply, c.level, c.err
 }
 
-// Done returns a channel that's closed when the Read correctable
+// Done returns a channel that's closed when the correctable Read
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
@@ -473,7 +473,7 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 		return
 	}
 	for i := range c.watchers {
-		if c.watchers[i].level <= level {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
 			close(c.watchers[i].ch)
 			c.watchers[i] = nil
 		}
