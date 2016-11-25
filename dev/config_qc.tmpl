@@ -129,7 +129,7 @@ func (c *{{.MethodName}}Correctable) Get() (*{{.TypeName}}, int, error) {
 	return c.reply, c.level, c.err
 }
 
-// Done returns a channel that's closed when the {{.MethodName}} correctable
+// Done returns a channel that's closed when the correctable {{.MethodName}}
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
