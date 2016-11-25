@@ -213,23 +213,15 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 }
 
 func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
-	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], node.conn, "/dev.Register/ReadTwo")
+	x := NewRegisterClient(node.conn)
+	y, err := x.ReadTwo(ctx, args)
 	if err != nil {
-		replyChan <- readTwoReply{node.id, nil, err}
-		return
-	}
-	x := &registerReadTwoClient{stream}
-	if err := x.ClientStream.SendMsg(args); err != nil {
-		replyChan <- readTwoReply{node.id, nil, err}
-		return
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
 		replyChan <- readTwoReply{node.id, nil, err}
 		return
 	}
 
 	for {
-		reply, err := x.Recv()
+		reply, err := y.Recv()
 		if err == io.EOF {
 			return
 		}
