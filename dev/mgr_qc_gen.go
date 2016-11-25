@@ -177,7 +177,7 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 	for {
 		select {
 		case r := <-replyChan:
-			addIfNotPresent(r.nid, reply.NodeIDs)
+			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break

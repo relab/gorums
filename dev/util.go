@@ -9,11 +9,11 @@ func contains(addr string, addrs []string) (found bool, index int) {
 	return false, -1
 }
 
-func addIfNotPresent(x uint32, set []uint32) {
+func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	for _, y := range set {
 		if y == x {
-			return
+			return set
 		}
 	}
-	set = append(set, x)
+	return append(set, x)
 }
