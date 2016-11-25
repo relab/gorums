@@ -157,7 +157,7 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 	c.mu.Unlock()
 }
 
-// ReadTwoReply encapsulates the reply from a Read quorum call.
+// ReadTwoReply encapsulates the reply from a correctable ReadTwo quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type ReadTwoReply struct {
 	NodeIDs []uint32
@@ -170,7 +170,7 @@ func (r ReadTwoReply) String() string {
 
 // ReadTwoCorrectablePrelim asynchronously invokes a correctable ReadTwo quorum call
 // with server side preliminary reply support on configuration c and returns a
-// ReadCorrectable which can be used to inspect any repies or errors
+// ReadTwoCorrectablePrelim which can be used to inspect any repies or errors
 // when available.
 func (c *Configuration) ReadTwoCorrectablePrelim(ctx context.Context, args *ReadRequest) *ReadTwoCorrectablePrelim {
 	corr := &ReadTwoCorrectablePrelim{
@@ -209,7 +209,7 @@ func (c *ReadTwoCorrectablePrelim) Get() (*ReadTwoReply, int, error) {
 	return c.reply, c.level, c.err
 }
 
-// Done returns a channel that's closed when the Read correctable
+// Done returns a channel that's closed when the correctable ReadTwo
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
