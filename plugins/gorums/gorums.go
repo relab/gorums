@@ -279,11 +279,11 @@ type serviceMethod struct {
 	TypeName           string
 	UnexportedTypeName string
 
-	QuorumCall    bool
-	Correctable   bool
-	CorrectablePR bool
-	Future        bool
-	Multicast     bool
+	QuorumCall        bool
+	Correctable       bool
+	CorrectablePrelim bool
+	Future            bool
+	Multicast         bool
 
 	ServName string // Redundant, but keeps it simple.
 }
@@ -372,11 +372,11 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 
 func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto) (*serviceMethod, error) {
 	sm := &serviceMethod{
-		QuorumCall:    hasQuorumCallExtension(method),
-		Future:        hasFutureExtension(method),
-		Correctable:   hasCorrectableExtension(method),
-		CorrectablePR: hasCorrectablePRExtension(method),
-		Multicast:     hasMulticastExtension(method),
+		QuorumCall:        hasQuorumCallExtension(method),
+		Future:            hasFutureExtension(method),
+		Correctable:       hasCorrectableExtension(method),
+		CorrectablePrelim: hasCorrectablePRExtension(method),
+		Multicast:         hasMulticastExtension(method),
 	}
 
 	switch {
@@ -385,9 +385,9 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 			"%s.%s: illegal combination combination of options: 'future' but not 'qrpc'",
 			service, method.GetName(),
 		)
-	case !sm.QuorumCall && !sm.Correctable && !sm.CorrectablePR && !sm.Multicast:
+	case !sm.QuorumCall && !sm.Correctable && !sm.CorrectablePrelim && !sm.Multicast:
 		return nil, nil
-	case (sm.QuorumCall || sm.Correctable || sm.CorrectablePR) && sm.Multicast:
+	case (sm.QuorumCall || sm.Correctable || sm.CorrectablePrelim) && sm.Multicast:
 		return nil, fmt.Errorf(
 			"%s.%s: illegal combination combination of options: both 'qrpc/correctable' and 'broadcast'",
 			service, method.GetName(),
@@ -397,7 +397,7 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
 			service, method.GetName(),
 		)
-	case method.GetServerStreaming() && !sm.CorrectablePR:
+	case method.GetServerStreaming() && !sm.CorrectablePrelim:
 		return nil, fmt.Errorf(
 			"%s.%s: server-client streams only supported for 'correctable' option",
 			service, method.GetName(),
