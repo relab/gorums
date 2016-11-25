@@ -157,8 +157,14 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	}
 }
 
+type readTwoReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
 func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
-	replyChan := make(chan readReply, c.n)
+	replyChan := make(chan readTwoReply, c.n)
 	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
@@ -206,19 +212,19 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 	}
 }
 
-func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
+func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
 	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], node.conn, "/dev.Register/ReadTwo")
 	if err != nil {
-		replyChan <- readReply{node.id, nil, err}
+		replyChan <- readTwoReply{node.id, nil, err}
 		return
 	}
 	x := &registerReadTwoClient{stream}
 	if err := x.ClientStream.SendMsg(args); err != nil {
-		replyChan <- readReply{node.id, nil, err}
+		replyChan <- readTwoReply{node.id, nil, err}
 		return
 	}
 	if err := x.ClientStream.CloseSend(); err != nil {
-		replyChan <- readReply{node.id, nil, err}
+		replyChan <- readTwoReply{node.id, nil, err}
 		return
 	}
 
@@ -227,7 +233,7 @@ func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, r
 		if err == io.EOF {
 			return
 		}
-		replyChan <- readReply{node.id, reply, err}
+		replyChan <- readTwoReply{node.id, reply, err}
 		if err != nil {
 			return
 		}
