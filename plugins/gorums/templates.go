@@ -343,7 +343,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 {{- end -}}
 
-{{if .QuorumCall}}
+{{if or (.QuorumCall) (.Future)}}
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -667,7 +667,7 @@ package {{.PackageName}}
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
 {{- range $elm := .Services}}
-{{- if .QuorumCall}}
+{{- if or (.QuorumCall) (.Future)}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// quorum call method.
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)

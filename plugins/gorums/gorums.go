@@ -380,16 +380,11 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 	}
 
 	switch {
-	case sm.Future && !sm.QuorumCall:
-		return nil, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: 'future' but not 'qrpc'",
-			service, method.GetName(),
-		)
-	case !sm.QuorumCall && !sm.Correctable && !sm.CorrectablePrelim && !sm.Multicast:
+	case !sm.QuorumCall && !sm.Future && !sm.Correctable && !sm.CorrectablePrelim && !sm.Multicast:
 		return nil, nil
-	case (sm.QuorumCall || sm.Correctable || sm.CorrectablePrelim) && sm.Multicast:
+	case (sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectablePrelim) && sm.Multicast:
 		return nil, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: both 'qrpc/correctable' and 'broadcast'",
+			"%s.%s: illegal combination combination of options: both 'qc/qc-future/correctable' and 'broadcast'",
 			service, method.GetName(),
 		)
 	case sm.Multicast && !method.GetClientStreaming():
