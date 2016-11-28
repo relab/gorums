@@ -257,7 +257,7 @@ func (r *RegisterServerBench) WriteAsync(stream Register_WriteAsyncServer) error
 
 // ReadNoQC implements the ReadNoQC method from the RegisterServer interface.
 func (r *RegisterServerBench) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
-	return r.ReadNoQC(ctx, rq)
+	return r.Read(ctx, rq)
 }
 
 // ReadTwo implements the ReadTwo method from the RegisterServer interface.
