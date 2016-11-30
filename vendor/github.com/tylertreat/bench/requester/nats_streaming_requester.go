@@ -2,6 +2,7 @@ package requester
 
 import (
 	"errors"
+	"math/rand"
 	"strconv"
 	"time"
 
@@ -16,11 +17,13 @@ type NATSStreamingRequesterFactory struct {
 	PayloadSize int
 	Subject     string
 	ClientID    string
+	URL         string
 }
 
 // GetRequester returns a new Requester, called for each Benchmark connection.
 func (n *NATSStreamingRequesterFactory) GetRequester(num uint64) bench.Requester {
 	return &natsStreamingRequester{
+		url:         n.URL,
 		clientID:    n.ClientID,
 		payloadSize: n.PayloadSize,
 		subject:     n.Subject + "-" + strconv.FormatUint(num, 10),
@@ -30,6 +33,7 @@ func (n *NATSStreamingRequesterFactory) GetRequester(num uint64) bench.Requester
 // natsStreamingRequester implements Requester by publishing a message to NATS
 // Streaming and waiting to receive it.
 type natsStreamingRequester struct {
+	url         string
 	clientID    string
 	payloadSize int
 	subject     string
@@ -41,7 +45,7 @@ type natsStreamingRequester struct {
 
 // Setup prepares the Requester for benchmarking.
 func (n *natsStreamingRequester) Setup() error {
-	conn, err := stan.Connect("test-cluster", n.clientID)
+	conn, err := stan.Connect("test-cluster", n.clientID, stan.NatsURL(n.url))
 	if err != nil {
 		return err
 	}
@@ -56,12 +60,15 @@ func (n *natsStreamingRequester) Setup() error {
 	n.conn = conn
 	n.sub = sub
 	n.msg = make([]byte, n.payloadSize)
+	for i := 0; i < n.payloadSize; i++ {
+		n.msg[i] = 'A' + uint8(rand.Intn(26))
+	}
 	return nil
 }
 
 // Request performs a synchronous request to the system under test.
 func (n *natsStreamingRequester) Request() error {
-	if err := n.conn.Publish(n.subject, n.msg); err != nil {
+	if _, err := n.conn.PublishAsync(n.subject, n.msg, nil); err != nil {
 		return err
 	}
 	select {

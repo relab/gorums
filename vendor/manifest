@@ -13,7 +13,7 @@
 			"importpath": "github.com/gogo/protobuf",
 			"repository": "https://github.com/gogo/protobuf",
 			"vcs": "git",
-			"revision": "8d70fb3182befc465c4a1eac8ad4d38ff49778e2",
+			"revision": "6a92c871a8f5333cf106b2cdf937567208dbb2b7",
 			"branch": "master",
 			"notests": true
 		},
@@ -30,7 +30,7 @@
 			"importpath": "github.com/tylertreat/bench",
 			"repository": "https://github.com/tylertreat/bench",
 			"vcs": "git",
-			"revision": "4974d829b4991c0971c66af7ab0f559980f3b134",
+			"revision": "3456b313d396bc1b687dc08a92b710e260d02636",
 			"branch": "master",
 			"notests": true
 		},
@@ -92,7 +92,7 @@
 			"importpath": "google.golang.org/grpc",
 			"repository": "https://github.com/grpc/grpc-go",
 			"vcs": "git",
-			"revision": "63bd55dfbf781b183216d2dd4433a659c947648a",
+			"revision": "cc3363f26e0b0908b9bea322aa3a3489bd930913",
 			"branch": "master",
 			"notests": true
 		}
