@@ -29,5 +29,5 @@ implemented using Gorums can be found
 
 ### References
 
-[1] Tormod E. Lea, Leander Jehl, and Hein Meling. Gorums: _New Abstractions for
+[1] Tormod E. Lea, Leander Jehl, and Hein Meling. _Gorums: New Abstractions for
     Implementing Quorum-based Systems._ In submission.
