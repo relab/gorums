@@ -22,7 +22,7 @@ A collection of different algorithms for reconfigurable atomic storage
 implemented using Gorums can be found
 [here](https://github.com/relab/smartmerge).
 
-### Documentation
+### Outdated documentation
 
 * [Student/user guide](doc/userguide.md)
 * [Developer guide](doc/devguide.md)
