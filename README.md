@@ -15,6 +15,9 @@ language.
 
 ### Examples
 
+The original EPaxos implementation modified to use Gorums can be found
+[here](https://github.com/relab/epaxos).
+
 A collection of different algorithms for reconfigurable atomic storage
 implemented using Gorums can be found
 [here](https://github.com/relab/smartmerge).
