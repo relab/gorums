@@ -11,14 +11,15 @@ import (
 	"time"
 
 	"github.com/relab/gorums/gbench"
+
 	"github.com/tylertreat/bench"
 )
 
 const (
-	gorums string = "gorums"
-	grpc   string = "grpc"
-	byzq   string = "byzq"
-	gridq  string = "gridq"
+	gorums = "gorums"
+	grpc   = "grpc"
+	byzq   = "byzq"
+	gridq  = "gridq"
 )
 
 func main() {
@@ -54,10 +55,10 @@ func main() {
 		dief("unknown benchmark mode: %q", *mode)
 	}
 
-	if *saddrs == "" {
-		// using local addresses only
+	if *saddrs == "" && *mode == byzq {
+		// Using local addresses only.
 		if *f < 1 {
-			dief("must have f>0")
+			dief("must have f>0 for byzq")
 		}
 		n := 3**f + 1
 		var buf bytes.Buffer
