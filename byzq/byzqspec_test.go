@@ -5,9 +5,6 @@ import (
 	"testing"
 )
 
-// run tests with: go test -v
-
-// run benchmarks: go test -run=$$ -benchmem -benchtime=5s -bench=.
 var byzQTests = []struct {
 	n   int
 	f   int // expected value

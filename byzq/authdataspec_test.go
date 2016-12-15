@@ -13,11 +13,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
-// run tests with: go test -v
-
-// run benchmarks: go test -run=$$ -benchmem -benchtime=5s -bench=.
-
-// TODO Make tests for f=2 and f=3
+// TODO(meling): Make tests for f=2 and f=3.
 
 var priv *ecdsa.PrivateKey
 

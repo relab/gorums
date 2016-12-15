@@ -11,4 +11,4 @@ proto: installprotocgorums
 
 .PHONY: bench 
 bench:
-	go test github.com/relab/byzq/cmd/byzclient -run=NONE -benchmem -benchtime=5s -bench=.
+	go test github.com/relab/gorums/byzq -run=NONE -benchmem -benchtime=5s -bench=.
