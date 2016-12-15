@@ -11,4 +11,4 @@ proto: installprotocgorums
 
 .PHONY: bench 
 bench:
-	go test github.com/relab/gridq/cmd/gqclient -run=NONE -benchmem -benchtime=5s -bench=.
+	go test github.com/relab/gorums/gridq -run=NONE -benchmem -benchtime=5s -bench=.
