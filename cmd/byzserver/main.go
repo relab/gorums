@@ -36,16 +36,16 @@ func main() {
 	flag.Parse()
 
 	if *f > 0 {
-		// we are running only local since we have asked for 3f+1 servers
+		// We are running only local since we have asked for 3f+1 servers.
 		done := make(chan bool)
 		n := 3**f + 1
 		for i := 0; i < n; i++ {
 			go serve(*port+i, *key, *noauth)
 		}
-		// wait indefinitely
+		// Wait indefinitely.
 		<-done
 	}
-	// run only one server
+	// Run only one server.
 	serve(*port, *key, *noauth)
 }
 
@@ -62,14 +62,14 @@ func serve(port int, keyFile string, noauth bool) {
 	if !noauth {
 		creds, err := credentials.NewServerTLSFromFile(keyFile+".pem", keyFile+".key")
 		if err != nil {
-			log.Fatalf("failed to load credentials %v", err)
+			log.Fatalf("failed to load credentials: %v", err)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	grpcServer := grpc.NewServer(opts...)
 	smap := make(map[string]byzq.Value)
 	byzq.RegisterRegisterServer(grpcServer, &register{state: smap})
-	log.Printf("Server %s running", l.Addr())
+	log.Printf("server %s running", l.Addr())
 	log.Fatal(grpcServer.Serve(l))
 }
 
