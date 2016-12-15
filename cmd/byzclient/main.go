@@ -37,7 +37,7 @@ func main() {
 	flag.Parse()
 
 	if *generate {
-		// generate key file and exit
+		// Generate key file and exit.
 		err := byzq.GenerateKeyfile(*keyFile)
 		if err != nil {
 			dief("error generating public/private key-pair: %v", err)
@@ -46,7 +46,7 @@ func main() {
 	}
 
 	if *saddrs == "" {
-		// use local addresses only
+		// Use local addresses only.
 		if *f > 3 || *f < 1 {
 			dief("only f=1,2,3 is allowed")
 		}
@@ -71,7 +71,7 @@ func main() {
 	if *noauth {
 		secDialOption = grpc.WithInsecure()
 	} else {
-		//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
+		// TODO: Fix hardcoded youtube server name.
 		clientCreds, err := credentials.NewClientTLSFromFile("cert/ca.pem", "x.test.youtube.com")
 		if err != nil {
 			dief("error creating credentials: %v", err)
@@ -115,7 +115,7 @@ func main() {
 
 	for {
 		if *writer {
-			// Writer client
+			// Writer client.
 			registerState.Value = strconv.Itoa(rand.Intn(1 << 8))
 			registerState.Timestamp = qspec.IncWTS()
 			signedState, err := qspec.Sign(registerState)
@@ -129,7 +129,7 @@ func main() {
 			fmt.Println("WriteReturn " + ack.String())
 			time.Sleep(100 * time.Second)
 		} else {
-			// Reader client
+			// Reader client.
 			val, err := conf.Read(context.Background(), &byzq.Key{Key: registerState.Key})
 			if err != nil {
 				dief("error reading: %v", err)
