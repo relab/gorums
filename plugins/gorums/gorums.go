@@ -284,6 +284,7 @@ type serviceMethod struct {
 	CorrectablePrelim bool
 	Future            bool
 	Multicast         bool
+	QFWithReq         bool
 
 	ServName string // Redundant, but keeps it simple.
 }
@@ -377,27 +378,46 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		Correctable:       hasCorrectableExtension(method),
 		CorrectablePrelim: hasCorrectablePRExtension(method),
 		Multicast:         hasMulticastExtension(method),
+		QFWithReq:         hasQFWithReqExtension(method),
 	}
 
+	isQuorumCallVariant := isQuorumCallVariant(sm)
+
 	switch {
-	case !sm.QuorumCall && !sm.Future && !sm.Correctable && !sm.CorrectablePrelim && !sm.Multicast:
+
+	case !isQuorumCallVariant && !sm.Multicast:
 		return nil, nil
-	case (sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectablePrelim) && sm.Multicast:
+
+	case isQuorumCallVariant && sm.Multicast:
 		return nil, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: both 'qc/qc-future/correctable' and 'broadcast'",
+			"%s.%s: illegal combination combination of options: both 'qc/qc-future/correctable' and 'multicast'",
 			service, method.GetName(),
 		)
+
+	case sm.QFWithReq && !isQuorumCallVariant:
+		return nil, fmt.Errorf(
+			"%s.%s: illegal combination combination of options: method not a quorum call variant but has specified 'qf_with_req'",
+			service, method.GetName(),
+		)
+
 	case sm.Multicast && !method.GetClientStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
 			service, method.GetName(),
 		)
+
 	case method.GetServerStreaming() && !sm.CorrectablePrelim:
 		return nil, fmt.Errorf(
-			"%s.%s: server-client streams only supported for 'correctable' option",
+			"%s.%s: server-client streams only supported for 'correctable_pr' option",
 			service, method.GetName(),
 		)
+
 	default:
 		return sm, nil
+
 	}
+}
+
+func isQuorumCallVariant(sm *serviceMethod) bool {
+	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectablePrelim
 }
