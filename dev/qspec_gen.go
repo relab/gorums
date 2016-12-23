@@ -19,5 +19,5 @@ type QuorumSpec interface {
 
 	// WriteQF is the quorum function for the Write
 	// quorum call method.
-	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
+	WriteQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
 }

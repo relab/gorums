@@ -75,6 +75,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 			}
 			replyValues = append(replyValues, r.reply)
 			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
+
 				cancel()
 				return reply, nil
 			}
@@ -135,6 +136,7 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.State, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
+
 			if quorum {
 				cancel()
 				corr.set(reply, rlevel, nil, true)
@@ -190,6 +192,7 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 			}
 			replyValues = append(replyValues, r.reply)
 			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
+
 			if quorum {
 				cancel()
 				corr.set(reply, rlevel, nil, true)
@@ -292,7 +295,8 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
+			if reply.WriteResponse, quorum = c.qspec.WriteQF(args, replyValues); quorum {
+
 				cancel()
 				return reply, nil
 			}

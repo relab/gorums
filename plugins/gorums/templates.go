@@ -405,7 +405,11 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(args, replyValues); quorum {
+{{else}}
 			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+{{end}}
 				cancel()
 				return reply, nil
 			}
@@ -469,7 +473,11 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 				break
 			}
 			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(args, replyValues)
+{{else}}
 			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(replyValues)
+{{end}}
 			if quorum {
 				cancel()
 				corr.set(reply, rlevel, nil, true)
@@ -528,7 +536,11 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 				break
 			}
 			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			reply.State, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
+{{else}}
 			reply.State, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
+{{end}}
 			if quorum {
 				cancel()
 				corr.set(reply, rlevel, nil, true)
@@ -670,7 +682,11 @@ type QuorumSpec interface {
 {{- if or (.QuorumCall) (.Future)}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// quorum call method.
+{{- if .QFWithReq}}
+	{{.MethodName}}QF(req *{{.ReqName}}, replies []*{{.RespName}}) (*{{.RespName}}, bool)
+{{else}}
 	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
+{{end}}
 {{end}}
 
 {{if .Correctable}}

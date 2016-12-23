@@ -6,9 +6,9 @@ package dev;
 
 service Register {
 	rpc Read(ReadRequest) returns (State) {
-		option (gorums.qc) = true;
-		option (gorums.correctable) = true;
-		option (gorums.qc_future) = true;
+		option (gorums.qc) 		= true;
+		option (gorums.correctable) 	= true;
+		option (gorums.qc_future) 	= true;
 	}
 
 	rpc ReadTwo(ReadRequest) returns (stream State) {
@@ -16,8 +16,9 @@ service Register {
 	}
 
 	rpc Write(State) returns (WriteResponse) {
-		option (gorums.qc) = true;
-		option (gorums.qc_future) = true;
+		option (gorums.qc) 		= true;
+		option (gorums.qc_future) 	= true;
+		option (gorums.qf_with_req) 	= true;
 	}
 
 	rpc WriteAsync(stream State) returns (Empty) {
