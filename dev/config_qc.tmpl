@@ -234,7 +234,7 @@ type {{.MethodName}}CorrectablePrelim struct {
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *{{.MethodName}}CorrectablePrelim) Get() (*ReadTwoReply, int, error) {
+func (c *{{.MethodName}}CorrectablePrelim) Get() (*{{.TypeName}}, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
