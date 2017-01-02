@@ -239,7 +239,7 @@ type {{.MethodName}}CorrectablePrelim struct {
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *{{.MethodName}}CorrectablePrelim) Get() (*ReadTwoReply, int, error) {
+func (c *{{.MethodName}}CorrectablePrelim) Get() (*{{.TypeName}}, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
@@ -356,7 +356,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
 		defer ti.tr.Finish()
-		
+
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
@@ -537,9 +537,9 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			reply.State, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
 {{else}}
-			reply.State, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
 {{end}}
 			if quorum {
 				cancel()
