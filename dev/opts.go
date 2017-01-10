@@ -43,24 +43,6 @@ func WithNoConnect() ManagerOption {
 	}
 }
 
-// WithSelfAddr returns a ManagerOption which instructs the Manager not to connect
-// to the node with network address addr. The address must be present in the
-// list of node addresses provided to the Manager.
-func WithSelfAddr(addr string) ManagerOption {
-	return func(o *managerOptions) {
-		o.selfAddr = addr
-	}
-}
-
-// WithSelfID returns a ManagerOption which instructs the Manager not to
-// connect to the node with the given id. The node must be present in the list
-// of node addresses provided to the Manager.
-func WithSelfID(id uint32) ManagerOption {
-	return func(o *managerOptions) {
-		o.selfID = id
-	}
-}
-
 // WithTracing controls whether to trace qourum calls for this Manager instance
 // using the golang.org/x/net/trace package. Tracing is currently only supported
 // for regular quorum calls.

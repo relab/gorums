@@ -60,7 +60,7 @@ func TestBasicRegister(t *testing.T) {
 	defer mgr.Close()
 
 	// Get all all available node ids
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
 	qspec := NewRegisterByTimestampQSpec(2, len(ids))
@@ -100,7 +100,7 @@ func TestBasicRegister(t *testing.T) {
 		t.Fatalf("read reply: got state %v, want state %v", rreply.State, state)
 	}
 
-	nodes := mgr.Nodes(false)
+	nodes := mgr.Nodes()
 	for _, m := range nodes {
 		t.Logf("%v", m)
 	}
@@ -134,7 +134,7 @@ func TestSingleServerRPC(t *testing.T) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	nodes := mgr.Nodes(false)
+	nodes := mgr.Nodes()
 	ctx := context.Background()
 	for _, node := range nodes {
 		wreply, err := node.RegisterClient.Write(ctx, state)
@@ -178,7 +178,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	config, err := mgr.NewConfiguration(ids, &NeverQSpec{})
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
@@ -231,7 +231,7 @@ func TestSlowRegister(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	qspec := NewMajorityQSpec(len(ids))
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -277,7 +277,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(1, len(ids))
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -351,7 +351,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(1, len(ids))
 
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -478,7 +478,7 @@ func TestQuorumCallCancel(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	qspec := NewMajorityQSpec(len(ids))
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -534,7 +534,7 @@ func TestBasicCorrectable(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	majority := len(ids)/2 + 1
 	qspec := NewRegisterByTimestampQSpec(majority, majority)
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -605,7 +605,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	majority := len(ids)/2 + 1
 	qspec := NewRegisterByTimestampQSpec(majority, majority)
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -747,7 +747,7 @@ func TestCorrectablePrelim(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	config, err := mgr.NewConfiguration(ids, &ReadTwoTestQSpec{})
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
@@ -1049,7 +1049,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(rq, len(ids))
 	ctx := context.Background()
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -1192,7 +1192,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 	qspec := NewRegisterQSpec(0, wq)
 	ctx := context.Background()
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -1324,7 +1324,7 @@ const allServers = -1
 var portSupplier = struct {
 	p int
 	sync.Mutex
-}{p: 8080}
+}{p: 22332}
 
 func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.ManagerOption, func(n int), func(n int)) {
 	if len(regServers) == 0 {

@@ -122,7 +122,7 @@ func TestSecureRegister(t *testing.T) {
 	closeListeners(allServers)
 
 	// Get all all available node ids
-	ids := mgr.NodeIDs(false)
+	ids := mgr.NodeIDs()
 
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
 	qspec := NewRegisterByTimestampQSpec(2, len(ids))
@@ -162,7 +162,7 @@ func TestSecureRegister(t *testing.T) {
 		t.Errorf("read reply: want state %v, got %v", state, rreply.State)
 	}
 
-	nodes := mgr.Nodes(false)
+	nodes := mgr.Nodes()
 	for _, m := range nodes {
 		t.Logf("%v", m)
 	}
