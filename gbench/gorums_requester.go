@@ -66,7 +66,7 @@ func (gr *gorumsRequester) Setup() error {
 		return err
 	}
 
-	ids := gr.mgr.NodeIDs()
+	ids := gr.mgr.NodeIDs(false)
 	qspec := newRegisterQSpec(gr.readq, gr.writeq)
 	gr.config, err = gr.mgr.NewConfiguration(ids, qspec)
 	if err != nil {

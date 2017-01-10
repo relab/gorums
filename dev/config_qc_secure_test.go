@@ -122,7 +122,7 @@ func TestSecureRegister(t *testing.T) {
 	closeListeners(allServers)
 
 	// Get all all available node ids
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
 	qspec := NewRegisterByTimestampQSpec(2, len(ids))
