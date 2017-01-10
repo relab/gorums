@@ -187,12 +187,17 @@ func (m *Manager) Close() {
 	})
 }
 
-// NodeIDs returns the identifier of each available node.
-func (m *Manager) NodeIDs() []uint32 {
+// NodeIDs returns the identifier of each available node. The excludeSelf
+// argument will only have an effect if the Manager set the WithSelfAddr or
+// WithSelfID option.
+func (m *Manager) NodeIDs(excludeSelf bool) []uint32 {
 	m.Lock()
 	defer m.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
 	for id := range m.nodes {
+		if excludeSelf && m.nodes[id].self {
+			continue
+		}
 		ids = append(ids, id)
 	}
 	sort.Sort(idSlice(ids))
@@ -207,7 +212,8 @@ func (m *Manager) Node(id uint32) (node *Node, found bool) {
 	return node, found
 }
 
-// Nodes returns a slice of each available node.
+// Nodes returns a slice of each available node. The excludeSelf argument will
+// only have an effect if the Manager set the WithSelfAddr or WithSelfID option.
 func (m *Manager) Nodes(excludeSelf bool) []*Node {
 	m.Lock()
 	defer m.Unlock()

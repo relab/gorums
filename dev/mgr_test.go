@@ -21,7 +21,7 @@ func TestEqualGlobalConfigurationIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ids := mgrOne.NodeIDs()
+	ids := mgrOne.NodeIDs(false)
 	qspec := NewMajorityQSpec(len(ids))
 
 	// Create a configuration in each manager using all nodes.
@@ -55,7 +55,7 @@ func TestWithSelfAddrOption(t *testing.T) {
 		t.Errorf("got manager node size %d, want %d", gotSize, wantSize)
 	}
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	if len(ids) != wantSize {
 		t.Errorf("got %d node ids from manager, want %d", len(ids), wantSize)
 	}
@@ -96,7 +96,7 @@ func TestWithSelfGidOption(t *testing.T) {
 		t.Errorf("got manager node size %d, want %d", gotSize, wantSize)
 	}
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	if len(ids) != wantSize {
 		t.Errorf("got %d node ids from manager, want %d", len(ids), wantSize)
 	}
@@ -125,7 +125,7 @@ func TestCreateConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	qspec := NewMajorityQSpec(len(ids))
 
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -158,7 +158,7 @@ func TestCreateConfiguratonWithSelfOption(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	qspecOne := NewMajorityQSpec(len(ids))
 
 	_, err = mgr.NewConfiguration(ids, qspecOne)

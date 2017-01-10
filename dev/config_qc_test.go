@@ -60,7 +60,7 @@ func TestBasicRegister(t *testing.T) {
 	defer mgr.Close()
 
 	// Get all all available node ids
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
 	qspec := NewRegisterByTimestampQSpec(2, len(ids))
@@ -178,7 +178,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	config, err := mgr.NewConfiguration(ids, &NeverQSpec{})
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
@@ -231,7 +231,7 @@ func TestSlowRegister(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	qspec := NewMajorityQSpec(len(ids))
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -277,7 +277,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	qspec := NewRegisterQSpec(1, len(ids))
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -351,7 +351,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	qspec := NewRegisterQSpec(1, len(ids))
 
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -478,7 +478,7 @@ func TestQuorumCallCancel(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	qspec := NewMajorityQSpec(len(ids))
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -534,7 +534,7 @@ func TestBasicCorrectable(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	majority := len(ids)/2 + 1
 	qspec := NewRegisterByTimestampQSpec(majority, majority)
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -605,7 +605,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	majority := len(ids)/2 + 1
 	qspec := NewRegisterByTimestampQSpec(majority, majority)
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -747,7 +747,7 @@ func TestCorrectablePrelim(t *testing.T) {
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	config, err := mgr.NewConfiguration(ids, &ReadTwoTestQSpec{})
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
@@ -1049,7 +1049,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	qspec := NewRegisterQSpec(rq, len(ids))
 	ctx := context.Background()
 	config, err := mgr.NewConfiguration(ids, qspec)
@@ -1192,7 +1192,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 	}
 	defer mgr.Close()
 
-	ids := mgr.NodeIDs()
+	ids := mgr.NodeIDs(false)
 	qspec := NewRegisterQSpec(0, wq)
 	ctx := context.Background()
 	config, err := mgr.NewConfiguration(ids, qspec)
