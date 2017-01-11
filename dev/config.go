@@ -18,7 +18,8 @@ func (c *Configuration) ID() uint32 {
 }
 
 // NodeIDs returns a slice containing the local ids of all the nodes in the
-// configuration.
+// configuration. IDs are returned in the same order as they were provided in
+// the creation of the Configuration.
 func (c *Configuration) NodeIDs() []uint32 {
 	ids := make([]uint32, len(c.nodes))
 	for i, node := range c.nodes {

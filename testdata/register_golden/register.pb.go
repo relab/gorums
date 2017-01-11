@@ -1071,7 +1071,8 @@ func (c *Configuration) ID() uint32 {
 }
 
 // NodeIDs returns a slice containing the local ids of all the nodes in the
-// configuration.
+// configuration. IDs are returned in the same order as they were provided in
+// the creation of the Configuration.
 func (c *Configuration) NodeIDs() []uint32 {
 	ids := make([]uint32, len(c.nodes))
 	for i, node := range c.nodes {
@@ -1162,7 +1163,8 @@ const LevelNotSet = -1
 // procedure calls can be made.
 type Manager struct {
 	sync.Mutex
-	nodes    map[uint32]*Node
+	nodes    []*Node
+	lookup   map[uint32]*Node
 	configs  map[uint32]*Configuration
 	eventLog trace.EventLog
 
@@ -1179,7 +1181,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	m := &Manager{
-		nodes:   make(map[uint32]*Node),
+		lookup:  make(map[uint32]*Node),
 		configs: make(map[uint32]*Configuration),
 	}
 
@@ -1192,7 +1194,8 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		if err2 != nil {
 			return nil, ManagerCreationError(err2)
 		}
-		m.nodes[node.id] = node
+		m.lookup[node.id] = node
+		m.nodes = append(m.nodes, node)
 	}
 
 	if m.opts.trace {
@@ -1229,7 +1232,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 	_, _ = h.Write([]byte(tcpAddr.String()))
 	id := h.Sum32()
 
-	if _, found := m.nodes[id]; found {
+	if _, found := m.lookup[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)
 	}
 
@@ -1285,15 +1288,15 @@ func (m *Manager) Close() {
 	})
 }
 
-// NodeIDs returns the identifier of each available node.
+// NodeIDs returns the identifier of each available node. IDs are returned in
+// the same order as they were provided in the creation of the Manager.
 func (m *Manager) NodeIDs() []uint32 {
 	m.Lock()
 	defer m.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
-	for id := range m.nodes {
-		ids = append(ids, id)
+	for _, node := range m.nodes {
+		ids = append(ids, node.ID())
 	}
-	sort.Sort(idSlice(ids))
 	return ids
 }
 
@@ -1301,20 +1304,16 @@ func (m *Manager) NodeIDs() []uint32 {
 func (m *Manager) Node(id uint32) (node *Node, found bool) {
 	m.Lock()
 	defer m.Unlock()
-	node, found = m.nodes[id]
+	node, found = m.lookup[id]
 	return node, found
 }
 
-// Nodes returns a slice of each available node.
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Manager.
 func (m *Manager) Nodes() []*Node {
 	m.Lock()
 	defer m.Unlock()
-	var nodes []*Node
-	for _, node := range m.nodes {
-		nodes = append(nodes, node)
-	}
-	OrderedBy(ID).Sort(nodes)
-	return nodes
+	return m.nodes
 }
 
 // ConfigurationIDs returns the identifier of each available
@@ -1326,7 +1325,6 @@ func (m *Manager) ConfigurationIDs() []uint32 {
 	for id := range m.configs {
 		ids = append(ids, id)
 	}
-	sort.Sort(idSlice(ids))
 	return ids
 }
 
@@ -1375,7 +1373,7 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	var cnodes []*Node
 	for _, nid := range ids {
-		node, found := m.nodes[nid]
+		node, found := m.lookup[nid]
 		if !found {
 			return nil, NodeNotFoundError(nid)
 		}
@@ -1383,11 +1381,11 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	}
 
 	// Node ids are sorted ensure a globally consistent configuration id.
-	OrderedBy(ID).Sort(cnodes)
+	sort.Sort(idSlice(ids))
 
 	h := fnv.New32a()
-	for _, node := range cnodes {
-		binary.Write(h, binary.LittleEndian, node.id)
+	for _, id := range ids {
+		binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
