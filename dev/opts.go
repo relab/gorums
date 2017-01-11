@@ -11,8 +11,6 @@ type managerOptions struct {
 	logger       *log.Logger
 	noConnect    bool
 	trace        bool
-	selfAddr     string
-	selfID       uint32
 }
 
 // ManagerOption provides a way to set different options on a new Manager.

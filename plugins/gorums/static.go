@@ -518,8 +518,6 @@ type managerOptions struct {
 	logger		*log.Logger
 	noConnect	bool
 	trace		bool
-	selfAddr	string
-	selfID		uint32
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
@@ -614,15 +612,6 @@ func (q qcresult) String() string {
 }
 
 /* util.go */
-
-func contains(addr string, addrs []string) (found bool, index int) {
-	for i, a := range addrs {
-		if addr == a {
-			return true, i
-		}
-	}
-	return false, -1
-}
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	for _, y := range set {
