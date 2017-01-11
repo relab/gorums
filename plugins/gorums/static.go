@@ -10,9 +10,9 @@ var staticImports = []string{
 	"golang.org/x/net/trace",
 	"google.golang.org/grpc",
 	"time",
-	"strings",
 	"sort",
 	"sync",
+	"strings",
 	"net",
 	"log",
 	"hash/fnv",
@@ -347,9 +347,12 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 		cnodes = append(cnodes, node)
 	}
 
+	// Node ids are sorted ensure a globally consistent configuration id.
+	sort.Sort(idSlice(ids))
+
 	h := fnv.New32a()
-	for _, node := range cnodes {
-		binary.Write(h, binary.LittleEndian, node.id)
+	for _, id := range ids {
+		binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
