@@ -20,7 +20,7 @@ import (
 {{range $elm := .Services}}
 
 {{if .Multicast}}
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) error {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.{{.MethodName}}Client.Send(args)
@@ -42,11 +42,11 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
-	reply *{{.RespName}}
+	reply *{{.FQRespName}}
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) (r *{{.TypeName}}, err error) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) (r *{{.TypeName}}, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
@@ -82,7 +82,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	}
 
 	var (
-		replyValues = make([]*{{.RespName}}, 0, c.n)
+		replyValues = make([]*{{.FQRespName}}, 0, c.n)
 		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
@@ -119,8 +119,8 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	}
 }
 
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	reply := new({{.RespName}})
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.FQRespName}})
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
@@ -142,7 +142,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}
 
 {{if .Correctable}}
 
-func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.ReqName}}) {
+func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 	newCtx, cancel := context.WithCancel(ctx)
 
@@ -151,7 +151,7 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 	}
 
 	var (
-		replyValues     = make([]*{{.RespName}}, 0, c.n)
+		replyValues     = make([]*{{.FQRespName}}, 0, c.n)
 		reply           = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 		clevel      	= LevelNotSet
 		rlevel      int
@@ -201,11 +201,11 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
-	reply *{{.RespName}}
+	reply *{{.FQRespName}}
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.ReqName}}) {
+func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 	newCtx, cancel := context.WithCancel(ctx)
 
@@ -214,7 +214,7 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 	}
 
 	var (
-		replyValues = make([]*{{.RespName}}, 0, c.n*2)
+		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
 		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 		clevel      = LevelNotSet
 		rlevel      int
@@ -258,7 +258,7 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 	}
 }
 
-func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	x := New{{.ServName}}Client(node.conn)
 	y, err := x.{{.MethodName}}(ctx, args)
 	if err != nil {
