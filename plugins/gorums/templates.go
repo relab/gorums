@@ -25,7 +25,7 @@ import (
 // {{.MethodName}} is a one-way multicast operation, where args is sent to
 // every node in configuration c. The call is asynchronous and has no response
 // return value.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) error {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
@@ -37,7 +37,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 // It contains the id of each node of the quorum that replied and a single reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
-	*{{.RespName}}
+	*{{.FQRespName}}
 }
 
 func (r {{.TypeName}}) String() string {
@@ -48,7 +48,7 @@ func (r {{.TypeName}}) String() string {
 {{if .QuorumCall}}
 // {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
 // and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) (*{{.TypeName}}, error) {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 {{- end -}}
@@ -65,7 +65,7 @@ type {{.MethodName}}Future struct {
 // {{.MethodName}}Future asynchronously invokes a {{.MethodName}} quorum call
 // on configuration c and returns a {{.MethodName}}Future which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.ReqName}}) *{{.MethodName}}Future {
+func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Future {
 	f := new({{.MethodName}}Future)
 	f.c = make(chan struct{}, 1)
 	go func() {
@@ -197,7 +197,7 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 // It contains the id of each node of the quorum that replied and a single reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
-	*{{.RespName}}
+	*{{.FQRespName}}
 }
 
 func (r {{.TypeName}}) String() string {
@@ -208,7 +208,7 @@ func (r {{.TypeName}}) String() string {
 // with server side preliminary reply support on configuration c and returns a
 // {{.MethodName}}CorrectablePrelim which can be used to inspect any repies or errors
 // when available.
-func (c *Configuration) {{.MethodName}}CorrectablePrelim(ctx context.Context, args *{{.ReqName}}) *{{.MethodName}}CorrectablePrelim {
+func (c *Configuration) {{.MethodName}}CorrectablePrelim(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}CorrectablePrelim {
 	corr := &{{.MethodName}}CorrectablePrelim{
 		level:  LevelNotSet,
 		donech: make(chan struct{}),
@@ -325,7 +325,7 @@ import (
 {{range $elm := .Services}}
 
 {{if .Multicast}}
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) error {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.{{.MethodName}}Client.Send(args)
@@ -347,11 +347,11 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
-	reply *{{.RespName}}
+	reply *{{.FQRespName}}
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.ReqName}}) (r *{{.TypeName}}, err error) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) (r *{{.TypeName}}, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
@@ -387,7 +387,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	}
 
 	var (
-		replyValues = make([]*{{.RespName}}, 0, c.n)
+		replyValues = make([]*{{.FQRespName}}, 0, c.n)
 		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
@@ -424,8 +424,8 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	}
 }
 
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	reply := new({{.RespName}})
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.FQRespName}})
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
@@ -447,7 +447,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.ReqName}}
 
 {{if .Correctable}}
 
-func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.ReqName}}) {
+func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 	newCtx, cancel := context.WithCancel(ctx)
 
@@ -456,7 +456,7 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 	}
 
 	var (
-		replyValues     = make([]*{{.RespName}}, 0, c.n)
+		replyValues     = make([]*{{.FQRespName}}, 0, c.n)
 		reply           = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 		clevel      	= LevelNotSet
 		rlevel      int
@@ -506,11 +506,11 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
-	reply *{{.RespName}}
+	reply *{{.FQRespName}}
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.ReqName}}) {
+func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 	newCtx, cancel := context.WithCancel(ctx)
 
@@ -519,7 +519,7 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 	}
 
 	var (
-		replyValues = make([]*{{.RespName}}, 0, c.n*2)
+		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
 		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 		clevel      = LevelNotSet
 		rlevel      int
@@ -563,7 +563,7 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 	}
 }
 
-func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.ReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	x := New{{.ServName}}Client(node.conn)
 	y, err := x.{{.MethodName}}(ctx, args)
 	if err != nil {
@@ -683,22 +683,22 @@ type QuorumSpec interface {
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// quorum call method.
 {{- if .QFWithReq}}
-	{{.MethodName}}QF(req *{{.ReqName}}, replies []*{{.RespName}}) (*{{.RespName}}, bool)
+	{{.MethodName}}QF(req *{{.FQReqName}}, replies []*{{.FQRespName}}) (*{{.FQRespName}}, bool)
 {{else}}
-	{{.MethodName}}QF(replies []*{{.RespName}}) (*{{.RespName}}, bool)
+	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, bool)
 {{end}}
 {{end}}
 
 {{if .Correctable}}
 	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}}
 	// correctable quorum call method.
-	{{.MethodName}}CorrectableQF(replies []*{{.RespName}}) (*{{.RespName}}, int, bool)
+	{{.MethodName}}CorrectableQF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
 {{end}}
 
 {{if .CorrectablePrelim}}
 	// {{.MethodName}}CorrectablePrelimQF is the quorum function for the {{.MethodName}} 
 	// correctable prelim quourm call method.
-	{{.MethodName}}CorrectablePrelimQF(replies []*{{.RespName}}) (*{{.RespName}}, int, bool)
+	{{.MethodName}}CorrectablePrelimQF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
 {{end}}
 {{- end -}}
 }

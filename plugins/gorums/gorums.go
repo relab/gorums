@@ -102,9 +102,16 @@ func (g *gorums) objectNamed(name string) generator.Object {
 	return g.gen.ObjectNamed(name)
 }
 
-// Given a type name defined in a .proto, return its name as we will print it.
-func (g *gorums) typeName(str string) string {
+// Given a type name defined in a .proto, return its fully qualified name as we
+// will print it.
+func (g *gorums) fqTypeName(str string) string {
 	return g.gen.TypeName(g.objectNamed(str))
+}
+
+// Given a type name defined in a .proto, return its name as we will print it.
+// The package name is not part of this name.
+func (g *gorums) typeName(str string) string {
+	return generator.CamelCaseSlice(g.objectNamed(str).TypeName())
 }
 
 // P forwards to g.gen.P.
@@ -216,6 +223,11 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 		ignoreImport["bytes"] = true
 	}
 
+	if len(file.Messages()) > 0 {
+		ignoreImport["io"] = true
+		ignoreImport["strings"] = true
+	}
+
 	sort.Strings(staticImports)
 	g.P("import (")
 	for _, simport := range staticImports {
@@ -243,10 +255,8 @@ func hasMessageWithByteField(file *generator.FileDescriptor) bool {
 }
 
 var ignoreImport = map[string]bool{
-	"fmt":                      true,
-	"io":                       true,
-	"math":                     true,
-	"strings":                  true,
+	"fmt":  true,
+	"math": true,
 	"golang.org/x/net/context": true,
 	"golang.org/x/net/trace":   true,
 	"google.golang.org/grpc":   true,
@@ -273,8 +283,9 @@ type serviceMethod struct {
 	UnexportedMethodName string
 	RPCName              string
 
-	RespName string
-	ReqName  string
+	FQRespName string
+	RespName   string
+	FQReqName  string
 
 	TypeName           string
 	UnexportedTypeName string
@@ -327,12 +338,13 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			sm.MethodName = generator.CamelCase(sm.OrigName)
 			sm.RPCName = sm.MethodName // sm.MethodName may be overwritten if method name conflict
 			sm.UnexportedMethodName = unexport(sm.MethodName)
+			sm.FQRespName = g.fqTypeName(method.GetOutputType())
 			sm.RespName = g.typeName(method.GetOutputType())
-			sm.ReqName = g.typeName(method.GetInputType())
+			sm.FQReqName = g.fqTypeName(method.GetInputType())
 			sm.TypeName = sm.MethodName + "Reply"
 			sm.UnexportedTypeName = unexport(sm.TypeName)
 			sm.ServName = service.GetName()
-			if sm.TypeName == sm.RespName {
+			if sm.TypeName == sm.FQRespName {
 				sm.TypeName += "_"
 			}
 
@@ -358,7 +370,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 				sm.UnexportedMethodName = unexport(sm.MethodName)
 				sm.TypeName = sm.MethodName + "Reply"
 				sm.UnexportedTypeName = unexport(sm.TypeName)
-				if sm.TypeName == sm.RespName {
+				if sm.TypeName == sm.FQRespName {
 					sm.TypeName += "_"
 				}
 				allRewrittenFlat = append(allRewrittenFlat, *sm)

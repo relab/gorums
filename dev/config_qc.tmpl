@@ -20,7 +20,7 @@ import (
 // {{.MethodName}} is a one-way multicast operation, where args is sent to
 // every node in configuration c. The call is asynchronous and has no response
 // return value.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) error {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
@@ -32,7 +32,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}})
 // It contains the id of each node of the quorum that replied and a single reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
-	*{{.RespName}}
+	*{{.FQRespName}}
 }
 
 func (r {{.TypeName}}) String() string {
@@ -43,7 +43,7 @@ func (r {{.TypeName}}) String() string {
 {{if .QuorumCall}}
 // {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
 // and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.ReqName}}) (*{{.TypeName}}, error) {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) (*{{.TypeName}}, error) {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 {{- end -}}
@@ -60,7 +60,7 @@ type {{.MethodName}}Future struct {
 // {{.MethodName}}Future asynchronously invokes a {{.MethodName}} quorum call
 // on configuration c and returns a {{.MethodName}}Future which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.ReqName}}) *{{.MethodName}}Future {
+func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Future {
 	f := new({{.MethodName}}Future)
 	f.c = make(chan struct{}, 1)
 	go func() {
@@ -192,7 +192,7 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 // It contains the id of each node of the quorum that replied and a single reply.
 type {{.TypeName}} struct {
 	NodeIDs []uint32
-	*{{.RespName}}
+	*{{.FQRespName}}
 }
 
 func (r {{.TypeName}}) String() string {
@@ -203,7 +203,7 @@ func (r {{.TypeName}}) String() string {
 // with server side preliminary reply support on configuration c and returns a
 // {{.MethodName}}CorrectablePrelim which can be used to inspect any repies or errors
 // when available.
-func (c *Configuration) {{.MethodName}}CorrectablePrelim(ctx context.Context, args *{{.ReqName}}) *{{.MethodName}}CorrectablePrelim {
+func (c *Configuration) {{.MethodName}}CorrectablePrelim(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}CorrectablePrelim {
 	corr := &{{.MethodName}}CorrectablePrelim{
 		level:  LevelNotSet,
 		donech: make(chan struct{}),
