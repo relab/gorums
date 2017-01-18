@@ -58,6 +58,8 @@ func sum(t *testing.T, name string) string {
 
 // Verify that the compiler output for register.proto is unchanged.
 func TestGolden(t *testing.T) {
+	checkProtocVersion(t)
+
 	// Compute the original checksum, run proto compiler,
 	// compute new checksum, and verify.
 	goldenSum := sum(t, tdRegPbGoRelPath)
