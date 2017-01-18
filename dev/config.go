@@ -28,6 +28,12 @@ func (c *Configuration) NodeIDs() []uint32 {
 	return ids
 }
 
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Configuration.
+func (c *Configuration) Nodes() []*Node {
+	return c.nodes
+}
+
 // Size returns the number of nodes in the configuration.
 func (c *Configuration) Size() int {
 	return c.n
