@@ -410,7 +410,6 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 {{else}}
 			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end}}
-				cancel()
 				return reply, nil
 			}
 		case <-newCtx.Done():

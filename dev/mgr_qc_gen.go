@@ -76,7 +76,6 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 			replyValues = append(replyValues, r.reply)
 			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
 
-				cancel()
 				return reply, nil
 			}
 		case <-newCtx.Done():
@@ -297,7 +296,6 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 			replyValues = append(replyValues, r.reply)
 			if reply.WriteResponse, quorum = c.qspec.WriteQF(args, replyValues); quorum {
 
-				cancel()
 				return reply, nil
 			}
 		case <-newCtx.Done():
