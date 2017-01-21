@@ -242,7 +242,7 @@ func TestSlowRegister(t *testing.T) {
 	defer cancel()
 	_, err = config.Read(ctx, &qc.ReadRequest{})
 	if err == nil {
-		t.Fatalf("read quorum call: got no error, want none")
+		t.Fatalf("read quorum call: got no error, want one")
 	}
 	timeoutErr, ok := err.(qc.QuorumCallError)
 	if !ok {
