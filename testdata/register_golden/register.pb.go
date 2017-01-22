@@ -742,10 +742,9 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 
 func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
 	replyChan := make(chan readReply, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCRead(newCtx, n, args, replyChan)
+		go callGRPCRead(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -769,7 +768,6 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 			reply.State, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
 
 			if quorum {
-				cancel()
 				corr.set(reply, rlevel, nil, true)
 				return
 			}
@@ -777,13 +775,12 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 				clevel = rlevel
 				corr.set(reply, rlevel, nil, false)
 			}
-		case <-newCtx.Done():
+		case <-ctx.Done():
 			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
 			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
@@ -798,10 +795,9 @@ type readTwoReply struct {
 
 func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
 	replyChan := make(chan readTwoReply, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPCReadTwoStream(newCtx, n, args, replyChan)
+		go callGRPCReadTwoStream(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -825,7 +821,6 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
 
 			if quorum {
-				cancel()
 				corr.set(reply, rlevel, nil, true)
 				return
 			}
@@ -833,13 +828,12 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 				clevel = rlevel
 				corr.set(reply, rlevel, nil, false)
 			}
-		case <-newCtx.Done():
+		case <-ctx.Done():
 			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount == c.n { // Can't rely on reply count.
-			cancel()
 			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}

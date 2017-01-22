@@ -446,10 +446,9 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 
 func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(newCtx, n, args, replyChan)
+		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -476,7 +475,6 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(replyValues)
 {{end}}
 			if quorum {
-				cancel()
 				corr.set(reply, rlevel, nil, true)
 				return
 			}
@@ -484,13 +482,12 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 				clevel = rlevel
 				corr.set(reply, rlevel, nil, false)
 			}
-		case <-newCtx.Done():
+		case <-ctx.Done():
 			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
 			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
@@ -509,10 +506,9 @@ type {{.UnexportedTypeName}} struct {
 
 func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}Stream(newCtx, n, args, replyChan)
+		go callGRPC{{.MethodName}}Stream(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -539,7 +535,6 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
 {{end}}
 			if quorum {
-				cancel()
 				corr.set(reply, rlevel, nil, true)
 				return
 			}
@@ -547,13 +542,12 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 				clevel = rlevel
 				corr.set(reply, rlevel, nil, false)
 			}
-		case <-newCtx.Done():
+		case <-ctx.Done():
 			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount == c.n { // Can't rely on reply count.
-			cancel()
 			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
