@@ -71,14 +71,13 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
 
 	if m.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(newCtx, n, args, replyChan)
+		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -104,16 +103,14 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(args, replyValues); quorum {
 {{else}}
 			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
-{{end}}
-				cancel()
+{{end -}}
 				return reply, nil
 			}
-		case <-newCtx.Done():
+		case <-ctx.Done():
 			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
 			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}

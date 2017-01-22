@@ -45,14 +45,13 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 	}
 
 	replyChan := make(chan readReply, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
 
 	if m.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCRead(newCtx, n, args, replyChan)
+		go callGRPCRead(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -75,16 +74,13 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 			}
 			replyValues = append(replyValues, r.reply)
 			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
-
-				cancel()
 				return reply, nil
 			}
-		case <-newCtx.Done():
+		case <-ctx.Done():
 			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
 			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
@@ -266,14 +262,13 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	}
 
 	replyChan := make(chan writeReply, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
 
 	if m.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCWrite(newCtx, n, args, replyChan)
+		go callGRPCWrite(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -296,16 +291,13 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 			}
 			replyValues = append(replyValues, r.reply)
 			if reply.WriteResponse, quorum = c.qspec.WriteQF(args, replyValues); quorum {
-
-				cancel()
 				return reply, nil
 			}
-		case <-newCtx.Done():
+		case <-ctx.Done():
 			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
 			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
