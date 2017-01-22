@@ -408,7 +408,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(args, replyValues); quorum {
 {{else}}
 			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
-{{end}}
+{{end -}}
 				return reply, nil
 			}
 		case <-ctx.Done():
