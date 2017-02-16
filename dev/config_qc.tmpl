@@ -26,7 +26,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 
 {{- end -}}
 
-{{if or (.QuorumCall) (.Future) (.Correctable)}}
+{{if or (.QuorumCall) (.Future) (.Correctable) (.PerNodeArg)}}
 
 // {{.TypeName}} encapsulates the reply from a {{.MethodName}} quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
@@ -45,6 +45,15 @@ func (r {{.TypeName}}) String() string {
 // and returns the result as a {{.TypeName}}.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) (*{{.TypeName}}, error) {
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+}
+{{- end -}}
+
+{{if .PerNodeArg}}
+// {{.MethodName}} invokes the {{.MethodName}} on each node in configuration c,
+// with the argument returned by the provided perNodeArg function
+// and returns the result as a {{.TypeName}}.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, perNodeArg func(nodeID int) *{{.FQReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, perNodeArg)
 }
 {{- end -}}
 

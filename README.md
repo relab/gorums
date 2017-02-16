@@ -27,6 +27,19 @@ implemented using Gorums can be found
 * [Student/user guide](doc/userguide.md)
 * [Developer guide](doc/devguide.md)
 
+### Adding a new extension option (TODO Move this to devguide)
+
+1. Add your extension option to `gorums.proto`. We currently only have method options.
+2. Run `make gorumsprotoopts` to regenerate the `gorums.pb.go` file. (TODO we could probably avoid using a make file for this and instead do `go generate`)
+3. Add a check function, such as `hasPerNodeArgExtension()`, for your option in `plugins/gorums/ext.go`.
+4. Update the `plugins/gorums/gorums.go` as follows 
+   a. add the option `PerNodeArg` bool to the `serviceMethod` struct.
+   b. add the option to initialize of the `serivceMethod` struct in the `verifyExtensionsAndCreate` function, like this: `PerNodeArg:        hasPerNodeArgExtension(method),`
+   c. update the logic in the `isQuorumCallVariant` function if necessary.
+   d. update the error handling logic in `verifyExtensionsAndCreate`.
+
+5. Update the template files (`.tmpl` in `dev` folder) related to your option. This is were your on your own.
+
 ### References
 
 [1] Tormod E. Lea, Leander Jehl, and Hein Meling. _Gorums: New Abstractions for

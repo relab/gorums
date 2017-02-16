@@ -157,6 +157,24 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 	c.mu.Unlock()
 }
 
+// ReadPerNodeArgReply encapsulates the reply from a ReadPerNodeArg quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type ReadPerNodeArgReply struct {
+	NodeIDs []uint32
+	*State
+}
+
+func (r ReadPerNodeArgReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
+}
+
+// ReadPerNodeArg invokes the ReadPerNodeArg on each node in configuration c,
+// with the argument returned by the provided perNodeArg function
+// and returns the result as a ReadPerNodeArgReply.
+func (c *Configuration) ReadPerNodeArg(ctx context.Context, perNodeArg func(nodeID int) *ReadRequest) (*ReadPerNodeArgReply, error) {
+	return c.mgr.readPerNodeArg(ctx, c, perNodeArg)
+}
+
 // ReadTwoReply encapsulates the reply from a correctable ReadTwo quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type ReadTwoReply struct {

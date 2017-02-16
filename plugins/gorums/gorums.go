@@ -282,6 +282,8 @@ type serviceMethod struct {
 	MethodName           string
 	UnexportedMethodName string
 	RPCName              string
+	MethodArg            string
+	MethodArgUse         string
 
 	FQRespName string
 	RespName   string
@@ -296,6 +298,7 @@ type serviceMethod struct {
 	Future            bool
 	Multicast         bool
 	QFWithReq         bool
+	PerNodeArg        bool
 
 	ServName string // Redundant, but keeps it simple.
 }
@@ -347,6 +350,13 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			if sm.TypeName == sm.FQRespName {
 				sm.TypeName += "_"
 			}
+			sm.MethodArg = "args *" + sm.FQReqName
+			sm.MethodArgUse = "args"
+			if sm.PerNodeArg {
+				g.logger.Println("per_node")
+				sm.MethodArg = "perNodeArg func(nodeID int) *" + sm.FQReqName
+				sm.MethodArgUse = "perNodeArg(n.id)"
+			}
 
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, sm)
@@ -391,6 +401,7 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		CorrectablePrelim: hasCorrectablePRExtension(method),
 		Multicast:         hasMulticastExtension(method),
 		QFWithReq:         hasQFWithReqExtension(method),
+		PerNodeArg:        hasPerNodeArgExtension(method),
 	}
 
 	isQuorumCallVariant := isQuorumCallVariant(sm)
@@ -402,7 +413,7 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 
 	case isQuorumCallVariant && sm.Multicast:
 		return nil, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: both 'qc/qc-future/correctable' and 'multicast'",
+			"%s.%s: illegal combination combination of options: both 'qc/qc-future/correctable/per-node-arg' and 'multicast'",
 			service, method.GetName(),
 		)
 
@@ -431,5 +442,5 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 }
 
 func isQuorumCallVariant(sm *serviceMethod) bool {
-	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectablePrelim
+	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectablePrelim || sm.PerNodeArg
 }

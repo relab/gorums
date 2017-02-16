@@ -20,6 +20,9 @@ type readReply struct {
 	err   error
 }
 
+// func (m *Manager) read(ctx context.Context, c *Configuration, perNodeArg func(nodeID int) *ReadRequest) (r *ReadReply, err error) {
+// func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadReply, err error) {
+
 func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
@@ -230,6 +233,9 @@ type writeReply struct {
 	reply *WriteResponse
 	err   error
 }
+
+// func (m *Manager) write(ctx context.Context, c *Configuration, perNodeArg func(nodeID int) *State) (r *WriteReply, err error) {
+// func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
 
 func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
 	var ti traceInfo
