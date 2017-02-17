@@ -355,7 +355,6 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			sm.MethodArgCall = "args"
 			sm.MethodArgUse = "args"
 			if sm.PerNodeArg {
-				g.logger.Println("per_node")
 				sm.MethodArg = "perNodeArg func(nodeID uint32) *" + sm.FQReqName
 				sm.MethodArgCall = "perNodeArg(n.id)"
 				sm.MethodArgUse = "perNodeArg"

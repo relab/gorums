@@ -589,8 +589,6 @@ func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQR
 {{- end -}}
 `
 
-const mgr_quorum_call_tmpl = ``
-
 const node_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
@@ -708,9 +706,8 @@ type QuorumSpec interface {
 `
 
 var templates = map[string]string{
-	"config_qc_tmpl":       config_qc_tmpl,
-	"mgr_qc_tmpl":          mgr_qc_tmpl,
-	"mgr_quorum_call_tmpl": mgr_quorum_call_tmpl,
-	"node_tmpl":            node_tmpl,
-	"qspec_tmpl":           qspec_tmpl,
+	"config_qc_tmpl": config_qc_tmpl,
+	"mgr_qc_tmpl":    mgr_qc_tmpl,
+	"node_tmpl":      node_tmpl,
+	"qspec_tmpl":     qspec_tmpl,
 }

@@ -409,7 +409,7 @@ func callGRPCWriteNode(ctx context.Context, node *Node, args *State, replyChan c
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/WriteNode",
+		"/dev.RegisterNode/WriteNode",
 		args,
 		reply,
 		node.conn,

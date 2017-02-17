@@ -23,6 +23,8 @@ type Node struct {
 
 	RegisterClient RegisterClient
 
+	RegisterNodeClient RegisterNodeClient
+
 	WriteAsyncClient Register_WriteAsyncClient
 
 	sync.Mutex
@@ -38,6 +40,8 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 	}
 
 	n.RegisterClient = NewRegisterClient(n.conn)
+
+	n.RegisterNodeClient = NewRegisterNodeClient(n.conn)
 
 	n.WriteAsyncClient, err = n.RegisterClient.WriteAsync(context.Background())
 	if err != nil {

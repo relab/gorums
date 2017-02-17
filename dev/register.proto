@@ -21,16 +21,18 @@ service Register {
 		option (gorums.qf_with_req) 	= true;
 	}
 
-	rpc WriteNode(State) returns (WriteResponse) {
-		option (gorums.qc) 		= true;
-		option (gorums.per_node_arg) = true;
-	}
-
 	rpc WriteAsync(stream State) returns (Empty) {
 		option (gorums.multicast) = true;
 	}
 
 	rpc ReadNoQC(ReadRequest) returns (State) {}
+}
+
+service RegisterNode {
+	rpc WriteNode(State) returns (WriteResponse) {
+		option (gorums.qc) 		= true;
+		option (gorums.per_node_arg) = true;
+	}
 }
 
 message State {
