@@ -168,6 +168,12 @@ func (r ReadPerNodeArgReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
+// ReadPerNodeArg invokes a ReadPerNodeArg quorum call on configuration c
+// and returns the result as a ReadPerNodeArgReply.
+func (c *Configuration) ReadPerNodeArg(ctx context.Context, args *ReadRequest) (*ReadPerNodeArgReply, error) {
+	return c.mgr.readPerNodeArg(ctx, c, args)
+}
+
 // ReadPerNodeArg invokes the ReadPerNodeArg on each node in configuration c,
 // with the argument returned by the provided perNodeArg function
 // and returns the result as a ReadPerNodeArgReply.

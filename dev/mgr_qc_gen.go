@@ -20,9 +20,6 @@ type readReply struct {
 	err   error
 }
 
-// func (m *Manager) read(ctx context.Context, c *Configuration, perNodeArg func(nodeID int) *ReadRequest) (r *ReadReply, err error) {
-// func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadReply, err error) {
-
 func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
@@ -155,6 +152,97 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	}
 }
 
+type readPerNodeArgReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
+func (m *Manager) readPerNodeArg(ctx context.Context, c *Configuration, perNodeArg func(nodeID int) *ReadRequest) (r *ReadPerNodeArgReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadPerNodeArg")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.State,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan readPerNodeArgReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: perNodeArg(n.id)}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCReadPerNodeArg(ctx, n, perNodeArg(n.id), replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       = &ReadPerNodeArgReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.State, quorum = c.qspec.ReadPerNodeArgQF(replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCReadPerNodeArg(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readPerNodeArgReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/ReadPerNodeArg",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readPerNodeArgReply{node.id, reply, err}
+}
+
 type readTwoReply struct {
 	nid   uint32
 	reply *State
@@ -233,9 +321,6 @@ type writeReply struct {
 	reply *WriteResponse
 	err   error
 }
-
-// func (m *Manager) write(ctx context.Context, c *Configuration, perNodeArg func(nodeID int) *State) (r *WriteReply, err error) {
-// func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
 
 func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
 	var ti traceInfo

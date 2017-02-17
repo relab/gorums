@@ -6,6 +6,7 @@ package dev;
 
 service Register {
 	rpc ReadPerNodeArg(ReadRequest) returns (State) {
+		option (gorums.qc) 		= true;
 		option (gorums.per_node_arg) = true;
 	}
 

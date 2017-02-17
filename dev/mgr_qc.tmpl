@@ -47,9 +47,6 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-// func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, perNodeArg func(nodeID int) *{{.FQReqName}}) (r *{{.TypeName}}, err error) {
-// func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) (r *{{.TypeName}}, err error) {
-
 func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, {{.MethodArg}}) (r *{{.TypeName}}, err error) {
 	var ti traceInfo
 	if m.opts.trace {
