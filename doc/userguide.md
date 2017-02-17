@@ -22,7 +22,7 @@ using the protocol buffers interface definition language. Let's create a file,
 package file path may for example be
 ```
 $GOPATH/src/github.com/yourusername/gorumsexample
-``` 
+```
 The file ```register.proto``` should have the following content:
 
 ```protobuf
@@ -30,9 +30,15 @@ syntax = "proto3";
 
 package gorumsexample;
 
+import "github.com/relab/gorums/gorums.proto";
+
 service Register {
-	rpc Read(ReadRequest) returns (State) {}
-	rpc Write(State) returns (WriteResponse) {}
+	rpc Read(ReadRequest) returns (State) {
+		option (gorums.qc) = true;
+ 	}
+	rpc Write(State) returns (WriteResponse) {
+		option (gorums.qc) = true;
+ 	}
 }
 
 message State {
@@ -93,7 +99,7 @@ We can now invoke ```protoc``` to compile our protobuf definition:
 
 ```shell
 	$ cd GOPATH/src/github.com/yourusername/gorumsexample
-	$ protoc --gorums_out=plugins=grpc+gorums:. register.proto
+	$ protoc -I=$GOPATH:. --gorums_out=plugins=grpc+gorums:. register.proto
 ```
 
 You should now have a file named ```register.pb.go``` in your package
@@ -124,7 +130,7 @@ The implementation of this interface and running the servers is not described
 here. See
 [reg_server_udef.go](https://github.com/relab/gorums/blob/master/dev/reg_server_udef.go)
 for an example implementation and
-[config_rpc_test.go](https://github.com/relab/gorums/blob/master/dev/config_rpc_test.go).
+[config_rpc_test.go](https://github.com/relab/gorums/blob/master/dev/config_qc_test.go).
 for how to run at set of servers.
 
 We will now describe how to use the generated Gorums API. The first thing we
@@ -224,7 +230,7 @@ A configuration is a set of nodes with a defined quorum size on which our
 RPC calls can be invoked. The manager assigns every node and configuration a
 unique id. The code below show how to create two different configurations:
 
-```go 
+```go
 	// Get all all available node ids, 3 nodes
 	ids := mgr.IDs()
 
@@ -272,4 +278,4 @@ configurations:
 A reply has the type name "RPCMethodName" + "Reply". A reply contains a single
 reply of the appropriate type for this RPC method. It additionally also
 contains a slice with the id of every node that is a part of the quorum that
-replied. 
+replied.
