@@ -284,6 +284,7 @@ type serviceMethod struct {
 	RPCName              string
 	MethodArg            string
 	MethodArgUse         string
+	MethodArgCall        string
 
 	FQRespName string
 	RespName   string
@@ -351,13 +352,16 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 				sm.TypeName += "_"
 			}
 			sm.MethodArg = "args *" + sm.FQReqName
+			sm.MethodArgCall = "args"
 			sm.MethodArgUse = "args"
 			if sm.PerNodeArg {
 				g.logger.Println("per_node")
-				sm.MethodArg = "perNodeArg func(nodeID int) *" + sm.FQReqName
-				sm.MethodArgUse = "perNodeArg(n.id)"
+				sm.MethodArg = "perNodeArg func(nodeID uint32) *" + sm.FQReqName
+				sm.MethodArgCall = "perNodeArg(n.id)"
+				sm.MethodArgUse = "perNodeArg"
 				fmt.Fprintf(os.Stderr, "per_node %v -- %v\n", sm.MethodName, sm.MethodArg)
 			}
+			fmt.Fprintf(os.Stderr, "xxxxx %v -- %v\n", sm.MethodName, sm.MethodArg)
 
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, sm)

@@ -31,7 +31,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 
 {{- end -}}
 
-{{if or (.QuorumCall) (.Future) (.Correctable) (.PerNodeArg)}}
+{{if or (.QuorumCall) (.Future) (.Correctable)}}
 
 // {{.TypeName}} encapsulates the reply from a {{.MethodName}} quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
@@ -45,7 +45,7 @@ func (r {{.TypeName}}) String() string {
 }
 {{- end -}}
 
-{{if .QuorumCall}}
+{{if and (not (.PerNodeArg)) (.QuorumCall)}}
 // {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
 // and returns the result as a {{.TypeName}}.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) (*{{.TypeName}}, error) {
@@ -53,12 +53,12 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 }
 {{- end -}}
 
-{{if .PerNodeArg}}
+{{if and (.PerNodeArg) (.QuorumCall)}}
 // {{.MethodName}} invokes the {{.MethodName}} on each node in configuration c,
 // with the argument returned by the provided perNodeArg function
 // and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, perNodeArg func(nodeID int) *{{.FQReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, perNodeArg)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, {{.MethodArg}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, {{.MethodArgUse}})
 }
 {{- end -}}
 
@@ -392,7 +392,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	}
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, {{.MethodArgUse}}, replyChan)
+		go callGRPC{{.MethodName}}(ctx, n, {{.MethodArgCall}}, replyChan)
 	}
 
 	var (
@@ -589,6 +589,8 @@ func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQR
 {{- end -}}
 `
 
+const mgr_quorum_call_tmpl = ``
+
 const node_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
@@ -706,8 +708,9 @@ type QuorumSpec interface {
 `
 
 var templates = map[string]string{
-	"config_qc_tmpl": config_qc_tmpl,
-	"mgr_qc_tmpl":    mgr_qc_tmpl,
-	"node_tmpl":      node_tmpl,
-	"qspec_tmpl":     qspec_tmpl,
+	"config_qc_tmpl":       config_qc_tmpl,
+	"mgr_qc_tmpl":          mgr_qc_tmpl,
+	"mgr_quorum_call_tmpl": mgr_quorum_call_tmpl,
+	"node_tmpl":            node_tmpl,
+	"qspec_tmpl":           qspec_tmpl,
 }
