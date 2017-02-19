@@ -28,12 +28,12 @@ service Register {
 	rpc ReadNoQC(ReadRequest) returns (State) {}
 }
 
-service RegisterNode {
-	rpc WriteNode(State) returns (WriteResponse) {
-		option (gorums.qc) 		= true;
-		option (gorums.per_node_arg) = true;
-	}
-}
+// service RegisterNode {
+// 	rpc WriteNode(State) returns (WriteResponse) {
+// 		option (gorums.qc) 		= true;
+// 		option (gorums.per_node_arg) = true;
+// 	}
+// }
 
 message State {
 	string Value = 1;

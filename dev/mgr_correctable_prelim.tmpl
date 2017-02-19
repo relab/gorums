@@ -1,0 +1,97 @@
+
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{if not .IgnoreImports}}
+package {{$pkgName}}
+
+import (
+	"io"
+
+	"golang.org/x/net/context"
+)
+{{end}}
+
+{{range $elm := .Services}}
+
+{{if .CorrectablePrelim}}
+
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+
+func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.FQReqName}}) {
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPC{{.MethodName}}Stream(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
+		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      = LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
+{{else}}
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
+{{end}}
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount == c.n { // Can't rely on reply count.
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	x := New{{.ServName}}Client(node.conn)
+	y, err := x.{{.MethodName}}(ctx, args)
+	if err != nil {
+		replyChan <- {{.UnexportedTypeName}}{node.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+{{- end -}}
+{{- end -}}

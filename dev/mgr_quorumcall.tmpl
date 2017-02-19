@@ -1,0 +1,120 @@
+
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{if not .IgnoreImports}}
+package {{$pkgName}}
+
+import (
+	"time"
+
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+)
+{{end}}
+
+{{range $elm := .Services}}
+
+{{if or (.QuorumCall) (.Future)}}
+
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, {{.MethodArg}}) (r *{{.TypeName}}, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.{{.RespName}},
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: {{.MethodArgUse}}}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPC{{.MethodName}}(ctx, n, {{.MethodArgCall}}, replyChan)
+	}
+
+	var (
+		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
+{{else}}
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+{{end -}}
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.FQRespName}})
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+}
+
+{{- end -}}
+{{end}}

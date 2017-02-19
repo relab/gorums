@@ -312,7 +312,77 @@ func (c *{{.MethodName}}CorrectablePrelim) set(reply *{{.TypeName}}, level int, 
 {{- end -}}
 `
 
-const mgr_qc_tmpl = `
+const mgr_correctable_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{if not .IgnoreImports}}
+package {{$pkgName}}
+
+import "golang.org/x/net/context"
+
+{{end}}
+
+{{range $elm := .Services}}
+
+{{if .Correctable}}
+
+func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.FQReqName}}) {
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues     = make([]*{{.FQRespName}}, 0, c.n)
+		reply           = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      	= LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(args, replyValues)
+{{else}}
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(replyValues)
+{{end}}
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+{{- end -}}
+{{end}}
+`
+
+const mgr_correctable_prelim_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
 {{$pkgName := .PackageName}}
@@ -322,14 +392,104 @@ package {{$pkgName}}
 
 import (
 	"io"
-	"time"
 
 	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 )
+{{end}}
+
+{{range $elm := .Services}}
+
+{{if .CorrectablePrelim}}
+
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+
+func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.FQReqName}}) {
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPC{{.MethodName}}Stream(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
+		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      = LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
+{{else}}
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
+{{end}}
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount == c.n { // Can't rely on reply count.
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	x := New{{.ServName}}Client(node.conn)
+	y, err := x.{{.MethodName}}(ctx, args)
+	if err != nil {
+		replyChan <- {{.UnexportedTypeName}}{node.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+{{- end -}}
+{{- end -}}
+`
+
+const mgr_multicast_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{if not .IgnoreImports}}
+package {{$pkgName}}
+
+import "golang.org/x/net/context"
 {{end}}
 
 {{range $elm := .Services}}
@@ -350,8 +510,30 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 	return nil
 }
-
 {{- end -}}
+{{end}}
+`
+
+const mgr_quorumcall_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{if not .IgnoreImports}}
+package {{$pkgName}}
+
+import (
+	"time"
+
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+)
+{{end}}
+
+{{range $elm := .Services}}
 
 {{if or (.QuorumCall) (.Future)}}
 
@@ -451,142 +633,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 }
 
 {{- end -}}
-
-{{if .Correctable}}
-
-func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.FQReqName}}) {
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-
-	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues     = make([]*{{.FQRespName}}, 0, c.n)
-		reply           = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      	= LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-{{- if .QFWithReq}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(args, replyValues)
-{{else}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectableQF(replyValues)
 {{end}}
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount+len(replyValues) == c.n {
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
-}
-
-{{- end -}}
-
-{{if .CorrectablePrelim}}
-
-type {{.UnexportedTypeName}} struct {
-	nid   uint32
-	reply *{{.FQRespName}}
-	err   error
-}
-
-func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.FQReqName}}) {
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-
-	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}Stream(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
-		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-{{- if .QFWithReq}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
-{{else}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
-{{end}}
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount == c.n { // Can't rely on reply count.
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
-}
-
-func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	x := New{{.ServName}}Client(node.conn)
-	y, err := x.{{.MethodName}}(ctx, args)
-	if err != nil {
-		replyChan <- {{.UnexportedTypeName}}{node.id, nil, err}
-		return
-	}
-
-	for {
-		reply, err := y.Recv()
-		if err == io.EOF {
-			return
-		}
-		replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
-		if err != nil {
-			return
-		}
-	}
-}
-
-{{- end -}}
-
-{{- end -}}
 `
 
 const node_tmpl = `
@@ -706,8 +753,11 @@ type QuorumSpec interface {
 `
 
 var templates = map[string]string{
-	"config_qc_tmpl": config_qc_tmpl,
-	"mgr_qc_tmpl":    mgr_qc_tmpl,
-	"node_tmpl":      node_tmpl,
-	"qspec_tmpl":     qspec_tmpl,
+	"config_qc_tmpl":              config_qc_tmpl,
+	"mgr_correctable_tmpl":        mgr_correctable_tmpl,
+	"mgr_correctable_prelim_tmpl": mgr_correctable_prelim_tmpl,
+	"mgr_multicast_tmpl":          mgr_multicast_tmpl,
+	"mgr_quorumcall_tmpl":         mgr_quorumcall_tmpl,
+	"node_tmpl":                   node_tmpl,
+	"qspec_tmpl":                  qspec_tmpl,
 }

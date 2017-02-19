@@ -1,0 +1,31 @@
+
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{if not .IgnoreImports}}
+package {{$pkgName}}
+
+import "golang.org/x/net/context"
+{{end}}
+
+{{range $elm := .Services}}
+
+{{if .Multicast}}
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.{{.MethodName}}Client.Send(args)
+			if err == nil {
+				return
+			}
+			if m.logger != nil {
+				m.logger.Printf("%d: {{.UnexportedMethodName}} stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+
+	return nil
+}
+{{- end -}}
+{{end}}

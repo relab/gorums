@@ -58,8 +58,8 @@ var _ = math.Inf
 const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type State struct {
-	Value     string `protobuf:"bytes,1,opt,name=Value,proto3" json:"Value,omitempty"`
-	Timestamp int64  `protobuf:"varint,2,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
+	Value     string `protobuf:"bytes,1,opt,name=Value,json=value,proto3" json:"Value,omitempty"`
+	Timestamp int64  `protobuf:"varint,2,opt,name=Timestamp,json=timestamp,proto3" json:"Timestamp,omitempty"`
 }
 
 func (m *State) Reset()                    { *m = State{} }
@@ -67,7 +67,7 @@ func (*State) ProtoMessage()               {}
 func (*State) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{0} }
 
 type WriteResponse struct {
-	New bool `protobuf:"varint,1,opt,name=New,proto3" json:"New,omitempty"`
+	New bool `protobuf:"varint,1,opt,name=New,json=new,proto3" json:"New,omitempty"`
 }
 
 func (m *WriteResponse) Reset()                    { *m = WriteResponse{} }
@@ -647,25 +647,149 @@ func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
 	return c.mgr.writeAsync(ctx, c, args)
 }
 
-// WriteNodeReply encapsulates the reply from a WriteNode quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteNodeReply struct {
-	NodeIDs []uint32
-	*WriteResponse
+/* 'gorums' plugin for protoc-gen-go - generated from: mgr_correctable_prelim_tmpl */
+
+type readTwoReply struct {
+	nid   uint32
+	reply *State
+	err   error
 }
 
-func (r WriteNodeReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
+func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
+	replyChan := make(chan readTwoReply, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPCReadTwoStream(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n*2)
+		reply       = &ReadTwoReply{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      = LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
+
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount == c.n { // Can't rely on reply count.
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
 }
 
-// WriteNode invokes the WriteNode on each node in configuration c,
-// with the argument returned by the provided perNodeArg function
-// and returns the result as a WriteNodeReply.
-func (c *Configuration) WriteNode(ctx context.Context, perNodeArg func(nodeID uint32) *State) (*WriteNodeReply, error) {
-	return c.mgr.writeNode(ctx, c, perNodeArg)
+func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
+	x := NewRegisterClient(node.conn)
+	y, err := x.ReadTwo(ctx, args)
+	if err != nil {
+		replyChan <- readTwoReply{node.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- readTwoReply{node.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
 }
 
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_qc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: mgr_correctable_tmpl */
+
+func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
+	replyChan := make(chan readReply, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPCRead(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      = LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply.State, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
+
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: mgr_multicast_tmpl */
+
+func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.WriteAsyncClient.Send(args)
+			if err == nil {
+				return
+			}
+			if m.logger != nil {
+				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+
+	return nil
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: mgr_quorumcall_tmpl */
 
 type readReply struct {
 	nid   uint32
@@ -756,126 +880,6 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 		node.setLastErr(err)
 	}
 	replyChan <- readReply{node.id, reply, err}
-}
-
-func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
-	replyChan := make(chan readReply, c.n)
-
-	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*State, 0, c.n)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-			reply.State, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
-
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount+len(replyValues) == c.n {
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
-}
-
-type readTwoReply struct {
-	nid   uint32
-	reply *State
-	err   error
-}
-
-func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
-	replyChan := make(chan readTwoReply, c.n)
-
-	for _, n := range c.nodes {
-		go callGRPCReadTwoStream(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*State, 0, c.n*2)
-		reply       = &ReadTwoReply{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
-
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount == c.n { // Can't rely on reply count.
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
-}
-
-func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
-	x := NewRegisterClient(node.conn)
-	y, err := x.ReadTwo(ctx, args)
-	if err != nil {
-		replyChan <- readTwoReply{node.id, nil, err}
-		return
-	}
-
-	for {
-		reply, err := y.Recv()
-		if err == io.EOF {
-			return
-		}
-		replyChan <- readTwoReply{node.id, reply, err}
-		if err != nil {
-			return
-		}
-	}
 }
 
 type writeReply struct {
@@ -969,113 +973,6 @@ func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<
 	replyChan <- writeReply{node.id, reply, err}
 }
 
-func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.WriteAsyncClient.Send(args)
-			if err == nil {
-				return
-			}
-			if m.logger != nil {
-				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
-			}
-		}(node)
-	}
-
-	return nil
-}
-
-type writeNodeReply struct {
-	nid   uint32
-	reply *WriteResponse
-	err   error
-}
-
-func (m *Manager) writeNode(ctx context.Context, c *Configuration, perNodeArg func(nodeID uint32) *State) (r *WriteNodeReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteNode")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResponse,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan writeNodeReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: perNodeArg}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCWriteNode(ctx, n, perNodeArg(n.id), replyChan)
-	}
-
-	var (
-		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       = &WriteNodeReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteNodeQF(replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCWriteNode(ctx context.Context, node *Node, args *State, replyChan chan<- writeNodeReply) {
-	reply := new(WriteResponse)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.RegisterNode/WriteNode",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- writeNodeReply{node.id, reply, err}
-}
-
 /* 'gorums' plugin for protoc-gen-go - generated from: node_tmpl */
 
 // Node encapsulates the state of a node on which a remote procedure call
@@ -1088,8 +985,6 @@ type Node struct {
 	conn *grpc.ClientConn
 
 	RegisterClient RegisterClient
-
-	RegisterNodeClient RegisterNodeClient
 
 	WriteAsyncClient Register_WriteAsyncClient
 
@@ -1106,8 +1001,6 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 	}
 
 	n.RegisterClient = NewRegisterClient(n.conn)
-
-	n.RegisterNodeClient = NewRegisterNodeClient(n.conn)
 
 	n.WriteAsyncClient, err = n.RegisterClient.WriteAsync(context.Background())
 	if err != nil {
@@ -1148,10 +1041,6 @@ type QuorumSpec interface {
 	// WriteQF is the quorum function for the Write
 	// quorum call method.
 	WriteQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
-
-	// WriteNodeQF is the quorum function for the WriteNode
-	// quorum call method.
-	WriteNodeQF(replies []*WriteResponse) (*WriteResponse, bool)
 }
 
 /* Static resources */
@@ -2030,70 +1919,6 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 	Metadata: "testdata/register_golden/register.proto",
 }
 
-// Client API for RegisterNode service
-
-type RegisterNodeClient interface {
-	WriteNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
-}
-
-type registerNodeClient struct {
-	cc *grpc.ClientConn
-}
-
-func NewRegisterNodeClient(cc *grpc.ClientConn) RegisterNodeClient {
-	return &registerNodeClient{cc}
-}
-
-func (c *registerNodeClient) WriteNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
-	out := new(WriteResponse)
-	err := grpc.Invoke(ctx, "/dev.RegisterNode/WriteNode", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// Server API for RegisterNode service
-
-type RegisterNodeServer interface {
-	WriteNode(context.Context, *State) (*WriteResponse, error)
-}
-
-func RegisterRegisterNodeServer(s *grpc.Server, srv RegisterNodeServer) {
-	s.RegisterService(&_RegisterNode_serviceDesc, srv)
-}
-
-func _RegisterNode_WriteNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(State)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RegisterNodeServer).WriteNode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.RegisterNode/WriteNode",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterNodeServer).WriteNode(ctx, req.(*State))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-var _RegisterNode_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "dev.RegisterNode",
-	HandlerType: (*RegisterNodeServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "WriteNode",
-			Handler:    _RegisterNode_WriteNode_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "testdata/register_golden/register.proto",
-}
-
 func (m *State) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -2684,30 +2509,29 @@ var (
 func init() { proto.RegisterFile("testdata/register_golden/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 390 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x91, 0xbf, 0x8f, 0xd3, 0x30,
-	0x14, 0xc7, 0xf3, 0xae, 0x0d, 0xd7, 0x3e, 0xee, 0xa4, 0x93, 0xc5, 0x60, 0x55, 0xc8, 0x3a, 0x22,
-	0x24, 0x2a, 0x74, 0x4a, 0x50, 0xd1, 0x4d, 0x4c, 0x80, 0x6e, 0xad, 0x44, 0x38, 0xc1, 0x88, 0xdc,
-	0xcb, 0x53, 0x88, 0xd4, 0xd4, 0x21, 0x76, 0x5a, 0x75, 0xeb, 0xc8, 0xd8, 0x91, 0x91, 0xb1, 0x23,
-	0x4b, 0xfe, 0x07, 0xc6, 0x8e, 0x8c, 0x6d, 0x58, 0x18, 0xf9, 0x13, 0x50, 0x9c, 0x02, 0xed, 0xd4,
-	0xc9, 0xef, 0xc7, 0xf7, 0xf9, 0xfb, 0x79, 0x36, 0x3e, 0x31, 0xa4, 0x4d, 0x24, 0x8d, 0x0c, 0x72,
-	0x8a, 0x13, 0x6d, 0x28, 0xff, 0x10, 0xab, 0x71, 0x44, 0x93, 0x7f, 0xb9, 0x9f, 0xe5, 0xca, 0x28,
-	0xd6, 0x8a, 0x68, 0xda, 0x7b, 0x1c, 0x27, 0xe6, 0x63, 0x31, 0xf2, 0xef, 0x54, 0x1a, 0xe4, 0x34,
-	0x96, 0xa3, 0x20, 0x56, 0x79, 0x91, 0xea, 0xdd, 0xd1, 0x48, 0xbd, 0x17, 0xe8, 0xbe, 0x35, 0xd2,
-	0x10, 0x7b, 0x80, 0xee, 0x3b, 0x39, 0x2e, 0x88, 0xc3, 0x25, 0xf4, 0xbb, 0x61, 0x93, 0xb0, 0x87,
-	0xd8, 0xbd, 0x4d, 0x52, 0xd2, 0x46, 0xa6, 0x19, 0x3f, 0xb9, 0x84, 0x7e, 0x2b, 0xfc, 0x5f, 0xf0,
-	0x1e, 0xe1, 0xf9, 0xfb, 0x3c, 0x31, 0x14, 0x92, 0xce, 0xd4, 0x44, 0x13, 0xbb, 0xc0, 0xd6, 0x90,
-	0x66, 0xf6, 0x8a, 0x4e, 0x58, 0x87, 0xde, 0x39, 0xde, 0x0f, 0x49, 0x46, 0x21, 0x7d, 0x2a, 0x48,
-	0x1b, 0xef, 0x14, 0xdd, 0x9b, 0x34, 0x33, 0xf3, 0xc1, 0xe2, 0x04, 0x3b, 0xe1, 0x8e, 0x9a, 0x0d,
-	0xb0, 0x5d, 0x8b, 0xd8, 0x85, 0x1f, 0xd1, 0xd4, 0xdf, 0xd3, 0xf7, 0xd0, 0x56, 0x2c, 0xa1, 0x77,
-	0xb6, 0x28, 0x39, 0x7c, 0x2e, 0x39, 0x7c, 0x2d, 0x39, 0xb0, 0x00, 0x4f, 0x6b, 0xe1, 0xed, 0x4c,
-	0x1d, 0x19, 0x6b, 0x2f, 0x4b, 0x0e, 0xcf, 0x80, 0x5d, 0xa3, 0x6b, 0x61, 0xd9, 0x5e, 0xb3, 0xc7,
-	0x6c, 0x7c, 0xb0, 0x44, 0xe3, 0x53, 0x7b, 0xac, 0x6a, 0x9f, 0x2b, 0x44, 0xdb, 0x7e, 0xa9, 0xe7,
-	0x93, 0xbb, 0x83, 0xd9, 0x26, 0xb6, 0xeb, 0x78, 0xed, 0x2f, 0x25, 0x87, 0x3e, 0xb0, 0xa7, 0xf5,
-	0x56, 0x32, 0x1a, 0xaa, 0x37, 0xaf, 0x8f, 0x60, 0x39, 0x83, 0x1b, 0x3c, 0xfb, 0xfb, 0x02, 0x43,
-	0x15, 0x11, 0xbb, 0xc6, 0xae, 0x75, 0xb2, 0xc9, 0x31, 0xc8, 0x4e, 0x0d, 0xf9, 0xad, 0xe4, 0xf0,
-	0xea, 0x6a, 0xbd, 0x15, 0xce, 0x8f, 0xad, 0x70, 0x36, 0x5b, 0x01, 0x8b, 0x4a, 0xc0, 0xaa, 0x12,
-	0xf0, 0xbd, 0x12, 0xb0, 0xae, 0x04, 0x6c, 0x2a, 0x01, 0xbf, 0x2a, 0xe1, 0xfc, 0xae, 0x04, 0x2c,
-	0x7f, 0x0a, 0x67, 0x74, 0xcf, 0x7e, 0xfb, 0xf3, 0x3f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xb1, 0x87,
-	0xc8, 0xaa, 0x4c, 0x02, 0x00, 0x00,
+	// 370 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x51, 0x3d, 0x8f, 0xda, 0x40,
+	0x14, 0xf4, 0xc3, 0x38, 0xc0, 0x26, 0x48, 0x68, 0x95, 0xc2, 0x42, 0xd1, 0x8a, 0x58, 0x91, 0x82,
+	0x22, 0x64, 0x47, 0x44, 0xa9, 0x52, 0x25, 0x51, 0x5a, 0xa4, 0x38, 0x28, 0x29, 0xa3, 0x05, 0x3f,
+	0x39, 0x96, 0xb0, 0xd7, 0xf1, 0xae, 0x41, 0x74, 0x94, 0x29, 0x29, 0x53, 0x5e, 0xc9, 0x1f, 0xf0,
+	0x7f, 0xb8, 0x92, 0xf2, 0x4a, 0xf0, 0x35, 0x57, 0xde, 0x4f, 0x38, 0x79, 0xe1, 0x4e, 0x50, 0x51,
+	0xed, 0xfb, 0x98, 0xd9, 0x99, 0xd1, 0x23, 0x6f, 0x15, 0x4a, 0x15, 0x70, 0xc5, 0xbd, 0x0c, 0xc3,
+	0x48, 0x2a, 0xcc, 0x7e, 0x87, 0x62, 0x16, 0x60, 0xf2, 0xd4, 0xbb, 0x69, 0x26, 0x94, 0xa0, 0x66,
+	0x80, 0xf3, 0xee, 0x9b, 0x30, 0x52, 0x7f, 0xf2, 0x89, 0x3b, 0x15, 0xb1, 0x97, 0xe1, 0x8c, 0x4f,
+	0xbc, 0x50, 0x64, 0x79, 0x2c, 0x8f, 0xcf, 0x01, 0xea, 0x7c, 0x22, 0xd6, 0x0f, 0xc5, 0x15, 0xd2,
+	0x97, 0xc4, 0xfa, 0xc9, 0x67, 0x39, 0xda, 0xd0, 0x83, 0x7e, 0xcb, 0xb7, 0xe6, 0x55, 0x43, 0x5f,
+	0x91, 0xd6, 0x38, 0x8a, 0x51, 0x2a, 0x1e, 0xa7, 0x76, 0xad, 0x07, 0x7d, 0xd3, 0x6f, 0xa9, 0xc7,
+	0x81, 0xf3, 0x9a, 0xb4, 0x7f, 0x65, 0x91, 0x42, 0x1f, 0x65, 0x2a, 0x12, 0x89, 0xb4, 0x43, 0xcc,
+	0x11, 0x2e, 0xf4, 0x17, 0x4d, 0xdf, 0x4c, 0x70, 0xe1, 0xb4, 0xc9, 0x73, 0x1f, 0x79, 0xe0, 0xe3,
+	0xdf, 0x1c, 0xa5, 0x72, 0x1a, 0xc4, 0xfa, 0x16, 0xa7, 0x6a, 0x39, 0x5c, 0xd5, 0x48, 0xd3, 0x3f,
+	0xba, 0xa6, 0x43, 0x52, 0xaf, 0x40, 0xb4, 0xe3, 0x06, 0x38, 0x77, 0x4f, 0xf0, 0x5d, 0xa2, 0x27,
+	0xda, 0xa1, 0xf3, 0x62, 0x55, 0xd8, 0xf0, 0xaf, 0xb0, 0xe1, 0xaa, 0xb0, 0x81, 0x7a, 0xa4, 0x51,
+	0x01, 0xc7, 0x0b, 0x71, 0x81, 0x56, 0x5f, 0x17, 0x36, 0xbc, 0x07, 0xfa, 0x91, 0x58, 0xda, 0x2c,
+	0x3d, 0x59, 0x76, 0xa9, 0xae, 0xcf, 0x42, 0x1c, 0x74, 0x2a, 0x8d, 0x4d, 0xa5, 0x33, 0x20, 0x44,
+	0xaf, 0x3f, 0xcb, 0x65, 0x32, 0x3d, 0xe3, 0x1e, 0x6a, 0x1d, 0xc7, 0xa9, 0xff, 0x2f, 0x6c, 0xe8,
+	0x03, 0x7d, 0x57, 0xa5, 0xe2, 0xc1, 0x48, 0x7c, 0xff, 0x7a, 0xc1, 0x96, 0xf1, 0x65, 0xb0, 0xdd,
+	0x33, 0xe3, 0x66, 0xcf, 0x8c, 0xdd, 0x9e, 0xc1, 0xaa, 0x64, 0xb0, 0x29, 0x19, 0x5c, 0x97, 0x0c,
+	0xb6, 0x25, 0x83, 0x5d, 0xc9, 0xe0, 0xae, 0x64, 0xc6, 0x7d, 0xc9, 0x60, 0x7d, 0xcb, 0x8c, 0xc9,
+	0x33, 0x7d, 0xaf, 0x0f, 0x0f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xee, 0x58, 0x7d, 0x6a, 0x05, 0x02,
+	0x00, 0x00,
 }
