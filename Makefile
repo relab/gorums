@@ -23,6 +23,10 @@ PROTOC_I_FLAG			:= ../../../:.
 
 TESTDATA_REG			:= testdata/register_golden
 
+GORUMS_RPC_PROTO_NAME		:= gorums_rpc.proto
+GORUMS_RPC_PBGO_NAME		:= gorums_rpc.pb.go
+GORUMS_RPC_PROTO_DEV_RPATH	:= $(DEV_PKG)/$(GORUMS_RPC_PROTO_NAME)
+
 REG_PROTO_NAME			:= register.proto
 REG_PBGO_NAME			:= register.pb.go
 REG_PROTO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PROTO_NAME)
@@ -90,6 +94,11 @@ reinstallprotoc:
 devproto: reinstallprotoc
 	@echo generating gorumsdev register proto
 	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
+
+.PHONY: devgorumsproto
+devgorumsproto: reinstallprotoc
+	@echo generating dev gorums rpc proto
+	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(GORUMS_RPC_PROTO_DEV_RPATH)
 
 .PHONY: gorumsprotoopts
 gorumsprotoopts:
