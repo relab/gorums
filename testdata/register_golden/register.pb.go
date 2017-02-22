@@ -390,7 +390,7 @@ func (f *ReadFuture) Done() bool {
 
 // ReadCorrectable asynchronously invokes a
 // correctable Read quorum call on configuration c and returns a
-// ReadCorrectable which can be used to inspect any repies or errors
+// ReadCorrectable which can be used to inspect any replies or errors
 // when available.
 func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
 	corr := &ReadCorrectable{
