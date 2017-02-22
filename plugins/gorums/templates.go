@@ -100,7 +100,7 @@ func (f *{{.MethodName}}Future) Done() bool {
 // correctable {{.MethodName}} quorum call on configuration c and returns a
 // {{.MethodName}}Correctable which can be used to inspect any repies or errors
 // when available.
-func (c *Configuration) {{.MethodName}}Correctable(ctx context.Context, args *ReadRequest) *{{.MethodName}}Correctable {
+func (c *Configuration) {{.MethodName}}Correctable(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Correctable {
 	corr := &{{.MethodName}}Correctable{
 		level:  LevelNotSet,
 		donech: make(chan struct{}),
