@@ -1,0 +1,23 @@
+
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import "golang.org/x/net/context"
+
+{{- end}}
+
+{{range $elm := .Services}}
+
+{{if .Multicast}}
+
+// {{.MethodName}} is a one-way multicast operation, where args is sent to
+// every node in configuration c. The call is asynchronous and has no response
+// return value.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+}
+
+{{- end -}}
+{{- end -}}

@@ -58,8 +58,8 @@ var _ = math.Inf
 const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type State struct {
-	Value     string `protobuf:"bytes,1,opt,name=Value,json=value,proto3" json:"Value,omitempty"`
-	Timestamp int64  `protobuf:"varint,2,opt,name=Timestamp,json=timestamp,proto3" json:"Timestamp,omitempty"`
+	Value     string `protobuf:"bytes,1,opt,name=Value,proto3" json:"Value,omitempty"`
+	Timestamp int64  `protobuf:"varint,2,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
 }
 
 func (m *State) Reset()                    { *m = State{} }
@@ -67,7 +67,7 @@ func (*State) ProtoMessage()               {}
 func (*State) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{0} }
 
 type WriteResponse struct {
-	New bool `protobuf:"varint,1,opt,name=New,json=new,proto3" json:"New,omitempty"`
+	New bool `protobuf:"varint,1,opt,name=New,proto3" json:"New,omitempty"`
 }
 
 func (m *WriteResponse) Reset()                    { *m = WriteResponse{} }
@@ -332,165 +332,7 @@ func (this *Empty) Equal(that interface{}) bool {
 //  Reference Gorums specific imports to suppress errors if they are not otherwise used.
 var _ = codes.OK
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_qc_tmpl */
-
-// ReadReply encapsulates the reply from a Read quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadReply struct {
-	NodeIDs []uint32
-	*State
-}
-
-func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
-}
-
-// Read invokes a Read quorum call on configuration c
-// and returns the result as a ReadReply.
-func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(ctx, c, args)
-}
-
-// ReadFuture is a reference to an asynchronous Read quorum call invocation.
-type ReadFuture struct {
-	reply *ReadReply
-	err   error
-	c     chan struct{}
-}
-
-// ReadFuture asynchronously invokes a Read quorum call
-// on configuration c and returns a ReadFuture which can be used to
-// inspect the quorum call reply and error when available.
-func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
-	f := new(ReadFuture)
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.read(ctx, c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the ReadFuture.
-// The method blocks until a reply or error is available.
-func (f *ReadFuture) Get() (*ReadReply, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply and/or error is available for the ReadFuture.
-func (f *ReadFuture) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-
-// ReadCorrectable asynchronously invokes a
-// correctable Read quorum call on configuration c and returns a
-// ReadCorrectable which can be used to inspect any repies or errors
-// when available.
-func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
-	corr := &ReadCorrectable{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
-	}
-	go func() {
-		c.mgr.readCorrectable(ctx, c, corr, args)
-	}()
-	return corr
-}
-
-// ReadCorrectable is a reference to a correctable Read quorum call.
-type ReadCorrectable struct {
-	mu       sync.Mutex
-	reply    *ReadReply
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
-
-// Get returns the reply, level and any error associated with the
-// ReadCorrectable. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *ReadCorrectable) Get() (*ReadReply, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.reply, c.level, c.err
-}
-
-// Done returns a channel that's closed when the correctable Read
-// quorum call is done. A call is considered done when the quorum function has
-// signaled that a quorum of replies was received or that the call returned an
-// error.
-func (c *ReadCorrectable) Done() <-chan struct{} {
-	return c.donech
-}
-
-// Watch returns a channel that's closed when a reply or error at or above the
-// specified level is available. If the call is done, the channel is closed
-// disregardless of the specified level.
-func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
-	ch := make(chan struct{})
-	c.mu.Lock()
-	if level < c.level {
-		close(ch)
-		c.mu.Unlock()
-		return ch
-	}
-	c.watchers = append(c.watchers, &struct {
-		level int
-		ch    chan struct{}
-	}{level, ch})
-	c.mu.Unlock()
-	return ch
-}
-
-func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool) {
-	c.mu.Lock()
-	if c.done {
-		c.mu.Unlock()
-		panic("set(...) called on a done correctable")
-	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
-	if done {
-		close(c.donech)
-		for _, watcher := range c.watchers {
-			if watcher != nil {
-				close(watcher.ch)
-			}
-		}
-		c.mu.Unlock()
-		return
-	}
-	for i := range c.watchers {
-		if c.watchers[i] != nil && c.watchers[i].level <= level {
-			close(c.watchers[i].ch)
-			c.watchers[i] = nil
-		}
-	}
-	c.mu.Unlock()
-}
-
-// ReadTwoReply encapsulates the reply from a correctable ReadTwo quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadTwoReply struct {
-	NodeIDs []uint32
-	*State
-}
-
-func (r ReadTwoReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
-}
+/* 'gorums' plugin for protoc-gen-go - generated from: config_correctable_prelim_tmpl */
 
 // ReadTwoCorrectablePrelim asynchronously invokes a correctable ReadTwo quorum call
 // with server side preliminary reply support on configuration c and returns a
@@ -586,21 +428,138 @@ func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error
 	c.mu.Unlock()
 }
 
-// WriteReply encapsulates the reply from a Write quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteReply struct {
-	NodeIDs []uint32
-	*WriteResponse
+/* 'gorums' plugin for protoc-gen-go - generated from: config_correctable_tmpl */
+
+// ReadCorrectable asynchronously invokes a
+// correctable Read quorum call on configuration c and returns a
+// ReadCorrectable which can be used to inspect any repies or errors
+// when available.
+func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
+	corr := &ReadCorrectable{
+		level:  LevelNotSet,
+		donech: make(chan struct{}),
+	}
+	go func() {
+		c.mgr.readCorrectable(ctx, c, corr, args)
+	}()
+	return corr
 }
 
-func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
+// ReadCorrectable is a reference to a correctable Read quorum call.
+type ReadCorrectable struct {
+	mu       sync.Mutex
+	reply    *ReadReply
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
 }
 
-// Write invokes a Write quorum call on configuration c
-// and returns the result as a WriteReply.
-func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
-	return c.mgr.write(ctx, c, args)
+// Get returns the reply, level and any error associated with the
+// ReadCorrectable. The method does not block until a (possibly
+// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// reply has yet been received. The Done or Watch methods should be used to
+// ensure that a reply is available.
+func (c *ReadCorrectable) Get() (*ReadReply, int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.reply, c.level, c.err
+}
+
+// Done returns a channel that's closed when the correctable Read
+// quorum call is done. A call is considered done when the quorum function has
+// signaled that a quorum of replies was received or that the call returned an
+// error.
+func (c *ReadCorrectable) Done() <-chan struct{} {
+	return c.donech
+}
+
+// Watch returns a channel that's closed when a reply or error at or above the
+// specified level is available. If the call is done, the channel is closed
+// disregardless of the specified level.
+func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
+	ch := make(chan struct{})
+	c.mu.Lock()
+	if level < c.level {
+		close(ch)
+		c.mu.Unlock()
+		return ch
+	}
+	c.watchers = append(c.watchers, &struct {
+		level int
+		ch    chan struct{}
+	}{level, ch})
+	c.mu.Unlock()
+	return ch
+}
+
+func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool) {
+	c.mu.Lock()
+	if c.done {
+		c.mu.Unlock()
+		panic("set(...) called on a done correctable")
+	}
+	c.reply, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			if watcher != nil {
+				close(watcher.ch)
+			}
+		}
+		c.mu.Unlock()
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+			c.watchers[i] = nil
+		}
+	}
+	c.mu.Unlock()
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: config_future_tmpl */
+
+// ReadFuture is a reference to an asynchronous Read quorum call invocation.
+type ReadFuture struct {
+	reply *ReadReply
+	err   error
+	c     chan struct{}
+}
+
+// ReadFuture asynchronously invokes a Read quorum call
+// on configuration c and returns a ReadFuture which can be used to
+// inspect the quorum call reply and error when available.
+func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
+	f := new(ReadFuture)
+	f.c = make(chan struct{}, 1)
+	go func() {
+		defer close(f.c)
+		f.reply, f.err = c.mgr.read(ctx, c, args)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the ReadFuture.
+// The method blocks until a reply or error is available.
+func (f *ReadFuture) Get() (*ReadReply, error) {
+	<-f.c
+	return f.reply, f.err
+}
+
+// Done reports if a reply and/or error is available for the ReadFuture.
+func (f *ReadFuture) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
 }
 
 // WriteFuture is a reference to an asynchronous Write quorum call invocation.
@@ -640,11 +599,62 @@ func (f *WriteFuture) Done() bool {
 	}
 }
 
+/* 'gorums' plugin for protoc-gen-go - generated from: config_multicast_tmpl */
+
 // WriteAsync is a one-way multicast operation, where args is sent to
 // every node in configuration c. The call is asynchronous and has no response
 // return value.
 func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
 	return c.mgr.writeAsync(ctx, c, args)
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: config_quorumcall_tmpl */
+
+// Read invokes a Read quorum call on configuration c
+// and returns the result as a ReadReply.
+func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
+	return c.mgr.read(ctx, c, args)
+}
+
+// Write invokes a Write quorum call on configuration c
+// and returns the result as a WriteReply.
+func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
+	return c.mgr.write(ctx, c, args)
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: config_shared_struct_tmpl */
+
+// ReadReply encapsulates the reply from a correctable Read quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type ReadReply struct {
+	NodeIDs []uint32
+	*State
+}
+
+func (r ReadReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
+}
+
+// ReadTwoReply encapsulates the reply from a correctable ReadTwo quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type ReadTwoReply struct {
+	NodeIDs []uint32
+	*State
+}
+
+func (r ReadTwoReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
+}
+
+// WriteReply encapsulates the reply from a correctable Write quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type WriteReply struct {
+	NodeIDs []uint32
+	*WriteResponse
+}
+
+func (r WriteReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_correctable_prelim_tmpl */
@@ -2509,29 +2519,28 @@ var (
 func init() { proto.RegisterFile("testdata/register_golden/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 370 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x51, 0x3d, 0x8f, 0xda, 0x40,
-	0x14, 0xf4, 0xc3, 0x38, 0xc0, 0x26, 0x48, 0x68, 0x95, 0xc2, 0x42, 0xd1, 0x8a, 0x58, 0x91, 0x82,
-	0x22, 0x64, 0x47, 0x44, 0xa9, 0x52, 0x25, 0x51, 0x5a, 0xa4, 0x38, 0x28, 0x29, 0xa3, 0x05, 0x3f,
-	0x39, 0x96, 0xb0, 0xd7, 0xf1, 0xae, 0x41, 0x74, 0x94, 0x29, 0x29, 0x53, 0x5e, 0xc9, 0x1f, 0xf0,
-	0x7f, 0xb8, 0x92, 0xf2, 0x4a, 0xf0, 0x35, 0x57, 0xde, 0x4f, 0x38, 0x79, 0xe1, 0x4e, 0x50, 0x51,
-	0xed, 0xfb, 0x98, 0xd9, 0x99, 0xd1, 0x23, 0x6f, 0x15, 0x4a, 0x15, 0x70, 0xc5, 0xbd, 0x0c, 0xc3,
-	0x48, 0x2a, 0xcc, 0x7e, 0x87, 0x62, 0x16, 0x60, 0xf2, 0xd4, 0xbb, 0x69, 0x26, 0x94, 0xa0, 0x66,
-	0x80, 0xf3, 0xee, 0x9b, 0x30, 0x52, 0x7f, 0xf2, 0x89, 0x3b, 0x15, 0xb1, 0x97, 0xe1, 0x8c, 0x4f,
-	0xbc, 0x50, 0x64, 0x79, 0x2c, 0x8f, 0xcf, 0x01, 0xea, 0x7c, 0x22, 0xd6, 0x0f, 0xc5, 0x15, 0xd2,
-	0x97, 0xc4, 0xfa, 0xc9, 0x67, 0x39, 0xda, 0xd0, 0x83, 0x7e, 0xcb, 0xb7, 0xe6, 0x55, 0x43, 0x5f,
-	0x91, 0xd6, 0x38, 0x8a, 0x51, 0x2a, 0x1e, 0xa7, 0x76, 0xad, 0x07, 0x7d, 0xd3, 0x6f, 0xa9, 0xc7,
-	0x81, 0xf3, 0x9a, 0xb4, 0x7f, 0x65, 0x91, 0x42, 0x1f, 0x65, 0x2a, 0x12, 0x89, 0xb4, 0x43, 0xcc,
-	0x11, 0x2e, 0xf4, 0x17, 0x4d, 0xdf, 0x4c, 0x70, 0xe1, 0xb4, 0xc9, 0x73, 0x1f, 0x79, 0xe0, 0xe3,
-	0xdf, 0x1c, 0xa5, 0x72, 0x1a, 0xc4, 0xfa, 0x16, 0xa7, 0x6a, 0x39, 0x5c, 0xd5, 0x48, 0xd3, 0x3f,
-	0xba, 0xa6, 0x43, 0x52, 0xaf, 0x40, 0xb4, 0xe3, 0x06, 0x38, 0x77, 0x4f, 0xf0, 0x5d, 0xa2, 0x27,
-	0xda, 0xa1, 0xf3, 0x62, 0x55, 0xd8, 0xf0, 0xaf, 0xb0, 0xe1, 0xaa, 0xb0, 0x81, 0x7a, 0xa4, 0x51,
-	0x01, 0xc7, 0x0b, 0x71, 0x81, 0x56, 0x5f, 0x17, 0x36, 0xbc, 0x07, 0xfa, 0x91, 0x58, 0xda, 0x2c,
-	0x3d, 0x59, 0x76, 0xa9, 0xae, 0xcf, 0x42, 0x1c, 0x74, 0x2a, 0x8d, 0x4d, 0xa5, 0x33, 0x20, 0x44,
-	0xaf, 0x3f, 0xcb, 0x65, 0x32, 0x3d, 0xe3, 0x1e, 0x6a, 0x1d, 0xc7, 0xa9, 0xff, 0x2f, 0x6c, 0xe8,
-	0x03, 0x7d, 0x57, 0xa5, 0xe2, 0xc1, 0x48, 0x7c, 0xff, 0x7a, 0xc1, 0x96, 0xf1, 0x65, 0xb0, 0xdd,
-	0x33, 0xe3, 0x66, 0xcf, 0x8c, 0xdd, 0x9e, 0xc1, 0xaa, 0x64, 0xb0, 0x29, 0x19, 0x5c, 0x97, 0x0c,
-	0xb6, 0x25, 0x83, 0x5d, 0xc9, 0xe0, 0xae, 0x64, 0xc6, 0x7d, 0xc9, 0x60, 0x7d, 0xcb, 0x8c, 0xc9,
-	0x33, 0x7d, 0xaf, 0x0f, 0x0f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xee, 0x58, 0x7d, 0x6a, 0x05, 0x02,
-	0x00, 0x00,
+	// 366 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x51, 0xb1, 0x8e, 0xda, 0x40,
+	0x10, 0xf5, 0x00, 0x0e, 0xb0, 0x09, 0x12, 0x5a, 0xa5, 0xb0, 0x50, 0xb4, 0x22, 0x56, 0xa4, 0xa0,
+	0x08, 0xd9, 0x11, 0x51, 0xaa, 0x54, 0x49, 0x94, 0x16, 0x29, 0x0e, 0x4a, 0xca, 0x68, 0xc1, 0x23,
+	0x9f, 0x25, 0xcc, 0xfa, 0xbc, 0x6b, 0x10, 0x1d, 0xe5, 0x95, 0x94, 0x57, 0x5e, 0xc9, 0x0f, 0xf8,
+	0x1f, 0xae, 0xa4, 0xbc, 0x12, 0x7c, 0xcd, 0x95, 0xf7, 0x09, 0x27, 0xaf, 0xd1, 0x1d, 0x54, 0x54,
+	0xfb, 0x66, 0xe6, 0xcd, 0xbe, 0xf7, 0x34, 0xe4, 0xa3, 0x42, 0xa9, 0x7c, 0xae, 0xb8, 0x9b, 0x60,
+	0x10, 0x4a, 0x85, 0xc9, 0xff, 0x40, 0x4c, 0x7d, 0x9c, 0x3d, 0xd7, 0x4e, 0x9c, 0x08, 0x25, 0x68,
+	0xd5, 0xc7, 0x79, 0xe7, 0x43, 0x10, 0xaa, 0x8b, 0x74, 0xec, 0x4c, 0x44, 0xe4, 0x26, 0x38, 0xe5,
+	0x63, 0x37, 0x10, 0x49, 0x1a, 0xc9, 0xc3, 0x53, 0x52, 0xed, 0x6f, 0xc4, 0xfc, 0xa3, 0xb8, 0x42,
+	0xfa, 0x96, 0x98, 0x7f, 0xf9, 0x34, 0x45, 0x0b, 0xba, 0xd0, 0x6b, 0x7a, 0x65, 0x41, 0xdf, 0x91,
+	0xe6, 0x28, 0x8c, 0x50, 0x2a, 0x1e, 0xc5, 0x56, 0xa5, 0x0b, 0xbd, 0xaa, 0xf7, 0xd2, 0xb0, 0xdf,
+	0x93, 0xd6, 0xbf, 0x24, 0x54, 0xe8, 0xa1, 0x8c, 0xc5, 0x4c, 0x22, 0x6d, 0x93, 0xea, 0x10, 0x17,
+	0xfa, 0x8b, 0x86, 0x57, 0x40, 0xbb, 0x45, 0x5e, 0x7b, 0xc8, 0x7d, 0x0f, 0x2f, 0x53, 0x94, 0xca,
+	0xae, 0x13, 0xf3, 0x57, 0x14, 0xab, 0xe5, 0x60, 0x55, 0x21, 0x0d, 0xef, 0xe0, 0x9a, 0x0e, 0x48,
+	0xad, 0x20, 0xd1, 0xb6, 0xe3, 0xe3, 0xdc, 0x39, 0xe2, 0x77, 0x88, 0xee, 0x68, 0x87, 0xf6, 0x9b,
+	0x55, 0x66, 0xc1, 0x55, 0x66, 0xc1, 0x4d, 0x66, 0x01, 0x75, 0x49, 0xbd, 0x20, 0x8e, 0x16, 0xe2,
+	0xcc, 0x5a, 0x6d, 0x9d, 0x59, 0xf0, 0x19, 0xe8, 0x57, 0x62, 0x6a, 0xb3, 0xf4, 0x68, 0xd8, 0xa1,
+	0x1a, 0x9f, 0x84, 0x28, 0x75, 0x0a, 0x8d, 0x4d, 0xa1, 0xd3, 0x27, 0x44, 0x8f, 0xbf, 0xcb, 0xe5,
+	0x6c, 0x72, 0xb2, 0x5b, 0x62, 0x1d, 0xc7, 0xae, 0x5d, 0x67, 0x16, 0xf4, 0x80, 0x7e, 0x2a, 0x52,
+	0x71, 0x7f, 0x28, 0x7e, 0xff, 0x3c, 0x63, 0xcb, 0xf8, 0xd1, 0xdf, 0xee, 0x99, 0x71, 0xb7, 0x67,
+	0xc6, 0x6e, 0xcf, 0x60, 0x95, 0x33, 0xd8, 0xe4, 0x0c, 0x6e, 0x73, 0x06, 0xdb, 0x9c, 0xc1, 0x2e,
+	0x67, 0xf0, 0x90, 0x33, 0xe3, 0x31, 0x67, 0xb0, 0xbe, 0x67, 0xc6, 0xf8, 0x95, 0xbe, 0xd7, 0x97,
+	0xa7, 0x00, 0x00, 0x00, 0xff, 0xff, 0x30, 0xbf, 0xe7, 0xef, 0x05, 0x02, 0x00, 0x00,
 }

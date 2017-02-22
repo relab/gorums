@@ -3,14 +3,13 @@
 
 package gorums
 
-const config_qc_tmpl = `
+const config_correctable_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
 
 import (
-	"fmt"
 	"sync"
 
 	"golang.org/x/net/context"
@@ -20,96 +19,13 @@ import (
 
 {{range $elm := .Services}}
 
-{{if .Multicast}}
-
-// {{.MethodName}} is a one-way multicast operation, where args is sent to
-// every node in configuration c. The call is asynchronous and has no response
-// return value.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
-}
-
-{{- end -}}
-
-{{if or (.QuorumCall) (.Future) (.Correctable)}}
-
-// {{.TypeName}} encapsulates the reply from a {{.MethodName}} quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type {{.TypeName}} struct {
-	NodeIDs []uint32
-	*{{.FQRespName}}
-}
-
-func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
-}
-{{- end -}}
-
-{{if and (not (.PerNodeArg)) (.QuorumCall)}}
-// {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
-// and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
-}
-{{- end -}}
-
-{{if and (.PerNodeArg) (.QuorumCall)}}
-// {{.MethodName}} invokes the {{.MethodName}} on each node in configuration c,
-// with the argument returned by the provided perNodeArg function
-// and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, {{.MethodArg}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, {{.MethodArgUse}})
-}
-{{- end -}}
-
-{{if .Future}}
-
-// {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} quorum call invocation.
-type {{.MethodName}}Future struct {
-	reply *{{.TypeName}}
-	err   error
-	c     chan struct{}
-}
-
-// {{.MethodName}}Future asynchronously invokes a {{.MethodName}} quorum call
-// on configuration c and returns a {{.MethodName}}Future which can be used to
-// inspect the quorum call reply and error when available.
-func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Future {
-	f := new({{.MethodName}}Future)
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the {{.MethodName}}Future.
-// The method blocks until a reply or error is available.
-func (f *{{.MethodName}}Future) Get() (*{{.TypeName}}, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply and/or error is available for the {{.MethodName}}Future.
-func (f *{{.MethodName}}Future) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-
-{{- end -}}
-
 {{if .Correctable}}
 
 // {{.MethodName}}Correctable asynchronously invokes a
 // correctable {{.MethodName}} quorum call on configuration c and returns a
 // {{.MethodName}}Correctable which can be used to inspect any repies or errors
 // when available.
-func (c *Configuration) {{.MethodName}}Correctable(ctx context.Context, args *ReadRequest) *{{.MethodName}}Correctable {
+func (c *Configuration) {{.MethodName}}Correctable(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Correctable {
 	corr := &{{.MethodName}}Correctable{
 		level:  LevelNotSet,
 		donech: make(chan struct{}),
@@ -199,19 +115,26 @@ func (c *{{.MethodName}}Correctable) set(reply *{{.TypeName}}, level int, err er
 }
 
 {{- end -}}
+{{- end -}}
+`
+
+const config_correctable_prelim_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import (
+	"sync"
+
+	"golang.org/x/net/context"
+)
+
+{{- end}}
+
+{{range $elm := .Services}}
 
 {{if .CorrectablePrelim}}
-
-// {{.TypeName}} encapsulates the reply from a correctable {{.MethodName}} quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type {{.TypeName}} struct {
-	NodeIDs []uint32
-	*{{.FQRespName}}
-}
-
-func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
-}
 
 // {{.MethodName}}CorrectablePrelim asynchronously invokes a correctable {{.MethodName}} quorum call
 // with server side preliminary reply support on configuration c and returns a
@@ -308,7 +231,151 @@ func (c *{{.MethodName}}CorrectablePrelim) set(reply *{{.TypeName}}, level int, 
 }
 
 {{- end -}}
+{{- end -}}
+`
 
+const config_future_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import "golang.org/x/net/context"
+
+{{- end}}
+
+{{range $elm := .Services}}
+
+{{if .Future}}
+
+// {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} quorum call invocation.
+type {{.MethodName}}Future struct {
+	reply *{{.TypeName}}
+	err   error
+	c     chan struct{}
+}
+
+// {{.MethodName}}Future asynchronously invokes a {{.MethodName}} quorum call
+// on configuration c and returns a {{.MethodName}}Future which can be used to
+// inspect the quorum call reply and error when available.
+func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Future {
+	f := new({{.MethodName}}Future)
+	f.c = make(chan struct{}, 1)
+	go func() {
+		defer close(f.c)
+		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the {{.MethodName}}Future.
+// The method blocks until a reply or error is available.
+func (f *{{.MethodName}}Future) Get() (*{{.TypeName}}, error) {
+	<-f.c
+	return f.reply, f.err
+}
+
+// Done reports if a reply and/or error is available for the {{.MethodName}}Future.
+func (f *{{.MethodName}}Future) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
+{{- end -}}
+{{- end -}}
+`
+
+const config_multicast_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import "golang.org/x/net/context"
+
+{{- end}}
+
+{{range $elm := .Services}}
+
+{{if .Multicast}}
+
+// {{.MethodName}} is a one-way multicast operation, where args is sent to
+// every node in configuration c. The call is asynchronous and has no response
+// return value.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+}
+
+{{- end -}}
+{{- end -}}
+`
+
+const config_quorumcall_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import "golang.org/x/net/context"
+
+{{- end}}
+
+{{range $elm := .Services}}
+
+{{if .QuorumCall}}
+
+{{if .PerNodeArg}}
+
+// {{.MethodName}} invokes the {{.MethodName}} on each node in configuration c,
+// with the argument returned by the provided perNodeArg function
+// and returns the result as a {{.TypeName}}.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, {{.MethodArg}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, {{.MethodArgUse}})
+}
+
+{{else}}
+
+// {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
+// and returns the result as a {{.TypeName}}.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+}
+
+{{- end -}}
+{{- end -}}
+{{- end -}}
+`
+
+const config_shared_struct_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import "fmt"
+
+{{- end}}
+
+{{range $elm := .Services}}
+
+{{if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim)}}
+
+// {{.TypeName}} encapsulates the reply from a correctable {{.MethodName}} quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type {{.TypeName}} struct {
+	NodeIDs []uint32
+	*{{.FQRespName}}
+}
+
+func (r {{.TypeName}}) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
+}
+
+{{- end -}}
 {{- end -}}
 `
 
@@ -753,11 +820,16 @@ type QuorumSpec interface {
 `
 
 var templates = map[string]string{
-	"config_qc_tmpl":              config_qc_tmpl,
-	"mgr_correctable_tmpl":        mgr_correctable_tmpl,
-	"mgr_correctable_prelim_tmpl": mgr_correctable_prelim_tmpl,
-	"mgr_multicast_tmpl":          mgr_multicast_tmpl,
-	"mgr_quorumcall_tmpl":         mgr_quorumcall_tmpl,
-	"node_tmpl":                   node_tmpl,
-	"qspec_tmpl":                  qspec_tmpl,
+	"config_correctable_tmpl":        config_correctable_tmpl,
+	"config_correctable_prelim_tmpl": config_correctable_prelim_tmpl,
+	"config_future_tmpl":             config_future_tmpl,
+	"config_multicast_tmpl":          config_multicast_tmpl,
+	"config_quorumcall_tmpl":         config_quorumcall_tmpl,
+	"config_shared_struct_tmpl":      config_shared_struct_tmpl,
+	"mgr_correctable_tmpl":           mgr_correctable_tmpl,
+	"mgr_correctable_prelim_tmpl":    mgr_correctable_prelim_tmpl,
+	"mgr_multicast_tmpl":             mgr_multicast_tmpl,
+	"mgr_quorumcall_tmpl":            mgr_quorumcall_tmpl,
+	"node_tmpl":                      node_tmpl,
+	"qspec_tmpl":                     qspec_tmpl,
 }

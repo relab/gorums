@@ -1,0 +1,27 @@
+
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import "fmt"
+
+{{- end}}
+
+{{range $elm := .Services}}
+
+{{if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim)}}
+
+// {{.TypeName}} encapsulates the reply from a correctable {{.MethodName}} quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type {{.TypeName}} struct {
+	NodeIDs []uint32
+	*{{.FQRespName}}
+}
+
+func (r {{.TypeName}}) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
+}
+
+{{- end -}}
+{{- end -}}
