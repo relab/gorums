@@ -336,7 +336,7 @@ var _ = codes.OK
 
 // ReadTwoCorrectablePrelim asynchronously invokes a correctable ReadTwo quorum call
 // with server side preliminary reply support on configuration c and returns a
-// ReadTwoCorrectablePrelim which can be used to inspect any repies or errors
+// ReadTwoCorrectablePrelim which can be used to inspect any replies or errors
 // when available.
 func (c *Configuration) ReadTwoCorrectablePrelim(ctx context.Context, args *ReadRequest) *ReadTwoCorrectablePrelim {
 	corr := &ReadTwoCorrectablePrelim{
@@ -432,7 +432,7 @@ func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error
 
 // ReadCorrectable asynchronously invokes a
 // correctable Read quorum call on configuration c and returns a
-// ReadCorrectable which can be used to inspect any repies or errors
+// ReadCorrectable which can be used to inspect any replies or errors
 // when available.
 func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
 	corr := &ReadCorrectable{

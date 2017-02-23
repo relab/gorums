@@ -23,7 +23,7 @@ import (
 
 // {{.MethodName}}Correctable asynchronously invokes a
 // correctable {{.MethodName}} quorum call on configuration c and returns a
-// {{.MethodName}}Correctable which can be used to inspect any repies or errors
+// {{.MethodName}}Correctable which can be used to inspect any replies or errors
 // when available.
 func (c *Configuration) {{.MethodName}}Correctable(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Correctable {
 	corr := &{{.MethodName}}Correctable{
@@ -138,7 +138,7 @@ import (
 
 // {{.MethodName}}CorrectablePrelim asynchronously invokes a correctable {{.MethodName}} quorum call
 // with server side preliminary reply support on configuration c and returns a
-// {{.MethodName}}CorrectablePrelim which can be used to inspect any repies or errors
+// {{.MethodName}}CorrectablePrelim which can be used to inspect any replies or errors
 // when available.
 func (c *Configuration) {{.MethodName}}CorrectablePrelim(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}CorrectablePrelim {
 	corr := &{{.MethodName}}CorrectablePrelim{
