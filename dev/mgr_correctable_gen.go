@@ -3,13 +3,26 @@
 
 package dev
 
-import "golang.org/x/net/context"
+import (
+	"time"
+
+	"golang.org/x/net/context"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+)
+
+type readReplyCorrectable struct {
+	nid   uint32
+	reply *State
+	err   error
+}
 
 func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
 	replyChan := make(chan readReply, c.n)
 
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, args, replyChan)
+		go callGRPCReadCorrectable(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -50,4 +63,23 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 			return
 		}
 	}
+}
+
+func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/Read",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readReply{node.id, reply, err}
 }

@@ -115,6 +115,11 @@ templates:
 	@echo creating templates for gorums plugin code bundle
 	@go run $(GENTEMPLATES_MAIN_GO)
 
+.PHONY: tst
+tst: static templates reinstallprotoc
+	@echo generating tst output
+	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. ./tst/gorums_rpc.proto
+
 .PHONY: golden
 golden: static templates reinstallprotoc
 	@echo generating golden output
@@ -186,7 +191,7 @@ check: getchecktools
 		grep -vE '("_"|.pb.go)' ; \
 	done
 	@echo "errcheck"
-	@errcheck -ignore 'bytes:WriteString,encoding/binary:Write,io:WriteString,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close' $(GORUMS_PKGS)
+	@errcheck -ignore 'bytes:WriteString,encoding/binary:Write,io:WriteString,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close,github.com/relab/gorums/tst:.*' $(GORUMS_PKGS)
 	@echo "ineffassign"
 	@for dir in $(GORUMS_DIRS); do \
 		ineffassign -n $$dir ; \

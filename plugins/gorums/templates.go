@@ -387,7 +387,14 @@ const mgr_correctable_tmpl = `
 {{if not .IgnoreImports}}
 package {{$pkgName}}
 
-import "golang.org/x/net/context"
+import (
+	"time"
+
+	"golang.org/x/net/context"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+)
 
 {{end}}
 
@@ -395,11 +402,17 @@ import "golang.org/x/net/context"
 
 {{if .Correctable}}
 
+type {{.UnexportedTypeName}}Correctable struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+
 func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *Configuration, corr *{{.MethodName}}Correctable, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
+		go callGRPC{{.MethodName}}Correctable(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -445,8 +458,27 @@ func (m *Manager) {{.UnexportedMethodName}}Correctable(ctx context.Context, c *C
 	}
 }
 
+func callGRPC{{.MethodName}}Correctable(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.FQRespName}})
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+}
+
 {{- end -}}
-{{end}}
+{{- end -}}
 `
 
 const mgr_correctable_prelim_tmpl = `
@@ -700,7 +732,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 }
 
 {{- end -}}
-{{end}}
+{{- end -}}
 `
 
 const node_tmpl = `
