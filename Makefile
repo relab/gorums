@@ -21,16 +21,18 @@ PROTOC_PLUGIN_PKG_PATH 		:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
 PROTOC_PLUGIN_NAME 		:= gorums_out
 PROTOC_I_FLAG			:= ../../../:.
 
-TESTDATA_REG			:= testdata/register_golden
-
+TESTDATA_GORUMS_RPC			:= testdata/gorums_rpc_golden
 GORUMS_RPC_PROTO_NAME		:= gorums_rpc.proto
 GORUMS_RPC_PBGO_NAME		:= gorums_rpc.pb.go
 GORUMS_RPC_PROTO_DEV_RPATH	:= $(DEV_PKG)/$(GORUMS_RPC_PROTO_NAME)
+GORUMS_RPC_PROTO_TEST_RPATH	:= $(TESTDATA_GORUMS_RPC)/$(GORUMS_RPC_PROTO_NAME)
+GORUMS_RPC_PBGO_TEST_RPATH	:= $(TESTDATA_GORUMS_RPC)/$(GORUMS_RPC_PBGO_NAME)
 
+TESTDATA_REG			:= testdata/register_golden
 REG_PROTO_NAME			:= register.proto
 REG_PBGO_NAME			:= register.pb.go
 REG_PROTO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PROTO_NAME)
-REG_PROTO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PROTO_NAME)
+REG_PROTO_TEST_RPATH	:= $(TESTDATA_REG)/$(REG_PROTO_NAME)
 REG_PBGO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PBGO_NAME)
 
 GOGOPROTO_ALIAS 		:= google/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor
@@ -115,11 +117,6 @@ templates:
 	@echo creating templates for gorums plugin code bundle
 	@go run $(GENTEMPLATES_MAIN_GO)
 
-.PHONY: tst
-tst: static templates reinstallprotoc
-	@echo generating tst output
-	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. ./tst/gorums_rpc.proto
-
 .PHONY: golden
 golden: static templates reinstallprotoc
 	@echo generating golden output
@@ -133,11 +130,17 @@ dev: static templates reinstallprotoc
 	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 	git checkout $(REG_PBGO_TEST_RPATH)
 
-.PHONY: goldenanddev
-goldenanddev: static templates reinstallprotoc
+.PHONY: OLDgoldenanddev
+OLDgoldenanddev: static templates reinstallprotoc
 	@echo generating golden output and _gen.go files for dev
 	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
 	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
+
+.PHONY: goldenanddev
+goldenanddev: static templates reinstallprotoc
+	@echo generating golden output and _gen.go files for dev
+	cp $(GORUMS_RPC_PROTO_DEV_RPATH) $(GORUMS_RPC_PROTO_TEST_RPATH)
+	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(GORUMS_RPC_PROTO_TEST_RPATH)
 
 .PHONY: profcpu
 profcpu:
@@ -191,7 +194,7 @@ check: getchecktools
 		grep -vE '("_"|.pb.go)' ; \
 	done
 	@echo "errcheck"
-	@errcheck -ignore 'bytes:WriteString,encoding/binary:Write,io:WriteString,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close,github.com/relab/gorums/tst:.*' $(GORUMS_PKGS)
+	@errcheck -ignore 'bytes:WriteString,encoding/binary:Write,io:WriteString,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close' $(GORUMS_PKGS)
 	@echo "ineffassign"
 	@for dir in $(GORUMS_DIRS); do \
 		ineffassign -n $$dir ; \

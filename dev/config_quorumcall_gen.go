@@ -5,14 +5,27 @@ package dev
 
 import "golang.org/x/net/context"
 
-// Read invokes a Read quorum call on configuration c
-// and returns the result as a ReadReply.
-func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(ctx, c, args)
+// ReadQC invokes a ReadQC quorum call on configuration c
+// and returns the result as a ReadQCReply.
+func (c *Configuration) ReadQC(ctx context.Context, args *ReadReq) (*ReadQCReply, error) {
+	return c.mgr.readQC(ctx, c, args)
 }
 
-// Write invokes a Write quorum call on configuration c
-// and returns the result as a WriteReply.
-func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
-	return c.mgr.write(ctx, c, args)
+// ReadQCCustomReturn invokes a ReadQCCustomReturn quorum call on configuration c
+// and returns the result as a ReadQCCustomReturnReply.
+func (c *Configuration) ReadQCCustomReturn(ctx context.Context, args *ReadReq) (*ReadQCCustomReturnReply, error) {
+	return c.mgr.readQCCustomReturn(ctx, c, args)
+}
+
+// WriteQCPerNode invokes the WriteQCPerNode on each node in configuration c,
+// with the argument returned by the provided perNodeArg function
+// and returns the result as a WriteQCPerNodeReply.
+func (c *Configuration) WriteQCPerNode(ctx context.Context, perNodeArg func(nodeID uint32) *Reply) (*WriteQCPerNodeReply, error) {
+	return c.mgr.writeQCPerNode(ctx, c, perNodeArg)
+}
+
+// WriteQCWithReq invokes a WriteQCWithReq quorum call on configuration c
+// and returns the result as a WriteQCWithReqReply.
+func (c *Configuration) WriteQCWithReq(ctx context.Context, args *Reply) (*WriteQCWithReqReply, error) {
+	return c.mgr.writeQCWithReq(ctx, c, args)
 }

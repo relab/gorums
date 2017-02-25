@@ -19,9 +19,9 @@ type QuorumSpec interface {
 {{end}}
 
 {{if .Correctable}}
-	// {{.MethodName}}CorrectableQF is the quorum function for the {{.MethodName}}
+	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// correctable quorum call method.
-	{{.MethodName}}CorrectableQF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
+	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
 {{end}}
 
 {{if .CorrectablePrelim}}

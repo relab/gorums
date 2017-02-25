@@ -13,16 +13,16 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-type readReply struct {
+type readQCReply struct {
 	nid   uint32
-	reply *State
+	reply *Reply
 	err   error
 }
 
-func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadReply, err error) {
+func (m *Manager) readQC(ctx context.Context, c *Configuration, args *ReadReq) (r *ReadQCReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadQC")
 		defer ti.tr.Finish()
 
 		ti.firstLine.cid = c.id
@@ -34,7 +34,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
 				ids:   r.NodeIDs,
-				reply: r.State,
+				reply: r.Reply,
 				err:   err,
 			}, false)
 			if err != nil {
@@ -43,19 +43,19 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 		}()
 	}
 
-	replyChan := make(chan readReply, c.n)
+	replyChan := make(chan readQCReply, c.n)
 
 	if m.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, args, replyChan)
+		go callGRPCReadQC(ctx, n, args, replyChan)
 	}
 
 	var (
-		replyValues = make([]*State, 0, c.n)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
+		replyValues = make([]*Reply, 0, c.n)
+		reply       = &ReadQCReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -72,7 +72,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
+			if reply.Reply, quorum = c.qspec.ReadQCQF(replyValues); quorum {
 				return reply, nil
 			}
 		case <-ctx.Done():
@@ -85,12 +85,12 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 	}
 }
 
-func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
-	reply := new(State)
+func callGRPCReadQC(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readQCReply) {
+	reply := new(Reply)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/Read",
+		"/dev.GorumsRPC/ReadQC",
 		args,
 		reply,
 		node.conn,
@@ -101,19 +101,19 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 	default:
 		node.setLastErr(err)
 	}
-	replyChan <- readReply{node.id, reply, err}
+	replyChan <- readQCReply{node.id, reply, err}
 }
 
-type writeReply struct {
+type readQCCustomReturnReply struct {
 	nid   uint32
-	reply *WriteResponse
+	reply *Reply
 	err   error
 }
 
-func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
+func (m *Manager) readQCCustomReturn(ctx context.Context, c *Configuration, args *ReadReq) (r *ReadQCCustomReturnReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadQCCustomReturn")
 		defer ti.tr.Finish()
 
 		ti.firstLine.cid = c.id
@@ -125,7 +125,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
 				ids:   r.NodeIDs,
-				reply: r.WriteResponse,
+				reply: r.Reply,
 				err:   err,
 			}, false)
 			if err != nil {
@@ -134,19 +134,19 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 		}()
 	}
 
-	replyChan := make(chan writeReply, c.n)
+	replyChan := make(chan readQCCustomReturnReply, c.n)
 
 	if m.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCWrite(ctx, n, args, replyChan)
+		go callGRPCReadQCCustomReturn(ctx, n, args, replyChan)
 	}
 
 	var (
-		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
+		replyValues = make([]*Reply, 0, c.n)
+		reply       = &ReadQCCustomReturnReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -163,7 +163,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteQF(args, replyValues); quorum {
+			if reply.Reply, quorum = c.qspec.ReadQCCustomReturnQF(replyValues); quorum {
 				return reply, nil
 			}
 		case <-ctx.Done():
@@ -176,12 +176,12 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	}
 }
 
-func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<- writeReply) {
-	reply := new(WriteResponse)
+func callGRPCReadQCCustomReturn(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readQCCustomReturnReply) {
+	reply := new(Reply)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/Write",
+		"/dev.GorumsRPC/ReadQCCustomReturn",
 		args,
 		reply,
 		node.conn,
@@ -192,5 +192,278 @@ func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<
 	default:
 		node.setLastErr(err)
 	}
-	replyChan <- writeReply{node.id, reply, err}
+	replyChan <- readQCCustomReturnReply{node.id, reply, err}
+}
+
+type readQCFutureReply struct {
+	nid   uint32
+	reply *Reply
+	err   error
+}
+
+func (m *Manager) readQCFuture(ctx context.Context, c *Configuration, args *ReadReq) (r *ReadQCFutureReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadQCFuture")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.Reply,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan readQCFutureReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCReadQCFuture(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Reply, 0, c.n)
+		reply       = &ReadQCFutureReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.Reply, quorum = c.qspec.ReadQCFutureQF(replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCReadQCFuture(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readQCFutureReply) {
+	reply := new(Reply)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.GorumsRPC/ReadQCFuture",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readQCFutureReply{node.id, reply, err}
+}
+
+type writeQCPerNodeReply struct {
+	nid   uint32
+	reply *WriteResp
+	err   error
+}
+
+func (m *Manager) writeQCPerNode(ctx context.Context, c *Configuration, perNodeArg func(nodeID uint32) *Reply) (r *WriteQCPerNodeReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteQCPerNode")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.WriteResp,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan writeQCPerNodeReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: perNodeArg}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCWriteQCPerNode(ctx, n, perNodeArg(n.id), replyChan)
+	}
+
+	var (
+		replyValues = make([]*WriteResp, 0, c.n)
+		reply       = &WriteQCPerNodeReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.WriteResp, quorum = c.qspec.WriteQCPerNodeQF(replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCWriteQCPerNode(ctx context.Context, node *Node, args *Reply, replyChan chan<- writeQCPerNodeReply) {
+	reply := new(WriteResp)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.GorumsRPC/WriteQCPerNode",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- writeQCPerNodeReply{node.id, reply, err}
+}
+
+type writeQCWithReqReply struct {
+	nid   uint32
+	reply *WriteResp
+	err   error
+}
+
+func (m *Manager) writeQCWithReq(ctx context.Context, c *Configuration, args *Reply) (r *WriteQCWithReqReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteQCWithReq")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.WriteResp,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan writeQCWithReqReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCWriteQCWithReq(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*WriteResp, 0, c.n)
+		reply       = &WriteQCWithReqReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.WriteResp, quorum = c.qspec.WriteQCWithReqQF(args, replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCWriteQCWithReq(ctx context.Context, node *Node, args *Reply, replyChan chan<- writeQCWithReqReply) {
+	reply := new(WriteResp)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.GorumsRPC/WriteQCWithReq",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- writeQCWithReqReply{node.id, reply, err}
 }

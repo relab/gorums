@@ -49,9 +49,9 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
+			reply.{{.FQRespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
 {{else}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
+			reply.{{.FQRespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
 {{end}}
 			if quorum {
 				corr.set(reply, rlevel, nil, true)

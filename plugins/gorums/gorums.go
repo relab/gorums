@@ -278,17 +278,17 @@ func logEnabled() bool {
 func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }
 
 type serviceMethod struct {
-	OrigName             string
 	MethodName           string
 	UnexportedMethodName string
 	RPCName              string
 	MethodArg            string
 	MethodArgUse         string
 	MethodArgCall        string
+	CustomReturnType     string
 
 	FQRespName string
-	RespName   string
-	FQReqName  string
+	// RespName   string //TODO remove if FQRespName is enough
+	FQReqName string
 
 	TypeName           string
 	UnexportedTypeName string
@@ -314,9 +314,9 @@ func (p smSlice) Less(i, j int) bool {
 	} else if p[i].ServName > p[j].ServName {
 		return false
 	} else {
-		if p[i].OrigName < p[j].OrigName {
+		if p[i].MethodName < p[j].MethodName {
 			return true
-		} else if p[i].OrigName > p[j].OrigName {
+		} else if p[i].MethodName > p[j].MethodName {
 			return false
 		} else {
 			return false
@@ -338,19 +338,23 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 				continue
 			}
 
-			sm.OrigName = method.GetName()
-			sm.MethodName = generator.CamelCase(sm.OrigName)
+			sm.MethodName = generator.CamelCase(method.GetName())
 			sm.RPCName = sm.MethodName // sm.MethodName may be overwritten if method name conflict
 			sm.UnexportedMethodName = unexport(sm.MethodName)
-			sm.FQRespName = g.fqTypeName(method.GetOutputType())
-			sm.RespName = g.typeName(method.GetOutputType())
+
 			sm.FQReqName = g.fqTypeName(method.GetInputType())
+			sm.FQRespName = g.fqTypeName(method.GetOutputType())
+			// sm.RespName = g.typeName(method.GetOutputType()) //TODO always same as FQRespName??
 			sm.TypeName = sm.MethodName + "Reply"
 			sm.UnexportedTypeName = unexport(sm.TypeName)
 			sm.ServName = service.GetName()
 			if sm.TypeName == sm.FQRespName {
 				sm.TypeName += "_"
 			}
+			fmt.Fprintf(os.Stderr, "%v\n \tRPCName\t\t%v\n \tUnexpMethodName\t%v\n \tFQRespName\t%v\n \tFQReqName\t%v\n \tTypeName\t%v\n \tUnexpTypeName\t%v\n \tServName\t%v\n ",
+				sm.MethodName, sm.RPCName, sm.UnexportedMethodName, sm.FQRespName, sm.FQReqName, sm.TypeName, sm.UnexportedTypeName, sm.ServName,
+			)
+
 			sm.MethodArg = "args *" + sm.FQReqName
 			sm.MethodArgCall = "args"
 			sm.MethodArgUse = "args"
@@ -360,8 +364,9 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 				sm.MethodArgUse = "perNodeArg"
 				fmt.Fprintf(os.Stderr, "per_node %v -- %v\n", sm.MethodName, sm.MethodArg)
 			}
-			fmt.Fprintf(os.Stderr, "xxxxx %v -- %v\n", sm.MethodName, sm.MethodArg)
+			fmt.Fprintf(os.Stderr, "xxxxx %v -- %v (custom return type: %v)\n", sm.MethodName, sm.MethodArg, sm.CustomReturnType)
 
+			//TODO Why do we need to check for equal methods?? gRPC does not allow equally named methods.
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, sm)
 			smethods[sm.MethodName] = methodsForName
@@ -379,7 +384,6 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			continue
 		default:
 			for _, sm := range methodsForName {
-				sm.OrigName = sm.ServName + sm.OrigName
 				sm.MethodName = sm.ServName + sm.MethodName
 				sm.UnexportedMethodName = unexport(sm.MethodName)
 				sm.TypeName = sm.MethodName + "Reply"
@@ -406,45 +410,69 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		Multicast:         hasMulticastExtension(method),
 		QFWithReq:         hasQFWithReqExtension(method),
 		PerNodeArg:        hasPerNodeArgExtension(method),
+		CustomReturnType:  getCustomReturnTypeExtension(method),
+	}
+
+	mutuallyIncompatible := map[string]bool{
+		qcName():     sm.QuorumCall,
+		futureName(): sm.Future,
+		corrName():   sm.Correctable,
+		corrPrName(): sm.CorrectablePrelim,
+		mcastName():  sm.Multicast,
+	}
+	firstOption := ""
+	for optionName, optionSet := range mutuallyIncompatible {
+		if optionSet {
+			if firstOption != "" {
+				return nil, fmt.Errorf(
+					"%s.%s: cannot combine options: '%s' and '%s'",
+					service, method.GetName(), firstOption, optionName,
+				)
+			}
+			firstOption = optionName
+		}
 	}
 
 	isQuorumCallVariant := isQuorumCallVariant(sm)
 
 	switch {
-
-	case !isQuorumCallVariant && !sm.Multicast:
-		return nil, nil
-
-	case isQuorumCallVariant && sm.Multicast:
+	case !isQuorumCallVariant && sm.CustomReturnType != "":
+		// only QC variants can define custom return type
+		// because we want to avoid rewriting the plain gRPC methods
 		return nil, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: both 'qc/qc-future/correctable/per-node-arg' and 'multicast'",
-			service, method.GetName(),
+			"%s.%s: cannot combine non-quorum call method with the '%s' option",
+			service, method.GetName(), custRetName(),
 		)
 
-	case sm.QFWithReq && !isQuorumCallVariant:
+	case !isQuorumCallVariant && sm.QFWithReq:
+		// only QC variants need to process replies
 		return nil, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: method not a quorum call variant but has specified 'qf_with_req'",
-			service, method.GetName(),
+			"%s.%s: cannot combine non-quorum call method with the '%s' option",
+			service, method.GetName(), qfreqName(),
 		)
 
 	case sm.Multicast && !method.GetClientStreaming():
 		return nil, fmt.Errorf(
-			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
-			service, method.GetName(),
+			"%s.%s: '%s' option is only valid for client-server streams methods",
+			service, method.GetName(), mcastName(),
 		)
 
-	case method.GetServerStreaming() && !sm.CorrectablePrelim:
+	case !sm.CorrectablePrelim && method.GetServerStreaming():
 		return nil, fmt.Errorf(
-			"%s.%s: server-client streams only supported for 'correctable_pr' option",
-			service, method.GetName(),
+			"%s.%s: '%s' option is only valid for server-client streams",
+			service, method.GetName(), corrPrName(),
 		)
+
+	case !isQuorumCallVariant && !sm.Multicast:
+		// plain gRPC; no further processing is done by gorums plugin
+		return nil, nil
 
 	default:
+		// all good
 		return sm, nil
-
 	}
 }
 
 func isQuorumCallVariant(sm *serviceMethod) bool {
-	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectablePrelim || sm.PerNodeArg
+	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectablePrelim
 }

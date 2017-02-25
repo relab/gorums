@@ -1,0 +1,197 @@
+
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import (
+	"sync"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+
+	"golang.org/x/net/context")
+
+{{- end}}
+
+{{range $elm := .Services}}
+
+{{if .Correctable}}
+
+/* Methods on Configuration and the correctable struct {{.MethodName}} */
+
+// {{.MethodName}} is a reference to a correctable {{.MethodName}} quorum call.
+type {{.MethodName}} struct {
+	sync.Mutex
+	reply    *{{.TypeName}}
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+
+// {{.MethodName}} asynchronously invokes a
+// correctable {{.MethodName}} quorum call on configuration c and returns a
+// {{.MethodName}} which can be used to inspect any replies or errors
+// when available.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
+	corr := &{{.MethodName}}{
+		level:  LevelNotSet,
+		donech: make(chan struct{}),
+	}
+	go func() {
+		c.mgr.{{.UnexportedMethodName}}(ctx, c, corr, args)
+	}()
+	return corr
+}
+
+// Get returns the reply, level and any error associated with the
+// {{.MethodName}}. The method does not block until a (possibly
+// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// reply has yet been received. The Done or Watch methods should be used to
+// ensure that a reply is available.
+func (c *{{.MethodName}}) Get() (*{{.TypeName}}, int, error) {
+	c.Lock()
+	defer c.Unlock()
+	return c.reply, c.level, c.err
+}
+
+// Done returns a channel that's closed when the correctable {{.MethodName}}
+// quorum call is done. A call is considered done when the quorum function has
+// signaled that a quorum of replies was received or that the call returned an
+// error.
+func (c *{{.MethodName}}) Done() <-chan struct{} {
+	return c.donech
+}
+
+// Watch returns a channel that's closed when a reply or error at or above the
+// specified level is available. If the call is done, the channel is closed
+// disregardless of the specified level.
+func (c *{{.MethodName}}) Watch(level int) <-chan struct{} {
+	ch := make(chan struct{})
+	c.Lock()
+	if level < c.level {
+		close(ch)
+		c.Unlock()
+		return ch
+	}
+	c.watchers = append(c.watchers, &struct {
+		level int
+		ch    chan struct{}
+	}{level, ch})
+	c.Unlock()
+	return ch
+}
+
+func (c *{{.MethodName}}) set(reply *{{.TypeName}}, level int, err error, done bool) {
+	c.Lock()
+	if c.done {
+		c.Unlock()
+		panic("set(...) called on a done correctable")
+	}
+	c.reply, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			if watcher != nil {
+				close(watcher.ch)
+			}
+		}
+		c.Unlock()
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+			c.watchers[i] = nil
+		}
+	}
+	c.Unlock()
+}
+
+/* Methods on Manager for correctable method {{.MethodName}} */
+
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, corr *{{.MethodName}}, args *{{.FQReqName}}) {
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues     = make([]*{{.FQRespName}}, 0, c.n)
+		reply           = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
+		clevel      	= LevelNotSet
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			reply.{{.FQRespName}}, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
+{{else}}
+			reply.{{.FQRespName}}, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
+{{end}}
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.FQRespName}})
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+}
+
+{{- end -}}
+{{- end -}}

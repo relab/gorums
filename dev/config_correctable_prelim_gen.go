@@ -9,26 +9,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-// ReadTwoCorrectablePrelim asynchronously invokes a correctable ReadTwo quorum call
-// with server side preliminary reply support on configuration c and returns a
-// ReadTwoCorrectablePrelim which can be used to inspect any replies or errors
-// when available.
-func (c *Configuration) ReadTwoCorrectablePrelim(ctx context.Context, args *ReadRequest) *ReadTwoCorrectablePrelim {
-	corr := &ReadTwoCorrectablePrelim{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
-	}
-	go func() {
-		c.mgr.readTwoCorrectablePrelim(ctx, c, corr, args)
-	}()
-	return corr
-}
-
-// ReadTwoCorrectablePrelim is a reference to a correctable Read quorum call
+// ReadCorrectablePrelim is a reference to a correctable quorum call
 // with server side preliminary reply support.
-type ReadTwoCorrectablePrelim struct {
-	mu       sync.Mutex
-	reply    *ReadTwoReply
+type ReadCorrectablePrelim struct {
+	sync.Mutex
+	reply    *ReadCorrectablePrelimReply
 	level    int
 	err      error
 	done     bool
@@ -39,48 +24,63 @@ type ReadTwoCorrectablePrelim struct {
 	donech chan struct{}
 }
 
+// ReadCorrectablePrelim asynchronously invokes a correctable ReadCorrectablePrelim quorum call
+// with server side preliminary reply support on configuration c and returns a
+// ReadCorrectablePrelim which can be used to inspect any replies or errors
+// when available.
+func (c *Configuration) ReadCorrectablePrelim(ctx context.Context, args *ReadReq) *ReadCorrectablePrelim {
+	corr := &ReadCorrectablePrelim{
+		level:  LevelNotSet,
+		donech: make(chan struct{}),
+	}
+	go func() {
+		c.mgr.readCorrectablePrelimCorrectablePrelim(ctx, c, corr, args)
+	}()
+	return corr
+}
+
 // Get returns the reply, level and any error associated with the
-// ReadTwoCorrectablePremlim. The method does not block until a (possibly
+// ReadCorrectablePrelimCorrectablePremlim. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadTwoCorrectablePrelim) Get() (*ReadTwoReply, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *ReadCorrectablePrelim) Get() (*ReadCorrectablePrelimReply, int, error) {
+	c.Lock()
+	defer c.Unlock()
 	return c.reply, c.level, c.err
 }
 
-// Done returns a channel that's closed when the correctable ReadTwo
+// Done returns a channel that's closed when the correctable ReadCorrectablePrelim
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
-func (c *ReadTwoCorrectablePrelim) Done() <-chan struct{} {
+func (c *ReadCorrectablePrelim) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // disregardless of the specified level.
-func (c *ReadTwoCorrectablePrelim) Watch(level int) <-chan struct{} {
+func (c *ReadCorrectablePrelim) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
-	c.mu.Lock()
+	c.Lock()
 	if level < c.level {
 		close(ch)
-		c.mu.Unlock()
+		c.Unlock()
 		return ch
 	}
 	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
-	c.mu.Unlock()
+	c.Unlock()
 	return ch
 }
 
-func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error, done bool) {
-	c.mu.Lock()
+func (c *ReadCorrectablePrelim) set(reply *ReadCorrectablePrelimReply, level int, err error, done bool) {
+	c.Lock()
 	if c.done {
-		c.mu.Unlock()
+		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
 	c.reply, c.level, c.err, c.done = reply, level, err, done
@@ -91,7 +91,7 @@ func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error
 				close(watcher.ch)
 			}
 		}
-		c.mu.Unlock()
+		c.Unlock()
 		return
 	}
 	for i := range c.watchers {
@@ -100,5 +100,5 @@ func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error
 			c.watchers[i] = nil
 		}
 	}
-	c.mu.Unlock()
+	c.Unlock()
 }

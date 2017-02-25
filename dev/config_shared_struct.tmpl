@@ -12,6 +12,9 @@ import "fmt"
 
 {{if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim)}}
 
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
+//(This file could maybe hold all types of structs for the different call semantics)
+
 // {{.TypeName}} encapsulates the reply from a correctable {{.MethodName}} quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type {{.TypeName}} struct {
@@ -20,7 +23,7 @@ type {{.TypeName}} struct {
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.FQRespName}})
 }
 
 {{- end -}}

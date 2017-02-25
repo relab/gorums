@@ -5,19 +5,32 @@ package dev
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
-	// ReadQF is the quorum function for the Read
-	// quorum call method.
-	ReadQF(replies []*State) (*State, bool)
 
-	// ReadCorrectableQF is the quorum function for the Read
+	// ReadCorrectableQF is the quorum function for the ReadCorrectable
 	// correctable quorum call method.
-	ReadCorrectableQF(replies []*State) (*State, int, bool)
+	ReadCorrectableQF(replies []*Reply) (*Reply, int, bool)
 
-	// ReadTwoCorrectablePrelimQF is the quorum function for the ReadTwo
+	// ReadCorrectablePrelimCorrectablePrelimQF is the quorum function for the ReadCorrectablePrelim
 	// correctable prelim quourm call method.
-	ReadTwoCorrectablePrelimQF(replies []*State) (*State, int, bool)
+	ReadCorrectablePrelimCorrectablePrelimQF(replies []*Reply) (*Reply, int, bool)
 
-	// WriteQF is the quorum function for the Write
+	// ReadQCQF is the quorum function for the ReadQC
 	// quorum call method.
-	WriteQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
+	ReadQCQF(replies []*Reply) (*Reply, bool)
+
+	// ReadQCCustomReturnQF is the quorum function for the ReadQCCustomReturn
+	// quorum call method.
+	ReadQCCustomReturnQF(replies []*Reply) (*Reply, bool)
+
+	// ReadQCFutureQF is the quorum function for the ReadQCFuture
+	// quorum call method.
+	ReadQCFutureQF(replies []*Reply) (*Reply, bool)
+
+	// WriteQCPerNodeQF is the quorum function for the WriteQCPerNode
+	// quorum call method.
+	WriteQCPerNodeQF(replies []*WriteResp) (*WriteResp, bool)
+
+	// WriteQCWithReqQF is the quorum function for the WriteQCWithReq
+	// quorum call method.
+	WriteQCWithReqQF(req *Reply, replies []*WriteResp) (*WriteResp, bool)
 }

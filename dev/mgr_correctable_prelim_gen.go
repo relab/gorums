@@ -9,22 +9,22 @@ import (
 	"golang.org/x/net/context"
 )
 
-type readTwoReply struct {
+type readCorrectablePrelimReply struct {
 	nid   uint32
-	reply *State
+	reply *Reply
 	err   error
 }
 
-func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
-	replyChan := make(chan readTwoReply, c.n)
+func (m *Manager) readCorrectablePrelimCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadCorrectablePrelimCorrectablePrelim, args *ReadReq) {
+	replyChan := make(chan readCorrectablePrelimReply, c.n)
 
 	for _, n := range c.nodes {
-		go callGRPCReadTwoStream(ctx, n, args, replyChan)
+		go callGRPCReadCorrectablePrelimStream(ctx, n, args, replyChan)
 	}
 
 	var (
-		replyValues = make([]*State, 0, c.n*2)
-		reply       = &ReadTwoReply{NodeIDs: make([]uint32, 0, c.n)}
+		replyValues = make([]*Reply, 0, c.n*2)
+		reply       = &ReadCorrectablePrelimReply{NodeIDs: make([]uint32, 0, c.n)}
 		clevel      = LevelNotSet
 		rlevel      int
 		errCount    int
@@ -40,7 +40,7 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 				break
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
+			reply.Reply, rlevel, quorum = c.qspec.ReadCorrectablePrelimCorrectablePrelimQF(replyValues)
 
 			if quorum {
 				corr.set(reply, rlevel, nil, true)
@@ -62,11 +62,11 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 	}
 }
 
-func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
-	x := NewRegisterClient(node.conn)
-	y, err := x.ReadTwo(ctx, args)
+func callGRPCReadCorrectablePrelimStream(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readCorrectablePrelimReply) {
+	x := NewGorumsRPCClient(node.conn)
+	y, err := x.ReadCorrectablePrelim(ctx, args)
 	if err != nil {
-		replyChan <- readTwoReply{node.id, nil, err}
+		replyChan <- readCorrectablePrelimReply{node.id, nil, err}
 		return
 	}
 
@@ -75,7 +75,7 @@ func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, r
 		if err == io.EOF {
 			return
 		}
-		replyChan <- readTwoReply{node.id, reply, err}
+		replyChan <- readCorrectablePrelimReply{node.id, reply, err}
 		if err != nil {
 			return
 		}

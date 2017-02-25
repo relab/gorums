@@ -16,25 +16,10 @@ import (
 
 {{if .CorrectablePrelim}}
 
-// {{.MethodName}}CorrectablePrelim asynchronously invokes a correctable {{.MethodName}} quorum call
-// with server side preliminary reply support on configuration c and returns a
-// {{.MethodName}}CorrectablePrelim which can be used to inspect any replies or errors
-// when available.
-func (c *Configuration) {{.MethodName}}CorrectablePrelim(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}CorrectablePrelim {
-	corr := &{{.MethodName}}CorrectablePrelim{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
-	}
-	go func() {
-		c.mgr.{{.UnexportedMethodName}}CorrectablePrelim(ctx, c, corr, args)
-	}()
-	return corr
-}
-
-// {{.MethodName}}CorrectablePrelim is a reference to a correctable Read quorum call
+// {{.MethodName}} is a reference to a correctable quorum call
 // with server side preliminary reply support.
-type {{.MethodName}}CorrectablePrelim struct {
-	mu       sync.Mutex
+type {{.MethodName}} struct {
+	sync.Mutex
 	reply    *{{.TypeName}}
 	level    int
 	err      error
@@ -46,14 +31,29 @@ type {{.MethodName}}CorrectablePrelim struct {
 	donech chan struct{}
 }
 
+// {{.MethodName}} asynchronously invokes a correctable {{.MethodName}} quorum call
+// with server side preliminary reply support on configuration c and returns a
+// {{.MethodName}} which can be used to inspect any replies or errors
+// when available.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
+	corr := &{{.MethodName}}{
+		level:  LevelNotSet,
+		donech: make(chan struct{}),
+	}
+	go func() {
+		c.mgr.{{.UnexportedMethodName}}CorrectablePrelim(ctx, c, corr, args)
+	}()
+	return corr
+}
+
 // Get returns the reply, level and any error associated with the
 // {{.MethodName}}CorrectablePremlim. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *{{.MethodName}}CorrectablePrelim) Get() (*{{.TypeName}}, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *{{.MethodName}}) Get() (*{{.TypeName}}, int, error) {
+	c.Lock()
+	defer c.Unlock()
 	return c.reply, c.level, c.err
 }
 
@@ -61,33 +61,33 @@ func (c *{{.MethodName}}CorrectablePrelim) Get() (*{{.TypeName}}, int, error) {
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
-func (c *{{.MethodName}}CorrectablePrelim) Done() <-chan struct{} {
+func (c *{{.MethodName}}) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // disregardless of the specified level.
-func (c *{{.MethodName}}CorrectablePrelim) Watch(level int) <-chan struct{} {
+func (c *{{.MethodName}}) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
-	c.mu.Lock()
+	c.Lock()
 	if level < c.level {
 		close(ch)
-		c.mu.Unlock()
+		c.Unlock()
 		return ch
 	}
 	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
-	c.mu.Unlock()
+	c.Unlock()
 	return ch
 }
 
-func (c *{{.MethodName}}CorrectablePrelim) set(reply *{{.TypeName}}, level int, err error, done bool) {
-	c.mu.Lock()
+func (c *{{.MethodName}}) set(reply *{{.TypeName}}, level int, err error, done bool) {
+	c.Lock()
 	if c.done {
-		c.mu.Unlock()
+		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
 	c.reply, c.level, c.err, c.done = reply, level, err, done
@@ -98,7 +98,7 @@ func (c *{{.MethodName}}CorrectablePrelim) set(reply *{{.TypeName}}, level int, 
 				close(watcher.ch)
 			}
 		}
-		c.mu.Unlock()
+		c.Unlock()
 		return
 	}
 	for i := range c.watchers {
@@ -107,7 +107,7 @@ func (c *{{.MethodName}}CorrectablePrelim) set(reply *{{.TypeName}}, level int, 
 			c.watchers[i] = nil
 		}
 	}
-	c.mu.Unlock()
+	c.Unlock()
 }
 
 {{- end -}}
