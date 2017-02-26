@@ -7,6 +7,7 @@
 package {{$pkgName}}
 
 import (
+	"fmt"
 	"time"
 
 	"golang.org/x/net/context"
@@ -19,7 +20,45 @@ import (
 
 {{range $elm := .Services}}
 
-{{if or (.QuorumCall)}}
+{{if .QuorumCall}}
+
+/* Methods on Configuration and the quorum call struct {{.MethodName}} */
+
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
+//(This file could maybe hold all types of structs for the different call semantics)
+
+// {{.TypeName}} encapsulates the reply from a {{.MethodName}} quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type {{.TypeName}} struct {
+	// the actual reply
+	*{{.FQRespName}}
+	NodeIDs []uint32
+}
+
+func (r {{.TypeName}}) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
+}
+
+{{if .PerNodeArg}}
+
+// {{.MethodName}} invokes the {{.MethodName}} on each node in configuration c,
+// with the argument returned by the provided perNodeArg function
+// and returns the result as a {{.TypeName}}.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, {{.MethodArg}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, {{.MethodArgUse}})
+}
+
+{{else}}
+
+// {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
+// and returns the result as a {{.TypeName}}.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+}
+
+{{- end -}}
+
+/* Methods on Manager for quorum call method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32

@@ -614,19 +614,46 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 {{- end -}}
 `
 
-const config_quorumcall_tmpl = `
+const calltype_quorumcall_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
-{{- if not .IgnoreImports}}
-package {{.PackageName}}
+{{$pkgName := .PackageName}}
 
-import "golang.org/x/net/context"
+{{if not .IgnoreImports}}
+package {{$pkgName}}
 
-{{- end}}
+import (
+	"fmt"
+	"time"
+
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+)
+{{end}}
 
 {{range $elm := .Services}}
 
 {{if .QuorumCall}}
+
+/* Methods on Configuration and the quorum call struct {{.MethodName}} */
+
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
+//(This file could maybe hold all types of structs for the different call semantics)
+
+// {{.TypeName}} encapsulates the reply from a {{.MethodName}} quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type {{.TypeName}} struct {
+	// the actual reply
+	*{{.FQRespName}}
+	NodeIDs []uint32
+}
+
+func (r {{.TypeName}}) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
+}
 
 {{if .PerNodeArg}}
 
@@ -646,66 +673,8 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 }
 
 {{- end -}}
-{{- end -}}
-{{- end -}}
-`
 
-const config_shared_struct_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
-
-{{- if not .IgnoreImports}}
-package {{.PackageName}}
-
-import "fmt"
-
-{{- end}}
-
-{{range $elm := .Services}}
-
-{{/*if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim) */}}
-
-{{if or (.QuorumCall)}}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// {{.TypeName}} encapsulates the reply from a correctable {{.MethodName}} quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type {{.TypeName}} struct {
-	NodeIDs []uint32
-	*{{.FQRespName}}
-}
-
-func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
-}
-
-{{- end -}}
-{{- end -}}
-`
-
-const mgr_quorumcall_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
-
-{{$pkgName := .PackageName}}
-
-{{if not .IgnoreImports}}
-package {{$pkgName}}
-
-import (
-	"time"
-
-	"golang.org/x/net/context"
-	"golang.org/x/net/trace"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-)
-{{end}}
-
-{{range $elm := .Services}}
-
-{{if or (.QuorumCall)}}
+/* Methods on Manager for quorum call method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -927,9 +896,7 @@ var templates = map[string]string{
 	"calltype_correctable_prelim_tmpl": calltype_correctable_prelim_tmpl,
 	"calltype_future_tmpl":             calltype_future_tmpl,
 	"calltype_multicast_tmpl":          calltype_multicast_tmpl,
-	"config_quorumcall_tmpl":           config_quorumcall_tmpl,
-	"config_shared_struct_tmpl":        config_shared_struct_tmpl,
-	"mgr_quorumcall_tmpl":              mgr_quorumcall_tmpl,
+	"calltype_quorumcall_tmpl":         calltype_quorumcall_tmpl,
 	"node_tmpl":                        node_tmpl,
 	"qspec_tmpl":                       qspec_tmpl,
 }
