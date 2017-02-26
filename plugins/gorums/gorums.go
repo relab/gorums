@@ -337,25 +337,25 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			if sm == nil {
 				continue
 			}
-
-			sm.MethodName = generator.CamelCase(method.GetName())
-			sm.RPCName = sm.MethodName // sm.MethodName may be overwritten if method name conflict
-			sm.UnexportedMethodName = unexport(sm.MethodName)
-
+			// Service name ; keep a copy for each method, for convenience
+			sm.ServName = service.GetName()
+			// Request type with package (if needed)
 			sm.FQReqName = g.fqTypeName(method.GetInputType())
 			// Response type without package
 			sm.RespName = g.typeName(method.GetOutputType())
 			// Response type with package (if needed)
 			sm.FQRespName = g.fqTypeName(method.GetOutputType())
 
+			sm.MethodName = generator.CamelCase(method.GetName())
+			sm.UnexportedMethodName = unexport(sm.MethodName)
 			sm.TypeName = sm.MethodName + "Reply"
 			sm.UnexportedTypeName = unexport(sm.TypeName)
-			sm.ServName = service.GetName()
 			if sm.TypeName == sm.FQRespName {
 				sm.TypeName += "_"
 			}
-			fmt.Fprintf(os.Stderr, "%v\n \tRPCName\t\t%v\n \tUnexpMethodName\t%v\n \tFQRespName\t%v\n \tFQReqName\t%v\n \tTypeName\t%v\n \tUnexpTypeName\t%v\n \tServName\t%v\n",
-				sm.MethodName, sm.RPCName, sm.UnexportedMethodName, sm.FQRespName, sm.FQReqName, sm.TypeName, sm.UnexportedTypeName, sm.ServName,
+
+			fmt.Fprintf(os.Stderr, "%v\n \tUnexpMethodName\t%v\n \tFQRespName\t%v\n \tFQReqName\t%v\n \tTypeName\t%v\n \tUnexpTypeName\t%v\n \tServName\t%v\n",
+				sm.MethodName, sm.UnexportedMethodName, sm.FQRespName, sm.FQReqName, sm.TypeName, sm.UnexportedTypeName, sm.ServName,
 			)
 
 			sm.MethodArg = "args *" + sm.FQReqName
@@ -369,7 +369,6 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			}
 			fmt.Fprintf(os.Stderr, "xxxxx %v -- %v (custom return type: %v)\n", sm.MethodName, sm.MethodArg, sm.CustomReturnType)
 
-			//TODO Why do we need to check for equal methods?? gRPC does not allow equally named methods.
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, sm)
 			smethods[sm.MethodName] = methodsForName
