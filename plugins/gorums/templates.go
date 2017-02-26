@@ -28,8 +28,6 @@ import (
 
 /* Methods on Configuration and the correctable struct {{.MethodName}} */
 
-	// reply    *{{.TypeName}}
-
 // {{.MethodName}} is a reference to a correctable {{.MethodName}} quorum call.
 type {{.MethodName}} struct {
 	sync.Mutex
@@ -207,29 +205,35 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 {{- end -}}
 `
 
-const config_correctable_prelim_tmpl = `
+const calltype_correctable_prelim_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
 
 import (
+	"io"
 	"sync"
 
 	"golang.org/x/net/context"
 )
-
 {{- end}}
 
 {{range $elm := .Services}}
 
 {{if .CorrectablePrelim}}
 
+/* Methods on Configuration and the correctable prelim struct {{.MethodName}} */
+
 // {{.MethodName}} is a reference to a correctable quorum call
 // with server side preliminary reply support.
 type {{.MethodName}} struct {
 	sync.Mutex
-	reply    *{{.TypeName}}
+	// the actual reply
+	*{{.FQRespName}}
+	NodeIDs  []uint32
 	level    int
 	err      error
 	done     bool
@@ -247,10 +251,11 @@ type {{.MethodName}} struct {
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
 	corr := &{{.MethodName}}{
 		level:  LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
 		donech: make(chan struct{}),
 	}
 	go func() {
-		c.mgr.{{.UnexportedMethodName}}CorrectablePrelim(ctx, c, corr, args)
+		c.mgr.{{.UnexportedMethodName}}(ctx, c, corr, args)
 	}()
 	return corr
 }
@@ -260,10 +265,10 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *{{.MethodName}}) Get() (*{{.TypeName}}, int, error) {
+func (c *{{.MethodName}}) Get() (*{{.FQRespName}}, int, error) {
 	c.Lock()
 	defer c.Unlock()
-	return c.reply, c.level, c.err
+	return c.{{.RespName}}, c.level, c.err
 }
 
 // Done returns a channel that's closed when the correctable {{.MethodName}}
@@ -293,13 +298,13 @@ func (c *{{.MethodName}}) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *{{.MethodName}}) set(reply *{{.TypeName}}, level int, err error, done bool) {
+func (c *{{.MethodName}}) set(reply *{{.FQRespName}}, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
+	c.{{.RespName}}, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -317,6 +322,84 @@ func (c *{{.MethodName}}) set(reply *{{.TypeName}}, level int, err error, done b
 		}
 	}
 	c.Unlock()
+}
+
+/* Methods on Manager for correctable prelim method {{.MethodName}} */
+
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, corr *{{.MethodName}}, args *{{.FQReqName}}) {
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPC{{.MethodName}}Stream(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply		*{{.FQRespName}}
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			corr.NodeIDs = appendIfNotPresent(corr.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
+{{else}}
+			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
+{{end -}}
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount == c.n { // Can't rely on reply count.
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	x := New{{.ServName}}Client(node.conn)
+	y, err := x.{{.MethodName}}(ctx, args)
+	if err != nil {
+		replyChan <- {{.UnexportedTypeName}}{node.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
 }
 
 {{- end -}}
@@ -453,7 +536,7 @@ import "fmt"
 
 {{/*if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim) */}}
 
-{{if or (.QuorumCall) (.Future) (.CorrectablePrelim)}}
+{{if or (.QuorumCall) (.Future)}}
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -467,105 +550,6 @@ type {{.TypeName}} struct {
 
 func (r {{.TypeName}}) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
-}
-
-{{- end -}}
-{{- end -}}
-`
-
-const mgr_correctable_prelim_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
-
-{{$pkgName := .PackageName}}
-
-{{if not .IgnoreImports}}
-package {{$pkgName}}
-
-import (
-	"io"
-
-	"golang.org/x/net/context"
-)
-{{end}}
-
-{{range $elm := .Services}}
-
-{{if .CorrectablePrelim}}
-
-type {{.UnexportedTypeName}} struct {
-	nid   uint32
-	reply *{{.FQRespName}}
-	err   error
-}
-
-func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}, args *{{.FQReqName}}) {
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-
-	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}Stream(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
-		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-{{- if .QFWithReq}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
-{{else}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
-{{end}}
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount == c.n { // Can't rely on reply count.
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
-}
-
-func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	x := New{{.ServName}}Client(node.conn)
-	y, err := x.{{.MethodName}}(ctx, args)
-	if err != nil {
-		replyChan <- {{.UnexportedTypeName}}{node.id, nil, err}
-		return
-	}
-
-	for {
-		reply, err := y.Recv()
-		if err == io.EOF {
-			return
-		}
-		replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
-		if err != nil {
-			return
-		}
-	}
 }
 
 {{- end -}}
@@ -826,33 +810,32 @@ type QuorumSpec interface {
 {{else}}
 	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, bool)
 {{end}}
-{{end}}
+{{end -}}
 
 {{if .Correctable}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// correctable quorum call method.
 	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
-{{end}}
+{{end -}}
 
 {{if .CorrectablePrelim}}
 	// {{.MethodName}}CorrectablePrelimQF is the quorum function for the {{.MethodName}} 
 	// correctable prelim quourm call method.
-	{{.MethodName}}CorrectablePrelimQF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
-{{end}}
+	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
+{{end -}}
 {{- end -}}
 }
 `
 
 var templates = map[string]string{
-	"calltype_correctable_tmpl":      calltype_correctable_tmpl,
-	"config_correctable_prelim_tmpl": config_correctable_prelim_tmpl,
-	"config_future_tmpl":             config_future_tmpl,
-	"config_multicast_tmpl":          config_multicast_tmpl,
-	"config_quorumcall_tmpl":         config_quorumcall_tmpl,
-	"config_shared_struct_tmpl":      config_shared_struct_tmpl,
-	"mgr_correctable_prelim_tmpl":    mgr_correctable_prelim_tmpl,
-	"mgr_multicast_tmpl":             mgr_multicast_tmpl,
-	"mgr_quorumcall_tmpl":            mgr_quorumcall_tmpl,
-	"node_tmpl":                      node_tmpl,
-	"qspec_tmpl":                     qspec_tmpl,
+	"calltype_correctable_tmpl":        calltype_correctable_tmpl,
+	"calltype_correctable_prelim_tmpl": calltype_correctable_prelim_tmpl,
+	"config_future_tmpl":               config_future_tmpl,
+	"config_multicast_tmpl":            config_multicast_tmpl,
+	"config_quorumcall_tmpl":           config_quorumcall_tmpl,
+	"config_shared_struct_tmpl":        config_shared_struct_tmpl,
+	"mgr_multicast_tmpl":               mgr_multicast_tmpl,
+	"mgr_quorumcall_tmpl":              mgr_quorumcall_tmpl,
+	"node_tmpl":                        node_tmpl,
+	"qspec_tmpl":                       qspec_tmpl,
 }

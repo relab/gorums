@@ -32,7 +32,7 @@ func (mqs *MajorityQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int
 	panic("not implemented")
 }
 
-func (mqs *MajorityQSpec) ReadTwoCorrectablePrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (mqs *MajorityQSpec) ReadTwoQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
@@ -79,7 +79,7 @@ func (rqs *RegisterQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int
 	panic("not implemented")
 }
 
-func (rqs *RegisterQSpec) ReadTwoCorrectablePrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (rqs *RegisterQSpec) ReadTwoQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
@@ -140,7 +140,7 @@ func (rqs *RegisterByTimestampQSpec) ReadCorrectableQF(replies []*qc.State) (*qc
 	return replies[len(replies)-1], LevelStrong, true
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadTwoCorrectablePrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (rqs *RegisterByTimestampQSpec) ReadTwoQF(replies []*qc.State) (*qc.State, int, bool) {
 	if len(replies) == 0 {
 		return nil, qc.LevelNotSet, false
 	}
@@ -179,7 +179,7 @@ func (*NeverQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool)
 	return nil, qc.LevelNotSet, false
 }
 
-func (*NeverQSpec) ReadTwoCorrectablePrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (*NeverQSpec) ReadTwoQF(replies []*qc.State) (*qc.State, int, bool) {
 	return nil, qc.LevelNotSet, false
 }
 
@@ -205,7 +205,7 @@ func (*ReadTwoTestQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int,
 	panic("not implemented")
 }
 
-func (*ReadTwoTestQSpec) ReadTwoCorrectablePrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (*ReadTwoTestQSpec) ReadTwoQF(replies []*qc.State) (*qc.State, int, bool) {
 	switch len(replies) {
 	case 0:
 		return nil, qc.LevelNotSet, false

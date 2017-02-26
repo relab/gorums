@@ -16,18 +16,18 @@ type QuorumSpec interface {
 {{else}}
 	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, bool)
 {{end}}
-{{end}}
+{{end -}}
 
 {{if .Correctable}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// correctable quorum call method.
 	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
-{{end}}
+{{end -}}
 
 {{if .CorrectablePrelim}}
 	// {{.MethodName}}CorrectablePrelimQF is the quorum function for the {{.MethodName}} 
 	// correctable prelim quourm call method.
-	{{.MethodName}}CorrectablePrelimQF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
-{{end}}
+	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
+{{end -}}
 {{- end -}}
 }

@@ -15,8 +15,6 @@ import (
 
 /* Methods on Configuration and the correctable struct ReadCorrectable */
 
-// reply    *ReadCorrectableReply
-
 // ReadCorrectable is a reference to a correctable ReadCorrectable quorum call.
 type ReadCorrectable struct {
 	sync.Mutex

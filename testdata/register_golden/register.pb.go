@@ -332,11 +332,184 @@ func (this *Empty) Equal(that interface{}) bool {
 //  Reference Gorums specific imports to suppress errors if they are not otherwise used.
 var _ = codes.OK
 
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_prelim_tmpl */
+
+/* Methods on Configuration and the correctable prelim struct ReadTwo */
+
+// ReadTwo is a reference to a correctable quorum call
+// with server side preliminary reply support.
+type ReadTwo struct {
+	sync.Mutex
+	// the actual reply
+	*State
+	NodeIDs  []uint32
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+
+// ReadTwo asynchronously invokes a correctable ReadTwo quorum call
+// with server side preliminary reply support on configuration c and returns a
+// ReadTwo which can be used to inspect any replies or errors
+// when available.
+func (c *Configuration) ReadTwo(ctx context.Context, args *ReadRequest) *ReadTwo {
+	corr := &ReadTwo{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go func() {
+		c.mgr.readTwo(ctx, c, corr, args)
+	}()
+	return corr
+}
+
+// Get returns the reply, level and any error associated with the
+// ReadTwoCorrectablePremlim. The method does not block until a (possibly
+// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// reply has yet been received. The Done or Watch methods should be used to
+// ensure that a reply is available.
+func (c *ReadTwo) Get() (*State, int, error) {
+	c.Lock()
+	defer c.Unlock()
+	return c.State, c.level, c.err
+}
+
+// Done returns a channel that's closed when the correctable ReadTwo
+// quorum call is done. A call is considered done when the quorum function has
+// signaled that a quorum of replies was received or that the call returned an
+// error.
+func (c *ReadTwo) Done() <-chan struct{} {
+	return c.donech
+}
+
+// Watch returns a channel that's closed when a reply or error at or above the
+// specified level is available. If the call is done, the channel is closed
+// disregardless of the specified level.
+func (c *ReadTwo) Watch(level int) <-chan struct{} {
+	ch := make(chan struct{})
+	c.Lock()
+	if level < c.level {
+		close(ch)
+		c.Unlock()
+		return ch
+	}
+	c.watchers = append(c.watchers, &struct {
+		level int
+		ch    chan struct{}
+	}{level, ch})
+	c.Unlock()
+	return ch
+}
+
+func (c *ReadTwo) set(reply *State, level int, err error, done bool) {
+	c.Lock()
+	if c.done {
+		c.Unlock()
+		panic("set(...) called on a done correctable")
+	}
+	c.State, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			if watcher != nil {
+				close(watcher.ch)
+			}
+		}
+		c.Unlock()
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+			c.watchers[i] = nil
+		}
+	}
+	c.Unlock()
+}
+
+/* Methods on Manager for correctable prelim method ReadTwo */
+
+type readTwoReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
+func (m *Manager) readTwo(ctx context.Context, c *Configuration, corr *ReadTwo, args *ReadRequest) {
+	replyChan := make(chan readTwoReply, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPCReadTwoStream(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *State
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			corr.NodeIDs = appendIfNotPresent(corr.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.ReadTwoQF(replyValues)
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount == c.n { // Can't rely on reply count.
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
+	x := NewRegisterClient(node.conn)
+	y, err := x.ReadTwo(ctx, args)
+	if err != nil {
+		replyChan <- readTwoReply{node.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- readTwoReply{node.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
 /* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_tmpl */
 
 /* Methods on Configuration and the correctable struct ReadCorrectable */
-
-// reply    *ReadCorrectableReply
 
 // ReadCorrectable is a reference to a correctable ReadCorrectable quorum call.
 type ReadCorrectable struct {
@@ -507,102 +680,6 @@ func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest,
 	replyChan <- readCorrectableReply{node.id, reply, err}
 }
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_correctable_prelim_tmpl */
-
-// ReadTwo is a reference to a correctable quorum call
-// with server side preliminary reply support.
-type ReadTwo struct {
-	sync.Mutex
-	reply    *ReadTwoReply
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
-
-// ReadTwo asynchronously invokes a correctable ReadTwo quorum call
-// with server side preliminary reply support on configuration c and returns a
-// ReadTwo which can be used to inspect any replies or errors
-// when available.
-func (c *Configuration) ReadTwo(ctx context.Context, args *ReadRequest) *ReadTwo {
-	corr := &ReadTwo{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
-	}
-	go func() {
-		c.mgr.readTwoCorrectablePrelim(ctx, c, corr, args)
-	}()
-	return corr
-}
-
-// Get returns the reply, level and any error associated with the
-// ReadTwoCorrectablePremlim. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *ReadTwo) Get() (*ReadTwoReply, int, error) {
-	c.Lock()
-	defer c.Unlock()
-	return c.reply, c.level, c.err
-}
-
-// Done returns a channel that's closed when the correctable ReadTwo
-// quorum call is done. A call is considered done when the quorum function has
-// signaled that a quorum of replies was received or that the call returned an
-// error.
-func (c *ReadTwo) Done() <-chan struct{} {
-	return c.donech
-}
-
-// Watch returns a channel that's closed when a reply or error at or above the
-// specified level is available. If the call is done, the channel is closed
-// disregardless of the specified level.
-func (c *ReadTwo) Watch(level int) <-chan struct{} {
-	ch := make(chan struct{})
-	c.Lock()
-	if level < c.level {
-		close(ch)
-		c.Unlock()
-		return ch
-	}
-	c.watchers = append(c.watchers, &struct {
-		level int
-		ch    chan struct{}
-	}{level, ch})
-	c.Unlock()
-	return ch
-}
-
-func (c *ReadTwo) set(reply *ReadTwoReply, level int, err error, done bool) {
-	c.Lock()
-	if c.done {
-		c.Unlock()
-		panic("set(...) called on a done correctable")
-	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
-	if done {
-		close(c.donech)
-		for _, watcher := range c.watchers {
-			if watcher != nil {
-				close(watcher.ch)
-			}
-		}
-		c.Unlock()
-		return
-	}
-	for i := range c.watchers {
-		if c.watchers[i] != nil && c.watchers[i].level <= level {
-			close(c.watchers[i].ch)
-			c.watchers[i] = nil
-		}
-	}
-	c.Unlock()
-}
-
 /* 'gorums' plugin for protoc-gen-go - generated from: config_future_tmpl */
 
 // ReadFuture is a reference to an asynchronous ReadFuture quorum call invocation.
@@ -735,20 +812,6 @@ func (r ReadFutureReply) String() string {
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
 
-// ReadTwoReply encapsulates the reply from a correctable ReadTwo quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadTwoReply struct {
-	NodeIDs []uint32
-	*State
-}
-
-func (r ReadTwoReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
 // WriteReply encapsulates the reply from a correctable Write quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type WriteReply struct {
@@ -772,81 +835,6 @@ type WriteFutureReply struct {
 
 func (r WriteFutureReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_correctable_prelim_tmpl */
-
-type readTwoReply struct {
-	nid   uint32
-	reply *State
-	err   error
-}
-
-func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwo, args *ReadRequest) {
-	replyChan := make(chan readTwoReply, c.n)
-
-	for _, n := range c.nodes {
-		go callGRPCReadTwoStream(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*State, 0, c.n*2)
-		reply       = &ReadTwoReply{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
-
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount == c.n { // Can't rely on reply count.
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
-}
-
-func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
-	x := NewRegisterClient(node.conn)
-	y, err := x.ReadTwo(ctx, args)
-	if err != nil {
-		replyChan <- readTwoReply{node.id, nil, err}
-		return
-	}
-
-	for {
-		reply, err := y.Recv()
-		if err == io.EOF {
-			return
-		}
-		replyChan <- readTwoReply{node.id, reply, err}
-		if err != nil {
-			return
-		}
-	}
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_multicast_tmpl */
@@ -1300,7 +1288,7 @@ type QuorumSpec interface {
 
 	// ReadTwoCorrectablePrelimQF is the quorum function for the ReadTwo
 	// correctable prelim quourm call method.
-	ReadTwoCorrectablePrelimQF(replies []*State) (*State, int, bool)
+	ReadTwoQF(replies []*State) (*State, int, bool)
 
 	// WriteQF is the quorum function for the Write
 	// quorum call method.
