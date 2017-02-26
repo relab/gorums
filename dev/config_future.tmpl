@@ -12,18 +12,18 @@ import "golang.org/x/net/context"
 
 {{if .Future}}
 
-// {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} quorum call invocation.
-type {{.MethodName}}Future struct {
+// {{.MethodName}} is a reference to an asynchronous {{.MethodName}} quorum call invocation.
+type {{.MethodName}} struct {
 	reply *{{.TypeName}}
 	err   error
 	c     chan struct{}
 }
 
-// {{.MethodName}}Future asynchronously invokes a {{.MethodName}} quorum call
-// on configuration c and returns a {{.MethodName}}Future which can be used to
+// {{.MethodName}} asynchronously invokes a {{.MethodName}} quorum call
+// on configuration c and returns a {{.MethodName}} which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Future {
-	f := new({{.MethodName}}Future)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
+	f := new({{.MethodName}})
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
@@ -32,15 +32,15 @@ func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.FQRe
 	return f
 }
 
-// Get returns the reply and any error associated with the {{.MethodName}}Future.
+// Get returns the reply and any error associated with the {{.MethodName}}.
 // The method blocks until a reply or error is available.
-func (f *{{.MethodName}}Future) Get() (*{{.TypeName}}, error) {
+func (f *{{.MethodName}}) Get() (*{{.TypeName}}, error) {
 	<-f.c
 	return f.reply, f.err
 }
 
-// Done reports if a reply and/or error is available for the {{.MethodName}}Future.
-func (f *{{.MethodName}}Future) Done() bool {
+// Done reports if a reply and/or error is available for the {{.MethodName}}.
+func (f *{{.MethodName}}) Done() bool {
 	select {
 	case <-f.c:
 		return true

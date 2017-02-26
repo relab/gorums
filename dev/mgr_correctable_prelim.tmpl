@@ -23,7 +23,7 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.FQReqName}}) {
+func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
 	for _, n := range c.nodes {

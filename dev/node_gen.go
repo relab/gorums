@@ -21,11 +21,9 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
-	GorumsQCClient GorumsQCClient
+	RegisterClient RegisterClient
 
-	GorumsRPCClient GorumsRPCClient
-
-	WriteMulticastClient GorumsRPC_WriteMulticastClient
+	WriteAsyncClient Register_WriteAsyncClient
 
 	sync.Mutex
 	lastErr error
@@ -39,11 +37,9 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 
-	n.GorumsQCClient = NewGorumsQCClient(n.conn)
+	n.RegisterClient = NewRegisterClient(n.conn)
 
-	n.GorumsRPCClient = NewGorumsRPCClient(n.conn)
-
-	n.WriteMulticastClient, err = n.GorumsRPCClient.WriteMulticast(context.Background())
+	n.WriteAsyncClient, err = n.RegisterClient.WriteAsync(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
@@ -55,7 +51,7 @@ func (n *Node) close() error {
 	// TODO: Log error, mainly care about the connection error below.
 	// We should log this error, but we currently don't have access to the
 	// logger in the manager.
-	_, _ = n.WriteMulticastClient.CloseAndRecv()
+	_, _ = n.WriteAsyncClient.CloseAndRecv()
 
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("conn close error: %v", err)

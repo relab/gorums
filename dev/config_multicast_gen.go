@@ -5,9 +5,9 @@ package dev
 
 import "golang.org/x/net/context"
 
-// WriteMulticast is a one-way multicast operation, where args is sent to
+// WriteAsync is a one-way multicast operation, where args is sent to
 // every node in configuration c. The call is asynchronous and has no response
 // return value.
-func (c *Configuration) WriteMulticast(ctx context.Context, args *Reply) error {
-	return c.mgr.writeMulticast(ctx, c, args)
+func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
+	return c.mgr.writeAsync(ctx, c, args)
 }

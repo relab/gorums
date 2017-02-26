@@ -28,10 +28,14 @@ import (
 
 /* Methods on Configuration and the correctable struct {{.MethodName}} */
 
+	// reply    *{{.TypeName}}
+
 // {{.MethodName}} is a reference to a correctable {{.MethodName}} quorum call.
 type {{.MethodName}} struct {
 	sync.Mutex
-	reply    *{{.TypeName}}
+	// the actual reply
+	*{{.FQRespName}}
+	NodeIDs  []uint32
 	level    int
 	err      error
 	done     bool
@@ -48,8 +52,9 @@ type {{.MethodName}} struct {
 // when available.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
 	corr := &{{.MethodName}}{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
 	}
 	go func() {
 		c.mgr.{{.UnexportedMethodName}}(ctx, c, corr, args)
@@ -62,10 +67,10 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *{{.MethodName}}) Get() (*{{.TypeName}}, int, error) {
+func (c *{{.MethodName}}) Get() (*{{.FQRespName}}, int, error) {
 	c.Lock()
 	defer c.Unlock()
-	return c.reply, c.level, c.err
+	return c.{{.RespName}}, c.level, c.err
 }
 
 // Done returns a channel that's closed when the correctable {{.MethodName}}
@@ -95,13 +100,13 @@ func (c *{{.MethodName}}) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *{{.MethodName}}) set(reply *{{.TypeName}}, level int, err error, done bool) {
+func (c *{{.MethodName}}) set(reply *{{.FQRespName}}, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
+	c.{{.RespName}}, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -137,9 +142,9 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	}
 
 	var (
-		replyValues     = make([]*{{.FQRespName}}, 0, c.n)
-		reply           = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      	= LevelNotSet
+		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		clevel      = LevelNotSet
+		reply		*{{.FQRespName}}
 		rlevel      int
 		errCount    int
 		quorum      bool
@@ -148,16 +153,16 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			corr.NodeIDs = append(corr.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
+			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
 {{else}}
-			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
+			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
 {{end -}}
 			if quorum {
 				corr.set(reply, rlevel, nil, true)
@@ -332,18 +337,18 @@ import "golang.org/x/net/context"
 
 {{if .Future}}
 
-// {{.MethodName}}Future is a reference to an asynchronous {{.MethodName}} quorum call invocation.
-type {{.MethodName}}Future struct {
+// {{.MethodName}} is a reference to an asynchronous {{.MethodName}} quorum call invocation.
+type {{.MethodName}} struct {
 	reply *{{.TypeName}}
 	err   error
 	c     chan struct{}
 }
 
-// {{.MethodName}}Future asynchronously invokes a {{.MethodName}} quorum call
-// on configuration c and returns a {{.MethodName}}Future which can be used to
+// {{.MethodName}} asynchronously invokes a {{.MethodName}} quorum call
+// on configuration c and returns a {{.MethodName}} which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}}Future {
-	f := new({{.MethodName}}Future)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
+	f := new({{.MethodName}})
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
@@ -352,15 +357,15 @@ func (c *Configuration) {{.MethodName}}Future(ctx context.Context, args *{{.FQRe
 	return f
 }
 
-// Get returns the reply and any error associated with the {{.MethodName}}Future.
+// Get returns the reply and any error associated with the {{.MethodName}}.
 // The method blocks until a reply or error is available.
-func (f *{{.MethodName}}Future) Get() (*{{.TypeName}}, error) {
+func (f *{{.MethodName}}) Get() (*{{.TypeName}}, error) {
 	<-f.c
 	return f.reply, f.err
 }
 
-// Done reports if a reply and/or error is available for the {{.MethodName}}Future.
-func (f *{{.MethodName}}Future) Done() bool {
+// Done reports if a reply and/or error is available for the {{.MethodName}}.
+func (f *{{.MethodName}}) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -446,7 +451,9 @@ import "fmt"
 
 {{range $elm := .Services}}
 
-{{if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim)}}
+{{/*if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim) */}}
+
+{{if or (.QuorumCall) (.Future) (.CorrectablePrelim)}}
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -491,7 +498,7 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}CorrectablePrelim, args *{{.FQReqName}}) {
+func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context, c *Configuration, corr *{{.MethodName}}, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
 	for _, n := range c.nodes {

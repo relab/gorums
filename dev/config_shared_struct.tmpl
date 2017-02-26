@@ -10,7 +10,9 @@ import "fmt"
 
 {{range $elm := .Services}}
 
-{{if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim)}}
+{{/*if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim) */}}
+
+{{if or (.QuorumCall) (.Future) (.CorrectablePrelim)}}
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
 //(This file could maybe hold all types of structs for the different call semantics)

@@ -5,15 +5,15 @@ package dev
 
 import "golang.org/x/net/context"
 
-func (m *Manager) writeMulticast(ctx context.Context, c *Configuration, args *Reply) error {
+func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.WriteMulticastClient.Send(args)
+			err := n.WriteAsyncClient.Send(args)
 			if err == nil {
 				return
 			}
 			if m.logger != nil {
-				m.logger.Printf("%d: writeMulticast stream send error: %v", n.id, err)
+				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
 			}
 		}(node)
 	}

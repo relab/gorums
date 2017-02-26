@@ -4,35 +4,35 @@ import "github.com/relab/gorums/gorums.proto";
 
 package dev;
 
-service GorumsQC {
-	// Read is a plain gRPC call
-	rpc Read(ReadReq) returns (Reply) {}
+// service GorumsQC {
+// 	// Read is a plain gRPC call
+// 	rpc Read(ReadReq) returns (Reply) {}
 
-	// ReadQC is a synchronous quorum call
-	rpc ReadQC(ReadReq) returns (Reply) {
-		option (gorums.qc) = true;
-	}
-}
+// 	// ReadQC is a synchronous quorum call
+// 	rpc ReadQC(ReadReq) returns (Reply) {
+// 		option (gorums.qc) = true;
+// 	}
+// }
 
 service GorumsRPC {
 	// Read is a plain gRPC call
-	rpc Read(ReadReq) returns (Reply) {}
+	// rpc Read(ReadReq) returns (Reply) {}
 
-	// ReadQC is a synchronous quorum call
-	rpc ReadQC(ReadReq) returns (Reply) {
-		option (gorums.qc) = true;
-	}
+	// // ReadQC is a synchronous quorum call
+	// rpc ReadQC(ReadReq) returns (Reply) {
+	// 	option (gorums.qc) = true;
+	// }
 
-	// ReadQCCustomReturn is a synchronous quorum call with a custom return type
-	rpc ReadQCCustomReturn(ReadReq) returns (Reply) {
-		option (gorums.qc) = true;
-		option (gorums.custom_return_type) = "CReply";
-	}
+	// // ReadQCCustomReturn is a synchronous quorum call with a custom return type
+	// rpc ReadQCCustomReturn(ReadReq) returns (Reply) {
+	// 	option (gorums.qc) = true;
+	// 	option (gorums.custom_return_type) = "CReply";
+	// }
 
-	// ReadQCFuture is an asynchronous quorum call that returns a future object for retrieving results
-	rpc ReadQCFuture(ReadReq) returns (Reply) {
-		option (gorums.qc_future) = true;
-	}
+	// // ReadQCFuture is an asynchronous quorum call that returns a future object for retrieving results
+	// rpc ReadQCFuture(ReadReq) returns (Reply) {
+	// 	option (gorums.qc_future) = true;
+	// }
 
 	// ReadCorrectable is an asynchronous correctable quorum call that returns a correctable object for retrieving results
 	rpc ReadCorrectable(ReadReq) returns (Reply) {
@@ -40,26 +40,26 @@ service GorumsRPC {
 	}
 
 	// ReadCorrectablePrelim is an asynchronous correctable preliminary quorum call that returns a correctable object for retrieving results
-	rpc ReadCorrectablePrelim(ReadReq) returns (Reply) {
-		option (gorums.correctable_pr) = true;
-	}
+	// rpc ReadCorrectablePrelim(ReadReq) returns (Reply) {
+	// 	option (gorums.correctable_pr) = true;
+	// }
 
 	// WriteMulticast is an asynchronous multicast to all nodes in a configuration; it doesn't collect any replies
-	rpc WriteMulticast(stream Reply) returns (Nothing) {
-		option (gorums.multicast) = true;
-	}
+	// rpc WriteMulticast(stream Reply) returns (Nothing) {
+	// 	option (gorums.multicast) = true;
+	// }
 
-	// WriteQCWithReq is a synchronous quorum call with the request parameter passed to the quorum function
-	rpc WriteQCWithReq(Reply) returns (WriteResp) {
-		option (gorums.qc)			= true;
-		option (gorums.qf_with_req) = true;
-	}
+	// // WriteQCWithReq is a synchronous quorum call with the request parameter passed to the quorum function
+	// rpc WriteQCWithReq(Reply) returns (WriteResp) {
+	// 	option (gorums.qc)			= true;
+	// 	option (gorums.qf_with_req) = true;
+	// }
 
-	// WriteQCPerNode is a synchronous quorum call, where, for each node, a function is called to determine the argument to be sent to that node
-	rpc WriteQCPerNode(Reply) returns (WriteResp) {
-		option (gorums.qc)			 = true;
-		option (gorums.per_node_arg) = true;
-	}
+	// // WriteQCPerNode is a synchronous quorum call, where, for each node, a function is called to determine the argument to be sent to that node
+	// rpc WriteQCPerNode(Reply) returns (WriteResp) {
+	// 	option (gorums.qc)			 = true;
+	// 	option (gorums.per_node_arg) = true;
+	// }
 }
 
 message Reply {

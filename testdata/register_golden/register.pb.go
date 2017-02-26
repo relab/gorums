@@ -332,28 +332,18 @@ func (this *Empty) Equal(that interface{}) bool {
 //  Reference Gorums specific imports to suppress errors if they are not otherwise used.
 var _ = codes.OK
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_correctable_prelim_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_tmpl */
 
-// ReadTwoCorrectablePrelim asynchronously invokes a correctable ReadTwo quorum call
-// with server side preliminary reply support on configuration c and returns a
-// ReadTwoCorrectablePrelim which can be used to inspect any replies or errors
-// when available.
-func (c *Configuration) ReadTwoCorrectablePrelim(ctx context.Context, args *ReadRequest) *ReadTwoCorrectablePrelim {
-	corr := &ReadTwoCorrectablePrelim{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
-	}
-	go func() {
-		c.mgr.readTwoCorrectablePrelim(ctx, c, corr, args)
-	}()
-	return corr
-}
+/* Methods on Configuration and the correctable struct ReadCorrectable */
 
-// ReadTwoCorrectablePrelim is a reference to a correctable Read quorum call
-// with server side preliminary reply support.
-type ReadTwoCorrectablePrelim struct {
-	mu       sync.Mutex
-	reply    *ReadTwoReply
+// reply    *ReadCorrectableReply
+
+// ReadCorrectable is a reference to a correctable ReadCorrectable quorum call.
+type ReadCorrectable struct {
+	sync.Mutex
+	// the actual reply
+	*State
+	NodeIDs  []uint32
 	level    int
 	err      error
 	done     bool
@@ -364,80 +354,15 @@ type ReadTwoCorrectablePrelim struct {
 	donech chan struct{}
 }
 
-// Get returns the reply, level and any error associated with the
-// ReadTwoCorrectablePremlim. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *ReadTwoCorrectablePrelim) Get() (*ReadTwoReply, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.reply, c.level, c.err
-}
-
-// Done returns a channel that's closed when the correctable ReadTwo
-// quorum call is done. A call is considered done when the quorum function has
-// signaled that a quorum of replies was received or that the call returned an
-// error.
-func (c *ReadTwoCorrectablePrelim) Done() <-chan struct{} {
-	return c.donech
-}
-
-// Watch returns a channel that's closed when a reply or error at or above the
-// specified level is available. If the call is done, the channel is closed
-// disregardless of the specified level.
-func (c *ReadTwoCorrectablePrelim) Watch(level int) <-chan struct{} {
-	ch := make(chan struct{})
-	c.mu.Lock()
-	if level < c.level {
-		close(ch)
-		c.mu.Unlock()
-		return ch
-	}
-	c.watchers = append(c.watchers, &struct {
-		level int
-		ch    chan struct{}
-	}{level, ch})
-	c.mu.Unlock()
-	return ch
-}
-
-func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error, done bool) {
-	c.mu.Lock()
-	if c.done {
-		c.mu.Unlock()
-		panic("set(...) called on a done correctable")
-	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
-	if done {
-		close(c.donech)
-		for _, watcher := range c.watchers {
-			if watcher != nil {
-				close(watcher.ch)
-			}
-		}
-		c.mu.Unlock()
-		return
-	}
-	for i := range c.watchers {
-		if c.watchers[i] != nil && c.watchers[i].level <= level {
-			close(c.watchers[i].ch)
-			c.watchers[i] = nil
-		}
-	}
-	c.mu.Unlock()
-}
-
-/* 'gorums' plugin for protoc-gen-go - generated from: config_correctable_tmpl */
-
 // ReadCorrectable asynchronously invokes a
-// correctable Read quorum call on configuration c and returns a
+// correctable ReadCorrectable quorum call on configuration c and returns a
 // ReadCorrectable which can be used to inspect any replies or errors
 // when available.
 func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
 	corr := &ReadCorrectable{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
 	}
 	go func() {
 		c.mgr.readCorrectable(ctx, c, corr, args)
@@ -445,32 +370,18 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) 
 	return corr
 }
 
-// ReadCorrectable is a reference to a correctable Read quorum call.
-type ReadCorrectable struct {
-	mu       sync.Mutex
-	reply    *ReadReply
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
-
 // Get returns the reply, level and any error associated with the
 // ReadCorrectable. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadCorrectable) Get() (*ReadReply, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.reply, c.level, c.err
+func (c *ReadCorrectable) Get() (*State, int, error) {
+	c.Lock()
+	defer c.Unlock()
+	return c.State, c.level, c.err
 }
 
-// Done returns a channel that's closed when the correctable Read
+// Done returns a channel that's closed when the correctable ReadCorrectable
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
@@ -483,24 +394,193 @@ func (c *ReadCorrectable) Done() <-chan struct{} {
 // disregardless of the specified level.
 func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
-	c.mu.Lock()
+	c.Lock()
 	if level < c.level {
 		close(ch)
-		c.mu.Unlock()
+		c.Unlock()
 		return ch
 	}
 	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
-	c.mu.Unlock()
+	c.Unlock()
 	return ch
 }
 
-func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool) {
-	c.mu.Lock()
+func (c *ReadCorrectable) set(reply *State, level int, err error, done bool) {
+	c.Lock()
 	if c.done {
-		c.mu.Unlock()
+		c.Unlock()
+		panic("set(...) called on a done correctable")
+	}
+	c.State, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			if watcher != nil {
+				close(watcher.ch)
+			}
+		}
+		c.Unlock()
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+			c.watchers[i] = nil
+		}
+	}
+	c.Unlock()
+}
+
+/* Methods on Manager for correctable method ReadCorrectable */
+
+type readCorrectableReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
+func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
+	replyChan := make(chan readCorrectableReply, c.n)
+
+	for _, n := range c.nodes {
+		go callGRPCReadCorrectable(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		clevel      = LevelNotSet
+		reply       *State
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			corr.NodeIDs = append(corr.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
+			if quorum {
+				corr.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				corr.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readCorrectableReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/ReadCorrectable",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readCorrectableReply{node.id, reply, err}
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: config_correctable_prelim_tmpl */
+
+// ReadTwo is a reference to a correctable quorum call
+// with server side preliminary reply support.
+type ReadTwo struct {
+	sync.Mutex
+	reply    *ReadTwoReply
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+
+// ReadTwo asynchronously invokes a correctable ReadTwo quorum call
+// with server side preliminary reply support on configuration c and returns a
+// ReadTwo which can be used to inspect any replies or errors
+// when available.
+func (c *Configuration) ReadTwo(ctx context.Context, args *ReadRequest) *ReadTwo {
+	corr := &ReadTwo{
+		level:  LevelNotSet,
+		donech: make(chan struct{}),
+	}
+	go func() {
+		c.mgr.readTwoCorrectablePrelim(ctx, c, corr, args)
+	}()
+	return corr
+}
+
+// Get returns the reply, level and any error associated with the
+// ReadTwoCorrectablePremlim. The method does not block until a (possibly
+// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// reply has yet been received. The Done or Watch methods should be used to
+// ensure that a reply is available.
+func (c *ReadTwo) Get() (*ReadTwoReply, int, error) {
+	c.Lock()
+	defer c.Unlock()
+	return c.reply, c.level, c.err
+}
+
+// Done returns a channel that's closed when the correctable ReadTwo
+// quorum call is done. A call is considered done when the quorum function has
+// signaled that a quorum of replies was received or that the call returned an
+// error.
+func (c *ReadTwo) Done() <-chan struct{} {
+	return c.donech
+}
+
+// Watch returns a channel that's closed when a reply or error at or above the
+// specified level is available. If the call is done, the channel is closed
+// disregardless of the specified level.
+func (c *ReadTwo) Watch(level int) <-chan struct{} {
+	ch := make(chan struct{})
+	c.Lock()
+	if level < c.level {
+		close(ch)
+		c.Unlock()
+		return ch
+	}
+	c.watchers = append(c.watchers, &struct {
+		level int
+		ch    chan struct{}
+	}{level, ch})
+	c.Unlock()
+	return ch
+}
+
+func (c *ReadTwo) set(reply *ReadTwoReply, level int, err error, done bool) {
+	c.Lock()
+	if c.done {
+		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
 	c.reply, c.level, c.err, c.done = reply, level, err, done
@@ -511,7 +591,7 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 				close(watcher.ch)
 			}
 		}
-		c.mu.Unlock()
+		c.Unlock()
 		return
 	}
 	for i := range c.watchers {
@@ -520,19 +600,19 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 			c.watchers[i] = nil
 		}
 	}
-	c.mu.Unlock()
+	c.Unlock()
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: config_future_tmpl */
 
-// ReadFuture is a reference to an asynchronous Read quorum call invocation.
+// ReadFuture is a reference to an asynchronous ReadFuture quorum call invocation.
 type ReadFuture struct {
-	reply *ReadReply
+	reply *ReadFutureReply
 	err   error
 	c     chan struct{}
 }
 
-// ReadFuture asynchronously invokes a Read quorum call
+// ReadFuture asynchronously invokes a ReadFuture quorum call
 // on configuration c and returns a ReadFuture which can be used to
 // inspect the quorum call reply and error when available.
 func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
@@ -540,14 +620,14 @@ func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *Read
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.read(ctx, c, args)
+		f.reply, f.err = c.mgr.readFuture(ctx, c, args)
 	}()
 	return f
 }
 
 // Get returns the reply and any error associated with the ReadFuture.
 // The method blocks until a reply or error is available.
-func (f *ReadFuture) Get() (*ReadReply, error) {
+func (f *ReadFuture) Get() (*ReadFutureReply, error) {
 	<-f.c
 	return f.reply, f.err
 }
@@ -562,14 +642,14 @@ func (f *ReadFuture) Done() bool {
 	}
 }
 
-// WriteFuture is a reference to an asynchronous Write quorum call invocation.
+// WriteFuture is a reference to an asynchronous WriteFuture quorum call invocation.
 type WriteFuture struct {
-	reply *WriteReply
+	reply *WriteFutureReply
 	err   error
 	c     chan struct{}
 }
 
-// WriteFuture asynchronously invokes a Write quorum call
+// WriteFuture asynchronously invokes a WriteFuture quorum call
 // on configuration c and returns a WriteFuture which can be used to
 // inspect the quorum call reply and error when available.
 func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
@@ -577,14 +657,14 @@ func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFutu
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.write(ctx, c, args)
+		f.reply, f.err = c.mgr.writeFuture(ctx, c, args)
 	}()
 	return f
 }
 
 // Get returns the reply and any error associated with the WriteFuture.
 // The method blocks until a reply or error is available.
-func (f *WriteFuture) Get() (*WriteReply, error) {
+func (f *WriteFuture) Get() (*WriteFutureReply, error) {
 	<-f.c
 	return f.reply, f.err
 }
@@ -624,6 +704,9 @@ func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, er
 
 /* 'gorums' plugin for protoc-gen-go - generated from: config_shared_struct_tmpl */
 
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
+
 // ReadReply encapsulates the reply from a correctable Read quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type ReadReply struct {
@@ -634,6 +717,23 @@ type ReadReply struct {
 func (r ReadReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
+
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
+
+// ReadFutureReply encapsulates the reply from a correctable ReadFuture quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type ReadFutureReply struct {
+	NodeIDs []uint32
+	*State
+}
+
+func (r ReadFutureReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
+}
+
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
 
 // ReadTwoReply encapsulates the reply from a correctable ReadTwo quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
@@ -646,6 +746,9 @@ func (r ReadTwoReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
+
 // WriteReply encapsulates the reply from a correctable Write quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type WriteReply struct {
@@ -657,6 +760,20 @@ func (r WriteReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
+
+// WriteFutureReply encapsulates the reply from a correctable WriteFuture quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type WriteFutureReply struct {
+	NodeIDs []uint32
+	*WriteResponse
+}
+
+func (r WriteFutureReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
+}
+
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_correctable_prelim_tmpl */
 
 type readTwoReply struct {
@@ -665,7 +782,7 @@ type readTwoReply struct {
 	err   error
 }
 
-func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
+func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwo, args *ReadRequest) {
 	replyChan := make(chan readTwoReply, c.n)
 
 	for _, n := range c.nodes {
@@ -730,80 +847,6 @@ func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, r
 			return
 		}
 	}
-}
-
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_correctable_tmpl */
-
-type readReplyCorrectable struct {
-	nid   uint32
-	reply *State
-	err   error
-}
-
-func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
-	replyChan := make(chan readReply, c.n)
-
-	for _, n := range c.nodes {
-		go callGRPCReadCorrectable(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*State, 0, c.n)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-			reply.State, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
-
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount+len(replyValues) == c.n {
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
-}
-
-func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
-	reply := new(State)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.Register/Read",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- readReply{node.id, reply, err}
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_multicast_tmpl */
@@ -917,6 +960,97 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 	replyChan <- readReply{node.id, reply, err}
 }
 
+type readFutureReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
+func (m *Manager) readFuture(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadFutureReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.State,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan readFutureReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCReadFuture(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       = &ReadFutureReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.State, quorum = c.qspec.ReadFutureQF(replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCReadFuture(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readFutureReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/ReadFuture",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readFutureReply{node.id, reply, err}
+}
+
 type writeReply struct {
 	nid   uint32
 	reply *WriteResponse
@@ -1008,6 +1142,97 @@ func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<
 	replyChan <- writeReply{node.id, reply, err}
 }
 
+type writeFutureReply struct {
+	nid   uint32
+	reply *WriteResponse
+	err   error
+}
+
+func (m *Manager) writeFuture(ctx context.Context, c *Configuration, args *State) (r *WriteFutureReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.WriteResponse,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan writeFutureReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCWriteFuture(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*WriteResponse, 0, c.n)
+		reply       = &WriteFutureReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.WriteResponse, quorum = c.qspec.WriteFutureQF(args, replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCWriteFuture(ctx context.Context, node *Node, args *State, replyChan chan<- writeFutureReply) {
+	reply := new(WriteResponse)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/WriteFuture",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- writeFutureReply{node.id, reply, err}
+}
+
 /* 'gorums' plugin for protoc-gen-go - generated from: node_tmpl */
 
 // Node encapsulates the state of a node on which a remote procedure call
@@ -1065,9 +1290,13 @@ type QuorumSpec interface {
 	// quorum call method.
 	ReadQF(replies []*State) (*State, bool)
 
-	// ReadCorrectableQF is the quorum function for the Read
+	// ReadCorrectableQF is the quorum function for the ReadCorrectable
 	// correctable quorum call method.
 	ReadCorrectableQF(replies []*State) (*State, int, bool)
+
+	// ReadFutureQF is the quorum function for the ReadFuture
+	// quorum call method.
+	ReadFutureQF(replies []*State) (*State, bool)
 
 	// ReadTwoCorrectablePrelimQF is the quorum function for the ReadTwo
 	// correctable prelim quourm call method.
@@ -1076,6 +1305,10 @@ type QuorumSpec interface {
 	// WriteQF is the quorum function for the Write
 	// quorum call method.
 	WriteQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
+
+	// WriteFutureQF is the quorum function for the WriteFuture
+	// quorum call method.
+	WriteFutureQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
 }
 
 /* Static resources */
@@ -1700,8 +1933,11 @@ const _ = grpc.SupportPackageIsVersion4
 
 type RegisterClient interface {
 	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
 	ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error)
 	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
+	WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
 	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
 	ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
 }
@@ -1717,6 +1953,24 @@ func NewRegisterClient(cc *grpc.ClientConn) RegisterClient {
 func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
 	err := grpc.Invoke(ctx, "/dev.Register/Read", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadCorrectable", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1758,6 +2012,15 @@ func (x *registerReadTwoClient) Recv() (*State, error) {
 func (c *registerClient) Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
 	err := grpc.Invoke(ctx, "/dev.Register/Write", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+	out := new(WriteResponse)
+	err := grpc.Invoke(ctx, "/dev.Register/WriteFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1811,8 +2074,11 @@ func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...
 
 type RegisterServer interface {
 	Read(context.Context, *ReadRequest) (*State, error)
+	ReadCorrectable(context.Context, *ReadRequest) (*State, error)
+	ReadFuture(context.Context, *ReadRequest) (*State, error)
 	ReadTwo(*ReadRequest, Register_ReadTwoServer) error
 	Write(context.Context, *State) (*WriteResponse, error)
+	WriteFuture(context.Context, *State) (*WriteResponse, error)
 	WriteAsync(Register_WriteAsyncServer) error
 	ReadNoQC(context.Context, *ReadRequest) (*State, error)
 }
@@ -1835,6 +2101,42 @@ func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(inter
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RegisterServer).Read(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadCorrectable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadCorrectable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadCorrectable(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadFuture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadFuture",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadFuture(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1874,6 +2176,24 @@ func _Register_Write_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RegisterServer).Write(ctx, req.(*State))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_WriteFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(State)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).WriteFuture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/WriteFuture",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).WriteFuture(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1931,8 +2251,20 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Register_Read_Handler,
 		},
 		{
+			MethodName: "ReadCorrectable",
+			Handler:    _Register_ReadCorrectable_Handler,
+		},
+		{
+			MethodName: "ReadFuture",
+			Handler:    _Register_ReadFuture_Handler,
+		},
+		{
 			MethodName: "Write",
 			Handler:    _Register_Write_Handler,
+		},
+		{
+			MethodName: "WriteFuture",
+			Handler:    _Register_WriteFuture_Handler,
 		},
 		{
 			MethodName: "ReadNoQC",
@@ -2544,28 +2876,31 @@ var (
 func init() { proto.RegisterFile("testdata/register_golden/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 366 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x51, 0xb1, 0x8e, 0xda, 0x40,
-	0x10, 0xf5, 0x00, 0x0e, 0xb0, 0x09, 0x12, 0x5a, 0xa5, 0xb0, 0x50, 0xb4, 0x22, 0x56, 0xa4, 0xa0,
-	0x08, 0xd9, 0x11, 0x51, 0xaa, 0x54, 0x49, 0x94, 0x16, 0x29, 0x0e, 0x4a, 0xca, 0x68, 0xc1, 0x23,
-	0x9f, 0x25, 0xcc, 0xfa, 0xbc, 0x6b, 0x10, 0x1d, 0xe5, 0x95, 0x94, 0x57, 0x5e, 0xc9, 0x0f, 0xf8,
-	0x1f, 0xae, 0xa4, 0xbc, 0x12, 0x7c, 0xcd, 0x95, 0xf7, 0x09, 0x27, 0xaf, 0xd1, 0x1d, 0x54, 0x54,
-	0xfb, 0x66, 0xe6, 0xcd, 0xbe, 0xf7, 0x34, 0xe4, 0xa3, 0x42, 0xa9, 0x7c, 0xae, 0xb8, 0x9b, 0x60,
-	0x10, 0x4a, 0x85, 0xc9, 0xff, 0x40, 0x4c, 0x7d, 0x9c, 0x3d, 0xd7, 0x4e, 0x9c, 0x08, 0x25, 0x68,
-	0xd5, 0xc7, 0x79, 0xe7, 0x43, 0x10, 0xaa, 0x8b, 0x74, 0xec, 0x4c, 0x44, 0xe4, 0x26, 0x38, 0xe5,
-	0x63, 0x37, 0x10, 0x49, 0x1a, 0xc9, 0xc3, 0x53, 0x52, 0xed, 0x6f, 0xc4, 0xfc, 0xa3, 0xb8, 0x42,
-	0xfa, 0x96, 0x98, 0x7f, 0xf9, 0x34, 0x45, 0x0b, 0xba, 0xd0, 0x6b, 0x7a, 0x65, 0x41, 0xdf, 0x91,
-	0xe6, 0x28, 0x8c, 0x50, 0x2a, 0x1e, 0xc5, 0x56, 0xa5, 0x0b, 0xbd, 0xaa, 0xf7, 0xd2, 0xb0, 0xdf,
-	0x93, 0xd6, 0xbf, 0x24, 0x54, 0xe8, 0xa1, 0x8c, 0xc5, 0x4c, 0x22, 0x6d, 0x93, 0xea, 0x10, 0x17,
-	0xfa, 0x8b, 0x86, 0x57, 0x40, 0xbb, 0x45, 0x5e, 0x7b, 0xc8, 0x7d, 0x0f, 0x2f, 0x53, 0x94, 0xca,
-	0xae, 0x13, 0xf3, 0x57, 0x14, 0xab, 0xe5, 0x60, 0x55, 0x21, 0x0d, 0xef, 0xe0, 0x9a, 0x0e, 0x48,
-	0xad, 0x20, 0xd1, 0xb6, 0xe3, 0xe3, 0xdc, 0x39, 0xe2, 0x77, 0x88, 0xee, 0x68, 0x87, 0xf6, 0x9b,
-	0x55, 0x66, 0xc1, 0x55, 0x66, 0xc1, 0x4d, 0x66, 0x01, 0x75, 0x49, 0xbd, 0x20, 0x8e, 0x16, 0xe2,
-	0xcc, 0x5a, 0x6d, 0x9d, 0x59, 0xf0, 0x19, 0xe8, 0x57, 0x62, 0x6a, 0xb3, 0xf4, 0x68, 0xd8, 0xa1,
-	0x1a, 0x9f, 0x84, 0x28, 0x75, 0x0a, 0x8d, 0x4d, 0xa1, 0xd3, 0x27, 0x44, 0x8f, 0xbf, 0xcb, 0xe5,
-	0x6c, 0x72, 0xb2, 0x5b, 0x62, 0x1d, 0xc7, 0xae, 0x5d, 0x67, 0x16, 0xf4, 0x80, 0x7e, 0x2a, 0x52,
-	0x71, 0x7f, 0x28, 0x7e, 0xff, 0x3c, 0x63, 0xcb, 0xf8, 0xd1, 0xdf, 0xee, 0x99, 0x71, 0xb7, 0x67,
-	0xc6, 0x6e, 0xcf, 0x60, 0x95, 0x33, 0xd8, 0xe4, 0x0c, 0x6e, 0x73, 0x06, 0xdb, 0x9c, 0xc1, 0x2e,
-	0x67, 0xf0, 0x90, 0x33, 0xe3, 0x31, 0x67, 0xb0, 0xbe, 0x67, 0xc6, 0xf8, 0x95, 0xbe, 0xd7, 0x97,
-	0xa7, 0x00, 0x00, 0x00, 0xff, 0xff, 0x30, 0xbf, 0xe7, 0xef, 0x05, 0x02, 0x00, 0x00,
+	// 403 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x92, 0xbf, 0x6f, 0xd3, 0x40,
+	0x14, 0xc7, 0x7d, 0x38, 0xa6, 0xe9, 0xab, 0x2a, 0xaa, 0x13, 0x83, 0x15, 0xa1, 0x53, 0xb1, 0x90,
+	0x88, 0xaa, 0xca, 0x2e, 0x20, 0xc4, 0xc0, 0x04, 0x15, 0x8c, 0x95, 0x30, 0x15, 0x8c, 0xe8, 0x1c,
+	0x3f, 0x19, 0x4b, 0x76, 0xce, 0xdc, 0x9d, 0x1b, 0x65, 0xcb, 0xc8, 0x98, 0x09, 0x31, 0x66, 0xcc,
+	0x3f, 0x90, 0xff, 0x81, 0x31, 0x23, 0x63, 0x62, 0x16, 0x46, 0xfe, 0x04, 0x74, 0x97, 0x40, 0x93,
+	0xc9, 0xd3, 0xbd, 0x1f, 0xdf, 0xcf, 0xdd, 0x7b, 0x5f, 0x1d, 0x3c, 0xd6, 0xa8, 0x74, 0xca, 0x35,
+	0x8f, 0x24, 0x66, 0xb9, 0xd2, 0x28, 0x3f, 0x65, 0xa2, 0x48, 0x71, 0xf8, 0x3f, 0x0f, 0x2b, 0x29,
+	0xb4, 0xa0, 0x6e, 0x8a, 0x37, 0xbd, 0x47, 0x59, 0xae, 0x3f, 0xd7, 0x49, 0x38, 0x10, 0x65, 0x24,
+	0xb1, 0xe0, 0x49, 0x94, 0x09, 0x59, 0x97, 0x6a, 0x7b, 0x6c, 0xa4, 0xc1, 0x4b, 0xf0, 0xde, 0x6b,
+	0xae, 0x91, 0xde, 0x07, 0xef, 0x03, 0x2f, 0x6a, 0xf4, 0xc9, 0x29, 0xe9, 0x1f, 0xc6, 0x9b, 0x84,
+	0x3e, 0x80, 0xc3, 0xeb, 0xbc, 0x44, 0xa5, 0x79, 0x59, 0xf9, 0x77, 0x4e, 0x49, 0xdf, 0x8d, 0x6f,
+	0x0b, 0xc1, 0x43, 0x38, 0xfe, 0x28, 0x73, 0x8d, 0x31, 0xaa, 0x4a, 0x0c, 0x15, 0xd2, 0x13, 0x70,
+	0xaf, 0x70, 0x64, 0xaf, 0xe8, 0xc6, 0x26, 0x0c, 0x8e, 0xe1, 0x28, 0x46, 0x9e, 0xc6, 0xf8, 0xa5,
+	0x46, 0xa5, 0x83, 0x03, 0xf0, 0xde, 0x94, 0x95, 0x1e, 0x3f, 0xfd, 0xe6, 0x42, 0x37, 0xde, 0x4e,
+	0x4d, 0xcf, 0xa0, 0x63, 0x44, 0xf4, 0x24, 0x4c, 0xf1, 0x26, 0xdc, 0xd1, 0xf7, 0xc0, 0x56, 0xec,
+	0x84, 0x41, 0x67, 0xb2, 0xf0, 0x09, 0x7d, 0x0e, 0xf7, 0x8c, 0xe0, 0x52, 0x48, 0x89, 0x03, 0xcd,
+	0x93, 0x02, 0xdb, 0xb0, 0xaf, 0x06, 0xbb, 0x00, 0x30, 0x82, 0xb7, 0xb5, 0xae, 0x65, 0x2b, 0x31,
+	0x33, 0x44, 0x04, 0x07, 0x46, 0x70, 0x3d, 0x12, 0x6d, 0xf2, 0xe9, 0xc2, 0x27, 0x17, 0x84, 0x3e,
+	0x01, 0xcf, 0xba, 0x41, 0x77, 0x9a, 0x3d, 0x6a, 0xe3, 0x3d, 0x97, 0x82, 0xae, 0x59, 0x64, 0x6e,
+	0xde, 0x78, 0x01, 0x47, 0xb6, 0xb5, 0x1d, 0xab, 0x15, 0x9c, 0xfd, 0x03, 0xcf, 0x01, 0x6c, 0xeb,
+	0x95, 0x1a, 0x0f, 0x07, 0x7b, 0xdc, 0x26, 0xb6, 0x26, 0x07, 0x9d, 0xef, 0x0b, 0x9f, 0xf4, 0x09,
+	0x3d, 0x33, 0x5e, 0xf3, 0xf4, 0x4a, 0xbc, 0xbb, 0x6c, 0xd9, 0xc5, 0x79, 0x7d, 0xbe, 0x5c, 0x33,
+	0xe7, 0xe7, 0x9a, 0x39, 0xab, 0x35, 0x23, 0x93, 0x86, 0x91, 0x79, 0xc3, 0xc8, 0x8f, 0x86, 0x91,
+	0x65, 0xc3, 0xc8, 0xaa, 0x61, 0xe4, 0x77, 0xc3, 0x9c, 0x3f, 0x0d, 0x23, 0xd3, 0x5f, 0xcc, 0x49,
+	0xee, 0xda, 0x5f, 0xf4, 0xec, 0x6f, 0x00, 0x00, 0x00, 0xff, 0xff, 0xf7, 0x01, 0x39, 0xae, 0x9b,
+	0x02, 0x00, 0x00,
 }

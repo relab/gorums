@@ -15,10 +15,14 @@ import (
 
 /* Methods on Configuration and the correctable struct ReadCorrectable */
 
+// reply    *ReadCorrectableReply
+
 // ReadCorrectable is a reference to a correctable ReadCorrectable quorum call.
 type ReadCorrectable struct {
 	sync.Mutex
-	reply    *ReadCorrectableReply
+	// the actual reply
+	*State
+	NodeIDs  []uint32
 	level    int
 	err      error
 	done     bool
@@ -33,10 +37,11 @@ type ReadCorrectable struct {
 // correctable ReadCorrectable quorum call on configuration c and returns a
 // ReadCorrectable which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadReq) *ReadCorrectable {
+func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
 	corr := &ReadCorrectable{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
 	}
 	go func() {
 		c.mgr.readCorrectable(ctx, c, corr, args)
@@ -49,10 +54,10 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadReq) *Rea
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadCorrectable) Get() (*ReadCorrectableReply, int, error) {
+func (c *ReadCorrectable) Get() (*State, int, error) {
 	c.Lock()
 	defer c.Unlock()
-	return c.reply, c.level, c.err
+	return c.State, c.level, c.err
 }
 
 // Done returns a channel that's closed when the correctable ReadCorrectable
@@ -82,13 +87,13 @@ func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *ReadCorrectable) set(reply *ReadCorrectableReply, level int, err error, done bool) {
+func (c *ReadCorrectable) set(reply *State, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
+	c.State, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -112,11 +117,11 @@ func (c *ReadCorrectable) set(reply *ReadCorrectableReply, level int, err error,
 
 type readCorrectableReply struct {
 	nid   uint32
-	reply *Reply
+	reply *State
 	err   error
 }
 
-func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadReq) {
+func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
 	replyChan := make(chan readCorrectableReply, c.n)
 
 	for _, n := range c.nodes {
@@ -124,9 +129,9 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	}
 
 	var (
-		replyValues = make([]*Reply, 0, c.n)
-		reply       = &ReadCorrectableReply{NodeIDs: make([]uint32, 0, c.n)}
+		replyValues = make([]*State, 0, c.n)
 		clevel      = LevelNotSet
+		reply       *State
 		rlevel      int
 		errCount    int
 		quorum      bool
@@ -135,14 +140,13 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			corr.NodeIDs = append(corr.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.Reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
-
+			reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
 			if quorum {
 				corr.set(reply, rlevel, nil, true)
 				return
@@ -163,12 +167,12 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	}
 }
 
-func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readCorrectableReply) {
-	reply := new(Reply)
+func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readCorrectableReply) {
+	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.GorumsRPC/ReadCorrectable",
+		"/dev.Register/ReadCorrectable",
 		args,
 		reply,
 		node.conn,

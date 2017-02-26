@@ -325,24 +325,8 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for GorumsRPC service
 
 type GorumsRPCClient interface {
-	// Read is a plain gRPC call
-	Read(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadQC is a synchronous quorum call
-	ReadQC(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadCustomReturn is a synchronous quorum call with a custom return type
-	ReadCustomReturn(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadQCFuture is an asynchronous quorum call that returns a future object for retrieving results
-	ReadQCFuture(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that returns a correctable object for retrieving results
 	ReadCorrectable(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadCorrectablePrelim is an asynchronous correctable preliminary quorum call that returns a correctable object for retrieving results
-	ReadCorrectablePrelim(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// WriteMulticast is an asynchronous multicast to all nodes in a configuration; it doesn't collect any replies
-	WriteMulticast(ctx context.Context, opts ...grpc.CallOption) (GorumsRPC_WriteMulticastClient, error)
-	// WriteQCWithReq is a synchronous quorum call with the request parameter passed to the quorum function
-	WriteQCWithReq(ctx context.Context, in *Reply, opts ...grpc.CallOption) (*WriteResp, error)
-	// WriteQCPerNode is a synchronous quorum call, where, for each node, a function is called to determine the argument to be sent to that node
-	WriteQCPerNode(ctx context.Context, in *Reply, opts ...grpc.CallOption) (*WriteResp, error)
 }
 
 type gorumsRPCClient struct {
@@ -351,42 +335,6 @@ type gorumsRPCClient struct {
 
 func NewGorumsRPCClient(cc *grpc.ClientConn) GorumsRPCClient {
 	return &gorumsRPCClient{cc}
-}
-
-func (c *gorumsRPCClient) Read(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/Read", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) ReadQC(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/ReadQC", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) ReadCustomReturn(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/ReadCustomReturn", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) ReadQCFuture(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/ReadQCFuture", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *gorumsRPCClient) ReadCorrectable(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
@@ -398,164 +346,15 @@ func (c *gorumsRPCClient) ReadCorrectable(ctx context.Context, in *ReadReq, opts
 	return out, nil
 }
 
-func (c *gorumsRPCClient) ReadCorrectablePrelim(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/ReadCorrectablePrelim", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) WriteMulticast(ctx context.Context, opts ...grpc.CallOption) (GorumsRPC_WriteMulticastClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_GorumsRPC_serviceDesc.Streams[0], c.cc, "/dev.GorumsRPC/WriteMulticast", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &gorumsRPCWriteMulticastClient{stream}
-	return x, nil
-}
-
-type GorumsRPC_WriteMulticastClient interface {
-	Send(*Reply) error
-	CloseAndRecv() (*Nothing, error)
-	grpc.ClientStream
-}
-
-type gorumsRPCWriteMulticastClient struct {
-	grpc.ClientStream
-}
-
-func (x *gorumsRPCWriteMulticastClient) Send(m *Reply) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *gorumsRPCWriteMulticastClient) CloseAndRecv() (*Nothing, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(Nothing)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *gorumsRPCClient) WriteQCWithReq(ctx context.Context, in *Reply, opts ...grpc.CallOption) (*WriteResp, error) {
-	out := new(WriteResp)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/WriteQCWithReq", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) WriteQCPerNode(ctx context.Context, in *Reply, opts ...grpc.CallOption) (*WriteResp, error) {
-	out := new(WriteResp)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/WriteQCPerNode", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // Server API for GorumsRPC service
 
 type GorumsRPCServer interface {
-	// Read is a plain gRPC call
-	Read(context.Context, *ReadReq) (*Reply, error)
-	// ReadQC is a synchronous quorum call
-	ReadQC(context.Context, *ReadReq) (*Reply, error)
-	// ReadCustomReturn is a synchronous quorum call with a custom return type
-	ReadCustomReturn(context.Context, *ReadReq) (*Reply, error)
-	// ReadQCFuture is an asynchronous quorum call that returns a future object for retrieving results
-	ReadQCFuture(context.Context, *ReadReq) (*Reply, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that returns a correctable object for retrieving results
 	ReadCorrectable(context.Context, *ReadReq) (*Reply, error)
-	// ReadCorrectablePrelim is an asynchronous correctable preliminary quorum call that returns a correctable object for retrieving results
-	ReadCorrectablePrelim(context.Context, *ReadReq) (*Reply, error)
-	// WriteMulticast is an asynchronous multicast to all nodes in a configuration; it doesn't collect any replies
-	WriteMulticast(GorumsRPC_WriteMulticastServer) error
-	// WriteQCWithReq is a synchronous quorum call with the request parameter passed to the quorum function
-	WriteQCWithReq(context.Context, *Reply) (*WriteResp, error)
-	// WriteQCPerNode is a synchronous quorum call, where, for each node, a function is called to determine the argument to be sent to that node
-	WriteQCPerNode(context.Context, *Reply) (*WriteResp, error)
 }
 
 func RegisterGorumsRPCServer(s *grpc.Server, srv GorumsRPCServer) {
 	s.RegisterService(&_GorumsRPC_serviceDesc, srv)
-}
-
-func _GorumsRPC_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).Read(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/Read",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).Read(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_ReadQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).ReadQC(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/ReadQC",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).ReadQC(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_ReadCustomReturn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).ReadCustomReturn(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/ReadCustomReturn",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).ReadCustomReturn(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_ReadQCFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).ReadQCFuture(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/ReadQCFuture",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).ReadQCFuture(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _GorumsRPC_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -576,130 +375,16 @@ func _GorumsRPC_ReadCorrectable_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _GorumsRPC_ReadCorrectablePrelim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).ReadCorrectablePrelim(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/ReadCorrectablePrelim",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).ReadCorrectablePrelim(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_WriteMulticast_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(GorumsRPCServer).WriteMulticast(&gorumsRPCWriteMulticastServer{stream})
-}
-
-type GorumsRPC_WriteMulticastServer interface {
-	SendAndClose(*Nothing) error
-	Recv() (*Reply, error)
-	grpc.ServerStream
-}
-
-type gorumsRPCWriteMulticastServer struct {
-	grpc.ServerStream
-}
-
-func (x *gorumsRPCWriteMulticastServer) SendAndClose(m *Nothing) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *gorumsRPCWriteMulticastServer) Recv() (*Reply, error) {
-	m := new(Reply)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func _GorumsRPC_WriteQCWithReq_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Reply)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).WriteQCWithReq(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/WriteQCWithReq",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).WriteQCWithReq(ctx, req.(*Reply))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_WriteQCPerNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Reply)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).WriteQCPerNode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/WriteQCPerNode",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).WriteQCPerNode(ctx, req.(*Reply))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 var _GorumsRPC_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "dev.GorumsRPC",
 	HandlerType: (*GorumsRPCServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Read",
-			Handler:    _GorumsRPC_Read_Handler,
-		},
-		{
-			MethodName: "ReadQC",
-			Handler:    _GorumsRPC_ReadQC_Handler,
-		},
-		{
-			MethodName: "ReadCustomReturn",
-			Handler:    _GorumsRPC_ReadCustomReturn_Handler,
-		},
-		{
-			MethodName: "ReadQCFuture",
-			Handler:    _GorumsRPC_ReadQCFuture_Handler,
-		},
-		{
 			MethodName: "ReadCorrectable",
 			Handler:    _GorumsRPC_ReadCorrectable_Handler,
 		},
-		{
-			MethodName: "ReadCorrectablePrelim",
-			Handler:    _GorumsRPC_ReadCorrectablePrelim_Handler,
-		},
-		{
-			MethodName: "WriteQCWithReq",
-			Handler:    _GorumsRPC_WriteQCWithReq_Handler,
-		},
-		{
-			MethodName: "WriteQCPerNode",
-			Handler:    _GorumsRPC_WriteQCPerNode_Handler,
-		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "WriteMulticast",
-			Handler:       _GorumsRPC_WriteMulticast_Handler,
-			ClientStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "dev/gorums_rpc.proto",
 }
 
@@ -1293,32 +978,22 @@ var (
 func init() { proto.RegisterFile("dev/gorums_rpc.proto", fileDescriptorGorumsRpc) }
 
 var fileDescriptorGorumsRpc = []byte{
-	// 421 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x92, 0xbf, 0x8b, 0xd4, 0x40,
-	0x14, 0xc7, 0x33, 0x66, 0x6f, 0xbd, 0x3c, 0x8e, 0xf3, 0x18, 0x4e, 0x08, 0x8b, 0x0e, 0x47, 0xb0,
-	0x48, 0x21, 0x39, 0x3c, 0x41, 0x05, 0x3b, 0x03, 0x5a, 0xb9, 0xec, 0x0d, 0xe2, 0x95, 0x92, 0x1f,
-	0x8f, 0xdd, 0x40, 0x72, 0x93, 0x9b, 0xcc, 0xac, 0x5c, 0x77, 0xa5, 0xe5, 0x95, 0x96, 0x96, 0x5b,
-	0xda, 0xec, 0x3f, 0x60, 0x65, 0xb9, 0x60, 0x63, 0xb9, 0x1b, 0x1b, 0x4b, 0xc1, 0x7f, 0x40, 0x26,
-	0x09, 0xae, 0x5a, 0xc4, 0x6a, 0xde, 0x9b, 0xf7, 0xfd, 0xf0, 0x9d, 0xf9, 0xce, 0xc0, 0x61, 0x8a,
-	0xf3, 0xe3, 0xa9, 0x90, 0xba, 0xa8, 0xde, 0xc8, 0x32, 0x09, 0x4a, 0x29, 0x94, 0xa0, 0x76, 0x8a,
-	0xf3, 0xd1, 0xbd, 0x69, 0xa6, 0x66, 0x3a, 0x0e, 0x12, 0x51, 0x1c, 0x4b, 0xcc, 0xa3, 0xb8, 0xd3,
-	0x75, 0x4b, 0x2b, 0xf5, 0x9e, 0xc2, 0x0e, 0xc7, 0x32, 0xbf, 0xa4, 0x87, 0xb0, 0xf3, 0x3a, 0xca,
-	0x35, 0xba, 0xe4, 0x88, 0xf8, 0x0e, 0x6f, 0x1b, 0x7a, 0x07, 0x9c, 0x57, 0x59, 0x81, 0x95, 0x8a,
-	0x8a, 0xd2, 0xbd, 0x71, 0x44, 0x7c, 0x9b, 0x6f, 0x37, 0xbc, 0xbb, 0xe0, 0x9c, 0xc9, 0x4c, 0x21,
-	0xc7, 0xaa, 0xa4, 0x07, 0x60, 0x8f, 0xf1, 0x6d, 0x83, 0xef, 0x72, 0x53, 0x7a, 0x0e, 0xdc, 0xe4,
-	0x18, 0xa5, 0x1c, 0x2f, 0x4c, 0x39, 0x16, 0x6a, 0x96, 0x9d, 0x4f, 0x4f, 0xbe, 0xd8, 0xe0, 0xbc,
-	0x68, 0x8e, 0xc0, 0x27, 0x21, 0xf5, 0x60, 0x60, 0x34, 0x74, 0x2f, 0x48, 0x71, 0x1e, 0x74, 0xf2,
-	0x11, 0x74, 0x5d, 0x99, 0x5f, 0x7a, 0x16, 0xf5, 0x61, 0x68, 0x06, 0xa7, 0x61, 0x8f, 0x6a, 0x70,
-	0xb5, 0x74, 0x09, 0x7d, 0x02, 0x07, 0x66, 0x18, 0xea, 0x4a, 0x89, 0x82, 0xa3, 0xd2, 0xf2, 0xbc,
-	0x87, 0x81, 0x4f, 0x3f, 0xdd, 0x61, 0xd8, 0x5e, 0x3f, 0x80, 0xbd, 0xd6, 0xe3, 0xb9, 0x56, 0x5a,
-	0x62, 0x9f, 0xd3, 0x07, 0xe3, 0xf4, 0x00, 0x6e, 0x35, 0x4e, 0x42, 0x4a, 0x4c, 0x54, 0x14, 0xe7,
-	0xbd, 0xc8, 0x3b, 0x83, 0x3c, 0x86, 0xdb, 0xff, 0x20, 0x13, 0x89, 0x79, 0x56, 0xf4, 0x81, 0xd7,
-	0x06, 0x3c, 0x81, 0xfd, 0x26, 0xe6, 0x97, 0x3a, 0x57, 0x59, 0x12, 0x55, 0x8a, 0xfe, 0xa1, 0x19,
-	0xb5, 0x74, 0x97, 0xae, 0x37, 0x78, 0xbf, 0x74, 0x89, 0x4f, 0xe8, 0xa3, 0x8e, 0x39, 0x0d, 0xcf,
-	0x32, 0x35, 0xe3, 0x78, 0xf1, 0x17, 0xb3, 0xdf, 0xd4, 0xbf, 0xdf, 0xce, 0xdb, 0x35, 0xe9, 0x2d,
-	0x8c, 0xd7, 0x96, 0x9b, 0xa0, 0x1c, 0x8b, 0x14, 0xff, 0xcf, 0x7d, 0x5c, 0xba, 0xe4, 0xd9, 0xfd,
-	0xd5, 0x86, 0x59, 0x5f, 0x37, 0xcc, 0x5a, 0x6f, 0x18, 0xb9, 0xaa, 0x19, 0x59, 0xd4, 0x8c, 0x7c,
-	0xae, 0x19, 0x59, 0xd5, 0x8c, 0xac, 0x6b, 0x46, 0xbe, 0xd7, 0xcc, 0xfa, 0x51, 0x33, 0x72, 0xfd,
-	0x8d, 0x59, 0xf1, 0xb0, 0xf9, 0x7c, 0x0f, 0x7f, 0x05, 0x00, 0x00, 0xff, 0xff, 0xcb, 0x2c, 0xcf,
-	0x36, 0xbf, 0x02, 0x00, 0x00,
+	// 272 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x49, 0x49, 0x2d, 0xd3,
+	0x4f, 0xcf, 0x2f, 0x2a, 0xcd, 0x2d, 0x8e, 0x2f, 0x2a, 0x48, 0xd6, 0x2b, 0x28, 0xca, 0x2f, 0xc9,
+	0x17, 0x62, 0x4e, 0x49, 0x2d, 0x93, 0x52, 0x49, 0xcf, 0x2c, 0xc9, 0x28, 0x4d, 0xd2, 0x4b, 0xce,
+	0xcf, 0xd5, 0x2f, 0x4a, 0xcd, 0x49, 0x4c, 0x82, 0xaa, 0x83, 0x52, 0x10, 0xa5, 0x4a, 0xd6, 0x5c,
+	0xac, 0x41, 0xa9, 0x05, 0x39, 0x95, 0x42, 0x22, 0x5c, 0xac, 0x61, 0x89, 0x39, 0xa5, 0xa9, 0x12,
+	0x8c, 0x0a, 0x8c, 0x1a, 0x9c, 0x41, 0x10, 0x8e, 0x90, 0x0c, 0x17, 0x67, 0x48, 0x66, 0x6e, 0x6a,
+	0x71, 0x49, 0x62, 0x6e, 0x81, 0x04, 0x93, 0x02, 0xa3, 0x06, 0x73, 0x10, 0x42, 0x40, 0x49, 0x96,
+	0x8b, 0x33, 0xbc, 0x28, 0xb3, 0x24, 0x35, 0x28, 0xb5, 0xb8, 0x40, 0x48, 0x80, 0x8b, 0xd9, 0x2f,
+	0xb5, 0x1c, 0xac, 0x9d, 0x23, 0x08, 0xc4, 0x54, 0xe2, 0xe4, 0x62, 0x0f, 0x4a, 0x4d, 0x4c, 0x09,
+	0x4a, 0x2d, 0x04, 0x31, 0xfd, 0xf2, 0x4b, 0x32, 0x32, 0xf3, 0xd2, 0x8d, 0xec, 0xb8, 0x38, 0xdd,
+	0xc1, 0x2e, 0x08, 0x0a, 0x70, 0x16, 0x32, 0xe4, 0xe2, 0x07, 0x29, 0x71, 0xce, 0x2f, 0x2a, 0x4a,
+	0x4d, 0x2e, 0x49, 0x4c, 0xca, 0x49, 0x15, 0xe2, 0xd1, 0x4b, 0x49, 0x2d, 0xd3, 0x83, 0x6a, 0x94,
+	0xe2, 0x82, 0xf2, 0x0a, 0x72, 0x2a, 0x95, 0x58, 0x3a, 0xb6, 0x4a, 0x30, 0x3a, 0xe9, 0x5c, 0x78,
+	0x28, 0xc7, 0x70, 0xe3, 0xa1, 0x1c, 0xc3, 0x83, 0x87, 0x72, 0x8c, 0x0d, 0x8f, 0xe4, 0x18, 0x57,
+	0x3c, 0x92, 0x63, 0x3c, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f, 0xe4, 0x18,
+	0x5f, 0x3c, 0x92, 0x63, 0xf8, 0xf0, 0x48, 0x8e, 0x71, 0xc2, 0x63, 0x39, 0x86, 0x24, 0x36, 0xb0,
+	0x37, 0x8d, 0x01, 0x01, 0x00, 0x00, 0xff, 0xff, 0xad, 0x5c, 0xeb, 0xba, 0x29, 0x01, 0x00, 0x00,
 }

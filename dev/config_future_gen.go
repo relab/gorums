@@ -5,35 +5,72 @@ package dev
 
 import "golang.org/x/net/context"
 
-// ReadQCFutureFuture is a reference to an asynchronous ReadQCFuture quorum call invocation.
-type ReadQCFutureFuture struct {
-	reply *ReadQCFutureReply
+// ReadFuture is a reference to an asynchronous ReadFuture quorum call invocation.
+type ReadFuture struct {
+	reply *ReadFutureReply
 	err   error
 	c     chan struct{}
 }
 
-// ReadQCFutureFuture asynchronously invokes a ReadQCFuture quorum call
-// on configuration c and returns a ReadQCFutureFuture which can be used to
+// ReadFuture asynchronously invokes a ReadFuture quorum call
+// on configuration c and returns a ReadFuture which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) ReadQCFutureFuture(ctx context.Context, args *ReadReq) *ReadQCFutureFuture {
-	f := new(ReadQCFutureFuture)
+func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
+	f := new(ReadFuture)
 	f.c = make(chan struct{}, 1)
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.readQCFuture(ctx, c, args)
+		f.reply, f.err = c.mgr.readFuture(ctx, c, args)
 	}()
 	return f
 }
 
-// Get returns the reply and any error associated with the ReadQCFutureFuture.
+// Get returns the reply and any error associated with the ReadFuture.
 // The method blocks until a reply or error is available.
-func (f *ReadQCFutureFuture) Get() (*ReadQCFutureReply, error) {
+func (f *ReadFuture) Get() (*ReadFutureReply, error) {
 	<-f.c
 	return f.reply, f.err
 }
 
-// Done reports if a reply and/or error is available for the ReadQCFutureFuture.
-func (f *ReadQCFutureFuture) Done() bool {
+// Done reports if a reply and/or error is available for the ReadFuture.
+func (f *ReadFuture) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
+// WriteFuture is a reference to an asynchronous WriteFuture quorum call invocation.
+type WriteFuture struct {
+	reply *WriteFutureReply
+	err   error
+	c     chan struct{}
+}
+
+// WriteFuture asynchronously invokes a WriteFuture quorum call
+// on configuration c and returns a WriteFuture which can be used to
+// inspect the quorum call reply and error when available.
+func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
+	f := new(WriteFuture)
+	f.c = make(chan struct{}, 1)
+	go func() {
+		defer close(f.c)
+		f.reply, f.err = c.mgr.writeFuture(ctx, c, args)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the WriteFuture.
+// The method blocks until a reply or error is available.
+func (f *WriteFuture) Get() (*WriteFutureReply, error) {
+	<-f.c
+	return f.reply, f.err
+}
+
+// Done reports if a reply and/or error is available for the WriteFuture.
+func (f *WriteFuture) Done() bool {
 	select {
 	case <-f.c:
 		return true

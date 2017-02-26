@@ -7,7 +7,13 @@ package dev;
 service Register {
 	rpc Read(ReadRequest) returns (State) {
 		option (gorums.qc) 		= true;
+	}
+
+	rpc ReadCorrectable(ReadRequest) returns (State) {
 		option (gorums.correctable) 	= true;
+	}
+
+	rpc ReadFuture(ReadRequest) returns (State) {
 		option (gorums.qc_future) 	= true;
 	}
 
@@ -17,6 +23,10 @@ service Register {
 
 	rpc Write(State) returns (WriteResponse) {
 		option (gorums.qc) 		= true;
+		option (gorums.qf_with_req) 	= true;
+	}
+
+	rpc WriteFuture(State) returns (WriteResponse) {
 		option (gorums.qc_future) 	= true;
 		option (gorums.qf_with_req) 	= true;
 	}

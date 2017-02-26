@@ -336,10 +336,14 @@ var _ = codes.OK
 
 /* Methods on Configuration and the correctable struct ReadCorrectable */
 
+// reply    *ReadCorrectableReply
+
 // ReadCorrectable is a reference to a correctable ReadCorrectable quorum call.
 type ReadCorrectable struct {
 	sync.Mutex
-	reply    *ReadCorrectableReply
+	// the actual reply
+	*Reply
+	NodeIDs  []uint32
 	level    int
 	err      error
 	done     bool
@@ -356,8 +360,9 @@ type ReadCorrectable struct {
 // when available.
 func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadReq) *ReadCorrectable {
 	corr := &ReadCorrectable{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
 	}
 	go func() {
 		c.mgr.readCorrectable(ctx, c, corr, args)
@@ -370,10 +375,10 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadReq) *Rea
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadCorrectable) Get() (*ReadCorrectableReply, int, error) {
+func (c *ReadCorrectable) Get() (*Reply, int, error) {
 	c.Lock()
 	defer c.Unlock()
-	return c.reply, c.level, c.err
+	return c.Reply, c.level, c.err
 }
 
 // Done returns a channel that's closed when the correctable ReadCorrectable
@@ -403,13 +408,13 @@ func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *ReadCorrectable) set(reply *ReadCorrectableReply, level int, err error, done bool) {
+func (c *ReadCorrectable) set(reply *Reply, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
+	c.Reply, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -446,8 +451,8 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 
 	var (
 		replyValues = make([]*Reply, 0, c.n)
-		reply       = &ReadCorrectableReply{NodeIDs: make([]uint32, 0, c.n)}
 		clevel      = LevelNotSet
+		reply       *Reply
 		rlevel      int
 		errCount    int
 		quorum      bool
@@ -456,14 +461,13 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			corr.NodeIDs = append(corr.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
 			replyValues = append(replyValues, r.reply)
-			reply.Reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
-
+			reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
 			if quorum {
 				corr.set(reply, rlevel, nil, true)
 				return
@@ -505,935 +509,19 @@ func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadReq, rep
 
 /* 'gorums' plugin for protoc-gen-go - generated from: config_correctable_prelim_tmpl */
 
-// ReadCorrectablePrelim is a reference to a correctable quorum call
-// with server side preliminary reply support.
-type ReadCorrectablePrelim struct {
-	sync.Mutex
-	reply    *ReadCorrectablePrelimReply
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
-
-// ReadCorrectablePrelim asynchronously invokes a correctable ReadCorrectablePrelim quorum call
-// with server side preliminary reply support on configuration c and returns a
-// ReadCorrectablePrelim which can be used to inspect any replies or errors
-// when available.
-func (c *Configuration) ReadCorrectablePrelim(ctx context.Context, args *ReadReq) *ReadCorrectablePrelim {
-	corr := &ReadCorrectablePrelim{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
-	}
-	go func() {
-		c.mgr.readCorrectablePrelimCorrectablePrelim(ctx, c, corr, args)
-	}()
-	return corr
-}
-
-// Get returns the reply, level and any error associated with the
-// ReadCorrectablePrelimCorrectablePremlim. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *ReadCorrectablePrelim) Get() (*ReadCorrectablePrelimReply, int, error) {
-	c.Lock()
-	defer c.Unlock()
-	return c.reply, c.level, c.err
-}
-
-// Done returns a channel that's closed when the correctable ReadCorrectablePrelim
-// quorum call is done. A call is considered done when the quorum function has
-// signaled that a quorum of replies was received or that the call returned an
-// error.
-func (c *ReadCorrectablePrelim) Done() <-chan struct{} {
-	return c.donech
-}
-
-// Watch returns a channel that's closed when a reply or error at or above the
-// specified level is available. If the call is done, the channel is closed
-// disregardless of the specified level.
-func (c *ReadCorrectablePrelim) Watch(level int) <-chan struct{} {
-	ch := make(chan struct{})
-	c.Lock()
-	if level < c.level {
-		close(ch)
-		c.Unlock()
-		return ch
-	}
-	c.watchers = append(c.watchers, &struct {
-		level int
-		ch    chan struct{}
-	}{level, ch})
-	c.Unlock()
-	return ch
-}
-
-func (c *ReadCorrectablePrelim) set(reply *ReadCorrectablePrelimReply, level int, err error, done bool) {
-	c.Lock()
-	if c.done {
-		c.Unlock()
-		panic("set(...) called on a done correctable")
-	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
-	if done {
-		close(c.donech)
-		for _, watcher := range c.watchers {
-			if watcher != nil {
-				close(watcher.ch)
-			}
-		}
-		c.Unlock()
-		return
-	}
-	for i := range c.watchers {
-		if c.watchers[i] != nil && c.watchers[i].level <= level {
-			close(c.watchers[i].ch)
-			c.watchers[i] = nil
-		}
-	}
-	c.Unlock()
-}
-
 /* 'gorums' plugin for protoc-gen-go - generated from: config_future_tmpl */
-
-// ReadQCFutureFuture is a reference to an asynchronous ReadQCFuture quorum call invocation.
-type ReadQCFutureFuture struct {
-	reply *ReadQCFutureReply
-	err   error
-	c     chan struct{}
-}
-
-// ReadQCFutureFuture asynchronously invokes a ReadQCFuture quorum call
-// on configuration c and returns a ReadQCFutureFuture which can be used to
-// inspect the quorum call reply and error when available.
-func (c *Configuration) ReadQCFutureFuture(ctx context.Context, args *ReadReq) *ReadQCFutureFuture {
-	f := new(ReadQCFutureFuture)
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.readQCFuture(ctx, c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the ReadQCFutureFuture.
-// The method blocks until a reply or error is available.
-func (f *ReadQCFutureFuture) Get() (*ReadQCFutureReply, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply and/or error is available for the ReadQCFutureFuture.
-func (f *ReadQCFutureFuture) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
 
 /* 'gorums' plugin for protoc-gen-go - generated from: config_multicast_tmpl */
 
-// WriteMulticast is a one-way multicast operation, where args is sent to
-// every node in configuration c. The call is asynchronous and has no response
-// return value.
-func (c *Configuration) WriteMulticast(ctx context.Context, args *Reply) error {
-	return c.mgr.writeMulticast(ctx, c, args)
-}
-
 /* 'gorums' plugin for protoc-gen-go - generated from: config_quorumcall_tmpl */
-
-// GorumsQCReadQC invokes a GorumsQCReadQC quorum call on configuration c
-// and returns the result as a GorumsQCReadQCReply.
-func (c *Configuration) GorumsQCReadQC(ctx context.Context, args *ReadReq) (*GorumsQCReadQCReply, error) {
-	return c.mgr.gorumsQCReadQC(ctx, c, args)
-}
-
-// GorumsRPCReadQC invokes a GorumsRPCReadQC quorum call on configuration c
-// and returns the result as a GorumsRPCReadQCReply.
-func (c *Configuration) GorumsRPCReadQC(ctx context.Context, args *ReadReq) (*GorumsRPCReadQCReply, error) {
-	return c.mgr.gorumsRPCReadQC(ctx, c, args)
-}
-
-// ReadQCCustomReturn invokes a ReadQCCustomReturn quorum call on configuration c
-// and returns the result as a ReadQCCustomReturnReply.
-func (c *Configuration) ReadQCCustomReturn(ctx context.Context, args *ReadReq) (*ReadQCCustomReturnReply, error) {
-	return c.mgr.readQCCustomReturn(ctx, c, args)
-}
-
-// WriteQCPerNode invokes the WriteQCPerNode on each node in configuration c,
-// with the argument returned by the provided perNodeArg function
-// and returns the result as a WriteQCPerNodeReply.
-func (c *Configuration) WriteQCPerNode(ctx context.Context, perNodeArg func(nodeID uint32) *Reply) (*WriteQCPerNodeReply, error) {
-	return c.mgr.writeQCPerNode(ctx, c, perNodeArg)
-}
-
-// WriteQCWithReq invokes a WriteQCWithReq quorum call on configuration c
-// and returns the result as a WriteQCWithReqReply.
-func (c *Configuration) WriteQCWithReq(ctx context.Context, args *Reply) (*WriteQCWithReqReply, error) {
-	return c.mgr.writeQCWithReq(ctx, c, args)
-}
 
 /* 'gorums' plugin for protoc-gen-go - generated from: config_shared_struct_tmpl */
 
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// GorumsQCReadQCReply encapsulates the reply from a correctable GorumsQCReadQC quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type GorumsQCReadQCReply struct {
-	NodeIDs []uint32
-	*Reply
-}
-
-func (r GorumsQCReadQCReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// GorumsRPCReadQCReply encapsulates the reply from a correctable GorumsRPCReadQC quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type GorumsRPCReadQCReply struct {
-	NodeIDs []uint32
-	*Reply
-}
-
-func (r GorumsRPCReadQCReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// ReadCorrectableReply encapsulates the reply from a correctable ReadCorrectable quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadCorrectableReply struct {
-	NodeIDs []uint32
-	*Reply
-}
-
-func (r ReadCorrectableReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// ReadCorrectablePrelimReply encapsulates the reply from a correctable ReadCorrectablePrelim quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadCorrectablePrelimReply struct {
-	NodeIDs []uint32
-	*Reply
-}
-
-func (r ReadCorrectablePrelimReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// ReadQCCustomReturnReply encapsulates the reply from a correctable ReadQCCustomReturn quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadQCCustomReturnReply struct {
-	NodeIDs []uint32
-	*Reply
-}
-
-func (r ReadQCCustomReturnReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// ReadQCFutureReply encapsulates the reply from a correctable ReadQCFuture quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadQCFutureReply struct {
-	NodeIDs []uint32
-	*Reply
-}
-
-func (r ReadQCFutureReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// WriteQCPerNodeReply encapsulates the reply from a correctable WriteQCPerNode quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteQCPerNodeReply struct {
-	NodeIDs []uint32
-	*WriteResp
-}
-
-func (r WriteQCPerNodeReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResp)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// WriteQCWithReqReply encapsulates the reply from a correctable WriteQCWithReq quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteQCWithReqReply struct {
-	NodeIDs []uint32
-	*WriteResp
-}
-
-func (r WriteQCWithReqReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResp)
-}
-
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_correctable_prelim_tmpl */
-
-type readCorrectablePrelimReply struct {
-	nid   uint32
-	reply *Reply
-	err   error
-}
-
-func (m *Manager) readCorrectablePrelimCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadCorrectablePrelimCorrectablePrelim, args *ReadReq) {
-	replyChan := make(chan readCorrectablePrelimReply, c.n)
-
-	for _, n := range c.nodes {
-		go callGRPCReadCorrectablePrelimStream(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Reply, 0, c.n*2)
-		reply       = &ReadCorrectablePrelimReply{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-			reply.Reply, rlevel, quorum = c.qspec.ReadCorrectablePrelimCorrectablePrelimQF(replyValues)
-
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount == c.n { // Can't rely on reply count.
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
-}
-
-func callGRPCReadCorrectablePrelimStream(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readCorrectablePrelimReply) {
-	x := NewGorumsRPCClient(node.conn)
-	y, err := x.ReadCorrectablePrelim(ctx, args)
-	if err != nil {
-		replyChan <- readCorrectablePrelimReply{node.id, nil, err}
-		return
-	}
-
-	for {
-		reply, err := y.Recv()
-		if err == io.EOF {
-			return
-		}
-		replyChan <- readCorrectablePrelimReply{node.id, reply, err}
-		if err != nil {
-			return
-		}
-	}
-}
 
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_multicast_tmpl */
 
-func (m *Manager) writeMulticast(ctx context.Context, c *Configuration, args *Reply) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.WriteMulticastClient.Send(args)
-			if err == nil {
-				return
-			}
-			if m.logger != nil {
-				m.logger.Printf("%d: writeMulticast stream send error: %v", n.id, err)
-			}
-		}(node)
-	}
-
-	return nil
-}
-
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_quorumcall_tmpl */
-
-type gorumsQCReadQCReply struct {
-	nid   uint32
-	reply *Reply
-	err   error
-}
-
-func (m *Manager) gorumsQCReadQC(ctx context.Context, c *Configuration, args *ReadReq) (r *GorumsQCReadQCReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "GorumsQCReadQC")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.Reply,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan gorumsQCReadQCReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCGorumsQCReadQC(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Reply, 0, c.n)
-		reply       = &GorumsQCReadQCReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.Reply, quorum = c.qspec.GorumsQCReadQCQF(replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCGorumsQCReadQC(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- gorumsQCReadQCReply) {
-	reply := new(Reply)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.GorumsQC/GorumsQCReadQC",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- gorumsQCReadQCReply{node.id, reply, err}
-}
-
-type gorumsRPCReadQCReply struct {
-	nid   uint32
-	reply *Reply
-	err   error
-}
-
-func (m *Manager) gorumsRPCReadQC(ctx context.Context, c *Configuration, args *ReadReq) (r *GorumsRPCReadQCReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "GorumsRPCReadQC")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.Reply,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan gorumsRPCReadQCReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCGorumsRPCReadQC(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Reply, 0, c.n)
-		reply       = &GorumsRPCReadQCReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.Reply, quorum = c.qspec.GorumsRPCReadQCQF(replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCGorumsRPCReadQC(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- gorumsRPCReadQCReply) {
-	reply := new(Reply)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.GorumsRPC/GorumsRPCReadQC",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- gorumsRPCReadQCReply{node.id, reply, err}
-}
-
-type readQCCustomReturnReply struct {
-	nid   uint32
-	reply *Reply
-	err   error
-}
-
-func (m *Manager) readQCCustomReturn(ctx context.Context, c *Configuration, args *ReadReq) (r *ReadQCCustomReturnReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadQCCustomReturn")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.Reply,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan readQCCustomReturnReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCReadQCCustomReturn(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Reply, 0, c.n)
-		reply       = &ReadQCCustomReturnReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.Reply, quorum = c.qspec.ReadQCCustomReturnQF(replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCReadQCCustomReturn(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readQCCustomReturnReply) {
-	reply := new(Reply)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.GorumsRPC/ReadQCCustomReturn",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- readQCCustomReturnReply{node.id, reply, err}
-}
-
-type readQCFutureReply struct {
-	nid   uint32
-	reply *Reply
-	err   error
-}
-
-func (m *Manager) readQCFuture(ctx context.Context, c *Configuration, args *ReadReq) (r *ReadQCFutureReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadQCFuture")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.Reply,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan readQCFutureReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCReadQCFuture(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Reply, 0, c.n)
-		reply       = &ReadQCFutureReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.Reply, quorum = c.qspec.ReadQCFutureQF(replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCReadQCFuture(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readQCFutureReply) {
-	reply := new(Reply)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.GorumsRPC/ReadQCFuture",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- readQCFutureReply{node.id, reply, err}
-}
-
-type writeQCPerNodeReply struct {
-	nid   uint32
-	reply *WriteResp
-	err   error
-}
-
-func (m *Manager) writeQCPerNode(ctx context.Context, c *Configuration, perNodeArg func(nodeID uint32) *Reply) (r *WriteQCPerNodeReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteQCPerNode")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResp,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan writeQCPerNodeReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: perNodeArg}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCWriteQCPerNode(ctx, n, perNodeArg(n.id), replyChan)
-	}
-
-	var (
-		replyValues = make([]*WriteResp, 0, c.n)
-		reply       = &WriteQCPerNodeReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.WriteResp, quorum = c.qspec.WriteQCPerNodeQF(replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCWriteQCPerNode(ctx context.Context, node *Node, args *Reply, replyChan chan<- writeQCPerNodeReply) {
-	reply := new(WriteResp)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.GorumsRPC/WriteQCPerNode",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- writeQCPerNodeReply{node.id, reply, err}
-}
-
-type writeQCWithReqReply struct {
-	nid   uint32
-	reply *WriteResp
-	err   error
-}
-
-func (m *Manager) writeQCWithReq(ctx context.Context, c *Configuration, args *Reply) (r *WriteQCWithReqReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteQCWithReq")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResp,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan writeQCWithReqReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCWriteQCWithReq(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*WriteResp, 0, c.n)
-		reply       = &WriteQCWithReqReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.WriteResp, quorum = c.qspec.WriteQCWithReqQF(args, replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCWriteQCWithReq(ctx context.Context, node *Node, args *Reply, replyChan chan<- writeQCWithReqReply) {
-	reply := new(WriteResp)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.GorumsRPC/WriteQCWithReq",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- writeQCWithReqReply{node.id, reply, err}
-}
 
 /* 'gorums' plugin for protoc-gen-go - generated from: node_tmpl */
 
@@ -1446,11 +534,7 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
-	GorumsQCClient GorumsQCClient
-
 	GorumsRPCClient GorumsRPCClient
-
-	WriteMulticastClient GorumsRPC_WriteMulticastClient
 
 	sync.Mutex
 	lastErr error
@@ -1464,14 +548,7 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 
-	n.GorumsQCClient = NewGorumsQCClient(n.conn)
-
 	n.GorumsRPCClient = NewGorumsRPCClient(n.conn)
-
-	n.WriteMulticastClient, err = n.GorumsRPCClient.WriteMulticast(context.Background())
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
 
 	return nil
 }
@@ -1480,7 +557,6 @@ func (n *Node) close() error {
 	// TODO: Log error, mainly care about the connection error below.
 	// We should log this error, but we currently don't have access to the
 	// logger in the manager.
-	_, _ = n.WriteMulticastClient.CloseAndRecv()
 
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("conn close error: %v", err)
@@ -1492,37 +568,10 @@ func (n *Node) close() error {
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
-	// GorumsQCReadQCQF is the quorum function for the GorumsQCReadQC
-	// quorum call method.
-	GorumsQCReadQCQF(replies []*Reply) (*Reply, bool)
-
-	// GorumsRPCReadQCQF is the quorum function for the GorumsRPCReadQC
-	// quorum call method.
-	GorumsRPCReadQCQF(replies []*Reply) (*Reply, bool)
 
 	// ReadCorrectableQF is the quorum function for the ReadCorrectable
 	// correctable quorum call method.
 	ReadCorrectableQF(replies []*Reply) (*Reply, int, bool)
-
-	// ReadCorrectablePrelimCorrectablePrelimQF is the quorum function for the ReadCorrectablePrelim
-	// correctable prelim quourm call method.
-	ReadCorrectablePrelimCorrectablePrelimQF(replies []*Reply) (*Reply, int, bool)
-
-	// ReadQCCustomReturnQF is the quorum function for the ReadQCCustomReturn
-	// quorum call method.
-	ReadQCCustomReturnQF(replies []*Reply) (*Reply, bool)
-
-	// ReadQCFutureQF is the quorum function for the ReadQCFuture
-	// quorum call method.
-	ReadQCFutureQF(replies []*Reply) (*Reply, bool)
-
-	// WriteQCPerNodeQF is the quorum function for the WriteQCPerNode
-	// quorum call method.
-	WriteQCPerNodeQF(replies []*WriteResp) (*WriteResp, bool)
-
-	// WriteQCWithReqQF is the quorum function for the WriteQCWithReq
-	// quorum call method.
-	WriteQCWithReqQF(req *Reply, replies []*WriteResp) (*WriteResp, bool)
 }
 
 /* Static resources */
@@ -2143,128 +1192,11 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for GorumsQC service
-
-type GorumsQCClient interface {
-	// Read is a plain gRPC call
-	Read(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadQC is a synchronous quorum call
-	ReadQC(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-}
-
-type gorumsQCClient struct {
-	cc *grpc.ClientConn
-}
-
-func NewGorumsQCClient(cc *grpc.ClientConn) GorumsQCClient {
-	return &gorumsQCClient{cc}
-}
-
-func (c *gorumsQCClient) Read(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsQC/Read", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsQCClient) ReadQC(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsQC/ReadQC", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// Server API for GorumsQC service
-
-type GorumsQCServer interface {
-	// Read is a plain gRPC call
-	Read(context.Context, *ReadReq) (*Reply, error)
-	// ReadQC is a synchronous quorum call
-	ReadQC(context.Context, *ReadReq) (*Reply, error)
-}
-
-func RegisterGorumsQCServer(s *grpc.Server, srv GorumsQCServer) {
-	s.RegisterService(&_GorumsQC_serviceDesc, srv)
-}
-
-func _GorumsQC_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsQCServer).Read(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsQC/Read",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsQCServer).Read(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsQC_ReadQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsQCServer).ReadQC(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsQC/ReadQC",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsQCServer).ReadQC(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-var _GorumsQC_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "dev.GorumsQC",
-	HandlerType: (*GorumsQCServer)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Read",
-			Handler:    _GorumsQC_Read_Handler,
-		},
-		{
-			MethodName: "ReadQC",
-			Handler:    _GorumsQC_ReadQC_Handler,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "testdata/gorums_rpc_golden/gorums_rpc.proto",
-}
-
 // Client API for GorumsRPC service
 
 type GorumsRPCClient interface {
-	// Read is a plain gRPC call
-	Read(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadQC is a synchronous quorum call
-	ReadQC(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadQCCustomReturn is a synchronous quorum call with a custom return type
-	ReadQCCustomReturn(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadQCFuture is an asynchronous quorum call that returns a future object for retrieving results
-	ReadQCFuture(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that returns a correctable object for retrieving results
 	ReadCorrectable(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// ReadCorrectablePrelim is an asynchronous correctable preliminary quorum call that returns a correctable object for retrieving results
-	ReadCorrectablePrelim(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
-	// WriteMulticast is an asynchronous multicast to all nodes in a configuration; it doesn't collect any replies
-	WriteMulticast(ctx context.Context, opts ...grpc.CallOption) (GorumsRPC_WriteMulticastClient, error)
-	// WriteQCWithReq is a synchronous quorum call with the request parameter passed to the quorum function
-	WriteQCWithReq(ctx context.Context, in *Reply, opts ...grpc.CallOption) (*WriteResp, error)
-	// WriteQCPerNode is a synchronous quorum call, where, for each node, a function is called to determine the argument to be sent to that node
-	WriteQCPerNode(ctx context.Context, in *Reply, opts ...grpc.CallOption) (*WriteResp, error)
 }
 
 type gorumsRPCClient struct {
@@ -2273,42 +1205,6 @@ type gorumsRPCClient struct {
 
 func NewGorumsRPCClient(cc *grpc.ClientConn) GorumsRPCClient {
 	return &gorumsRPCClient{cc}
-}
-
-func (c *gorumsRPCClient) Read(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/Read", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) ReadQC(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/ReadQC", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) ReadQCCustomReturn(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/ReadQCCustomReturn", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) ReadQCFuture(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/ReadQCFuture", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *gorumsRPCClient) ReadCorrectable(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
@@ -2320,164 +1216,15 @@ func (c *gorumsRPCClient) ReadCorrectable(ctx context.Context, in *ReadReq, opts
 	return out, nil
 }
 
-func (c *gorumsRPCClient) ReadCorrectablePrelim(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
-	out := new(Reply)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/ReadCorrectablePrelim", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) WriteMulticast(ctx context.Context, opts ...grpc.CallOption) (GorumsRPC_WriteMulticastClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_GorumsRPC_serviceDesc.Streams[0], c.cc, "/dev.GorumsRPC/WriteMulticast", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &gorumsRPCWriteMulticastClient{stream}
-	return x, nil
-}
-
-type GorumsRPC_WriteMulticastClient interface {
-	Send(*Reply) error
-	CloseAndRecv() (*Nothing, error)
-	grpc.ClientStream
-}
-
-type gorumsRPCWriteMulticastClient struct {
-	grpc.ClientStream
-}
-
-func (x *gorumsRPCWriteMulticastClient) Send(m *Reply) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *gorumsRPCWriteMulticastClient) CloseAndRecv() (*Nothing, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(Nothing)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *gorumsRPCClient) WriteQCWithReq(ctx context.Context, in *Reply, opts ...grpc.CallOption) (*WriteResp, error) {
-	out := new(WriteResp)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/WriteQCWithReq", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *gorumsRPCClient) WriteQCPerNode(ctx context.Context, in *Reply, opts ...grpc.CallOption) (*WriteResp, error) {
-	out := new(WriteResp)
-	err := grpc.Invoke(ctx, "/dev.GorumsRPC/WriteQCPerNode", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // Server API for GorumsRPC service
 
 type GorumsRPCServer interface {
-	// Read is a plain gRPC call
-	Read(context.Context, *ReadReq) (*Reply, error)
-	// ReadQC is a synchronous quorum call
-	ReadQC(context.Context, *ReadReq) (*Reply, error)
-	// ReadQCCustomReturn is a synchronous quorum call with a custom return type
-	ReadQCCustomReturn(context.Context, *ReadReq) (*Reply, error)
-	// ReadQCFuture is an asynchronous quorum call that returns a future object for retrieving results
-	ReadQCFuture(context.Context, *ReadReq) (*Reply, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that returns a correctable object for retrieving results
 	ReadCorrectable(context.Context, *ReadReq) (*Reply, error)
-	// ReadCorrectablePrelim is an asynchronous correctable preliminary quorum call that returns a correctable object for retrieving results
-	ReadCorrectablePrelim(context.Context, *ReadReq) (*Reply, error)
-	// WriteMulticast is an asynchronous multicast to all nodes in a configuration; it doesn't collect any replies
-	WriteMulticast(GorumsRPC_WriteMulticastServer) error
-	// WriteQCWithReq is a synchronous quorum call with the request parameter passed to the quorum function
-	WriteQCWithReq(context.Context, *Reply) (*WriteResp, error)
-	// WriteQCPerNode is a synchronous quorum call, where, for each node, a function is called to determine the argument to be sent to that node
-	WriteQCPerNode(context.Context, *Reply) (*WriteResp, error)
 }
 
 func RegisterGorumsRPCServer(s *grpc.Server, srv GorumsRPCServer) {
 	s.RegisterService(&_GorumsRPC_serviceDesc, srv)
-}
-
-func _GorumsRPC_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).Read(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/Read",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).Read(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_ReadQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).ReadQC(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/ReadQC",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).ReadQC(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_ReadQCCustomReturn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).ReadQCCustomReturn(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/ReadQCCustomReturn",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).ReadQCCustomReturn(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_ReadQCFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).ReadQCFuture(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/ReadQCFuture",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).ReadQCFuture(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _GorumsRPC_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2498,130 +1245,16 @@ func _GorumsRPC_ReadCorrectable_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _GorumsRPC_ReadCorrectablePrelim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).ReadCorrectablePrelim(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/ReadCorrectablePrelim",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).ReadCorrectablePrelim(ctx, req.(*ReadReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_WriteMulticast_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(GorumsRPCServer).WriteMulticast(&gorumsRPCWriteMulticastServer{stream})
-}
-
-type GorumsRPC_WriteMulticastServer interface {
-	SendAndClose(*Nothing) error
-	Recv() (*Reply, error)
-	grpc.ServerStream
-}
-
-type gorumsRPCWriteMulticastServer struct {
-	grpc.ServerStream
-}
-
-func (x *gorumsRPCWriteMulticastServer) SendAndClose(m *Nothing) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *gorumsRPCWriteMulticastServer) Recv() (*Reply, error) {
-	m := new(Reply)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func _GorumsRPC_WriteQCWithReq_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Reply)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).WriteQCWithReq(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/WriteQCWithReq",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).WriteQCWithReq(ctx, req.(*Reply))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _GorumsRPC_WriteQCPerNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Reply)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(GorumsRPCServer).WriteQCPerNode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.GorumsRPC/WriteQCPerNode",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(GorumsRPCServer).WriteQCPerNode(ctx, req.(*Reply))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 var _GorumsRPC_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "dev.GorumsRPC",
 	HandlerType: (*GorumsRPCServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Read",
-			Handler:    _GorumsRPC_Read_Handler,
-		},
-		{
-			MethodName: "ReadQC",
-			Handler:    _GorumsRPC_ReadQC_Handler,
-		},
-		{
-			MethodName: "ReadQCCustomReturn",
-			Handler:    _GorumsRPC_ReadQCCustomReturn_Handler,
-		},
-		{
-			MethodName: "ReadQCFuture",
-			Handler:    _GorumsRPC_ReadQCFuture_Handler,
-		},
-		{
 			MethodName: "ReadCorrectable",
 			Handler:    _GorumsRPC_ReadCorrectable_Handler,
 		},
-		{
-			MethodName: "ReadCorrectablePrelim",
-			Handler:    _GorumsRPC_ReadCorrectablePrelim_Handler,
-		},
-		{
-			MethodName: "WriteQCWithReq",
-			Handler:    _GorumsRPC_WriteQCWithReq_Handler,
-		},
-		{
-			MethodName: "WriteQCPerNode",
-			Handler:    _GorumsRPC_WriteQCPerNode_Handler,
-		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "WriteMulticast",
-			Handler:       _GorumsRPC_WriteMulticast_Handler,
-			ClientStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "testdata/gorums_rpc_golden/gorums_rpc.proto",
 }
 
@@ -3217,33 +1850,23 @@ func init() {
 }
 
 var fileDescriptorGorumsRpc = []byte{
-	// 445 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x92, 0xbf, 0x8b, 0xd4, 0x40,
-	0x14, 0xc7, 0x33, 0xee, 0xde, 0xba, 0x79, 0x1c, 0xab, 0x0c, 0x0a, 0x61, 0xd1, 0xe1, 0x08, 0x16,
-	0x0b, 0x4a, 0x0e, 0x57, 0xd0, 0x42, 0xb0, 0x30, 0xa0, 0x95, 0xcb, 0xee, 0x20, 0x9e, 0xdd, 0x91,
-	0xdd, 0x3c, 0xb2, 0x81, 0xc9, 0x4e, 0x6e, 0x32, 0x73, 0x72, 0xdd, 0x95, 0x96, 0x57, 0x5a, 0x5a,
-	0x5e, 0x69, 0xb3, 0xff, 0x80, 0x95, 0xe5, 0x95, 0xda, 0xdd, 0xc6, 0xc6, 0x52, 0xf0, 0x1f, 0x90,
-	0x49, 0x82, 0x77, 0x5a, 0xc4, 0xe6, 0xaa, 0x79, 0x3f, 0xbe, 0x9f, 0xf7, 0x86, 0xf7, 0x1e, 0xdc,
-	0xd7, 0x58, 0xe8, 0x38, 0xd2, 0xd1, 0x6e, 0x22, 0x95, 0xc9, 0x8a, 0x7d, 0x95, 0x2f, 0xf6, 0x13,
-	0x29, 0x62, 0x5c, 0x5d, 0x8a, 0x04, 0xb9, 0x92, 0x5a, 0xd2, 0x4e, 0x8c, 0x87, 0xc3, 0x7b, 0x49,
-	0xaa, 0x97, 0x66, 0x1e, 0x2c, 0x64, 0xb6, 0xab, 0x50, 0x44, 0xf3, 0x46, 0xd7, 0x3c, 0xb5, 0xd4,
-	0x7f, 0x0a, 0x5b, 0x1c, 0x73, 0x71, 0x44, 0x6f, 0xc1, 0xd6, 0x9b, 0x48, 0x18, 0xf4, 0xc8, 0x0e,
-	0x19, 0xb9, 0xbc, 0x76, 0xe8, 0x1d, 0x70, 0x5f, 0xa7, 0x19, 0x16, 0x3a, 0xca, 0x72, 0xef, 0xda,
-	0x0e, 0x19, 0x75, 0xf8, 0x45, 0xc0, 0xbf, 0x0b, 0xee, 0x9e, 0x4a, 0x35, 0x72, 0x2c, 0x72, 0x7a,
-	0x13, 0x3a, 0x13, 0x7c, 0x57, 0xe1, 0x7d, 0x6e, 0x4d, 0xdf, 0x85, 0xeb, 0x1c, 0xa3, 0x98, 0xe3,
-	0x81, 0x35, 0x27, 0x52, 0x2f, 0xd3, 0x55, 0x32, 0x7e, 0x0b, 0xfd, 0x97, 0xd5, 0x0f, 0x66, 0x21,
-	0xf5, 0xa1, 0x6b, 0x15, 0x74, 0x3b, 0x88, 0xf1, 0x30, 0x68, 0xc4, 0x43, 0x68, 0xbc, 0x5c, 0x1c,
-	0xf9, 0x0e, 0x1d, 0x41, 0xcf, 0x26, 0x66, 0x61, 0x8b, 0xaa, 0x7b, 0xbc, 0xf6, 0xc8, 0xf8, 0x5b,
-	0x07, 0xdc, 0xba, 0x34, 0x9f, 0x5e, 0x71, 0x6d, 0xfa, 0x0c, 0x68, 0xad, 0x0c, 0x4d, 0xa1, 0x65,
-	0xc6, 0x51, 0x1b, 0xb5, 0x6a, 0xa1, 0x06, 0x96, 0xfa, 0xfc, 0xcb, 0xeb, 0x85, 0xf5, 0x78, 0x03,
-	0xd8, 0xae, 0xf9, 0x17, 0x46, 0x1b, 0x85, 0x6d, 0xfd, 0x3e, 0xda, 0x7e, 0x0f, 0xe1, 0x86, 0x4d,
-	0x86, 0x52, 0x29, 0x5c, 0xe8, 0x68, 0x2e, 0x5a, 0x91, 0xf7, 0x16, 0x79, 0x02, 0xb7, 0xff, 0x41,
-	0xa6, 0x0a, 0x45, 0x9a, 0xb5, 0x81, 0x27, 0x16, 0x1c, 0xc3, 0xa0, 0x5a, 0xe3, 0x2b, 0x23, 0x74,
-	0xba, 0x88, 0x0a, 0x4d, 0x2f, 0x69, 0x86, 0x35, 0xdd, 0x6c, 0xcf, 0xef, 0x7e, 0x58, 0x7b, 0x64,
-	0x44, 0xe8, 0xe3, 0x86, 0x99, 0x85, 0x7b, 0xa9, 0x5e, 0x72, 0x3c, 0xf8, 0x8b, 0x19, 0x54, 0xf6,
-	0x9f, 0xdb, 0xf0, 0xfb, 0x76, 0x1a, 0xa7, 0xb6, 0xd7, 0x05, 0x37, 0x45, 0x35, 0x91, 0x31, 0xfe,
-	0x9f, 0xfb, 0xb4, 0xf6, 0xc8, 0xf3, 0x07, 0x67, 0x1b, 0xe6, 0x7c, 0xdd, 0x30, 0xe7, 0x7c, 0xc3,
-	0xc8, 0x71, 0xc9, 0xc8, 0x69, 0xc9, 0xc8, 0x97, 0x92, 0x91, 0xb3, 0x92, 0x91, 0xf3, 0x92, 0x91,
-	0x1f, 0x25, 0x73, 0x7e, 0x96, 0x8c, 0x9c, 0x7c, 0x67, 0xce, 0xbc, 0x57, 0x1d, 0xf7, 0xa3, 0xdf,
-	0x01, 0x00, 0x00, 0xff, 0xff, 0x26, 0x05, 0x8d, 0x81, 0x36, 0x03, 0x00, 0x00,
+	// 286 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xd2, 0x2e, 0x49, 0x2d, 0x2e,
+	0x49, 0x49, 0x2c, 0x49, 0xd4, 0x4f, 0xcf, 0x2f, 0x2a, 0xcd, 0x2d, 0x8e, 0x2f, 0x2a, 0x48, 0x8e,
+	0x4f, 0xcf, 0xcf, 0x49, 0x49, 0xcd, 0x43, 0x12, 0xd1, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62,
+	0x4e, 0x49, 0x2d, 0x93, 0x52, 0x49, 0xcf, 0x2c, 0xc9, 0x28, 0x4d, 0xd2, 0x4b, 0xce, 0xcf, 0xd5,
+	0x2f, 0x4a, 0xcd, 0x49, 0x4c, 0x82, 0xaa, 0x83, 0x52, 0x10, 0xa5, 0x4a, 0xd6, 0x5c, 0xac, 0x41,
+	0xa9, 0x05, 0x39, 0x95, 0x42, 0x22, 0x5c, 0xac, 0x61, 0x89, 0x39, 0xa5, 0xa9, 0x12, 0x8c, 0x0a,
+	0x8c, 0x1a, 0x9c, 0x41, 0x10, 0x8e, 0x90, 0x0c, 0x17, 0x67, 0x48, 0x66, 0x6e, 0x6a, 0x71, 0x49,
+	0x62, 0x6e, 0x81, 0x04, 0x93, 0x02, 0xa3, 0x06, 0x73, 0x10, 0x42, 0x40, 0x49, 0x96, 0x8b, 0x33,
+	0xbc, 0x28, 0xb3, 0x24, 0x35, 0x28, 0xb5, 0xb8, 0x40, 0x48, 0x80, 0x8b, 0xd9, 0x2f, 0xb5, 0x1c,
+	0xac, 0x9d, 0x23, 0x08, 0xc4, 0x54, 0xe2, 0xe4, 0x62, 0x0f, 0x4a, 0x4d, 0x4c, 0x09, 0x4a, 0x2d,
+	0x04, 0x31, 0xfd, 0xf2, 0x4b, 0x32, 0x32, 0xf3, 0xd2, 0x8d, 0xec, 0xb8, 0x38, 0xdd, 0xc1, 0x2e,
+	0x08, 0x0a, 0x70, 0x16, 0x32, 0xe4, 0xe2, 0x07, 0x29, 0x71, 0xce, 0x2f, 0x2a, 0x4a, 0x4d, 0x2e,
+	0x49, 0x4c, 0xca, 0x49, 0x15, 0xe2, 0xd1, 0x4b, 0x49, 0x2d, 0xd3, 0x83, 0x6a, 0x94, 0xe2, 0x82,
+	0xf2, 0x0a, 0x72, 0x2a, 0x95, 0x58, 0x3a, 0xb6, 0x4a, 0x30, 0x3a, 0xe9, 0x5c, 0x78, 0x28, 0xc7,
+	0x70, 0xe3, 0xa1, 0x1c, 0xc3, 0x83, 0x87, 0x72, 0x8c, 0x0d, 0x8f, 0xe4, 0x18, 0x57, 0x3c, 0x92,
+	0x63, 0x3c, 0xf1, 0x48, 0x8e, 0xf1, 0xc2, 0x23, 0x39, 0xc6, 0x07, 0x8f, 0xe4, 0x18, 0x5f, 0x3c,
+	0x92, 0x63, 0xf8, 0xf0, 0x48, 0x8e, 0x71, 0xc2, 0x63, 0x39, 0x86, 0x24, 0x36, 0xb0, 0x37, 0x8d,
+	0x01, 0x01, 0x00, 0x00, 0xff, 0xff, 0x29, 0x1c, 0x7a, 0x57, 0x40, 0x01, 0x00, 0x00,
 }

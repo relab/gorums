@@ -5,35 +5,27 @@ package dev
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
-	// GorumsQCReadQCQF is the quorum function for the GorumsQCReadQC
+	// ReadQF is the quorum function for the Read
 	// quorum call method.
-	GorumsQCReadQCQF(replies []*Reply) (*Reply, bool)
-
-	// GorumsRPCReadQCQF is the quorum function for the GorumsRPCReadQC
-	// quorum call method.
-	GorumsRPCReadQCQF(replies []*Reply) (*Reply, bool)
+	ReadQF(replies []*State) (*State, bool)
 
 	// ReadCorrectableQF is the quorum function for the ReadCorrectable
 	// correctable quorum call method.
-	ReadCorrectableQF(replies []*Reply) (*Reply, int, bool)
+	ReadCorrectableQF(replies []*State) (*State, int, bool)
 
-	// ReadCorrectablePrelimCorrectablePrelimQF is the quorum function for the ReadCorrectablePrelim
+	// ReadFutureQF is the quorum function for the ReadFuture
+	// quorum call method.
+	ReadFutureQF(replies []*State) (*State, bool)
+
+	// ReadTwoCorrectablePrelimQF is the quorum function for the ReadTwo
 	// correctable prelim quourm call method.
-	ReadCorrectablePrelimCorrectablePrelimQF(replies []*Reply) (*Reply, int, bool)
+	ReadTwoCorrectablePrelimQF(replies []*State) (*State, int, bool)
 
-	// ReadQCCustomReturnQF is the quorum function for the ReadQCCustomReturn
+	// WriteQF is the quorum function for the Write
 	// quorum call method.
-	ReadQCCustomReturnQF(replies []*Reply) (*Reply, bool)
+	WriteQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
 
-	// ReadQCFutureQF is the quorum function for the ReadQCFuture
+	// WriteFutureQF is the quorum function for the WriteFuture
 	// quorum call method.
-	ReadQCFutureQF(replies []*Reply) (*Reply, bool)
-
-	// WriteQCPerNodeQF is the quorum function for the WriteQCPerNode
-	// quorum call method.
-	WriteQCPerNodeQF(replies []*WriteResp) (*WriteResp, bool)
-
-	// WriteQCWithReqQF is the quorum function for the WriteQCWithReq
-	// quorum call method.
-	WriteQCWithReqQF(req *Reply, replies []*WriteResp) (*WriteResp, bool)
+	WriteFutureQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
 }

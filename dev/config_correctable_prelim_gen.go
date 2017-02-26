@@ -9,11 +9,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-// ReadCorrectablePrelim is a reference to a correctable quorum call
+// ReadTwo is a reference to a correctable quorum call
 // with server side preliminary reply support.
-type ReadCorrectablePrelim struct {
+type ReadTwo struct {
 	sync.Mutex
-	reply    *ReadCorrectablePrelimReply
+	reply    *ReadTwoReply
 	level    int
 	err      error
 	done     bool
@@ -24,44 +24,44 @@ type ReadCorrectablePrelim struct {
 	donech chan struct{}
 }
 
-// ReadCorrectablePrelim asynchronously invokes a correctable ReadCorrectablePrelim quorum call
+// ReadTwo asynchronously invokes a correctable ReadTwo quorum call
 // with server side preliminary reply support on configuration c and returns a
-// ReadCorrectablePrelim which can be used to inspect any replies or errors
+// ReadTwo which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) ReadCorrectablePrelim(ctx context.Context, args *ReadReq) *ReadCorrectablePrelim {
-	corr := &ReadCorrectablePrelim{
+func (c *Configuration) ReadTwo(ctx context.Context, args *ReadRequest) *ReadTwo {
+	corr := &ReadTwo{
 		level:  LevelNotSet,
 		donech: make(chan struct{}),
 	}
 	go func() {
-		c.mgr.readCorrectablePrelimCorrectablePrelim(ctx, c, corr, args)
+		c.mgr.readTwoCorrectablePrelim(ctx, c, corr, args)
 	}()
 	return corr
 }
 
 // Get returns the reply, level and any error associated with the
-// ReadCorrectablePrelimCorrectablePremlim. The method does not block until a (possibly
+// ReadTwoCorrectablePremlim. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadCorrectablePrelim) Get() (*ReadCorrectablePrelimReply, int, error) {
+func (c *ReadTwo) Get() (*ReadTwoReply, int, error) {
 	c.Lock()
 	defer c.Unlock()
 	return c.reply, c.level, c.err
 }
 
-// Done returns a channel that's closed when the correctable ReadCorrectablePrelim
+// Done returns a channel that's closed when the correctable ReadTwo
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
-func (c *ReadCorrectablePrelim) Done() <-chan struct{} {
+func (c *ReadTwo) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // disregardless of the specified level.
-func (c *ReadCorrectablePrelim) Watch(level int) <-chan struct{} {
+func (c *ReadTwo) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.Lock()
 	if level < c.level {
@@ -77,7 +77,7 @@ func (c *ReadCorrectablePrelim) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *ReadCorrectablePrelim) set(reply *ReadCorrectablePrelimReply, level int, err error, done bool) {
+func (c *ReadTwo) set(reply *ReadTwoReply, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
