@@ -26,10 +26,10 @@ import (
 
 {{if .Correctable}}
 
-/* Methods on Configuration and the correctable struct {{.MethodName}} */
+/* Methods on Configuration and the correctable struct {{.TypeName}} */
 
-// {{.MethodName}} is a reference to a correctable {{.MethodName}} quorum call.
-type {{.MethodName}} struct {
+// {{.TypeName}} is a reference to a correctable {{.MethodName}} quorum call.
+type {{.TypeName}} struct {
 	sync.Mutex
 	// the actual reply
 	*{{.FQRespName}}
@@ -46,10 +46,10 @@ type {{.MethodName}} struct {
 
 // {{.MethodName}} asynchronously invokes a
 // correctable {{.MethodName}} quorum call on configuration c and returns a
-// {{.MethodName}} which can be used to inspect any replies or errors
+// {{.TypeName}} which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
-	corr := &{{.MethodName}}{
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.TypeName}} {
+	corr := &{{.TypeName}}{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
@@ -65,7 +65,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *{{.MethodName}}) Get() (*{{.FQRespName}}, int, error) {
+func (c *{{.TypeName}}) Get() (*{{.FQRespName}}, int, error) {
 	c.Lock()
 	defer c.Unlock()
 	return c.{{.RespName}}, c.level, c.err
@@ -75,14 +75,14 @@ func (c *{{.MethodName}}) Get() (*{{.FQRespName}}, int, error) {
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
-func (c *{{.MethodName}}) Done() <-chan struct{} {
+func (c *{{.TypeName}}) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // disregardless of the specified level.
-func (c *{{.MethodName}}) Watch(level int) <-chan struct{} {
+func (c *{{.TypeName}}) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.Lock()
 	if level < c.level {
@@ -98,7 +98,7 @@ func (c *{{.MethodName}}) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *{{.MethodName}}) set(reply *{{.FQRespName}}, level int, err error, done bool) {
+func (c *{{.TypeName}}) set(reply *{{.FQRespName}}, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
@@ -132,7 +132,7 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, corr *{{.MethodName}}, args *{{.FQReqName}}) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, corr *{{.TypeName}}, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
 	for _, n := range c.nodes {

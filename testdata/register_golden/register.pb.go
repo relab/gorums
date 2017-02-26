@@ -509,10 +509,10 @@ func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, r
 
 /* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_tmpl */
 
-/* Methods on Configuration and the correctable struct ReadCorrectable */
+/* Methods on Configuration and the correctable struct ReadCorrectableReply */
 
-// ReadCorrectable is a reference to a correctable ReadCorrectable quorum call.
-type ReadCorrectable struct {
+// ReadCorrectableReply is a reference to a correctable ReadCorrectable quorum call.
+type ReadCorrectableReply struct {
 	sync.Mutex
 	// the actual reply
 	*State
@@ -529,10 +529,10 @@ type ReadCorrectable struct {
 
 // ReadCorrectable asynchronously invokes a
 // correctable ReadCorrectable quorum call on configuration c and returns a
-// ReadCorrectable which can be used to inspect any replies or errors
+// ReadCorrectableReply which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
-	corr := &ReadCorrectable{
+func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectableReply {
+	corr := &ReadCorrectableReply{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
@@ -548,7 +548,7 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) 
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadCorrectable) Get() (*State, int, error) {
+func (c *ReadCorrectableReply) Get() (*State, int, error) {
 	c.Lock()
 	defer c.Unlock()
 	return c.State, c.level, c.err
@@ -558,14 +558,14 @@ func (c *ReadCorrectable) Get() (*State, int, error) {
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
-func (c *ReadCorrectable) Done() <-chan struct{} {
+func (c *ReadCorrectableReply) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // disregardless of the specified level.
-func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
+func (c *ReadCorrectableReply) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.Lock()
 	if level < c.level {
@@ -581,7 +581,7 @@ func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *ReadCorrectable) set(reply *State, level int, err error, done bool) {
+func (c *ReadCorrectableReply) set(reply *State, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
@@ -615,7 +615,7 @@ type readCorrectableReply struct {
 	err   error
 }
 
-func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
+func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectableReply, args *ReadRequest) {
 	replyChan := make(chan readCorrectableReply, c.n)
 
 	for _, n := range c.nodes {
