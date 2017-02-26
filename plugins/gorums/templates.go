@@ -155,10 +155,10 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			reply.{{.FQRespName}}, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
 {{else}}
-			reply.{{.FQRespName}}, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
-{{end}}
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
+{{end -}}
 			if quorum {
 				corr.set(reply, rlevel, nil, true)
 				return
@@ -459,7 +459,7 @@ type {{.TypeName}} struct {
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.FQRespName}})
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
 }
 
 {{- end -}}
@@ -517,9 +517,9 @@ func (m *Manager) {{.UnexportedMethodName}}CorrectablePrelim(ctx context.Context
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			reply.{{.FQRespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(args, replyValues)
 {{else}}
-			reply.{{.FQRespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
+			reply.{{.RespName}}, rlevel, quorum = c.qspec.{{.MethodName}}CorrectablePrelimQF(replyValues)
 {{end}}
 			if quorum {
 				corr.set(reply, rlevel, nil, true)
@@ -642,7 +642,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
 				ids:   r.NodeIDs,
-				reply: r.{{.FQRespName}},
+				reply: r.{{.RespName}},
 				err:   err,
 			}, false)
 			if err != nil {
@@ -681,9 +681,9 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if reply.{{.FQRespName}}, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
 {{else}}
-			if reply.{{.FQRespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
 				return reply, nil
 			}

@@ -42,7 +42,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
 				ids:   r.NodeIDs,
-				reply: r.{{.FQRespName}},
+				reply: r.{{.RespName}},
 				err:   err,
 			}, false)
 			if err != nil {
@@ -81,9 +81,9 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if reply.{{.FQRespName}}, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
 {{else}}
-			if reply.{{.FQRespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
 				return reply, nil
 			}

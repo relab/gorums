@@ -287,8 +287,8 @@ type serviceMethod struct {
 	CustomReturnType     string
 
 	FQRespName string
-	// RespName   string //TODO remove if FQRespName is enough
-	FQReqName string
+	RespName   string
+	FQReqName  string
 
 	TypeName           string
 	UnexportedTypeName string
@@ -343,8 +343,11 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			sm.UnexportedMethodName = unexport(sm.MethodName)
 
 			sm.FQReqName = g.fqTypeName(method.GetInputType())
+			// Response type without package
+			sm.RespName = g.typeName(method.GetOutputType())
+			// Response type with package (if needed)
 			sm.FQRespName = g.fqTypeName(method.GetOutputType())
-			// sm.RespName = g.typeName(method.GetOutputType()) //TODO always same as FQRespName??
+
 			sm.TypeName = sm.MethodName + "Reply"
 			sm.UnexportedTypeName = unexport(sm.TypeName)
 			sm.ServName = service.GetName()
