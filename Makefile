@@ -130,17 +130,11 @@ dev: static templates reinstallprotoc
 	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 	git checkout $(REG_PBGO_TEST_RPATH)
 
-.PHONY: OLDgoldenanddev
-OLDgoldenanddev: static templates reinstallprotoc
-	@echo generating golden output and _gen.go files for dev
-	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
-	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
-
 .PHONY: goldenanddev
 goldenanddev: static templates reinstallprotoc
 	@echo generating golden output and _gen.go files for dev
-	cp $(GORUMS_RPC_PROTO_DEV_RPATH) $(GORUMS_RPC_PROTO_TEST_RPATH)
-	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(GORUMS_RPC_PROTO_TEST_RPATH)
+	cp $(REG_PROTO_DEV_RPATH) $(REG_PROTO_TEST_RPATH)
+	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:. $(REG_PROTO_TEST_RPATH)
 
 .PHONY: profcpu
 profcpu:
