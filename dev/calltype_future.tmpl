@@ -3,7 +3,7 @@
 
 {{$pkgName := .PackageName}}
 
-{{if not .IgnoreImports}}
+{{- if not .IgnoreImports}}
 package {{$pkgName}}
 
 import (
@@ -19,7 +19,52 @@ import (
 
 {{range $elm := .Services}}
 
-{{if or (.QuorumCall)}}
+{{if .Future}}
+
+/* Methods on Configuration and the asynchronous struct {{.MethodName}} */
+
+// {{.MethodName}} is a reference to an asynchronous {{.MethodName}} quorum call invocation.
+type {{.MethodName}} struct {
+	// the actual reply
+	*{{.FQRespName}}
+	NodeIDs  []uint32
+	err   error
+	c     chan struct{}
+}
+
+// {{.MethodName}} asynchronously invokes a {{.MethodName}} quorum call
+// on configuration c and returns a {{.MethodName}} which can be used to
+// inspect the quorum call reply and error when available.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
+	f := &{{.MethodName}}{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(f.c)
+		f.{{.RespName}}, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, f, args)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the {{.MethodName}}.
+// The method blocks until a reply or error is available.
+func (f *{{.MethodName}}) Get() (*{{.FQRespName}}, error) {
+	<-f.c
+	return f.{{.RespName}}, f.err
+}
+
+// Done reports if a reply and/or error is available for the {{.MethodName}}.
+func (f *{{.MethodName}}) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
+/* Methods on Manager for asynchronous method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -27,7 +72,7 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, {{.MethodArg}}) (r *{{.TypeName}}, err error) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, f *{{.MethodName}}, {{.MethodArg}}) (r *{{.FQRespName}}, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
@@ -41,8 +86,8 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.{{.RespName}},
+				ids:   f.NodeIDs,
+				reply: f.{{.RespName}},
 				err:   err,
 			}, false)
 			if err != nil {
@@ -63,7 +108,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
-		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
+		reply       *{{.FQRespName}}
 		errCount    int
 		quorum      bool
 	)
@@ -71,7 +116,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			f.NodeIDs = append(f.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -81,9 +126,9 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
+			if reply, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
 {{else}}
-			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
 				return reply, nil
 			}

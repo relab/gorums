@@ -22,20 +22,6 @@ func (r ReadReply) String() string {
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
 
-// ReadFutureReply encapsulates the reply from a correctable ReadFuture quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadFutureReply struct {
-	NodeIDs []uint32
-	*State
-}
-
-func (r ReadFutureReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
 // WriteReply encapsulates the reply from a correctable Write quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type WriteReply struct {
@@ -44,19 +30,5 @@ type WriteReply struct {
 }
 
 func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// WriteFutureReply encapsulates the reply from a correctable WriteFuture quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteFutureReply struct {
-	NodeIDs []uint32
-	*WriteResponse
-}
-
-func (r WriteFutureReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }

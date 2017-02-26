@@ -324,7 +324,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Value != state.Value {
-		t.Fatalf("read future reply:\ngot:\n%v\nwant:\n%v", rreply.State, state)
+		t.Fatalf("read future reply:\ngot:\n%v\nwant:\n%v", rreply, state)
 	}
 }
 
@@ -1009,7 +1009,7 @@ func BenchmarkRead1KQ1N1FutureParallelRemote(b *testing.B) {
 ///////////////////////////////////////////////////////////////
 
 var replySink *qc.ReadReply
-var replySinkFuture *qc.ReadFutureReply
+var replySinkFuture *qc.State
 
 func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote bool) {
 	var rservers []regServer
@@ -1153,7 +1153,7 @@ func BenchmarkWrited1KQ2N3FutureParallelRemote(b *testing.B) {
 ///////////////////////////////////////////////////////////////
 
 var wreplySink *qc.WriteReply
-var wreplySinkFuture *qc.WriteFutureReply
+var wreplySinkFuture *qc.WriteResponse
 
 func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote bool) {
 	var rservers []regServer

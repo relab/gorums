@@ -406,6 +406,173 @@ func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQR
 {{- end -}}
 `
 
+const calltype_future_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{- if not .IgnoreImports}}
+package {{$pkgName}}
+
+import (
+	"time"
+
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+)
+{{end}}
+
+{{range $elm := .Services}}
+
+{{if .Future}}
+
+/* Methods on Configuration and the asynchronous struct {{.MethodName}} */
+
+// {{.MethodName}} is a reference to an asynchronous {{.MethodName}} quorum call invocation.
+type {{.MethodName}} struct {
+	// the actual reply
+	*{{.FQRespName}}
+	NodeIDs  []uint32
+	err   error
+	c     chan struct{}
+}
+
+// {{.MethodName}} asynchronously invokes a {{.MethodName}} quorum call
+// on configuration c and returns a {{.MethodName}} which can be used to
+// inspect the quorum call reply and error when available.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
+	f := &{{.MethodName}}{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(f.c)
+		f.{{.RespName}}, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, f, args)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the {{.MethodName}}.
+// The method blocks until a reply or error is available.
+func (f *{{.MethodName}}) Get() (*{{.FQRespName}}, error) {
+	<-f.c
+	return f.{{.RespName}}, f.err
+}
+
+// Done reports if a reply and/or error is available for the {{.MethodName}}.
+func (f *{{.MethodName}}) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
+/* Methods on Manager for asynchronous method {{.MethodName}} */
+
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, f *{{.MethodName}}, {{.MethodArg}}) (r *{{.FQRespName}}, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   f.NodeIDs,
+				reply: f.{{.RespName}},
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: {{.MethodArgUse}}}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPC{{.MethodName}}(ctx, n, {{.MethodArgCall}}, replyChan)
+	}
+
+	var (
+		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		reply       *{{.FQRespName}}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			f.NodeIDs = append(f.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			if reply, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
+{{else}}
+			if reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+{{end -}}
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.FQRespName}})
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+}
+
+{{- end -}}
+{{- end -}}
+`
+
 const calltype_multicast_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
@@ -443,61 +610,6 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 	return nil
 }
-{{- end -}}
-{{- end -}}
-`
-
-const config_future_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
-
-{{- if not .IgnoreImports}}
-package {{.PackageName}}
-
-import "golang.org/x/net/context"
-
-{{- end}}
-
-{{range $elm := .Services}}
-
-{{if .Future}}
-
-// {{.MethodName}} is a reference to an asynchronous {{.MethodName}} quorum call invocation.
-type {{.MethodName}} struct {
-	reply *{{.TypeName}}
-	err   error
-	c     chan struct{}
-}
-
-// {{.MethodName}} asynchronously invokes a {{.MethodName}} quorum call
-// on configuration c and returns a {{.MethodName}} which can be used to
-// inspect the quorum call reply and error when available.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
-	f := new({{.MethodName}})
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the {{.MethodName}}.
-// The method blocks until a reply or error is available.
-func (f *{{.MethodName}}) Get() (*{{.TypeName}}, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply and/or error is available for the {{.MethodName}}.
-func (f *{{.MethodName}}) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-
 {{- end -}}
 {{- end -}}
 `
@@ -552,7 +664,7 @@ import "fmt"
 
 {{/*if or (.QuorumCall) (.Future) (.Correctable) (.CorrectablePrelim) */}}
 
-{{if or (.QuorumCall) (.Future)}}
+{{if or (.QuorumCall)}}
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -593,7 +705,7 @@ import (
 
 {{range $elm := .Services}}
 
-{{if or (.QuorumCall) (.Future)}}
+{{if or (.QuorumCall)}}
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -813,8 +925,8 @@ type QuorumSpec interface {
 var templates = map[string]string{
 	"calltype_correctable_tmpl":        calltype_correctable_tmpl,
 	"calltype_correctable_prelim_tmpl": calltype_correctable_prelim_tmpl,
+	"calltype_future_tmpl":             calltype_future_tmpl,
 	"calltype_multicast_tmpl":          calltype_multicast_tmpl,
-	"config_future_tmpl":               config_future_tmpl,
 	"config_quorumcall_tmpl":           config_quorumcall_tmpl,
 	"config_shared_struct_tmpl":        config_shared_struct_tmpl,
 	"mgr_quorumcall_tmpl":              mgr_quorumcall_tmpl,

@@ -680,6 +680,280 @@ func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest,
 	replyChan <- readCorrectableReply{node.id, reply, err}
 }
 
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_future_tmpl */
+
+/* Methods on Configuration and the asynchronous struct ReadFuture */
+
+// ReadFuture is a reference to an asynchronous ReadFuture quorum call invocation.
+type ReadFuture struct {
+	// the actual reply
+	*State
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
+}
+
+// ReadFuture asynchronously invokes a ReadFuture quorum call
+// on configuration c and returns a ReadFuture which can be used to
+// inspect the quorum call reply and error when available.
+func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
+	f := &ReadFuture{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(f.c)
+		f.State, f.err = c.mgr.readFuture(ctx, c, f, args)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the ReadFuture.
+// The method blocks until a reply or error is available.
+func (f *ReadFuture) Get() (*State, error) {
+	<-f.c
+	return f.State, f.err
+}
+
+// Done reports if a reply and/or error is available for the ReadFuture.
+func (f *ReadFuture) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
+/* Methods on Manager for asynchronous method ReadFuture */
+
+type readFutureReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
+func (m *Manager) readFuture(ctx context.Context, c *Configuration, f *ReadFuture, args *ReadRequest) (r *State, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   f.NodeIDs,
+				reply: f.State,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan readFutureReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCReadFuture(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       *State
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			f.NodeIDs = append(f.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.ReadFutureQF(replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCReadFuture(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readFutureReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/ReadFuture",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readFutureReply{node.id, reply, err}
+}
+
+/* Methods on Configuration and the asynchronous struct WriteFuture */
+
+// WriteFuture is a reference to an asynchronous WriteFuture quorum call invocation.
+type WriteFuture struct {
+	// the actual reply
+	*WriteResponse
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
+}
+
+// WriteFuture asynchronously invokes a WriteFuture quorum call
+// on configuration c and returns a WriteFuture which can be used to
+// inspect the quorum call reply and error when available.
+func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
+	f := &WriteFuture{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(f.c)
+		f.WriteResponse, f.err = c.mgr.writeFuture(ctx, c, f, args)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the WriteFuture.
+// The method blocks until a reply or error is available.
+func (f *WriteFuture) Get() (*WriteResponse, error) {
+	<-f.c
+	return f.WriteResponse, f.err
+}
+
+// Done reports if a reply and/or error is available for the WriteFuture.
+func (f *WriteFuture) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
+/* Methods on Manager for asynchronous method WriteFuture */
+
+type writeFutureReply struct {
+	nid   uint32
+	reply *WriteResponse
+	err   error
+}
+
+func (m *Manager) writeFuture(ctx context.Context, c *Configuration, f *WriteFuture, args *State) (r *WriteResponse, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   f.NodeIDs,
+				reply: f.WriteResponse,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan writeFutureReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCWriteFuture(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*WriteResponse, 0, c.n)
+		reply       *WriteResponse
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			f.NodeIDs = append(f.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.WriteFutureQF(args, replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCWriteFuture(ctx context.Context, node *Node, args *State, replyChan chan<- writeFutureReply) {
+	reply := new(WriteResponse)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/WriteFuture",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- writeFutureReply{node.id, reply, err}
+}
+
 /* 'gorums' plugin for protoc-gen-go - generated from: calltype_multicast_tmpl */
 
 // WriteAsync is a one-way multicast operation, where args is sent to
@@ -703,82 +977,6 @@ func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State)
 	}
 
 	return nil
-}
-
-/* 'gorums' plugin for protoc-gen-go - generated from: config_future_tmpl */
-
-// ReadFuture is a reference to an asynchronous ReadFuture quorum call invocation.
-type ReadFuture struct {
-	reply *ReadFutureReply
-	err   error
-	c     chan struct{}
-}
-
-// ReadFuture asynchronously invokes a ReadFuture quorum call
-// on configuration c and returns a ReadFuture which can be used to
-// inspect the quorum call reply and error when available.
-func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
-	f := new(ReadFuture)
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.readFuture(ctx, c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the ReadFuture.
-// The method blocks until a reply or error is available.
-func (f *ReadFuture) Get() (*ReadFutureReply, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply and/or error is available for the ReadFuture.
-func (f *ReadFuture) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-
-// WriteFuture is a reference to an asynchronous WriteFuture quorum call invocation.
-type WriteFuture struct {
-	reply *WriteFutureReply
-	err   error
-	c     chan struct{}
-}
-
-// WriteFuture asynchronously invokes a WriteFuture quorum call
-// on configuration c and returns a WriteFuture which can be used to
-// inspect the quorum call reply and error when available.
-func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
-	f := new(WriteFuture)
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.writeFuture(ctx, c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the WriteFuture.
-// The method blocks until a reply or error is available.
-func (f *WriteFuture) Get() (*WriteFutureReply, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply and/or error is available for the WriteFuture.
-func (f *WriteFuture) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: config_quorumcall_tmpl */
@@ -814,20 +1012,6 @@ func (r ReadReply) String() string {
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
 
-// ReadFutureReply encapsulates the reply from a correctable ReadFuture quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadFutureReply struct {
-	NodeIDs []uint32
-	*State
-}
-
-func (r ReadFutureReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
 // WriteReply encapsulates the reply from a correctable Write quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type WriteReply struct {
@@ -836,20 +1020,6 @@ type WriteReply struct {
 }
 
 func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// WriteFutureReply encapsulates the reply from a correctable WriteFuture quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteFutureReply struct {
-	NodeIDs []uint32
-	*WriteResponse
-}
-
-func (r WriteFutureReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
@@ -946,97 +1116,6 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 	replyChan <- readReply{node.id, reply, err}
 }
 
-type readFutureReply struct {
-	nid   uint32
-	reply *State
-	err   error
-}
-
-func (m *Manager) readFuture(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadFutureReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.State,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan readFutureReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCReadFuture(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*State, 0, c.n)
-		reply       = &ReadFutureReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.State, quorum = c.qspec.ReadFutureQF(replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCReadFuture(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readFutureReply) {
-	reply := new(State)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.Register/ReadFuture",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- readFutureReply{node.id, reply, err}
-}
-
 type writeReply struct {
 	nid   uint32
 	reply *WriteResponse
@@ -1126,97 +1205,6 @@ func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<
 		node.setLastErr(err)
 	}
 	replyChan <- writeReply{node.id, reply, err}
-}
-
-type writeFutureReply struct {
-	nid   uint32
-	reply *WriteResponse
-	err   error
-}
-
-func (m *Manager) writeFuture(ctx context.Context, c *Configuration, args *State) (r *WriteFutureReply, err error) {
-	var ti traceInfo
-	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResponse,
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
-
-	replyChan := make(chan writeFutureReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
-	for _, n := range c.nodes {
-		go callGRPCWriteFuture(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       = &WriteFutureReply{NodeIDs: make([]uint32, 0, c.n)}
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			if m.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteFutureQF(args, replyValues); quorum {
-				return reply, nil
-			}
-		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
-		}
-
-		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
-		}
-	}
-}
-
-func callGRPCWriteFuture(ctx context.Context, node *Node, args *State, replyChan chan<- writeFutureReply) {
-	reply := new(WriteResponse)
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/dev.Register/WriteFuture",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- writeFutureReply{node.id, reply, err}
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: node_tmpl */
