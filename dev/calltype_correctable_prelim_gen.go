@@ -10,11 +10,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-/* Methods on Configuration and the correctable prelim struct ReadTwo */
+/* Methods on Configuration and the correctable prelim struct ReadTwoReply */
 
-// ReadTwo is a reference to a correctable quorum call
+// ReadTwoReply is a reference to a correctable quorum call
 // with server side preliminary reply support.
-type ReadTwo struct {
+type ReadTwoReply struct {
 	sync.Mutex
 	// the actual reply
 	*State
@@ -31,10 +31,10 @@ type ReadTwo struct {
 
 // ReadTwo asynchronously invokes a correctable ReadTwo quorum call
 // with server side preliminary reply support on configuration c and returns a
-// ReadTwo which can be used to inspect any replies or errors
+// ReadTwoReply which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) ReadTwo(ctx context.Context, args *ReadRequest) *ReadTwo {
-	corr := &ReadTwo{
+func (c *Configuration) ReadTwo(ctx context.Context, args *ReadRequest) *ReadTwoReply {
+	corr := &ReadTwoReply{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
@@ -46,11 +46,11 @@ func (c *Configuration) ReadTwo(ctx context.Context, args *ReadRequest) *ReadTwo
 }
 
 // Get returns the reply, level and any error associated with the
-// ReadTwoCorrectablePremlim. The method does not block until a (possibly
+// ReadTwo. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadTwo) Get() (*State, int, error) {
+func (c *ReadTwoReply) Get() (*State, int, error) {
 	c.Lock()
 	defer c.Unlock()
 	return c.State, c.level, c.err
@@ -60,14 +60,14 @@ func (c *ReadTwo) Get() (*State, int, error) {
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
-func (c *ReadTwo) Done() <-chan struct{} {
+func (c *ReadTwoReply) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // disregardless of the specified level.
-func (c *ReadTwo) Watch(level int) <-chan struct{} {
+func (c *ReadTwoReply) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.Lock()
 	if level < c.level {
@@ -83,7 +83,7 @@ func (c *ReadTwo) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *ReadTwo) set(reply *State, level int, err error, done bool) {
+func (c *ReadTwoReply) set(reply *State, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
@@ -117,7 +117,7 @@ type readTwoReply struct {
 	err   error
 }
 
-func (m *Manager) readTwo(ctx context.Context, c *Configuration, corr *ReadTwo, args *ReadRequest) {
+func (m *Manager) readTwo(ctx context.Context, c *Configuration, corr *ReadTwoReply, args *ReadRequest) {
 	replyChan := make(chan readTwoReply, c.n)
 
 	for _, n := range c.nodes {
