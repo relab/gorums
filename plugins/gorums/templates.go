@@ -672,7 +672,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
-{{- end -}}
+{{- end}}
 
 /* Methods on Manager for quorum call method {{.MethodName}} */
 

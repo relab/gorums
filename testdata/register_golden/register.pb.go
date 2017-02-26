@@ -1002,7 +1002,9 @@ func (r ReadReply) String() string {
 // and returns the result as a ReadReply.
 func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
 	return c.mgr.read(ctx, c, args)
-} /* Methods on Manager for quorum call method Read */
+}
+
+/* Methods on Manager for quorum call method Read */
 
 type readReply struct {
 	nid   uint32
@@ -1116,7 +1118,9 @@ func (r WriteReply) String() string {
 // and returns the result as a WriteReply.
 func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
 	return c.mgr.write(ctx, c, args)
-} /* Methods on Manager for quorum call method Write */
+}
+
+/* Methods on Manager for quorum call method Write */
 
 type writeReply struct {
 	nid   uint32
