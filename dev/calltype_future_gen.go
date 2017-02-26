@@ -13,10 +13,10 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-/* Methods on Configuration and the asynchronous struct ReadFuture */
+/* Methods on Configuration and the asynchronous struct ReadFutureReply */
 
-// ReadFuture is a reference to an asynchronous ReadFuture quorum call invocation.
-type ReadFuture struct {
+// ReadFutureReply is a reference to an asynchronous ReadFuture quorum call invocation.
+type ReadFutureReply struct {
 	// the actual reply
 	*State
 	NodeIDs []uint32
@@ -25,10 +25,10 @@ type ReadFuture struct {
 }
 
 // ReadFuture asynchronously invokes a ReadFuture quorum call
-// on configuration c and returns a ReadFuture which can be used to
+// on configuration c and returns a ReadFutureReply which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
-	f := &ReadFuture{
+func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFutureReply {
+	f := &ReadFutureReply{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
@@ -41,13 +41,13 @@ func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *Read
 
 // Get returns the reply and any error associated with the ReadFuture.
 // The method blocks until a reply or error is available.
-func (f *ReadFuture) Get() (*State, error) {
+func (f *ReadFutureReply) Get() (*State, error) {
 	<-f.c
 	return f.State, f.err
 }
 
 // Done reports if a reply and/or error is available for the ReadFuture.
-func (f *ReadFuture) Done() bool {
+func (f *ReadFutureReply) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -64,7 +64,7 @@ type readFutureReply struct {
 	err   error
 }
 
-func (m *Manager) readFuture(ctx context.Context, c *Configuration, f *ReadFuture, args *ReadRequest) (r *State, err error) {
+func (m *Manager) readFuture(ctx context.Context, c *Configuration, f *ReadFutureReply, args *ReadRequest) (r *State, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
@@ -149,10 +149,10 @@ func callGRPCReadFuture(ctx context.Context, node *Node, args *ReadRequest, repl
 	replyChan <- readFutureReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the asynchronous struct WriteFuture */
+/* Methods on Configuration and the asynchronous struct WriteFutureReply */
 
-// WriteFuture is a reference to an asynchronous WriteFuture quorum call invocation.
-type WriteFuture struct {
+// WriteFutureReply is a reference to an asynchronous WriteFuture quorum call invocation.
+type WriteFutureReply struct {
 	// the actual reply
 	*WriteResponse
 	NodeIDs []uint32
@@ -161,10 +161,10 @@ type WriteFuture struct {
 }
 
 // WriteFuture asynchronously invokes a WriteFuture quorum call
-// on configuration c and returns a WriteFuture which can be used to
+// on configuration c and returns a WriteFutureReply which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
-	f := &WriteFuture{
+func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFutureReply {
+	f := &WriteFutureReply{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
@@ -177,13 +177,13 @@ func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFutu
 
 // Get returns the reply and any error associated with the WriteFuture.
 // The method blocks until a reply or error is available.
-func (f *WriteFuture) Get() (*WriteResponse, error) {
+func (f *WriteFutureReply) Get() (*WriteResponse, error) {
 	<-f.c
 	return f.WriteResponse, f.err
 }
 
 // Done reports if a reply and/or error is available for the WriteFuture.
-func (f *WriteFuture) Done() bool {
+func (f *WriteFutureReply) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -200,7 +200,7 @@ type writeFutureReply struct {
 	err   error
 }
 
-func (m *Manager) writeFuture(ctx context.Context, c *Configuration, f *WriteFuture, args *State) (r *WriteResponse, err error) {
+func (m *Manager) writeFuture(ctx context.Context, c *Configuration, f *WriteFutureReply, args *State) (r *WriteResponse, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")

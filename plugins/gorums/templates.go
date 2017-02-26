@@ -429,10 +429,10 @@ import (
 
 {{if .Future}}
 
-/* Methods on Configuration and the asynchronous struct {{.MethodName}} */
+/* Methods on Configuration and the asynchronous struct {{.TypeName}} */
 
-// {{.MethodName}} is a reference to an asynchronous {{.MethodName}} quorum call invocation.
-type {{.MethodName}} struct {
+// {{.TypeName}} is a reference to an asynchronous {{.MethodName}} quorum call invocation.
+type {{.TypeName}} struct {
 	// the actual reply
 	*{{.FQRespName}}
 	NodeIDs  []uint32
@@ -441,10 +441,10 @@ type {{.MethodName}} struct {
 }
 
 // {{.MethodName}} asynchronously invokes a {{.MethodName}} quorum call
-// on configuration c and returns a {{.MethodName}} which can be used to
+// on configuration c and returns a {{.TypeName}} which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.MethodName}} {
-	f := &{{.MethodName}}{
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.TypeName}} {
+	f := &{{.TypeName}}{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
@@ -457,13 +457,13 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 
 // Get returns the reply and any error associated with the {{.MethodName}}.
 // The method blocks until a reply or error is available.
-func (f *{{.MethodName}}) Get() (*{{.FQRespName}}, error) {
+func (f *{{.TypeName}}) Get() (*{{.FQRespName}}, error) {
 	<-f.c
 	return f.{{.RespName}}, f.err
 }
 
 // Done reports if a reply and/or error is available for the {{.MethodName}}.
-func (f *{{.MethodName}}) Done() bool {
+func (f *{{.TypeName}}) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -480,7 +480,7 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, f *{{.MethodName}}, {{.MethodArg}}) (r *{{.FQRespName}}, err error) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, f *{{.TypeName}}, {{.MethodArg}}) (r *{{.FQRespName}}, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
