@@ -406,6 +406,47 @@ func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQR
 {{- end -}}
 `
 
+const calltype_multicast_tmpl = `
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{$pkgName := .PackageName}}
+
+{{if not .IgnoreImports}}
+package {{$pkgName}}
+
+import "golang.org/x/net/context"
+{{end}}
+
+{{range $elm := .Services}}
+
+{{if .Multicast}}
+
+// {{.MethodName}} is a one-way multicast operation, where args is sent to
+// every node in configuration c. The call is asynchronous and has no response
+// return value.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+}
+
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.{{.MethodName}}Client.Send(args)
+			if err == nil {
+				return
+			}
+			if m.logger != nil {
+				m.logger.Printf("%d: {{.UnexportedMethodName}} stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+
+	return nil
+}
+{{- end -}}
+{{- end -}}
+`
+
 const config_future_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
@@ -455,31 +496,6 @@ func (f *{{.MethodName}}) Done() bool {
 	default:
 		return false
 	}
-}
-
-{{- end -}}
-{{- end -}}
-`
-
-const config_multicast_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
-
-{{- if not .IgnoreImports}}
-package {{.PackageName}}
-
-import "golang.org/x/net/context"
-
-{{- end}}
-
-{{range $elm := .Services}}
-
-{{if .Multicast}}
-
-// {{.MethodName}} is a one-way multicast operation, where args is sent to
-// every node in configuration c. The call is asynchronous and has no response
-// return value.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
 }
 
 {{- end -}}
@@ -554,39 +570,6 @@ func (r {{.TypeName}}) String() string {
 
 {{- end -}}
 {{- end -}}
-`
-
-const mgr_multicast_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
-
-{{$pkgName := .PackageName}}
-
-{{if not .IgnoreImports}}
-package {{$pkgName}}
-
-import "golang.org/x/net/context"
-{{end}}
-
-{{range $elm := .Services}}
-
-{{if .Multicast}}
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.{{.MethodName}}Client.Send(args)
-			if err == nil {
-				return
-			}
-			if m.logger != nil {
-				m.logger.Printf("%d: {{.UnexportedMethodName}} stream send error: %v", n.id, err)
-			}
-		}(node)
-	}
-
-	return nil
-}
-{{- end -}}
-{{end}}
 `
 
 const mgr_quorumcall_tmpl = `
@@ -830,11 +813,10 @@ type QuorumSpec interface {
 var templates = map[string]string{
 	"calltype_correctable_tmpl":        calltype_correctable_tmpl,
 	"calltype_correctable_prelim_tmpl": calltype_correctable_prelim_tmpl,
+	"calltype_multicast_tmpl":          calltype_multicast_tmpl,
 	"config_future_tmpl":               config_future_tmpl,
-	"config_multicast_tmpl":            config_multicast_tmpl,
 	"config_quorumcall_tmpl":           config_quorumcall_tmpl,
 	"config_shared_struct_tmpl":        config_shared_struct_tmpl,
-	"mgr_multicast_tmpl":               mgr_multicast_tmpl,
 	"mgr_quorumcall_tmpl":              mgr_quorumcall_tmpl,
 	"node_tmpl":                        node_tmpl,
 	"qspec_tmpl":                       qspec_tmpl,

@@ -680,6 +680,31 @@ func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest,
 	replyChan <- readCorrectableReply{node.id, reply, err}
 }
 
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_multicast_tmpl */
+
+// WriteAsync is a one-way multicast operation, where args is sent to
+// every node in configuration c. The call is asynchronous and has no response
+// return value.
+func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
+	return c.mgr.writeAsync(ctx, c, args)
+}
+
+func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.WriteAsyncClient.Send(args)
+			if err == nil {
+				return
+			}
+			if m.logger != nil {
+				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+
+	return nil
+}
+
 /* 'gorums' plugin for protoc-gen-go - generated from: config_future_tmpl */
 
 // ReadFuture is a reference to an asynchronous ReadFuture quorum call invocation.
@@ -756,15 +781,6 @@ func (f *WriteFuture) Done() bool {
 	}
 }
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_multicast_tmpl */
-
-// WriteAsync is a one-way multicast operation, where args is sent to
-// every node in configuration c. The call is asynchronous and has no response
-// return value.
-func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
-	return c.mgr.writeAsync(ctx, c, args)
-}
-
 /* 'gorums' plugin for protoc-gen-go - generated from: config_quorumcall_tmpl */
 
 // Read invokes a Read quorum call on configuration c
@@ -835,24 +851,6 @@ type WriteFutureReply struct {
 
 func (r WriteFutureReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_multicast_tmpl */
-
-func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.WriteAsyncClient.Send(args)
-			if err == nil {
-				return
-			}
-			if m.logger != nil {
-				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
-			}
-		}(node)
-	}
-
-	return nil
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_quorumcall_tmpl */

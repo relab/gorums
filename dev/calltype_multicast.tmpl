@@ -12,6 +12,14 @@ import "golang.org/x/net/context"
 {{range $elm := .Services}}
 
 {{if .Multicast}}
+
+// {{.MethodName}} is a one-way multicast operation, where args is sent to
+// every node in configuration c. The call is asynchronous and has no response
+// return value.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+}
+
 func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
@@ -28,4 +36,4 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	return nil
 }
 {{- end -}}
-{{end}}
+{{- end -}}
