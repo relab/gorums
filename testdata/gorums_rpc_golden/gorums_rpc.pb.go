@@ -649,10 +649,16 @@ func (c *Configuration) WriteMulticast(ctx context.Context, args *Reply) error {
 
 /* 'gorums' plugin for protoc-gen-go - generated from: config_quorumcall_tmpl */
 
-// ReadQC invokes a ReadQC quorum call on configuration c
-// and returns the result as a ReadQCReply.
-func (c *Configuration) ReadQC(ctx context.Context, args *ReadReq) (*ReadQCReply, error) {
-	return c.mgr.readQC(ctx, c, args)
+// GorumsQCReadQC invokes a GorumsQCReadQC quorum call on configuration c
+// and returns the result as a GorumsQCReadQCReply.
+func (c *Configuration) GorumsQCReadQC(ctx context.Context, args *ReadReq) (*GorumsQCReadQCReply, error) {
+	return c.mgr.gorumsQCReadQC(ctx, c, args)
+}
+
+// GorumsRPCReadQC invokes a GorumsRPCReadQC quorum call on configuration c
+// and returns the result as a GorumsRPCReadQCReply.
+func (c *Configuration) GorumsRPCReadQC(ctx context.Context, args *ReadReq) (*GorumsRPCReadQCReply, error) {
+	return c.mgr.gorumsRPCReadQC(ctx, c, args)
 }
 
 // ReadQCCustomReturn invokes a ReadQCCustomReturn quorum call on configuration c
@@ -679,6 +685,34 @@ func (c *Configuration) WriteQCWithReq(ctx context.Context, args *Reply) (*Write
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
 
+// GorumsQCReadQCReply encapsulates the reply from a correctable GorumsQCReadQC quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type GorumsQCReadQCReply struct {
+	NodeIDs []uint32
+	*Reply
+}
+
+func (r GorumsQCReadQCReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+}
+
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
+
+// GorumsRPCReadQCReply encapsulates the reply from a correctable GorumsRPCReadQC quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type GorumsRPCReadQCReply struct {
+	NodeIDs []uint32
+	*Reply
+}
+
+func (r GorumsRPCReadQCReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
+}
+
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
+
 // ReadCorrectableReply encapsulates the reply from a correctable ReadCorrectable quorum call.
 // It contains the id of each node of the quorum that replied and a single reply.
 type ReadCorrectableReply struct {
@@ -701,20 +735,6 @@ type ReadCorrectablePrelimReply struct {
 }
 
 func (r ReadCorrectablePrelimReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
-}
-
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// ReadQCReply encapsulates the reply from a correctable ReadQC quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadQCReply struct {
-	NodeIDs []uint32
-	*Reply
-}
-
-func (r ReadQCReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Reply)
 }
 
@@ -869,16 +889,16 @@ func (m *Manager) writeMulticast(ctx context.Context, c *Configuration, args *Re
 
 /* 'gorums' plugin for protoc-gen-go - generated from: mgr_quorumcall_tmpl */
 
-type readQCReply struct {
+type gorumsQCReadQCReply struct {
 	nid   uint32
 	reply *Reply
 	err   error
 }
 
-func (m *Manager) readQC(ctx context.Context, c *Configuration, args *ReadReq) (r *ReadQCReply, err error) {
+func (m *Manager) gorumsQCReadQC(ctx context.Context, c *Configuration, args *ReadReq) (r *GorumsQCReadQCReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadQC")
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "GorumsQCReadQC")
 		defer ti.tr.Finish()
 
 		ti.firstLine.cid = c.id
@@ -899,19 +919,19 @@ func (m *Manager) readQC(ctx context.Context, c *Configuration, args *ReadReq) (
 		}()
 	}
 
-	replyChan := make(chan readQCReply, c.n)
+	replyChan := make(chan gorumsQCReadQCReply, c.n)
 
 	if m.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCReadQC(ctx, n, args, replyChan)
+		go callGRPCGorumsQCReadQC(ctx, n, args, replyChan)
 	}
 
 	var (
 		replyValues = make([]*Reply, 0, c.n)
-		reply       = &ReadQCReply{NodeIDs: make([]uint32, 0, c.n)}
+		reply       = &GorumsQCReadQCReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -928,7 +948,7 @@ func (m *Manager) readQC(ctx context.Context, c *Configuration, args *ReadReq) (
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.Reply, quorum = c.qspec.ReadQCQF(replyValues); quorum {
+			if reply.Reply, quorum = c.qspec.GorumsQCReadQCQF(replyValues); quorum {
 				return reply, nil
 			}
 		case <-ctx.Done():
@@ -941,12 +961,12 @@ func (m *Manager) readQC(ctx context.Context, c *Configuration, args *ReadReq) (
 	}
 }
 
-func callGRPCReadQC(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- readQCReply) {
+func callGRPCGorumsQCReadQC(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- gorumsQCReadQCReply) {
 	reply := new(Reply)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.GorumsRPC/ReadQC",
+		"/dev.GorumsQC/GorumsQCReadQC",
 		args,
 		reply,
 		node.conn,
@@ -957,7 +977,98 @@ func callGRPCReadQC(ctx context.Context, node *Node, args *ReadReq, replyChan ch
 	default:
 		node.setLastErr(err)
 	}
-	replyChan <- readQCReply{node.id, reply, err}
+	replyChan <- gorumsQCReadQCReply{node.id, reply, err}
+}
+
+type gorumsRPCReadQCReply struct {
+	nid   uint32
+	reply *Reply
+	err   error
+}
+
+func (m *Manager) gorumsRPCReadQC(ctx context.Context, c *Configuration, args *ReadReq) (r *GorumsRPCReadQCReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "GorumsRPCReadQC")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.Reply,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan gorumsRPCReadQCReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCGorumsRPCReadQC(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Reply, 0, c.n)
+		reply       = &GorumsRPCReadQCReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.Reply, quorum = c.qspec.GorumsRPCReadQCQF(replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCGorumsRPCReadQC(ctx context.Context, node *Node, args *ReadReq, replyChan chan<- gorumsRPCReadQCReply) {
+	reply := new(Reply)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.GorumsRPC/GorumsRPCReadQC",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- gorumsRPCReadQCReply{node.id, reply, err}
 }
 
 type readQCCustomReturnReply struct {
@@ -1335,6 +1446,8 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
+	GorumsQCClient GorumsQCClient
+
 	GorumsRPCClient GorumsRPCClient
 
 	WriteMulticastClient GorumsRPC_WriteMulticastClient
@@ -1350,6 +1463,8 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
+
+	n.GorumsQCClient = NewGorumsQCClient(n.conn)
 
 	n.GorumsRPCClient = NewGorumsRPCClient(n.conn)
 
@@ -1377,6 +1492,13 @@ func (n *Node) close() error {
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
+	// GorumsQCReadQCQF is the quorum function for the GorumsQCReadQC
+	// quorum call method.
+	GorumsQCReadQCQF(replies []*Reply) (*Reply, bool)
+
+	// GorumsRPCReadQCQF is the quorum function for the GorumsRPCReadQC
+	// quorum call method.
+	GorumsRPCReadQCQF(replies []*Reply) (*Reply, bool)
 
 	// ReadCorrectableQF is the quorum function for the ReadCorrectable
 	// correctable quorum call method.
@@ -1385,10 +1507,6 @@ type QuorumSpec interface {
 	// ReadCorrectablePrelimCorrectablePrelimQF is the quorum function for the ReadCorrectablePrelim
 	// correctable prelim quourm call method.
 	ReadCorrectablePrelimCorrectablePrelimQF(replies []*Reply) (*Reply, int, bool)
-
-	// ReadQCQF is the quorum function for the ReadQC
-	// quorum call method.
-	ReadQCQF(replies []*Reply) (*Reply, bool)
 
 	// ReadQCCustomReturnQF is the quorum function for the ReadQCCustomReturn
 	// quorum call method.
@@ -2024,6 +2142,107 @@ var _ grpc.ClientConn
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
+
+// Client API for GorumsQC service
+
+type GorumsQCClient interface {
+	// Read is a plain gRPC call
+	Read(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
+	// ReadQC is a synchronous quorum call
+	ReadQC(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error)
+}
+
+type gorumsQCClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewGorumsQCClient(cc *grpc.ClientConn) GorumsQCClient {
+	return &gorumsQCClient{cc}
+}
+
+func (c *gorumsQCClient) Read(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
+	out := new(Reply)
+	err := grpc.Invoke(ctx, "/dev.GorumsQC/Read", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gorumsQCClient) ReadQC(ctx context.Context, in *ReadReq, opts ...grpc.CallOption) (*Reply, error) {
+	out := new(Reply)
+	err := grpc.Invoke(ctx, "/dev.GorumsQC/ReadQC", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Server API for GorumsQC service
+
+type GorumsQCServer interface {
+	// Read is a plain gRPC call
+	Read(context.Context, *ReadReq) (*Reply, error)
+	// ReadQC is a synchronous quorum call
+	ReadQC(context.Context, *ReadReq) (*Reply, error)
+}
+
+func RegisterGorumsQCServer(s *grpc.Server, srv GorumsQCServer) {
+	s.RegisterService(&_GorumsQC_serviceDesc, srv)
+}
+
+func _GorumsQC_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GorumsQCServer).Read(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.GorumsQC/Read",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GorumsQCServer).Read(ctx, req.(*ReadReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GorumsQC_ReadQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GorumsQCServer).ReadQC(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.GorumsQC/ReadQC",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GorumsQCServer).ReadQC(ctx, req.(*ReadReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _GorumsQC_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "dev.GorumsQC",
+	HandlerType: (*GorumsQCServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Read",
+			Handler:    _GorumsQC_Read_Handler,
+		},
+		{
+			MethodName: "ReadQC",
+			Handler:    _GorumsQC_ReadQC_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "testdata/gorums_rpc_golden/gorums_rpc.proto",
+}
 
 // Client API for GorumsRPC service
 
@@ -2998,33 +3217,33 @@ func init() {
 }
 
 var fileDescriptorGorumsRpc = []byte{
-	// 433 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x92, 0xbf, 0x8b, 0xd4, 0x40,
-	0x14, 0xc7, 0x33, 0xee, 0xde, 0x7a, 0x79, 0x1c, 0xab, 0x0c, 0x0a, 0x61, 0xd1, 0xe1, 0x08, 0x16,
-	0x0b, 0x4a, 0x0e, 0x4f, 0xd0, 0x42, 0xb0, 0x30, 0xa0, 0x95, 0xcb, 0xde, 0x20, 0x5e, 0x79, 0xcc,
-	0x6e, 0x1e, 0xd9, 0xc0, 0x64, 0x27, 0x37, 0x99, 0x39, 0xb9, 0xee, 0x4a, 0xcb, 0x2b, 0x2d, 0x2d,
-	0xaf, 0xb4, 0xd9, 0x7f, 0xc0, 0xca, 0xf2, 0x4a, 0xed, 0x6e, 0x63, 0x63, 0x29, 0xf8, 0x0f, 0xc8,
-	0x24, 0xc1, 0x3b, 0x2d, 0x72, 0x55, 0xde, 0x8f, 0xcf, 0x87, 0x17, 0xbe, 0x09, 0x3c, 0x34, 0x58,
-	0x9a, 0x44, 0x18, 0xb1, 0x93, 0x2a, 0x6d, 0xf3, 0xf2, 0x40, 0x17, 0xf3, 0x83, 0x54, 0xc9, 0x04,
-	0x97, 0x57, 0x26, 0x51, 0xa1, 0x95, 0x51, 0xb4, 0x97, 0xe0, 0xd1, 0xe8, 0x41, 0x9a, 0x99, 0x85,
-	0x9d, 0x45, 0x73, 0x95, 0xef, 0x68, 0x94, 0x62, 0xd6, 0x72, 0xed, 0xa3, 0x41, 0xc3, 0xe7, 0xb0,
-	0xc1, 0xb1, 0x90, 0xc7, 0xf4, 0x0e, 0x6c, 0xbc, 0x13, 0xd2, 0x62, 0x40, 0xb6, 0xc9, 0xd8, 0xe7,
-	0x4d, 0x43, 0xef, 0x81, 0xff, 0x36, 0xcb, 0xb1, 0x34, 0x22, 0x2f, 0x82, 0x1b, 0xdb, 0x64, 0xdc,
-	0xe3, 0x97, 0x83, 0xf0, 0x3e, 0xf8, 0xfb, 0x3a, 0x33, 0xc8, 0xb1, 0x2c, 0xe8, 0x6d, 0xe8, 0x4d,
-	0xf0, 0x7d, 0xad, 0x6f, 0x72, 0x57, 0x86, 0x3e, 0xdc, 0xe4, 0x28, 0x12, 0x8e, 0x87, 0xae, 0x9c,
-	0x28, 0xb3, 0xc8, 0x96, 0xe9, 0xee, 0xf7, 0x1e, 0xf8, 0xaf, 0xeb, 0x57, 0xe0, 0xd3, 0x98, 0x86,
-	0xd0, 0x77, 0x0c, 0xdd, 0x8a, 0x12, 0x3c, 0x8a, 0x5a, 0x7c, 0x04, 0x6d, 0x57, 0xc8, 0xe3, 0xd0,
-	0xa3, 0x63, 0x18, 0xb8, 0xc5, 0x5e, 0xdc, 0x41, 0xf5, 0x4f, 0x56, 0x01, 0xa1, 0x2f, 0x80, 0x36,
-	0x64, 0x6c, 0x4b, 0xa3, 0x72, 0x8e, 0xc6, 0xea, 0x65, 0x87, 0x35, 0x74, 0xd6, 0x97, 0xdf, 0xc1,
-	0x20, 0x6e, 0x42, 0x88, 0x60, 0xab, 0xf1, 0x5f, 0x59, 0x63, 0x35, 0x76, 0xdd, 0xfb, 0xe4, 0xee,
-	0x3d, 0x86, 0x5b, 0x6e, 0x19, 0x2b, 0xad, 0x71, 0x6e, 0xc4, 0x4c, 0x76, 0x2a, 0x1f, 0x9c, 0xf2,
-	0x0c, 0xee, 0xfe, 0xa7, 0x4c, 0x35, 0xca, 0x2c, 0xef, 0x12, 0x4f, 0x9d, 0xb8, 0x0b, 0xc3, 0x3a,
-	0xec, 0x37, 0x56, 0x9a, 0x6c, 0x2e, 0x4a, 0x43, 0xaf, 0x30, 0xa3, 0xc6, 0x6e, 0x33, 0x0e, 0xfb,
-	0x1f, 0x57, 0x01, 0x19, 0x13, 0xfa, 0xb4, 0x75, 0xf6, 0xe2, 0xfd, 0xcc, 0x2c, 0x38, 0x1e, 0xfe,
-	0xe3, 0x0c, 0xeb, 0xfa, 0xef, 0x17, 0x0c, 0x37, 0x5d, 0x1a, 0x67, 0xee, 0xd6, 0xa5, 0x37, 0x45,
-	0x3d, 0x51, 0x09, 0x5e, 0xef, 0x7d, 0x5e, 0x05, 0xe4, 0xe5, 0xa3, 0xf3, 0x35, 0xf3, 0xbe, 0xad,
-	0x99, 0x77, 0xb1, 0x66, 0xe4, 0xa4, 0x62, 0xe4, 0xac, 0x62, 0xe4, 0x6b, 0xc5, 0xc8, 0x79, 0xc5,
-	0xc8, 0x45, 0xc5, 0xc8, 0xcf, 0x8a, 0x79, 0xbf, 0x2a, 0x46, 0x4e, 0x7f, 0x30, 0x6f, 0x36, 0xa8,
-	0x7f, 0xc1, 0x27, 0x7f, 0x02, 0x00, 0x00, 0xff, 0xff, 0x1b, 0x10, 0x06, 0x95, 0xdc, 0x02, 0x00,
-	0x00,
+	// 445 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x92, 0xbf, 0x8b, 0xd4, 0x40,
+	0x14, 0xc7, 0x33, 0xee, 0xde, 0xba, 0x79, 0x1c, 0xab, 0x0c, 0x0a, 0x61, 0xd1, 0xe1, 0x08, 0x16,
+	0x0b, 0x4a, 0x0e, 0x57, 0xd0, 0x42, 0xb0, 0x30, 0xa0, 0x95, 0xcb, 0xee, 0x20, 0x9e, 0xdd, 0x91,
+	0xdd, 0x3c, 0xb2, 0x81, 0xc9, 0x4e, 0x6e, 0x32, 0x73, 0x72, 0xdd, 0x95, 0x96, 0x57, 0x5a, 0x5a,
+	0x5e, 0x69, 0xb3, 0xff, 0x80, 0x95, 0xe5, 0x95, 0xda, 0xdd, 0xc6, 0xc6, 0x52, 0xf0, 0x1f, 0x90,
+	0x49, 0x82, 0x77, 0x5a, 0xc4, 0xe6, 0xaa, 0x79, 0x3f, 0xbe, 0x9f, 0xf7, 0x86, 0xf7, 0x1e, 0xdc,
+	0xd7, 0x58, 0xe8, 0x38, 0xd2, 0xd1, 0x6e, 0x22, 0x95, 0xc9, 0x8a, 0x7d, 0x95, 0x2f, 0xf6, 0x13,
+	0x29, 0x62, 0x5c, 0x5d, 0x8a, 0x04, 0xb9, 0x92, 0x5a, 0xd2, 0x4e, 0x8c, 0x87, 0xc3, 0x7b, 0x49,
+	0xaa, 0x97, 0x66, 0x1e, 0x2c, 0x64, 0xb6, 0xab, 0x50, 0x44, 0xf3, 0x46, 0xd7, 0x3c, 0xb5, 0xd4,
+	0x7f, 0x0a, 0x5b, 0x1c, 0x73, 0x71, 0x44, 0x6f, 0xc1, 0xd6, 0x9b, 0x48, 0x18, 0xf4, 0xc8, 0x0e,
+	0x19, 0xb9, 0xbc, 0x76, 0xe8, 0x1d, 0x70, 0x5f, 0xa7, 0x19, 0x16, 0x3a, 0xca, 0x72, 0xef, 0xda,
+	0x0e, 0x19, 0x75, 0xf8, 0x45, 0xc0, 0xbf, 0x0b, 0xee, 0x9e, 0x4a, 0x35, 0x72, 0x2c, 0x72, 0x7a,
+	0x13, 0x3a, 0x13, 0x7c, 0x57, 0xe1, 0x7d, 0x6e, 0x4d, 0xdf, 0x85, 0xeb, 0x1c, 0xa3, 0x98, 0xe3,
+	0x81, 0x35, 0x27, 0x52, 0x2f, 0xd3, 0x55, 0x32, 0x7e, 0x0b, 0xfd, 0x97, 0xd5, 0x0f, 0x66, 0x21,
+	0xf5, 0xa1, 0x6b, 0x15, 0x74, 0x3b, 0x88, 0xf1, 0x30, 0x68, 0xc4, 0x43, 0x68, 0xbc, 0x5c, 0x1c,
+	0xf9, 0x0e, 0x1d, 0x41, 0xcf, 0x26, 0x66, 0x61, 0x8b, 0xaa, 0x7b, 0xbc, 0xf6, 0xc8, 0xf8, 0x5b,
+	0x07, 0xdc, 0xba, 0x34, 0x9f, 0x5e, 0x71, 0x6d, 0xfa, 0x0c, 0x68, 0xad, 0x0c, 0x4d, 0xa1, 0x65,
+	0xc6, 0x51, 0x1b, 0xb5, 0x6a, 0xa1, 0x06, 0x96, 0xfa, 0xfc, 0xcb, 0xeb, 0x85, 0xf5, 0x78, 0x03,
+	0xd8, 0xae, 0xf9, 0x17, 0x46, 0x1b, 0x85, 0x6d, 0xfd, 0x3e, 0xda, 0x7e, 0x0f, 0xe1, 0x86, 0x4d,
+	0x86, 0x52, 0x29, 0x5c, 0xe8, 0x68, 0x2e, 0x5a, 0x91, 0xf7, 0x16, 0x79, 0x02, 0xb7, 0xff, 0x41,
+	0xa6, 0x0a, 0x45, 0x9a, 0xb5, 0x81, 0x27, 0x16, 0x1c, 0xc3, 0xa0, 0x5a, 0xe3, 0x2b, 0x23, 0x74,
+	0xba, 0x88, 0x0a, 0x4d, 0x2f, 0x69, 0x86, 0x35, 0xdd, 0x6c, 0xcf, 0xef, 0x7e, 0x58, 0x7b, 0x64,
+	0x44, 0xe8, 0xe3, 0x86, 0x99, 0x85, 0x7b, 0xa9, 0x5e, 0x72, 0x3c, 0xf8, 0x8b, 0x19, 0x54, 0xf6,
+	0x9f, 0xdb, 0xf0, 0xfb, 0x76, 0x1a, 0xa7, 0xb6, 0xd7, 0x05, 0x37, 0x45, 0x35, 0x91, 0x31, 0xfe,
+	0x9f, 0xfb, 0xb4, 0xf6, 0xc8, 0xf3, 0x07, 0x67, 0x1b, 0xe6, 0x7c, 0xdd, 0x30, 0xe7, 0x7c, 0xc3,
+	0xc8, 0x71, 0xc9, 0xc8, 0x69, 0xc9, 0xc8, 0x97, 0x92, 0x91, 0xb3, 0x92, 0x91, 0xf3, 0x92, 0x91,
+	0x1f, 0x25, 0x73, 0x7e, 0x96, 0x8c, 0x9c, 0x7c, 0x67, 0xce, 0xbc, 0x57, 0x1d, 0xf7, 0xa3, 0xdf,
+	0x01, 0x00, 0x00, 0xff, 0xff, 0x26, 0x05, 0x8d, 0x81, 0x36, 0x03, 0x00, 0x00,
 }

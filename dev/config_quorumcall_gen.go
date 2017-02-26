@@ -5,10 +5,16 @@ package dev
 
 import "golang.org/x/net/context"
 
-// ReadQC invokes a ReadQC quorum call on configuration c
-// and returns the result as a ReadQCReply.
-func (c *Configuration) ReadQC(ctx context.Context, args *ReadReq) (*ReadQCReply, error) {
-	return c.mgr.readQC(ctx, c, args)
+// GorumsQCReadQC invokes a GorumsQCReadQC quorum call on configuration c
+// and returns the result as a GorumsQCReadQCReply.
+func (c *Configuration) GorumsQCReadQC(ctx context.Context, args *ReadReq) (*GorumsQCReadQCReply, error) {
+	return c.mgr.gorumsQCReadQC(ctx, c, args)
+}
+
+// GorumsRPCReadQC invokes a GorumsRPCReadQC quorum call on configuration c
+// and returns the result as a GorumsRPCReadQCReply.
+func (c *Configuration) GorumsRPCReadQC(ctx context.Context, args *ReadReq) (*GorumsRPCReadQCReply, error) {
+	return c.mgr.gorumsRPCReadQC(ctx, c, args)
 }
 
 // ReadQCCustomReturn invokes a ReadQCCustomReturn quorum call on configuration c

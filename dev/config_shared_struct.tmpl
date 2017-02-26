@@ -23,7 +23,7 @@ type {{.TypeName}} struct {
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.FQRespName}})
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
 }
 
 {{- end -}}

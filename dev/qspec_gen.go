@@ -5,6 +5,13 @@ package dev
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
+	// GorumsQCReadQCQF is the quorum function for the GorumsQCReadQC
+	// quorum call method.
+	GorumsQCReadQCQF(replies []*Reply) (*Reply, bool)
+
+	// GorumsRPCReadQCQF is the quorum function for the GorumsRPCReadQC
+	// quorum call method.
+	GorumsRPCReadQCQF(replies []*Reply) (*Reply, bool)
 
 	// ReadCorrectableQF is the quorum function for the ReadCorrectable
 	// correctable quorum call method.
@@ -13,10 +20,6 @@ type QuorumSpec interface {
 	// ReadCorrectablePrelimCorrectablePrelimQF is the quorum function for the ReadCorrectablePrelim
 	// correctable prelim quourm call method.
 	ReadCorrectablePrelimCorrectablePrelimQF(replies []*Reply) (*Reply, int, bool)
-
-	// ReadQCQF is the quorum function for the ReadQC
-	// quorum call method.
-	ReadQCQF(replies []*Reply) (*Reply, bool)
 
 	// ReadQCCustomReturnQF is the quorum function for the ReadQCCustomReturn
 	// quorum call method.

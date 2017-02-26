@@ -4,6 +4,16 @@ import "github.com/relab/gorums/gorums.proto";
 
 package dev;
 
+service GorumsQC {
+	// Read is a plain gRPC call
+	rpc Read(ReadReq) returns (Reply) {}
+
+	// ReadQC is a synchronous quorum call
+	rpc ReadQC(ReadReq) returns (Reply) {
+		option (gorums.qc) = true;
+	}
+}
+
 service GorumsRPC {
 	// Read is a plain gRPC call
 	rpc Read(ReadReq) returns (Reply) {}

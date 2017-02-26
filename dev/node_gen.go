@@ -21,6 +21,8 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
+	GorumsQCClient GorumsQCClient
+
 	GorumsRPCClient GorumsRPCClient
 
 	WriteMulticastClient GorumsRPC_WriteMulticastClient
@@ -36,6 +38,8 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
+
+	n.GorumsQCClient = NewGorumsQCClient(n.conn)
 
 	n.GorumsRPCClient = NewGorumsRPCClient(n.conn)
 

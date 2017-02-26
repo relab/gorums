@@ -351,7 +351,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			if sm.TypeName == sm.FQRespName {
 				sm.TypeName += "_"
 			}
-			fmt.Fprintf(os.Stderr, "%v\n \tRPCName\t\t%v\n \tUnexpMethodName\t%v\n \tFQRespName\t%v\n \tFQReqName\t%v\n \tTypeName\t%v\n \tUnexpTypeName\t%v\n \tServName\t%v\n ",
+			fmt.Fprintf(os.Stderr, "%v\n \tRPCName\t\t%v\n \tUnexpMethodName\t%v\n \tFQRespName\t%v\n \tFQReqName\t%v\n \tTypeName\t%v\n \tUnexpTypeName\t%v\n \tServName\t%v\n",
 				sm.MethodName, sm.RPCName, sm.UnexportedMethodName, sm.FQRespName, sm.FQReqName, sm.TypeName, sm.UnexportedTypeName, sm.ServName,
 			)
 
@@ -392,6 +392,9 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 					sm.TypeName += "_"
 				}
 				allRewrittenFlat = append(allRewrittenFlat, *sm)
+				fmt.Fprintf(os.Stderr, "%v\n \tRPCName\t\t%v\n \tUnexpMethodName\t%v\n \tFQRespName\t%v\n \tFQReqName\t%v\n \tTypeName\t%v\n \tUnexpTypeName\t%v\n \tServName\t%v\n",
+					sm.MethodName, sm.RPCName, sm.UnexportedMethodName, sm.FQRespName, sm.FQReqName, sm.TypeName, sm.UnexportedTypeName, sm.ServName,
+				)
 			}
 		}
 	}
