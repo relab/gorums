@@ -555,8 +555,8 @@ func TestBasicCorrectable(t *testing.T) {
 		if level != LevelStrong {
 			t.Fatalf("read correctable: get: got level %v, want %v", level, LevelStrong)
 		}
-		if reply.State.Value != stateTwo.Value {
-			t.Fatalf("read correctable: get: reply:\ngot:\n%v\nwant:\n%v", reply.State, stateTwo)
+		if reply.Value != stateTwo.Value {
+			t.Fatalf("read correctable: get: reply:\ngot:\n%v\nwant:\n%v", reply.Value, stateTwo)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("read correctable: was not done and call did not timeout using context")
@@ -755,7 +755,7 @@ func TestCorrectablePrelim(t *testing.T) {
 
 	waitTimeout := time.Second
 	ctx := context.Background()
-	correctable := config.ReadTwoCorrectablePrelim(ctx, &qc.ReadRequest{})
+	correctable := config.ReadTwo(ctx, &qc.ReadRequest{})
 
 	// We need these watchers for testing to know that a server has replied and
 	// gorums has processed the reply.
@@ -1009,6 +1009,7 @@ func BenchmarkRead1KQ1N1FutureParallelRemote(b *testing.B) {
 ///////////////////////////////////////////////////////////////
 
 var replySink *qc.ReadReply
+var replySinkFuture *qc.ReadFutureReply
 
 func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote bool) {
 	var rservers []regServer
@@ -1097,7 +1098,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
 					rf := config.ReadFuture(ctx, &qc.ReadRequest{})
-					replySink, err = rf.Get()
+					replySinkFuture, err = rf.Get()
 					if err != nil {
 						b.Fatalf("read future quorum call error: %v", err)
 					}
@@ -1106,7 +1107,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		} else {
 			for i := 0; i < b.N; i++ {
 				rf := config.ReadFuture(ctx, &qc.ReadRequest{})
-				replySink, err = rf.Get()
+				replySinkFuture, err = rf.Get()
 				if err != nil {
 					b.Fatalf("read future quorum call error: %v", err)
 				}
@@ -1152,6 +1153,7 @@ func BenchmarkWrited1KQ2N3FutureParallelRemote(b *testing.B) {
 ///////////////////////////////////////////////////////////////
 
 var wreplySink *qc.WriteReply
+var wreplySinkFuture *qc.WriteFutureReply
 
 func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote bool) {
 	var rservers []regServer
@@ -1232,7 +1234,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
 					rf := config.WriteFuture(ctx, state)
-					wreplySink, err = rf.Get()
+					wreplySinkFuture, err = rf.Get()
 					if err != nil {
 						b.Fatalf("write future quorum call error: %v", err)
 					}
@@ -1241,7 +1243,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 		} else {
 			for i := 0; i < b.N; i++ {
 				rf := config.WriteFuture(ctx, state)
-				wreplySink, err = rf.Get()
+				wreplySinkFuture, err = rf.Get()
 				if err != nil {
 					b.Fatalf("write future quorum call error: %v", err)
 				}
