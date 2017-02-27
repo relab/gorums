@@ -2,40 +2,80 @@ syntax = "proto3";
 
 import "github.com/relab/gorums/gorums.proto";
 
+// Package dev provides a blueprint for testing the various call semantics provided by Gorums.
+// Here is table explaining the differences in how the different call semantics work.
+//
+//                    Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type      
+// ------------------------------------------------------------------------------------------------------------------------------------------------
+// Quorum call                 1                   Reply + error count                 1                           Single response 
+// Correctable QC              1                   Reply + error count                 N                           Single response 
+// Correctable QC w/prelim     M                   Error count                         M                           Stream of responses
 package dev;
 
+//TODO consider to rename Register to Storage following Leander's logic that it is a more understandable term.
 service Register {
+	// ReadNoQC is a plain gRPC call.
+	rpc ReadNoQC(ReadRequest) returns (State) {}
+
+	// Read is a synchronous quorum call.
 	rpc Read(ReadRequest) returns (State) {
-		option (gorums.qc) 		= true;
+		option (gorums.qc) = true;
 	}
 
-	rpc ReadCorrectable(ReadRequest) returns (State) {
-		option (gorums.correctable) 	= true;
-	}
-
+	// ReadFuture is an asynchronous quorum call that 
+	// returns a future object for retrieving results.
 	rpc ReadFuture(ReadRequest) returns (State) {
-		option (gorums.qc_future) 	= true;
+		option (gorums.qc_future) = true;
 	}
 
+	// ReadCorrectable is an asynchronous correctable quorum call that 
+	// returns a correctable object for retrieving results.
+	rpc ReadCorrectable(ReadRequest) returns (State) {
+		option (gorums.correctable) = true;
+	}
+
+	// ReadPrelim is an asynchronous correctable quorum call that 
+	// returns a correctable object for retrieving results.
+//TODO rename
 	rpc ReadTwo(ReadRequest) returns (stream State) {
 		option (gorums.correctable_pr) = true;
 	}
 
+	// Write is a synchronous quorum call.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteQF, for this method.
 	rpc Write(State) returns (WriteResponse) {
-		option (gorums.qc) 		= true;
-		option (gorums.qf_with_req) 	= true;
+		option (gorums.qc)			= true;
+		option (gorums.qf_with_req)	= true;
 	}
 
+	// WriteFuture is an asynchronous quorum call that 
+	// returns a future object for retrieving results.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteFutureQF, for this method.
 	rpc WriteFuture(State) returns (WriteResponse) {
-		option (gorums.qc_future) 	= true;
-		option (gorums.qf_with_req) 	= true;
+		option (gorums.qc_future)	= true;
+		option (gorums.qf_with_req)	= true;
 	}
 
+	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
+	// No replies are collected.
 	rpc WriteAsync(stream State) returns (Empty) {
 		option (gorums.multicast) = true;
 	}
 
-	rpc ReadNoQC(ReadRequest) returns (State) {}
+//TODO enable these
+	// // ReadQCCustomReturn is a synchronous quorum call with a custom return type
+	// rpc ReadQCCustomReturn(ReadRequest) returns (State) {
+	// 	option (gorums.qc) = true;
+	// 	option (gorums.custom_return_type) = "CReply";
+	// }
+
+	// // WriteQCPerNode is a synchronous quorum call, where, for each node, a function is called to determine the argument to be sent to that node
+	// rpc WriteQCPerNode(State) returns (WriteResponse) {
+	// 	option (gorums.qc)			 = true;
+	// 	option (gorums.per_node_arg) = true;
+	// }
 }
 
 message State {

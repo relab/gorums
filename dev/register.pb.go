@@ -5,6 +5,15 @@
 /*
 Package dev is a generated protocol buffer package.
 
+Package dev provides a blueprint for testing the various call semantics provided by Gorums.
+Here is table explaining the differences in how the different call semantics work.
+
+                   Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type
+------------------------------------------------------------------------------------------------------------------------------------------------
+Quorum call                 1                   Reply + error count                 1                           Single response
+Correctable QC              1                   Reply + error count                 N                           Single response
+Correctable QC w/prelim     M                   Error count                         M                           Stream of responses
+
 It is generated from these files:
 	dev/register.proto
 
@@ -325,14 +334,32 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for Register service
 
 type RegisterClient interface {
-	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
-	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
-	ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
-	ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error)
-	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
-	WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
-	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
+	// ReadNoQC is a plain gRPC call.
 	ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// Read is a synchronous quorum call.
+	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadCorrectable is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadPrelim is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO rename
+	ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error)
+	// Write is a synchronous quorum call.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteQF, for this method.
+	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
+	// WriteFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteFutureQF, for this method.
+	WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
+	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
+	// No replies are collected.
+	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
 }
 
 type registerClient struct {
@@ -341,6 +368,15 @@ type registerClient struct {
 
 func NewRegisterClient(cc *grpc.ClientConn) RegisterClient {
 	return &registerClient{cc}
+}
+
+func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadNoQC", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
@@ -352,18 +388,18 @@ func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc
 	return out, nil
 }
 
-func (c *registerClient) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+func (c *registerClient) ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadCorrectable", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+func (c *registerClient) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadFuture", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadCorrectable", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -454,30 +490,57 @@ func (x *registerWriteAsyncClient) CloseAndRecv() (*Empty, error) {
 	return m, nil
 }
 
-func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
-	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadNoQC", in, out, c.cc, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // Server API for Register service
 
 type RegisterServer interface {
-	Read(context.Context, *ReadRequest) (*State, error)
-	ReadCorrectable(context.Context, *ReadRequest) (*State, error)
-	ReadFuture(context.Context, *ReadRequest) (*State, error)
-	ReadTwo(*ReadRequest, Register_ReadTwoServer) error
-	Write(context.Context, *State) (*WriteResponse, error)
-	WriteFuture(context.Context, *State) (*WriteResponse, error)
-	WriteAsync(Register_WriteAsyncServer) error
+	// ReadNoQC is a plain gRPC call.
 	ReadNoQC(context.Context, *ReadRequest) (*State, error)
+	// Read is a synchronous quorum call.
+	Read(context.Context, *ReadRequest) (*State, error)
+	// ReadFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	ReadFuture(context.Context, *ReadRequest) (*State, error)
+	// ReadCorrectable is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	ReadCorrectable(context.Context, *ReadRequest) (*State, error)
+	// ReadPrelim is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO rename
+	ReadTwo(*ReadRequest, Register_ReadTwoServer) error
+	// Write is a synchronous quorum call.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteQF, for this method.
+	Write(context.Context, *State) (*WriteResponse, error)
+	// WriteFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteFutureQF, for this method.
+	WriteFuture(context.Context, *State) (*WriteResponse, error)
+	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
+	// No replies are collected.
+	WriteAsync(Register_WriteAsyncServer) error
 }
 
 func RegisterRegisterServer(s *grpc.Server, srv RegisterServer) {
 	s.RegisterService(&_Register_serviceDesc, srv)
+}
+
+func _Register_ReadNoQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadNoQC(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadNoQC",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadNoQC(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -498,24 +561,6 @@ func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RegisterServer).ReadCorrectable(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.Register/ReadCorrectable",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).ReadCorrectable(ctx, req.(*ReadRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Register_ReadFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadRequest)
 	if err := dec(in); err != nil {
@@ -530,6 +575,24 @@ func _Register_ReadFuture_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RegisterServer).ReadFuture(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadCorrectable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadCorrectable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadCorrectable(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -617,39 +680,25 @@ func (x *registerWriteAsyncServer) Recv() (*State, error) {
 	return m, nil
 }
 
-func _Register_ReadNoQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(RegisterServer).ReadNoQC(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.Register/ReadNoQC",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).ReadNoQC(ctx, req.(*ReadRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 var _Register_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "dev.Register",
 	HandlerType: (*RegisterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ReadNoQC",
+			Handler:    _Register_ReadNoQC_Handler,
+		},
+		{
 			MethodName: "Read",
 			Handler:    _Register_Read_Handler,
 		},
 		{
-			MethodName: "ReadCorrectable",
-			Handler:    _Register_ReadCorrectable_Handler,
-		},
-		{
 			MethodName: "ReadFuture",
 			Handler:    _Register_ReadFuture_Handler,
+		},
+		{
+			MethodName: "ReadCorrectable",
+			Handler:    _Register_ReadCorrectable_Handler,
 		},
 		{
 			MethodName: "Write",
@@ -658,10 +707,6 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WriteFuture",
 			Handler:    _Register_WriteFuture_Handler,
-		},
-		{
-			MethodName: "ReadNoQC",
-			Handler:    _Register_ReadNoQC_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -1269,30 +1314,30 @@ var (
 func init() { proto.RegisterFile("dev/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 387 bytes of a gzipped FileDescriptorProto
+	// 386 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x92, 0xb1, 0xef, 0xd2, 0x40,
 	0x14, 0xc7, 0x7b, 0x96, 0x0a, 0x3c, 0x42, 0x24, 0x17, 0x87, 0x86, 0x98, 0x0b, 0x36, 0x0e, 0x84,
 	0x90, 0x16, 0x35, 0xc6, 0xc1, 0x49, 0x89, 0x8e, 0x24, 0x56, 0xa2, 0x73, 0x4b, 0x5f, 0xb0, 0x09,
 	0xe5, 0xea, 0xf5, 0x0a, 0x61, 0x63, 0x74, 0x64, 0x32, 0x8e, 0x8c, 0xfc, 0x03, 0xfc, 0x0f, 0x8e,
-	0x8c, 0x8e, 0x50, 0x17, 0x47, 0xff, 0x04, 0x73, 0x07, 0xbf, 0xfc, 0x60, 0xea, 0xd4, 0xd7, 0x7b,
-	0x9f, 0x4f, 0xfb, 0xde, 0x37, 0x07, 0x34, 0xc2, 0x85, 0x27, 0x70, 0x1a, 0x67, 0x12, 0x85, 0x9b,
-	0x0a, 0x2e, 0x39, 0x35, 0x23, 0x5c, 0xb4, 0x9f, 0x4d, 0x63, 0xf9, 0x35, 0x0f, 0xdd, 0x09, 0x4f,
-	0x3c, 0x81, 0xb3, 0x20, 0xf4, 0xa6, 0x5c, 0xe4, 0x49, 0x76, 0x79, 0x9c, 0x51, 0xe7, 0x0d, 0x58,
-	0x9f, 0x64, 0x20, 0x91, 0x3e, 0x06, 0xeb, 0x73, 0x30, 0xcb, 0xd1, 0x26, 0x1d, 0xd2, 0xad, 0xfb,
-	0xe7, 0x17, 0xfa, 0x04, 0xea, 0xe3, 0x38, 0xc1, 0x4c, 0x06, 0x49, 0x6a, 0x3f, 0xe8, 0x90, 0xae,
-	0xe9, 0xdf, 0x1f, 0x38, 0x4f, 0xa1, 0xf9, 0x45, 0xc4, 0x12, 0x7d, 0xcc, 0x52, 0x3e, 0xcf, 0x90,
-	0xb6, 0xc0, 0x1c, 0xe1, 0x52, 0x7f, 0xa2, 0xe6, 0xab, 0xd2, 0x69, 0x42, 0xc3, 0xc7, 0x20, 0xf2,
-	0xf1, 0x5b, 0x8e, 0x99, 0x74, 0xaa, 0x60, 0xbd, 0x4f, 0x52, 0xb9, 0x7a, 0xf1, 0xc3, 0x84, 0x9a,
-	0x7f, 0x99, 0x9a, 0xf6, 0xa0, 0xa2, 0x20, 0xda, 0x72, 0x23, 0x5c, 0xb8, 0x57, 0x7c, 0x1b, 0xf4,
-	0x89, 0x9e, 0xd0, 0xa9, 0xac, 0xf7, 0x36, 0xa1, 0xaf, 0xe0, 0x91, 0x02, 0x86, 0x5c, 0x08, 0x9c,
-	0xc8, 0x20, 0x9c, 0x61, 0x99, 0xf6, 0x5d, 0x69, 0x03, 0x00, 0x05, 0x7c, 0xc8, 0x65, 0x2e, 0x4a,
-	0x8d, 0xad, 0x32, 0x3c, 0xa8, 0x2a, 0x60, 0xbc, 0xe4, 0x65, 0xf8, 0x66, 0x6f, 0x93, 0x01, 0xa1,
-	0xcf, 0xc1, 0xd2, 0x69, 0xd0, 0xab, 0x66, 0x9b, 0xea, 0xfa, 0x26, 0x25, 0xa7, 0xa6, 0x16, 0xd9,
-	0xa9, 0x7f, 0xbc, 0x86, 0x86, 0x6e, 0x5d, 0xc6, 0x2a, 0x15, 0xb7, 0x77, 0x62, 0x1f, 0x40, 0xb7,
-	0xde, 0x66, 0xab, 0xf9, 0xe4, 0xc6, 0x3b, 0xd7, 0x3a, 0x64, 0xa7, 0xf2, 0x73, 0x6f, 0x93, 0x2e,
-	0xa1, 0x3d, 0x95, 0x75, 0x10, 0x8d, 0xf8, 0xc7, 0x61, 0xc9, 0x2e, 0xc6, 0xbb, 0xfe, 0xe1, 0xc4,
-	0x8c, 0xdf, 0x27, 0x66, 0x1c, 0x4f, 0x8c, 0xac, 0x0b, 0x46, 0x76, 0x05, 0x23, 0xbf, 0x0a, 0x46,
-	0x0e, 0x05, 0x23, 0xc7, 0x82, 0x91, 0xbf, 0x05, 0x33, 0xfe, 0x15, 0x8c, 0x6c, 0xfe, 0x30, 0x23,
-	0x7c, 0xa8, 0x6f, 0xd1, 0xcb, 0xff, 0x01, 0x00, 0x00, 0xff, 0xff, 0x38, 0x43, 0xcc, 0x89, 0x86,
-	0x02, 0x00, 0x00,
+	0x8c, 0x8e, 0x50, 0x17, 0x47, 0xff, 0x04, 0x73, 0x07, 0xbf, 0xfc, 0x60, 0xea, 0xd4, 0x6f, 0xdf,
+	0xf7, 0xfb, 0x69, 0xdf, 0x7b, 0x77, 0x40, 0x23, 0x5c, 0x78, 0x02, 0xa7, 0x71, 0x26, 0x51, 0xb8,
+	0xa9, 0xe0, 0x92, 0x53, 0x33, 0xc2, 0x45, 0xfb, 0xd9, 0x34, 0x96, 0x5f, 0xf3, 0xd0, 0x9d, 0xf0,
+	0xc4, 0x13, 0x38, 0x0b, 0x42, 0x6f, 0xca, 0x45, 0x9e, 0x64, 0x97, 0xc7, 0x39, 0xea, 0xbc, 0x01,
+	0xeb, 0x93, 0x0c, 0x24, 0xd2, 0xc7, 0x60, 0x7d, 0x0e, 0x66, 0x39, 0xda, 0xa4, 0x43, 0xba, 0x75,
+	0xff, 0xfc, 0x42, 0x9f, 0x40, 0x7d, 0x1c, 0x27, 0x98, 0xc9, 0x20, 0x49, 0xed, 0x07, 0x1d, 0xd2,
+	0x35, 0xfd, 0xfb, 0x82, 0xf3, 0x14, 0x9a, 0x5f, 0x44, 0x2c, 0xd1, 0xc7, 0x2c, 0xe5, 0xf3, 0x0c,
+	0x69, 0x0b, 0xcc, 0x11, 0x2e, 0xf5, 0x27, 0x6a, 0xbe, 0x92, 0x4e, 0x13, 0x1a, 0x3e, 0x06, 0x91,
+	0x8f, 0xdf, 0x72, 0xcc, 0xa4, 0x53, 0x05, 0xeb, 0x7d, 0x92, 0xca, 0xd5, 0x8b, 0x1f, 0x26, 0xd4,
+	0xfc, 0x4b, 0xd7, 0xb4, 0xa7, 0x74, 0x10, 0x8d, 0xf8, 0xc7, 0x21, 0x6d, 0xb9, 0x11, 0x2e, 0xdc,
+	0x2b, 0xa6, 0x0d, 0xba, 0xa2, 0xbb, 0x74, 0x0c, 0xda, 0x83, 0x8a, 0x32, 0x4b, 0x72, 0x95, 0xf5,
+	0xde, 0x26, 0x74, 0x00, 0xa0, 0x02, 0x1f, 0x72, 0x99, 0x0b, 0x2c, 0x23, 0xb6, 0x8a, 0x78, 0x05,
+	0x8f, 0x54, 0x60, 0xc8, 0x85, 0xc0, 0x89, 0x0c, 0xc2, 0x59, 0x29, 0xf6, 0x5d, 0x61, 0x1e, 0x54,
+	0x55, 0x60, 0xbc, 0xe4, 0x65, 0xf1, 0xcd, 0xde, 0x26, 0x03, 0x42, 0x9f, 0x83, 0xa5, 0x37, 0x47,
+	0xaf, 0xcc, 0x36, 0xd5, 0xfa, 0x66, 0xa3, 0x4e, 0x4d, 0x0d, 0xb2, 0x53, 0xff, 0x78, 0x0d, 0x0d,
+	0x6d, 0x5d, 0xa6, 0x29, 0x05, 0xb7, 0x77, 0x60, 0x1f, 0x40, 0x5b, 0x6f, 0xb3, 0xd5, 0x7c, 0x72,
+	0xc3, 0x9d, 0xb5, 0x3e, 0x10, 0xa7, 0xf2, 0x73, 0x6f, 0x93, 0x2e, 0x79, 0xd7, 0x3f, 0x9c, 0x98,
+	0xf1, 0xfb, 0xc4, 0x8c, 0xe3, 0x89, 0x91, 0x75, 0xc1, 0xc8, 0xae, 0x60, 0xe4, 0x57, 0xc1, 0xc8,
+	0xa1, 0x60, 0xe4, 0x58, 0x30, 0xf2, 0xb7, 0x60, 0xc6, 0xbf, 0x82, 0x91, 0xcd, 0x1f, 0x66, 0x84,
+	0x0f, 0xf5, 0x2d, 0x7a, 0xf9, 0x3f, 0x00, 0x00, 0xff, 0xff, 0x3a, 0xff, 0x5a, 0x54, 0x86, 0x02,
+	0x00, 0x00,
 }
