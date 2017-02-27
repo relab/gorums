@@ -17,9 +17,9 @@ type QuorumSpec interface {
 	// quorum call method.
 	ReadFutureQF(replies []*State) (*State, bool)
 
-	// ReadTwoCorrectablePrelimQF is the quorum function for the ReadTwo
+	// ReadPrelimCorrectablePrelimQF is the quorum function for the ReadPrelim
 	// correctable prelim quourm call method.
-	ReadTwoQF(replies []*State) (*State, int, bool)
+	ReadPrelimQF(replies []*State) (*State, int, bool)
 
 	// WriteQF is the quorum function for the Write
 	// quorum call method.

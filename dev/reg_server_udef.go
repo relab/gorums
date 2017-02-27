@@ -106,8 +106,8 @@ func (r *RegisterServerBasic) ReadNoQC(ctx context.Context, rq *ReadRequest) (*S
 	return r.Read(ctx, rq)
 }
 
-// ReadTwo implements the ReadTwo method from the RegisterServer interface.
-func (r *RegisterServerBasic) ReadTwo(rq *ReadRequest, rrts Register_ReadTwoServer) error {
+// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
+func (r *RegisterServerBasic) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
 	return rrts.Send(&r.state)
 }
 
@@ -164,8 +164,8 @@ func (r *RegisterServerError) ReadNoQC(ctx context.Context, rq *ReadRequest) (*S
 	return r.Read(ctx, rq)
 }
 
-// ReadTwo implements the ReadTwo method from the RegisterServer interface.
-func (r *RegisterServerError) ReadTwo(rq *ReadRequest, rrts Register_ReadTwoServer) error {
+// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
+func (r *RegisterServerError) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
 	return r.err
 }
 
@@ -240,8 +240,8 @@ func (r *RegisterServerSlow) ReadNoQC(ctx context.Context, rq *ReadRequest) (*St
 	return r.Read(ctx, rq)
 }
 
-// ReadTwo implements the ReadTwo method from the RegisterServer interface.
-func (r *RegisterServerSlow) ReadTwo(rq *ReadRequest, rrts Register_ReadTwoServer) error {
+// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
+func (r *RegisterServerSlow) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
 	panic("not implemented")
 }
 
@@ -319,8 +319,8 @@ func (r *RegisterServerBench) ReadNoQC(ctx context.Context, rq *ReadRequest) (*S
 	return r.Read(ctx, rq)
 }
 
-// ReadTwo implements the ReadTwo method from the RegisterServer interface.
-func (r *RegisterServerBench) ReadTwo(rq *ReadRequest, rrts Register_ReadTwoServer) error {
+// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
+func (r *RegisterServerBench) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
 	panic("not implemented")
 }
 
@@ -333,19 +333,19 @@ func (r *RegisterServerBench) WriteExecuted() {}
 // RegisterServerLockedWithState represents a register server with an initial
 // state that does not reply to any requests before it's unlocked.
 type RegisterServerLockedWithState struct {
-	lock              chan struct{}
-	realServer        *RegisterServerBasic
-	readTwoNumReplies int
-	readTwoLockChan   chan struct{}
+	lock                 chan struct{}
+	realServer           *RegisterServerBasic
+	ReadPrelimNumReplies int
+	ReadPrelimLockChan   chan struct{}
 }
 
 // NewRegisterServerLockedWithState returns a new locked register server with an initial state.
-func NewRegisterServerLockedWithState(state *State, readTwoNumReplies int) *RegisterServerLockedWithState {
+func NewRegisterServerLockedWithState(state *State, ReadPrelimNumReplies int) *RegisterServerLockedWithState {
 	return &RegisterServerLockedWithState{
-		lock:              make(chan struct{}),
-		realServer:        NewRegisterBasicWithState(state),
-		readTwoNumReplies: readTwoNumReplies,
-		readTwoLockChan:   make(chan struct{}, 1),
+		lock:                 make(chan struct{}),
+		realServer:           NewRegisterBasicWithState(state),
+		ReadPrelimNumReplies: ReadPrelimNumReplies,
+		ReadPrelimLockChan:   make(chan struct{}, 1),
 	}
 }
 
@@ -385,16 +385,16 @@ func (r *RegisterServerLockedWithState) ReadNoQC(ctx context.Context, rq *ReadRe
 	return r.Read(ctx, rq)
 }
 
-// ReadTwo implements the ReadTwo method from the RegisterServer interface.
-func (r *RegisterServerLockedWithState) ReadTwo(rq *ReadRequest, rrts Register_ReadTwoServer) error {
+// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
+func (r *RegisterServerLockedWithState) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
 	<-r.lock
 
 	r.realServer.RLock()
 	state := r.realServer.state
 	r.realServer.RUnlock()
 
-	for i := 0; i < r.readTwoNumReplies; i++ {
-		<-r.readTwoLockChan
+	for i := 0; i < r.ReadPrelimNumReplies; i++ {
+		<-r.ReadPrelimLockChan
 		err := rrts.Send(&state)
 		if err != nil {
 			return err
@@ -419,8 +419,8 @@ func (r *RegisterServerLockedWithState) Unlock() {
 	close(r.lock)
 }
 
-// PerformSingleReadTwo lets the register server send a single reply from a
-// single ReadTwo method handler.
-func (r *RegisterServerLockedWithState) PerformSingleReadTwo() {
-	r.readTwoLockChan <- struct{}{}
+// PerformSingleReadPrelim lets the register server send a single reply from a
+// single ReadPrelim method handler.
+func (r *RegisterServerLockedWithState) PerformSingleReadPrelim() {
+	r.ReadPrelimLockChan <- struct{}{}
 }

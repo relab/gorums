@@ -139,11 +139,15 @@ func (rqs *registerQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
 	return replies[0], true
 }
 
+func (rqs *registerQSpec) ReadFutureQF(replies []*rpc.State) (*rpc.State, bool) {
+	return rqs.ReadQF(replies)
+}
+
 func (rqs *registerQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, int, bool) {
 	panic("not implemented")
 }
 
-func (rqs *registerQSpec) ReadTwoCorrectablePrelimQF(replies []*rpc.State) (*rpc.State, int, bool) {
+func (rqs *registerQSpec) ReadPrelimQF(replies []*rpc.State) (*rpc.State, int, bool) {
 	panic("not implemented")
 }
 
@@ -152,4 +156,8 @@ func (rqs *registerQSpec) WriteQF(req *rpc.State, replies []*rpc.WriteResponse) 
 		return nil, false
 	}
 	return replies[0], true
+}
+
+func (rqs *registerQSpec) WriteFutureQF(req *rpc.State, replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+	return rqs.WriteQF(req, replies)
 }

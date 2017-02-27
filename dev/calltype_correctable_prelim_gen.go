@@ -10,11 +10,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-/* Methods on Configuration and the correctable prelim struct ReadTwoReply */
+/* Methods on Configuration and the correctable prelim struct ReadPrelimReply */
 
-// ReadTwoReply is a reference to a correctable quorum call
+// ReadPrelimReply is a reference to a correctable quorum call
 // with server side preliminary reply support.
-type ReadTwoReply struct {
+type ReadPrelimReply struct {
 	sync.Mutex
 	// the actual reply
 	*State
@@ -29,45 +29,45 @@ type ReadTwoReply struct {
 	donech chan struct{}
 }
 
-// ReadTwo asynchronously invokes a correctable ReadTwo quorum call
+// ReadPrelim asynchronously invokes a correctable ReadPrelim quorum call
 // with server side preliminary reply support on configuration c and returns a
-// ReadTwoReply which can be used to inspect any replies or errors
+// ReadPrelimReply which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) ReadTwo(ctx context.Context, args *ReadRequest) *ReadTwoReply {
-	corr := &ReadTwoReply{
+func (c *Configuration) ReadPrelim(ctx context.Context, args *ReadRequest) *ReadPrelimReply {
+	corr := &ReadPrelimReply{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.mgr.readTwo(ctx, c, corr, args)
+		c.mgr.readPrelim(ctx, c, corr, args)
 	}()
 	return corr
 }
 
 // Get returns the reply, level and any error associated with the
-// ReadTwo. The method does not block until a (possibly
+// ReadPrelim. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadTwoReply) Get() (*State, int, error) {
+func (c *ReadPrelimReply) Get() (*State, int, error) {
 	c.Lock()
 	defer c.Unlock()
 	return c.State, c.level, c.err
 }
 
-// Done returns a channel that's closed when the correctable ReadTwo
+// Done returns a channel that's closed when the correctable ReadPrelim
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
-func (c *ReadTwoReply) Done() <-chan struct{} {
+func (c *ReadPrelimReply) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // disregardless of the specified level.
-func (c *ReadTwoReply) Watch(level int) <-chan struct{} {
+func (c *ReadPrelimReply) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.Lock()
 	if level < c.level {
@@ -83,7 +83,7 @@ func (c *ReadTwoReply) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *ReadTwoReply) set(reply *State, level int, err error, done bool) {
+func (c *ReadPrelimReply) set(reply *State, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
@@ -109,19 +109,19 @@ func (c *ReadTwoReply) set(reply *State, level int, err error, done bool) {
 	c.Unlock()
 }
 
-/* Methods on Manager for correctable prelim method ReadTwo */
+/* Methods on Manager for correctable prelim method ReadPrelim */
 
-type readTwoReply struct {
+type readPrelimReply struct {
 	nid   uint32
 	reply *State
 	err   error
 }
 
-func (m *Manager) readTwo(ctx context.Context, c *Configuration, corr *ReadTwoReply, args *ReadRequest) {
-	replyChan := make(chan readTwoReply, c.n)
+func (m *Manager) readPrelim(ctx context.Context, c *Configuration, corr *ReadPrelimReply, args *ReadRequest) {
+	replyChan := make(chan readPrelimReply, c.n)
 
 	for _, n := range c.nodes {
-		go callGRPCReadTwoStream(ctx, n, args, replyChan)
+		go callGRPCReadPrelimStream(ctx, n, args, replyChan)
 	}
 
 	var (
@@ -142,7 +142,7 @@ func (m *Manager) readTwo(ctx context.Context, c *Configuration, corr *ReadTwoRe
 				break
 			}
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.ReadTwoQF(replyValues)
+			reply, rlevel, quorum = c.qspec.ReadPrelimQF(replyValues)
 			if quorum {
 				corr.set(reply, rlevel, nil, true)
 				return
@@ -163,11 +163,11 @@ func (m *Manager) readTwo(ctx context.Context, c *Configuration, corr *ReadTwoRe
 	}
 }
 
-func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
+func callGRPCReadPrelimStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readPrelimReply) {
 	x := NewRegisterClient(node.conn)
-	y, err := x.ReadTwo(ctx, args)
+	y, err := x.ReadPrelim(ctx, args)
 	if err != nil {
-		replyChan <- readTwoReply{node.id, nil, err}
+		replyChan <- readPrelimReply{node.id, nil, err}
 		return
 	}
 
@@ -176,7 +176,7 @@ func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, r
 		if err == io.EOF {
 			return
 		}
-		replyChan <- readTwoReply{node.id, reply, err}
+		replyChan <- readPrelimReply{node.id, reply, err}
 		if err != nil {
 			return
 		}

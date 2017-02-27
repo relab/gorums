@@ -717,7 +717,7 @@ func TestCorrectablePrelim(t *testing.T) {
 		Timestamp: 100,
 	}
 
-	// We need the specific implementation so we call the Unlock and PerformReadTwoChan methods.
+	// We need the specific implementation so we call the Unlock and PerformReadPrelimChan methods.
 	regServersImplementation := []*qc.RegisterServerLockedWithState{
 		qc.NewRegisterServerLockedWithState(stateOne, 2),
 		qc.NewRegisterServerLockedWithState(stateTwo, 2),
@@ -748,14 +748,14 @@ func TestCorrectablePrelim(t *testing.T) {
 	defer mgr.Close()
 
 	ids := mgr.NodeIDs()
-	config, err := mgr.NewConfiguration(ids, &ReadTwoTestQSpec{})
+	config, err := mgr.NewConfiguration(ids, &ReadPrelimTestQSpec{})
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
 
 	waitTimeout := time.Second
 	ctx := context.Background()
-	correctable := config.ReadTwo(ctx, &qc.ReadRequest{})
+	correctable := config.ReadPrelim(ctx, &qc.ReadRequest{})
 
 	// We need these watchers for testing to know that a server has replied and
 	// gorums has processed the reply.
@@ -791,7 +791,7 @@ func TestCorrectablePrelim(t *testing.T) {
 		t.Fatal("read correctable prelim: initial get: got reply, want none")
 	}
 
-	regServersImplementation[0].PerformSingleReadTwo()
+	regServersImplementation[0].PerformSingleReadPrelim()
 
 	// Wait for level 1 notification.
 	select {
@@ -819,7 +819,7 @@ func TestCorrectablePrelim(t *testing.T) {
 		t.Fatalf("read correctable prelim: get (1):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateOne.Value)
 	}
 
-	regServersImplementation[0].PerformSingleReadTwo()
+	regServersImplementation[0].PerformSingleReadPrelim()
 
 	// Wait for level 2 notification.
 	select {
@@ -847,7 +847,7 @@ func TestCorrectablePrelim(t *testing.T) {
 		t.Fatalf("read correctable prelim: get (2):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateOne.Value)
 	}
 
-	regServersImplementation[1].PerformSingleReadTwo()
+	regServersImplementation[1].PerformSingleReadPrelim()
 
 	// Wait for level 3 notification.
 	select {
@@ -875,7 +875,7 @@ func TestCorrectablePrelim(t *testing.T) {
 		t.Fatalf("read correctable prelim: get (3):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
 	}
 
-	regServersImplementation[1].PerformSingleReadTwo()
+	regServersImplementation[1].PerformSingleReadPrelim()
 
 	// Wait for level 4 notification.
 	select {
