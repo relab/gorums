@@ -1,5 +1,5 @@
 CMD_PKG 			:= cmd
-PLUGINS_PKG 			:= plugins
+PLUGINS_PKG 		:= plugins
 BUNDLE_PKG			:= bundle
 DEV_PKG				:= dev
 PLUGIN_PKG 			:= gorums
@@ -14,21 +14,15 @@ GORUMS_ENV_GENDEV		:= GORUMSGENDEV=1
 
 GORUMS_STATIC_GO		:= $(PLUGINS_PKG)/$(PLUGIN_PKG)/static.go
 BUNDLE_MAIN_GO 			:= $(CMD_PKG)/$(BUNDLE_PKG)/main.go
-GENTEMPLATES_MAIN_GO 		:= $(CMD_PKG)/gentemplates/main.go
+GENTEMPLATES_MAIN_GO 	:= $(CMD_PKG)/gentemplates/main.go
 
 PROTOC_PLUGIN_PKG		:= protoc-gen-gorums
-PROTOC_PLUGIN_PKG_PATH 		:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
+PROTOC_PLUGIN_PKG_PATH 	:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
 PROTOC_PLUGIN_NAME 		:= gorums_out
 PROTOC_I_FLAG			:= ../../../:.
 
-TESTDATA_GORUMS_RPC			:= testdata/gorums_rpc_golden
-GORUMS_RPC_PROTO_NAME		:= gorums_rpc.proto
-GORUMS_RPC_PBGO_NAME		:= gorums_rpc.pb.go
-GORUMS_RPC_PROTO_DEV_RPATH	:= $(DEV_PKG)/$(GORUMS_RPC_PROTO_NAME)
-GORUMS_RPC_PROTO_TEST_RPATH	:= $(TESTDATA_GORUMS_RPC)/$(GORUMS_RPC_PROTO_NAME)
-GORUMS_RPC_PBGO_TEST_RPATH	:= $(TESTDATA_GORUMS_RPC)/$(GORUMS_RPC_PBGO_NAME)
-
 TESTDATA_REG			:= testdata/register_golden
+
 REG_PROTO_NAME			:= register.proto
 REG_PBGO_NAME			:= register.pb.go
 REG_PROTO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PROTO_NAME)
@@ -96,11 +90,6 @@ reinstallprotoc:
 devproto: reinstallprotoc
 	@echo generating gorumsdev register proto
 	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
-
-.PHONY: devgorumsproto
-devgorumsproto: reinstallprotoc
-	@echo generating dev gorums rpc proto
-	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(GORUMS_RPC_PROTO_DEV_RPATH)
 
 .PHONY: gorumsprotoopts
 gorumsprotoopts:
