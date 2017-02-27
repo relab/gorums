@@ -13,6 +13,10 @@ type QuorumSpec interface {
 	// correctable quorum call method.
 	ReadCorrectableQF(replies []*State) (*State, int, bool)
 
+	// ReadCustomReturnQF is the quorum function for the ReadCustomReturn
+	// quorum call method.
+	ReadCustomReturnQF(replies []*State) (*State, bool)
+
 	// ReadFutureQF is the quorum function for the ReadFuture
 	// quorum call method.
 	ReadFutureQF(replies []*State) (*State, bool)
@@ -28,4 +32,8 @@ type QuorumSpec interface {
 	// WriteFutureQF is the quorum function for the WriteFuture
 	// quorum call method.
 	WriteFutureQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
+
+	// WritePerNodeQF is the quorum function for the WritePerNode
+	// quorum call method.
+	WritePerNodeQF(replies []*WriteResponse) (*WriteResponse, bool)
 }

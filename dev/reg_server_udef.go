@@ -62,10 +62,11 @@ func (r *RegisterServerBasic) ReadCorrectable(ctx context.Context, rq *ReadReque
 }
 
 func (r *RegisterServerBasic) ReadFuture(ctx context.Context, rq *ReadRequest) (*State, error) {
-	r.RLock()
-	defer r.RUnlock()
-	r.readExecutedChan <- struct{}{}
-	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
+	return r.Read(ctx, rq)
+}
+
+func (r *RegisterServerBasic) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return r.Read(ctx, rq)
 }
 
 func (r *RegisterServerBasic) Write(ctx context.Context, s *State) (*WriteResponse, error) {
@@ -81,6 +82,10 @@ func (r *RegisterServerBasic) Write(ctx context.Context, s *State) (*WriteRespon
 }
 
 func (r *RegisterServerBasic) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
+	return r.Write(ctx, s)
+}
+
+func (r *RegisterServerBasic) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
 	return r.Write(ctx, s)
 }
 
@@ -146,11 +151,19 @@ func (r *RegisterServerError) ReadFuture(ctx context.Context, rq *ReadRequest) (
 	return nil, r.err
 }
 
+func (r *RegisterServerError) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return nil, r.err
+}
+
 func (r *RegisterServerError) Write(ctx context.Context, s *State) (*WriteResponse, error) {
 	return nil, r.err
 }
 
 func (r *RegisterServerError) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
+	return nil, r.err
+}
+
+func (r *RegisterServerError) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
 	return nil, r.err
 }
 
@@ -218,6 +231,10 @@ func (r *RegisterServerSlow) ReadFuture(ctx context.Context, rq *ReadRequest) (*
 	return r.realServer.Read(ctx, rq)
 }
 
+func (r *RegisterServerSlow) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return r.Read(ctx, rq)
+}
+
 func (r *RegisterServerSlow) Write(ctx context.Context, s *State) (*WriteResponse, error) {
 	time.Sleep(r.delay)
 	return r.realServer.Write(ctx, s)
@@ -226,6 +243,10 @@ func (r *RegisterServerSlow) Write(ctx context.Context, s *State) (*WriteRespons
 func (r *RegisterServerSlow) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
 	time.Sleep(r.delay)
 	return r.realServer.Write(ctx, s)
+}
+
+func (r *RegisterServerSlow) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
+	return r.Write(ctx, s)
 }
 
 // WriteAsync implements the WriteAsync method from the RegisterServer interface.
@@ -282,6 +303,10 @@ func (r *RegisterServerBench) ReadFuture(ctx context.Context, rq *ReadRequest) (
 	return r.Read(ctx, rq)
 }
 
+func (r *RegisterServerBench) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return r.Read(ctx, rq)
+}
+
 func (r *RegisterServerBench) Write(ctx context.Context, s *State) (*WriteResponse, error) {
 	r.Lock()
 	defer r.Unlock()
@@ -294,6 +319,10 @@ func (r *RegisterServerBench) Write(ctx context.Context, s *State) (*WriteRespon
 }
 
 func (r *RegisterServerBench) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
+	return r.Write(ctx, s)
+}
+
+func (r *RegisterServerBench) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
 	return r.Write(ctx, s)
 }
 
@@ -359,6 +388,10 @@ func (r *RegisterServerLockedWithState) ReadFuture(ctx context.Context, rq *Read
 	return r.realServer.ReadFuture(ctx, rq)
 }
 
+func (r *RegisterServerLockedWithState) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
+	return r.Read(ctx, rq)
+}
+
 func (r *RegisterServerLockedWithState) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
 	<-r.lock
 	return r.realServer.ReadCorrectable(ctx, rq)
@@ -372,6 +405,10 @@ func (r *RegisterServerLockedWithState) Write(ctx context.Context, s *State) (*W
 func (r *RegisterServerLockedWithState) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
 	<-r.lock
 	return r.realServer.WriteFuture(ctx, s)
+}
+
+func (r *RegisterServerLockedWithState) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
+	return r.Write(ctx, s)
 }
 
 // WriteAsync implements the WriteAsync method from the RegisterServer interface.

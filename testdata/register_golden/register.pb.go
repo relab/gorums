@@ -1106,6 +1106,122 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 	replyChan <- readReply{node.id, reply, err}
 }
 
+/* Methods on Configuration and the quorum call struct ReadCustomReturn */
+
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
+
+// ReadCustomReturnReply encapsulates the reply from a ReadCustomReturn quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type ReadCustomReturnReply struct {
+	// the actual reply
+	*State
+	NodeIDs []uint32
+}
+
+func (r ReadCustomReturnReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
+}
+
+// ReadCustomReturn invokes a ReadCustomReturn quorum call on configuration c
+// and returns the result as a ReadCustomReturnReply.
+func (c *Configuration) ReadCustomReturn(ctx context.Context, args *ReadRequest) (*ReadCustomReturnReply, error) {
+	return c.mgr.readCustomReturn(ctx, c, args)
+}
+
+/* Methods on Manager for quorum call method ReadCustomReturn */
+
+type readCustomReturnReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
+func (m *Manager) readCustomReturn(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadCustomReturnReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.State,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan readCustomReturnReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCReadCustomReturn(ctx, n, args, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       = &ReadCustomReturnReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.State, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCReadCustomReturn(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readCustomReturnReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/ReadCustomReturn",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readCustomReturnReply{node.id, reply, err}
+}
+
 /* Methods on Configuration and the quorum call struct Write */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
@@ -1222,6 +1338,123 @@ func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<
 	replyChan <- writeReply{node.id, reply, err}
 }
 
+/* Methods on Configuration and the quorum call struct WritePerNode */
+
+//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
+//(This file could maybe hold all types of structs for the different call semantics)
+
+// WritePerNodeReply encapsulates the reply from a WritePerNode quorum call.
+// It contains the id of each node of the quorum that replied and a single reply.
+type WritePerNodeReply struct {
+	// the actual reply
+	*WriteResponse
+	NodeIDs []uint32
+}
+
+func (r WritePerNodeReply) String() string {
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
+}
+
+// WritePerNode invokes the WritePerNode on each node in configuration c,
+// with the argument returned by the provided perNodeArg function
+// and returns the result as a WritePerNodeReply.
+func (c *Configuration) WritePerNode(ctx context.Context, perNodeArg func(nodeID uint32) *State) (*WritePerNodeReply, error) {
+	return c.mgr.writePerNode(ctx, c, perNodeArg)
+}
+
+/* Methods on Manager for quorum call method WritePerNode */
+
+type writePerNodeReply struct {
+	nid   uint32
+	reply *WriteResponse
+	err   error
+}
+
+func (m *Manager) writePerNode(ctx context.Context, c *Configuration, perNodeArg func(nodeID uint32) *State) (r *WritePerNodeReply, err error) {
+	var ti traceInfo
+	if m.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   r.NodeIDs,
+				reply: r.WriteResponse,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan writePerNodeReply, c.n)
+
+	if m.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: perNodeArg}, false)
+	}
+
+	for _, n := range c.nodes {
+		go callGRPCWritePerNode(ctx, n, perNodeArg(n.id), replyChan)
+	}
+
+	var (
+		replyValues = make([]*WriteResponse, 0, c.n)
+		reply       = &WritePerNodeReply{NodeIDs: make([]uint32, 0, c.n)}
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if m.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply.WriteResponse, quorum = c.qspec.WritePerNodeQF(replyValues); quorum {
+				return reply, nil
+			}
+		case <-ctx.Done():
+			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCWritePerNode(ctx context.Context, node *Node, args *State, replyChan chan<- writePerNodeReply) {
+	reply := new(WriteResponse)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/WritePerNode",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- writePerNodeReply{node.id, reply, err}
+}
+
 /* 'gorums' plugin for protoc-gen-go - generated from: node_tmpl */
 
 // Node encapsulates the state of a node on which a remote procedure call
@@ -1283,6 +1516,10 @@ type QuorumSpec interface {
 	// correctable quorum call method.
 	ReadCorrectableQF(replies []*State) (*State, int, bool)
 
+	// ReadCustomReturnQF is the quorum function for the ReadCustomReturn
+	// quorum call method.
+	ReadCustomReturnQF(replies []*State) (*State, bool)
+
 	// ReadFutureQF is the quorum function for the ReadFuture
 	// quorum call method.
 	ReadFutureQF(replies []*State) (*State, bool)
@@ -1298,6 +1535,10 @@ type QuorumSpec interface {
 	// WriteFutureQF is the quorum function for the WriteFuture
 	// quorum call method.
 	WriteFutureQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
+
+	// WritePerNodeQF is the quorum function for the WritePerNode
+	// quorum call method.
+	WritePerNodeQF(replies []*WriteResponse) (*WriteResponse, bool)
 }
 
 /* Static resources */
@@ -1928,6 +2169,8 @@ type RegisterClient interface {
 	// ReadFuture is an asynchronous quorum call that
 	// returns a future object for retrieving results.
 	ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadCustomReturn is a synchronous quorum call with a custom return type
+	ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
 	// TODO update DOC
@@ -1948,6 +2191,10 @@ type RegisterClient interface {
 	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
 	// No replies are collected.
 	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
+	// WritePerNode is a synchronous quorum call, where,
+	// for each node, a provided function is called to determine
+	// the argument to be sent to that node.
+	WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
 }
 
 type registerClient struct {
@@ -1979,6 +2226,15 @@ func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc
 func (c *registerClient) ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
 	err := grpc.Invoke(ctx, "/dev.Register/ReadFuture", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadCustomReturn", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -2078,6 +2334,15 @@ func (x *registerWriteAsyncClient) CloseAndRecv() (*Empty, error) {
 	return m, nil
 }
 
+func (c *registerClient) WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+	out := new(WriteResponse)
+	err := grpc.Invoke(ctx, "/dev.Register/WritePerNode", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Server API for Register service
 
 type RegisterServer interface {
@@ -2088,6 +2353,8 @@ type RegisterServer interface {
 	// ReadFuture is an asynchronous quorum call that
 	// returns a future object for retrieving results.
 	ReadFuture(context.Context, *ReadRequest) (*State, error)
+	// ReadCustomReturn is a synchronous quorum call with a custom return type
+	ReadCustomReturn(context.Context, *ReadRequest) (*State, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
 	// TODO update DOC
@@ -2108,6 +2375,10 @@ type RegisterServer interface {
 	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
 	// No replies are collected.
 	WriteAsync(Register_WriteAsyncServer) error
+	// WritePerNode is a synchronous quorum call, where,
+	// for each node, a provided function is called to determine
+	// the argument to be sent to that node.
+	WritePerNode(context.Context, *State) (*WriteResponse, error)
 }
 
 func RegisterRegisterServer(s *grpc.Server, srv RegisterServer) {
@@ -2164,6 +2435,24 @@ func _Register_ReadFuture_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RegisterServer).ReadFuture(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadCustomReturn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadCustomReturn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadCustomReturn",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadCustomReturn(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2269,6 +2558,24 @@ func (x *registerWriteAsyncServer) Recv() (*State, error) {
 	return m, nil
 }
 
+func _Register_WritePerNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(State)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).WritePerNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/WritePerNode",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).WritePerNode(ctx, req.(*State))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Register_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "dev.Register",
 	HandlerType: (*RegisterServer)(nil),
@@ -2286,6 +2593,10 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Register_ReadFuture_Handler,
 		},
 		{
+			MethodName: "ReadCustomReturn",
+			Handler:    _Register_ReadCustomReturn_Handler,
+		},
+		{
 			MethodName: "ReadCorrectable",
 			Handler:    _Register_ReadCorrectable_Handler,
 		},
@@ -2296,6 +2607,10 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WriteFuture",
 			Handler:    _Register_WriteFuture_Handler,
+		},
+		{
+			MethodName: "WritePerNode",
+			Handler:    _Register_WritePerNode_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -2903,31 +3218,33 @@ var (
 func init() { proto.RegisterFile("testdata/register_golden/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 401 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x92, 0x3f, 0x8f, 0xd3, 0x30,
-	0x18, 0xc6, 0x63, 0xd2, 0x40, 0xef, 0x3d, 0x9d, 0x38, 0x59, 0x0c, 0x51, 0x85, 0xac, 0x23, 0x42,
-	0xa2, 0x3a, 0x9d, 0xd2, 0xe3, 0x10, 0x62, 0x60, 0x82, 0x13, 0x8c, 0x15, 0x04, 0x04, 0x23, 0x72,
-	0x9a, 0x57, 0x21, 0x52, 0x52, 0x07, 0xdb, 0x29, 0xea, 0xd6, 0x91, 0xb1, 0x23, 0x6c, 0x1d, 0xfb,
-	0x05, 0xfa, 0x1d, 0x18, 0x3b, 0x32, 0xb6, 0x61, 0x61, 0xe4, 0x23, 0x20, 0x3b, 0x05, 0xda, 0x29,
-	0x53, 0x1e, 0xfb, 0x79, 0x7e, 0x79, 0xff, 0x24, 0xf0, 0x40, 0xa3, 0xd2, 0x09, 0xd7, 0x7c, 0x20,
-	0x31, 0xcd, 0x94, 0x46, 0xf9, 0x21, 0x15, 0x79, 0x82, 0xe3, 0x7f, 0xe7, 0xb0, 0x94, 0x42, 0x0b,
-	0xea, 0x26, 0x38, 0xe9, 0xdd, 0x4f, 0x33, 0xfd, 0xb1, 0x8a, 0xc3, 0x91, 0x28, 0x06, 0x12, 0x73,
-	0x1e, 0x0f, 0x52, 0x21, 0xab, 0x42, 0xed, 0x1e, 0x4d, 0x34, 0x78, 0x0a, 0xde, 0x1b, 0xcd, 0x35,
-	0xd2, 0x3b, 0xe0, 0xbd, 0xe3, 0x79, 0x85, 0x3e, 0x39, 0x23, 0xfd, 0xa3, 0xa8, 0x39, 0xd0, 0xbb,
-	0x70, 0xf4, 0x36, 0x2b, 0x50, 0x69, 0x5e, 0x94, 0xfe, 0x8d, 0x33, 0xd2, 0x77, 0xa3, 0xff, 0x17,
-	0xc1, 0x3d, 0x38, 0x79, 0x2f, 0x33, 0x8d, 0x11, 0xaa, 0x52, 0x8c, 0x15, 0xd2, 0x53, 0x70, 0x87,
-	0xf8, 0xd9, 0xbe, 0xa2, 0x1b, 0x19, 0x19, 0x9c, 0xc0, 0x71, 0x84, 0x3c, 0x89, 0xf0, 0x53, 0x85,
-	0x4a, 0x07, 0xb7, 0xc0, 0x7b, 0x51, 0x94, 0x7a, 0x7a, 0xf5, 0xcd, 0x85, 0x6e, 0xb4, 0xeb, 0x9a,
-	0x9e, 0x1b, 0xcd, 0x93, 0xa1, 0x78, 0x7d, 0x4d, 0x4f, 0xc3, 0x04, 0x27, 0xe1, 0x1e, 0xd3, 0x03,
-	0x7b, 0x63, 0xbb, 0x0c, 0x1c, 0x7a, 0x0e, 0x1d, 0x63, 0xb6, 0xe4, 0x3a, 0xb3, 0x95, 0x4f, 0xe8,
-	0x25, 0x80, 0x09, 0xbc, 0xac, 0x74, 0x25, 0xb1, 0x8d, 0x58, 0x18, 0xe2, 0x31, 0xdc, 0x36, 0x81,
-	0x6b, 0x21, 0x25, 0x8e, 0x34, 0x8f, 0xf3, 0x56, 0xec, 0x8b, 0xc1, 0xae, 0x9a, 0x42, 0xaf, 0x24,
-	0xe6, 0x59, 0xd1, 0x46, 0xcc, 0x57, 0x3e, 0xb9, 0x24, 0xf4, 0x21, 0x78, 0x76, 0x79, 0x74, 0xcf,
-	0xec, 0x51, 0xab, 0x0f, 0x96, 0x1a, 0x74, 0xcd, 0x2c, 0x4b, 0x53, 0xe6, 0x09, 0x1c, 0x5b, 0x6b,
-	0x37, 0x50, 0x2b, 0xb8, 0xf8, 0x0b, 0x5e, 0x00, 0x58, 0xeb, 0x99, 0x9a, 0x8e, 0x47, 0x07, 0x5c,
-	0xa3, 0xed, 0x37, 0x09, 0x3a, 0x5f, 0x57, 0x3e, 0xe9, 0x93, 0xe7, 0x17, 0xeb, 0x2d, 0x73, 0x7e,
-	0x6c, 0x99, 0xb3, 0xd9, 0x32, 0x32, 0xab, 0x19, 0x59, 0xd6, 0x8c, 0x7c, 0xaf, 0x19, 0x59, 0xd7,
-	0x8c, 0x6c, 0x6a, 0x46, 0x7e, 0xd5, 0xcc, 0xf9, 0x5d, 0x33, 0x32, 0xff, 0xc9, 0x9c, 0xf8, 0xa6,
-	0xfd, 0x91, 0x1e, 0xfd, 0x09, 0x00, 0x00, 0xff, 0xff, 0x2c, 0x2f, 0xdc, 0xb1, 0x9e, 0x02, 0x00,
-	0x00,
+	// 447 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0xb1, 0x6f, 0xd3, 0x40,
+	0x14, 0xc6, 0x7d, 0x24, 0xa1, 0xe9, 0x2b, 0x55, 0xa3, 0x13, 0x83, 0x15, 0xa1, 0x53, 0xb1, 0x90,
+	0x88, 0xaa, 0x2a, 0x29, 0x45, 0x08, 0x24, 0xa6, 0x52, 0xc1, 0x46, 0x54, 0x0c, 0x82, 0x11, 0x5d,
+	0xe2, 0xa7, 0x60, 0xc9, 0xce, 0x85, 0xbb, 0x77, 0x45, 0xd9, 0x3a, 0x32, 0x76, 0x42, 0x8c, 0x1d,
+	0x3b, 0xb2, 0xf8, 0x1f, 0x60, 0x62, 0xec, 0xc8, 0xd8, 0x98, 0x85, 0x11, 0x89, 0x7f, 0x00, 0xdd,
+	0x39, 0x40, 0x3b, 0xb9, 0x93, 0xdf, 0xdd, 0xfb, 0x7e, 0xf7, 0x7d, 0x7a, 0xcf, 0x70, 0x97, 0xd0,
+	0x50, 0x22, 0x49, 0x0e, 0x34, 0x4e, 0x52, 0x43, 0xa8, 0xdf, 0x4e, 0x54, 0x96, 0xe0, 0xf4, 0xdf,
+	0xb9, 0x3f, 0xd3, 0x8a, 0x14, 0x6f, 0x24, 0x78, 0xd8, 0xbd, 0x33, 0x49, 0xe9, 0x9d, 0x1d, 0xf5,
+	0xc7, 0x2a, 0x1f, 0x68, 0xcc, 0xe4, 0x68, 0x30, 0x51, 0xda, 0xe6, 0x66, 0xf9, 0xa9, 0xa4, 0xd1,
+	0x63, 0x68, 0xbd, 0x24, 0x49, 0xc8, 0x6f, 0x42, 0xeb, 0xb5, 0xcc, 0x2c, 0x86, 0x6c, 0x93, 0xf5,
+	0x56, 0xe3, 0xea, 0xc0, 0x6f, 0xc1, 0xea, 0xab, 0x34, 0x47, 0x43, 0x32, 0x9f, 0x85, 0xd7, 0x36,
+	0x59, 0xaf, 0x11, 0xff, 0xbf, 0x88, 0x6e, 0xc3, 0xfa, 0x1b, 0x9d, 0x12, 0xc6, 0x68, 0x66, 0x6a,
+	0x6a, 0x90, 0x77, 0xa0, 0x31, 0xc4, 0x0f, 0xfe, 0x89, 0x76, 0xec, 0xca, 0x68, 0x1d, 0xd6, 0x62,
+	0x94, 0x49, 0x8c, 0xef, 0x2d, 0x1a, 0x8a, 0x56, 0xa0, 0xf5, 0x34, 0x9f, 0xd1, 0x7c, 0xf7, 0x53,
+	0x13, 0xda, 0xf1, 0x32, 0x35, 0xdf, 0x72, 0xb5, 0x4c, 0x86, 0xea, 0xc5, 0x3e, 0xef, 0xf4, 0x13,
+	0x3c, 0xec, 0x5f, 0x60, 0xba, 0xe0, 0x6f, 0x7c, 0xca, 0x28, 0xe0, 0x5b, 0xd0, 0x74, 0xcd, 0x1a,
+	0x5d, 0xf3, 0xa8, 0x08, 0x19, 0xdf, 0x01, 0x70, 0x82, 0x67, 0x96, 0xac, 0xc6, 0x3a, 0xe2, 0xc4,
+	0x11, 0x7b, 0xd0, 0x71, 0x82, 0x7d, 0x6b, 0x48, 0xe5, 0x31, 0x92, 0xd5, 0xd3, 0x1a, 0x6e, 0xc3,
+	0x39, 0x7d, 0xfd, 0x1d, 0xae, 0x3c, 0x9f, 0x57, 0x83, 0x7c, 0x00, 0x1b, 0xfe, 0x09, 0xa5, 0x35,
+	0x8e, 0x49, 0x8e, 0xb2, 0x5a, 0xe7, 0x8f, 0xce, 0x79, 0xb7, 0xca, 0x7a, 0xa0, 0x31, 0x4b, 0xf3,
+	0x3a, 0xe2, 0xb8, 0x08, 0xd9, 0x0e, 0xe3, 0xf7, 0xa0, 0xe5, 0xe7, 0xcf, 0x2f, 0x34, 0xbb, 0xdc,
+	0xd7, 0x97, 0xf6, 0x12, 0xb5, 0x5d, 0xc8, 0x53, 0x67, 0xf3, 0x10, 0xd6, 0x7c, 0x6b, 0x39, 0x93,
+	0x5a, 0xf0, 0xe4, 0x2f, 0xb8, 0x0d, 0xe0, 0x5b, 0x7b, 0x66, 0x3e, 0x1d, 0x5f, 0xe2, 0xaa, 0xda,
+	0xaf, 0x35, 0x6a, 0x7e, 0x2e, 0x42, 0xd6, 0x63, 0xfc, 0x11, 0xdc, 0xf0, 0xea, 0x03, 0xd4, 0x43,
+	0x95, 0x5c, 0x31, 0xe0, 0x97, 0x22, 0x64, 0x4f, 0xb6, 0xcf, 0x16, 0x22, 0xf8, 0xbe, 0x10, 0xc1,
+	0xf9, 0x42, 0xb0, 0xa3, 0x52, 0xb0, 0xd3, 0x52, 0xb0, 0x6f, 0xa5, 0x60, 0x67, 0xa5, 0x60, 0xe7,
+	0xa5, 0x60, 0x3f, 0x4b, 0x11, 0xfc, 0x2a, 0x05, 0x3b, 0xfe, 0x21, 0x82, 0xd1, 0x75, 0xff, 0x17,
+	0xdf, 0xff, 0x13, 0x00, 0x00, 0xff, 0xff, 0x8e, 0xab, 0xc7, 0x5a, 0x1b, 0x03, 0x00, 0x00,
 }

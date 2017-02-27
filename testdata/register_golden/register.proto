@@ -28,6 +28,12 @@ service Register {
 		option (gorums.qc_future) = true;
 	}
 
+	// ReadCustomReturn is a synchronous quorum call with a custom return type
+	rpc ReadCustomReturn(ReadRequest) returns (State) {
+		option (gorums.qc) = true;
+		option (gorums.custom_return_type) = "MyState";
+	}
+
 	// ReadCorrectable is an asynchronous correctable quorum call that 
 	// returns a correctable object for retrieving results.
 	// TODO update DOC
@@ -65,19 +71,13 @@ service Register {
 		option (gorums.multicast) = true;
 	}
 
-//TODO enable these
-	// // ReadCustomReturn is a synchronous quorum call with a custom return type
-	// rpc ReadCustomReturn(ReadRequest) returns (State) {
-	// 	option (gorums.qc) = true;
-	// 	option (gorums.custom_return_type) = "CReply";
-	// }
-
-	// // WritePerNode is a synchronous quorum call, where, for each node, 
-	// a function is called to determine the argument to be sent to that node.
-	// rpc WritePerNode(State) returns (WriteResponse) {
-	// 	option (gorums.qc)			 = true;
-	// 	option (gorums.per_node_arg) = true;
-	// }
+	// WritePerNode is a synchronous quorum call, where,
+	// for each node, a provided function is called to determine
+	// the argument to be sent to that node.
+	rpc WritePerNode(State) returns (WriteResponse) {
+		option (gorums.qc)			 = true;
+		option (gorums.per_node_arg) = true;
+	}
 }
 
 message State {
