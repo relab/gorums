@@ -6,7 +6,7 @@
 Package dev is a generated protocol buffer package.
 
 Package dev provides a blueprint for testing the various call semantics provided by Gorums.
-Here is table explaining the differences in how the different call semantics work.
+The following table explains the differences in how the different call semantics work.
 
                    Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type
 ------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1007,10 +1007,12 @@ func (r ReadReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
-// Read invokes a Read quorum call on configuration c
+type readArg *ReadRequest
+
+// Read is invoked as a quorum call on configuration c
 // and returns the result as a ReadReply.
-func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(ctx, c, args)
+func (c *Configuration) Read(ctx context.Context, a *ReadRequest) (*ReadReply, error) {
+	return c.mgr.read(ctx, c, a)
 }
 
 /* Methods on Manager for quorum call method Read */
@@ -1021,7 +1023,7 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadReply, err error) {
+func (m *Manager) read(ctx context.Context, c *Configuration, a readArg) (r *ReadReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
@@ -1048,11 +1050,11 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 	replyChan := make(chan readReply, c.n)
 
 	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, args, replyChan)
+		go callGRPCRead(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -1123,10 +1125,12 @@ func (r ReadCustomReturnReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
-// ReadCustomReturn invokes a ReadCustomReturn quorum call on configuration c
+type readCustomReturnArg *ReadRequest
+
+// ReadCustomReturn is invoked as a quorum call on configuration c
 // and returns the result as a ReadCustomReturnReply.
-func (c *Configuration) ReadCustomReturn(ctx context.Context, args *ReadRequest) (*ReadCustomReturnReply, error) {
-	return c.mgr.readCustomReturn(ctx, c, args)
+func (c *Configuration) ReadCustomReturn(ctx context.Context, a *ReadRequest) (*ReadCustomReturnReply, error) {
+	return c.mgr.readCustomReturn(ctx, c, a)
 }
 
 /* Methods on Manager for quorum call method ReadCustomReturn */
@@ -1137,7 +1141,7 @@ type readCustomReturnReply struct {
 	err   error
 }
 
-func (m *Manager) readCustomReturn(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadCustomReturnReply, err error) {
+func (m *Manager) readCustomReturn(ctx context.Context, c *Configuration, a readCustomReturnArg) (r *ReadCustomReturnReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
@@ -1164,11 +1168,11 @@ func (m *Manager) readCustomReturn(ctx context.Context, c *Configuration, args *
 	replyChan := make(chan readCustomReturnReply, c.n)
 
 	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCReadCustomReturn(ctx, n, args, replyChan)
+		go callGRPCReadCustomReturn(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -1239,10 +1243,12 @@ func (r WriteReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
-// Write invokes a Write quorum call on configuration c
+type writeArg *State
+
+// Write is invoked as a quorum call on configuration c
 // and returns the result as a WriteReply.
-func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
-	return c.mgr.write(ctx, c, args)
+func (c *Configuration) Write(ctx context.Context, a *State) (*WriteReply, error) {
+	return c.mgr.write(ctx, c, a)
 }
 
 /* Methods on Manager for quorum call method Write */
@@ -1253,7 +1259,7 @@ type writeReply struct {
 	err   error
 }
 
-func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
+func (m *Manager) write(ctx context.Context, c *Configuration, a writeArg) (r *WriteReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
@@ -1280,11 +1286,11 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	replyChan := make(chan writeReply, c.n)
 
 	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCWrite(ctx, n, args, replyChan)
+		go callGRPCWrite(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -1306,7 +1312,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteQF(args, replyValues); quorum {
+			if reply.WriteResponse, quorum = c.qspec.WriteQF(a, replyValues); quorum {
 				return reply, nil
 			}
 		case <-ctx.Done():
@@ -1355,11 +1361,13 @@ func (r WritePerNodeReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
-// WritePerNode invokes the WritePerNode on each node in configuration c,
+type writePerNodeArg func(nodeID uint32) *State
+
+// WritePerNode is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNodeArg function
 // and returns the result as a WritePerNodeReply.
-func (c *Configuration) WritePerNode(ctx context.Context, perNodeArg func(nodeID uint32) *State) (*WritePerNodeReply, error) {
-	return c.mgr.writePerNode(ctx, c, perNodeArg)
+func (c *Configuration) WritePerNode(ctx context.Context, a writePerNodeArg) (*WritePerNodeReply, error) {
+	return c.mgr.writePerNode(ctx, c, a)
 }
 
 /* Methods on Manager for quorum call method WritePerNode */
@@ -1370,7 +1378,7 @@ type writePerNodeReply struct {
 	err   error
 }
 
-func (m *Manager) writePerNode(ctx context.Context, c *Configuration, perNodeArg func(nodeID uint32) *State) (r *WritePerNodeReply, err error) {
+func (m *Manager) writePerNode(ctx context.Context, c *Configuration, a writePerNodeArg) (r *WritePerNodeReply, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
@@ -1397,11 +1405,11 @@ func (m *Manager) writePerNode(ctx context.Context, c *Configuration, perNodeArg
 	replyChan := make(chan writePerNodeReply, c.n)
 
 	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: perNodeArg}, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCWritePerNode(ctx, n, perNodeArg(n.id), replyChan)
+		go callGRPCWritePerNode(ctx, n, a(n.id), replyChan)
 	}
 
 	var (
@@ -2173,7 +2181,7 @@ type RegisterClient interface {
 	ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
-	// TODO update DOC
+	// TODO update DOC (useful for EPaxos)
 	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
 	// ReadPrelim is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
@@ -2357,7 +2365,7 @@ type RegisterServer interface {
 	ReadCustomReturn(context.Context, *ReadRequest) (*State, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
-	// TODO update DOC
+	// TODO update DOC (useful for EPaxos)
 	ReadCorrectable(context.Context, *ReadRequest) (*State, error)
 	// ReadPrelim is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.

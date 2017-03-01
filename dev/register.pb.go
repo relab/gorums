@@ -6,7 +6,7 @@
 Package dev is a generated protocol buffer package.
 
 Package dev provides a blueprint for testing the various call semantics provided by Gorums.
-Here is table explaining the differences in how the different call semantics work.
+The following table explains the differences in how the different call semantics work.
 
                    Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type
 ------------------------------------------------------------------------------------------------------------------------------------------------
@@ -345,7 +345,7 @@ type RegisterClient interface {
 	ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
-	// TODO update DOC
+	// TODO update DOC (useful for EPaxos)
 	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
 	// ReadPrelim is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
@@ -529,7 +529,7 @@ type RegisterServer interface {
 	ReadCustomReturn(context.Context, *ReadRequest) (*State, error)
 	// ReadCorrectable is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
-	// TODO update DOC
+	// TODO update DOC (useful for EPaxos)
 	ReadCorrectable(context.Context, *ReadRequest) (*State, error)
 	// ReadPrelim is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.

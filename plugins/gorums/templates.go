@@ -657,19 +657,23 @@ func (r {{.TypeName}}) String() string {
 
 {{if .PerNodeArg}}
 
-// {{.MethodName}} invokes the {{.MethodName}} on each node in configuration c,
+type {{.UnexportedMethodName}}Arg func(nodeID uint32) *{{.FQReqName}}
+
+// {{.MethodName}} is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNodeArg function
 // and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, {{.MethodArg}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, {{.MethodArgUse}})
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a {{.UnexportedMethodName}}Arg) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, a)
 }
 
 {{else}}
 
-// {{.MethodName}} invokes a {{.MethodName}} quorum call on configuration c
+type {{.UnexportedMethodName}}Arg *{{.FQReqName}}
+
+// {{.MethodName}} is invoked as a quorum call on configuration c
 // and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, a)
 }
 
 {{- end}}
@@ -682,7 +686,7 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, {{.MethodArg}}) (r *{{.TypeName}}, err error) {
+func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, a {{.UnexportedMethodName}}Arg) (r *{{.TypeName}}, err error) {
 	var ti traceInfo
 	if m.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
@@ -709,11 +713,15 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
 	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: {{.MethodArgUse}}}, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, {{.MethodArgCall}}, replyChan)
+{{- if .PerNodeArg}}
+		go callGRPC{{.MethodName}}(ctx, n, a(n.id), replyChan)
+{{else}}
+		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+{{end -}}
 	}
 
 	var (
@@ -736,7 +744,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
+			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
 {{else}}
 			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
