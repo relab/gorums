@@ -3,7 +3,7 @@ syntax = "proto3";
 import "github.com/relab/gorums/gorums.proto";
 
 // Package dev provides a blueprint for testing the various call semantics provided by Gorums.
-// Here is table explaining the differences in how the different call semantics work.
+// The following table explains the differences in how the different call semantics work.
 //
 //                    Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type      
 // ------------------------------------------------------------------------------------------------------------------------------------------------
@@ -36,7 +36,7 @@ service Register {
 
 	// ReadCorrectable is an asynchronous correctable quorum call that 
 	// returns a correctable object for retrieving results.
-	// TODO update DOC
+	// TODO update DOC (useful for EPaxos)
 	rpc ReadCorrectable(ReadRequest) returns (State) {
 		option (gorums.correctable) = true;
 	}

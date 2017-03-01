@@ -18,6 +18,8 @@ import (
 
 	"golang.org/x/net/context"
 
+	"strconv"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -901,6 +903,88 @@ func TestCorrectablePrelim(t *testing.T) {
 	}
 	if reply.Value != stateTwo.Value {
 		t.Fatalf("read correctable prelim: get after done call:\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
+	}
+}
+
+func TestPerNodeArg(t *testing.T) {
+	defer leakCheck(t)()
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(
+		t,
+		[]regServer{
+			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewRegisterBasic()},
+		},
+		false,
+	)
+	defer closeListeners(allServers)
+	defer stopGrpcServe(allServers)
+
+	mgrOpts := []qc.ManagerOption{
+		dialOpts,
+		qc.WithTracing(),
+	}
+	mgr, err := qc.NewManager(
+		servers.addrs(),
+		mgrOpts...,
+	)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+
+	// Get all all available node ids
+	ids := mgr.NodeIDs()
+
+	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
+	qspec := NewRegisterByTimestampQSpec(2, len(ids))
+
+	config, err := mgr.NewConfiguration(ids, qspec)
+	if err != nil {
+		t.Fatalf("error creating config: %v", err)
+	}
+
+	// Construct test state
+	state := make(map[uint32]*qc.State, len(ids))
+	for _, n := range ids {
+		state[n] = &qc.State{Value: fmt.Sprintf("%d", n), Timestamp: time.Now().UnixNano()}
+	}
+
+	// Perform write per node arg call
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	perNodeArg := func(nodeID uint32) *qc.State {
+		t.Logf("sending to node %d\n", nodeID)
+		return &qc.State{
+			Value:     fmt.Sprintf("%d", nodeID),
+			Timestamp: time.Now().UnixNano(),
+		}
+	}
+	wreply, err := config.WritePerNode(ctx, perNodeArg)
+	if err != nil {
+		t.Fatalf("write quorum call error: %v", err)
+	}
+	t.Logf("wreply: %v\n", wreply)
+	if !wreply.New {
+		t.Error("write reply was not marked as new")
+	}
+
+	// Do read call
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	rreply, err := config.Read(ctx, &qc.ReadRequest{})
+	if err != nil {
+		t.Fatalf("read quorum call error: %v", err)
+	}
+	t.Logf("rreply: %v\n", rreply)
+	valNodeID, _ := strconv.ParseUint(rreply.Value, 10, 32)
+	if rreply.State.Value != state[uint32(valNodeID)].Value {
+		t.Fatalf("read reply: got state %v, want state %v", rreply.State.Value, state[uint32(valNodeID)].Value)
+	}
+
+	nodes := mgr.Nodes()
+	for _, m := range nodes {
+		t.Logf("%v", m)
 	}
 }
 
