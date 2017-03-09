@@ -13,9 +13,9 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-/* Methods on Configuration and the asynchronous struct ReadFutureReply */
+/* Methods on Configuration and the future type struct ReadFutureReply */
 
-// ReadFutureReply is a reference to an asynchronous ReadFuture quorum call invocation.
+// ReadFutureReply is a future object for an asynchronous ReadFuture quorum call invocation.
 type ReadFutureReply struct {
 	// the actual reply
 	*State
@@ -27,14 +27,14 @@ type ReadFutureReply struct {
 // ReadFuture asynchronously invokes a ReadFuture quorum call
 // on configuration c and returns a ReadFutureReply which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFutureReply {
+func (c *Configuration) ReadFuture(ctx context.Context, arg *ReadRequest) *ReadFutureReply {
 	f := &ReadFutureReply{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
 	go func() {
 		defer close(f.c)
-		f.State, f.err = c.mgr.readFuture(ctx, c, f, args)
+		f.State, f.err = c.readFuture(ctx, f, arg)
 	}()
 	return f
 }
@@ -56,7 +56,9 @@ func (f *ReadFutureReply) Done() bool {
 	}
 }
 
-/* Methods on Manager for asynchronous method ReadFuture */
+/* Unexported types and methods for asynchronous method ReadFuture */
+
+type readFutureArg *ReadRequest
 
 type readFutureReply struct {
 	nid   uint32
@@ -64,9 +66,9 @@ type readFutureReply struct {
 	err   error
 }
 
-func (m *Manager) readFuture(ctx context.Context, c *Configuration, f *ReadFutureReply, args *ReadRequest) (r *State, err error) {
+func (c *Configuration) readFuture(ctx context.Context, f *ReadFutureReply, a readFutureArg) (reply *State, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
 		defer ti.tr.Finish()
 
@@ -90,17 +92,16 @@ func (m *Manager) readFuture(ctx context.Context, c *Configuration, f *ReadFutur
 
 	replyChan := make(chan readFutureReply, c.n)
 
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	if c.mgr.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCReadFuture(ctx, n, args, replyChan)
+		go callGRPCReadFuture(ctx, n, a, replyChan)
 	}
 
 	var (
 		replyValues = make([]*State, 0, c.n)
-		reply       *State
 		errCount    int
 		quorum      bool
 	)
@@ -113,7 +114,7 @@ func (m *Manager) readFuture(ctx context.Context, c *Configuration, f *ReadFutur
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
@@ -149,9 +150,9 @@ func callGRPCReadFuture(ctx context.Context, node *Node, args *ReadRequest, repl
 	replyChan <- readFutureReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the asynchronous struct WriteFutureReply */
+/* Methods on Configuration and the future type struct WriteFutureReply */
 
-// WriteFutureReply is a reference to an asynchronous WriteFuture quorum call invocation.
+// WriteFutureReply is a future object for an asynchronous WriteFuture quorum call invocation.
 type WriteFutureReply struct {
 	// the actual reply
 	*WriteResponse
@@ -163,14 +164,14 @@ type WriteFutureReply struct {
 // WriteFuture asynchronously invokes a WriteFuture quorum call
 // on configuration c and returns a WriteFutureReply which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFutureReply {
+func (c *Configuration) WriteFuture(ctx context.Context, arg *State) *WriteFutureReply {
 	f := &WriteFutureReply{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
 	go func() {
 		defer close(f.c)
-		f.WriteResponse, f.err = c.mgr.writeFuture(ctx, c, f, args)
+		f.WriteResponse, f.err = c.writeFuture(ctx, f, arg)
 	}()
 	return f
 }
@@ -192,7 +193,9 @@ func (f *WriteFutureReply) Done() bool {
 	}
 }
 
-/* Methods on Manager for asynchronous method WriteFuture */
+/* Unexported types and methods for asynchronous method WriteFuture */
+
+type writeFutureArg *State
 
 type writeFutureReply struct {
 	nid   uint32
@@ -200,9 +203,9 @@ type writeFutureReply struct {
 	err   error
 }
 
-func (m *Manager) writeFuture(ctx context.Context, c *Configuration, f *WriteFutureReply, args *State) (r *WriteResponse, err error) {
+func (c *Configuration) writeFuture(ctx context.Context, f *WriteFutureReply, a writeFutureArg) (reply *WriteResponse, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
 		defer ti.tr.Finish()
 
@@ -226,17 +229,16 @@ func (m *Manager) writeFuture(ctx context.Context, c *Configuration, f *WriteFut
 
 	replyChan := make(chan writeFutureReply, c.n)
 
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
+	if c.mgr.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCWriteFuture(ctx, n, args, replyChan)
+		go callGRPCWriteFuture(ctx, n, a, replyChan)
 	}
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       *WriteResponse
 		errCount    int
 		quorum      bool
 	)
@@ -249,11 +251,11 @@ func (m *Manager) writeFuture(ctx context.Context, c *Configuration, f *WriteFut
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.WriteFutureQF(args, replyValues); quorum {
+			if reply, quorum = c.qspec.WriteFutureQF(a, replyValues); quorum {
 				return reply, nil
 			}
 		case <-ctx.Done():

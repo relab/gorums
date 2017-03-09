@@ -411,7 +411,7 @@ const calltype_future_tmpl = `
 
 {{$pkgName := .PackageName}}
 
-{{- if not .IgnoreImports}}
+{{if not .IgnoreImports}}
 package {{$pkgName}}
 
 import (
@@ -429,9 +429,9 @@ import (
 
 {{if .Future}}
 
-/* Methods on Configuration and the asynchronous struct {{.TypeName}} */
+/* Methods on Configuration and the future type struct {{.TypeName}} */
 
-// {{.TypeName}} is a reference to an asynchronous {{.MethodName}} quorum call invocation.
+// {{.TypeName}} is a future object for an asynchronous {{.MethodName}} quorum call invocation.
 type {{.TypeName}} struct {
 	// the actual reply
 	*{{.FQRespName}}
@@ -443,14 +443,14 @@ type {{.TypeName}} struct {
 // {{.MethodName}} asynchronously invokes a {{.MethodName}} quorum call
 // on configuration c and returns a {{.TypeName}} which can be used to
 // inspect the quorum call reply and error when available.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.TypeName}} {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) *{{.TypeName}} {
 	f := &{{.TypeName}}{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
 	go func() {
 		defer close(f.c)
-		f.{{.RespName}}, f.err = c.mgr.{{.UnexportedMethodName}}(ctx, c, f, args)
+		f.{{.RespName}}, f.err = c.{{.UnexportedMethodName}}(ctx, f, arg)
 	}()
 	return f
 }
@@ -472,7 +472,9 @@ func (f *{{.TypeName}}) Done() bool {
 	}
 }
 
-/* Methods on Manager for asynchronous method {{.MethodName}} */
+/* Unexported types and methods for asynchronous method {{.MethodName}} */
+
+type {{.UnexportedMethodName}}Arg *{{.FQReqName}}
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -480,9 +482,9 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, f *{{.TypeName}}, {{.MethodArg}}) (r *{{.FQRespName}}, err error) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.TypeName}}, a {{.UnexportedMethodName}}Arg) (reply *{{.FQRespName}}, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
 		defer ti.tr.Finish()
 
@@ -506,17 +508,20 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: {{.MethodArgUse}}}, false)
+	if c.mgr.opts.trace {
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, {{.MethodArgCall}}, replyChan)
+{{- if .PerNodeArg}}
+		go callGRPC{{.MethodName}}(ctx, n, a(n.id), replyChan)
+{{else}}
+		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+{{end -}}
 	}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
-		reply       *{{.FQRespName}}
 		errCount    int
 		quorum      bool
 	)
@@ -529,12 +534,12 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if reply, quorum = c.qspec.{{.MethodName}}QF({{.MethodArgUse}}, replyValues); quorum {
+			if reply, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
 {{else}}
 			if reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
