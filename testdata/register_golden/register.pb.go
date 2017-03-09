@@ -1013,7 +1013,7 @@ type readArg *ReadRequest
 // Read is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result as a ReadReply.
 func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(ctx, c, arg)
+	return c.read(ctx, arg)
 }
 
 /* Methods on Manager for quorum call method Read */
@@ -1024,9 +1024,9 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(ctx context.Context, c *Configuration, a readArg) (r *ReadReply, err error) {
+func (c *Configuration) read(ctx context.Context, a readArg) (r *ReadReply, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
 		defer ti.tr.Finish()
 
@@ -1050,7 +1050,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, a readArg) (r *Rea
 
 	replyChan := make(chan readReply, c.n)
 
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
@@ -1073,7 +1073,7 @@ func (m *Manager) read(ctx context.Context, c *Configuration, a readArg) (r *Rea
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
@@ -1131,7 +1131,7 @@ type readCustomReturnArg *ReadRequest
 // ReadCustomReturn is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result as a ReadCustomReturnReply.
 func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) (*ReadCustomReturnReply, error) {
-	return c.mgr.readCustomReturn(ctx, c, arg)
+	return c.readCustomReturn(ctx, arg)
 }
 
 /* Methods on Manager for quorum call method ReadCustomReturn */
@@ -1142,9 +1142,9 @@ type readCustomReturnReply struct {
 	err   error
 }
 
-func (m *Manager) readCustomReturn(ctx context.Context, c *Configuration, a readCustomReturnArg) (r *ReadCustomReturnReply, err error) {
+func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturnArg) (r *ReadCustomReturnReply, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
 		defer ti.tr.Finish()
 
@@ -1168,7 +1168,7 @@ func (m *Manager) readCustomReturn(ctx context.Context, c *Configuration, a read
 
 	replyChan := make(chan readCustomReturnReply, c.n)
 
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
@@ -1191,7 +1191,7 @@ func (m *Manager) readCustomReturn(ctx context.Context, c *Configuration, a read
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
@@ -1249,7 +1249,7 @@ type writeArg *State
 // Write is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result as a WriteReply.
 func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteReply, error) {
-	return c.mgr.write(ctx, c, arg)
+	return c.write(ctx, arg)
 }
 
 /* Methods on Manager for quorum call method Write */
@@ -1260,9 +1260,9 @@ type writeReply struct {
 	err   error
 }
 
-func (m *Manager) write(ctx context.Context, c *Configuration, a writeArg) (r *WriteReply, err error) {
+func (c *Configuration) write(ctx context.Context, a writeArg) (r *WriteReply, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
 		defer ti.tr.Finish()
 
@@ -1286,7 +1286,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, a writeArg) (r *W
 
 	replyChan := make(chan writeReply, c.n)
 
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
@@ -1309,7 +1309,7 @@ func (m *Manager) write(ctx context.Context, c *Configuration, a writeArg) (r *W
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
@@ -1369,7 +1369,7 @@ type writePerNodeArg func(nodeID uint32) *State
 // result as a WritePerNodeReply. The perNode function returns a *State
 // object to be passed to the given nodeID.
 func (c *Configuration) WritePerNode(ctx context.Context, perNode func(nodeID uint32) *State) (*WritePerNodeReply, error) {
-	return c.mgr.writePerNode(ctx, c, perNode)
+	return c.writePerNode(ctx, perNode)
 }
 
 /* Methods on Manager for quorum call method WritePerNode */
@@ -1380,9 +1380,9 @@ type writePerNodeReply struct {
 	err   error
 }
 
-func (m *Manager) writePerNode(ctx context.Context, c *Configuration, a writePerNodeArg) (r *WritePerNodeReply, err error) {
+func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (r *WritePerNodeReply, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
 		defer ti.tr.Finish()
 
@@ -1406,7 +1406,7 @@ func (m *Manager) writePerNode(ctx context.Context, c *Configuration, a writePer
 
 	replyChan := make(chan writePerNodeReply, c.n)
 
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
@@ -1429,7 +1429,7 @@ func (m *Manager) writePerNode(ctx context.Context, c *Configuration, a writePer
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)

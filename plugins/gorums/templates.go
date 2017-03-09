@@ -668,7 +668,7 @@ type {{.UnexportedMethodName}}Arg func(nodeID uint32) *{{.FQReqName}}
 // result as a {{.TypeName}}. The perNode function returns a *{{.FQReqName}}
 // object to be passed to the given nodeID.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, perNode func(nodeID uint32) *{{.FQReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, perNode)
+	return c.{{.UnexportedMethodName}}(ctx, perNode)
 }
 
 {{else}}
@@ -678,7 +678,7 @@ type {{.UnexportedMethodName}}Arg *{{.FQReqName}}
 // {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result as a {{.TypeName}}.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, arg)
+	return c.{{.UnexportedMethodName}}(ctx, arg)
 }
 
 {{- end}}
@@ -691,9 +691,9 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, a {{.UnexportedMethodName}}Arg) (r *{{.TypeName}}, err error) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.UnexportedMethodName}}Arg) (r *{{.TypeName}}, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
 		defer ti.tr.Finish()
 
@@ -717,7 +717,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 	}
 
@@ -744,7 +744,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
