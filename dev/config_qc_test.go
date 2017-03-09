@@ -953,7 +953,14 @@ func TestPerNodeArg(t *testing.T) {
 	// Perform write per node arg call
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
+
+	cnt := 0
 	perNodeArg := func(nodeID uint32) *qc.State {
+		if cnt > 1 {
+			time.Sleep(250 * time.Millisecond)
+			t.Logf("delay sending to node %d\n", nodeID)
+		}
+		cnt++
 		t.Logf("sending to node %d\n", nodeID)
 		return &qc.State{
 			Value:     fmt.Sprintf("%d", nodeID),
