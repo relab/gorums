@@ -13,22 +13,21 @@ import "golang.org/x/net/context"
 
 {{if .Multicast}}
 
-// {{.MethodName}} is a one-way multicast operation, where args is sent to
-// every node in configuration c. The call is asynchronous and has no response
-// return value.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) error {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, args)
+// {{.MethodName}} is a one-way multicast call on all nodes in configuration c,
+// using the same argument arg. The call is asynchronous and has no return value.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) error {
+	return c.{{.UnexportedMethodName}}(ctx, arg)
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, args *{{.FQReqName}}) error {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, arg *{{.FQReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.{{.MethodName}}Client.Send(args)
+			err := n.{{.MethodName}}Client.Send(arg)
 			if err == nil {
 				return
 			}
-			if m.logger != nil {
-				m.logger.Printf("%d: {{.UnexportedMethodName}} stream send error: %v", n.id, err)
+			if c.mgr.logger != nil {
+				c.mgr.logger.Printf("%d: {{.UnexportedMethodName}} stream send error: %v", n.id, err)
 			}
 		}(node)
 	}

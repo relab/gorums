@@ -5,22 +5,21 @@ package dev
 
 import "golang.org/x/net/context"
 
-// WriteAsync is a one-way multicast operation, where args is sent to
-// every node in configuration c. The call is asynchronous and has no response
-// return value.
-func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
-	return c.mgr.writeAsync(ctx, c, args)
+// WriteAsync is a one-way multicast call on all nodes in configuration c,
+// using the same argument arg. The call is asynchronous and has no return value.
+func (c *Configuration) WriteAsync(ctx context.Context, arg *State) error {
+	return c.writeAsync(ctx, arg)
 }
 
-func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
+func (c *Configuration) writeAsync(ctx context.Context, arg *State) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.WriteAsyncClient.Send(args)
+			err := n.WriteAsyncClient.Send(arg)
 			if err == nil {
 				return
 			}
-			if m.logger != nil {
-				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
+			if c.mgr.logger != nil {
+				c.mgr.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
 			}
 		}(node)
 	}
