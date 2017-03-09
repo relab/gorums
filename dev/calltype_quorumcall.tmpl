@@ -44,20 +44,21 @@ func (r {{.TypeName}}) String() string {
 type {{.UnexportedMethodName}}Arg func(nodeID uint32) *{{.FQReqName}}
 
 // {{.MethodName}} is invoked as a quorum call on each node in configuration c,
-// with the argument returned by the provided perNodeArg function
-// and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, a {{.UnexportedMethodName}}Arg) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, a)
+// with the argument returned by the provided perNode function and returns the
+// result as a {{.TypeName}}. The perNode function returns a *{{.FQReqName}}
+// object to be passed to the given nodeID.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, perNode func(nodeID uint32) *{{.FQReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, perNode)
 }
 
 {{else}}
 
 type {{.UnexportedMethodName}}Arg *{{.FQReqName}}
 
-// {{.MethodName}} is invoked as a quorum call on configuration c
-// and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}) (*{{.TypeName}}, error) {
-	return c.mgr.{{.UnexportedMethodName}}(ctx, c, a)
+// {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result as a {{.TypeName}}.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) (*{{.TypeName}}, error) {
+	return c.mgr.{{.UnexportedMethodName}}(ctx, c, arg)
 }
 
 {{- end}}

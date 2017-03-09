@@ -1009,10 +1009,10 @@ func (r ReadReply) String() string {
 
 type readArg *ReadRequest
 
-// Read is invoked as a quorum call on configuration c
-// and returns the result as a ReadReply.
-func (c *Configuration) Read(ctx context.Context, a *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(ctx, c, a)
+// Read is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result as a ReadReply.
+func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*ReadReply, error) {
+	return c.mgr.read(ctx, c, arg)
 }
 
 /* Methods on Manager for quorum call method Read */
@@ -1127,10 +1127,10 @@ func (r ReadCustomReturnReply) String() string {
 
 type readCustomReturnArg *ReadRequest
 
-// ReadCustomReturn is invoked as a quorum call on configuration c
-// and returns the result as a ReadCustomReturnReply.
-func (c *Configuration) ReadCustomReturn(ctx context.Context, a *ReadRequest) (*ReadCustomReturnReply, error) {
-	return c.mgr.readCustomReturn(ctx, c, a)
+// ReadCustomReturn is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result as a ReadCustomReturnReply.
+func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) (*ReadCustomReturnReply, error) {
+	return c.mgr.readCustomReturn(ctx, c, arg)
 }
 
 /* Methods on Manager for quorum call method ReadCustomReturn */
@@ -1245,10 +1245,10 @@ func (r WriteReply) String() string {
 
 type writeArg *State
 
-// Write is invoked as a quorum call on configuration c
-// and returns the result as a WriteReply.
-func (c *Configuration) Write(ctx context.Context, a *State) (*WriteReply, error) {
-	return c.mgr.write(ctx, c, a)
+// Write is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result as a WriteReply.
+func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteReply, error) {
+	return c.mgr.write(ctx, c, arg)
 }
 
 /* Methods on Manager for quorum call method Write */
@@ -1364,10 +1364,11 @@ func (r WritePerNodeReply) String() string {
 type writePerNodeArg func(nodeID uint32) *State
 
 // WritePerNode is invoked as a quorum call on each node in configuration c,
-// with the argument returned by the provided perNodeArg function
-// and returns the result as a WritePerNodeReply.
-func (c *Configuration) WritePerNode(ctx context.Context, a writePerNodeArg) (*WritePerNodeReply, error) {
-	return c.mgr.writePerNode(ctx, c, a)
+// with the argument returned by the provided perNode function and returns the
+// result as a WritePerNodeReply. The perNode function returns a *State
+// object to be passed to the given nodeID.
+func (c *Configuration) WritePerNode(ctx context.Context, perNode func(nodeID uint32) *State) (*WritePerNodeReply, error) {
+	return c.mgr.writePerNode(ctx, c, perNode)
 }
 
 /* Methods on Manager for quorum call method WritePerNode */
@@ -3227,7 +3228,7 @@ func init() { proto.RegisterFile("testdata/register_golden/register.proto", file
 
 var fileDescriptorRegister = []byte{
 	// 447 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x92, 0xb1, 0x6f, 0xd3, 0x40,
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x8c, 0x92, 0xb1, 0x6f, 0xd3, 0x40,
 	0x14, 0xc6, 0x7d, 0x24, 0xa1, 0xe9, 0x2b, 0x55, 0xa3, 0x13, 0x83, 0x15, 0xa1, 0x53, 0xb1, 0x90,
 	0x88, 0xaa, 0x2a, 0x29, 0x45, 0x08, 0x24, 0xa6, 0x52, 0xc1, 0x46, 0x54, 0x0c, 0x82, 0x11, 0x5d,
 	0xe2, 0xa7, 0x60, 0xc9, 0xce, 0x85, 0xbb, 0x77, 0x45, 0xd9, 0x3a, 0x32, 0x76, 0x42, 0x8c, 0x1d,
