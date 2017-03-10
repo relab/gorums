@@ -40,7 +40,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 	}
 	go func() {
 		defer close(f.c)
-		f.{{.RespName}}, f.err = c.{{.UnexportedMethodName}}(ctx, f, arg)
+		c.{{.UnexportedMethodName}}(ctx, f, arg)
 	}()
 	return f
 }
@@ -72,29 +72,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.TypeName}}, a {{.UnexportedMethodName}}Arg) (reply *{{.FQRespName}}, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   f.NodeIDs,
-				reply: f.{{.RespName}},
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.TypeName}}, a {{.UnexportedMethodName}}Arg) {
+	{{template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
@@ -112,6 +91,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.Typ
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		reply		*{{.FQRespName}}
 		errCount    int
 		quorum      bool
 	)
@@ -119,7 +99,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.Typ
 	for {
 		select {
 		case r := <-replyChan:
-			f.NodeIDs = append(f.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -133,14 +113,17 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.Typ
 {{else}}
 			if reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
-				return reply, nil
+				resp.{{.RespName}}, resp.err = reply, nil
+				return
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.{{.RespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			resp.{{.RespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return
 		}
 	}
 }

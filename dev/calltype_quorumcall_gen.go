@@ -25,6 +25,7 @@ type ReadReply struct {
 	// the actual reply
 	*State
 	NodeIDs []uint32
+	err     error
 }
 
 func (r ReadReply) String() string {
@@ -47,7 +48,8 @@ type readReply struct {
 	err   error
 }
 
-func (c *Configuration) read(ctx context.Context, a readArg) (r *ReadReply, err error) {
+func (c *Configuration) read(ctx context.Context, a readArg) (resp *ReadReply, err error) {
+
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
@@ -61,11 +63,11 @@ func (c *Configuration) read(ctx context.Context, a readArg) (r *ReadReply, err 
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.State,
-				err:   err,
+				ids:   resp.NodeIDs,
+				reply: resp.State,
+				err:   resp.err,
 			}, false)
-			if err != nil {
+			if resp.err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -81,9 +83,9 @@ func (c *Configuration) read(ctx context.Context, a readArg) (r *ReadReply, err 
 		go callGRPCRead(ctx, n, a, replyChan)
 	}
 
+	resp = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*State, 0, c.n)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -91,7 +93,7 @@ func (c *Configuration) read(ctx context.Context, a readArg) (r *ReadReply, err 
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -100,15 +102,15 @@ func (c *Configuration) read(ctx context.Context, a readArg) (r *ReadReply, err 
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
-				return reply, nil
+			if resp.State, quorum = c.qspec.ReadQF(replyValues); quorum {
+				return resp, nil
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
@@ -143,6 +145,7 @@ type ReadCustomReturnReply struct {
 	// the actual reply
 	*State
 	NodeIDs []uint32
+	err     error
 }
 
 func (r ReadCustomReturnReply) String() string {
@@ -165,7 +168,8 @@ type readCustomReturnReply struct {
 	err   error
 }
 
-func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturnArg) (r *ReadCustomReturnReply, err error) {
+func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturnArg) (resp *ReadCustomReturnReply, err error) {
+
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
@@ -179,11 +183,11 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturn
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.State,
-				err:   err,
+				ids:   resp.NodeIDs,
+				reply: resp.State,
+				err:   resp.err,
 			}, false)
-			if err != nil {
+			if resp.err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -199,9 +203,9 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturn
 		go callGRPCReadCustomReturn(ctx, n, a, replyChan)
 	}
 
+	resp = &ReadCustomReturnReply{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*State, 0, c.n)
-		reply       = &ReadCustomReturnReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -209,7 +213,7 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturn
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -218,15 +222,15 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturn
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.State, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
-				return reply, nil
+			if resp.State, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
+				return resp, nil
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
@@ -261,6 +265,7 @@ type WriteReply struct {
 	// the actual reply
 	*WriteResponse
 	NodeIDs []uint32
+	err     error
 }
 
 func (r WriteReply) String() string {
@@ -283,7 +288,8 @@ type writeReply struct {
 	err   error
 }
 
-func (c *Configuration) write(ctx context.Context, a writeArg) (r *WriteReply, err error) {
+func (c *Configuration) write(ctx context.Context, a writeArg) (resp *WriteReply, err error) {
+
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
@@ -297,11 +303,11 @@ func (c *Configuration) write(ctx context.Context, a writeArg) (r *WriteReply, e
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResponse,
-				err:   err,
+				ids:   resp.NodeIDs,
+				reply: resp.WriteResponse,
+				err:   resp.err,
 			}, false)
-			if err != nil {
+			if resp.err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -317,9 +323,9 @@ func (c *Configuration) write(ctx context.Context, a writeArg) (r *WriteReply, e
 		go callGRPCWrite(ctx, n, a, replyChan)
 	}
 
+	resp = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -327,7 +333,7 @@ func (c *Configuration) write(ctx context.Context, a writeArg) (r *WriteReply, e
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -336,15 +342,15 @@ func (c *Configuration) write(ctx context.Context, a writeArg) (r *WriteReply, e
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteQF(a, replyValues); quorum {
-				return reply, nil
+			if resp.WriteResponse, quorum = c.qspec.WriteQF(a, replyValues); quorum {
+				return resp, nil
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
@@ -379,6 +385,7 @@ type WritePerNodeReply struct {
 	// the actual reply
 	*WriteResponse
 	NodeIDs []uint32
+	err     error
 }
 
 func (r WritePerNodeReply) String() string {
@@ -403,7 +410,8 @@ type writePerNodeReply struct {
 	err   error
 }
 
-func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (r *WritePerNodeReply, err error) {
+func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (resp *WritePerNodeReply, err error) {
+
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
@@ -417,11 +425,11 @@ func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (r 
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResponse,
-				err:   err,
+				ids:   resp.NodeIDs,
+				reply: resp.WriteResponse,
+				err:   resp.err,
 			}, false)
-			if err != nil {
+			if resp.err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -437,9 +445,9 @@ func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (r 
 		go callGRPCWritePerNode(ctx, n, a(n.id), replyChan)
 	}
 
+	resp = &WritePerNodeReply{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       = &WritePerNodeReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -447,7 +455,7 @@ func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (r 
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -456,15 +464,15 @@ func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (r 
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WritePerNodeQF(replyValues); quorum {
-				return reply, nil
+			if resp.WriteResponse, quorum = c.qspec.WritePerNodeQF(replyValues); quorum {
+				return resp, nil
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }

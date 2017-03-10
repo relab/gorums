@@ -41,11 +41,11 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   f.NodeIDs,
-				reply: f.{{.RespName}},
-				err:   err,
+				ids:   resp.NodeIDs,
+				reply: resp.{{.RespName}},
+				err:   resp.err,
 			}, false)
-			if err != nil {
+			if resp.err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -477,7 +477,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 	}
 	go func() {
 		defer close(f.c)
-		f.{{.RespName}}, f.err = c.{{.UnexportedMethodName}}(ctx, f, arg)
+		c.{{.UnexportedMethodName}}(ctx, f, arg)
 	}()
 	return f
 }
@@ -509,29 +509,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.TypeName}}, a {{.UnexportedMethodName}}Arg) (reply *{{.FQRespName}}, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   f.NodeIDs,
-				reply: f.{{.RespName}},
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.TypeName}}, a {{.UnexportedMethodName}}Arg) {
+	{{template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
@@ -549,6 +528,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.Typ
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		reply		*{{.FQRespName}}
 		errCount    int
 		quorum      bool
 	)
@@ -556,7 +536,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.Typ
 	for {
 		select {
 		case r := <-replyChan:
-			f.NodeIDs = append(f.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -570,14 +550,17 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.Typ
 {{else}}
 			if reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
-				return reply, nil
+				resp.{{.RespName}}, resp.err = reply, nil
+				return
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.{{.RespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			resp.{{.RespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return
 		}
 	}
 }
@@ -659,6 +642,7 @@ type {{.TypeName}} struct {
 	// the actual reply
 	*{{.FQRespName}}
 	NodeIDs []uint32
+	err		error
 }
 
 func (r {{.TypeName}}) String() string {
@@ -697,29 +681,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.UnexportedMethodName}}Arg) (r *{{.TypeName}}, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
-		defer ti.tr.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
-		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-
-		defer func() {
-			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.{{.RespName}},
-				err:   err,
-			}, false)
-			if err != nil {
-				ti.tr.SetError()
-			}
-		}()
-	}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.UnexportedMethodName}}Arg) (resp *{{.TypeName}}, err error) {
+	{{template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
@@ -735,9 +698,9 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.Unex
 {{end -}}
 	}
 
+	resp = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
-		reply       = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -745,7 +708,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.Unex
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -755,18 +718,18 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.Unex
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
+			if resp.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
 {{else}}
-			if reply.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if resp.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
-				return reply, nil
+				return resp, nil
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }

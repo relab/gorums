@@ -34,7 +34,7 @@ func (c *Configuration) ReadFuture(ctx context.Context, arg *ReadRequest) *ReadF
 	}
 	go func() {
 		defer close(f.c)
-		f.State, f.err = c.readFuture(ctx, f, arg)
+		c.readFuture(ctx, f, arg)
 	}()
 	return f
 }
@@ -66,7 +66,8 @@ type readFutureReply struct {
 	err   error
 }
 
-func (c *Configuration) readFuture(ctx context.Context, f *ReadFutureReply, a readFutureArg) (reply *State, err error) {
+func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a readFutureArg) {
+
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
@@ -80,11 +81,11 @@ func (c *Configuration) readFuture(ctx context.Context, f *ReadFutureReply, a re
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   f.NodeIDs,
-				reply: f.State,
-				err:   err,
+				ids:   resp.NodeIDs,
+				reply: resp.State,
+				err:   resp.err,
 			}, false)
-			if err != nil {
+			if resp.err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -102,6 +103,7 @@ func (c *Configuration) readFuture(ctx context.Context, f *ReadFutureReply, a re
 
 	var (
 		replyValues = make([]*State, 0, c.n)
+		reply       *State
 		errCount    int
 		quorum      bool
 	)
@@ -109,7 +111,7 @@ func (c *Configuration) readFuture(ctx context.Context, f *ReadFutureReply, a re
 	for {
 		select {
 		case r := <-replyChan:
-			f.NodeIDs = append(f.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -119,14 +121,17 @@ func (c *Configuration) readFuture(ctx context.Context, f *ReadFutureReply, a re
 			}
 			replyValues = append(replyValues, r.reply)
 			if reply, quorum = c.qspec.ReadFutureQF(replyValues); quorum {
-				return reply, nil
+				resp.State, resp.err = reply, nil
+				return
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.State, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			resp.State, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return
 		}
 	}
 }
@@ -171,7 +176,7 @@ func (c *Configuration) WriteFuture(ctx context.Context, arg *State) *WriteFutur
 	}
 	go func() {
 		defer close(f.c)
-		f.WriteResponse, f.err = c.writeFuture(ctx, f, arg)
+		c.writeFuture(ctx, f, arg)
 	}()
 	return f
 }
@@ -203,7 +208,8 @@ type writeFutureReply struct {
 	err   error
 }
 
-func (c *Configuration) writeFuture(ctx context.Context, f *WriteFutureReply, a writeFutureArg) (reply *WriteResponse, err error) {
+func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply, a writeFutureArg) {
+
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
@@ -217,11 +223,11 @@ func (c *Configuration) writeFuture(ctx context.Context, f *WriteFutureReply, a 
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   f.NodeIDs,
-				reply: f.WriteResponse,
-				err:   err,
+				ids:   resp.NodeIDs,
+				reply: resp.WriteResponse,
+				err:   resp.err,
 			}, false)
-			if err != nil {
+			if resp.err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -239,6 +245,7 @@ func (c *Configuration) writeFuture(ctx context.Context, f *WriteFutureReply, a 
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
+		reply       *WriteResponse
 		errCount    int
 		quorum      bool
 	)
@@ -246,7 +253,7 @@ func (c *Configuration) writeFuture(ctx context.Context, f *WriteFutureReply, a 
 	for {
 		select {
 		case r := <-replyChan:
-			f.NodeIDs = append(f.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -256,14 +263,17 @@ func (c *Configuration) writeFuture(ctx context.Context, f *WriteFutureReply, a 
 			}
 			replyValues = append(replyValues, r.reply)
 			if reply, quorum = c.qspec.WriteFutureQF(a, replyValues); quorum {
-				return reply, nil
+				resp.WriteResponse, resp.err = reply, nil
+				return
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.WriteResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			resp.WriteResponse, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return
 		}
 	}
 }
