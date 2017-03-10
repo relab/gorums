@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -954,13 +955,13 @@ func TestPerNodeArg(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	cnt := 0
+	var cnt int64
 	perNodeArg := func(nodeID uint32) *qc.State {
-		if cnt > 1 {
+		if atomic.LoadInt64(&cnt) > 1 {
 			time.Sleep(250 * time.Millisecond)
 			t.Logf("delay sending to node %d\n", nodeID)
 		}
-		cnt++
+		atomic.AddInt64(&cnt, 1)
 		t.Logf("sending to node %d\n", nodeID)
 		return &qc.State{
 			Value:     fmt.Sprintf("%d", nodeID),
