@@ -292,9 +292,6 @@ type serviceMethod struct {
 	MethodName           string
 	UnexportedMethodName string
 	RPCName              string
-	MethodArg            string
-	MethodArgUse         string
-	MethodArgCall        string
 	CustomReturnType     string
 
 	FQRespName string
@@ -367,21 +364,9 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 			if sm.TypeName == sm.FQRespName {
 				sm.TypeName += "_"
 			}
-
 			fmt.Fprintf(os.Stderr, "%v\n \tUnexpMethodName\t%v\n \tFQRespName\t%v\n \tFQReqName\t%v\n \tTypeName\t%v\n \tUnexpTypeName\t%v\n \tServName\t%v\n",
 				sm.MethodName, sm.UnexportedMethodName, sm.FQRespName, sm.FQReqName, sm.TypeName, sm.UnexportedTypeName, sm.ServName,
 			)
-
-			sm.MethodArg = "args *" + sm.FQReqName
-			sm.MethodArgCall = "args"
-			sm.MethodArgUse = "args"
-			if sm.PerNodeArg {
-				sm.MethodArg = "perNodeArg func(nodeID uint32) *" + sm.FQReqName
-				sm.MethodArgCall = "perNodeArg(n.id)"
-				sm.MethodArgUse = "perNodeArg"
-				fmt.Fprintf(os.Stderr, "per_node %v -- %v\n", sm.MethodName, sm.MethodArg)
-			}
-			fmt.Fprintf(os.Stderr, "xxxxx %v -- %v (custom return type: %v)\n", sm.MethodName, sm.MethodArg, sm.CustomReturnType)
 
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, sm)
