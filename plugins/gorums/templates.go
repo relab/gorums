@@ -3,10 +3,33 @@
 
 package gorums
 
+const calltype_common_definitions_tmpl = `{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* calltype_common_definitions.tmpl will only be executed for each 'calltype' template. */}}
+
+{{define "callGRPC"}}
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.FQRespName}})
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/{{.ServPackageName}}.{{.ServName}}/{{.MethodName}}",
+		args,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+}
+{{end}}
+`
+
 const calltype_correctable_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
-
-{{$pkgName := .PackageName}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
@@ -182,24 +205,7 @@ func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuratio
 	}
 }
 
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	reply := new({{.FQRespName}})
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
-}
+{{template "callGRPC" .}}
 
 {{- end -}}
 {{- end -}}
@@ -207,8 +213,6 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 
 const calltype_correctable_prelim_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
-
-{{$pkgName := .PackageName}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
@@ -409,10 +413,8 @@ func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQR
 const calltype_future_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
-{{$pkgName := .PackageName}}
-
 {{if not .IgnoreImports}}
-package {{$pkgName}}
+package {{.PackageName}}
 
 import (
 	"time"
@@ -555,24 +557,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.Typ
 	}
 }
 
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	reply := new({{.FQRespName}})
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
-}
+{{template "callGRPC" .}}
 
 {{- end -}}
 {{- end -}}
@@ -581,10 +566,8 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 const calltype_multicast_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
-{{$pkgName := .PackageName}}
-
 {{if not .IgnoreImports}}
-package {{$pkgName}}
+package {{.PackageName}}
 
 import "golang.org/x/net/context"
 {{end}}
@@ -621,10 +604,8 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, arg *{{.F
 const calltype_quorumcall_tmpl = `
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
-{{$pkgName := .PackageName}}
-
 {{if not .IgnoreImports}}
-package {{$pkgName}}
+package {{.PackageName}}
 
 import (
 	"fmt"
@@ -765,24 +746,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.Unex
 	}
 }
 
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	reply := new({{.FQRespName}})
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
-}
+{{template "callGRPC" .}}
 
 {{- end -}}
 {{- end -}}
@@ -905,6 +869,7 @@ type QuorumSpec interface {
 `
 
 var templates = map[string]string{
+	"calltype_common_definitions_tmpl": calltype_common_definitions_tmpl,
 	"calltype_correctable_tmpl":        calltype_correctable_tmpl,
 	"calltype_correctable_prelim_tmpl": calltype_correctable_prelim_tmpl,
 	"calltype_future_tmpl":             calltype_future_tmpl,

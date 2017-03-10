@@ -73,6 +73,9 @@ func (g *gorums) Name() string {
 	return "gorums"
 }
 
+// suffix text for common definitions template files
+const defSuffix = "common_definitions_tmpl"
+
 // Init initializes the plugin.
 func (g *gorums) Init(gen *generator.Generator) {
 	g.gen = gen
@@ -84,9 +87,17 @@ func (g *gorums) Init(gen *generator.Generator) {
 
 	g.templates = make([]tmpl, 0, len(templates))
 	for name, devTemplate := range templates {
+		if strings.HasSuffix(name, defSuffix) {
+			// ignore common definitions (they are extracted below)
+			continue
+		}
+		// check if the template name has a common definitions template file
+		prefix := strings.SplitN(name, "_", 2)[0]
+		commonDefName := prefix + "_" + defSuffix
+		common := templates[commonDefName]
 		t := tmpl{
 			name: name,
-			t:    template.Must(template.New(name).Parse(devTemplate)),
+			t:    template.Must(template.New(name).Parse(common + "\n" + devTemplate)),
 		}
 		g.templates = append(g.templates, t)
 	}
@@ -135,7 +146,7 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	}
 
 	g.pkgData.PackageName = file.GetPackage()
-	g.pkgData.Clients, g.pkgData.Services = g.generateServiceMethods(file.FileDescriptorProto.Service)
+	g.pkgData.Clients, g.pkgData.Services = g.generateServiceMethods(file.FileDescriptorProto.Service, g.pkgData.PackageName)
 
 	g.referenceToSuppressErrs()
 
@@ -301,7 +312,8 @@ type serviceMethod struct {
 	QFWithReq         bool
 	PerNodeArg        bool
 
-	ServName string // Redundant, but keeps it simple.
+	ServName        string // Redundant, but keeps it simple.
+	ServPackageName string // Redundant, but makes it simpler.
 }
 
 type smSlice []serviceMethod
@@ -324,7 +336,7 @@ func (p smSlice) Less(i, j int) bool {
 	}
 }
 
-func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) ([]string, []serviceMethod) {
+func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, pkgName string) ([]string, []serviceMethod) {
 	clients := make([]string, len(services))
 	smethods := make(map[string][]*serviceMethod)
 	for i, service := range services {
@@ -337,6 +349,8 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			if sm == nil {
 				continue
 			}
+			// Package name ; keep a copy for each method, for convenience
+			sm.ServPackageName = pkgName
 			// Service name ; keep a copy for each method, for convenience
 			sm.ServName = service.GetName()
 			// Request type with package (if needed)

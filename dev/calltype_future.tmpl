@@ -1,10 +1,8 @@
 
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
-{{$pkgName := .PackageName}}
-
 {{if not .IgnoreImports}}
-package {{$pkgName}}
+package {{.PackageName}}
 
 import (
 	"time"
@@ -147,24 +145,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, f *{{.Typ
 	}
 }
 
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	reply := new({{.FQRespName}})
-	start := time.Now()
-	err := grpc.Invoke(
-		ctx,
-		"/{{$pkgName}}.{{.ServName}}/{{.MethodName}}",
-		args,
-		reply,
-		node.conn,
-	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
-		node.setLatency(time.Since(start))
-	default:
-		node.setLastErr(err)
-	}
-	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
-}
+{{template "callGRPC" .}}
 
 {{- end -}}
 {{- end -}}

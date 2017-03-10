@@ -1,10 +1,8 @@
 
 {{/* Remember to run 'make goldenanddev' after editing this file. */}}
 
-{{$pkgName := .PackageName}}
-
 {{if not .IgnoreImports}}
-package {{$pkgName}}
+package {{.PackageName}}
 
 import "golang.org/x/net/context"
 {{end}}
