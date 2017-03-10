@@ -745,7 +745,6 @@ type readFutureReply struct {
 }
 
 func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a readFutureArg) {
-
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
@@ -887,7 +886,6 @@ type writeFutureReply struct {
 }
 
 func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply, a writeFutureArg) {
-
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
@@ -1036,7 +1034,6 @@ type readReply struct {
 }
 
 func (c *Configuration) read(ctx context.Context, a readArg) (resp *ReadReply, err error) {
-
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
@@ -1156,7 +1153,6 @@ type readCustomReturnReply struct {
 }
 
 func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturnArg) (resp *ReadCustomReturnReply, err error) {
-
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
@@ -1276,7 +1272,6 @@ type writeReply struct {
 }
 
 func (c *Configuration) write(ctx context.Context, a writeArg) (resp *WriteReply, err error) {
-
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
@@ -1398,7 +1393,6 @@ type writePerNodeReply struct {
 }
 
 func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (resp *WritePerNodeReply, err error) {
-
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")

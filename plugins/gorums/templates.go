@@ -510,7 +510,7 @@ type {{.UnexportedTypeName}} struct {
 }
 
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.TypeName}}, a {{.UnexportedMethodName}}Arg) {
-	{{template "trace" .}}
+	{{- template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 
@@ -682,7 +682,7 @@ type {{.UnexportedTypeName}} struct {
 }
 
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.UnexportedMethodName}}Arg) (resp *{{.TypeName}}, err error) {
-	{{template "trace" .}}
+	{{- template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 

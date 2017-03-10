@@ -67,7 +67,6 @@ type readFutureReply struct {
 }
 
 func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a readFutureArg) {
-
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
@@ -209,7 +208,6 @@ type writeFutureReply struct {
 }
 
 func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply, a writeFutureArg) {
-
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
