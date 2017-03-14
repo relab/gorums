@@ -651,14 +651,14 @@ func (r {{.TypeName}}) String() string {
 
 {{if .PerNodeArg}}
 
-type {{.UnexportedMethodName}}Arg func(nodeID uint32) *{{.FQReqName}}
+type {{.UnexportedMethodName}}Arg func(req {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}
 
 // {{.MethodName}} is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNode function and returns the
 // result as a {{.TypeName}}. The perNode function returns a *{{.FQReqName}}
 // object to be passed to the given nodeID.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, perNode func(nodeID uint32) *{{.FQReqName}}) (*{{.TypeName}}, error) {
-	return c.{{.UnexportedMethodName}}(ctx, perNode)
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(req {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (*{{.TypeName}}, error) {
+	return c.{{.UnexportedMethodName}}(ctx, arg, perNode)
 }
 
 {{else}}
@@ -681,7 +681,11 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
+{{- if .PerNodeArg}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f {{.UnexportedMethodName}}Arg) (resp *{{.TypeName}}, err error) {
+{{else}}
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.UnexportedMethodName}}Arg) (resp *{{.TypeName}}, err error) {
+{{end -}}
 	{{template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
@@ -692,7 +696,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.Unex
 
 	for _, n := range c.nodes {
 {{- if .PerNodeArg}}
-		go callGRPC{{.MethodName}}(ctx, n, a(n.id), replyChan)
+		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
 {{else}}
 		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
 {{end -}}

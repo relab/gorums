@@ -392,14 +392,14 @@ func (r WritePerNodeReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
-type writePerNodeArg func(nodeID uint32) *State
+type writePerNodeArg func(req State, nodeID uint32) *State
 
 // WritePerNode is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNode function and returns the
 // result as a WritePerNodeReply. The perNode function returns a *State
 // object to be passed to the given nodeID.
-func (c *Configuration) WritePerNode(ctx context.Context, perNode func(nodeID uint32) *State) (*WritePerNodeReply, error) {
-	return c.writePerNode(ctx, perNode)
+func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(req State, nodeID uint32) *State) (*WritePerNodeReply, error) {
+	return c.writePerNode(ctx, arg, perNode)
 }
 
 /* Methods on Manager for quorum call method WritePerNode */
@@ -410,7 +410,7 @@ type writePerNodeReply struct {
 	err   error
 }
 
-func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (resp *WritePerNodeReply, err error) {
+func (c *Configuration) writePerNode(ctx context.Context, a *State, f writePerNodeArg) (resp *WritePerNodeReply, err error) {
 
 	var ti traceInfo
 	if c.mgr.opts.trace {
@@ -442,7 +442,7 @@ func (c *Configuration) writePerNode(ctx context.Context, a writePerNodeArg) (re
 	}
 
 	for _, n := range c.nodes {
-		go callGRPCWritePerNode(ctx, n, a(n.id), replyChan)
+		go callGRPCWritePerNode(ctx, n, f(*a, n.id), replyChan)
 	}
 
 	resp = &WritePerNodeReply{NodeIDs: make([]uint32, 0, c.n)}
