@@ -42,7 +42,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
 				ids:   resp.NodeIDs,
-				reply: resp.{{.RespName}},
+				reply: resp.{{.CustomRespName}},
 				err:   resp.err,
 			}, false)
 			if resp.err != nil {
@@ -461,7 +461,7 @@ import (
 // {{.TypeName}} is a future object for an asynchronous {{.MethodName}} quorum call invocation.
 type {{.TypeName}} struct {
 	// the actual reply
-	*{{.FQRespName}}
+	*{{.FQCustomRespName}}
 	NodeIDs  []uint32
 	err   error
 	c     chan struct{}
@@ -484,9 +484,9 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 
 // Get returns the reply and any error associated with the {{.MethodName}}.
 // The method blocks until a reply or error is available.
-func (f *{{.TypeName}}) Get() (*{{.FQRespName}}, error) {
+func (f *{{.TypeName}}) Get() (*{{.FQCustomRespName}}, error) {
 	<-f.c
-	return f.{{.RespName}}, f.err
+	return f.{{.CustomRespName}}, f.err
 }
 
 // Done reports if a reply and/or error is available for the {{.MethodName}}.
@@ -528,7 +528,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
-		reply		*{{.FQRespName}}
+		reply		*{{.FQCustomRespName}}
 		errCount    int
 		quorum      bool
 	)
@@ -550,16 +550,16 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.
 {{else}}
 			if reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
-				resp.{{.RespName}}, resp.err = reply, nil
+				resp.{{.CustomRespName}}, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.{{.RespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			resp.{{.RespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 			return
 		}
 	}
@@ -640,13 +640,13 @@ import (
 // It contains the id of each node of the quorum that replied and a single reply.
 type {{.TypeName}} struct {
 	// the actual reply
-	*{{.FQRespName}}
+	*{{.FQCustomRespName}}
 	NodeIDs []uint32
 	err		error
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.CustomRespName}})
 }
 
 {{if .PerNodeArg}}
@@ -722,9 +722,9 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.Unex
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if resp.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
+			if resp.{{.CustomRespName}}, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
 {{else}}
-			if resp.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if resp.{{.CustomRespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
 				return resp, nil
 			}
@@ -839,9 +839,9 @@ type QuorumSpec interface {
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// quorum call method.
 {{- if .QFWithReq}}
-	{{.MethodName}}QF(req *{{.FQReqName}}, replies []*{{.FQRespName}}) (*{{.FQRespName}}, bool)
+	{{.MethodName}}QF(req *{{.FQReqName}}, replies []*{{.FQRespName}}) (*{{.FQCustomRespName}}, bool)
 {{else}}
-	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, bool)
+	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQCustomRespName}}, bool)
 {{end}}
 {{end -}}
 

@@ -143,13 +143,13 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 // It contains the id of each node of the quorum that replied and a single reply.
 type ReadCustomReturnReply struct {
 	// the actual reply
-	*State
+	*MyState
 	NodeIDs []uint32
 	err     error
 }
 
 func (r ReadCustomReturnReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.MyState)
 }
 
 type readCustomReturnArg *ReadRequest
@@ -184,7 +184,7 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturn
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
 				ids:   resp.NodeIDs,
-				reply: resp.State,
+				reply: resp.MyState,
 				err:   resp.err,
 			}, false)
 			if resp.err != nil {
@@ -222,7 +222,7 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturn
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if resp.State, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
+			if resp.MyState, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():

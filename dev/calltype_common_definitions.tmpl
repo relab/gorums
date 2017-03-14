@@ -37,7 +37,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
 				ids:   resp.NodeIDs,
-				reply: resp.{{.RespName}},
+				reply: resp.{{.CustomRespName}},
 				err:   resp.err,
 			}, false)
 			if resp.err != nil {

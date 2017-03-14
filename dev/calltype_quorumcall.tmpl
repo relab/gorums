@@ -29,13 +29,13 @@ import (
 // It contains the id of each node of the quorum that replied and a single reply.
 type {{.TypeName}} struct {
 	// the actual reply
-	*{{.FQRespName}}
+	*{{.FQCustomRespName}}
 	NodeIDs []uint32
 	err		error
 }
 
 func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.RespName}})
+	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.CustomRespName}})
 }
 
 {{if .PerNodeArg}}
@@ -111,9 +111,9 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.Unex
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if resp.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
+			if resp.{{.CustomRespName}}, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
 {{else}}
-			if resp.{{.RespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if resp.{{.CustomRespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
 				return resp, nil
 			}

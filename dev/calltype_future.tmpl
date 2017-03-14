@@ -24,7 +24,7 @@ import (
 // {{.TypeName}} is a future object for an asynchronous {{.MethodName}} quorum call invocation.
 type {{.TypeName}} struct {
 	// the actual reply
-	*{{.FQRespName}}
+	*{{.FQCustomRespName}}
 	NodeIDs  []uint32
 	err   error
 	c     chan struct{}
@@ -47,9 +47,9 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 
 // Get returns the reply and any error associated with the {{.MethodName}}.
 // The method blocks until a reply or error is available.
-func (f *{{.TypeName}}) Get() (*{{.FQRespName}}, error) {
+func (f *{{.TypeName}}) Get() (*{{.FQCustomRespName}}, error) {
 	<-f.c
-	return f.{{.RespName}}, f.err
+	return f.{{.CustomRespName}}, f.err
 }
 
 // Done reports if a reply and/or error is available for the {{.MethodName}}.
@@ -91,7 +91,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
-		reply		*{{.FQRespName}}
+		reply		*{{.FQCustomRespName}}
 		errCount    int
 		quorum      bool
 	)
@@ -113,16 +113,16 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.
 {{else}}
 			if reply, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
-				resp.{{.RespName}}, resp.err = reply, nil
+				resp.{{.CustomRespName}}, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.{{.RespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			resp.{{.RespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 			return
 		}
 	}

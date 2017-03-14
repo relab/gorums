@@ -12,9 +12,9 @@ type QuorumSpec interface {
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// quorum call method.
 {{- if .QFWithReq}}
-	{{.MethodName}}QF(req *{{.FQReqName}}, replies []*{{.FQRespName}}) (*{{.FQRespName}}, bool)
+	{{.MethodName}}QF(req *{{.FQReqName}}, replies []*{{.FQRespName}}) (*{{.FQCustomRespName}}, bool)
 {{else}}
-	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, bool)
+	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQCustomRespName}}, bool)
 {{end}}
 {{end -}}
 

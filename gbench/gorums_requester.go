@@ -143,8 +143,17 @@ func (rqs *registerQSpec) ReadFutureQF(replies []*rpc.State) (*rpc.State, bool) 
 	return rqs.ReadQF(replies)
 }
 
-func (rqs *registerQSpec) ReadCustomReturnQF(replies []*rpc.State) (*rpc.State, bool) {
-	return rqs.ReadQF(replies)
+func (rqs *registerQSpec) ReadCustomReturnQF(replies []*rpc.State) (*rpc.MyState, bool) {
+	state, ok := rqs.ReadQF(replies)
+	if !ok {
+		return nil, false
+	}
+	myState := &rpc.MyState{
+		Value:     state.Value,
+		Timestamp: state.Timestamp,
+		Extra:     123,
+	}
+	return myState, ok
 }
 
 func (rqs *registerQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, int, bool) {
