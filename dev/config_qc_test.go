@@ -991,10 +991,30 @@ func TestPerNodeArg(t *testing.T) {
 		t.Fatalf("read reply: got state %v, want state %v", rreply.State.Value, state[uint32(valNodeID)].Value)
 	}
 
-	nodes := mgr.Nodes()
-	for _, m := range nodes {
-		t.Logf("%v", m)
+	// Test nil return value from perNodeArg to indicate that we should ignore a node
+
+	/* DISABLED TODO need to implement logic to test for nil in quorumcall.tmpl
+	nodeToIgnore := mgr.NodeIDs()[0]
+	perNodeArgNil := func(req qc.State, nodeID uint32) *qc.State {
+		if nodeID == nodeToIgnore {
+			t.Logf("ignoring node %d\n", nodeID)
+			return nil
+		}
+		t.Logf("sending to node %d\n", nodeID)
+		req.Value = fmt.Sprintf("%d", nodeID)
+		req.Timestamp = time.Now().UnixNano()
+		return &req
 	}
+	wreply, err = config.WritePerNode(ctx, req, perNodeArgNil)
+	if err != nil {
+		t.Fatalf("write quorum call error: %v", err)
+	}
+	t.Logf("wreply: %v\n", wreply)
+	if !wreply.New {
+		t.Error("write reply was not marked as new")
+	}
+	*/
+
 }
 
 ///////////////////////////////////////////////////////////////
