@@ -125,7 +125,7 @@ import (
 type {{.TypeName}} struct {
 	sync.Mutex
 	// the actual reply
-	*{{.FQRespName}}
+	*{{.FQCustomRespName}}
 	NodeIDs  []uint32
 	level    int
 	err      error
@@ -158,10 +158,10 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *{{.TypeName}}) Get() (*{{.FQRespName}}, int, error) {
+func (c *{{.TypeName}}) Get() (*{{.FQCustomRespName}}, int, error) {
 	c.Lock()
 	defer c.Unlock()
-	return c.{{.RespName}}, c.level, c.err
+	return c.{{.CustomRespName}}, c.level, c.err
 }
 
 // Done returns a channel that's closed when the correctable {{.MethodName}}
@@ -191,13 +191,13 @@ func (c *{{.TypeName}}) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *{{.TypeName}}) set(reply *{{.FQRespName}}, level int, err error, done bool) {
+func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
-	c.{{.RespName}}, c.level, c.err, c.done = reply, level, err, done
+	c.{{.CustomRespName}}, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -231,7 +231,7 @@ type {{.UnexportedTypeName}} struct {
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
 		clevel      = LevelNotSet
-		reply		*{{.FQRespName}}
+		reply		*{{.FQCustomRespName}}
 		rlevel      int
 		errCount    int
 		quorum      bool
@@ -302,7 +302,7 @@ import (
 type {{.TypeName}} struct {
 	sync.Mutex
 	// the actual reply
-	*{{.FQRespName}}
+	*{{.FQCustomRespName}}
 	NodeIDs  []uint32
 	level    int
 	err      error
@@ -335,10 +335,10 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *{{.TypeName}}) Get() (*{{.FQRespName}}, int, error) {
+func (c *{{.TypeName}}) Get() (*{{.FQCustomRespName}}, int, error) {
 	c.Lock()
 	defer c.Unlock()
-	return c.{{.RespName}}, c.level, c.err
+	return c.{{.CustomRespName}}, c.level, c.err
 }
 
 // Done returns a channel that's closed when the correctable {{.MethodName}}
@@ -368,13 +368,13 @@ func (c *{{.TypeName}}) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *{{.TypeName}}) set(reply *{{.FQRespName}}, level int, err error, done bool) {
+func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, done bool) {
 	c.Lock()
 	if c.done {
 		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
-	c.{{.RespName}}, c.level, c.err, c.done = reply, level, err, done
+	c.{{.CustomRespName}}, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -408,7 +408,7 @@ type {{.UnexportedTypeName}} struct {
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
 		clevel      = LevelNotSet
-		reply		*{{.FQRespName}}
+		reply		*{{.FQCustomRespName}}
 		rlevel      int
 		errCount    int
 		quorum      bool
@@ -510,7 +510,7 @@ type {{.TypeName}} struct {
 // configuration c, with the argument returned by the provided perNode
 // function and returns the result as a {{.TypeName}}, which can be used
 // to inspect the quorum call reply and error when available. 
-// The perNode function takes the provided arg and returns a *{{.FQReqName}}
+// The perNode function takes the provided arg and returns a {{.FQReqName}}
 // object to be passed to the given nodeID.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) *{{.TypeName}} {
 	f := &{{.TypeName}}{
@@ -852,8 +852,16 @@ package {{.PackageName}}
 type QuorumSpec interface {
 {{- range $elm := .Services}}
 {{- if or (.QuorumCall) (.Future)}}
+{{- if .QuorumCall}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// quorum call method.
+{{- end -}}
+
+{{- if .Future}}
+	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
+	// asynchronous quorum call method.
+{{- end -}}
+
 {{- if .QFWithReq}}
 	{{.MethodName}}QF(req *{{.FQReqName}}, replies []*{{.FQRespName}}) (*{{.FQCustomRespName}}, bool)
 {{else}}
@@ -861,16 +869,23 @@ type QuorumSpec interface {
 {{end}}
 {{end -}}
 
+{{- if or (.Correctable) (.CorrectablePrelim)}}
 {{if .Correctable}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// correctable quorum call method.
-	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
-{{end -}}
+{{- end -}}
 
 {{if .CorrectablePrelim}}
-	// {{.MethodName}}CorrectablePrelimQF is the quorum function for the {{.MethodName}} 
+	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} 
 	// correctable prelim quourm call method.
-	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQRespName}}, int, bool)
+{{- end -}}
+
+{{- if .QFWithReq}}
+	{{.MethodName}}QF(req *{{.FQReqName}}, replies []*{{.FQRespName}}) (*{{.FQCustomRespName}}, int, bool)
+{{else}}
+	{{.MethodName}}QF(replies []*{{.FQRespName}}) (*{{.FQCustomRespName}}, int, bool)
+{{end}}
+
 {{end -}}
 {{- end -}}
 }
