@@ -38,6 +38,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
@@ -685,11 +686,6 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 	{{- template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-
-	if c.mgr.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
-	}
-
 	for _, n := range c.nodes {
 {{- if .PerNodeArg}}
 		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)

@@ -33,6 +33,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{

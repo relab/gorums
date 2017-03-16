@@ -77,6 +77,7 @@ func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
@@ -218,6 +219,7 @@ func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply,
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{

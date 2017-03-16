@@ -839,6 +839,7 @@ func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
@@ -980,6 +981,7 @@ func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply,
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
@@ -1126,6 +1128,7 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *ReadRep
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
@@ -1140,11 +1143,6 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *ReadRep
 	}
 
 	replyChan := make(chan readReply, c.n)
-
-	if c.mgr.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
-	}
-
 	for _, n := range c.nodes {
 		go callGRPCRead(ctx, n, a, replyChan)
 	}
@@ -1243,6 +1241,7 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
@@ -1257,11 +1256,6 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 	}
 
 	replyChan := make(chan readCustomReturnReply, c.n)
-
-	if c.mgr.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
-	}
-
 	for _, n := range c.nodes {
 		go callGRPCReadCustomReturn(ctx, n, a, replyChan)
 	}
@@ -1360,6 +1354,7 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteReply, 
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
@@ -1374,11 +1369,6 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteReply, 
 	}
 
 	replyChan := make(chan writeReply, c.n)
-
-	if c.mgr.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
-	}
-
 	for _, n := range c.nodes {
 		go callGRPCWrite(ctx, n, a, replyChan)
 	}
@@ -1479,6 +1469,7 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
@@ -1493,11 +1484,6 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 	}
 
 	replyChan := make(chan writePerNodeReply, c.n)
-
-	if c.mgr.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
-	}
-
 	for _, n := range c.nodes {
 		go callGRPCWritePerNode(ctx, n, f(*a, n.id), replyChan)
 	}
