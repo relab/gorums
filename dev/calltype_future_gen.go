@@ -34,7 +34,7 @@ func (c *Configuration) ReadFuture(ctx context.Context, arg *ReadRequest) *ReadF
 	}
 	go func() {
 		defer close(f.c)
-		c.readFuture(ctx, f, arg)
+		c.readFuture(ctx, arg, f)
 	}()
 	return f
 }
@@ -58,15 +58,13 @@ func (f *ReadFutureReply) Done() bool {
 
 /* Unexported types and methods for asynchronous method ReadFuture */
 
-type readFutureArg *ReadRequest
-
 type readFutureReply struct {
 	nid   uint32
 	reply *State
 	err   error
 }
 
-func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a readFutureArg) {
+func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *ReadFutureReply) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
@@ -171,7 +169,7 @@ func (c *Configuration) WriteFuture(ctx context.Context, arg *State) *WriteFutur
 	}
 	go func() {
 		defer close(f.c)
-		c.writeFuture(ctx, f, arg)
+		c.writeFuture(ctx, arg, f)
 	}()
 	return f
 }
@@ -195,15 +193,13 @@ func (f *WriteFutureReply) Done() bool {
 
 /* Unexported types and methods for asynchronous method WriteFuture */
 
-type writeFutureArg *State
-
 type writeFutureReply struct {
 	nid   uint32
 	reply *WriteResponse
 	err   error
 }
 
-func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply, a writeFutureArg) {
+func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *WriteFutureReply) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")

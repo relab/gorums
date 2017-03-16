@@ -478,7 +478,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 	}
 	go func() {
 		defer close(f.c)
-		c.{{.UnexportedMethodName}}(ctx, f, arg)
+		c.{{.UnexportedMethodName}}(ctx, arg, f)
 	}()
 	return f
 }
@@ -502,15 +502,13 @@ func (f *{{.TypeName}}) Done() bool {
 
 /* Unexported types and methods for asynchronous method {{.MethodName}} */
 
-type {{.UnexportedMethodName}}Arg *{{.FQReqName}}
-
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
 	reply *{{.FQRespName}}
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.TypeName}}, a {{.UnexportedMethodName}}Arg) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
 	{{- template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
