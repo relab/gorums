@@ -13,7 +13,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-/* Methods on Configuration and the correctable struct ReadCorrectableReply */
+/* Exported types and methods for correctable method ReadCorrectable */
 
 // ReadCorrectableReply is a reference to a correctable ReadCorrectable quorum call.
 type ReadCorrectableReply struct {
@@ -42,7 +42,7 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) 
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.readCorrectable(ctx, corr, args)
+		c.readCorrectable(ctx, args, corr)
 	}()
 	return corr
 }
@@ -119,10 +119,10 @@ type readCorrectableReply struct {
 	err   error
 }
 
-func (c *Configuration) readCorrectable(ctx context.Context, corr *ReadCorrectableReply, args *ReadRequest) {
+func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, resp *ReadCorrectableReply) {
 	replyChan := make(chan readCorrectableReply, c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadCorrectable(ctx, n, args, replyChan)
+		go callGRPCReadCorrectable(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -137,7 +137,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, corr *ReadCorrectab
 	for {
 		select {
 		case r := <-replyChan:
-			corr.NodeIDs = append(corr.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -145,20 +145,20 @@ func (c *Configuration) readCorrectable(ctx context.Context, corr *ReadCorrectab
 			replyValues = append(replyValues, r.reply)
 			reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
 			if quorum {
-				corr.set(reply, rlevel, nil, true)
+				resp.set(reply, rlevel, nil, true)
 				return
 			}
 			if rlevel > clevel {
 				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
+				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
 	}

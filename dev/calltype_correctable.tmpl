@@ -48,7 +48,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.{{.UnexportedMethodName}}(ctx, corr, args)
+		c.{{.UnexportedMethodName}}(ctx, args, corr)
 	}()
 	return corr
 }
@@ -125,10 +125,10 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, corr *{{.TypeName}}, args *{{.FQReqName}}) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
+		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -143,32 +143,32 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, corr *{{.
 	for {
 		select {
 		case r := <-replyChan:
-			corr.NodeIDs = append(corr.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
+			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(a, replyValues)
 {{else}}
 			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
 {{end -}}
 			if quorum {
-				corr.set(reply, rlevel, nil, true)
+				resp.set(reply, rlevel, nil, true)
 				return
 			}
 			if rlevel > clevel {
 				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
+				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
 	}

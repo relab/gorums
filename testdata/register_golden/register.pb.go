@@ -427,7 +427,7 @@ var _ = codes.OK
 
 /* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_prelim_tmpl */
 
-/* Methods on Configuration and the correctable prelim struct ReadPrelimReply */
+/* Exported types and methods for correctable prelim method ReadPrelim */
 
 // ReadPrelimReply is a reference to a correctable quorum call
 // with server side preliminary reply support.
@@ -457,7 +457,7 @@ func (c *Configuration) ReadPrelim(ctx context.Context, args *ReadRequest) *Read
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.readPrelim(ctx, corr, args)
+		c.readPrelim(ctx, args, corr)
 	}()
 	return corr
 }
@@ -534,10 +534,10 @@ type readPrelimReply struct {
 	err   error
 }
 
-func (c *Configuration) readPrelim(ctx context.Context, corr *ReadPrelimReply, args *ReadRequest) {
+func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *ReadPrelimReply) {
 	replyChan := make(chan readPrelimReply, c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadPrelimStream(ctx, n, args, replyChan)
+		go callGRPCReadPrelimStream(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -552,7 +552,7 @@ func (c *Configuration) readPrelim(ctx context.Context, corr *ReadPrelimReply, a
 	for {
 		select {
 		case r := <-replyChan:
-			corr.NodeIDs = appendIfNotPresent(corr.NodeIDs, r.nid)
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -560,28 +560,28 @@ func (c *Configuration) readPrelim(ctx context.Context, corr *ReadPrelimReply, a
 			replyValues = append(replyValues, r.reply)
 			reply, rlevel, quorum = c.qspec.ReadPrelimQF(replyValues)
 			if quorum {
-				corr.set(reply, rlevel, nil, true)
+				resp.set(reply, rlevel, nil, true)
 				return
 			}
 			if rlevel > clevel {
 				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
+				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount == c.n { // Can't rely on reply count.
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
 	}
 }
 
-func callGRPCReadPrelimStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readPrelimReply) {
+func callGRPCReadPrelimStream(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readPrelimReply) {
 	x := NewRegisterClient(node.conn)
-	y, err := x.ReadPrelim(ctx, args)
+	y, err := x.ReadPrelim(ctx, arg)
 	if err != nil {
 		replyChan <- readPrelimReply{node.id, nil, err}
 		return
@@ -601,7 +601,7 @@ func callGRPCReadPrelimStream(ctx context.Context, node *Node, args *ReadRequest
 
 /* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_tmpl */
 
-/* Methods on Configuration and the correctable struct ReadCorrectableReply */
+/* Exported types and methods for correctable method ReadCorrectable */
 
 // ReadCorrectableReply is a reference to a correctable ReadCorrectable quorum call.
 type ReadCorrectableReply struct {
@@ -630,7 +630,7 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) 
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.readCorrectable(ctx, corr, args)
+		c.readCorrectable(ctx, args, corr)
 	}()
 	return corr
 }
@@ -707,10 +707,10 @@ type readCorrectableReply struct {
 	err   error
 }
 
-func (c *Configuration) readCorrectable(ctx context.Context, corr *ReadCorrectableReply, args *ReadRequest) {
+func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, resp *ReadCorrectableReply) {
 	replyChan := make(chan readCorrectableReply, c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadCorrectable(ctx, n, args, replyChan)
+		go callGRPCReadCorrectable(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -725,7 +725,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, corr *ReadCorrectab
 	for {
 		select {
 		case r := <-replyChan:
-			corr.NodeIDs = append(corr.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -733,20 +733,20 @@ func (c *Configuration) readCorrectable(ctx context.Context, corr *ReadCorrectab
 			replyValues = append(replyValues, r.reply)
 			reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
 			if quorum {
-				corr.set(reply, rlevel, nil, true)
+				resp.set(reply, rlevel, nil, true)
 				return
 			}
 			if rlevel > clevel {
 				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
+				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
 	}
@@ -773,7 +773,7 @@ func callGRPCReadCorrectable(ctx context.Context, node *Node, arg *ReadRequest, 
 
 /* 'gorums' plugin for protoc-gen-go - generated from: calltype_future_tmpl */
 
-/* Methods on Configuration and the future type struct ReadFutureReply */
+/* Exported types and methods for asynchronous quorum call method ReadFuture */
 
 // ReadFutureReply is a future object for an asynchronous ReadFuture quorum call invocation.
 type ReadFutureReply struct {
@@ -816,7 +816,7 @@ func (f *ReadFutureReply) Done() bool {
 	}
 }
 
-/* Unexported types and methods for asynchronous method ReadFuture */
+/* Unexported types and methods for asynchronous quorum call method ReadFuture */
 
 type readFutureReply struct {
 	nid   uint32
@@ -908,7 +908,7 @@ func callGRPCReadFuture(ctx context.Context, node *Node, arg *ReadRequest, reply
 	replyChan <- readFutureReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the future type struct WriteFutureReply */
+/* Exported types and methods for asynchronous quorum call method WriteFuture */
 
 // WriteFutureReply is a future object for an asynchronous WriteFuture quorum call invocation.
 type WriteFutureReply struct {
@@ -951,7 +951,7 @@ func (f *WriteFutureReply) Done() bool {
 	}
 }
 
-/* Unexported types and methods for asynchronous method WriteFuture */
+/* Unexported types and methods for asynchronous quorum call method WriteFuture */
 
 type writeFutureReply struct {
 	nid   uint32
@@ -1045,11 +1045,15 @@ func callGRPCWriteFuture(ctx context.Context, node *Node, arg *State, replyChan 
 
 /* 'gorums' plugin for protoc-gen-go - generated from: calltype_multicast_tmpl */
 
+/* Exported types and methods for multicast method WriteAsync */
+
 // WriteAsync is a one-way multicast call on all nodes in configuration c,
 // using the same argument arg. The call is asynchronous and has no return value.
 func (c *Configuration) WriteAsync(ctx context.Context, arg *State) error {
 	return c.writeAsync(ctx, arg)
 }
+
+/* Unexported types and methods for multicast method WriteAsync */
 
 func (c *Configuration) writeAsync(ctx context.Context, arg *State) error {
 	for _, node := range c.nodes {
@@ -1069,7 +1073,7 @@ func (c *Configuration) writeAsync(ctx context.Context, arg *State) error {
 
 /* 'gorums' plugin for protoc-gen-go - generated from: calltype_quorumcall_tmpl */
 
-/* Methods on Configuration and the quorum call struct Read */
+/* Exported types and methods for quorum call method Read */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -1093,7 +1097,7 @@ func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*ReadReply,
 	return c.read(ctx, arg)
 }
 
-/* Methods on Manager for quorum call method Read */
+/* Unexported types and methods for quorum call method Read */
 
 type readReply struct {
 	nid   uint32
@@ -1182,7 +1186,7 @@ func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan c
 	replyChan <- readReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the quorum call struct ReadCustomReturn */
+/* Exported types and methods for quorum call method ReadCustomReturn */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -1206,7 +1210,7 @@ func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) 
 	return c.readCustomReturn(ctx, arg)
 }
 
-/* Methods on Manager for quorum call method ReadCustomReturn */
+/* Unexported types and methods for quorum call method ReadCustomReturn */
 
 type readCustomReturnReply struct {
 	nid   uint32
@@ -1295,7 +1299,7 @@ func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest,
 	replyChan <- readCustomReturnReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the quorum call struct Write */
+/* Exported types and methods for quorum call method Write */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -1319,7 +1323,7 @@ func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteReply, err
 	return c.write(ctx, arg)
 }
 
-/* Methods on Manager for quorum call method Write */
+/* Unexported types and methods for quorum call method Write */
 
 type writeReply struct {
 	nid   uint32
@@ -1408,7 +1412,7 @@ func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<-
 	replyChan <- writeReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the quorum call struct WritePerNode */
+/* Exported types and methods for quorum call method WritePerNode */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -1434,7 +1438,7 @@ func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode fu
 	return c.writePerNode(ctx, arg, perNode)
 }
 
-/* Methods on Manager for quorum call method WritePerNode */
+/* Unexported types and methods for quorum call method WritePerNode */
 
 type writePerNodeReply struct {
 	nid   uint32

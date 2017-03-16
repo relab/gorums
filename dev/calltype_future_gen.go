@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-/* Methods on Configuration and the future type struct ReadFutureReply */
+/* Exported types and methods for asynchronous quorum call method ReadFuture */
 
 // ReadFutureReply is a future object for an asynchronous ReadFuture quorum call invocation.
 type ReadFutureReply struct {
@@ -56,7 +56,7 @@ func (f *ReadFutureReply) Done() bool {
 	}
 }
 
-/* Unexported types and methods for asynchronous method ReadFuture */
+/* Unexported types and methods for asynchronous quorum call method ReadFuture */
 
 type readFutureReply struct {
 	nid   uint32
@@ -148,7 +148,7 @@ func callGRPCReadFuture(ctx context.Context, node *Node, arg *ReadRequest, reply
 	replyChan <- readFutureReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the future type struct WriteFutureReply */
+/* Exported types and methods for asynchronous quorum call method WriteFuture */
 
 // WriteFutureReply is a future object for an asynchronous WriteFuture quorum call invocation.
 type WriteFutureReply struct {
@@ -191,7 +191,7 @@ func (f *WriteFutureReply) Done() bool {
 	}
 }
 
-/* Unexported types and methods for asynchronous method WriteFuture */
+/* Unexported types and methods for asynchronous quorum call method WriteFuture */
 
 type writeFutureReply struct {
 	nid   uint32

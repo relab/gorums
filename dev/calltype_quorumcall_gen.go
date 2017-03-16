@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-/* Methods on Configuration and the quorum call struct Read */
+/* Exported types and methods for quorum call method Read */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -38,7 +38,7 @@ func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*ReadReply,
 	return c.read(ctx, arg)
 }
 
-/* Methods on Manager for quorum call method Read */
+/* Unexported types and methods for quorum call method Read */
 
 type readReply struct {
 	nid   uint32
@@ -127,7 +127,7 @@ func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan c
 	replyChan <- readReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the quorum call struct ReadCustomReturn */
+/* Exported types and methods for quorum call method ReadCustomReturn */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -151,7 +151,7 @@ func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) 
 	return c.readCustomReturn(ctx, arg)
 }
 
-/* Methods on Manager for quorum call method ReadCustomReturn */
+/* Unexported types and methods for quorum call method ReadCustomReturn */
 
 type readCustomReturnReply struct {
 	nid   uint32
@@ -240,7 +240,7 @@ func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest,
 	replyChan <- readCustomReturnReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the quorum call struct Write */
+/* Exported types and methods for quorum call method Write */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -264,7 +264,7 @@ func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteReply, err
 	return c.write(ctx, arg)
 }
 
-/* Methods on Manager for quorum call method Write */
+/* Unexported types and methods for quorum call method Write */
 
 type writeReply struct {
 	nid   uint32
@@ -353,7 +353,7 @@ func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<-
 	replyChan <- writeReply{node.id, reply, err}
 }
 
-/* Methods on Configuration and the quorum call struct WritePerNode */
+/* Exported types and methods for quorum call method WritePerNode */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -379,7 +379,7 @@ func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode fu
 	return c.writePerNode(ctx, arg, perNode)
 }
 
-/* Methods on Manager for quorum call method WritePerNode */
+/* Unexported types and methods for quorum call method WritePerNode */
 
 type writePerNodeReply struct {
 	nid   uint32

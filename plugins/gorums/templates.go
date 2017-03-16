@@ -75,7 +75,7 @@ import (
 
 {{if .Correctable}}
 
-/* Methods on Configuration and the correctable struct {{.TypeName}} */
+/* Exported types and methods for correctable method {{.MethodName}} */
 
 // {{.TypeName}} is a reference to a correctable {{.MethodName}} quorum call.
 type {{.TypeName}} struct {
@@ -104,7 +104,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.{{.UnexportedMethodName}}(ctx, corr, args)
+		c.{{.UnexportedMethodName}}(ctx, args, corr)
 	}()
 	return corr
 }
@@ -181,10 +181,10 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, corr *{{.TypeName}}, args *{{.FQReqName}}) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
+		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -199,32 +199,32 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, corr *{{.
 	for {
 		select {
 		case r := <-replyChan:
-			corr.NodeIDs = append(corr.NodeIDs, r.nid)
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
+			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(a, replyValues)
 {{else}}
 			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
 {{end -}}
 			if quorum {
-				corr.set(reply, rlevel, nil, true)
+				resp.set(reply, rlevel, nil, true)
 				return
 			}
 			if rlevel > clevel {
 				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
+				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount+len(replyValues) == c.n {
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
 	}
@@ -254,7 +254,7 @@ import (
 
 {{if .CorrectablePrelim}}
 
-/* Methods on Configuration and the correctable prelim struct {{.TypeName}} */
+/* Exported types and methods for correctable prelim method {{.MethodName}} */
 
 // {{.TypeName}} is a reference to a correctable quorum call
 // with server side preliminary reply support.
@@ -284,7 +284,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 		donech: make(chan struct{}),
 	}
 	go func() {
-		c.{{.UnexportedMethodName}}(ctx, corr, args)
+		c.{{.UnexportedMethodName}}(ctx, args, corr)
 	}()
 	return corr
 }
@@ -361,10 +361,10 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, corr *{{.TypeName}}, args *{{.FQReqName}}) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}Stream(ctx, n, args, replyChan)
+		go callGRPC{{.MethodName}}Stream(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -379,40 +379,40 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, corr *{{.
 	for {
 		select {
 		case r := <-replyChan:
-			corr.NodeIDs = appendIfNotPresent(corr.NodeIDs, r.nid)
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(args, replyValues)
+			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(a, replyValues)
 {{else}}
 			reply, rlevel, quorum = c.qspec.{{.MethodName}}QF(replyValues)
 {{end -}}
 			if quorum {
-				corr.set(reply, rlevel, nil, true)
+				resp.set(reply, rlevel, nil, true)
 				return
 			}
 			if rlevel > clevel {
 				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
+				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
 			return
 		}
 
 		if errCount == c.n { // Can't rely on reply count.
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
 	}
 }
 
-func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	x := New{{.ServName}}Client(node.conn)
-	y, err := x.{{.MethodName}}(ctx, args)
+	y, err := x.{{.MethodName}}(ctx, arg)
 	if err != nil {
 		replyChan <- {{.UnexportedTypeName}}{node.id, nil, err}
 		return
@@ -455,7 +455,7 @@ import (
 
 {{if .Future}}
 
-/* Methods on Configuration and the future type struct {{.TypeName}} */
+/* Exported types and methods for asynchronous quorum call method {{.MethodName}} */
 
 // {{.TypeName}} is a future object for an asynchronous {{.MethodName}} quorum call invocation.
 type {{.TypeName}} struct {
@@ -522,7 +522,7 @@ func (f *{{.TypeName}}) Done() bool {
 	}
 }
 
-/* Unexported types and methods for asynchronous method {{.MethodName}} */
+/* Unexported types and methods for asynchronous quorum call method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -604,11 +604,15 @@ import "golang.org/x/net/context"
 
 {{if .Multicast}}
 
+/* Exported types and methods for multicast method {{.MethodName}} */
+
 // {{.MethodName}} is a one-way multicast call on all nodes in configuration c,
 // using the same argument arg. The call is asynchronous and has no return value.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) error {
 	return c.{{.UnexportedMethodName}}(ctx, arg)
 }
+
+/* Unexported types and methods for multicast method {{.MethodName}} */
 
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, arg *{{.FQReqName}}) error {
 	for _, node := range c.nodes {
@@ -651,7 +655,7 @@ import (
 
 {{if .QuorumCall}}
 
-/* Methods on Configuration and the quorum call struct {{.MethodName}} */
+/* Exported types and methods for quorum call method {{.MethodName}} */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -689,7 +693,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 
 {{- end}}
 
-/* Methods on Manager for quorum call method {{.MethodName}} */
+/* Unexported types and methods for quorum call method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32

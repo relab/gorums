@@ -5,11 +5,15 @@ package dev
 
 import "golang.org/x/net/context"
 
+/* Exported types and methods for multicast method WriteAsync */
+
 // WriteAsync is a one-way multicast call on all nodes in configuration c,
 // using the same argument arg. The call is asynchronous and has no return value.
 func (c *Configuration) WriteAsync(ctx context.Context, arg *State) error {
 	return c.writeAsync(ctx, arg)
 }
+
+/* Unexported types and methods for multicast method WriteAsync */
 
 func (c *Configuration) writeAsync(ctx context.Context, arg *State) error {
 	for _, node := range c.nodes {
