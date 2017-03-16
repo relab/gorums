@@ -125,7 +125,7 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-{{template "unexported_method_signature" .}}
+{{template "unexported_method_signature" . -}}
 	{{- template "callLoop" .}}
 
 	var (

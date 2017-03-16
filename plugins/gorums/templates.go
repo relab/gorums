@@ -225,8 +225,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-{{template "unexported_method_signature" .}}
-	{{template "callLoop" .}}
+{{template "unexported_method_signature" . -}}
+	{{- template "callLoop" .}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
@@ -402,8 +402,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-{{template "unexported_method_signature" .}}
-	{{template "callLoop" .}}
+{{template "unexported_method_signature" . -}}
+	{{- template "callLoop" .}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)

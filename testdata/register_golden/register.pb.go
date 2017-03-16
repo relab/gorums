@@ -535,7 +535,6 @@ type readPrelimReply struct {
 }
 
 func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *ReadPrelimReply) {
-
 	replyChan := make(chan readPrelimReply, c.n)
 	for _, n := range c.nodes {
 		go callGRPCReadPrelim(ctx, n, a, replyChan)
@@ -709,7 +708,6 @@ type readCorrectableReply struct {
 }
 
 func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, resp *ReadCorrectableReply) {
-
 	replyChan := make(chan readCorrectableReply, c.n)
 	for _, n := range c.nodes {
 		go callGRPCReadCorrectable(ctx, n, a, replyChan)

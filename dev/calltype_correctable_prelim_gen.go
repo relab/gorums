@@ -118,7 +118,6 @@ type readPrelimReply struct {
 }
 
 func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *ReadPrelimReply) {
-
 	replyChan := make(chan readPrelimReply, c.n)
 	for _, n := range c.nodes {
 		go callGRPCReadPrelim(ctx, n, a, replyChan)
