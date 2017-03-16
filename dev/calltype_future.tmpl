@@ -19,7 +19,7 @@ import (
 
 {{if .Future}}
 
-/* Methods on Configuration and the future type struct {{.TypeName}} */
+/* Exported types and methods for asynchronous quorum call method {{.MethodName}} */
 
 // {{.TypeName}} is a future object for an asynchronous {{.MethodName}} quorum call invocation.
 type {{.TypeName}} struct {
@@ -86,7 +86,7 @@ func (f *{{.TypeName}}) Done() bool {
 	}
 }
 
-/* Unexported types and methods for asynchronous method {{.MethodName}} */
+/* Unexported types and methods for asynchronous quorum call method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32

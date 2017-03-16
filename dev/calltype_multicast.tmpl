@@ -11,11 +11,15 @@ import "golang.org/x/net/context"
 
 {{if .Multicast}}
 
+/* Exported types and methods for multicast method {{.MethodName}} */
+
 // {{.MethodName}} is a one-way multicast call on all nodes in configuration c,
 // using the same argument arg. The call is asynchronous and has no return value.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) error {
 	return c.{{.UnexportedMethodName}}(ctx, arg)
 }
+
+/* Unexported types and methods for multicast method {{.MethodName}} */
 
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, arg *{{.FQReqName}}) error {
 	for _, node := range c.nodes {

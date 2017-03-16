@@ -20,7 +20,7 @@ import (
 
 {{if .QuorumCall}}
 
-/* Methods on Configuration and the quorum call struct {{.MethodName}} */
+/* Exported types and methods for quorum call method {{.MethodName}} */
 
 //TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
 //(This file could maybe hold all types of structs for the different call semantics)
@@ -58,7 +58,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 
 {{- end}}
 
-/* Methods on Manager for quorum call method {{.MethodName}} */
+/* Unexported types and methods for quorum call method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
