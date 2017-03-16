@@ -7,13 +7,13 @@ const calltype_common_definitions_tmpl = `{{/* Remember to run 'make goldenandde
 {{/* calltype_common_definitions.tmpl will only be executed for each 'calltype' template. */}}
 
 {{define "callGRPC"}}
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	reply := new({{.FQRespName}})
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/{{.ServPackageName}}.{{.ServName}}/{{.MethodName}}",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -651,19 +651,15 @@ func (r {{.TypeName}}) String() string {
 
 {{if .PerNodeArg}}
 
-type {{.UnexportedMethodName}}Arg func(req {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}
-
 // {{.MethodName}} is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNode function and returns the
 // result as a {{.TypeName}}. The perNode function returns a *{{.FQReqName}}
 // object to be passed to the given nodeID.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(req {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (*{{.TypeName}}, error) {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (*{{.TypeName}}, error) {
 	return c.{{.UnexportedMethodName}}(ctx, arg, perNode)
 }
 
 {{else}}
-
-type {{.UnexportedMethodName}}Arg *{{.FQReqName}}
 
 // {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result as a {{.TypeName}}.
@@ -682,11 +678,11 @@ type {{.UnexportedTypeName}} struct {
 }
 
 {{- if .PerNodeArg}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f {{.UnexportedMethodName}}Arg) (resp *{{.TypeName}}, err error) {
-{{else}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a {{.UnexportedMethodName}}Arg) (resp *{{.TypeName}}, err error) {
-{{end -}}
-	{{template "trace" .}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.TypeName}}, err error) {
+{{- else}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.TypeName}}, err error) {
+{{- end -}}
+	{{- template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
 

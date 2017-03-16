@@ -754,13 +754,13 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	}
 }
 
-func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readCorrectableReply) {
+func callGRPCReadCorrectable(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readCorrectableReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/ReadCorrectable",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -897,13 +897,13 @@ func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a
 	}
 }
 
-func callGRPCReadFuture(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readFutureReply) {
+func callGRPCReadFuture(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readFutureReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/ReadFuture",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -1038,13 +1038,13 @@ func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply,
 	}
 }
 
-func callGRPCWriteFuture(ctx context.Context, node *Node, args *State, replyChan chan<- writeFutureReply) {
+func callGRPCWriteFuture(ctx context.Context, node *Node, arg *State, replyChan chan<- writeFutureReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/WriteFuture",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -1101,8 +1101,6 @@ func (r ReadReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
 }
 
-type readArg *ReadRequest
-
 // Read is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result as a ReadReply.
 func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*ReadReply, error) {
@@ -1117,8 +1115,7 @@ type readReply struct {
 	err   error
 }
 
-func (c *Configuration) read(ctx context.Context, a readArg) (resp *ReadReply, err error) {
-
+func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *ReadReply, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
@@ -1184,13 +1181,13 @@ func (c *Configuration) read(ctx context.Context, a readArg) (resp *ReadReply, e
 	}
 }
 
-func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/Read",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -1221,8 +1218,6 @@ func (r ReadCustomReturnReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.MyState)
 }
 
-type readCustomReturnArg *ReadRequest
-
 // ReadCustomReturn is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result as a ReadCustomReturnReply.
 func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) (*ReadCustomReturnReply, error) {
@@ -1237,8 +1232,7 @@ type readCustomReturnReply struct {
 	err   error
 }
 
-func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturnArg) (resp *ReadCustomReturnReply, err error) {
-
+func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (resp *ReadCustomReturnReply, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
@@ -1304,13 +1298,13 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a readCustomReturn
 	}
 }
 
-func callGRPCReadCustomReturn(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readCustomReturnReply) {
+func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readCustomReturnReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/ReadCustomReturn",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -1341,8 +1335,6 @@ func (r WriteReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
-type writeArg *State
-
 // Write is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result as a WriteReply.
 func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteReply, error) {
@@ -1357,8 +1349,7 @@ type writeReply struct {
 	err   error
 }
 
-func (c *Configuration) write(ctx context.Context, a writeArg) (resp *WriteReply, err error) {
-
+func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteReply, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
@@ -1424,13 +1415,13 @@ func (c *Configuration) write(ctx context.Context, a writeArg) (resp *WriteReply
 	}
 }
 
-func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<- writeReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/Write",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -1461,13 +1452,11 @@ func (r WritePerNodeReply) String() string {
 	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
 }
 
-type writePerNodeArg func(req State, nodeID uint32) *State
-
 // WritePerNode is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNode function and returns the
 // result as a WritePerNodeReply. The perNode function returns a *State
 // object to be passed to the given nodeID.
-func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(req State, nodeID uint32) *State) (*WritePerNodeReply, error) {
+func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(arg State, nodeID uint32) *State) (*WritePerNodeReply, error) {
 	return c.writePerNode(ctx, arg, perNode)
 }
 
@@ -1479,8 +1468,7 @@ type writePerNodeReply struct {
 	err   error
 }
 
-func (c *Configuration) writePerNode(ctx context.Context, a *State, f writePerNodeArg) (resp *WritePerNodeReply, err error) {
-
+func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg State, nodeID uint32) *State) (resp *WritePerNodeReply, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
@@ -1546,13 +1534,13 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f writePerNo
 	}
 }
 
-func callGRPCWritePerNode(ctx context.Context, node *Node, args *State, replyChan chan<- writePerNodeReply) {
+func callGRPCWritePerNode(ctx context.Context, node *Node, arg *State, replyChan chan<- writePerNodeReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/WritePerNode",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)

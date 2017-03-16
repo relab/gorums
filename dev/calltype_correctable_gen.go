@@ -165,13 +165,13 @@ func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *R
 	}
 }
 
-func callGRPCReadCorrectable(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readCorrectableReply) {
+func callGRPCReadCorrectable(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readCorrectableReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/ReadCorrectable",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)

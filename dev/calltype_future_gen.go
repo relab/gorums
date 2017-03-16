@@ -135,13 +135,13 @@ func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a
 	}
 }
 
-func callGRPCReadFuture(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readFutureReply) {
+func callGRPCReadFuture(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readFutureReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/ReadFuture",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -276,13 +276,13 @@ func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply,
 	}
 }
 
-func callGRPCWriteFuture(ctx context.Context, node *Node, args *State, replyChan chan<- writeFutureReply) {
+func callGRPCWriteFuture(ctx context.Context, node *Node, arg *State, replyChan chan<- writeFutureReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/WriteFuture",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)

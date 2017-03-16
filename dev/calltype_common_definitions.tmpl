@@ -2,13 +2,13 @@
 {{/* calltype_common_definitions.tmpl will only be executed for each 'calltype' template. */}}
 
 {{define "callGRPC"}}
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, args *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	reply := new({{.FQRespName}})
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/{{.ServPackageName}}.{{.ServName}}/{{.MethodName}}",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
