@@ -373,8 +373,8 @@ func (r WritePerNodeReply) String() string {
 
 // WritePerNode is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNode function and returns the
-// result as a WritePerNodeReply. The perNode function returns a *State
-// object to be passed to the given nodeID.
+// result as a WritePerNodeReply. The perNode function takes a request arg and
+// returns a *State object to be passed to the given nodeID.
 func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(arg State, nodeID uint32) *State) (*WritePerNodeReply, error) {
 	return c.writePerNode(ctx, arg, perNode)
 }

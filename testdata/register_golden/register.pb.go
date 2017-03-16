@@ -786,9 +786,9 @@ type ReadFutureReply struct {
 	c       chan struct{}
 }
 
-// ReadFuture asynchronously invokes a ReadFuture quorum call
-// on configuration c and returns a ReadFutureReply which can be used to
-// inspect the quorum call reply and error when available.
+// ReadFuture asynchronously invokes a quorum call on configuration c
+// and returns a ReadFutureReply which can be used to inspect the quorum call
+// reply and error when available.
 func (c *Configuration) ReadFuture(ctx context.Context, arg *ReadRequest) *ReadFutureReply {
 	f := &ReadFutureReply{
 		NodeIDs: make([]uint32, 0, c.n),
@@ -921,9 +921,9 @@ type WriteFutureReply struct {
 	c       chan struct{}
 }
 
-// WriteFuture asynchronously invokes a WriteFuture quorum call
-// on configuration c and returns a WriteFutureReply which can be used to
-// inspect the quorum call reply and error when available.
+// WriteFuture asynchronously invokes a quorum call on configuration c
+// and returns a WriteFutureReply which can be used to inspect the quorum call
+// reply and error when available.
 func (c *Configuration) WriteFuture(ctx context.Context, arg *State) *WriteFutureReply {
 	f := &WriteFutureReply{
 		NodeIDs: make([]uint32, 0, c.n),
@@ -1430,8 +1430,8 @@ func (r WritePerNodeReply) String() string {
 
 // WritePerNode is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNode function and returns the
-// result as a WritePerNodeReply. The perNode function returns a *State
-// object to be passed to the given nodeID.
+// result as a WritePerNodeReply. The perNode function takes a request arg and
+// returns a *State object to be passed to the given nodeID.
 func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(arg State, nodeID uint32) *State) (*WritePerNodeReply, error) {
 	return c.writePerNode(ctx, arg, perNode)
 }

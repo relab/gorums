@@ -24,9 +24,9 @@ type ReadFutureReply struct {
 	c       chan struct{}
 }
 
-// ReadFuture asynchronously invokes a ReadFuture quorum call
-// on configuration c and returns a ReadFutureReply which can be used to
-// inspect the quorum call reply and error when available.
+// ReadFuture asynchronously invokes a quorum call on configuration c
+// and returns a ReadFutureReply which can be used to inspect the quorum call
+// reply and error when available.
 func (c *Configuration) ReadFuture(ctx context.Context, arg *ReadRequest) *ReadFutureReply {
 	f := &ReadFutureReply{
 		NodeIDs: make([]uint32, 0, c.n),
@@ -159,9 +159,9 @@ type WriteFutureReply struct {
 	c       chan struct{}
 }
 
-// WriteFuture asynchronously invokes a WriteFuture quorum call
-// on configuration c and returns a WriteFutureReply which can be used to
-// inspect the quorum call reply and error when available.
+// WriteFuture asynchronously invokes a quorum call on configuration c
+// and returns a WriteFutureReply which can be used to inspect the quorum call
+// reply and error when available.
 func (c *Configuration) WriteFuture(ctx context.Context, arg *State) *WriteFutureReply {
 	f := &WriteFutureReply{
 		NodeIDs: make([]uint32, 0, c.n),
