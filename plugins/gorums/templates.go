@@ -104,7 +104,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.mgr.{{.UnexportedMethodName}}(ctx, c, corr, args)
+		c.{{.UnexportedMethodName}}(ctx, corr, args)
 	}()
 	return corr
 }
@@ -173,7 +173,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQRespName}}, level int, err error, done b
 	c.Unlock()
 }
 
-/* Methods on Manager for correctable method {{.MethodName}} */
+/* Unexported types and methods for correctable method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -181,9 +181,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, corr *{{.TypeName}}, args *{{.FQReqName}}) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, corr *{{.TypeName}}, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-
 	for _, n := range c.nodes {
 		go callGRPC{{.MethodName}}(ctx, n, args, replyChan)
 	}
@@ -285,7 +284,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}
 		donech: make(chan struct{}),
 	}
 	go func() {
-		c.mgr.{{.UnexportedMethodName}}(ctx, c, corr, args)
+		c.{{.UnexportedMethodName}}(ctx, corr, args)
 	}()
 	return corr
 }
@@ -354,7 +353,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQRespName}}, level int, err error, done b
 	c.Unlock()
 }
 
-/* Methods on Manager for correctable prelim method {{.MethodName}} */
+/* Unexported types and methods for correctable prelim method {{.MethodName}} */
 
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
@@ -362,9 +361,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (m *Manager) {{.UnexportedMethodName}}(ctx context.Context, c *Configuration, corr *{{.TypeName}}, args *{{.FQReqName}}) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, corr *{{.TypeName}}, args *{{.FQReqName}}) {
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-
 	for _, n := range c.nodes {
 		go callGRPC{{.MethodName}}Stream(ctx, n, args, replyChan)
 	}

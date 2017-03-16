@@ -457,7 +457,7 @@ func (c *Configuration) ReadPrelim(ctx context.Context, args *ReadRequest) *Read
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.mgr.readPrelim(ctx, c, corr, args)
+		c.readPrelim(ctx, corr, args)
 	}()
 	return corr
 }
@@ -526,7 +526,7 @@ func (c *ReadPrelimReply) set(reply *State, level int, err error, done bool) {
 	c.Unlock()
 }
 
-/* Methods on Manager for correctable prelim method ReadPrelim */
+/* Unexported types and methods for correctable prelim method ReadPrelim */
 
 type readPrelimReply struct {
 	nid   uint32
@@ -534,9 +534,8 @@ type readPrelimReply struct {
 	err   error
 }
 
-func (m *Manager) readPrelim(ctx context.Context, c *Configuration, corr *ReadPrelimReply, args *ReadRequest) {
+func (c *Configuration) readPrelim(ctx context.Context, corr *ReadPrelimReply, args *ReadRequest) {
 	replyChan := make(chan readPrelimReply, c.n)
-
 	for _, n := range c.nodes {
 		go callGRPCReadPrelimStream(ctx, n, args, replyChan)
 	}
@@ -631,7 +630,7 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) 
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.mgr.readCorrectable(ctx, c, corr, args)
+		c.readCorrectable(ctx, corr, args)
 	}()
 	return corr
 }
@@ -700,7 +699,7 @@ func (c *ReadCorrectableReply) set(reply *State, level int, err error, done bool
 	c.Unlock()
 }
 
-/* Methods on Manager for correctable method ReadCorrectable */
+/* Unexported types and methods for correctable method ReadCorrectable */
 
 type readCorrectableReply struct {
 	nid   uint32
@@ -708,9 +707,8 @@ type readCorrectableReply struct {
 	err   error
 }
 
-func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectableReply, args *ReadRequest) {
+func (c *Configuration) readCorrectable(ctx context.Context, corr *ReadCorrectableReply, args *ReadRequest) {
 	replyChan := make(chan readCorrectableReply, c.n)
-
 	for _, n := range c.nodes {
 		go callGRPCReadCorrectable(ctx, n, args, replyChan)
 	}

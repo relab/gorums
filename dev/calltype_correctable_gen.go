@@ -42,7 +42,7 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) 
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.mgr.readCorrectable(ctx, c, corr, args)
+		c.readCorrectable(ctx, corr, args)
 	}()
 	return corr
 }
@@ -111,7 +111,7 @@ func (c *ReadCorrectableReply) set(reply *State, level int, err error, done bool
 	c.Unlock()
 }
 
-/* Methods on Manager for correctable method ReadCorrectable */
+/* Unexported types and methods for correctable method ReadCorrectable */
 
 type readCorrectableReply struct {
 	nid   uint32
@@ -119,9 +119,8 @@ type readCorrectableReply struct {
 	err   error
 }
 
-func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectableReply, args *ReadRequest) {
+func (c *Configuration) readCorrectable(ctx context.Context, corr *ReadCorrectableReply, args *ReadRequest) {
 	replyChan := make(chan readCorrectableReply, c.n)
-
 	for _, n := range c.nodes {
 		go callGRPCReadCorrectable(ctx, n, args, replyChan)
 	}

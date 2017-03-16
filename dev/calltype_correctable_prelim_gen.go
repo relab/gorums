@@ -40,7 +40,7 @@ func (c *Configuration) ReadPrelim(ctx context.Context, args *ReadRequest) *Read
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.mgr.readPrelim(ctx, c, corr, args)
+		c.readPrelim(ctx, corr, args)
 	}()
 	return corr
 }
@@ -109,7 +109,7 @@ func (c *ReadPrelimReply) set(reply *State, level int, err error, done bool) {
 	c.Unlock()
 }
 
-/* Methods on Manager for correctable prelim method ReadPrelim */
+/* Unexported types and methods for correctable prelim method ReadPrelim */
 
 type readPrelimReply struct {
 	nid   uint32
@@ -117,9 +117,8 @@ type readPrelimReply struct {
 	err   error
 }
 
-func (m *Manager) readPrelim(ctx context.Context, c *Configuration, corr *ReadPrelimReply, args *ReadRequest) {
+func (c *Configuration) readPrelim(ctx context.Context, corr *ReadPrelimReply, args *ReadRequest) {
 	replyChan := make(chan readPrelimReply, c.n)
-
 	for _, n := range c.nodes {
 		go callGRPCReadPrelimStream(ctx, n, args, replyChan)
 	}
