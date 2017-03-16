@@ -94,21 +94,10 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-{{- if .PerNodeArg}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}, resp *{{.TypeName}}) {
-{{- else}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
-{{- end -}}
+{{template "unexported_method_signature" .}}
 	{{- template "trace" .}}
 
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	for _, n := range c.nodes {
-{{- if .PerNodeArg}}
-		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
-{{else}}
-		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
-{{end -}}
-	}
+	{{template "callLoop" .}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)

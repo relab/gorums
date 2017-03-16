@@ -125,11 +125,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
-	}
+{{template "unexported_method_signature" .}}
+	{{template "callLoop" .}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)

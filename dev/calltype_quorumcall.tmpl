@@ -73,14 +73,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 {{- end -}}
 	{{- template "trace" .}}
 
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	for _, n := range c.nodes {
-{{- if .PerNodeArg}}
-		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
-{{else}}
-		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
-{{end -}}
-	}
+	{{template "callLoop" .}}
 
 	resp = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 	var (

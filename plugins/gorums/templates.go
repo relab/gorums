@@ -52,6 +52,25 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 		}()
 	}
 {{end}}
+
+{{define "unexported_method_signature"}}
+{{- if .PerNodeArg}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}, resp *{{.TypeName}}) {
+{{- else}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
+{{- end -}}
+{{end}}
+
+{{define "callLoop"}}
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+	for _, n := range c.nodes {
+{{- if .PerNodeArg}}
+		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
+{{else}}
+		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+{{end -}}
+	}
+{{end}}
 `
 
 const calltype_correctable_tmpl = `
@@ -181,11 +200,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
-	}
+{{template "unexported_method_signature" .}}
+	{{template "callLoop" .}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
@@ -361,11 +377,8 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	for _, n := range c.nodes {
-		go callGRPC{{.MethodName}}Stream(ctx, n, a, replyChan)
-	}
+{{template "unexported_method_signature" .}}
+	{{template "callLoop" .}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
@@ -410,7 +423,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 	}
 }
 
-func callGRPC{{.MethodName}}Stream(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	x := New{{.ServName}}Client(node.conn)
 	y, err := x.{{.MethodName}}(ctx, arg)
 	if err != nil {
@@ -530,21 +543,10 @@ type {{.UnexportedTypeName}} struct {
 	err   error
 }
 
-{{- if .PerNodeArg}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}, resp *{{.TypeName}}) {
-{{- else}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
-{{- end -}}
+{{template "unexported_method_signature" .}}
 	{{- template "trace" .}}
 
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	for _, n := range c.nodes {
-{{- if .PerNodeArg}}
-		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
-{{else}}
-		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
-{{end -}}
-	}
+	{{template "callLoop" .}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
@@ -708,14 +710,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 {{- end -}}
 	{{- template "trace" .}}
 
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	for _, n := range c.nodes {
-{{- if .PerNodeArg}}
-		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
-{{else}}
-		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
-{{end -}}
-	}
+	{{template "callLoop" .}}
 
 	resp = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 	var (
