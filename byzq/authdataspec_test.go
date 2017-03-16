@@ -255,6 +255,22 @@ func TestAuthDataQ(t *testing.T) {
 			}
 		})
 
+		t.Run(fmt.Sprintf("SequentialVerifyReadQFReadQF(4,1) %s", test.name), func(t *testing.T) {
+			reply, byzquorum := qspec.SequentialVerifyReadQF(test.replies)
+			if byzquorum != test.rq {
+				t.Errorf("got %t, want %t", byzquorum, test.rq)
+			}
+			if reply != nil {
+				if !reply.Equal(test.expected) {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
+				}
+			} else {
+				if test.expected != nil {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
+				}
+			}
+		})
+
 		t.Run(fmt.Sprintf("ConcurrentVerifyIndexChanReadQF(4,1) %s", test.name), func(t *testing.T) {
 			reply, byzquorum := qspec.ConcurrentVerifyIndexChanReadQF(test.replies)
 			if byzquorum != test.rq {
@@ -325,6 +341,14 @@ func BenchmarkAuthDataQ(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				qspec.ReadQF(test.replies)
+			}
+		})
+
+		b.Run(fmt.Sprintf("SequentialVerifyReadQF(4,1) %s", test.name), func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				qspec.SequentialVerifyReadQF(test.replies)
 			}
 		})
 
