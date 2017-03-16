@@ -294,9 +294,11 @@ type serviceMethod struct {
 	RPCName              string
 	CustomReturnType     string
 
-	FQRespName string
-	RespName   string
-	FQReqName  string
+	FQRespName       string
+	RespName         string
+	FQCustomRespName string
+	CustomRespName   string
+	FQReqName        string
 
 	TypeName           string
 	UnexportedTypeName string
@@ -356,6 +358,16 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 			sm.RespName = g.typeName(method.GetOutputType())
 			// Response type with package (if needed)
 			sm.FQRespName = g.fqTypeName(method.GetOutputType())
+
+			if sm.CustomReturnType == "" {
+				sm.CustomRespName = sm.RespName
+				sm.FQCustomRespName = sm.FQRespName
+			} else {
+				s := strings.Split(sm.CustomReturnType, ".")
+				customRespName := strings.Join(s[len(s)-1:], "")
+				sm.CustomRespName = customRespName
+				sm.FQCustomRespName = sm.CustomReturnType
+			}
 
 			sm.MethodName = generator.CamelCase(method.GetName())
 			sm.UnexportedMethodName = unexport(sm.MethodName)

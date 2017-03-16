@@ -15,7 +15,7 @@ type QuorumSpec interface {
 
 	// ReadCustomReturnQF is the quorum function for the ReadCustomReturn
 	// quorum call method.
-	ReadCustomReturnQF(replies []*State) (*State, bool)
+	ReadCustomReturnQF(replies []*State) (*MyState, bool)
 
 	// ReadFutureQF is the quorum function for the ReadFuture
 	// quorum call method.

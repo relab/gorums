@@ -955,20 +955,21 @@ func TestPerNodeArg(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
+	req := &qc.State{}
+
 	var cnt int64
-	perNodeArg := func(nodeID uint32) *qc.State {
+	perNodeArg := func(req qc.State, nodeID uint32) *qc.State {
 		if atomic.LoadInt64(&cnt) > 1 {
 			time.Sleep(250 * time.Millisecond)
 			t.Logf("delay sending to node %d\n", nodeID)
 		}
 		atomic.AddInt64(&cnt, 1)
 		t.Logf("sending to node %d\n", nodeID)
-		return &qc.State{
-			Value:     fmt.Sprintf("%d", nodeID),
-			Timestamp: time.Now().UnixNano(),
-		}
+		req.Value = fmt.Sprintf("%d", nodeID)
+		req.Timestamp = time.Now().UnixNano()
+		return &req
 	}
-	wreply, err := config.WritePerNode(ctx, perNodeArg)
+	wreply, err := config.WritePerNode(ctx, req, perNodeArg)
 	if err != nil {
 		t.Fatalf("write quorum call error: %v", err)
 	}

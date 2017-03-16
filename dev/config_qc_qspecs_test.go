@@ -28,8 +28,17 @@ func (mqs *MajorityQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
 	return replies[0], true
 }
 
-func (mqs *MajorityQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.State, bool) {
-	return mqs.ReadQF(replies)
+func (mqs *MajorityQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
+	state, ok := mqs.ReadQF(replies)
+	if !ok {
+		return nil, false
+	}
+	myState := &qc.MyState{
+		Value:     state.Value,
+		Timestamp: state.Timestamp,
+		Extra:     123,
+	}
+	return myState, ok
 }
 
 func (mqs *MajorityQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
@@ -86,8 +95,17 @@ func (rqs *RegisterQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
 	return replies[0], true
 }
 
-func (rqs *RegisterQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.State, bool) {
-	return rqs.ReadQF(replies)
+func (rqs *RegisterQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
+	state, ok := rqs.ReadQF(replies)
+	if !ok {
+		return nil, false
+	}
+	myState := &qc.MyState{
+		Value:     state.Value,
+		Timestamp: state.Timestamp,
+		Extra:     123,
+	}
+	return myState, ok
 }
 
 func (rqs *RegisterQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
@@ -151,8 +169,17 @@ func (rqs *RegisterByTimestampQSpec) ReadFutureQF(replies []*qc.State) (*qc.Stat
 	return replies[len(replies)-1], true
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.State, bool) {
-	return rqs.ReadQF(replies)
+func (rqs *RegisterByTimestampQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
+	state, ok := rqs.ReadQF(replies)
+	if !ok {
+		return nil, false
+	}
+	myState := &qc.MyState{
+		Value:     state.Value,
+		Timestamp: state.Timestamp,
+		Extra:     123,
+	}
+	return myState, ok
 }
 
 func (rqs *RegisterByTimestampQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
@@ -208,7 +235,7 @@ func (*NeverQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
 	return nil, false
 }
 
-func (*NeverQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.State, bool) {
+func (*NeverQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
 	return nil, false
 }
 
@@ -242,7 +269,7 @@ func (*ReadPrelimTestQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) 
 	panic("not implemented")
 }
 
-func (*ReadPrelimTestQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.State, bool) {
+func (*ReadPrelimTestQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
 	panic("not implemented")
 }
 
