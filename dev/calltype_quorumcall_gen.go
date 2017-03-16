@@ -4,7 +4,6 @@
 package dev
 
 import (
-	"fmt"
 	"time"
 
 	"golang.org/x/net/context"
@@ -16,25 +15,9 @@ import (
 
 /* Exported types and methods for quorum call method Read */
 
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// ReadReply encapsulates the reply from a Read quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadReply struct {
-	// the actual reply
-	*State
-	NodeIDs []uint32
-	err     error
-}
-
-func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
-}
-
 // Read is invoked as a quorum call on all nodes in configuration c,
-// using the same argument arg, and returns the result as a ReadReply.
-func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*ReadReply, error) {
+// using the same argument arg, and returns the result.
+func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*State, error) {
 	return c.read(ctx, arg)
 }
 
@@ -46,7 +29,7 @@ type readReply struct {
 	err   error
 }
 
-func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *ReadReply, err error) {
+func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
@@ -61,11 +44,10 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *ReadRep
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   resp.NodeIDs,
-				reply: resp.State,
-				err:   resp.err,
+				reply: resp,
+				err:   err,
 			}, false)
-			if resp.err != nil {
+			if err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -76,7 +58,6 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *ReadRep
 		go callGRPCRead(ctx, n, a, replyChan)
 	}
 
-	resp = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*State, 0, c.n)
 		errCount    int
@@ -86,7 +67,6 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *ReadRep
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -95,7 +75,7 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *ReadRep
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if resp.State, quorum = c.qspec.ReadQF(replyValues); quorum {
+			if resp, quorum = c.qspec.ReadQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -129,25 +109,9 @@ func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan c
 
 /* Exported types and methods for quorum call method ReadCustomReturn */
 
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// ReadCustomReturnReply encapsulates the reply from a ReadCustomReturn quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadCustomReturnReply struct {
-	// the actual reply
-	*MyState
-	NodeIDs []uint32
-	err     error
-}
-
-func (r ReadCustomReturnReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.MyState)
-}
-
 // ReadCustomReturn is invoked as a quorum call on all nodes in configuration c,
-// using the same argument arg, and returns the result as a ReadCustomReturnReply.
-func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) (*ReadCustomReturnReply, error) {
+// using the same argument arg, and returns the result.
+func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) (*MyState, error) {
 	return c.readCustomReturn(ctx, arg)
 }
 
@@ -159,7 +123,7 @@ type readCustomReturnReply struct {
 	err   error
 }
 
-func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (resp *ReadCustomReturnReply, err error) {
+func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (resp *MyState, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
@@ -174,11 +138,10 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   resp.NodeIDs,
-				reply: resp.MyState,
-				err:   resp.err,
+				reply: resp,
+				err:   err,
 			}, false)
-			if resp.err != nil {
+			if err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -189,7 +152,6 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 		go callGRPCReadCustomReturn(ctx, n, a, replyChan)
 	}
 
-	resp = &ReadCustomReturnReply{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*State, 0, c.n)
 		errCount    int
@@ -199,7 +161,6 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -208,7 +169,7 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if resp.MyState, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
+			if resp, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -242,25 +203,9 @@ func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest,
 
 /* Exported types and methods for quorum call method Write */
 
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// WriteReply encapsulates the reply from a Write quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteReply struct {
-	// the actual reply
-	*WriteResponse
-	NodeIDs []uint32
-	err     error
-}
-
-func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
 // Write is invoked as a quorum call on all nodes in configuration c,
-// using the same argument arg, and returns the result as a WriteReply.
-func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteReply, error) {
+// using the same argument arg, and returns the result.
+func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteResponse, error) {
 	return c.write(ctx, arg)
 }
 
@@ -272,7 +217,7 @@ type writeReply struct {
 	err   error
 }
 
-func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteReply, err error) {
+func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
@@ -287,11 +232,10 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteReply, 
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   resp.NodeIDs,
-				reply: resp.WriteResponse,
-				err:   resp.err,
+				reply: resp,
+				err:   err,
 			}, false)
-			if resp.err != nil {
+			if err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -302,7 +246,6 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteReply, 
 		go callGRPCWrite(ctx, n, a, replyChan)
 	}
 
-	resp = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
 		errCount    int
@@ -312,7 +255,6 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteReply, 
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -321,7 +263,7 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteReply, 
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if resp.WriteResponse, quorum = c.qspec.WriteQF(a, replyValues); quorum {
+			if resp, quorum = c.qspec.WriteQF(a, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -355,27 +297,11 @@ func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<-
 
 /* Exported types and methods for quorum call method WritePerNode */
 
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf.
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// WritePerNodeReply encapsulates the reply from a WritePerNode quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WritePerNodeReply struct {
-	// the actual reply
-	*WriteResponse
-	NodeIDs []uint32
-	err     error
-}
-
-func (r WritePerNodeReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
 // WritePerNode is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNode function and returns the
-// result as a WritePerNodeReply. The perNode function takes a request arg and
-// returns a *State object to be passed to the given nodeID.
-func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(arg State, nodeID uint32) *State) (*WritePerNodeReply, error) {
+// result. The perNode function takes a request arg and
+// returns a State object to be passed to the given nodeID.
+func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(arg State, nodeID uint32) *State) (*WriteResponse, error) {
 	return c.writePerNode(ctx, arg, perNode)
 }
 
@@ -387,7 +313,7 @@ type writePerNodeReply struct {
 	err   error
 }
 
-func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg State, nodeID uint32) *State) (resp *WritePerNodeReply, err error) {
+func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg State, nodeID uint32) *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
@@ -402,11 +328,10 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   resp.NodeIDs,
-				reply: resp.WriteResponse,
-				err:   resp.err,
+				reply: resp,
+				err:   err,
 			}, false)
-			if resp.err != nil {
+			if err != nil {
 				ti.tr.SetError()
 			}
 		}()
@@ -417,7 +342,6 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 		go callGRPCWritePerNode(ctx, n, f(*a, n.id), replyChan)
 	}
 
-	resp = &WritePerNodeReply{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
 		errCount    int
@@ -427,7 +351,6 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -436,7 +359,7 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if resp.WriteResponse, quorum = c.qspec.WritePerNodeQF(replyValues); quorum {
+			if resp, quorum = c.qspec.WritePerNodeQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():

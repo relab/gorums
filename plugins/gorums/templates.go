@@ -53,6 +53,31 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 	}
 {{end}}
 
+{{define "simple_trace"}}
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				reply: resp,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+{{end}}
+
 {{define "unexported_method_signature"}}
 {{- if .PerNodeArg}}
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}, resp *{{.TypeName}}) {
@@ -642,7 +667,6 @@ const calltype_quorumcall_tmpl = `
 package {{.PackageName}}
 
 import (
-	"fmt"
 	"time"
 
 	"golang.org/x/net/context"
@@ -659,37 +683,21 @@ import (
 
 /* Exported types and methods for quorum call method {{.MethodName}} */
 
-//TODO Make this a customizable struct that replaces FQRespName together with typedecl option in gogoprotobuf. 
-//(This file could maybe hold all types of structs for the different call semantics)
-
-// {{.TypeName}} encapsulates the reply from a {{.MethodName}} quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type {{.TypeName}} struct {
-	// the actual reply
-	*{{.FQCustomRespName}}
-	NodeIDs []uint32
-	err		error
-}
-
-func (r {{.TypeName}}) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.{{.CustomRespName}})
-}
-
 {{if .PerNodeArg}}
 
 // {{.MethodName}} is invoked as a quorum call on each node in configuration c,
 // with the argument returned by the provided perNode function and returns the
-// result as a {{.TypeName}}. The perNode function takes a request arg and
-// returns a *{{.FQReqName}} object to be passed to the given nodeID.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (*{{.TypeName}}, error) {
+// result. The perNode function takes a request arg and
+// returns a {{.FQReqName}} object to be passed to the given nodeID.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (*{{.FQCustomRespName}}, error) {
 	return c.{{.UnexportedMethodName}}(ctx, arg, perNode)
 }
 
 {{else}}
 
 // {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
-// using the same argument arg, and returns the result as a {{.TypeName}}.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) (*{{.TypeName}}, error) {
+// using the same argument arg, and returns the result.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) (*{{.FQCustomRespName}}, error) {
 	return c.{{.UnexportedMethodName}}(ctx, arg)
 }
 
@@ -704,15 +712,14 @@ type {{.UnexportedTypeName}} struct {
 }
 
 {{- if .PerNodeArg}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.TypeName}}, err error) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
 {{- else}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.TypeName}}, err error) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
 {{- end -}}
-	{{- template "trace" .}}
+	{{- template "simple_trace" .}}
 
 	{{template "callLoop" .}}
 
-	resp = &{{.TypeName}}{NodeIDs: make([]uint32, 0, c.n)}
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, c.n)
 		errCount    int
@@ -722,7 +729,6 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
@@ -732,9 +738,9 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
-			if resp.{{.CustomRespName}}, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
+			if resp, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
 {{else}}
-			if resp.{{.CustomRespName}}, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+			if resp, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
 {{end -}}
 				return resp, nil
 			}
