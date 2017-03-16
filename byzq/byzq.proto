@@ -7,9 +7,11 @@ package byzq;
 service Register {
 	rpc Read(Key) returns (Value) {
 		option (gorums.qc) = true;
+		option (gorums.custom_return_type) = "Content";
 	}
 	rpc Write(Value) returns (WriteResponse) {
 		option (gorums.qc) = true;
+		option (gorums.qf_with_req) = true;
 	}
 }
 

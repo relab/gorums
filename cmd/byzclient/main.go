@@ -117,7 +117,7 @@ func main() {
 		if *writer {
 			// Writer client.
 			registerState.Value = strconv.Itoa(rand.Intn(1 << 8))
-			registerState.Timestamp = qspec.IncWTS()
+			registerState.Timestamp++
 			signedState, err := qspec.Sign(registerState)
 			if err != nil {
 				dief("failed to sign message: %v", err)
@@ -127,14 +127,14 @@ func main() {
 				dief("error writing: %v", err)
 			}
 			fmt.Println("WriteReturn " + ack.String())
-			time.Sleep(100 * time.Second)
+			time.Sleep(15 * time.Second)
 		} else {
 			// Reader client.
 			val, err := conf.Read(context.Background(), &byzq.Key{Key: registerState.Key})
 			if err != nil {
 				dief("error reading: %v", err)
 			}
-			registerState = val.C
+			registerState = val
 			fmt.Println("ReadReturn: " + registerState.String())
 			time.Sleep(10000 * time.Millisecond)
 		}
