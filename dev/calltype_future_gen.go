@@ -92,11 +92,6 @@ func (c *Configuration) readFuture(ctx context.Context, resp *ReadFutureReply, a
 	}
 
 	replyChan := make(chan readFutureReply, c.n)
-
-	if c.mgr.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
-	}
-
 	for _, n := range c.nodes {
 		go callGRPCReadFuture(ctx, n, a, replyChan)
 	}
@@ -234,11 +229,6 @@ func (c *Configuration) writeFuture(ctx context.Context, resp *WriteFutureReply,
 	}
 
 	replyChan := make(chan writeFutureReply, c.n)
-
-	if c.mgr.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
-	}
-
 	for _, n := range c.nodes {
 		go callGRPCWriteFuture(ctx, n, a, replyChan)
 	}

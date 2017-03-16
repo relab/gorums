@@ -514,11 +514,6 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, resp *{{.
 	{{- template "trace" .}}
 
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-
-	if c.mgr.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
-	}
-
 	for _, n := range c.nodes {
 {{- if .PerNodeArg}}
 		go callGRPC{{.MethodName}}(ctx, n, a(n.id), replyChan)
