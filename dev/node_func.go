@@ -17,8 +17,8 @@ func (n *Node) Address() string {
 }
 
 func (n *Node) String() string {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return fmt.Sprintf(
 		"node %d | addr: %s | latency: %v",
 		n.id, n.addr, n.latency,
@@ -26,30 +26,30 @@ func (n *Node) String() string {
 }
 
 func (n *Node) setLastErr(err error) {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.lastErr = err
 }
 
 // LastErr returns the last error encountered (if any) when invoking a remote
 // procedure call on this node.
 func (n *Node) LastErr() error {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return n.lastErr
 }
 
 func (n *Node) setLatency(lat time.Duration) {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.latency = lat
 }
 
 // Latency returns the latency of the last successful remote procedure call
 // made to this node.
 func (n *Node) Latency() time.Duration {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return n.latency
 }
 

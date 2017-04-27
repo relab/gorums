@@ -18,7 +18,7 @@ type RegisterTestServer interface {
 
 // RegisterServerBasic represents a single State register.
 type RegisterServerBasic struct {
-	sync.RWMutex
+	mu    sync.RWMutex
 	state State
 
 	readExecutedChan  chan struct{}
@@ -48,15 +48,15 @@ func NewRegisterBasicWithState(state *State) *RegisterServerBasic {
 }
 
 func (r *RegisterServerBasic) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
-	r.RLock()
-	defer r.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	r.readExecutedChan <- struct{}{}
 	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
 }
 
 func (r *RegisterServerBasic) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
-	r.RLock()
-	defer r.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	r.readExecutedChan <- struct{}{}
 	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
 }
@@ -70,8 +70,8 @@ func (r *RegisterServerBasic) ReadCustomReturn(ctx context.Context, rq *ReadRequ
 }
 
 func (r *RegisterServerBasic) Write(ctx context.Context, s *State) (*WriteResponse, error) {
-	r.Lock()
-	defer r.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	writeResp := &WriteResponse{}
 	if s.Timestamp > r.state.Timestamp {
 		r.state = *s
@@ -278,7 +278,7 @@ func (r *RegisterServerSlow) WriteExecuted() {
 
 // RegisterServerBench represents a single State register used for benchmarking.
 type RegisterServerBench struct {
-	sync.RWMutex
+	mu    sync.RWMutex
 	state State
 }
 
@@ -288,14 +288,14 @@ func NewRegisterBench() *RegisterServerBench {
 }
 
 func (r *RegisterServerBench) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
-	r.RLock()
-	defer r.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
 }
 
 func (r *RegisterServerBench) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
-	r.RLock()
-	defer r.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
 }
 
@@ -308,8 +308,8 @@ func (r *RegisterServerBench) ReadCustomReturn(ctx context.Context, rq *ReadRequ
 }
 
 func (r *RegisterServerBench) Write(ctx context.Context, s *State) (*WriteResponse, error) {
-	r.Lock()
-	defer r.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	writeResp := &WriteResponse{}
 	if s.Timestamp > r.state.Timestamp {
 		r.state = *s
@@ -426,9 +426,9 @@ func (r *RegisterServerLockedWithState) ReadNoQC(ctx context.Context, rq *ReadRe
 func (r *RegisterServerLockedWithState) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
 	<-r.lock
 
-	r.realServer.RLock()
+	r.realServer.mu.RLock()
 	state := r.realServer.state
-	r.realServer.RUnlock()
+	r.realServer.mu.RUnlock()
 
 	for i := 0; i < r.ReadPrelimNumReplies; i++ {
 		<-r.ReadPrelimLockChan

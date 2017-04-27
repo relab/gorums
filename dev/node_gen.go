@@ -25,7 +25,7 @@ type Node struct {
 
 	WriteAsyncClient Register_WriteAsyncClient
 
-	sync.Mutex
+	mu      sync.Mutex
 	lastErr error
 	latency time.Duration
 }

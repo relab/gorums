@@ -34,7 +34,7 @@ type Node struct {
 {{end}}
 {{end}}
 
-	sync.Mutex
+	mu sync.Mutex
 	lastErr error
 	latency time.Duration
 }

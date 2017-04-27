@@ -17,7 +17,7 @@ import (
 
 // ReadCorrectableReply is a reference to a correctable ReadCorrectable quorum call.
 type ReadCorrectableReply struct {
-	sync.Mutex
+	mu sync.Mutex
 	// the actual reply
 	*State
 	NodeIDs  []uint32
@@ -53,8 +53,8 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) 
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
 func (c *ReadCorrectableReply) Get() (*State, int, error) {
-	c.Lock()
-	defer c.Unlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.State, c.level, c.err
 }
 
@@ -71,24 +71,24 @@ func (c *ReadCorrectableReply) Done() <-chan struct{} {
 // disregardless of the specified level.
 func (c *ReadCorrectableReply) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
-	c.Lock()
+	c.mu.Lock()
 	if level < c.level {
 		close(ch)
-		c.Unlock()
+		c.mu.Unlock()
 		return ch
 	}
 	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
-	c.Unlock()
+	c.mu.Unlock()
 	return ch
 }
 
 func (c *ReadCorrectableReply) set(reply *State, level int, err error, done bool) {
-	c.Lock()
+	c.mu.Lock()
 	if c.done {
-		c.Unlock()
+		c.mu.Unlock()
 		panic("set(...) called on a done correctable")
 	}
 	c.State, c.level, c.err, c.done = reply, level, err, done
@@ -99,7 +99,7 @@ func (c *ReadCorrectableReply) set(reply *State, level int, err error, done bool
 				close(watcher.ch)
 			}
 		}
-		c.Unlock()
+		c.mu.Unlock()
 		return
 	}
 	for i := range c.watchers {
@@ -108,7 +108,7 @@ func (c *ReadCorrectableReply) set(reply *State, level int, err error, done bool
 			c.watchers[i] = nil
 		}
 	}
-	c.Unlock()
+	c.mu.Unlock()
 }
 
 /* Unexported types and methods for correctable method ReadCorrectable */
