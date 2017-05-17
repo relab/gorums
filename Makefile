@@ -1,5 +1,5 @@
 CMD_PKG 			:= cmd
-PLUGINS_PKG 			:= plugins
+PLUGINS_PKG 		:= plugins
 BUNDLE_PKG			:= bundle
 DEV_PKG				:= dev
 PLUGIN_PKG 			:= gorums
@@ -14,10 +14,10 @@ GORUMS_ENV_GENDEV		:= GORUMSGENDEV=1
 
 GORUMS_STATIC_GO		:= $(PLUGINS_PKG)/$(PLUGIN_PKG)/static.go
 BUNDLE_MAIN_GO 			:= $(CMD_PKG)/$(BUNDLE_PKG)/main.go
-GENTEMPLATES_MAIN_GO 		:= $(CMD_PKG)/gentemplates/main.go
+GENTEMPLATES_MAIN_GO 	:= $(CMD_PKG)/gentemplates/main.go
 
 PROTOC_PLUGIN_PKG		:= protoc-gen-gorums
-PROTOC_PLUGIN_PKG_PATH 		:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
+PROTOC_PLUGIN_PKG_PATH 	:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
 PROTOC_PLUGIN_NAME 		:= gorums_out
 PROTOC_I_FLAG			:= ../../../:.
 
@@ -26,7 +26,7 @@ TESTDATA_REG			:= testdata/register_golden
 REG_PROTO_NAME			:= register.proto
 REG_PBGO_NAME			:= register.pb.go
 REG_PROTO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PROTO_NAME)
-REG_PROTO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PROTO_NAME)
+REG_PROTO_TEST_RPATH	:= $(TESTDATA_REG)/$(REG_PROTO_NAME)
 REG_PBGO_TEST_RPATH		:= $(TESTDATA_REG)/$(REG_PBGO_NAME)
 
 GOGOPROTO_ALIAS 		:= google/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor

@@ -1,0 +1,98 @@
+
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+
+{{if not .IgnoreImports}}
+package {{.PackageName}}
+
+import (
+	"time"
+
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+)
+{{end}}
+
+{{range $elm := .Services}}
+
+{{if .QuorumCall}}
+
+/* Exported types and methods for quorum call method {{.MethodName}} */
+
+{{if .PerNodeArg}}
+
+// {{.MethodName}} is invoked as a quorum call on each node in configuration c,
+// with the argument returned by the provided perNode function and returns the
+// result. The perNode function takes a request arg and
+// returns a {{.FQReqName}} object to be passed to the given nodeID.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (*{{.FQCustomRespName}}, error) {
+	return c.{{.UnexportedMethodName}}(ctx, arg, perNode)
+}
+
+{{else}}
+
+// {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) (*{{.FQCustomRespName}}, error) {
+	return c.{{.UnexportedMethodName}}(ctx, arg)
+}
+
+{{- end}}
+
+/* Unexported types and methods for quorum call method {{.MethodName}} */
+
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+
+{{- if .PerNodeArg}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+{{- else}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+{{- end -}}
+	{{- template "simple_trace" .}}
+
+	{{template "callLoop" .}}
+
+	var (
+		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if c.mgr.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			if resp, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
+{{else}}
+			if resp, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+{{end -}}
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+{{template "callGRPC" .}}
+
+{{- end -}}
+{{- end -}}

@@ -125,7 +125,7 @@ func (gr *byzqRequester) Setup() error {
 	gr.state = &rpc.Content{
 		Key:       "State",
 		Value:     strings.Repeat("x", gr.payloadSize),
-		Timestamp: gr.qspec.NewTS(),
+		Timestamp: time.Now().UnixNano(),
 	}
 	// Sign initial state
 	signedState, err := gr.qspec.Sign(gr.state)
@@ -150,7 +150,7 @@ func (gr *byzqRequester) Request() error {
 	case 0:
 		_, err = gr.config.Read(ctx, &rpc.Key{Key: gr.state.Key})
 	case 100:
-		gr.state.Timestamp = gr.qspec.NewTS()
+		gr.state.Timestamp = time.Now().UnixNano()
 		signedState, err2 := gr.qspec.Sign(gr.state)
 		if err2 != nil {
 			return err2
@@ -159,7 +159,7 @@ func (gr *byzqRequester) Request() error {
 	default:
 		x := rand.Intn(100)
 		if x < gr.writeRatio {
-			gr.state.Timestamp = gr.qspec.NewTS()
+			gr.state.Timestamp = time.Now().UnixNano()
 			signedState, err2 := gr.qspec.Sign(gr.state)
 			if err2 != nil {
 				return err

@@ -1,0 +1,93 @@
+{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* calltype_common_definitions.tmpl will only be executed for each 'calltype' template. */}}
+
+{{define "callGRPC"}}
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	reply := new({{.FQRespName}})
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/{{.ServPackageName}}.{{.ServName}}/{{.MethodName}}",
+		arg,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
+}
+{{end}}
+
+{{define "trace"}}
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   resp.NodeIDs,
+				reply: resp.{{.CustomRespName}},
+				err:   resp.err,
+			}, false)
+			if resp.err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+{{end}}
+
+{{define "simple_trace"}}
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				reply: resp,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+{{end}}
+
+{{define "unexported_method_signature"}}
+{{- if .PerNodeArg}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}, resp *{{.TypeName}}) {
+{{- else}}
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
+{{- end -}}
+{{end}}
+
+{{define "callLoop"}}
+	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+	for _, n := range c.nodes {
+{{- if .PerNodeArg}}
+		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
+{{else}}
+		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+{{end -}}
+	}
+{{end}}

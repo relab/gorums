@@ -3,16 +3,26 @@
 // DO NOT EDIT!
 
 /*
-Package dev is a generated protocol buffer package.
+	Package dev is a generated protocol buffer package.
 
-It is generated from these files:
-	testdata/register_golden/register.proto
+	Package dev provides a blueprint for testing the various call semantics provided by Gorums.
+	The following table explains the differences in how the different call semantics work.
 
-It has these top-level messages:
-	State
-	WriteResponse
-	ReadRequest
-	Empty
+	                   Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type
+	------------------------------------------------------------------------------------------------------------------------------------------------
+	Quorum call                 1                   Reply + error count                 1                           Single response
+	Correctable QC              1                   Reply + error count                 N                           Single response
+	Correctable QC w/prelim     M                   Error count                         M                           Stream of responses
+
+	It is generated from these files:
+		testdata/register_golden/register.proto
+
+	It has these top-level messages:
+		State
+		MyState
+		WriteResponse
+		ReadRequest
+		Empty
 */
 package dev
 
@@ -66,30 +76,41 @@ func (m *State) Reset()                    { *m = State{} }
 func (*State) ProtoMessage()               {}
 func (*State) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{0} }
 
+type MyState struct {
+	Value     string `protobuf:"bytes,1,opt,name=Value,proto3" json:"Value,omitempty"`
+	Timestamp int64  `protobuf:"varint,2,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
+	Extra     int64  `protobuf:"varint,3,opt,name=Extra,proto3" json:"Extra,omitempty"`
+}
+
+func (m *MyState) Reset()                    { *m = MyState{} }
+func (*MyState) ProtoMessage()               {}
+func (*MyState) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{1} }
+
 type WriteResponse struct {
 	New bool `protobuf:"varint,1,opt,name=New,proto3" json:"New,omitempty"`
 }
 
 func (m *WriteResponse) Reset()                    { *m = WriteResponse{} }
 func (*WriteResponse) ProtoMessage()               {}
-func (*WriteResponse) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{1} }
+func (*WriteResponse) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{2} }
 
 type ReadRequest struct {
 }
 
 func (m *ReadRequest) Reset()                    { *m = ReadRequest{} }
 func (*ReadRequest) ProtoMessage()               {}
-func (*ReadRequest) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{2} }
+func (*ReadRequest) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{3} }
 
 type Empty struct {
 }
 
 func (m *Empty) Reset()                    { *m = Empty{} }
 func (*Empty) ProtoMessage()               {}
-func (*Empty) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{3} }
+func (*Empty) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{4} }
 
 func init() {
 	proto.RegisterType((*State)(nil), "dev.State")
+	proto.RegisterType((*MyState)(nil), "dev.MyState")
 	proto.RegisterType((*WriteResponse)(nil), "dev.WriteResponse")
 	proto.RegisterType((*ReadRequest)(nil), "dev.ReadRequest")
 	proto.RegisterType((*Empty)(nil), "dev.Empty")
@@ -156,6 +177,78 @@ func (this *State) Equal(that interface{}) bool {
 		return false
 	}
 	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	return true
+}
+func (this *MyState) VerboseEqual(that interface{}) error {
+	if that == nil {
+		if this == nil {
+			return nil
+		}
+		return fmt.Errorf("that == nil && this != nil")
+	}
+
+	that1, ok := that.(*MyState)
+	if !ok {
+		that2, ok := that.(MyState)
+		if ok {
+			that1 = &that2
+		} else {
+			return fmt.Errorf("that is not of type *MyState")
+		}
+	}
+	if that1 == nil {
+		if this == nil {
+			return nil
+		}
+		return fmt.Errorf("that is type *MyState but is nil && this != nil")
+	} else if this == nil {
+		return fmt.Errorf("that is type *MyState but is not nil && this == nil")
+	}
+	if this.Value != that1.Value {
+		return fmt.Errorf("Value this(%v) Not Equal that(%v)", this.Value, that1.Value)
+	}
+	if this.Timestamp != that1.Timestamp {
+		return fmt.Errorf("Timestamp this(%v) Not Equal that(%v)", this.Timestamp, that1.Timestamp)
+	}
+	if this.Extra != that1.Extra {
+		return fmt.Errorf("Extra this(%v) Not Equal that(%v)", this.Extra, that1.Extra)
+	}
+	return nil
+}
+func (this *MyState) Equal(that interface{}) bool {
+	if that == nil {
+		if this == nil {
+			return true
+		}
+		return false
+	}
+
+	that1, ok := that.(*MyState)
+	if !ok {
+		that2, ok := that.(MyState)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		if this == nil {
+			return true
+		}
+		return false
+	} else if this == nil {
+		return false
+	}
+	if this.Value != that1.Value {
+		return false
+	}
+	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	if this.Extra != that1.Extra {
 		return false
 	}
 	return true
@@ -332,81 +425,17 @@ func (this *Empty) Equal(that interface{}) bool {
 //  Reference Gorums specific imports to suppress errors if they are not otherwise used.
 var _ = codes.OK
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_qc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_prelim_tmpl */
 
-// ReadReply encapsulates the reply from a Read quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadReply struct {
-	NodeIDs []uint32
+/* Exported types and methods for correctable prelim method ReadPrelim */
+
+// ReadPrelimReply is a reference to a correctable quorum call
+// with server side preliminary reply support.
+type ReadPrelimReply struct {
+	sync.Mutex
+	// the actual reply
 	*State
-}
-
-func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
-}
-
-// Read invokes a Read quorum call on configuration c
-// and returns the result as a ReadReply.
-func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error) {
-	return c.mgr.read(ctx, c, args)
-}
-
-// ReadFuture is a reference to an asynchronous Read quorum call invocation.
-type ReadFuture struct {
-	reply *ReadReply
-	err   error
-	c     chan struct{}
-}
-
-// ReadFuture asynchronously invokes a Read quorum call
-// on configuration c and returns a ReadFuture which can be used to
-// inspect the quorum call reply and error when available.
-func (c *Configuration) ReadFuture(ctx context.Context, args *ReadRequest) *ReadFuture {
-	f := new(ReadFuture)
-	f.c = make(chan struct{}, 1)
-	go func() {
-		defer close(f.c)
-		f.reply, f.err = c.mgr.read(ctx, c, args)
-	}()
-	return f
-}
-
-// Get returns the reply and any error associated with the ReadFuture.
-// The method blocks until a reply or error is available.
-func (f *ReadFuture) Get() (*ReadReply, error) {
-	<-f.c
-	return f.reply, f.err
-}
-
-// Done reports if a reply and/or error is available for the ReadFuture.
-func (f *ReadFuture) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-
-// ReadCorrectable asynchronously invokes a
-// correctable Read quorum call on configuration c and returns a
-// ReadCorrectable which can be used to inspect any replies or errors
-// when available.
-func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectable {
-	corr := &ReadCorrectable{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
-	}
-	go func() {
-		c.mgr.readCorrectable(ctx, c, corr, args)
-	}()
-	return corr
-}
-
-// ReadCorrectable is a reference to a correctable Read quorum call.
-type ReadCorrectable struct {
-	mu       sync.Mutex
-	reply    *ReadReply
+	NodeIDs  []uint32
 	level    int
 	err      error
 	done     bool
@@ -415,6 +444,195 @@ type ReadCorrectable struct {
 		ch    chan struct{}
 	}
 	donech chan struct{}
+}
+
+// ReadPrelim asynchronously invokes a correctable ReadPrelim quorum call
+// with server side preliminary reply support on configuration c and returns a
+// ReadPrelimReply which can be used to inspect any replies or errors
+// when available.
+func (c *Configuration) ReadPrelim(ctx context.Context, args *ReadRequest) *ReadPrelimReply {
+	corr := &ReadPrelimReply{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go func() {
+		c.readPrelim(ctx, args, corr)
+	}()
+	return corr
+}
+
+// Get returns the reply, level and any error associated with the
+// ReadPrelim. The method does not block until a (possibly
+// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// reply has yet been received. The Done or Watch methods should be used to
+// ensure that a reply is available.
+func (c *ReadPrelimReply) Get() (*State, int, error) {
+	c.Lock()
+	defer c.Unlock()
+	return c.State, c.level, c.err
+}
+
+// Done returns a channel that's closed when the correctable ReadPrelim
+// quorum call is done. A call is considered done when the quorum function has
+// signaled that a quorum of replies was received or that the call returned an
+// error.
+func (c *ReadPrelimReply) Done() <-chan struct{} {
+	return c.donech
+}
+
+// Watch returns a channel that's closed when a reply or error at or above the
+// specified level is available. If the call is done, the channel is closed
+// disregardless of the specified level.
+func (c *ReadPrelimReply) Watch(level int) <-chan struct{} {
+	ch := make(chan struct{})
+	c.Lock()
+	if level < c.level {
+		close(ch)
+		c.Unlock()
+		return ch
+	}
+	c.watchers = append(c.watchers, &struct {
+		level int
+		ch    chan struct{}
+	}{level, ch})
+	c.Unlock()
+	return ch
+}
+
+func (c *ReadPrelimReply) set(reply *State, level int, err error, done bool) {
+	c.Lock()
+	if c.done {
+		c.Unlock()
+		panic("set(...) called on a done correctable")
+	}
+	c.State, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			if watcher != nil {
+				close(watcher.ch)
+			}
+		}
+		c.Unlock()
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+			c.watchers[i] = nil
+		}
+	}
+	c.Unlock()
+}
+
+/* Unexported types and methods for correctable prelim method ReadPrelim */
+
+type readPrelimReply struct {
+	nid   uint32
+	reply *State
+	err   error
+}
+
+func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *ReadPrelimReply) {
+	replyChan := make(chan readPrelimReply, c.n)
+	for _, n := range c.nodes {
+		go callGRPCReadPrelim(ctx, n, a, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *State
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.ReadPrelimQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount == c.n { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPCReadPrelim(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readPrelimReply) {
+	x := NewRegisterClient(node.conn)
+	y, err := x.ReadPrelim(ctx, arg)
+	if err != nil {
+		replyChan <- readPrelimReply{node.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- readPrelimReply{node.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_tmpl */
+
+/* Exported types and methods for correctable method ReadCorrectable */
+
+// ReadCorrectableReply is a reference to a correctable ReadCorrectable quorum call.
+type ReadCorrectableReply struct {
+	sync.Mutex
+	// the actual reply
+	*State
+	NodeIDs  []uint32
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+
+// ReadCorrectable asynchronously invokes a
+// correctable ReadCorrectable quorum call on configuration c and returns a
+// ReadCorrectableReply which can be used to inspect any replies or errors
+// when available.
+func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectableReply {
+	corr := &ReadCorrectableReply{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go func() {
+		c.readCorrectable(ctx, args, corr)
+	}()
+	return corr
 }
 
 // Get returns the reply, level and any error associated with the
@@ -422,46 +640,46 @@ type ReadCorrectable struct {
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *ReadCorrectable) Get() (*ReadReply, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.reply, c.level, c.err
+func (c *ReadCorrectableReply) Get() (*State, int, error) {
+	c.Lock()
+	defer c.Unlock()
+	return c.State, c.level, c.err
 }
 
-// Done returns a channel that's closed when the correctable Read
+// Done returns a channel that's closed when the correctable ReadCorrectable
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
-func (c *ReadCorrectable) Done() <-chan struct{} {
+func (c *ReadCorrectableReply) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that's closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // disregardless of the specified level.
-func (c *ReadCorrectable) Watch(level int) <-chan struct{} {
+func (c *ReadCorrectableReply) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
-	c.mu.Lock()
+	c.Lock()
 	if level < c.level {
 		close(ch)
-		c.mu.Unlock()
+		c.Unlock()
 		return ch
 	}
 	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
-	c.mu.Unlock()
+	c.Unlock()
 	return ch
 }
 
-func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool) {
-	c.mu.Lock()
+func (c *ReadCorrectableReply) set(reply *State, level int, err error, done bool) {
+	c.Lock()
 	if c.done {
-		c.mu.Unlock()
+		c.Unlock()
 		panic("set(...) called on a done correctable")
 	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
+	c.State, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -469,7 +687,7 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 				close(watcher.ch)
 			}
 		}
-		c.mu.Unlock()
+		c.Unlock()
 		return
 	}
 	for i := range c.watchers {
@@ -478,160 +696,118 @@ func (c *ReadCorrectable) set(reply *ReadReply, level int, err error, done bool)
 			c.watchers[i] = nil
 		}
 	}
-	c.mu.Unlock()
+	c.Unlock()
 }
 
-// ReadTwoReply encapsulates the reply from a correctable ReadTwo quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadTwoReply struct {
-	NodeIDs []uint32
-	*State
-}
+/* Unexported types and methods for correctable method ReadCorrectable */
 
-func (r ReadTwoReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.State)
-}
-
-// ReadTwoCorrectablePrelim asynchronously invokes a correctable ReadTwo quorum call
-// with server side preliminary reply support on configuration c and returns a
-// ReadTwoCorrectablePrelim which can be used to inspect any repies or errors
-// when available.
-func (c *Configuration) ReadTwoCorrectablePrelim(ctx context.Context, args *ReadRequest) *ReadTwoCorrectablePrelim {
-	corr := &ReadTwoCorrectablePrelim{
-		level:  LevelNotSet,
-		donech: make(chan struct{}),
-	}
-	go func() {
-		c.mgr.readTwoCorrectablePrelim(ctx, c, corr, args)
-	}()
-	return corr
-}
-
-// ReadTwoCorrectablePrelim is a reference to a correctable Read quorum call
-// with server side preliminary reply support.
-type ReadTwoCorrectablePrelim struct {
-	mu       sync.Mutex
-	reply    *ReadTwoReply
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
-
-// Get returns the reply, level and any error associated with the
-// ReadTwoCorrectablePremlim. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *ReadTwoCorrectablePrelim) Get() (*ReadTwoReply, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.reply, c.level, c.err
-}
-
-// Done returns a channel that's closed when the correctable ReadTwo
-// quorum call is done. A call is considered done when the quorum function has
-// signaled that a quorum of replies was received or that the call returned an
-// error.
-func (c *ReadTwoCorrectablePrelim) Done() <-chan struct{} {
-	return c.donech
-}
-
-// Watch returns a channel that's closed when a reply or error at or above the
-// specified level is available. If the call is done, the channel is closed
-// disregardless of the specified level.
-func (c *ReadTwoCorrectablePrelim) Watch(level int) <-chan struct{} {
-	ch := make(chan struct{})
-	c.mu.Lock()
-	if level < c.level {
-		close(ch)
-		c.mu.Unlock()
-		return ch
-	}
-	c.watchers = append(c.watchers, &struct {
-		level int
-		ch    chan struct{}
-	}{level, ch})
-	c.mu.Unlock()
-	return ch
-}
-
-func (c *ReadTwoCorrectablePrelim) set(reply *ReadTwoReply, level int, err error, done bool) {
-	c.mu.Lock()
-	if c.done {
-		c.mu.Unlock()
-		panic("set(...) called on a done correctable")
-	}
-	c.reply, c.level, c.err, c.done = reply, level, err, done
-	if done {
-		close(c.donech)
-		for _, watcher := range c.watchers {
-			if watcher != nil {
-				close(watcher.ch)
-			}
-		}
-		c.mu.Unlock()
-		return
-	}
-	for i := range c.watchers {
-		if c.watchers[i] != nil && c.watchers[i].level <= level {
-			close(c.watchers[i].ch)
-			c.watchers[i] = nil
-		}
-	}
-	c.mu.Unlock()
-}
-
-// WriteReply encapsulates the reply from a Write quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteReply struct {
-	NodeIDs []uint32
-	*WriteResponse
-}
-
-func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
-// Write invokes a Write quorum call on configuration c
-// and returns the result as a WriteReply.
-func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
-	return c.mgr.write(ctx, c, args)
-}
-
-// WriteFuture is a reference to an asynchronous Write quorum call invocation.
-type WriteFuture struct {
-	reply *WriteReply
+type readCorrectableReply struct {
+	nid   uint32
+	reply *State
 	err   error
-	c     chan struct{}
 }
 
-// WriteFuture asynchronously invokes a Write quorum call
-// on configuration c and returns a WriteFuture which can be used to
-// inspect the quorum call reply and error when available.
-func (c *Configuration) WriteFuture(ctx context.Context, args *State) *WriteFuture {
-	f := new(WriteFuture)
-	f.c = make(chan struct{}, 1)
+func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, resp *ReadCorrectableReply) {
+	replyChan := make(chan readCorrectableReply, c.n)
+	for _, n := range c.nodes {
+		go callGRPCReadCorrectable(ctx, n, a, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		clevel      = LevelNotSet
+		reply       *State
+		rlevel      int
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+			return
+		}
+	}
+}
+
+func callGRPCReadCorrectable(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readCorrectableReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/ReadCorrectable",
+		arg,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readCorrectableReply{node.id, reply, err}
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_future_tmpl */
+
+/* Exported types and methods for asynchronous quorum call method ReadFuture */
+
+// ReadFutureReply is a future object for an asynchronous ReadFuture quorum call invocation.
+type ReadFutureReply struct {
+	// the actual reply
+	*State
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
+}
+
+// ReadFuture asynchronously invokes a quorum call on configuration c
+// and returns a ReadFutureReply which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) ReadFuture(ctx context.Context, arg *ReadRequest) *ReadFutureReply {
+	f := &ReadFutureReply{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
 	go func() {
 		defer close(f.c)
-		f.reply, f.err = c.mgr.write(ctx, c, args)
+		c.readFuture(ctx, arg, f)
 	}()
 	return f
 }
 
-// Get returns the reply and any error associated with the WriteFuture.
+// Get returns the reply and any error associated with the ReadFuture.
 // The method blocks until a reply or error is available.
-func (f *WriteFuture) Get() (*WriteReply, error) {
+func (f *ReadFutureReply) Get() (*State, error) {
 	<-f.c
-	return f.reply, f.err
+	return f.State, f.err
 }
 
-// Done reports if a reply and/or error is available for the WriteFuture.
-func (f *WriteFuture) Done() bool {
+// Done reports if a reply and/or error is available for the ReadFuture.
+func (f *ReadFutureReply) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -640,14 +816,272 @@ func (f *WriteFuture) Done() bool {
 	}
 }
 
-// WriteAsync is a one-way multicast operation, where args is sent to
-// every node in configuration c. The call is asynchronous and has no response
-// return value.
-func (c *Configuration) WriteAsync(ctx context.Context, args *State) error {
-	return c.mgr.writeAsync(ctx, c, args)
+/* Unexported types and methods for asynchronous quorum call method ReadFuture */
+
+type readFutureReply struct {
+	nid   uint32
+	reply *State
+	err   error
 }
 
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_qc_tmpl */
+func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *ReadFutureReply) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   resp.NodeIDs,
+				reply: resp.State,
+				err:   resp.err,
+			}, false)
+			if resp.err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan readFutureReply, c.n)
+	for _, n := range c.nodes {
+		go callGRPCReadFuture(ctx, n, a, replyChan)
+	}
+
+	var (
+		replyValues = make([]*State, 0, c.n)
+		reply       *State
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if c.mgr.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.ReadFutureQF(replyValues); quorum {
+				resp.State, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.State, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			resp.State, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return
+		}
+	}
+}
+
+func callGRPCReadFuture(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readFutureReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/ReadFuture",
+		arg,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- readFutureReply{node.id, reply, err}
+}
+
+/* Exported types and methods for asynchronous quorum call method WriteFuture */
+
+// WriteFutureReply is a future object for an asynchronous WriteFuture quorum call invocation.
+type WriteFutureReply struct {
+	// the actual reply
+	*WriteResponse
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
+}
+
+// WriteFuture asynchronously invokes a quorum call on configuration c
+// and returns a WriteFutureReply which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) WriteFuture(ctx context.Context, arg *State) *WriteFutureReply {
+	f := &WriteFutureReply{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(f.c)
+		c.writeFuture(ctx, arg, f)
+	}()
+	return f
+}
+
+// Get returns the reply and any error associated with the WriteFuture.
+// The method blocks until a reply or error is available.
+func (f *WriteFutureReply) Get() (*WriteResponse, error) {
+	<-f.c
+	return f.WriteResponse, f.err
+}
+
+// Done reports if a reply and/or error is available for the WriteFuture.
+func (f *WriteFutureReply) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
+/* Unexported types and methods for asynchronous quorum call method WriteFuture */
+
+type writeFutureReply struct {
+	nid   uint32
+	reply *WriteResponse
+	err   error
+}
+
+func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *WriteFutureReply) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   resp.NodeIDs,
+				reply: resp.WriteResponse,
+				err:   resp.err,
+			}, false)
+			if resp.err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan writeFutureReply, c.n)
+	for _, n := range c.nodes {
+		go callGRPCWriteFuture(ctx, n, a, replyChan)
+	}
+
+	var (
+		replyValues = make([]*WriteResponse, 0, c.n)
+		reply       *WriteResponse
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if c.mgr.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.WriteFutureQF(a, replyValues); quorum {
+				resp.WriteResponse, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.WriteResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return
+		}
+
+		if errCount+len(replyValues) == c.n {
+			resp.WriteResponse, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return
+		}
+	}
+}
+
+func callGRPCWriteFuture(ctx context.Context, node *Node, arg *State, replyChan chan<- writeFutureReply) {
+	reply := new(WriteResponse)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/WriteFuture",
+		arg,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- writeFutureReply{node.id, reply, err}
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_multicast_tmpl */
+
+/* Exported types and methods for multicast method WriteAsync */
+
+// WriteAsync is a one-way multicast call on all nodes in configuration c,
+// using the same argument arg. The call is asynchronous and has no return value.
+func (c *Configuration) WriteAsync(ctx context.Context, arg *State) error {
+	return c.writeAsync(ctx, arg)
+}
+
+/* Unexported types and methods for multicast method WriteAsync */
+
+func (c *Configuration) writeAsync(ctx context.Context, arg *State) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.WriteAsyncClient.Send(arg)
+			if err == nil {
+				return
+			}
+			if c.mgr.logger != nil {
+				c.mgr.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+
+	return nil
+}
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_quorumcall_tmpl */
+
+/* Exported types and methods for quorum call method Read */
+
+// Read is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*State, error) {
+	return c.read(ctx, arg)
+}
+
+/* Unexported types and methods for quorum call method Read */
 
 type readReply struct {
 	nid   uint32
@@ -655,9 +1089,9 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest) (r *ReadReply, err error) {
+func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
 		defer ti.tr.Finish()
 
@@ -666,11 +1100,11 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.State,
+				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
@@ -680,18 +1114,12 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 	}
 
 	replyChan := make(chan readReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, args, replyChan)
+		go callGRPCRead(ctx, n, a, replyChan)
 	}
 
 	var (
 		replyValues = make([]*State, 0, c.n)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -699,35 +1127,34 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *ReadRequest)
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.State, quorum = c.qspec.ReadQF(replyValues); quorum {
-				return reply, nil
+			if resp, quorum = c.qspec.ReadQF(replyValues); quorum {
+				return resp, nil
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readReply) {
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/Read",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -740,71 +1167,53 @@ func callGRPCRead(ctx context.Context, node *Node, args *ReadRequest, replyChan 
 	replyChan <- readReply{node.id, reply, err}
 }
 
-func (m *Manager) readCorrectable(ctx context.Context, c *Configuration, corr *ReadCorrectable, args *ReadRequest) {
-	replyChan := make(chan readReply, c.n)
+/* Exported types and methods for quorum call method ReadCustomReturn */
 
-	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, args, replyChan)
-	}
-
-	var (
-		replyValues = make([]*State, 0, c.n)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
-		errCount    int
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
-			if r.err != nil {
-				errCount++
-				break
-			}
-			replyValues = append(replyValues, r.reply)
-			reply.State, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
-
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
-		}
-
-		if errCount+len(replyValues) == c.n {
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
-		}
-	}
+// ReadCustomReturn is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) (*MyState, error) {
+	return c.readCustomReturn(ctx, arg)
 }
 
-type readTwoReply struct {
+/* Unexported types and methods for quorum call method ReadCustomReturn */
+
+type readCustomReturnReply struct {
 	nid   uint32
 	reply *State
 	err   error
 }
 
-func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration, corr *ReadTwoCorrectablePrelim, args *ReadRequest) {
-	replyChan := make(chan readTwoReply, c.n)
+func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (resp *MyState, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
+		defer ti.tr.Finish()
 
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				reply: resp,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
+	replyChan := make(chan readCustomReturnReply, c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadTwoStream(ctx, n, args, replyChan)
+		go callGRPCReadCustomReturn(ctx, n, a, replyChan)
 	}
 
 	var (
-		replyValues = make([]*State, 0, c.n*2)
-		reply       = &ReadTwoReply{NodeIDs: make([]uint32, 0, c.n)}
-		clevel      = LevelNotSet
-		rlevel      int
+		replyValues = make([]*State, 0, c.n)
 		errCount    int
 		quorum      bool
 	)
@@ -812,53 +1221,55 @@ func (m *Manager) readTwoCorrectablePrelim(ctx context.Context, c *Configuration
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = appendIfNotPresent(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
-			replyValues = append(replyValues, r.reply)
-			reply.State, rlevel, quorum = c.qspec.ReadTwoCorrectablePrelimQF(replyValues)
-
-			if quorum {
-				corr.set(reply, rlevel, nil, true)
-				return
+			if c.mgr.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
-			if rlevel > clevel {
-				clevel = rlevel
-				corr.set(reply, rlevel, nil, false)
+			replyValues = append(replyValues, r.reply)
+			if resp, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
+				return resp, nil
 			}
 		case <-ctx.Done():
-			corr.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
-			return
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-		if errCount == c.n { // Can't rely on reply count.
-			corr.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
-			return
+		if errCount+len(replyValues) == c.n {
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCReadTwoStream(ctx context.Context, node *Node, args *ReadRequest, replyChan chan<- readTwoReply) {
-	x := NewRegisterClient(node.conn)
-	y, err := x.ReadTwo(ctx, args)
-	if err != nil {
-		replyChan <- readTwoReply{node.id, nil, err}
-		return
+func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readCustomReturnReply) {
+	reply := new(State)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/ReadCustomReturn",
+		arg,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
 	}
-
-	for {
-		reply, err := y.Recv()
-		if err == io.EOF {
-			return
-		}
-		replyChan <- readTwoReply{node.id, reply, err}
-		if err != nil {
-			return
-		}
-	}
+	replyChan <- readCustomReturnReply{node.id, reply, err}
 }
+
+/* Exported types and methods for quorum call method Write */
+
+// Write is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteResponse, error) {
+	return c.write(ctx, arg)
+}
+
+/* Unexported types and methods for quorum call method Write */
 
 type writeReply struct {
 	nid   uint32
@@ -866,9 +1277,9 @@ type writeReply struct {
 	err   error
 }
 
-func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
+func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
 		defer ti.tr.Finish()
 
@@ -877,11 +1288,11 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResponse,
+				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
@@ -891,18 +1302,12 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	}
 
 	replyChan := make(chan writeReply, c.n)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
 	for _, n := range c.nodes {
-		go callGRPCWrite(ctx, n, args, replyChan)
+		go callGRPCWrite(ctx, n, a, replyChan)
 	}
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -910,35 +1315,34 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteQF(args, replyValues); quorum {
-				return reply, nil
+			if resp, quorum = c.qspec.WriteQF(a, replyValues); quorum {
+				return resp, nil
 			}
 		case <-ctx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<- writeReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/dev.Register/Write",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -951,20 +1355,100 @@ func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<
 	replyChan <- writeReply{node.id, reply, err}
 }
 
-func (m *Manager) writeAsync(ctx context.Context, c *Configuration, args *State) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.WriteAsyncClient.Send(args)
-			if err == nil {
-				return
+/* Exported types and methods for quorum call method WritePerNode */
+
+// WritePerNode is invoked as a quorum call on each node in configuration c,
+// with the argument returned by the provided perNode function and returns the
+// result. The perNode function takes a request arg and
+// returns a State object to be passed to the given nodeID.
+func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(arg State, nodeID uint32) *State) (*WriteResponse, error) {
+	return c.writePerNode(ctx, arg, perNode)
+}
+
+/* Unexported types and methods for quorum call method WritePerNode */
+
+type writePerNodeReply struct {
+	nid   uint32
+	reply *WriteResponse
+	err   error
+}
+
+func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg State, nodeID uint32) *State) (resp *WriteResponse, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				reply: resp,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.tr.SetError()
 			}
-			if m.logger != nil {
-				m.logger.Printf("%d: writeAsync stream send error: %v", n.id, err)
-			}
-		}(node)
+		}()
 	}
 
-	return nil
+	replyChan := make(chan writePerNodeReply, c.n)
+	for _, n := range c.nodes {
+		go callGRPCWritePerNode(ctx, n, f(*a, n.id), replyChan)
+	}
+
+	var (
+		replyValues = make([]*WriteResponse, 0, c.n)
+		errCount    int
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			if r.err != nil {
+				errCount++
+				break
+			}
+			if c.mgr.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if resp, quorum = c.qspec.WritePerNodeQF(replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		}
+
+		if errCount+len(replyValues) == c.n {
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		}
+	}
+}
+
+func callGRPCWritePerNode(ctx context.Context, node *Node, arg *State, replyChan chan<- writePerNodeReply) {
+	reply := new(WriteResponse)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Register/WritePerNode",
+		arg,
+		reply,
+		node.conn,
+	)
+	switch grpc.Code(err) { // nil -> codes.OK
+	case codes.OK, codes.Canceled:
+		node.setLatency(time.Since(start))
+	default:
+		node.setLastErr(err)
+	}
+	replyChan <- writePerNodeReply{node.id, reply, err}
 }
 
 /* 'gorums' plugin for protoc-gen-go - generated from: node_tmpl */
@@ -1024,17 +1508,33 @@ type QuorumSpec interface {
 	// quorum call method.
 	ReadQF(replies []*State) (*State, bool)
 
-	// ReadCorrectableQF is the quorum function for the Read
+	// ReadCorrectableQF is the quorum function for the ReadCorrectable
 	// correctable quorum call method.
 	ReadCorrectableQF(replies []*State) (*State, int, bool)
 
-	// ReadTwoCorrectablePrelimQF is the quorum function for the ReadTwo
+	// ReadCustomReturnQF is the quorum function for the ReadCustomReturn
+	// quorum call method.
+	ReadCustomReturnQF(replies []*State) (*MyState, bool)
+
+	// ReadFutureQF is the quorum function for the ReadFuture
+	// asynchronous quorum call method.
+	ReadFutureQF(replies []*State) (*State, bool)
+
+	// ReadPrelimQF is the quorum function for the ReadPrelim
 	// correctable prelim quourm call method.
-	ReadTwoCorrectablePrelimQF(replies []*State) (*State, int, bool)
+	ReadPrelimQF(replies []*State) (*State, int, bool)
 
 	// WriteQF is the quorum function for the Write
 	// quorum call method.
 	WriteQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
+
+	// WriteFutureQF is the quorum function for the WriteFuture
+	// asynchronous quorum call method.
+	WriteFutureQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
+
+	// WritePerNodeQF is the quorum function for the WritePerNode
+	// quorum call method.
+	WritePerNodeQF(replies []*WriteResponse) (*WriteResponse, bool)
 }
 
 /* Static resources */
@@ -1658,11 +2158,39 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for Register service
 
 type RegisterClient interface {
-	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
-	ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error)
-	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
-	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
+	// ReadNoQC is a plain gRPC call.
 	ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// Read is a synchronous quorum call.
+	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadCustomReturn is a synchronous quorum call with a custom return type
+	ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadCorrectable is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO update DOC (useful for EPaxos)
+	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadPrelim is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO update DOC
+	ReadPrelim(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadPrelimClient, error)
+	// Write is a synchronous quorum call.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteQF, for this method.
+	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
+	// WriteFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteFutureQF, for this method.
+	WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
+	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
+	// No replies are collected.
+	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
+	// WritePerNode is a synchronous quorum call, where,
+	// for each node, a provided function is called to determine
+	// the argument to be sent to that node.
+	WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
 }
 
 type registerClient struct {
@@ -1671,6 +2199,15 @@ type registerClient struct {
 
 func NewRegisterClient(cc *grpc.ClientConn) RegisterClient {
 	return &registerClient{cc}
+}
+
+func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadNoQC", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
@@ -1682,12 +2219,39 @@ func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc
 	return out, nil
 }
 
-func (c *registerClient) ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], c.cc, "/dev.Register/ReadTwo", opts...)
+func (c *registerClient) ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &registerReadTwoClient{stream}
+	return out, nil
+}
+
+func (c *registerClient) ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadCustomReturn", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadCorrectable", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) ReadPrelim(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadPrelimClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], c.cc, "/dev.Register/ReadPrelim", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &registerReadPrelimClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -1697,16 +2261,16 @@ func (c *registerClient) ReadTwo(ctx context.Context, in *ReadRequest, opts ...g
 	return x, nil
 }
 
-type Register_ReadTwoClient interface {
+type Register_ReadPrelimClient interface {
 	Recv() (*State, error)
 	grpc.ClientStream
 }
 
-type registerReadTwoClient struct {
+type registerReadPrelimClient struct {
 	grpc.ClientStream
 }
 
-func (x *registerReadTwoClient) Recv() (*State, error) {
+func (x *registerReadPrelimClient) Recv() (*State, error) {
 	m := new(State)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -1717,6 +2281,15 @@ func (x *registerReadTwoClient) Recv() (*State, error) {
 func (c *registerClient) Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
 	err := grpc.Invoke(ctx, "/dev.Register/Write", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+	out := new(WriteResponse)
+	err := grpc.Invoke(ctx, "/dev.Register/WriteFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1757,9 +2330,9 @@ func (x *registerWriteAsyncClient) CloseAndRecv() (*Empty, error) {
 	return m, nil
 }
 
-func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
-	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadNoQC", in, out, c.cc, opts...)
+func (c *registerClient) WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+	out := new(WriteResponse)
+	err := grpc.Invoke(ctx, "/dev.Register/WritePerNode", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1769,15 +2342,61 @@ func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...
 // Server API for Register service
 
 type RegisterServer interface {
-	Read(context.Context, *ReadRequest) (*State, error)
-	ReadTwo(*ReadRequest, Register_ReadTwoServer) error
-	Write(context.Context, *State) (*WriteResponse, error)
-	WriteAsync(Register_WriteAsyncServer) error
+	// ReadNoQC is a plain gRPC call.
 	ReadNoQC(context.Context, *ReadRequest) (*State, error)
+	// Read is a synchronous quorum call.
+	Read(context.Context, *ReadRequest) (*State, error)
+	// ReadFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	ReadFuture(context.Context, *ReadRequest) (*State, error)
+	// ReadCustomReturn is a synchronous quorum call with a custom return type
+	ReadCustomReturn(context.Context, *ReadRequest) (*State, error)
+	// ReadCorrectable is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO update DOC (useful for EPaxos)
+	ReadCorrectable(context.Context, *ReadRequest) (*State, error)
+	// ReadPrelim is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO update DOC
+	ReadPrelim(*ReadRequest, Register_ReadPrelimServer) error
+	// Write is a synchronous quorum call.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteQF, for this method.
+	Write(context.Context, *State) (*WriteResponse, error)
+	// WriteFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteFutureQF, for this method.
+	WriteFuture(context.Context, *State) (*WriteResponse, error)
+	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
+	// No replies are collected.
+	WriteAsync(Register_WriteAsyncServer) error
+	// WritePerNode is a synchronous quorum call, where,
+	// for each node, a provided function is called to determine
+	// the argument to be sent to that node.
+	WritePerNode(context.Context, *State) (*WriteResponse, error)
 }
 
 func RegisterRegisterServer(s *grpc.Server, srv RegisterServer) {
 	s.RegisterService(&_Register_serviceDesc, srv)
+}
+
+func _Register_ReadNoQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadNoQC(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadNoQC",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadNoQC(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1798,24 +2417,78 @@ func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_ReadTwo_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Register_ReadFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadFuture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadFuture",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadFuture(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadCustomReturn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadCustomReturn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadCustomReturn",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadCustomReturn(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadCorrectable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadCorrectable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadCorrectable(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadPrelim_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(ReadRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(RegisterServer).ReadTwo(m, &registerReadTwoServer{stream})
+	return srv.(RegisterServer).ReadPrelim(m, &registerReadPrelimServer{stream})
 }
 
-type Register_ReadTwoServer interface {
+type Register_ReadPrelimServer interface {
 	Send(*State) error
 	grpc.ServerStream
 }
 
-type registerReadTwoServer struct {
+type registerReadPrelimServer struct {
 	grpc.ServerStream
 }
 
-func (x *registerReadTwoServer) Send(m *State) error {
+func (x *registerReadPrelimServer) Send(m *State) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -1833,6 +2506,24 @@ func _Register_Write_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RegisterServer).Write(ctx, req.(*State))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_WriteFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(State)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).WriteFuture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/WriteFuture",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).WriteFuture(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1863,20 +2554,20 @@ func (x *registerWriteAsyncServer) Recv() (*State, error) {
 	return m, nil
 }
 
-func _Register_ReadNoQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
+func _Register_WritePerNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(State)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).ReadNoQC(ctx, in)
+		return srv.(RegisterServer).WritePerNode(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/ReadNoQC",
+		FullMethod: "/dev.Register/WritePerNode",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).ReadNoQC(ctx, req.(*ReadRequest))
+		return srv.(RegisterServer).WritePerNode(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1886,22 +2577,42 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*RegisterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ReadNoQC",
+			Handler:    _Register_ReadNoQC_Handler,
+		},
+		{
 			MethodName: "Read",
 			Handler:    _Register_Read_Handler,
+		},
+		{
+			MethodName: "ReadFuture",
+			Handler:    _Register_ReadFuture_Handler,
+		},
+		{
+			MethodName: "ReadCustomReturn",
+			Handler:    _Register_ReadCustomReturn_Handler,
+		},
+		{
+			MethodName: "ReadCorrectable",
+			Handler:    _Register_ReadCorrectable_Handler,
 		},
 		{
 			MethodName: "Write",
 			Handler:    _Register_Write_Handler,
 		},
 		{
-			MethodName: "ReadNoQC",
-			Handler:    _Register_ReadNoQC_Handler,
+			MethodName: "WriteFuture",
+			Handler:    _Register_WriteFuture_Handler,
+		},
+		{
+			MethodName: "WritePerNode",
+			Handler:    _Register_WritePerNode_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "ReadTwo",
-			Handler:       _Register_ReadTwo_Handler,
+			StreamName:    "ReadPrelim",
+			Handler:       _Register_ReadPrelim_Handler,
 			ServerStreams: true,
 		},
 		{
@@ -1938,6 +2649,40 @@ func (m *State) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 		i++
 		i = encodeVarintRegister(dAtA, i, uint64(m.Timestamp))
+	}
+	return i, nil
+}
+
+func (m *MyState) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MyState) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Value) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintRegister(dAtA, i, uint64(len(m.Value)))
+		i += copy(dAtA[i:], m.Value)
+	}
+	if m.Timestamp != 0 {
+		dAtA[i] = 0x10
+		i++
+		i = encodeVarintRegister(dAtA, i, uint64(m.Timestamp))
+	}
+	if m.Extra != 0 {
+		dAtA[i] = 0x18
+		i++
+		i = encodeVarintRegister(dAtA, i, uint64(m.Extra))
 	}
 	return i, nil
 }
@@ -2046,6 +2791,22 @@ func (m *State) Size() (n int) {
 	return n
 }
 
+func (m *MyState) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.Value)
+	if l > 0 {
+		n += 1 + l + sovRegister(uint64(l))
+	}
+	if m.Timestamp != 0 {
+		n += 1 + sovRegister(uint64(m.Timestamp))
+	}
+	if m.Extra != 0 {
+		n += 1 + sovRegister(uint64(m.Extra))
+	}
+	return n
+}
+
 func (m *WriteResponse) Size() (n int) {
 	var l int
 	_ = l
@@ -2087,6 +2848,18 @@ func (this *State) String() string {
 	s := strings.Join([]string{`&State{`,
 		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
 		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MyState) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MyState{`,
+		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
+		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`Extra:` + fmt.Sprintf("%v", this.Extra) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -2200,6 +2973,123 @@ func (m *State) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Timestamp |= (int64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRegister(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRegister
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MyState) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRegister
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MyState: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MyState: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRegister
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthRegister
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Value = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Timestamp", wireType)
+			}
+			m.Timestamp = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRegister
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Timestamp |= (int64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Extra", wireType)
+			}
+			m.Extra = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRegister
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Extra |= (int64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -2503,28 +3393,34 @@ var (
 func init() { proto.RegisterFile("testdata/register_golden/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 366 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x51, 0xb1, 0x8e, 0xda, 0x40,
-	0x10, 0xf5, 0x00, 0x0e, 0xb0, 0x09, 0x12, 0x5a, 0xa5, 0xb0, 0x50, 0xb4, 0x22, 0x56, 0xa4, 0xa0,
-	0x08, 0xd9, 0x11, 0x51, 0xaa, 0x54, 0x49, 0x94, 0x16, 0x29, 0x0e, 0x4a, 0xca, 0x68, 0xc1, 0x23,
-	0x9f, 0x25, 0xcc, 0xfa, 0xbc, 0x6b, 0x10, 0x1d, 0xe5, 0x95, 0x94, 0x57, 0x5e, 0xc9, 0x0f, 0xf8,
-	0x1f, 0xae, 0xa4, 0xbc, 0x12, 0x7c, 0xcd, 0x95, 0xf7, 0x09, 0x27, 0xaf, 0xd1, 0x1d, 0x54, 0x54,
-	0xfb, 0x66, 0xe6, 0xcd, 0xbe, 0xf7, 0x34, 0xe4, 0xa3, 0x42, 0xa9, 0x7c, 0xae, 0xb8, 0x9b, 0x60,
-	0x10, 0x4a, 0x85, 0xc9, 0xff, 0x40, 0x4c, 0x7d, 0x9c, 0x3d, 0xd7, 0x4e, 0x9c, 0x08, 0x25, 0x68,
-	0xd5, 0xc7, 0x79, 0xe7, 0x43, 0x10, 0xaa, 0x8b, 0x74, 0xec, 0x4c, 0x44, 0xe4, 0x26, 0x38, 0xe5,
-	0x63, 0x37, 0x10, 0x49, 0x1a, 0xc9, 0xc3, 0x53, 0x52, 0xed, 0x6f, 0xc4, 0xfc, 0xa3, 0xb8, 0x42,
-	0xfa, 0x96, 0x98, 0x7f, 0xf9, 0x34, 0x45, 0x0b, 0xba, 0xd0, 0x6b, 0x7a, 0x65, 0x41, 0xdf, 0x91,
-	0xe6, 0x28, 0x8c, 0x50, 0x2a, 0x1e, 0xc5, 0x56, 0xa5, 0x0b, 0xbd, 0xaa, 0xf7, 0xd2, 0xb0, 0xdf,
-	0x93, 0xd6, 0xbf, 0x24, 0x54, 0xe8, 0xa1, 0x8c, 0xc5, 0x4c, 0x22, 0x6d, 0x93, 0xea, 0x10, 0x17,
-	0xfa, 0x8b, 0x86, 0x57, 0x40, 0xbb, 0x45, 0x5e, 0x7b, 0xc8, 0x7d, 0x0f, 0x2f, 0x53, 0x94, 0xca,
-	0xae, 0x13, 0xf3, 0x57, 0x14, 0xab, 0xe5, 0x60, 0x55, 0x21, 0x0d, 0xef, 0xe0, 0x9a, 0x0e, 0x48,
-	0xad, 0x20, 0xd1, 0xb6, 0xe3, 0xe3, 0xdc, 0x39, 0xe2, 0x77, 0x88, 0xee, 0x68, 0x87, 0xf6, 0x9b,
-	0x55, 0x66, 0xc1, 0x55, 0x66, 0xc1, 0x4d, 0x66, 0x01, 0x75, 0x49, 0xbd, 0x20, 0x8e, 0x16, 0xe2,
-	0xcc, 0x5a, 0x6d, 0x9d, 0x59, 0xf0, 0x19, 0xe8, 0x57, 0x62, 0x6a, 0xb3, 0xf4, 0x68, 0xd8, 0xa1,
-	0x1a, 0x9f, 0x84, 0x28, 0x75, 0x0a, 0x8d, 0x4d, 0xa1, 0xd3, 0x27, 0x44, 0x8f, 0xbf, 0xcb, 0xe5,
-	0x6c, 0x72, 0xb2, 0x5b, 0x62, 0x1d, 0xc7, 0xae, 0x5d, 0x67, 0x16, 0xf4, 0x80, 0x7e, 0x2a, 0x52,
-	0x71, 0x7f, 0x28, 0x7e, 0xff, 0x3c, 0x63, 0xcb, 0xf8, 0xd1, 0xdf, 0xee, 0x99, 0x71, 0xb7, 0x67,
-	0xc6, 0x6e, 0xcf, 0x60, 0x95, 0x33, 0xd8, 0xe4, 0x0c, 0x6e, 0x73, 0x06, 0xdb, 0x9c, 0xc1, 0x2e,
-	0x67, 0xf0, 0x90, 0x33, 0xe3, 0x31, 0x67, 0xb0, 0xbe, 0x67, 0xc6, 0xf8, 0x95, 0xbe, 0xd7, 0x97,
-	0xa7, 0x00, 0x00, 0x00, 0xff, 0xff, 0x30, 0xbf, 0xe7, 0xef, 0x05, 0x02, 0x00, 0x00,
+	// 463 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x93, 0xb1, 0x6f, 0xd3, 0x40,
+	0x14, 0xc6, 0x7d, 0x24, 0xa1, 0xe9, 0x2b, 0x55, 0xa3, 0x13, 0x83, 0x15, 0xa1, 0x53, 0xb1, 0x90,
+	0x88, 0xaa, 0x2a, 0x29, 0x45, 0x08, 0x24, 0xa6, 0x52, 0x95, 0x8d, 0xa8, 0xb8, 0x08, 0x46, 0x74,
+	0x89, 0x9f, 0x82, 0x25, 0x3b, 0x17, 0xee, 0xde, 0x15, 0xb2, 0x75, 0x64, 0xec, 0x84, 0x18, 0x3b,
+	0x76, 0x64, 0xc9, 0x3f, 0xc0, 0xc4, 0xd8, 0x91, 0xb1, 0x31, 0x0b, 0x23, 0x12, 0xff, 0x00, 0xba,
+	0x73, 0x28, 0xed, 0x64, 0xc4, 0xe4, 0xf7, 0xee, 0xfb, 0x7e, 0xf7, 0x9e, 0xbe, 0x93, 0xe1, 0x2e,
+	0xa1, 0xa1, 0x44, 0x92, 0xec, 0x69, 0x1c, 0xa5, 0x86, 0x50, 0xbf, 0x1e, 0xa9, 0x2c, 0xc1, 0xf1,
+	0x45, 0xdf, 0x9d, 0x68, 0x45, 0x8a, 0xd7, 0x12, 0x3c, 0x6c, 0xdf, 0x19, 0xa5, 0xf4, 0xc6, 0x0e,
+	0xba, 0x43, 0x95, 0xf7, 0x34, 0x66, 0x72, 0xd0, 0x1b, 0x29, 0x6d, 0x73, 0xb3, 0xf8, 0x94, 0xd6,
+	0xe8, 0x31, 0x34, 0x0e, 0x48, 0x12, 0xf2, 0x9b, 0xd0, 0x78, 0x29, 0x33, 0x8b, 0x21, 0x5b, 0x67,
+	0x9d, 0xe5, 0xb8, 0x6c, 0xf8, 0x2d, 0x58, 0x7e, 0x91, 0xe6, 0x68, 0x48, 0xe6, 0x93, 0xf0, 0xda,
+	0x3a, 0xeb, 0xd4, 0xe2, 0xbf, 0x07, 0xd1, 0x01, 0x2c, 0x3d, 0x9b, 0xfe, 0x37, 0xee, 0x98, 0xbd,
+	0xf7, 0xa4, 0x65, 0x58, 0xf3, 0x4a, 0xd9, 0x44, 0xb7, 0x61, 0xf5, 0x95, 0x4e, 0x09, 0x63, 0x34,
+	0x13, 0x35, 0x36, 0xc8, 0x5b, 0x50, 0xeb, 0xe3, 0x3b, 0x7f, 0x71, 0x33, 0x76, 0x65, 0xb4, 0x0a,
+	0x2b, 0x31, 0xca, 0x24, 0xc6, 0xb7, 0x16, 0x0d, 0x45, 0x4b, 0xd0, 0xd8, 0xcb, 0x27, 0x34, 0xdd,
+	0xfe, 0x58, 0x87, 0x66, 0xbc, 0x88, 0x82, 0x6f, 0xb8, 0x5a, 0x26, 0x7d, 0xf5, 0x7c, 0x97, 0xb7,
+	0xba, 0x09, 0x1e, 0x76, 0x2f, 0x31, 0x6d, 0xf0, 0x27, 0x7e, 0xf7, 0x28, 0xe0, 0x1b, 0x50, 0x77,
+	0x62, 0x85, 0xaf, 0x7e, 0x34, 0x0b, 0x19, 0xdf, 0x02, 0x70, 0x86, 0xa7, 0x96, 0xac, 0xc6, 0x2a,
+	0xe2, 0xc4, 0x11, 0x3b, 0xd0, 0x72, 0x86, 0x5d, 0x6b, 0x48, 0xe5, 0x31, 0x92, 0xd5, 0xe3, 0x0a,
+	0x6e, 0xcd, 0x4d, 0xfa, 0xf2, 0x2b, 0xbc, 0x88, 0xf7, 0x01, 0xac, 0xf9, 0x2b, 0x94, 0xd6, 0x38,
+	0x24, 0x39, 0xc8, 0x2a, 0x27, 0x7f, 0x70, 0x93, 0xb7, 0xcb, 0x5d, 0xf7, 0x35, 0x66, 0x69, 0x5e,
+	0x45, 0x1c, 0xcf, 0x42, 0xb6, 0xc5, 0xf8, 0x3d, 0x68, 0xf8, 0xfc, 0xf9, 0x25, 0xb1, 0xcd, 0x7d,
+	0x7d, 0xe5, 0x5d, 0xa2, 0xa6, 0x5b, 0xf2, 0xd4, 0x8d, 0x79, 0x08, 0x2b, 0x5e, 0x5a, 0x64, 0x52,
+	0x09, 0x9e, 0xfc, 0x01, 0x37, 0x01, 0xbc, 0xb4, 0x63, 0xa6, 0xe3, 0xe1, 0x15, 0xae, 0xac, 0xfd,
+	0xb3, 0x46, 0xf5, 0x4f, 0xb3, 0x90, 0x75, 0x18, 0x7f, 0x04, 0x37, 0xbc, 0x7b, 0x1f, 0x75, 0x5f,
+	0x25, 0xff, 0xb8, 0xe0, 0xe7, 0x59, 0xc8, 0x9e, 0x6c, 0x9e, 0xcd, 0x45, 0xf0, 0x6d, 0x2e, 0x82,
+	0xf3, 0xb9, 0x60, 0x47, 0x85, 0x60, 0xa7, 0x85, 0x60, 0x5f, 0x0b, 0xc1, 0xce, 0x0a, 0xc1, 0xce,
+	0x0b, 0xc1, 0x7e, 0x14, 0x22, 0xf8, 0x59, 0x08, 0x76, 0xfc, 0x5d, 0x04, 0x83, 0xeb, 0xfe, 0xd7,
+	0xb8, 0xff, 0x3b, 0x00, 0x00, 0xff, 0xff, 0xc5, 0x12, 0xd3, 0x01, 0x70, 0x03, 0x00, 0x00,
 }

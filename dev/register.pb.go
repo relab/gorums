@@ -3,16 +3,26 @@
 // DO NOT EDIT!
 
 /*
-Package dev is a generated protocol buffer package.
+	Package dev is a generated protocol buffer package.
 
-It is generated from these files:
-	dev/register.proto
+	Package dev provides a blueprint for testing the various call semantics provided by Gorums.
+	The following table explains the differences in how the different call semantics work.
 
-It has these top-level messages:
-	State
-	WriteResponse
-	ReadRequest
-	Empty
+	                   Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type
+	------------------------------------------------------------------------------------------------------------------------------------------------
+	Quorum call                 1                   Reply + error count                 1                           Single response
+	Correctable QC              1                   Reply + error count                 N                           Single response
+	Correctable QC w/prelim     M                   Error count                         M                           Stream of responses
+
+	It is generated from these files:
+		dev/register.proto
+
+	It has these top-level messages:
+		State
+		MyState
+		WriteResponse
+		ReadRequest
+		Empty
 */
 package dev
 
@@ -51,30 +61,41 @@ func (m *State) Reset()                    { *m = State{} }
 func (*State) ProtoMessage()               {}
 func (*State) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{0} }
 
+type MyState struct {
+	Value     string `protobuf:"bytes,1,opt,name=Value,proto3" json:"Value,omitempty"`
+	Timestamp int64  `protobuf:"varint,2,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
+	Extra     int64  `protobuf:"varint,3,opt,name=Extra,proto3" json:"Extra,omitempty"`
+}
+
+func (m *MyState) Reset()                    { *m = MyState{} }
+func (*MyState) ProtoMessage()               {}
+func (*MyState) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{1} }
+
 type WriteResponse struct {
 	New bool `protobuf:"varint,1,opt,name=New,proto3" json:"New,omitempty"`
 }
 
 func (m *WriteResponse) Reset()                    { *m = WriteResponse{} }
 func (*WriteResponse) ProtoMessage()               {}
-func (*WriteResponse) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{1} }
+func (*WriteResponse) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{2} }
 
 type ReadRequest struct {
 }
 
 func (m *ReadRequest) Reset()                    { *m = ReadRequest{} }
 func (*ReadRequest) ProtoMessage()               {}
-func (*ReadRequest) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{2} }
+func (*ReadRequest) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{3} }
 
 type Empty struct {
 }
 
 func (m *Empty) Reset()                    { *m = Empty{} }
 func (*Empty) ProtoMessage()               {}
-func (*Empty) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{3} }
+func (*Empty) Descriptor() ([]byte, []int) { return fileDescriptorRegister, []int{4} }
 
 func init() {
 	proto.RegisterType((*State)(nil), "dev.State")
+	proto.RegisterType((*MyState)(nil), "dev.MyState")
 	proto.RegisterType((*WriteResponse)(nil), "dev.WriteResponse")
 	proto.RegisterType((*ReadRequest)(nil), "dev.ReadRequest")
 	proto.RegisterType((*Empty)(nil), "dev.Empty")
@@ -141,6 +162,78 @@ func (this *State) Equal(that interface{}) bool {
 		return false
 	}
 	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	return true
+}
+func (this *MyState) VerboseEqual(that interface{}) error {
+	if that == nil {
+		if this == nil {
+			return nil
+		}
+		return fmt.Errorf("that == nil && this != nil")
+	}
+
+	that1, ok := that.(*MyState)
+	if !ok {
+		that2, ok := that.(MyState)
+		if ok {
+			that1 = &that2
+		} else {
+			return fmt.Errorf("that is not of type *MyState")
+		}
+	}
+	if that1 == nil {
+		if this == nil {
+			return nil
+		}
+		return fmt.Errorf("that is type *MyState but is nil && this != nil")
+	} else if this == nil {
+		return fmt.Errorf("that is type *MyState but is not nil && this == nil")
+	}
+	if this.Value != that1.Value {
+		return fmt.Errorf("Value this(%v) Not Equal that(%v)", this.Value, that1.Value)
+	}
+	if this.Timestamp != that1.Timestamp {
+		return fmt.Errorf("Timestamp this(%v) Not Equal that(%v)", this.Timestamp, that1.Timestamp)
+	}
+	if this.Extra != that1.Extra {
+		return fmt.Errorf("Extra this(%v) Not Equal that(%v)", this.Extra, that1.Extra)
+	}
+	return nil
+}
+func (this *MyState) Equal(that interface{}) bool {
+	if that == nil {
+		if this == nil {
+			return true
+		}
+		return false
+	}
+
+	that1, ok := that.(*MyState)
+	if !ok {
+		that2, ok := that.(MyState)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		if this == nil {
+			return true
+		}
+		return false
+	} else if this == nil {
+		return false
+	}
+	if this.Value != that1.Value {
+		return false
+	}
+	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	if this.Extra != that1.Extra {
 		return false
 	}
 	return true
@@ -325,11 +418,39 @@ const _ = grpc.SupportPackageIsVersion4
 // Client API for Register service
 
 type RegisterClient interface {
-	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
-	ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error)
-	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
-	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
+	// ReadNoQC is a plain gRPC call.
 	ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// Read is a synchronous quorum call.
+	Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadCustomReturn is a synchronous quorum call with a custom return type
+	ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadCorrectable is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO update DOC (useful for EPaxos)
+	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
+	// ReadPrelim is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO update DOC
+	ReadPrelim(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadPrelimClient, error)
+	// Write is a synchronous quorum call.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteQF, for this method.
+	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
+	// WriteFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteFutureQF, for this method.
+	WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
+	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
+	// No replies are collected.
+	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
+	// WritePerNode is a synchronous quorum call, where,
+	// for each node, a provided function is called to determine
+	// the argument to be sent to that node.
+	WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
 }
 
 type registerClient struct {
@@ -338,6 +459,15 @@ type registerClient struct {
 
 func NewRegisterClient(cc *grpc.ClientConn) RegisterClient {
 	return &registerClient{cc}
+}
+
+func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadNoQC", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
@@ -349,12 +479,39 @@ func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc
 	return out, nil
 }
 
-func (c *registerClient) ReadTwo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadTwoClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], c.cc, "/dev.Register/ReadTwo", opts...)
+func (c *registerClient) ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &registerReadTwoClient{stream}
+	return out, nil
+}
+
+func (c *registerClient) ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadCustomReturn", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+	out := new(State)
+	err := grpc.Invoke(ctx, "/dev.Register/ReadCorrectable", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) ReadPrelim(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadPrelimClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], c.cc, "/dev.Register/ReadPrelim", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &registerReadPrelimClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -364,16 +521,16 @@ func (c *registerClient) ReadTwo(ctx context.Context, in *ReadRequest, opts ...g
 	return x, nil
 }
 
-type Register_ReadTwoClient interface {
+type Register_ReadPrelimClient interface {
 	Recv() (*State, error)
 	grpc.ClientStream
 }
 
-type registerReadTwoClient struct {
+type registerReadPrelimClient struct {
 	grpc.ClientStream
 }
 
-func (x *registerReadTwoClient) Recv() (*State, error) {
+func (x *registerReadPrelimClient) Recv() (*State, error) {
 	m := new(State)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -384,6 +541,15 @@ func (x *registerReadTwoClient) Recv() (*State, error) {
 func (c *registerClient) Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
 	err := grpc.Invoke(ctx, "/dev.Register/Write", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *registerClient) WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+	out := new(WriteResponse)
+	err := grpc.Invoke(ctx, "/dev.Register/WriteFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -424,9 +590,9 @@ func (x *registerWriteAsyncClient) CloseAndRecv() (*Empty, error) {
 	return m, nil
 }
 
-func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
-	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadNoQC", in, out, c.cc, opts...)
+func (c *registerClient) WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+	out := new(WriteResponse)
+	err := grpc.Invoke(ctx, "/dev.Register/WritePerNode", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -436,15 +602,61 @@ func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...
 // Server API for Register service
 
 type RegisterServer interface {
-	Read(context.Context, *ReadRequest) (*State, error)
-	ReadTwo(*ReadRequest, Register_ReadTwoServer) error
-	Write(context.Context, *State) (*WriteResponse, error)
-	WriteAsync(Register_WriteAsyncServer) error
+	// ReadNoQC is a plain gRPC call.
 	ReadNoQC(context.Context, *ReadRequest) (*State, error)
+	// Read is a synchronous quorum call.
+	Read(context.Context, *ReadRequest) (*State, error)
+	// ReadFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	ReadFuture(context.Context, *ReadRequest) (*State, error)
+	// ReadCustomReturn is a synchronous quorum call with a custom return type
+	ReadCustomReturn(context.Context, *ReadRequest) (*State, error)
+	// ReadCorrectable is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO update DOC (useful for EPaxos)
+	ReadCorrectable(context.Context, *ReadRequest) (*State, error)
+	// ReadPrelim is an asynchronous correctable quorum call that
+	// returns a correctable object for retrieving results.
+	// TODO update DOC
+	ReadPrelim(*ReadRequest, Register_ReadPrelimServer) error
+	// Write is a synchronous quorum call.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteQF, for this method.
+	Write(context.Context, *State) (*WriteResponse, error)
+	// WriteFuture is an asynchronous quorum call that
+	// returns a future object for retrieving results.
+	// The request argument (State) is passed to the associated
+	// quorum function, WriteFutureQF, for this method.
+	WriteFuture(context.Context, *State) (*WriteResponse, error)
+	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
+	// No replies are collected.
+	WriteAsync(Register_WriteAsyncServer) error
+	// WritePerNode is a synchronous quorum call, where,
+	// for each node, a provided function is called to determine
+	// the argument to be sent to that node.
+	WritePerNode(context.Context, *State) (*WriteResponse, error)
 }
 
 func RegisterRegisterServer(s *grpc.Server, srv RegisterServer) {
 	s.RegisterService(&_Register_serviceDesc, srv)
+}
+
+func _Register_ReadNoQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadNoQC(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadNoQC",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadNoQC(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -465,24 +677,78 @@ func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_ReadTwo_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Register_ReadFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadFuture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadFuture",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadFuture(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadCustomReturn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadCustomReturn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadCustomReturn",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadCustomReturn(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).ReadCorrectable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/ReadCorrectable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).ReadCorrectable(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_ReadPrelim_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(ReadRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(RegisterServer).ReadTwo(m, &registerReadTwoServer{stream})
+	return srv.(RegisterServer).ReadPrelim(m, &registerReadPrelimServer{stream})
 }
 
-type Register_ReadTwoServer interface {
+type Register_ReadPrelimServer interface {
 	Send(*State) error
 	grpc.ServerStream
 }
 
-type registerReadTwoServer struct {
+type registerReadPrelimServer struct {
 	grpc.ServerStream
 }
 
-func (x *registerReadTwoServer) Send(m *State) error {
+func (x *registerReadPrelimServer) Send(m *State) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -500,6 +766,24 @@ func _Register_Write_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RegisterServer).Write(ctx, req.(*State))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Register_WriteFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(State)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RegisterServer).WriteFuture(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.Register/WriteFuture",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RegisterServer).WriteFuture(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -530,20 +814,20 @@ func (x *registerWriteAsyncServer) Recv() (*State, error) {
 	return m, nil
 }
 
-func _Register_ReadNoQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
+func _Register_WritePerNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(State)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).ReadNoQC(ctx, in)
+		return srv.(RegisterServer).WritePerNode(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/ReadNoQC",
+		FullMethod: "/dev.Register/WritePerNode",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).ReadNoQC(ctx, req.(*ReadRequest))
+		return srv.(RegisterServer).WritePerNode(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -553,22 +837,42 @@ var _Register_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*RegisterServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "ReadNoQC",
+			Handler:    _Register_ReadNoQC_Handler,
+		},
+		{
 			MethodName: "Read",
 			Handler:    _Register_Read_Handler,
+		},
+		{
+			MethodName: "ReadFuture",
+			Handler:    _Register_ReadFuture_Handler,
+		},
+		{
+			MethodName: "ReadCustomReturn",
+			Handler:    _Register_ReadCustomReturn_Handler,
+		},
+		{
+			MethodName: "ReadCorrectable",
+			Handler:    _Register_ReadCorrectable_Handler,
 		},
 		{
 			MethodName: "Write",
 			Handler:    _Register_Write_Handler,
 		},
 		{
-			MethodName: "ReadNoQC",
-			Handler:    _Register_ReadNoQC_Handler,
+			MethodName: "WriteFuture",
+			Handler:    _Register_WriteFuture_Handler,
+		},
+		{
+			MethodName: "WritePerNode",
+			Handler:    _Register_WritePerNode_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "ReadTwo",
-			Handler:       _Register_ReadTwo_Handler,
+			StreamName:    "ReadPrelim",
+			Handler:       _Register_ReadPrelim_Handler,
 			ServerStreams: true,
 		},
 		{
@@ -605,6 +909,40 @@ func (m *State) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 		i++
 		i = encodeVarintRegister(dAtA, i, uint64(m.Timestamp))
+	}
+	return i, nil
+}
+
+func (m *MyState) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MyState) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.Value) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintRegister(dAtA, i, uint64(len(m.Value)))
+		i += copy(dAtA[i:], m.Value)
+	}
+	if m.Timestamp != 0 {
+		dAtA[i] = 0x10
+		i++
+		i = encodeVarintRegister(dAtA, i, uint64(m.Timestamp))
+	}
+	if m.Extra != 0 {
+		dAtA[i] = 0x18
+		i++
+		i = encodeVarintRegister(dAtA, i, uint64(m.Extra))
 	}
 	return i, nil
 }
@@ -713,6 +1051,22 @@ func (m *State) Size() (n int) {
 	return n
 }
 
+func (m *MyState) Size() (n int) {
+	var l int
+	_ = l
+	l = len(m.Value)
+	if l > 0 {
+		n += 1 + l + sovRegister(uint64(l))
+	}
+	if m.Timestamp != 0 {
+		n += 1 + sovRegister(uint64(m.Timestamp))
+	}
+	if m.Extra != 0 {
+		n += 1 + sovRegister(uint64(m.Extra))
+	}
+	return n
+}
+
 func (m *WriteResponse) Size() (n int) {
 	var l int
 	_ = l
@@ -754,6 +1108,18 @@ func (this *State) String() string {
 	s := strings.Join([]string{`&State{`,
 		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
 		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MyState) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MyState{`,
+		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
+		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`Extra:` + fmt.Sprintf("%v", this.Extra) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -867,6 +1233,123 @@ func (m *State) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Timestamp |= (int64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipRegister(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthRegister
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MyState) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowRegister
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= (uint64(b) & 0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MyState: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MyState: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Value", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRegister
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= (uint64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthRegister
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Value = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Timestamp", wireType)
+			}
+			m.Timestamp = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRegister
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Timestamp |= (int64(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Extra", wireType)
+			}
+			m.Extra = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowRegister
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Extra |= (int64(b) & 0x7F) << shift
 				if b < 0x80 {
 					break
 				}
@@ -1170,27 +1653,34 @@ var (
 func init() { proto.RegisterFile("dev/register.proto", fileDescriptorRegister) }
 
 var fileDescriptorRegister = []byte{
-	// 348 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x84, 0x91, 0x31, 0x4f, 0xc2, 0x40,
-	0x14, 0xc7, 0xfb, 0x84, 0x0a, 0x3c, 0x25, 0x21, 0x17, 0x87, 0x86, 0x98, 0x0b, 0x36, 0x0e, 0xc4,
-	0x90, 0x56, 0x71, 0x74, 0x52, 0xe3, 0x4a, 0x62, 0x25, 0x3a, 0x17, 0xfa, 0x82, 0x4d, 0x28, 0xad,
-	0xed, 0x15, 0xc2, 0xc6, 0xe8, 0xc8, 0x47, 0x70, 0xf4, 0x0b, 0xd4, 0xcf, 0xe0, 0xc8, 0xe8, 0x08,
-	0x75, 0x71, 0xf4, 0x03, 0x38, 0x98, 0x1e, 0x18, 0x61, 0x62, 0xba, 0xff, 0xbd, 0xf7, 0x7f, 0x77,
-	0xbf, 0x7f, 0x1e, 0x32, 0x87, 0x86, 0x66, 0x48, 0x3d, 0x37, 0x12, 0x14, 0x1a, 0x41, 0xe8, 0x0b,
-	0x9f, 0xe5, 0x1c, 0x1a, 0x56, 0x8f, 0x7b, 0xae, 0x78, 0x8c, 0x3b, 0x46, 0xd7, 0xf7, 0xcc, 0x90,
-	0xfa, 0x76, 0xc7, 0xec, 0xf9, 0x61, 0xec, 0x45, 0xab, 0x63, 0x69, 0xd5, 0x2f, 0x50, 0xbd, 0x13,
-	0xb6, 0x20, 0x76, 0x80, 0xea, 0xbd, 0xdd, 0x8f, 0x49, 0x83, 0x1a, 0xd4, 0x4b, 0xd6, 0xf2, 0xc2,
-	0x0e, 0xb1, 0xd4, 0x76, 0x3d, 0x8a, 0x84, 0xed, 0x05, 0xda, 0x4e, 0x0d, 0xea, 0x39, 0xeb, 0xbf,
-	0xa0, 0x1f, 0x61, 0xf9, 0x21, 0x74, 0x05, 0x59, 0x14, 0x05, 0xfe, 0x20, 0x22, 0x56, 0xc1, 0x5c,
-	0x8b, 0x46, 0xf2, 0x89, 0xa2, 0x95, 0x49, 0xbd, 0x8c, 0x7b, 0x16, 0xd9, 0x8e, 0x45, 0x4f, 0x31,
-	0x45, 0x42, 0x2f, 0xa0, 0x7a, 0xe3, 0x05, 0x62, 0xdc, 0xfc, 0x01, 0x2c, 0x5a, 0x2b, 0x6a, 0xd6,
-	0xc4, 0x7c, 0x66, 0x62, 0x15, 0xc3, 0xa1, 0xa1, 0xb1, 0xe6, 0xaf, 0xa2, 0xac, 0x48, 0x42, 0x7d,
-	0x7f, 0x92, 0x68, 0xf0, 0x9c, 0x68, 0xf0, 0xf2, 0xa6, 0x01, 0x33, 0xb1, 0x90, 0x19, 0xdb, 0x23,
-	0x7f, 0xcb, 0x58, 0x7e, 0x9a, 0x68, 0x70, 0x0a, 0xec, 0x0c, 0x55, 0x09, 0xcb, 0xd6, 0x9a, 0x55,
-	0x26, 0xf5, 0x46, 0x08, 0xbd, 0x38, 0xf9, 0xfb, 0xa3, 0x81, 0x28, 0x5b, 0x97, 0xd1, 0x78, 0xd0,
-	0xdd, 0x98, 0x5b, 0x6a, 0x19, 0x45, 0xcf, 0xcf, 0x12, 0x0d, 0xea, 0xc0, 0x4e, 0xb2, 0x44, 0xb6,
-	0xd3, 0xf2, 0x6f, 0xaf, 0xb7, 0x20, 0x29, 0x57, 0x8d, 0xd9, 0x82, 0x2b, 0x1f, 0x0b, 0xae, 0xcc,
-	0x17, 0x1c, 0x26, 0x29, 0x87, 0xd7, 0x94, 0xc3, 0x7b, 0xca, 0x61, 0x96, 0x72, 0x98, 0xa7, 0x1c,
-	0xbe, 0x52, 0xae, 0x7c, 0xa7, 0x1c, 0xa6, 0x9f, 0x5c, 0xe9, 0xec, 0xca, 0x5d, 0x9d, 0xff, 0x06,
-	0x00, 0x00, 0xff, 0xff, 0xfa, 0xe1, 0x7a, 0x80, 0xec, 0x01, 0x00, 0x00,
+	// 452 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x93, 0x3f, 0x6f, 0x13, 0x41,
+	0x10, 0xc5, 0x6f, 0xb0, 0x4d, 0x9c, 0x09, 0x51, 0xac, 0x15, 0xc5, 0xc9, 0x42, 0xab, 0x70, 0xa2,
+	0xb0, 0xa2, 0xc8, 0x0e, 0x41, 0x08, 0x24, 0xaa, 0x10, 0x85, 0x0e, 0x2b, 0x5c, 0x10, 0xd4, 0x6b,
+	0xdf, 0xc8, 0x9c, 0xe4, 0xf3, 0x9a, 0xfd, 0x63, 0x70, 0x97, 0x92, 0x32, 0x15, 0xa2, 0x4c, 0x99,
+	0x92, 0xe6, 0xbe, 0x00, 0x15, 0x65, 0x4a, 0xca, 0xf8, 0x68, 0x28, 0x91, 0xf8, 0x02, 0x68, 0xf7,
+	0x0c, 0x24, 0xd5, 0xa1, 0x54, 0x37, 0xbb, 0xef, 0xfd, 0x76, 0x46, 0x6f, 0x74, 0xc8, 0x12, 0x9a,
+	0xf5, 0x14, 0x8d, 0x52, 0x6d, 0x48, 0x75, 0xa7, 0x4a, 0x1a, 0xc9, 0x6a, 0x09, 0xcd, 0xda, 0xf7,
+	0x46, 0xa9, 0x79, 0x63, 0x07, 0xdd, 0xa1, 0xcc, 0x7a, 0x8a, 0xc6, 0x62, 0xd0, 0x1b, 0x49, 0x65,
+	0x33, 0xbd, 0xfc, 0x94, 0xd6, 0xe8, 0x09, 0x36, 0x8e, 0x8c, 0x30, 0xc4, 0x6e, 0x63, 0xe3, 0x95,
+	0x18, 0x5b, 0x0a, 0x61, 0x13, 0x3a, 0xab, 0x71, 0x79, 0x60, 0x77, 0x70, 0xf5, 0x65, 0x9a, 0x91,
+	0x36, 0x22, 0x9b, 0x86, 0x37, 0x36, 0xa1, 0x53, 0x8b, 0xff, 0x5d, 0x44, 0x47, 0xb8, 0xf2, 0x7c,
+	0x7e, 0x6d, 0xdc, 0x31, 0x07, 0xef, 0x8d, 0x12, 0x61, 0xcd, 0x2b, 0xe5, 0x21, 0xba, 0x8b, 0xeb,
+	0xaf, 0x55, 0x6a, 0x28, 0x26, 0x3d, 0x95, 0x13, 0x4d, 0xac, 0x85, 0xb5, 0x3e, 0xbd, 0xf3, 0x0f,
+	0x37, 0x63, 0x57, 0x46, 0xeb, 0xb8, 0x16, 0x93, 0x48, 0x62, 0x7a, 0x6b, 0x49, 0x9b, 0x68, 0x05,
+	0x1b, 0x07, 0xd9, 0xd4, 0xcc, 0x77, 0x3f, 0xd6, 0xb1, 0x19, 0x2f, 0xa3, 0x60, 0x5b, 0xae, 0x16,
+	0x49, 0x5f, 0xbe, 0xd8, 0x67, 0xad, 0x6e, 0x42, 0xb3, 0xee, 0x25, 0xa6, 0x8d, 0xfe, 0xc6, 0xcf,
+	0x1e, 0x05, 0x6c, 0x0b, 0xeb, 0x4e, 0xac, 0xf0, 0xd5, 0x8f, 0xf3, 0x10, 0xd8, 0x0e, 0xa2, 0x33,
+	0x3c, 0xb3, 0xc6, 0x2a, 0xaa, 0x22, 0x4e, 0x1d, 0xb1, 0x87, 0x2d, 0x67, 0xd8, 0xb7, 0xda, 0xc8,
+	0x2c, 0x26, 0x63, 0xd5, 0xa4, 0x82, 0xdb, 0x70, 0x9d, 0xbe, 0xfc, 0x0a, 0xff, 0xc6, 0xfb, 0x10,
+	0x37, 0xfc, 0x13, 0x52, 0x29, 0x1a, 0x1a, 0x31, 0x18, 0x57, 0x76, 0xfe, 0xe0, 0x3a, 0xef, 0x96,
+	0xb3, 0x1e, 0x2a, 0x1a, 0xa7, 0x59, 0x15, 0x71, 0x92, 0x87, 0xb0, 0x03, 0xec, 0x3e, 0x36, 0x7c,
+	0xfe, 0xec, 0x92, 0xd8, 0x66, 0xbe, 0xbe, 0xb2, 0x97, 0xa8, 0xe9, 0x86, 0x3c, 0x73, 0x6d, 0x1e,
+	0xe1, 0x9a, 0x97, 0x96, 0x99, 0x54, 0x82, 0xa7, 0x7f, 0xc0, 0x6d, 0x44, 0x2f, 0xed, 0xe9, 0xf9,
+	0x64, 0x78, 0x85, 0x2b, 0x6b, 0xbf, 0xd6, 0xa8, 0xfe, 0x29, 0x0f, 0xa1, 0x03, 0xec, 0x31, 0xde,
+	0xf2, 0xee, 0x43, 0x52, 0x7d, 0x99, 0xfc, 0xe7, 0x80, 0x9f, 0xf3, 0x10, 0x9e, 0x6e, 0x9f, 0x2f,
+	0x78, 0xf0, 0x6d, 0xc1, 0x83, 0x8b, 0x05, 0x87, 0xe3, 0x82, 0xc3, 0x59, 0xc1, 0xe1, 0x6b, 0xc1,
+	0xe1, 0xbc, 0xe0, 0x70, 0x51, 0x70, 0xf8, 0x51, 0xf0, 0xe0, 0x67, 0xc1, 0xe1, 0xe4, 0x3b, 0x0f,
+	0x06, 0x37, 0xfd, 0xaf, 0xf1, 0xe0, 0x77, 0x00, 0x00, 0x00, 0xff, 0xff, 0x08, 0x95, 0x2d, 0x82,
+	0x5b, 0x03, 0x00, 0x00,
 }

@@ -8,8 +8,10 @@ import (
 	"log"
 	"math/big"
 	"sync"
-	"time"
 )
+
+// To generate gorums code for byzq.proto, run 'go generate' in this folder
+//go:generate protoc -I=$GOPATH/src/:. --gorums_out=plugins=grpc+gorums:. byzq.proto
 
 // AuthDataQ is the quorum specification for the Authenticated-Data Byzantine
 // Quorum algorithm described in RSDP, Algorithm 4.15, page 181.
@@ -19,7 +21,6 @@ type AuthDataQ struct {
 	q    int               // quorum size
 	priv *ecdsa.PrivateKey // writer's private key for signing
 	pub  *ecdsa.PublicKey  // public key of the writer (used by readers)
-	wts  int64             // writer's timestamp
 }
 
 // NewAuthDataQ returns a quorum specification or nil and an error
@@ -31,19 +32,7 @@ func NewAuthDataQ(n int, priv *ecdsa.PrivateKey, pub *ecdsa.PublicKey) (*AuthDat
 	if f < 1 {
 		return nil, fmt.Errorf("Byzantine quorum require n>3f replicas; only got n=%d, yielding f=%d", n, f)
 	}
-	return &AuthDataQ{n, f, (n + f) / 2, priv, pub, 0}, nil
-}
-
-// IncWTS updates the writer's timestamp wts. This is not thread safe.
-func (aq *AuthDataQ) IncWTS() int64 {
-	aq.wts++
-	return aq.wts
-}
-
-// NewTS reads the system clock and updates the writer's timestamp wts. This is not thread safe.
-func (aq *AuthDataQ) NewTS() int64 {
-	aq.wts = time.Now().UnixNano()
-	return aq.wts
+	return &AuthDataQ{n, f, (n + f) / 2, priv, pub}, nil
 }
 
 // Sign signs the provided content and returns a value to be passed into Write.
@@ -77,7 +66,7 @@ func (aq *AuthDataQ) verify(reply *Value) bool {
 // ReadQF returns nil and false until the supplied replies
 // constitute a Byzantine quorum, at which point the method returns the
 // single highest value and true.
-func (aq *AuthDataQ) ReadQF(replies []*Value) (*Value, bool) {
+func (aq *AuthDataQ) ReadQF(replies []*Value) (*Content, bool) {
 	if len(replies) <= aq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
@@ -90,13 +79,13 @@ func (aq *AuthDataQ) ReadQF(replies []*Value) (*Value, bool) {
 		highest = reply
 	}
 	// returns reply with the highest timestamp, or nil if no replies were verified
-	return highest, true
+	return highest.C, true
 }
 
 // SequentialVerifyReadQF returns nil and false until the supplied replies
 // constitute a Byzantine quorum, at which point the method returns the
 // single highest value and true.
-func (aq *AuthDataQ) SequentialVerifyReadQF(replies []*Value) (*Value, bool) {
+func (aq *AuthDataQ) SequentialVerifyReadQF(replies []*Value) (*Content, bool) {
 	if len(replies) <= aq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
@@ -111,13 +100,13 @@ func (aq *AuthDataQ) SequentialVerifyReadQF(replies []*Value) (*Value, bool) {
 		}
 	}
 	// returns reply with the highest timestamp, or nil if no replies were verified
-	return highest, true
+	return highest.C, true
 }
 
 // ConcurrentVerifyWGReadQF returns nil and false until the supplied replies
 // constitute a Byzantine quorum, at which point the method returns the
 // single highest value and true.
-func (aq *AuthDataQ) ConcurrentVerifyWGReadQF(replies []*Value) (*Value, bool) {
+func (aq *AuthDataQ) ConcurrentVerifyWGReadQF(replies []*Value) (*Content, bool) {
 	if len(replies) <= aq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
@@ -149,13 +138,13 @@ func (aq *AuthDataQ) ConcurrentVerifyWGReadQF(replies []*Value) (*Value, bool) {
 	}
 
 	// returns reply with the highest timestamp, or nil if no replies were verified
-	return highest, true
+	return highest.C, true
 }
 
 // ConcurrentVerifyIndexChanReadQF returns nil and false until the supplied replies
 // constitute a Byzantine quorum, at which point the method returns the
 // single highest value and true.
-func (aq *AuthDataQ) ConcurrentVerifyIndexChanReadQF(replies []*Value) (*Value, bool) {
+func (aq *AuthDataQ) ConcurrentVerifyIndexChanReadQF(replies []*Value) (*Content, bool) {
 	if len(replies) <= aq.q {
 		// not enough replies yet; need at least bq.q=(n+2f)/2 replies
 		return nil, false
@@ -188,13 +177,13 @@ func (aq *AuthDataQ) ConcurrentVerifyIndexChanReadQF(replies []*Value) (*Value, 
 		highest = replies[i]
 	}
 	// returns reply with the highest timestamp, or nil if no replies were verified
-	return highest, true
+	return highest.C, true
 }
 
 // VerfiyLastReplyFirstReadQF returns nil and false until the supplied replies
 // constitute a Byzantine quorum, at which point the method returns the
 // single highest value and true.
-func (aq *AuthDataQ) VerfiyLastReplyFirstReadQF(replies []*Value) (*Value, bool) {
+func (aq *AuthDataQ) VerfiyLastReplyFirstReadQF(replies []*Value) (*Content, bool) {
 	if len(replies) < 1 {
 		return nil, false
 	}
@@ -227,25 +216,23 @@ func (aq *AuthDataQ) VerfiyLastReplyFirstReadQF(replies []*Value) (*Value, bool)
 		return nil, false
 	}
 	// returns reply with the highest timestamp, or nil if no replies were verified
-	return highest, true
+	return highest.C, true
 }
 
 // WriteQF returns nil and false until it is possible to check for a quorum.
 // If enough replies with the same timestamp is found, we return true.
-func (aq *AuthDataQ) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
+func (aq *AuthDataQ) WriteQF(req *Value, replies []*WriteResponse) (reply *WriteResponse, quorum bool) {
 	if len(replies) <= aq.q {
 		return nil, false
 	}
-	//TODO(Hein) this is not needed since gRPC/Gorums provides request/reply matching
-	cnt := 0
-	var reply *WriteResponse
+	correctReplies := 0
 	for _, r := range replies {
-		if aq.wts == r.Timestamp {
-			cnt++
+		if r.Timestamp == req.C.Timestamp {
+			correctReplies++
 			reply = r
 		}
 	}
-	if cnt < aq.q {
+	if correctReplies <= aq.q {
 		return nil, false
 	}
 	return reply, true

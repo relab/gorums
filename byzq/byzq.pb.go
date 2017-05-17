@@ -379,43 +379,25 @@ func (this *WriteResponse) Equal(that interface{}) bool {
 //  Reference Gorums specific imports to suppress errors if they are not otherwise used.
 var _ = codes.OK
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_qc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_prelim_tmpl */
 
-// ReadReply encapsulates the reply from a Read quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadReply struct {
-	NodeIDs []uint32
-	*Value
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_tmpl */
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_future_tmpl */
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_multicast_tmpl */
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_quorumcall_tmpl */
+
+/* Exported types and methods for quorum call method Read */
+
+// Read is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) Read(ctx context.Context, arg *Key) (*Content, error) {
+	return c.read(ctx, arg)
 }
 
-func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.Value)
-}
-
-// Read invokes a Read quorum call on configuration c
-// and returns the result as a ReadReply.
-func (c *Configuration) Read(ctx context.Context, args *Key) (*ReadReply, error) {
-	return c.mgr.read(ctx, c, args)
-}
-
-// WriteReply encapsulates the reply from a Write quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteReply struct {
-	NodeIDs []uint32
-	*WriteResponse
-}
-
-func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
-// Write invokes a Write quorum call on configuration c
-// and returns the result as a WriteReply.
-func (c *Configuration) Write(ctx context.Context, args *Value) (*WriteReply, error) {
-	return c.mgr.write(ctx, c, args)
-}
-
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_qc_tmpl */
+/* Unexported types and methods for quorum call method Read */
 
 type readReply struct {
 	nid   uint32
@@ -423,9 +405,9 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(ctx context.Context, c *Configuration, args *Key) (r *ReadReply, err error) {
+func (c *Configuration) read(ctx context.Context, a *Key) (resp *Content, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
 		defer ti.tr.Finish()
 
@@ -434,11 +416,11 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Key) (r *Rea
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.Value,
+				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
@@ -448,19 +430,12 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Key) (r *Rea
 	}
 
 	replyChan := make(chan readReply, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
 	for _, n := range c.nodes {
-		go callGRPCRead(newCtx, n, args, replyChan)
+		go callGRPCRead(ctx, n, a, replyChan)
 	}
 
 	var (
 		replyValues = make([]*Value, 0, c.n)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -468,37 +443,34 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Key) (r *Rea
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.Value, quorum = c.qspec.ReadQF(replyValues); quorum {
-				cancel()
-				return reply, nil
+			if resp, quorum = c.qspec.ReadQF(replyValues); quorum {
+				return resp, nil
 			}
-		case <-newCtx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCRead(ctx context.Context, node *Node, args *Key, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, node *Node, arg *Key, replyChan chan<- readReply) {
 	reply := new(Value)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/byzq.Register/Read",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -511,15 +483,25 @@ func callGRPCRead(ctx context.Context, node *Node, args *Key, replyChan chan<- r
 	replyChan <- readReply{node.id, reply, err}
 }
 
+/* Exported types and methods for quorum call method Write */
+
+// Write is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) Write(ctx context.Context, arg *Value) (*WriteResponse, error) {
+	return c.write(ctx, arg)
+}
+
+/* Unexported types and methods for quorum call method Write */
+
 type writeReply struct {
 	nid   uint32
 	reply *WriteResponse
 	err   error
 }
 
-func (m *Manager) write(ctx context.Context, c *Configuration, args *Value) (r *WriteReply, err error) {
+func (c *Configuration) write(ctx context.Context, a *Value) (resp *WriteResponse, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
 		defer ti.tr.Finish()
 
@@ -528,11 +510,11 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *Value) (r *
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResponse,
+				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
@@ -542,19 +524,12 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *Value) (r *
 	}
 
 	replyChan := make(chan writeReply, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
 	for _, n := range c.nodes {
-		go callGRPCWrite(newCtx, n, args, replyChan)
+		go callGRPCWrite(ctx, n, a, replyChan)
 	}
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -562,37 +537,34 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *Value) (r *
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
-				cancel()
-				return reply, nil
+			if resp, quorum = c.qspec.WriteQF(a, replyValues); quorum {
+				return resp, nil
 			}
-		case <-newCtx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCWrite(ctx context.Context, node *Node, args *Value, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, node *Node, arg *Value, replyChan chan<- writeReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
 		"/byzq.Register/Write",
-		args,
+		arg,
 		reply,
 		node.conn,
 	)
@@ -652,11 +624,11 @@ func (n *Node) close() error {
 type QuorumSpec interface {
 	// ReadQF is the quorum function for the Read
 	// quorum call method.
-	ReadQF(replies []*Value) (*Value, bool)
+	ReadQF(replies []*Value) (*Content, bool)
 
 	// WriteQF is the quorum function for the Write
 	// quorum call method.
-	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
+	WriteQF(req *Value, replies []*WriteResponse) (*WriteResponse, bool)
 }
 
 /* Static resources */
@@ -679,13 +651,20 @@ func (c *Configuration) ID() uint32 {
 }
 
 // NodeIDs returns a slice containing the local ids of all the nodes in the
-// configuration.
+// configuration. IDs are returned in the same order as they were provided in
+// the creation of the Configuration.
 func (c *Configuration) NodeIDs() []uint32 {
 	ids := make([]uint32, len(c.nodes))
 	for i, node := range c.nodes {
 		ids[i] = node.ID()
 	}
 	return ids
+}
+
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Configuration.
+func (c *Configuration) Nodes() []*Node {
+	return c.nodes
 }
 
 // Size returns the number of nodes in the configuration.
@@ -770,7 +749,8 @@ const LevelNotSet = -1
 // procedure calls can be made.
 type Manager struct {
 	sync.Mutex
-	nodes    map[uint32]*Node
+	nodes    []*Node
+	lookup   map[uint32]*Node
 	configs  map[uint32]*Configuration
 	eventLog trace.EventLog
 
@@ -787,7 +767,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	m := &Manager{
-		nodes:   make(map[uint32]*Node),
+		lookup:  make(map[uint32]*Node),
 		configs: make(map[uint32]*Configuration),
 	}
 
@@ -795,31 +775,13 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		opt(&m.opts)
 	}
 
-	selfAddrIndex, selfID, err := m.parseSelfOptions(nodeAddrs)
-	if err != nil {
-		return nil, ManagerCreationError(err)
-	}
-
-	idSeen := false
-	for i, naddr := range nodeAddrs {
+	for _, naddr := range nodeAddrs {
 		node, err2 := m.createNode(naddr)
 		if err2 != nil {
 			return nil, ManagerCreationError(err2)
 		}
-		m.nodes[node.id] = node
-		if i == selfAddrIndex {
-			node.self = true
-			continue
-		}
-		if node.id == selfID {
-			node.self = true
-			idSeen = true
-		}
-	}
-	if selfID != 0 && !idSeen {
-		return nil, ManagerCreationError(
-			fmt.Errorf("WithSelfID provided, but no node with id %d found", selfID),
-		)
+		m.lookup[node.id] = node
+		m.nodes = append(m.nodes, node)
 	}
 
 	if m.opts.trace {
@@ -827,7 +789,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
-	err = m.connectAll()
+	err := m.connectAll()
 	if err != nil {
 		return nil, ManagerCreationError(err)
 	}
@@ -843,27 +805,6 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) parseSelfOptions(addrs []string) (int, uint32, error) {
-	if m.opts.selfAddr != "" && m.opts.selfID != 0 {
-		return 0, 0, fmt.Errorf("both WithSelfAddr and WithSelfID provided")
-	}
-	if m.opts.selfID != 0 {
-		return -1, m.opts.selfID, nil
-	}
-	if m.opts.selfAddr == "" {
-		return -1, 0, nil
-	}
-
-	seen, index := contains(m.opts.selfAddr, addrs)
-	if !seen {
-		return 0, 0, fmt.Errorf(
-			"option WithSelfAddr provided, but address %q was not present in address list",
-			m.opts.selfAddr)
-	}
-
-	return index, 0, nil
-}
-
 func (m *Manager) createNode(addr string) (*Node, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -877,7 +818,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 	_, _ = h.Write([]byte(tcpAddr.String()))
 	id := h.Sum32()
 
-	if _, found := m.nodes[id]; found {
+	if _, found := m.lookup[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)
 	}
 
@@ -900,9 +841,6 @@ func (m *Manager) connectAll() error {
 	}
 
 	for _, node := range m.nodes {
-		if node.self {
-			continue
-		}
 		err := node.connect(m.opts.grpcDialOpts...)
 		if err != nil {
 			if m.eventLog != nil {
@@ -916,9 +854,6 @@ func (m *Manager) connectAll() error {
 
 func (m *Manager) closeNodeConns() {
 	for _, node := range m.nodes {
-		if node.self {
-			continue
-		}
 		err := node.close()
 		if err == nil {
 			continue
@@ -939,15 +874,15 @@ func (m *Manager) Close() {
 	})
 }
 
-// NodeIDs returns the identifier of each available node.
+// NodeIDs returns the identifier of each available node. IDs are returned in
+// the same order as they were provided in the creation of the Manager.
 func (m *Manager) NodeIDs() []uint32 {
 	m.Lock()
 	defer m.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
-	for id := range m.nodes {
-		ids = append(ids, id)
+	for _, node := range m.nodes {
+		ids = append(ids, node.ID())
 	}
-	sort.Sort(idSlice(ids))
 	return ids
 }
 
@@ -955,23 +890,16 @@ func (m *Manager) NodeIDs() []uint32 {
 func (m *Manager) Node(id uint32) (node *Node, found bool) {
 	m.Lock()
 	defer m.Unlock()
-	node, found = m.nodes[id]
+	node, found = m.lookup[id]
 	return node, found
 }
 
-// Nodes returns a slice of each available node.
-func (m *Manager) Nodes(excludeSelf bool) []*Node {
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Manager.
+func (m *Manager) Nodes() []*Node {
 	m.Lock()
 	defer m.Unlock()
-	var nodes []*Node
-	for _, node := range m.nodes {
-		if excludeSelf && node.self {
-			continue
-		}
-		nodes = append(nodes, node)
-	}
-	OrderedBy(ID).Sort(nodes)
-	return nodes
+	return m.nodes
 }
 
 // ConfigurationIDs returns the identifier of each available
@@ -983,7 +911,6 @@ func (m *Manager) ConfigurationIDs() []uint32 {
 	for id := range m.configs {
 		ids = append(ids, id)
 	}
-	sort.Sort(idSlice(ids))
 	return ids
 }
 
@@ -1032,24 +959,19 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	var cnodes []*Node
 	for _, nid := range ids {
-		node, found := m.nodes[nid]
+		node, found := m.lookup[nid]
 		if !found {
 			return nil, NodeNotFoundError(nid)
-		}
-		if node.self && m.selfSpecified() {
-			return nil, IllegalConfigError(
-				fmt.Sprintf("self (%d) can't be part of a configuration when a self-option is provided", nid),
-			)
 		}
 		cnodes = append(cnodes, node)
 	}
 
 	// Node ids are sorted ensure a globally consistent configuration id.
-	OrderedBy(ID).Sort(cnodes)
+	sort.Sort(idSlice(ids))
 
 	h := fnv.New32a()
-	for _, node := range cnodes {
-		binary.Write(h, binary.LittleEndian, node.id)
+	for _, id := range ids {
+		binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
@@ -1068,10 +990,6 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	m.configs[cid] = c
 
 	return c, nil
-}
-
-func (m *Manager) selfSpecified() bool {
-	return m.opts.selfAddr != "" || m.opts.selfID != 0
 }
 
 type idSlice []uint32
@@ -1219,8 +1137,6 @@ type managerOptions struct {
 	logger       *log.Logger
 	noConnect    bool
 	trace        bool
-	selfAddr     string
-	selfID       uint32
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
@@ -1251,26 +1167,9 @@ func WithNoConnect() ManagerOption {
 	}
 }
 
-// WithSelfAddr returns a ManagerOption which instructs the Manager not to connect
-// to the node with network address addr. The address must be present in the
-// list of node addresses provided to the Manager.
-func WithSelfAddr(addr string) ManagerOption {
-	return func(o *managerOptions) {
-		o.selfAddr = addr
-	}
-}
-
-// WithSelfID returns a ManagerOption which instructs the Manager not to
-// connect to the node with the given id. The node must be present in the list
-// of node addresses provided to the Manager.
-func WithSelfID(id uint32) ManagerOption {
-	return func(o *managerOptions) {
-		o.selfID = id
-	}
-}
-
 // WithTracing controls whether to trace qourum calls for this Manager instance
-// using the golang.org/x/net/trace package.
+// using the golang.org/x/net/trace package. Tracing is currently only supported
+// for regular quorum calls.
 func WithTracing() ManagerOption {
 	return func(o *managerOptions) {
 		o.trace = true
@@ -1333,13 +1232,13 @@ func (q qcresult) String() string {
 
 /* util.go */
 
-func contains(addr string, addrs []string) (found bool, index int) {
-	for i, a := range addrs {
-		if addr == a {
-			return true, i
+func appendIfNotPresent(set []uint32, x uint32) []uint32 {
+	for _, y := range set {
+		if y == x {
+			return set
 		}
 	}
-	return false, -1
+	return append(set, x)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -2243,26 +2142,27 @@ var (
 func init() { proto.RegisterFile("byzq.proto", fileDescriptorByzq) }
 
 var fileDescriptorByzq = []byte{
-	// 321 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x64, 0x91, 0xc1, 0x4e, 0xc2, 0x40,
-	0x10, 0x86, 0x3b, 0x16, 0x54, 0x06, 0x49, 0xcc, 0x6a, 0x62, 0x83, 0x66, 0x42, 0x1a, 0x0e, 0x1c,
-	0x14, 0x12, 0x7c, 0x03, 0x3d, 0x72, 0x30, 0x59, 0x12, 0x3d, 0xb7, 0x30, 0xa9, 0x8d, 0xb4, 0xc5,
-	0x76, 0x6b, 0x52, 0x4f, 0x3c, 0x82, 0x8f, 0xe1, 0x0b, 0xf8, 0x0e, 0x1e, 0x39, 0x7a, 0x84, 0xf5,
-	0xe2, 0xd1, 0x47, 0x30, 0x6c, 0x49, 0x04, 0x3d, 0xed, 0x3f, 0xf3, 0xef, 0xcc, 0xff, 0x25, 0x83,
-	0xe8, 0x17, 0xcf, 0x8f, 0xdd, 0x69, 0x9a, 0xa8, 0x44, 0x54, 0x56, 0xba, 0xd9, 0x0e, 0x42, 0x75,
-	0x9f, 0xfb, 0xdd, 0x51, 0x12, 0xf5, 0x52, 0x9e, 0x78, 0x7e, 0x2f, 0x48, 0xd2, 0x3c, 0xca, 0xd6,
-	0x4f, 0xf9, 0xd7, 0x3d, 0x41, 0x7b, 0xc0, 0x85, 0x38, 0x44, 0xfb, 0x81, 0x0b, 0x07, 0x5a, 0xd0,
-	0xa9, 0xc9, 0x95, 0x74, 0x6f, 0x70, 0xef, 0x3a, 0x89, 0x15, 0xc7, 0xea, 0xbf, 0x29, 0xce, 0xb0,
-	0xa6, 0xc2, 0x88, 0x33, 0xe5, 0x45, 0x53, 0x67, 0xa7, 0x05, 0x1d, 0x5b, 0xfe, 0x36, 0xc4, 0x31,
-	0x56, 0x9f, 0xbc, 0x49, 0xce, 0x8e, 0x6d, 0x26, 0xca, 0xc2, 0x1d, 0x63, 0xf5, 0x76, 0x25, 0xc4,
-	0x29, 0xc2, 0xc8, 0x2c, 0xab, 0xf7, 0x1b, 0x5d, 0x83, 0xbd, 0x0e, 0x92, 0x30, 0x12, 0x84, 0x98,
-	0x85, 0x41, 0xec, 0xa9, 0x3c, 0x65, 0x69, 0x56, 0x1f, 0xc8, 0x8d, 0xce, 0x96, 0x3f, 0x34, 0x01,
-	0x9b, 0xfe, 0xd0, 0xbd, 0xc0, 0xc6, 0x5d, 0x1a, 0x2a, 0x96, 0x9c, 0x4d, 0x93, 0x38, 0xe3, 0x6d,
-	0x54, 0xf8, 0x83, 0xda, 0xf7, 0x70, 0x5f, 0x72, 0x10, 0x66, 0x8a, 0x53, 0xd1, 0xc6, 0x8a, 0x64,
-	0x6f, 0x2c, 0x6a, 0x25, 0xd4, 0x80, 0x8b, 0x66, 0xbd, 0x94, 0x86, 0xdb, 0xad, 0xcc, 0xde, 0x1c,
-	0x10, 0x3d, 0xac, 0x9a, 0x00, 0xb1, 0xe9, 0x35, 0x8f, 0xca, 0x62, 0x2b, 0xba, 0x1c, 0xb8, 0x3a,
-	0x9f, 0x2f, 0xc9, 0xfa, 0x58, 0x92, 0xb5, 0x58, 0x12, 0xcc, 0x34, 0xc1, 0xab, 0x26, 0x78, 0xd7,
-	0x04, 0x73, 0x4d, 0xb0, 0xd0, 0x04, 0x5f, 0x9a, 0xac, 0x6f, 0x4d, 0xf0, 0xf2, 0x49, 0x96, 0xbf,
-	0x6b, 0xce, 0x72, 0xf9, 0x13, 0x00, 0x00, 0xff, 0xff, 0xe5, 0x68, 0x70, 0xce, 0xd0, 0x01, 0x00,
-	0x00,
+	// 338 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x91, 0xcf, 0x4e, 0xea, 0x50,
+	0x10, 0xc6, 0x3b, 0xb7, 0x70, 0x2f, 0x0c, 0x97, 0xdc, 0x9b, 0xa3, 0x89, 0x0d, 0x9a, 0x13, 0xd2,
+	0xb8, 0x60, 0xa1, 0x90, 0xc0, 0x1b, 0xe8, 0x92, 0x85, 0xc9, 0x21, 0xd1, 0x75, 0x0b, 0x93, 0xda,
+	0x48, 0xff, 0xd8, 0x9e, 0x9a, 0xd4, 0x15, 0x8f, 0xe0, 0x63, 0xf0, 0x02, 0xbc, 0x80, 0x2b, 0x97,
+	0x2c, 0x5d, 0xc2, 0x71, 0xe3, 0xd2, 0xc4, 0x17, 0x30, 0x3d, 0x25, 0x0a, 0xba, 0xea, 0x37, 0xf3,
+	0xcd, 0xcc, 0xf7, 0x4b, 0x0f, 0xa2, 0x9b, 0xdf, 0xdf, 0x76, 0xe3, 0x24, 0x92, 0x11, 0xab, 0x14,
+	0xba, 0x75, 0xec, 0xf9, 0xf2, 0x3a, 0x73, 0xbb, 0xe3, 0x28, 0xe8, 0x25, 0x34, 0x75, 0xdc, 0x9e,
+	0x17, 0x25, 0x59, 0x90, 0x6e, 0x3e, 0xe5, 0xac, 0x7d, 0x80, 0xe6, 0x90, 0x72, 0xf6, 0x1f, 0xcd,
+	0x1b, 0xca, 0x2d, 0x68, 0x43, 0xa7, 0x2e, 0x0a, 0x69, 0x5f, 0xe0, 0x9f, 0xf3, 0x28, 0x94, 0x14,
+	0xca, 0x9f, 0x26, 0x3b, 0xc2, 0xba, 0xf4, 0x03, 0x4a, 0xa5, 0x13, 0xc4, 0xd6, 0xaf, 0x36, 0x74,
+	0x4c, 0xf1, 0xd5, 0x60, 0xfb, 0x58, 0xbd, 0x73, 0xa6, 0x19, 0x59, 0xa6, 0xde, 0x28, 0x0b, 0x7b,
+	0x82, 0xd5, 0xcb, 0x42, 0xb0, 0x43, 0x84, 0xb1, 0x3e, 0xd6, 0xe8, 0x37, 0xbb, 0x1a, 0x7b, 0x13,
+	0x24, 0x60, 0xcc, 0x38, 0x62, 0xea, 0x7b, 0xa1, 0x23, 0xb3, 0x84, 0x84, 0x3e, 0xfd, 0x57, 0x6c,
+	0x75, 0x76, 0xfc, 0x91, 0x0e, 0xd8, 0xf6, 0x47, 0xf6, 0x29, 0x36, 0xaf, 0x12, 0x5f, 0x92, 0xa0,
+	0x34, 0x8e, 0xc2, 0x94, 0x76, 0x51, 0xe1, 0x1b, 0x6a, 0x3f, 0xc6, 0x9a, 0x20, 0xcf, 0x4f, 0x25,
+	0x25, 0xac, 0x87, 0x15, 0x41, 0xce, 0x84, 0xd5, 0x4b, 0xa8, 0x21, 0xe5, 0xad, 0x46, 0x29, 0x35,
+	0xb7, 0xfd, 0x6f, 0xb6, 0xb0, 0xe0, 0xf1, 0xdd, 0xfa, 0xfc, 0x2f, 0x03, 0xac, 0xea, 0x2c, 0xb6,
+	0x3d, 0xd6, 0xda, 0x2b, 0x8b, 0x1d, 0x0a, 0xbb, 0x56, 0xec, 0xce, 0x17, 0x16, 0x9c, 0x9d, 0x2c,
+	0xd7, 0xdc, 0x78, 0x5e, 0x73, 0x63, 0xb5, 0xe6, 0x30, 0x53, 0x1c, 0xe6, 0x8a, 0xc3, 0x93, 0xe2,
+	0xb0, 0x54, 0x1c, 0x56, 0x8a, 0xc3, 0xab, 0xe2, 0xc6, 0x9b, 0xe2, 0xf0, 0xf0, 0xc2, 0x0d, 0xf7,
+	0xb7, 0x7e, 0xa5, 0xc1, 0x47, 0x00, 0x00, 0x00, 0xff, 0xff, 0x29, 0x16, 0xf8, 0x94, 0xdf, 0x01,
+	0x00, 0x00,
 }

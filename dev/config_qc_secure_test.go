@@ -159,7 +159,7 @@ func TestSecureRegister(t *testing.T) {
 	}
 	t.Logf("rreply: %v\n", rreply)
 	if rreply.Value != state.Value {
-		t.Errorf("read reply: want state %v, got %v", state, rreply.State)
+		t.Errorf("read reply: want state %v, got %v", state, rreply)
 	}
 
 	nodes := mgr.Nodes()

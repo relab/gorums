@@ -7,25 +7,13 @@ import "google/protobuf/descriptor.proto";
 option go_package = "github.com/relab/gorums";
 
 extend google.protobuf.MethodOptions {
-	bool qc = 50000;
-}
+	bool qc				= 50000;
+	bool correctable	= 50001;
+	bool correctable_pr	= 50002;
+	bool multicast		= 50003;
+	bool qc_future		= 50004;
+	bool qf_with_req	= 50005;
+	bool per_node_arg	= 50006;
 
-extend google.protobuf.MethodOptions {
-	bool correctable = 50001;
-}
-
-extend google.protobuf.MethodOptions {
-	bool correctable_pr = 50002;
-}
-
-extend google.protobuf.MethodOptions {
-	bool multicast = 50003;
-}
-
-extend google.protobuf.MethodOptions {
-	bool qc_future = 50004;
-}
-
-extend google.protobuf.MethodOptions {
-	bool qf_with_req = 50005;
+	string custom_return_type = 51000;
 }

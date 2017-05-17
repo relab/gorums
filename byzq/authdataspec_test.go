@@ -245,8 +245,24 @@ func TestAuthDataQ(t *testing.T) {
 				t.Errorf("got %t, want %t", byzquorum, test.rq)
 			}
 			if reply != nil {
-				if !reply.C.Equal(test.expected) {
-					t.Errorf("got %v, want %v as quorum reply", reply.C, test.expected)
+				if !reply.Equal(test.expected) {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
+				}
+			} else {
+				if test.expected != nil {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
+				}
+			}
+		})
+
+		t.Run(fmt.Sprintf("SequentialVerifyReadQFReadQF(4,1) %s", test.name), func(t *testing.T) {
+			reply, byzquorum := qspec.SequentialVerifyReadQF(test.replies)
+			if byzquorum != test.rq {
+				t.Errorf("got %t, want %t", byzquorum, test.rq)
+			}
+			if reply != nil {
+				if !reply.Equal(test.expected) {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
 				}
 			} else {
 				if test.expected != nil {
@@ -261,8 +277,8 @@ func TestAuthDataQ(t *testing.T) {
 				t.Errorf("got %t, want %t", byzquorum, test.rq)
 			}
 			if reply != nil {
-				if !reply.C.Equal(test.expected) {
-					t.Errorf("got %v, want %v as quorum reply", reply.C, test.expected)
+				if !reply.Equal(test.expected) {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
 				}
 			} else {
 				if test.expected != nil {
@@ -276,8 +292,8 @@ func TestAuthDataQ(t *testing.T) {
 				t.Errorf("got %t, want %t", byzquorum, test.rq)
 			}
 			if reply != nil {
-				if !reply.C.Equal(test.expected) {
-					t.Errorf("got %v, want %v as quorum reply", reply.C, test.expected)
+				if !reply.Equal(test.expected) {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
 				}
 			} else {
 				if test.expected != nil {
@@ -292,8 +308,8 @@ func TestAuthDataQ(t *testing.T) {
 				t.Errorf("got %t, want %t", byzquorum, test.rq)
 			}
 			if reply != nil {
-				if !reply.C.Equal(test.expected) {
-					t.Errorf("got %v, want %v as quorum reply", reply.C, test.expected)
+				if !reply.Equal(test.expected) {
+					t.Errorf("got %v, want %v as quorum reply", reply, test.expected)
 				}
 			} else {
 				if test.expected != nil {
@@ -325,6 +341,14 @@ func BenchmarkAuthDataQ(b *testing.B) {
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				qspec.ReadQF(test.replies)
+			}
+		})
+
+		b.Run(fmt.Sprintf("SequentialVerifyReadQF(4,1) %s", test.name), func(b *testing.B) {
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				qspec.SequentialVerifyReadQF(test.replies)
 			}
 		})
 
@@ -483,11 +507,11 @@ func TestAuthDataQW(t *testing.T) {
 	}
 	for _, test := range authWriteQFTests {
 		t.Run(fmt.Sprintf("WriteQF(4,1) %s", test.name), func(t *testing.T) {
+			req := &Value{C: &Content{Timestamp: 0}}
 			if test.expected != nil {
-				// initialize write timestamp to expected value
-				qspec.wts = test.expected.Timestamp
+				req = &Value{C: &Content{Timestamp: test.expected.Timestamp}}
 			}
-			reply, byzquorum := qspec.WriteQF(test.replies)
+			reply, byzquorum := qspec.WriteQF(req, test.replies)
 			if byzquorum != test.rq {
 				t.Errorf("got %t, want %t", byzquorum, test.rq)
 			}
@@ -504,6 +528,10 @@ func BenchmarkAuthDataQW(b *testing.B) {
 		b.Error(err)
 	}
 	for _, test := range authWriteQFTests {
+		req := &Value{C: &Content{Timestamp: 0}}
+		if test.expected != nil {
+			req = &Value{C: &Content{Timestamp: test.expected.Timestamp}}
+		}
 		if !strings.Contains(test.name, "case") {
 			continue
 		}
@@ -511,7 +539,7 @@ func BenchmarkAuthDataQW(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				qspec.WriteQF(test.replies)
+				qspec.WriteQF(req, test.replies)
 			}
 		})
 	}

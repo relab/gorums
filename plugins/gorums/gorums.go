@@ -73,6 +73,9 @@ func (g *gorums) Name() string {
 	return "gorums"
 }
 
+// suffix text for common definitions template files
+const defSuffix = "common_definitions_tmpl"
+
 // Init initializes the plugin.
 func (g *gorums) Init(gen *generator.Generator) {
 	g.gen = gen
@@ -84,9 +87,17 @@ func (g *gorums) Init(gen *generator.Generator) {
 
 	g.templates = make([]tmpl, 0, len(templates))
 	for name, devTemplate := range templates {
+		if strings.HasSuffix(name, defSuffix) {
+			// ignore common definitions (they are extracted below)
+			continue
+		}
+		// check if the template name has a common definitions template file
+		prefix := strings.SplitN(name, "_", 2)[0]
+		commonDefName := prefix + "_" + defSuffix
+		common := templates[commonDefName]
 		t := tmpl{
 			name: name,
-			t:    template.Must(template.New(name).Parse(devTemplate)),
+			t:    template.Must(template.New(name).Parse(common + "\n" + devTemplate)),
 		}
 		g.templates = append(g.templates, t)
 	}
@@ -135,7 +146,7 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	}
 
 	g.pkgData.PackageName = file.GetPackage()
-	g.pkgData.Clients, g.pkgData.Services = g.generateServiceMethods(file.FileDescriptorProto.Service)
+	g.pkgData.Clients, g.pkgData.Services = g.generateServiceMethods(file.FileDescriptorProto.Service, g.pkgData.PackageName)
 
 	g.referenceToSuppressErrs()
 
@@ -278,14 +289,16 @@ func logEnabled() bool {
 func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }
 
 type serviceMethod struct {
-	OrigName             string
 	MethodName           string
 	UnexportedMethodName string
 	RPCName              string
+	CustomReturnType     string
 
-	FQRespName string
-	RespName   string
-	FQReqName  string
+	FQRespName       string
+	RespName         string
+	FQCustomRespName string
+	CustomRespName   string
+	FQReqName        string
 
 	TypeName           string
 	UnexportedTypeName string
@@ -296,8 +309,10 @@ type serviceMethod struct {
 	Future            bool
 	Multicast         bool
 	QFWithReq         bool
+	PerNodeArg        bool
 
-	ServName string // Redundant, but keeps it simple.
+	ServName        string // Redundant, but keeps it simple.
+	ServPackageName string // Redundant, but makes it simpler.
 }
 
 type smSlice []serviceMethod
@@ -310,9 +325,9 @@ func (p smSlice) Less(i, j int) bool {
 	} else if p[i].ServName > p[j].ServName {
 		return false
 	} else {
-		if p[i].OrigName < p[j].OrigName {
+		if p[i].MethodName < p[j].MethodName {
 			return true
-		} else if p[i].OrigName > p[j].OrigName {
+		} else if p[i].MethodName > p[j].MethodName {
 			return false
 		} else {
 			return false
@@ -320,7 +335,7 @@ func (p smSlice) Less(i, j int) bool {
 	}
 }
 
-func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) ([]string, []serviceMethod) {
+func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, pkgName string) ([]string, []serviceMethod) {
 	clients := make([]string, len(services))
 	smethods := make(map[string][]*serviceMethod)
 	for i, service := range services {
@@ -333,20 +348,37 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			if sm == nil {
 				continue
 			}
-
-			sm.OrigName = method.GetName()
-			sm.MethodName = generator.CamelCase(sm.OrigName)
-			sm.RPCName = sm.MethodName // sm.MethodName may be overwritten if method name conflict
-			sm.UnexportedMethodName = unexport(sm.MethodName)
-			sm.FQRespName = g.fqTypeName(method.GetOutputType())
-			sm.RespName = g.typeName(method.GetOutputType())
+			// Package name ; keep a copy for each method, for convenience
+			sm.ServPackageName = pkgName
+			// Service name ; keep a copy for each method, for convenience
+			sm.ServName = service.GetName()
+			// Request type with package (if needed)
 			sm.FQReqName = g.fqTypeName(method.GetInputType())
+			// Response type without package
+			sm.RespName = g.typeName(method.GetOutputType())
+			// Response type with package (if needed)
+			sm.FQRespName = g.fqTypeName(method.GetOutputType())
+
+			if sm.CustomReturnType == "" {
+				sm.CustomRespName = sm.RespName
+				sm.FQCustomRespName = sm.FQRespName
+			} else {
+				s := strings.Split(sm.CustomReturnType, ".")
+				customRespName := strings.Join(s[len(s)-1:], "")
+				sm.CustomRespName = customRespName
+				sm.FQCustomRespName = sm.CustomReturnType
+			}
+
+			sm.MethodName = generator.CamelCase(method.GetName())
+			sm.UnexportedMethodName = unexport(sm.MethodName)
 			sm.TypeName = sm.MethodName + "Reply"
 			sm.UnexportedTypeName = unexport(sm.TypeName)
-			sm.ServName = service.GetName()
 			if sm.TypeName == sm.FQRespName {
 				sm.TypeName += "_"
 			}
+			fmt.Fprintf(os.Stderr, "%v\n \tUnexpMethodName\t%v\n \tFQRespName\t%v\n \tFQReqName\t%v\n \tTypeName\t%v\n \tUnexpTypeName\t%v\n \tServName\t%v\n",
+				sm.MethodName, sm.UnexportedMethodName, sm.FQRespName, sm.FQReqName, sm.TypeName, sm.UnexportedTypeName, sm.ServName,
+			)
 
 			methodsForName, _ := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, sm)
@@ -356,6 +388,8 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 
 	var allRewrittenFlat []serviceMethod
 
+	// check for duplicate method names across multiple services.
+	// we prefix duplicate method names with the service name.
 	for _, methodsForName := range smethods {
 		switch len(methodsForName) {
 		case 0:
@@ -365,7 +399,6 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto) (
 			continue
 		default:
 			for _, sm := range methodsForName {
-				sm.OrigName = sm.ServName + sm.OrigName
 				sm.MethodName = sm.ServName + sm.MethodName
 				sm.UnexportedMethodName = unexport(sm.MethodName)
 				sm.TypeName = sm.MethodName + "Reply"
@@ -391,42 +424,67 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		CorrectablePrelim: hasCorrectablePRExtension(method),
 		Multicast:         hasMulticastExtension(method),
 		QFWithReq:         hasQFWithReqExtension(method),
+		PerNodeArg:        hasPerNodeArgExtension(method),
+		CustomReturnType:  getCustomReturnTypeExtension(method),
+	}
+
+	mutuallyIncompatible := map[string]bool{
+		qcName():     sm.QuorumCall,
+		futureName(): sm.Future,
+		corrName():   sm.Correctable,
+		corrPrName(): sm.CorrectablePrelim,
+		mcastName():  sm.Multicast,
+	}
+	firstOption := ""
+	for optionName, optionSet := range mutuallyIncompatible {
+		if optionSet {
+			if firstOption != "" {
+				return nil, fmt.Errorf(
+					"%s.%s: cannot combine options: '%s' and '%s'",
+					service, method.GetName(), firstOption, optionName,
+				)
+			}
+			firstOption = optionName
+		}
 	}
 
 	isQuorumCallVariant := isQuorumCallVariant(sm)
 
 	switch {
-
-	case !isQuorumCallVariant && !sm.Multicast:
-		return nil, nil
-
-	case isQuorumCallVariant && sm.Multicast:
+	case !isQuorumCallVariant && sm.CustomReturnType != "":
+		// only QC variants can define custom return type
+		// because we want to avoid rewriting the plain gRPC methods
 		return nil, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: both 'qc/qc-future/correctable' and 'multicast'",
-			service, method.GetName(),
+			"%s.%s: cannot combine non-quorum call method with the '%s' option",
+			service, method.GetName(), custRetName(),
 		)
 
-	case sm.QFWithReq && !isQuorumCallVariant:
+	case !isQuorumCallVariant && sm.QFWithReq:
+		// only QC variants need to process replies
 		return nil, fmt.Errorf(
-			"%s.%s: illegal combination combination of options: method not a quorum call variant but has specified 'qf_with_req'",
-			service, method.GetName(),
+			"%s.%s: cannot combine non-quorum call method with the '%s' option",
+			service, method.GetName(), qfreqName(),
 		)
 
 	case sm.Multicast && !method.GetClientStreaming():
 		return nil, fmt.Errorf(
-			"%s.%s: 'broadcast' option only vaild for client-server streams methods",
-			service, method.GetName(),
+			"%s.%s: '%s' option is only valid for client-server streams methods",
+			service, method.GetName(), mcastName(),
 		)
 
-	case method.GetServerStreaming() && !sm.CorrectablePrelim:
+	case !sm.CorrectablePrelim && method.GetServerStreaming():
 		return nil, fmt.Errorf(
-			"%s.%s: server-client streams only supported for 'correctable_pr' option",
-			service, method.GetName(),
+			"%s.%s: '%s' option is only valid for server-client streams",
+			service, method.GetName(), corrPrName(),
 		)
+
+	case !isQuorumCallVariant && !sm.Multicast:
+		// plain gRPC; no further processing is done by gorums plugin
+		return nil, nil
 
 	default:
+		// all good
 		return sm, nil
-
 	}
 }
 
