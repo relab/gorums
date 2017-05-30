@@ -31,5 +31,5 @@ implemented using Gorums can be found
 ### References
 
 [1] Tormod Erevik Lea, Leander Jehl, and Hein Meling.
-    Towards New Abstractions for Implementing Quorum-based Systems.
+    _Towards New Abstractions for Implementing Quorum-based Systems._
     In 37th International Conference on Distributed Computing Systems (ICDCS), Jun 2017.
