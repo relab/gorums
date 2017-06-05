@@ -47,6 +47,7 @@ func NewRegisterBasicWithState(state *State) *RegisterServerBasic {
 	}
 }
 
+// Read implements the Read method.
 func (r *RegisterServerBasic) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -54,6 +55,7 @@ func (r *RegisterServerBasic) Read(ctx context.Context, rq *ReadRequest) (*State
 	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
 }
 
+// ReadCorrectable implements the ReadCorrectable method.
 func (r *RegisterServerBasic) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -61,14 +63,17 @@ func (r *RegisterServerBasic) ReadCorrectable(ctx context.Context, rq *ReadReque
 	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
 }
 
+// ReadFuture implements the ReadFuture method.
 func (r *RegisterServerBasic) ReadFuture(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
+// ReadCustomReturn implements the ReadCustomReturn method.
 func (r *RegisterServerBasic) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
+// Write implements the Write method.
 func (r *RegisterServerBasic) Write(ctx context.Context, s *State) (*WriteResponse, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -81,10 +86,12 @@ func (r *RegisterServerBasic) Write(ctx context.Context, s *State) (*WriteRespon
 	return writeResp, nil
 }
 
+// WriteFuture implements the WriteFuture method.
 func (r *RegisterServerBasic) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
 	return r.Write(ctx, s)
 }
 
+// WritePerNode implements the WritePerNode method.
 func (r *RegisterServerBasic) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
 	return r.Write(ctx, s)
 }
@@ -139,30 +146,37 @@ func NewRegisterError(err error) *RegisterServerError {
 	}
 }
 
+// Read implements the Read method.
 func (r *RegisterServerError) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return nil, r.err
 }
 
+// ReadCorrectable implements the ReadCorrectable method.
 func (r *RegisterServerError) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return nil, r.err
 }
 
+// ReadFuture implements the ReadFuture method.
 func (r *RegisterServerError) ReadFuture(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return nil, r.err
 }
 
+// ReadCustomReturn implements the ReadCustomReturn method.
 func (r *RegisterServerError) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return nil, r.err
 }
 
+// Write implements the Write method.
 func (r *RegisterServerError) Write(ctx context.Context, s *State) (*WriteResponse, error) {
 	return nil, r.err
 }
 
+// WriteFuture implements the WriteFuture method.
 func (r *RegisterServerError) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
 	return nil, r.err
 }
 
+// WritePerNode implements the WritePerNode method.
 func (r *RegisterServerError) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
 	return nil, r.err
 }
@@ -216,35 +230,42 @@ func NewRegisterSlowWithState(dur time.Duration, state *State) *RegisterServerSl
 	}
 }
 
+// Read implements the Read method.
 func (r *RegisterServerSlow) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
 	time.Sleep(r.delay)
 	return r.realServer.Read(ctx, rq)
 }
 
+// ReadCorrectable implements the ReadCorrectable method.
 func (r *RegisterServerSlow) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
 	time.Sleep(r.delay)
 	return r.realServer.Read(ctx, rq)
 }
 
+// ReadFuture implements the ReadFuture method.
 func (r *RegisterServerSlow) ReadFuture(ctx context.Context, rq *ReadRequest) (*State, error) {
 	time.Sleep(r.delay)
 	return r.realServer.Read(ctx, rq)
 }
 
+// ReadCustomReturn implements the ReadCustomReturn method.
 func (r *RegisterServerSlow) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
+// Write implements the Write method.
 func (r *RegisterServerSlow) Write(ctx context.Context, s *State) (*WriteResponse, error) {
 	time.Sleep(r.delay)
 	return r.realServer.Write(ctx, s)
 }
 
+// WriteFuture implements the WriteFuture method.
 func (r *RegisterServerSlow) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
 	time.Sleep(r.delay)
 	return r.realServer.Write(ctx, s)
 }
 
+// WritePerNode implements the WritePerNode method.
 func (r *RegisterServerSlow) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
 	return r.Write(ctx, s)
 }
@@ -287,26 +308,31 @@ func NewRegisterBench() *RegisterServerBench {
 	return &RegisterServerBench{}
 }
 
+// Read implements the Read method.
 func (r *RegisterServerBench) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
 }
 
+// ReadCorrectable implements the ReadCorrectable method.
 func (r *RegisterServerBench) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return &State{Value: r.state.Value, Timestamp: r.state.Timestamp}, nil
 }
 
+// ReadFuture implements the ReadFuture method.
 func (r *RegisterServerBench) ReadFuture(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
+// ReadCustomReturn implements the ReadCustomReturn method.
 func (r *RegisterServerBench) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
+// Write implements the Write method.
 func (r *RegisterServerBench) Write(ctx context.Context, s *State) (*WriteResponse, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -318,10 +344,12 @@ func (r *RegisterServerBench) Write(ctx context.Context, s *State) (*WriteRespon
 	return writeResp, nil
 }
 
+// WriteFuture implements the WriteFuture method.
 func (r *RegisterServerBench) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
 	return r.Write(ctx, s)
 }
 
+// WritePerNode implements the WritePerNode method.
 func (r *RegisterServerBench) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
 	return r.Write(ctx, s)
 }
@@ -378,20 +406,24 @@ func NewRegisterServerLockedWithState(state *State, ReadPrelimNumReplies int) *R
 	}
 }
 
+// Read implements the Read method.
 func (r *RegisterServerLockedWithState) Read(ctx context.Context, rq *ReadRequest) (*State, error) {
 	<-r.lock
 	return r.realServer.Read(ctx, rq)
 }
 
+// ReadFuture implements the ReadFuture method.
 func (r *RegisterServerLockedWithState) ReadFuture(ctx context.Context, rq *ReadRequest) (*State, error) {
 	<-r.lock
 	return r.realServer.ReadFuture(ctx, rq)
 }
 
+// ReadCustomReturn implements the ReadCustomReturn method.
 func (r *RegisterServerLockedWithState) ReadCustomReturn(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
+// ReadCorrectable implements the ReadCorrectable method.
 func (r *RegisterServerLockedWithState) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
 	<-r.lock
 	return r.realServer.ReadCorrectable(ctx, rq)
@@ -402,11 +434,13 @@ func (r *RegisterServerLockedWithState) Write(ctx context.Context, s *State) (*W
 	return r.realServer.Write(ctx, s)
 }
 
+// WriteFuture implements the WriteFuture method.
 func (r *RegisterServerLockedWithState) WriteFuture(ctx context.Context, s *State) (*WriteResponse, error) {
 	<-r.lock
 	return r.realServer.WriteFuture(ctx, s)
 }
 
+// WritePerNode implements the WritePerNode method.
 func (r *RegisterServerLockedWithState) WritePerNode(ctx context.Context, s *State) (*WriteResponse, error) {
 	return r.Write(ctx, s)
 }
