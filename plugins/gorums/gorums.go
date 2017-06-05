@@ -380,7 +380,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 				sm.MethodName, sm.UnexportedMethodName, sm.FQRespName, sm.FQReqName, sm.TypeName, sm.UnexportedTypeName, sm.ServName,
 			)
 
-			methodsForName, _ := smethods[sm.MethodName]
+			methodsForName := smethods[sm.MethodName]
 			methodsForName = append(methodsForName, sm)
 			smethods[sm.MethodName] = methodsForName
 		}

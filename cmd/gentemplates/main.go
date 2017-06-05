@@ -39,6 +39,10 @@ func main() {
 	// visit generates a _gen.go file if the supplied path is an .tmpl
 	// file.
 	visit := func(fpath string, f os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
 		if !strings.HasSuffix(fpath, ".tmpl") {
 			return nil
 		}
