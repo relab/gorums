@@ -53,7 +53,7 @@ func runAndCaptureOutput(command string, args ...string) ([]byte, error) {
 
 const (
 	protocVersionPrefix  = "libprotoc "
-	currentProtocVersion = "3.3.1"
+	currentProtocVersion = "3.3.2"
 )
 
 func checkProtocVersion(t *testing.T) {
