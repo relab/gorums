@@ -37,9 +37,7 @@ CHECKTOOLS			:= 	golang.org/x/tools/cmd/goimports \
 					github.com/kisielk/errcheck \
 					github.com/gordonklaus/ineffassign \
 					github.com/mdempsky/unconvert \
-					honnef.co/go/tools/cmd/unused/ \
-					honnef.co/go/tools/cmd/gosimple \
-					honnef.co/go/tools/cmd/staticcheck \
+					honnef.co/go/tools/cmd/megacheck/ \
 					github.com/mvdan/interfacer/cmd/interfacer \
 					github.com/client9/misspell/cmd/misspell
 
@@ -153,7 +151,7 @@ getchecktoolsu:
 	go get -u $(CHECKTOOLS)
 
 .PHONY: check
-check: getchecktools
+check: getchecktoolsu
 	@echo static analysis tools:
 	@echo "gofmt (simplify)"
 	@! gofmt -s -l $(GORUMS_FILES) | grep -vF 'No Exceptions'
@@ -184,19 +182,12 @@ check: getchecktools
 	done
 	@echo "unconvert"
 	@! unconvert $(GORUMS_PKGS) | grep -vF '.pb.go'
-	@echo "unused"
-	@unused $(GORUMS_PKGS)
-	@echo "gosimple"
-	@for pkg in $(GORUMS_PKGS); do \
-		! gosimple $$pkg | \
-		grep -vF 'pb.go' ; \
-	done
+	@echo "megacheck"
+	@megacheck $(GORUMS_PKGS)
 	@echo "interfacer"
 	@interfacer $(GORUMS_PKGS)
 	@echo "missspell"
 	@! misspell ./**/* | grep -vF 'vendor'
-	@echo "staticcheck"
-	@staticcheck $(GORUMS_PKGS)
 
 .PHONY: updatedeps 
 updatedeps:
