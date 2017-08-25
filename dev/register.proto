@@ -3,7 +3,7 @@ syntax = "proto3";
 import "github.com/relab/gorums/gorums.proto";
 
 // Package dev provides a blueprint for testing the various call semantics provided by Gorums.
-// The following table explains the differences in how the different call semantics work.
+// The following table explains the differences in call semantics.
 //
 //                    Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type      
 // ------------------------------------------------------------------------------------------------------------------------------------------------
@@ -30,8 +30,8 @@ service Register {
 
 	// ReadCustomReturn is a synchronous quorum call with a custom return type
 	rpc ReadCustomReturn(ReadRequest) returns (State) {
-		option (gorums.qc) = true;
-		option (gorums.custom_return_type) = "MyState";
+		option (gorums.qc) 			= true;
+		option (gorums.custom_return_type) 	= "MyState";
 	}
 
 	// ReadCorrectable is an asynchronous correctable quorum call that 
@@ -52,7 +52,7 @@ service Register {
 	// The request argument (State) is passed to the associated
 	// quorum function, WriteQF, for this method.
 	rpc Write(State) returns (WriteResponse) {
-		option (gorums.qc)			= true;
+		option (gorums.qc)		= true;
 		option (gorums.qf_with_req)	= true;
 	}
 
@@ -75,8 +75,8 @@ service Register {
 	// for each node, a provided function is called to determine
 	// the argument to be sent to that node.
 	rpc WritePerNode(State) returns (WriteResponse) {
-		option (gorums.qc)			 = true;
-		option (gorums.per_node_arg) = true;
+		option (gorums.qc)		= true;
+		option (gorums.per_node_arg) 	= true;
 	}
 }
 
