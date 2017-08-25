@@ -13,6 +13,7 @@ import (
 	"github.com/relab/gorums/gbench"
 
 	"github.com/tylertreat/bench"
+	"github.com/tylertreat/hdrhistogram-writer"
 )
 
 const (
@@ -40,6 +41,7 @@ func main() {
 		brrate = flag.Uint("brrate", 0, "benchmark) request rate")
 		bconns = flag.Uint("bconns", 1, "benchmark connections (separate gorums manager&config instances)")
 		bdur   = flag.Duration("bdur", 30*time.Second, "benchmark duration")
+		bburst = flag.Uint("bburst", 0, "benchmark burst rate")
 	)
 
 	flag.Usage = func() {
@@ -126,7 +128,7 @@ func main() {
 		}
 	}
 
-	benchmark := bench.NewBenchmark(factory, uint64(*brrate), uint64(*bconns), *bdur)
+	benchmark := bench.NewBenchmark(factory, uint64(*brrate), uint64(*bconns), *bdur, uint64(*bburst))
 
 	start := time.Now()
 	log.Println("mode is", *mode)
@@ -166,7 +168,7 @@ func main() {
 		start.Year(), start.Month(), start.Day(),
 		start.Hour(), start.Minute(),
 	)
-	err = summary.GenerateLatencyDistribution(bench.Logarithmic, filename)
+	err = summary.GenerateLatencyDistribution(histwriter.Logarithmic, filename)
 	if err != nil {
 		log.Printf("error writing latency distribution to file: %v", err)
 	}
