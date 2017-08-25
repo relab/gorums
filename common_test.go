@@ -31,6 +31,7 @@ const (
 )
 
 func run(t *testing.T, name string, args ...string) {
+	t.Helper()
 	cmd := exec.Command(name, args...)
 	cmd.Env = append(cmd.Env, os.Environ()...)
 	cmd.Stdin = os.Stdin
@@ -57,6 +58,7 @@ const (
 )
 
 func checkProtocVersion(t *testing.T) {
+	t.Helper()
 	out, err := runAndCaptureOutput("protoc", "--version")
 	if err != nil {
 		t.Skipf("skipping test due to protoc error: %v", err)
