@@ -81,14 +81,14 @@ service Register {
 }
 
 message State {
-	string Value = 1;
+	string Value 	= 1;
 	int64 Timestamp = 2;
 }
 
 message MyState {
-	string Value = 1;
+	string Value 	= 1;
 	int64 Timestamp = 2;
-	int64 Extra = 3;
+	int64 Extra 	= 3;
 }
 
 message WriteResponse {
