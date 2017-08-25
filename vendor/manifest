@@ -13,7 +13,7 @@
 			"importpath": "github.com/gogo/protobuf",
 			"repository": "https://github.com/gogo/protobuf",
 			"vcs": "git",
-			"revision": "6a92c871a8f5333cf106b2cdf937567208dbb2b7",
+			"revision": "fcdc5011193ff531a548e9b0301828d5a5b97fd8",
 			"branch": "master",
 			"notests": true
 		},
@@ -21,16 +21,33 @@
 			"importpath": "github.com/golang/protobuf/proto",
 			"repository": "https://github.com/golang/protobuf",
 			"vcs": "git",
-			"revision": "8ee79997227bf9b34611aee7946ae64735e6fd93",
+			"revision": "ab9f9a6dab164b7d1246e0e688b0ab7b94d8553e",
 			"branch": "master",
 			"path": "/proto",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/golang/protobuf/ptypes",
+			"repository": "https://github.com/golang/protobuf",
+			"vcs": "git",
+			"revision": "ab9f9a6dab164b7d1246e0e688b0ab7b94d8553e",
+			"branch": "master",
+			"path": "/ptypes",
 			"notests": true
 		},
 		{
 			"importpath": "github.com/tylertreat/bench",
 			"repository": "https://github.com/tylertreat/bench",
 			"vcs": "git",
-			"revision": "3456b313d396bc1b687dc08a92b710e260d02636",
+			"revision": "1ade8b39c27966244392e0e5be9a3e2cfc685ae4",
+			"branch": "master",
+			"notests": true
+		},
+		{
+			"importpath": "github.com/tylertreat/hdrhistogram-writer",
+			"repository": "https://github.com/tylertreat/hdrhistogram-writer",
+			"vcs": "git",
+			"revision": "d105e3c15daaac745539bdd3e4a1f743b8feda09",
 			"branch": "master",
 			"notests": true
 		},
@@ -38,7 +55,7 @@
 			"importpath": "golang.org/x/net/context",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "4971afdc2f162e82d185353533d3cf16188a9f4e",
+			"revision": "57efc9c3d9f91fb3277f8da1cff370539c4d3dc5",
 			"branch": "master",
 			"path": "/context",
 			"notests": true
@@ -47,7 +64,7 @@
 			"importpath": "golang.org/x/net/http2",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "4971afdc2f162e82d185353533d3cf16188a9f4e",
+			"revision": "57efc9c3d9f91fb3277f8da1cff370539c4d3dc5",
 			"branch": "master",
 			"path": "/http2",
 			"notests": true
@@ -56,7 +73,7 @@
 			"importpath": "golang.org/x/net/idna",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "4971afdc2f162e82d185353533d3cf16188a9f4e",
+			"revision": "57efc9c3d9f91fb3277f8da1cff370539c4d3dc5",
 			"branch": "master",
 			"path": "/idna",
 			"notests": true
@@ -65,7 +82,7 @@
 			"importpath": "golang.org/x/net/internal/timeseries",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "4971afdc2f162e82d185353533d3cf16188a9f4e",
+			"revision": "57efc9c3d9f91fb3277f8da1cff370539c4d3dc5",
 			"branch": "master",
 			"path": "/internal/timeseries",
 			"notests": true
@@ -74,7 +91,7 @@
 			"importpath": "golang.org/x/net/lex/httplex",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "4971afdc2f162e82d185353533d3cf16188a9f4e",
+			"revision": "57efc9c3d9f91fb3277f8da1cff370539c4d3dc5",
 			"branch": "master",
 			"path": "/lex/httplex",
 			"notests": true
@@ -83,16 +100,34 @@
 			"importpath": "golang.org/x/net/trace",
 			"repository": "https://go.googlesource.com/net",
 			"vcs": "git",
-			"revision": "4971afdc2f162e82d185353533d3cf16188a9f4e",
+			"revision": "57efc9c3d9f91fb3277f8da1cff370539c4d3dc5",
 			"branch": "master",
 			"path": "/trace",
+			"notests": true
+		},
+		{
+			"importpath": "golang.org/x/time/rate",
+			"repository": "https://go.googlesource.com/time",
+			"vcs": "git",
+			"revision": "8be79e1e0910c292df4e79c241bb7e8f7e725959",
+			"branch": "master",
+			"path": "/rate",
+			"notests": true
+		},
+		{
+			"importpath": "google.golang.org/genproto/googleapis/rpc/status",
+			"repository": "https://github.com/google/go-genproto",
+			"vcs": "git",
+			"revision": "ee236bd376b077c7a89f260c026c4735b195e459",
+			"branch": "master",
+			"path": "/googleapis/rpc/status",
 			"notests": true
 		},
 		{
 			"importpath": "google.golang.org/grpc",
 			"repository": "https://github.com/grpc/grpc-go",
 			"vcs": "git",
-			"revision": "cc3363f26e0b0908b9bea322aa3a3489bd930913",
+			"revision": "7db1564ba1229bc42919bb1f6d9c4186f3aa8678",
 			"branch": "master",
 			"notests": true
 		}

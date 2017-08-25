@@ -1,7 +1,7 @@
-package bench
+package histwriter
 
-// Percentiles is a list of percentiles to include in a latency distribution,
-// e.g. 10.0, 50.0, 99.0, 99.99, etc.
+// Percentiles is a list of percentiles to include in a percentile
+// distribution, e.g. 10.0, 50.0, 99.0, 99.99, etc.
 type Percentiles []float64
 
 // Logarithmic percentile scale.

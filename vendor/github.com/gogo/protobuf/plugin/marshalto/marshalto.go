@@ -420,7 +420,7 @@ func (p *marshalto) generateField(proto3 bool, numGen NumGen, file *generator.Fi
 		p.P(`if m.`, fieldname, ` != nil {`)
 		p.In()
 	}
-	packed := field.IsPacked() || (proto3 && field.IsRepeated() && generator.IsScalar(field))
+	packed := field.IsPacked() || (proto3 && field.IsPacked3())
 	wireType := field.WireType()
 	fieldNumber := field.GetNumber()
 	if packed {
@@ -1367,7 +1367,7 @@ func (p *marshalto) Generate(file *generator.FileDescriptor) {
 			p.P(`func (m *`, ccTypeName, `) MarshalTo(dAtA []byte) (int, error) {`)
 			p.In()
 			p.P(`i := 0`)
-			vanity.TurnOffNullableForNativeTypesWithoutDefaultsOnly(field)
+			vanity.TurnOffNullableForNativeTypes(field)
 			p.generateField(false, numGen, file, message, field)
 			p.P(`return i, nil`)
 			p.Out()

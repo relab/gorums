@@ -1,35 +1,22 @@
 /*
  *
- * Copyright 2014, Google Inc.
- * All rights reserved.
+ * Copyright 2014 gRPC authors.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *     * Redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above
- * copyright notice, this list of conditions and the following disclaimer
- * in the documentation and/or other materials provided with the
- * distribution.
- *     * Neither the name of Google Inc. nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
+
+//go:generate protoc --go_out=plugins=grpc:. grpc_testing/test.proto
 
 package interop
 
@@ -60,7 +47,8 @@ var (
 	trailingMetadataKey = "x-grpc-test-echo-trailing-bin"
 )
 
-func clientNewPayload(t testpb.PayloadType, size int) *testpb.Payload {
+// ClientNewPayload returns a payload of the given type and size.
+func ClientNewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	if size < 0 {
 		grpclog.Fatalf("Requested a response with invalid length %d", size)
 	}
@@ -79,8 +67,8 @@ func clientNewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 }
 
 // DoEmptyUnaryCall performs a unary RPC with empty request and response messages.
-func DoEmptyUnaryCall(tc testpb.TestServiceClient) {
-	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{})
+func DoEmptyUnaryCall(tc testpb.TestServiceClient, args ...grpc.CallOption) {
+	reply, err := tc.EmptyCall(context.Background(), &testpb.Empty{}, args...)
 	if err != nil {
 		grpclog.Fatal("/TestService/EmptyCall RPC failed: ", err)
 	}
@@ -90,14 +78,14 @@ func DoEmptyUnaryCall(tc testpb.TestServiceClient) {
 }
 
 // DoLargeUnaryCall performs a unary RPC with large payload in the request and response.
-func DoLargeUnaryCall(tc testpb.TestServiceClient) {
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+func DoLargeUnaryCall(tc testpb.TestServiceClient, args ...grpc.CallOption) {
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(largeRespSize)),
 		Payload:      pl,
 	}
-	reply, err := tc.UnaryCall(context.Background(), req)
+	reply, err := tc.UnaryCall(context.Background(), req, args...)
 	if err != nil {
 		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
 	}
@@ -109,23 +97,21 @@ func DoLargeUnaryCall(tc testpb.TestServiceClient) {
 }
 
 // DoClientStreaming performs a client streaming RPC.
-func DoClientStreaming(tc testpb.TestServiceClient) {
-	stream, err := tc.StreamingInputCall(context.Background())
+func DoClientStreaming(tc testpb.TestServiceClient, args ...grpc.CallOption) {
+	stream, err := tc.StreamingInputCall(context.Background(), args...)
 	if err != nil {
 		grpclog.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
 	}
 	var sum int
 	for _, s := range reqSizes {
-		pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, s)
+		pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, s)
 		req := &testpb.StreamingInputCallRequest{
 			Payload: pl,
 		}
 		if err := stream.Send(req); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+			grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 		}
 		sum += s
-		grpclog.Printf("Sent a request of size %d, aggregated size %d", s, sum)
-
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
@@ -137,7 +123,7 @@ func DoClientStreaming(tc testpb.TestServiceClient) {
 }
 
 // DoServerStreaming performs a server streaming RPC.
-func DoServerStreaming(tc testpb.TestServiceClient) {
+func DoServerStreaming(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 	respParam := make([]*testpb.ResponseParameters, len(respSizes))
 	for i, s := range respSizes {
 		respParam[i] = &testpb.ResponseParameters{
@@ -148,7 +134,7 @@ func DoServerStreaming(tc testpb.TestServiceClient) {
 		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseParameters: respParam,
 	}
-	stream, err := tc.StreamingOutputCall(context.Background(), req)
+	stream, err := tc.StreamingOutputCall(context.Background(), req, args...)
 	if err != nil {
 		grpclog.Fatalf("%v.StreamingOutputCall(_) = _, %v", tc, err)
 	}
@@ -173,7 +159,7 @@ func DoServerStreaming(tc testpb.TestServiceClient) {
 		respCnt++
 	}
 	if rpcStatus != io.EOF {
-		grpclog.Fatalf("Failed to finish the server streaming rpc: %v", err)
+		grpclog.Fatalf("Failed to finish the server streaming rpc: %v", rpcStatus)
 	}
 	if respCnt != len(respSizes) {
 		grpclog.Fatalf("Got %d reply, want %d", len(respSizes), respCnt)
@@ -181,8 +167,8 @@ func DoServerStreaming(tc testpb.TestServiceClient) {
 }
 
 // DoPingPong performs ping-pong style bi-directional streaming RPC.
-func DoPingPong(tc testpb.TestServiceClient) {
-	stream, err := tc.FullDuplexCall(context.Background())
+func DoPingPong(tc testpb.TestServiceClient, args ...grpc.CallOption) {
+	stream, err := tc.FullDuplexCall(context.Background(), args...)
 	if err != nil {
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
@@ -193,14 +179,14 @@ func DoPingPong(tc testpb.TestServiceClient) {
 				Size: proto.Int32(int32(respSizes[index])),
 			},
 		}
-		pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, reqSizes[index])
+		pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, reqSizes[index])
 		req := &testpb.StreamingOutputCallRequest{
 			ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
 			ResponseParameters: respParam,
 			Payload:            pl,
 		}
 		if err := stream.Send(req); err != nil {
-			grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+			grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 		}
 		reply, err := stream.Recv()
 		if err != nil {
@@ -225,8 +211,8 @@ func DoPingPong(tc testpb.TestServiceClient) {
 }
 
 // DoEmptyStream sets up a bi-directional streaming with zero message.
-func DoEmptyStream(tc testpb.TestServiceClient) {
-	stream, err := tc.FullDuplexCall(context.Background())
+func DoEmptyStream(tc testpb.TestServiceClient, args ...grpc.CallOption) {
+	stream, err := tc.FullDuplexCall(context.Background(), args...)
 	if err != nil {
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
@@ -239,16 +225,17 @@ func DoEmptyStream(tc testpb.TestServiceClient) {
 }
 
 // DoTimeoutOnSleepingServer performs an RPC on a sleep server which causes RPC timeout.
-func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
-	stream, err := tc.FullDuplexCall(ctx)
+func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient, args ...grpc.CallOption) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
 		if grpc.Code(err) == codes.DeadlineExceeded {
 			return
 		}
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, 27182)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, 27182)
 	req := &testpb.StreamingOutputCallRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		Payload:      pl,
@@ -265,7 +252,7 @@ func DoTimeoutOnSleepingServer(tc testpb.TestServiceClient) {
 
 // DoComputeEngineCreds performs a unary RPC with compute engine auth.
 func DoComputeEngineCreds(tc testpb.TestServiceClient, serviceAccount, oauthScope string) {
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize:   proto.Int32(int32(largeRespSize)),
@@ -297,7 +284,7 @@ func getServiceAccountJSONKey(keyFile string) []byte {
 
 // DoServiceAccountCreds performs a unary RPC with service account auth.
 func DoServiceAccountCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, oauthScope string) {
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize:   proto.Int32(int32(largeRespSize)),
@@ -322,7 +309,7 @@ func DoServiceAccountCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, o
 
 // DoJWTTokenCreds performs a unary RPC with JWT token auth.
 func DoJWTTokenCreds(tc testpb.TestServiceClient, serviceAccountKeyFile string) {
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(largeRespSize)),
@@ -356,7 +343,7 @@ func GetToken(serviceAccountKeyFile string, oauthScope string) *oauth2.Token {
 
 // DoOauth2TokenCreds performs a unary RPC with OAUTH2 token auth.
 func DoOauth2TokenCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, oauthScope string) {
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize:   proto.Int32(int32(largeRespSize)),
@@ -382,7 +369,7 @@ func DoOauth2TokenCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, oaut
 // DoPerRPCCreds performs a unary RPC with per RPC OAUTH2 token.
 func DoPerRPCCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, oauthScope string) {
 	jsonKey := getServiceAccountJSONKey(serviceAccountKeyFile)
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType:   testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize:   proto.Int32(int32(largeRespSize)),
@@ -392,7 +379,7 @@ func DoPerRPCCreds(tc testpb.TestServiceClient, serviceAccountKeyFile, oauthScop
 	}
 	token := GetToken(serviceAccountKeyFile, oauthScope)
 	kv := map[string]string{"authorization": token.TokenType + " " + token.AccessToken}
-	ctx := metadata.NewContext(context.Background(), metadata.MD{"authorization": []string{kv["authorization"]}})
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.MD{"authorization": []string{kv["authorization"]}})
 	reply, err := tc.UnaryCall(ctx, req)
 	if err != nil {
 		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
@@ -415,9 +402,9 @@ var (
 )
 
 // DoCancelAfterBegin cancels the RPC after metadata has been sent but before payloads are sent.
-func DoCancelAfterBegin(tc testpb.TestServiceClient) {
-	ctx, cancel := context.WithCancel(metadata.NewContext(context.Background(), testMetadata))
-	stream, err := tc.StreamingInputCall(ctx)
+func DoCancelAfterBegin(tc testpb.TestServiceClient, args ...grpc.CallOption) {
+	ctx, cancel := context.WithCancel(metadata.NewOutgoingContext(context.Background(), testMetadata))
+	stream, err := tc.StreamingInputCall(ctx, args...)
 	if err != nil {
 		grpclog.Fatalf("%v.StreamingInputCall(_) = _, %v", tc, err)
 	}
@@ -429,9 +416,9 @@ func DoCancelAfterBegin(tc testpb.TestServiceClient) {
 }
 
 // DoCancelAfterFirstResponse cancels the RPC after receiving the first message from the server.
-func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
+func DoCancelAfterFirstResponse(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 	ctx, cancel := context.WithCancel(context.Background())
-	stream, err := tc.FullDuplexCall(ctx)
+	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v", tc, err)
 	}
@@ -440,14 +427,14 @@ func DoCancelAfterFirstResponse(tc testpb.TestServiceClient) {
 			Size: proto.Int32(31415),
 		},
 	}
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, 27182)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, 27182)
 	req := &testpb.StreamingOutputCallRequest{
 		ResponseType:       testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseParameters: respParam,
 		Payload:            pl,
 	}
 	if err := stream.Send(req); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v", stream, req, err)
+		grpclog.Fatalf("%v has error %v while sending %v", stream, err, req)
 	}
 	if _, err := stream.Recv(); err != nil {
 		grpclog.Fatalf("%v.Recv() = %v", stream, err)
@@ -483,21 +470,21 @@ func validateMetadata(header, trailer metadata.MD) {
 }
 
 // DoCustomMetadata checks that metadata is echoed back to the client.
-func DoCustomMetadata(tc testpb.TestServiceClient) {
+func DoCustomMetadata(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 	// Testing with UnaryCall.
-	pl := clientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, 1)
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE.Enum(),
 		ResponseSize: proto.Int32(int32(1)),
 		Payload:      pl,
 	}
-	ctx := metadata.NewContext(context.Background(), customMetadata)
+	ctx := metadata.NewOutgoingContext(context.Background(), customMetadata)
 	var header, trailer metadata.MD
+	args = append(args, grpc.Header(&header), grpc.Trailer(&trailer))
 	reply, err := tc.UnaryCall(
 		ctx,
 		req,
-		grpc.Header(&header),
-		grpc.Trailer(&trailer),
+		args...,
 	)
 	if err != nil {
 		grpclog.Fatal("/TestService/UnaryCall RPC failed: ", err)
@@ -510,7 +497,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient) {
 	validateMetadata(header, trailer)
 
 	// Testing with FullDuplex.
-	stream, err := tc.FullDuplexCall(ctx)
+	stream, err := tc.FullDuplexCall(ctx, args...)
 	if err != nil {
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
@@ -525,7 +512,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient) {
 		Payload:            pl,
 	}
 	if err := stream.Send(streamReq); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v", stream, streamReq, err)
+		grpclog.Fatalf("%v has error %v while sending %v", stream, err, streamReq)
 	}
 	streamHeader, err := stream.Header()
 	if err != nil {
@@ -545,7 +532,7 @@ func DoCustomMetadata(tc testpb.TestServiceClient) {
 }
 
 // DoStatusCodeAndMessage checks that the status code is propagated back to the client.
-func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
+func DoStatusCodeAndMessage(tc testpb.TestServiceClient, args ...grpc.CallOption) {
 	var code int32 = 2
 	msg := "test status message"
 	expectedErr := grpc.Errorf(codes.Code(code), msg)
@@ -557,11 +544,11 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 	req := &testpb.SimpleRequest{
 		ResponseStatus: respStatus,
 	}
-	if _, err := tc.UnaryCall(context.Background(), req); err == nil || err.Error() != expectedErr.Error() {
+	if _, err := tc.UnaryCall(context.Background(), req, args...); err == nil || err.Error() != expectedErr.Error() {
 		grpclog.Fatalf("%v.UnaryCall(_, %v) = _, %v, want _, %v", tc, req, err, expectedErr)
 	}
 	// Test FullDuplexCall.
-	stream, err := tc.FullDuplexCall(context.Background())
+	stream, err := tc.FullDuplexCall(context.Background(), args...)
 	if err != nil {
 		grpclog.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
 	}
@@ -569,7 +556,7 @@ func DoStatusCodeAndMessage(tc testpb.TestServiceClient) {
 		ResponseStatus: respStatus,
 	}
 	if err := stream.Send(streamReq); err != nil {
-		grpclog.Fatalf("%v.Send(%v) = %v, want <nil>", stream, streamReq, err)
+		grpclog.Fatalf("%v has error %v while sending %v, want <nil>", stream, err, streamReq)
 	}
 	if err := stream.CloseSend(); err != nil {
 		grpclog.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
@@ -627,7 +614,7 @@ func serverNewPayload(t testpb.PayloadType, size int32) (*testpb.Payload, error)
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	status := in.GetResponseStatus()
-	if md, ok := metadata.FromContext(ctx); ok {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if initialMetadata, ok := md[initialMetadataKey]; ok {
 			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
 			grpc.SendHeader(ctx, header)
@@ -686,7 +673,7 @@ func (s *testServer) StreamingInputCall(stream testpb.TestService_StreamingInput
 }
 
 func (s *testServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallServer) error {
-	if md, ok := metadata.FromContext(stream.Context()); ok {
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
 		if initialMetadata, ok := md[initialMetadataKey]; ok {
 			header := metadata.Pairs(initialMetadataKey, initialMetadata[0])
 			stream.SendHeader(header)

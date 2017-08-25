@@ -2,10 +2,10 @@ package bench
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/codahale/hdrhistogram"
+	"github.com/tylertreat/hdrhistogram-writer"
 )
 
 // Summary contains the results of a Benchmark run.
@@ -37,7 +37,7 @@ func (s *Summary) String() string {
 // request rate was specified for the benchmark, this will also generate an
 // uncorrected distribution file which does not account for coordinated
 // omission.
-func (s *Summary) GenerateLatencyDistribution(percentiles Percentiles, file string) error {
+func (s *Summary) GenerateLatencyDistribution(percentiles histwriter.Percentiles, file string) error {
 	return generateLatencyDistribution(s.SuccessHistogram, s.UncorrectedSuccessHistogram, s.RequestRate, percentiles, file)
 }
 
@@ -49,46 +49,27 @@ func (s *Summary) GenerateLatencyDistribution(percentiles Percentiles, file stri
 // request rate was specified for the benchmark, this will also generate an
 // uncorrected distribution file which does not account for coordinated
 // omission.
-func (s *Summary) GenerateErrorLatencyDistribution(percentiles Percentiles, file string) error {
+func (s *Summary) GenerateErrorLatencyDistribution(percentiles histwriter.Percentiles, file string) error {
 	return generateLatencyDistribution(s.ErrorHistogram, s.UncorrectedErrorHistogram, s.RequestRate, percentiles, file)
 }
 
-func generateLatencyDistribution(histogram, unHistogram *hdrhistogram.Histogram, requestRate uint64, percentiles Percentiles, file string) error {
-	if percentiles == nil {
-		percentiles = Logarithmic
+func getOneByPercentile(percentile float64) float64 {
+	if percentile < 100 {
+		return 1 / (1 - (percentile / 100))
 	}
-	f, err := os.Create(file)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+	return float64(10000000)
+}
 
-	f.WriteString("Value    Percentile    TotalCount    1/(1-Percentile)\n\n")
-	for _, percentile := range percentiles {
-		value := float64(histogram.ValueAtQuantile(percentile)) / 1000000
-		_, err := f.WriteString(fmt.Sprintf("%f    %f        %d            %f\n",
-			value, percentile/100, 0, 1/(1-(percentile/100))))
-		if err != nil {
-			return err
-		}
+func generateLatencyDistribution(histogram, unHistogram *hdrhistogram.Histogram, requestRate uint64, percentiles histwriter.Percentiles, file string) error {
+	scaleFactor := 0.000001 // Scale ns to ms.
+	if err := histwriter.WriteDistributionFile(histogram, percentiles, scaleFactor, file); err != nil {
+		return err
 	}
 
 	// Generate uncorrected distribution.
 	if requestRate > 0 {
-		f, err := os.Create("uncorrected_" + file)
-		if err != nil {
+		if err := histwriter.WriteDistributionFile(unHistogram, percentiles, scaleFactor, fmt.Sprintf("uncorrected_%s", file)); err != nil {
 			return err
-		}
-		defer f.Close()
-
-		f.WriteString("Value    Percentile    TotalCount    1/(1-Percentile)\n\n")
-		for _, percentile := range percentiles {
-			value := float64(unHistogram.ValueAtQuantile(percentile)) / 1000000
-			_, err := f.WriteString(fmt.Sprintf("%f    %f        %d            %f\n",
-				value, percentile/100, 0, 1/(1-(percentile/100))))
-			if err != nil {
-				return err
-			}
 		}
 	}
 
