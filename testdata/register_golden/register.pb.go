@@ -5,7 +5,7 @@
 	Package dev is a generated protocol buffer package.
 
 	Package dev provides a blueprint for testing the various call semantics provided by Gorums.
-	The following table explains the differences in how the different call semantics work.
+	The following table explains the differences in call semantics.
 
 	                   Replies per server      Gorums termination check    # times qfunc can update result     Server-side reply type
 	------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1402,6 +1402,7 @@ func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<-
 // with the argument returned by the provided perNode function and returns the
 // result. The perNode function takes a request arg and
 // returns a State object to be passed to the given nodeID.
+// The perNode function should be thread-safe.
 func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(arg State, nodeID uint32) *State) (*WriteResponse, error) {
 	return c.writePerNode(ctx, arg, perNode)
 }

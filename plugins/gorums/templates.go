@@ -512,6 +512,7 @@ type {{.TypeName}} struct {
 // to inspect the quorum call reply and error when available. 
 // The perNode function takes the provided arg and returns a {{.FQReqName}}
 // object to be passed to the given nodeID.
+// The perNode function should be thread-safe.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) *{{.TypeName}} {
 	f := &{{.TypeName}}{
 		NodeIDs: make([]uint32, 0, c.n),
@@ -689,6 +690,7 @@ import (
 // with the argument returned by the provided perNode function and returns the
 // result. The perNode function takes a request arg and
 // returns a {{.FQReqName}} object to be passed to the given nodeID.
+// The perNode function should be thread-safe.
 func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (*{{.FQCustomRespName}}, error) {
 	return c.{{.UnexportedMethodName}}(ctx, arg, perNode)
 }
