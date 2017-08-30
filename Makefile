@@ -138,9 +138,9 @@ profobj:
 	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=RegisterRead -memprofile allocobj.prof
 	go tool pprof -alloc_objects $(DEV_PKG).test allocobj.prof
 
-.PHONY: getgvt
-getgvt:
-	go get -u github.com/FiloSottile/gvt
+.PHONY: getdep
+getdep:
+	go get -u github.com/golang/dep/cmd/dep
 
 .PHONY: getchecktools
 getchecktools:
@@ -191,4 +191,4 @@ check: getchecktoolsu
 
 .PHONY: updatedeps 
 updatedeps:
-	gvt update --all
+	dep ensure -update
