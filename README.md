@@ -26,7 +26,7 @@ implemented using Gorums can be found
 
 * [Student/user guide](doc/userguide.md)
 * [Adding extension options](doc/ext-opts.md)
-* [Developer guide](doc/devguide.md) (Old)
+* [Developer guide](doc/devguide.md) (Currently being updated) 
 
 ### References
 
