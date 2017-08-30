@@ -16,8 +16,6 @@
  *
  */
 
-//go:generate protoc -I ../routeguide --go_out=plugins=grpc:../routeguide ../routeguide/route_guide.proto
-
 // Package main implements a simple gRPC server that demonstrates how to use gRPC-Go libraries
 // to perform unary, client streaming, server streaming and full duplex RPCs.
 //
@@ -30,7 +28,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"math"
 	"net"
 	"time"
@@ -39,7 +36,7 @@ import (
 	"google.golang.org/grpc"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/testdata"
+	"google.golang.org/grpc/grpclog"
 
 	"github.com/golang/protobuf/proto"
 
@@ -48,8 +45,8 @@ import (
 
 var (
 	tls        = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
-	certFile   = flag.String("cert_file", "", "The TLS cert file")
-	keyFile    = flag.String("key_file", "", "The TLS key file")
+	certFile   = flag.String("cert_file", "testdata/server1.pem", "The TLS cert file")
+	keyFile    = flag.String("key_file", "testdata/server1.key", "The TLS key file")
 	jsonDBFile = flag.String("json_db_file", "testdata/route_guide_db.json", "A json file containing a list of features")
 	port       = flag.Int("port", 10000, "The server port")
 )
@@ -147,10 +144,10 @@ func (s *routeGuideServer) RouteChat(stream pb.RouteGuide_RouteChatServer) error
 func (s *routeGuideServer) loadFeatures(filePath string) {
 	file, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		log.Fatalf("Failed to load default features: %v", err)
+		grpclog.Fatalf("Failed to load default features: %v", err)
 	}
 	if err := json.Unmarshal(file, &s.savedFeatures); err != nil {
-		log.Fatalf("Failed to load default features: %v", err)
+		grpclog.Fatalf("Failed to load default features: %v", err)
 	}
 }
 
@@ -211,19 +208,13 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		grpclog.Fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
 	if *tls {
-		if *certFile == "" {
-			*certFile = testdata.Path("server1.pem")
-		}
-		if *keyFile == "" {
-			*keyFile = testdata.Path("server1.key")
-		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			log.Fatalf("Failed to generate credentials %v", err)
+			grpclog.Fatalf("Failed to generate credentials %v", err)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}

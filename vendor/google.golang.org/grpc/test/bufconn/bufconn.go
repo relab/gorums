@@ -31,10 +31,10 @@ import (
 // Listener implements a net.Listener that creates local, buffered net.Conns
 // via its Accept and Dial method.
 type Listener struct {
-	mu   sync.Mutex
-	sz   int
-	ch   chan net.Conn
-	done chan struct{}
+	mu     sync.Mutex
+	sz     int
+	ch     chan net.Conn
+	closed bool
 }
 
 var errClosed = fmt.Errorf("Closed")
@@ -42,31 +42,28 @@ var errClosed = fmt.Errorf("Closed")
 // Listen returns a Listener that can only be contacted by its own Dialers and
 // creates buffered connections between the two.
 func Listen(sz int) *Listener {
-	return &Listener{sz: sz, ch: make(chan net.Conn), done: make(chan struct{})}
+	return &Listener{sz: sz, ch: make(chan net.Conn)}
 }
 
 // Accept blocks until Dial is called, then returns a net.Conn for the server
 // half of the connection.
 func (l *Listener) Accept() (net.Conn, error) {
-	select {
-	case <-l.done:
+	c := <-l.ch
+	if c == nil {
 		return nil, errClosed
-	case c := <-l.ch:
-		return c, nil
 	}
+	return c, nil
 }
 
 // Close stops the listener.
 func (l *Listener) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	select {
-	case <-l.done:
-		// Already closed.
-		break
-	default:
-		close(l.done)
+	if l.closed {
+		return nil
 	}
+	l.closed = true
+	close(l.ch)
 	return nil
 }
 
@@ -77,13 +74,14 @@ func (l *Listener) Addr() net.Addr { return addr{} }
 // providing it the server half of the connection, and returns the client half
 // of the connection.
 func (l *Listener) Dial() (net.Conn, error) {
-	p1, p2 := newPipe(l.sz), newPipe(l.sz)
-	select {
-	case <-l.done:
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
 		return nil, errClosed
-	case l.ch <- &conn{p1, p2}:
-		return &conn{p2, p1}, nil
 	}
+	p1, p2 := newPipe(l.sz), newPipe(l.sz)
+	l.ch <- &conn{p1, p2}
+	return &conn{p2, p1}, nil
 }
 
 type pipe struct {

@@ -63,7 +63,6 @@ func NewGZIPCompressor() Compressor {
 
 func (c *gzipCompressor) Do(w io.Writer, p []byte) error {
 	z := c.pool.Get().(*gzip.Writer)
-	defer c.pool.Put(z)
 	z.Reset(w)
 	if _, err := z.Write(p); err != nil {
 		return err
@@ -520,6 +519,6 @@ const SupportPackageIsVersion3 = true
 const SupportPackageIsVersion4 = true
 
 // Version is the current grpc version.
-const Version = "1.6.0-dev"
+const Version = "1.5.2"
 
 const grpcUA = "grpc-go/" + Version

@@ -98,8 +98,7 @@ type http2Client struct {
 
 	initialWindowSize int32
 
-	bdpEst          *bdpEstimator
-	outQuotaVersion uint32
+	bdpEst *bdpEstimator
 
 	mu            sync.Mutex     // guard the following variables
 	state         transportState // the state of underlying connection
@@ -349,13 +348,18 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	// Create an audience string only if needed.
 	if len(t.creds) > 0 || callHdr.Creds != nil {
 		// Construct URI required to get auth request metadata.
-		// Omit port if it is the default one.
-		host := strings.TrimSuffix(callHdr.Host, ":443")
+		var port string
+		if pos := strings.LastIndex(t.target, ":"); pos != -1 {
+			// Omit port if it is the default one.
+			if t.target[pos+1:] != "443" {
+				port = ":" + t.target[pos+1:]
+			}
+		}
 		pos := strings.LastIndex(callHdr.Method, "/")
 		if pos == -1 {
 			pos = len(callHdr.Method)
 		}
-		audience = "https://" + host + callHdr.Method[:pos]
+		audience = "https://" + callHdr.Host + port + callHdr.Method[:pos]
 	}
 	for _, c := range t.creds {
 		data, err := c.GetRequestMetadata(ctx, audience)
@@ -471,12 +475,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 	var (
 		endHeaders bool
 	)
-	if b := stats.OutgoingTags(ctx); b != nil {
-		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-tags-bin", Value: encodeBinHeader(b)})
-	}
-	if b := stats.OutgoingTrace(ctx); b != nil {
-		t.hEnc.WriteField(hpack.HeaderField{Name: "grpc-trace-bin", Value: encodeBinHeader(b)})
-	}
 	if md, ok := metadata.FromOutgoingContext(ctx); ok {
 		for k, vv := range md {
 			// HTTP doesn't allow you to set pseudoheaders after non pseudoheaders were set.
@@ -681,13 +679,9 @@ func (t *http2Client) GracefulClose() error {
 // if it improves the performance.
 func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 	r := bytes.NewBuffer(data)
-	var (
-		p   []byte
-		oqv uint32
-	)
 	for {
-		oqv = atomic.LoadUint32(&t.outQuotaVersion)
-		if r.Len() > 0 || p != nil {
+		var p []byte
+		if r.Len() > 0 {
 			size := http2MaxFrameLen
 			// Wait until the stream has some quota to send the data.
 			sq, err := wait(s.ctx, s.done, s.goAway, t.shutdownChan, s.sendQuotaPool.acquire())
@@ -705,9 +699,7 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			if tq < size {
 				size = tq
 			}
-			if p == nil {
-				p = r.Next(size)
-			}
+			p = r.Next(size)
 			ps := len(p)
 			if ps < sq {
 				// Overbooked stream quota. Return it back.
@@ -752,18 +744,6 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			return ContextErr(s.ctx.Err())
 		default:
 		}
-		if oqv != atomic.LoadUint32(&t.outQuotaVersion) {
-			// InitialWindowSize settings frame must have been received after we
-			// acquired send quota but before we got the writable channel.
-			// We must forsake this write.
-			t.sendQuotaPool.add(len(p))
-			s.sendQuotaPool.add(len(p))
-			if t.framer.adjustNumWriters(-1) == 0 {
-				t.controlBuf.put(&flushIO{})
-			}
-			t.writableChan <- 0
-			continue
-		}
 		if r.Len() == 0 && t.framer.adjustNumWriters(0) == 1 {
 			// Do a force flush iff this is last frame for the entire gRPC message
 			// and the caller is the only writer at this moment.
@@ -776,7 +756,6 @@ func (t *http2Client) Write(s *Stream, data []byte, opts *Options) error {
 			t.notifyError(err)
 			return connectionErrorf(true, err, "transport: %v", err)
 		}
-		p = nil
 		if t.framer.adjustNumWriters(-1) == 0 {
 			t.framer.flushWrite()
 		}
@@ -956,7 +935,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
 		statusCode = codes.Unknown
 	}
-	s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %v", f.ErrCode))
+	s.finish(status.Newf(statusCode, "stream terminated by RST_STREAM with error code: %d", f.ErrCode))
 	s.mu.Unlock()
 	s.write(recvMsg{err: io.EOF})
 }
@@ -1237,7 +1216,6 @@ func (t *http2Client) applySettings(ss []http2.Setting) {
 			}
 			t.streamSendQuota = s.Val
 			t.mu.Unlock()
-			atomic.AddUint32(&t.outQuotaVersion, 1)
 		}
 	}
 }
