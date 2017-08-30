@@ -121,9 +121,12 @@ type readCorrectableReply struct {
 
 func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, resp *ReadCorrectableReply) {
 	replyChan := make(chan readCorrectableReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadCorrectable(ctx, n, a, replyChan)
+		go callGRPCReadCorrectable(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*State, 0, c.n)
@@ -164,7 +167,8 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 	}
 }
 
-func callGRPCReadCorrectable(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readCorrectableReply) {
+func callGRPCReadCorrectable(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *ReadRequest, replyChan chan<- readCorrectableReply) {
+	wg.Done()
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(

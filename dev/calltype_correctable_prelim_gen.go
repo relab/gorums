@@ -119,9 +119,12 @@ type readPrelimReply struct {
 
 func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *ReadPrelimReply) {
 	replyChan := make(chan readPrelimReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadPrelim(ctx, n, a, replyChan)
+		go callGRPCReadPrelim(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*State, 0, c.n*2)
@@ -162,7 +165,8 @@ func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *Re
 	}
 }
 
-func callGRPCReadPrelim(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readPrelimReply) {
+func callGRPCReadPrelim(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *ReadRequest, replyChan chan<- readPrelimReply) {
+	wg.Done()
 	x := NewRegisterClient(node.conn)
 	y, err := x.ReadPrelim(ctx, arg)
 	if err != nil {
