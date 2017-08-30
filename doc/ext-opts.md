@@ -15,7 +15,7 @@ Each call type may in addition specify some advanced options:
 
 | Name          | Gorums option      | Description                                 |
 |---------------|--------------------|---------------------------------------------|
-| Custom return type | `gorums.custom_return_type` | This option specified an custom return type that the quorum function can populate with additional information for the user application, typically based on the type specified in the RPC defintion. |
+| Custom return type | `gorums.custom_return_type` | This option specified an custom return type that the quorum function can populate with additional information for the user application, typically based on the type specified in the RPC definition. |
 | Per node arguments | `gorums.per_node_arg`       | This option tells Gorums to generate an RPC method that takes a special function that computes the argument to be sent to the different servers in the configuration. |
 
 P.S. Multicast and some other call types may not support the advanced options yet. The compiler should complain if an unsupported combination is specified.
