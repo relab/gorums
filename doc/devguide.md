@@ -13,47 +13,29 @@ The repository contains two main components:
 Below is a description of the current Makefile targets.
 The Makefile itself also serves as documentation; inspect it for details.
 
-* `all`: Run the `build` and `test` targets.
-
-* `build`: Build all packages in the repository.
-
-* `test`: Run all tests in the repository.
-
-* `testrace`: Run all tests in the repository with the race detector enabled.
-
-* `stresstestdev`: Run development test in a loop to catch sporadic failures.
-
-* `benchlocal`: Run a set of benchmarks with servers running as part of the test binary.
-
-* `benchremote`: Run a set of benchmarks that require separate running servers. See the benchmarks for details.
-
-* `clean`: Run `go clean` for the whole repository and remove all `.test` and `.prof` files.
-
-* `reinstallprotoc`: Install the `protoc-gen-gorums` binary with the gorums plugin included.
-
-* `devproto`: Compile the development register.proto file in the `dev` folder.
-
-* `gorumsprotoopts`: Compile the gorums protobuf options from the `gorums.proto` file.
-
-* `static`: Bundle the static (generic) code used by the gorums plugin.
-
-* `templates`: Generate the templates code bundle used by the gorums plugin.
-
-* `golden`: Generate and update the golden `protoc-gen-gorums` compiler output used by a test.
-
-* `dev`: Generate _gen.go files for the `dev` folder.
-
-* `goldenanddev`: Run both the`golden` and `dev` target.
-
-* `prof{cpu,mem,obj}`: Create a CPU/memory profile using a predefined benchmark.
-
-* `getdep`: Download the 'dep' vendoring tool.
-
-* `getchecktools{u}`: Download/update the static analysis tools.
-
-* `check`: Run a suite of static analysis tools.
-
-* `updatedeps`: Update vendored dependencies to the latest version available.
+| Target | Description |
+|--------|-------------|
+| `all` | Run the `build` and `test` targets. |
+| `build` | Build all packages in the repository. |
+| `test` | Run all tests in the repository. |
+| `testrace` | Run all tests in the repository with the race detector enabled. |
+| `stresstestdev` | Run development test in a loop to catch sporadic failures. |
+| `benchlocal` | Run a set of benchmarks with servers running as part of the test binary. |
+| `benchremote` | Run a set of benchmarks that require separate running servers. See the benchmarks for details. |
+| `clean` | Run `go clean` for the whole repository and remove all `.test` and `.prof` files. |
+| `reinstallprotoc` | Install the `protoc-gen-gorums` binary with the gorums plugin included. |
+| `devproto` | Compile the development register.proto file in the `dev` folder. |
+| `gorumsprotoopts` | Compile the gorums protobuf options from the `gorums.proto` file. |
+| `static` | Bundle the static (generic) code used by the gorums plugin. |
+| `templates` | Generate the templates code bundle used by the gorums plugin. |
+| `golden` | Generate and update the golden `protoc-gen-gorums` compiler output used by a test. |
+| `dev` | Generate _gen.go files for the `dev` folder. |
+| `goldenanddev` | Run both the`golden` and `dev` target. |
+| `prof{cpu,mem,obj}` | Create a CPU/memory profile using a predefined benchmark. |
+| `getdep` | Download the 'dep' vendoring tool. |
+| `getchecktools{u}` | Download/update the static analysis tools. |
+| `check` | Run a suite of static analysis tools. |
+| `updatedeps` | Update vendored dependencies to the latest version available. |
 
 #### File Endings
 
