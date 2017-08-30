@@ -4,6 +4,7 @@
 package dev
 
 import (
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -54,9 +55,12 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, 
 	}
 
 	replyChan := make(chan readReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, a, replyChan)
+		go callGRPCRead(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*State, 0, c.n)
@@ -88,7 +92,8 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, 
 	}
 }
 
-func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *ReadRequest, replyChan chan<- readReply) {
+	wg.Done()
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -148,9 +153,12 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 	}
 
 	replyChan := make(chan readCustomReturnReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadCustomReturn(ctx, n, a, replyChan)
+		go callGRPCReadCustomReturn(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*State, 0, c.n)
@@ -182,7 +190,8 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 	}
 }
 
-func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readCustomReturnReply) {
+func callGRPCReadCustomReturn(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *ReadRequest, replyChan chan<- readCustomReturnReply) {
+	wg.Done()
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -242,9 +251,12 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteRespons
 	}
 
 	replyChan := make(chan writeReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCWrite(ctx, n, a, replyChan)
+		go callGRPCWrite(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
@@ -276,7 +288,8 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteRespons
 	}
 }
 
-func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *State, replyChan chan<- writeReply) {
+	wg.Done()
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -339,9 +352,12 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 	}
 
 	replyChan := make(chan writePerNodeReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCWritePerNode(ctx, n, f(*a, n.id), replyChan)
+		go callGRPCWritePerNode(ctx, &wg, n, f(*a, n.id), replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
@@ -373,7 +389,8 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 	}
 }
 
-func callGRPCWritePerNode(ctx context.Context, node *Node, arg *State, replyChan chan<- writePerNodeReply) {
+func callGRPCWritePerNode(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *State, replyChan chan<- writePerNodeReply) {
+	wg.Done()
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(

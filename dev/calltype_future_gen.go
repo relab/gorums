@@ -4,6 +4,7 @@
 package dev
 
 import (
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -90,9 +91,12 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Re
 	}
 
 	replyChan := make(chan readFutureReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadFuture(ctx, n, a, replyChan)
+		go callGRPCReadFuture(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*State, 0, c.n)
@@ -129,7 +133,8 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Re
 	}
 }
 
-func callGRPCReadFuture(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readFutureReply) {
+func callGRPCReadFuture(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *ReadRequest, replyChan chan<- readFutureReply) {
+	wg.Done()
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -225,9 +230,12 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *WriteFu
 	}
 
 	replyChan := make(chan writeFutureReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCWriteFuture(ctx, n, a, replyChan)
+		go callGRPCWriteFuture(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
@@ -264,7 +272,8 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *WriteFu
 	}
 }
 
-func callGRPCWriteFuture(ctx context.Context, node *Node, arg *State, replyChan chan<- writeFutureReply) {
+func callGRPCWriteFuture(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *State, replyChan chan<- writeFutureReply) {
+	wg.Done()
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(

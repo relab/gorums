@@ -7,7 +7,8 @@ const calltype_common_definitions_tmpl = `{{/* Remember to run 'make goldenandde
 {{/* calltype_common_definitions.tmpl will only be executed for each 'calltype' template. */}}
 
 {{define "callGRPC"}}
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	wg.Done()
 	reply := new({{.FQRespName}})
 	start := time.Now()
 	err := grpc.Invoke(
@@ -88,13 +89,16 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 
 {{define "callLoop"}}
 	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
 {{- if .PerNodeArg}}
-		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
+		go callGRPC{{.MethodName}}(ctx, &wg, n, f(*a, n.id), replyChan)
 {{else}}
-		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+		go callGRPC{{.MethodName}}(ctx, &wg, n, a, replyChan)
 {{end -}}
 	}
+	wg.Wait()
 {{end}}
 `
 
@@ -448,7 +452,8 @@ type {{.UnexportedTypeName}} struct {
 	}
 }
 
-func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+func callGRPC{{.MethodName}}(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	wg.Done()
 	x := New{{.ServName}}Client(node.conn)
 	y, err := x.{{.MethodName}}(ctx, arg)
 	if err != nil {
@@ -479,6 +484,7 @@ const calltype_future_tmpl = `
 package {{.PackageName}}
 
 import (
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -668,6 +674,7 @@ const calltype_quorumcall_tmpl = `
 package {{.PackageName}}
 
 import (
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
