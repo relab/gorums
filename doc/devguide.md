@@ -47,7 +47,7 @@ The Makefile itself also serves as documentation; inspect it for details.
 
 * `prof{cpu,mem,obj}`: Create a CPU/memory profile using a predefined benchmark.
 
-* `getgvt`: Download the 'gvt' vendoring tool.
+* `getdep`: Download the 'dep' vendoring tool.
 
 * `getchecktools{u}`: Download/update the static analysis tools.
 
