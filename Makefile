@@ -38,7 +38,7 @@ CHECKTOOLS			:= 	golang.org/x/tools/cmd/goimports \
 					github.com/gordonklaus/ineffassign \
 					github.com/mdempsky/unconvert \
 					honnef.co/go/tools/cmd/megacheck/ \
-					github.com/mvdan/interfacer/cmd/interfacer \
+					mvdan.cc/interfacer \
 					github.com/client9/misspell/cmd/misspell
 
 .PHONY: all
