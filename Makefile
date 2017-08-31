@@ -144,14 +144,10 @@ getdep:
 
 .PHONY: getchecktools
 getchecktools:
-	go get $(CHECKTOOLS)
-
-.PHONY: getchecktoolsu
-getchecktoolsu:
 	go get -u $(CHECKTOOLS)
 
 .PHONY: check
-check: getchecktoolsu
+check: getchecktools
 	@echo static analysis tools:
 	@echo "gofmt (simplify)"
 	@! gofmt -s -l $(GORUMS_FILES) | grep -vF 'No Exceptions'
