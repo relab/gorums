@@ -494,13 +494,9 @@ func TestQuorumCallCancel(t *testing.T) {
 	if err == nil {
 		t.Fatalf("read quorum call: got no error, want one")
 	}
-	err, ok := err.(qc.QuorumCallError)
+	err2, ok := err.(qc.QuorumCallError)
 	if !ok {
-		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err, qc.QuorumCallError{}, err)
-	}
-	wantErr := qc.QuorumCallError{Reason: "context canceled", ErrCount: 0, ReplyCount: 0}
-	if err != wantErr {
-		t.Fatalf("got error: %v, want: %v", err, wantErr)
+		t.Fatalf("got error of type %T, want error of type %T\nerror details: %v", err2, qc.QuorumCallError{}, err)
 	}
 }
 
