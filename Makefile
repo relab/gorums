@@ -146,6 +146,9 @@ getdep:
 getchecktools:
 	go get -u $(CHECKTOOLS)
 
+.PHONY: getdevtools
+getdevtools: getdep getchecktools
+
 .PHONY: check
 check: getchecktools
 	@echo static analysis tools:
@@ -185,6 +188,6 @@ check: getchecktools
 	@echo "missspell"
 	@! misspell ./**/* | grep -vF 'vendor'
 
-.PHONY: updatedeps 
+.PHONY: updatedeps
 updatedeps:
 	dep ensure -update
