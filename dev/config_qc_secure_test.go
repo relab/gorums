@@ -65,7 +65,7 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 		go func(i int, server *grpc.Server) {
 			_ = server.Serve(listeners[i])
 		}(i, servers[i])
-		srvs[i].addr = "localhost" + rs.addr
+		srvs[i].addr = rs.addr
 	}
 
 	stopGrpcServeFunc := func(n int) {
