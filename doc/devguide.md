@@ -33,7 +33,8 @@ The Makefile itself also serves as documentation; inspect it for details.
 | `goldenanddev` | Run both the`golden` and `dev` target. |
 | `prof{cpu,mem,obj}` | Create a CPU/memory profile using a predefined benchmark. |
 | `getdep` | Download the 'dep' vendoring tool. |
-| `getchecktools{u}` | Download/update the static analysis tools. |
+| `getchecktools` | Download the static analysis tools. |
+| `getdevtools` | Download all development tools (`getdep` and `getchecktools`). |
 | `check` | Run a suite of static analysis tools. |
 | `updatedeps` | Update vendored dependencies to the latest version available. |
 
