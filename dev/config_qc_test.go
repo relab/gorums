@@ -1461,7 +1461,7 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.Ma
 		qc.RegisterRegisterServer(servers[i], regServers[i].impl)
 		if regServers[i].addr == "" {
 			portSupplier.Lock()
-			regServers[i].addr = fmt.Sprintf(":%d", portSupplier.p)
+			regServers[i].addr = fmt.Sprintf("localhost:%d", portSupplier.p)
 			portSupplier.p++
 			portSupplier.Unlock()
 		}

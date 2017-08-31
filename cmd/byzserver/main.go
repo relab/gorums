@@ -50,7 +50,7 @@ func main() {
 }
 
 func serve(port int, keyFile string, noauth bool) {
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {
 		log.Fatal(err)
 	}
