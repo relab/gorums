@@ -20,6 +20,7 @@ import proto "github.com/gogo/protobuf/proto"
 import fmt "fmt"
 import math "math"
 import _ "github.com/relab/gorums"
+import _ "github.com/gogo/protobuf/gogoproto"
 
 import bytes "bytes"
 
@@ -67,6 +68,13 @@ func (m *Key) Reset()                    { *m = Key{} }
 func (*Key) ProtoMessage()               {}
 func (*Key) Descriptor() ([]byte, []int) { return fileDescriptorByzq, []int{0} }
 
+func (m *Key) GetKey() string {
+	if m != nil {
+		return m.Key
+	}
+	return ""
+}
+
 type Content struct {
 	Key       string `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
 	Timestamp int64  `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -76,6 +84,27 @@ type Content struct {
 func (m *Content) Reset()                    { *m = Content{} }
 func (*Content) ProtoMessage()               {}
 func (*Content) Descriptor() ([]byte, []int) { return fileDescriptorByzq, []int{1} }
+
+func (m *Content) GetKey() string {
+	if m != nil {
+		return m.Key
+	}
+	return ""
+}
+
+func (m *Content) GetTimestamp() int64 {
+	if m != nil {
+		return m.Timestamp
+	}
+	return 0
+}
+
+func (m *Content) GetValue() string {
+	if m != nil {
+		return m.Value
+	}
+	return ""
+}
 
 // [Value, requestID, ts, val, signature]
 // [Write, wts, val, signature]
@@ -96,6 +125,20 @@ func (m *Value) GetC() *Content {
 	return nil
 }
 
+func (m *Value) GetSignatureR() []byte {
+	if m != nil {
+		return m.SignatureR
+	}
+	return nil
+}
+
+func (m *Value) GetSignatureS() []byte {
+	if m != nil {
+		return m.SignatureS
+	}
+	return nil
+}
+
 // [Ack, ts]
 type WriteResponse struct {
 	Timestamp int64 `protobuf:"varint,1,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
@@ -105,41 +148,18 @@ func (m *WriteResponse) Reset()                    { *m = WriteResponse{} }
 func (*WriteResponse) ProtoMessage()               {}
 func (*WriteResponse) Descriptor() ([]byte, []int) { return fileDescriptorByzq, []int{3} }
 
+func (m *WriteResponse) GetTimestamp() int64 {
+	if m != nil {
+		return m.Timestamp
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterType((*Key)(nil), "byzq.Key")
 	proto.RegisterType((*Content)(nil), "byzq.Content")
 	proto.RegisterType((*Value)(nil), "byzq.Value")
 	proto.RegisterType((*WriteResponse)(nil), "byzq.WriteResponse")
-}
-func (this *Key) VerboseEqual(that interface{}) error {
-	if that == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that == nil && this != nil")
-	}
-
-	that1, ok := that.(*Key)
-	if !ok {
-		that2, ok := that.(Key)
-		if ok {
-			that1 = &that2
-		} else {
-			return fmt.Errorf("that is not of type *Key")
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that is type *Key but is nil && this != nil")
-	} else if this == nil {
-		return fmt.Errorf("that is type *Key but is not nil && this == nil")
-	}
-	if this.Key != that1.Key {
-		return fmt.Errorf("Key this(%v) Not Equal that(%v)", this.Key, that1.Key)
-	}
-	return nil
 }
 func (this *Key) Equal(that interface{}) bool {
 	if that == nil {
@@ -170,42 +190,6 @@ func (this *Key) Equal(that interface{}) bool {
 		return false
 	}
 	return true
-}
-func (this *Content) VerboseEqual(that interface{}) error {
-	if that == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that == nil && this != nil")
-	}
-
-	that1, ok := that.(*Content)
-	if !ok {
-		that2, ok := that.(Content)
-		if ok {
-			that1 = &that2
-		} else {
-			return fmt.Errorf("that is not of type *Content")
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that is type *Content but is nil && this != nil")
-	} else if this == nil {
-		return fmt.Errorf("that is type *Content but is not nil && this == nil")
-	}
-	if this.Key != that1.Key {
-		return fmt.Errorf("Key this(%v) Not Equal that(%v)", this.Key, that1.Key)
-	}
-	if this.Timestamp != that1.Timestamp {
-		return fmt.Errorf("Timestamp this(%v) Not Equal that(%v)", this.Timestamp, that1.Timestamp)
-	}
-	if this.Value != that1.Value {
-		return fmt.Errorf("Value this(%v) Not Equal that(%v)", this.Value, that1.Value)
-	}
-	return nil
 }
 func (this *Content) Equal(that interface{}) bool {
 	if that == nil {
@@ -243,42 +227,6 @@ func (this *Content) Equal(that interface{}) bool {
 	}
 	return true
 }
-func (this *Value) VerboseEqual(that interface{}) error {
-	if that == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that == nil && this != nil")
-	}
-
-	that1, ok := that.(*Value)
-	if !ok {
-		that2, ok := that.(Value)
-		if ok {
-			that1 = &that2
-		} else {
-			return fmt.Errorf("that is not of type *Value")
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that is type *Value but is nil && this != nil")
-	} else if this == nil {
-		return fmt.Errorf("that is type *Value but is not nil && this == nil")
-	}
-	if !this.C.Equal(that1.C) {
-		return fmt.Errorf("C this(%v) Not Equal that(%v)", this.C, that1.C)
-	}
-	if !bytes.Equal(this.SignatureR, that1.SignatureR) {
-		return fmt.Errorf("SignatureR this(%v) Not Equal that(%v)", this.SignatureR, that1.SignatureR)
-	}
-	if !bytes.Equal(this.SignatureS, that1.SignatureS) {
-		return fmt.Errorf("SignatureS this(%v) Not Equal that(%v)", this.SignatureS, that1.SignatureS)
-	}
-	return nil
-}
 func (this *Value) Equal(that interface{}) bool {
 	if that == nil {
 		if this == nil {
@@ -314,36 +262,6 @@ func (this *Value) Equal(that interface{}) bool {
 		return false
 	}
 	return true
-}
-func (this *WriteResponse) VerboseEqual(that interface{}) error {
-	if that == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that == nil && this != nil")
-	}
-
-	that1, ok := that.(*WriteResponse)
-	if !ok {
-		that2, ok := that.(WriteResponse)
-		if ok {
-			that1 = &that2
-		} else {
-			return fmt.Errorf("that is not of type *WriteResponse")
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that is type *WriteResponse but is nil && this != nil")
-	} else if this == nil {
-		return fmt.Errorf("that is type *WriteResponse but is not nil && this == nil")
-	}
-	if this.Timestamp != that1.Timestamp {
-		return fmt.Errorf("Timestamp this(%v) Not Equal that(%v)", this.Timestamp, that1.Timestamp)
-	}
-	return nil
 }
 func (this *WriteResponse) Equal(that interface{}) bool {
 	if that == nil {
@@ -430,9 +348,12 @@ func (c *Configuration) read(ctx context.Context, a *Key) (resp *Content, err er
 	}
 
 	replyChan := make(chan readReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, n, a, replyChan)
+		go callGRPCRead(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*Value, 0, c.n)
@@ -464,7 +385,8 @@ func (c *Configuration) read(ctx context.Context, a *Key) (resp *Content, err er
 	}
 }
 
-func callGRPCRead(ctx context.Context, node *Node, arg *Key, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *Key, replyChan chan<- readReply) {
+	wg.Done()
 	reply := new(Value)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -524,9 +446,12 @@ func (c *Configuration) write(ctx context.Context, a *Value) (resp *WriteRespons
 	}
 
 	replyChan := make(chan writeReply, c.n)
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCWrite(ctx, n, a, replyChan)
+		go callGRPCWrite(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
@@ -558,7 +483,8 @@ func (c *Configuration) write(ctx context.Context, a *Value) (resp *WriteRespons
 	}
 }
 
-func callGRPCWrite(ctx context.Context, node *Node, arg *Value, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *Value, replyChan chan<- writeReply) {
+	wg.Done()
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -590,7 +516,7 @@ type Node struct {
 
 	RegisterClient RegisterClient
 
-	sync.Mutex
+	mu      sync.Mutex
 	lastErr error
 	latency time.Duration
 }
@@ -748,7 +674,7 @@ const LevelNotSet = -1
 // Manager manages a pool of node configurations on which quorum remote
 // procedure calls can be made.
 type Manager struct {
-	sync.Mutex
+	mu       sync.Mutex
 	nodes    []*Node
 	lookup   map[uint32]*Node
 	configs  map[uint32]*Configuration
@@ -806,8 +732,8 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 }
 
 func (m *Manager) createNode(addr string) (*Node, error) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
@@ -877,8 +803,8 @@ func (m *Manager) Close() {
 // NodeIDs returns the identifier of each available node. IDs are returned in
 // the same order as they were provided in the creation of the Manager.
 func (m *Manager) NodeIDs() []uint32 {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
 	for _, node := range m.nodes {
 		ids = append(ids, node.ID())
@@ -888,8 +814,8 @@ func (m *Manager) NodeIDs() []uint32 {
 
 // Node returns the node with the given identifier if present.
 func (m *Manager) Node(id uint32) (node *Node, found bool) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	node, found = m.lookup[id]
 	return node, found
 }
@@ -897,16 +823,16 @@ func (m *Manager) Node(id uint32) (node *Node, found bool) {
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
 func (m *Manager) Nodes() []*Node {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.nodes
 }
 
 // ConfigurationIDs returns the identifier of each available
 // configuration.
 func (m *Manager) ConfigurationIDs() []uint32 {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	ids := make([]uint32, 0, len(m.configs))
 	for id := range m.configs {
 		ids = append(ids, id)
@@ -917,16 +843,16 @@ func (m *Manager) ConfigurationIDs() []uint32 {
 // Configuration returns the configuration with the given global
 // identifier if present.
 func (m *Manager) Configuration(id uint32) (config *Configuration, found bool) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	config, found = m.configs[id]
 	return config, found
 }
 
 // Configurations returns a slice of each available configuration.
 func (m *Manager) Configurations() []*Configuration {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	configs := make([]*Configuration, 0, len(m.configs))
 	for _, conf := range m.configs {
 		configs = append(configs, conf)
@@ -936,8 +862,8 @@ func (m *Manager) Configurations() []*Configuration {
 
 // Size returns the number of nodes and configurations in the Manager.
 func (m *Manager) Size() (nodes, configs int) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return len(m.nodes), len(m.configs)
 }
 
@@ -950,8 +876,8 @@ func (m *Manager) AddNode(addr string) error {
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
 func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
@@ -1011,8 +937,8 @@ func (n *Node) Address() string {
 }
 
 func (n *Node) String() string {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return fmt.Sprintf(
 		"node %d | addr: %s | latency: %v",
 		n.id, n.addr, n.latency,
@@ -1020,30 +946,30 @@ func (n *Node) String() string {
 }
 
 func (n *Node) setLastErr(err error) {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.lastErr = err
 }
 
 // LastErr returns the last error encountered (if any) when invoking a remote
 // procedure call on this node.
 func (n *Node) LastErr() error {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return n.lastErr
 }
 
 func (n *Node) setLatency(lat time.Duration) {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.latency = lat
 }
 
 // Latency returns the latency of the last successful remote procedure call
 // made to this node.
 func (n *Node) Latency() time.Duration {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return n.latency
 }
 
@@ -2142,27 +2068,27 @@ var (
 func init() { proto.RegisterFile("byzq.proto", fileDescriptorByzq) }
 
 var fileDescriptorByzq = []byte{
-	// 338 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x91, 0xcf, 0x4e, 0xea, 0x50,
-	0x10, 0xc6, 0x3b, 0xb7, 0x70, 0x2f, 0x0c, 0x97, 0xdc, 0x9b, 0xa3, 0x89, 0x0d, 0x9a, 0x13, 0xd2,
-	0xb8, 0x60, 0xa1, 0x90, 0xc0, 0x1b, 0xe8, 0x92, 0x85, 0xc9, 0x21, 0xd1, 0x75, 0x0b, 0x93, 0xda,
-	0x48, 0xff, 0xd8, 0x9e, 0x9a, 0xd4, 0x15, 0x8f, 0xe0, 0x63, 0xf0, 0x02, 0xbc, 0x80, 0x2b, 0x97,
-	0x2c, 0x5d, 0xc2, 0x71, 0xe3, 0xd2, 0xc4, 0x17, 0x30, 0x3d, 0x25, 0x0a, 0xba, 0xea, 0x37, 0xf3,
-	0xcd, 0xcc, 0xf7, 0x4b, 0x0f, 0xa2, 0x9b, 0xdf, 0xdf, 0x76, 0xe3, 0x24, 0x92, 0x11, 0xab, 0x14,
-	0xba, 0x75, 0xec, 0xf9, 0xf2, 0x3a, 0x73, 0xbb, 0xe3, 0x28, 0xe8, 0x25, 0x34, 0x75, 0xdc, 0x9e,
-	0x17, 0x25, 0x59, 0x90, 0x6e, 0x3e, 0xe5, 0xac, 0x7d, 0x80, 0xe6, 0x90, 0x72, 0xf6, 0x1f, 0xcd,
-	0x1b, 0xca, 0x2d, 0x68, 0x43, 0xa7, 0x2e, 0x0a, 0x69, 0x5f, 0xe0, 0x9f, 0xf3, 0x28, 0x94, 0x14,
-	0xca, 0x9f, 0x26, 0x3b, 0xc2, 0xba, 0xf4, 0x03, 0x4a, 0xa5, 0x13, 0xc4, 0xd6, 0xaf, 0x36, 0x74,
-	0x4c, 0xf1, 0xd5, 0x60, 0xfb, 0x58, 0xbd, 0x73, 0xa6, 0x19, 0x59, 0xa6, 0xde, 0x28, 0x0b, 0x7b,
-	0x82, 0xd5, 0xcb, 0x42, 0xb0, 0x43, 0x84, 0xb1, 0x3e, 0xd6, 0xe8, 0x37, 0xbb, 0x1a, 0x7b, 0x13,
-	0x24, 0x60, 0xcc, 0x38, 0x62, 0xea, 0x7b, 0xa1, 0x23, 0xb3, 0x84, 0x84, 0x3e, 0xfd, 0x57, 0x6c,
-	0x75, 0x76, 0xfc, 0x91, 0x0e, 0xd8, 0xf6, 0x47, 0xf6, 0x29, 0x36, 0xaf, 0x12, 0x5f, 0x92, 0xa0,
-	0x34, 0x8e, 0xc2, 0x94, 0x76, 0x51, 0xe1, 0x1b, 0x6a, 0x3f, 0xc6, 0x9a, 0x20, 0xcf, 0x4f, 0x25,
-	0x25, 0xac, 0x87, 0x15, 0x41, 0xce, 0x84, 0xd5, 0x4b, 0xa8, 0x21, 0xe5, 0xad, 0x46, 0x29, 0x35,
-	0xb7, 0xfd, 0x6f, 0xb6, 0xb0, 0xe0, 0xf1, 0xdd, 0xfa, 0xfc, 0x2f, 0x03, 0xac, 0xea, 0x2c, 0xb6,
-	0x3d, 0xd6, 0xda, 0x2b, 0x8b, 0x1d, 0x0a, 0xbb, 0x56, 0xec, 0xce, 0x17, 0x16, 0x9c, 0x9d, 0x2c,
-	0xd7, 0xdc, 0x78, 0x5e, 0x73, 0x63, 0xb5, 0xe6, 0x30, 0x53, 0x1c, 0xe6, 0x8a, 0xc3, 0x93, 0xe2,
-	0xb0, 0x54, 0x1c, 0x56, 0x8a, 0xc3, 0xab, 0xe2, 0xc6, 0x9b, 0xe2, 0xf0, 0xf0, 0xc2, 0x0d, 0xf7,
-	0xb7, 0x7e, 0xa5, 0xc1, 0x47, 0x00, 0x00, 0x00, 0xff, 0xff, 0x29, 0x16, 0xf8, 0x94, 0xdf, 0x01,
-	0x00, 0x00,
+	// 349 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x64, 0x51, 0x31, 0x4e, 0xeb, 0x40,
+	0x10, 0xf5, 0x7e, 0x27, 0x9f, 0x64, 0x42, 0x04, 0x5a, 0x90, 0xb0, 0x0c, 0x5a, 0x45, 0x16, 0x45,
+	0x9a, 0xc4, 0x52, 0x72, 0x03, 0x28, 0x53, 0x20, 0x6d, 0x24, 0xa8, 0xed, 0x64, 0x30, 0x16, 0xb1,
+	0xd7, 0xd8, 0x6b, 0x24, 0x53, 0xe5, 0x08, 0x1c, 0x23, 0x17, 0xc8, 0x05, 0xa8, 0x28, 0x53, 0x52,
+	0x12, 0xd3, 0x50, 0x22, 0x71, 0x01, 0xe4, 0x75, 0x04, 0x0e, 0x54, 0xfb, 0xde, 0xcc, 0x9b, 0x79,
+	0x6f, 0x77, 0x01, 0xdc, 0xec, 0xe1, 0xae, 0x1f, 0xc5, 0x42, 0x0a, 0x5a, 0x2b, 0xb0, 0x79, 0xea,
+	0xf9, 0xf2, 0x26, 0x75, 0xfb, 0x13, 0x11, 0xd8, 0x31, 0xce, 0x1c, 0xd7, 0xf6, 0x44, 0x9c, 0x06,
+	0xc9, 0xe6, 0x28, 0xb5, 0x66, 0xaf, 0xa2, 0xf2, 0x84, 0x27, 0x6c, 0x55, 0x76, 0xd3, 0x6b, 0xc5,
+	0x14, 0x51, 0xa8, 0x94, 0x5b, 0x47, 0xa0, 0x8f, 0x30, 0xa3, 0xfb, 0xa0, 0xdf, 0x62, 0x66, 0x90,
+	0x0e, 0xe9, 0x36, 0x79, 0x01, 0xad, 0x0b, 0xd8, 0x39, 0x17, 0xa1, 0xc4, 0x50, 0xfe, 0x6d, 0xd2,
+	0x13, 0x68, 0x4a, 0x3f, 0xc0, 0x44, 0x3a, 0x41, 0x64, 0xfc, 0xeb, 0x90, 0xae, 0xce, 0x7f, 0x0a,
+	0xf4, 0x10, 0xea, 0xf7, 0xce, 0x2c, 0x45, 0x43, 0x57, 0x13, 0x25, 0xb1, 0xa6, 0x50, 0xbf, 0x2c,
+	0x00, 0x3d, 0x06, 0x32, 0x51, 0xcb, 0x5a, 0x83, 0x76, 0x5f, 0xdd, 0x72, 0x63, 0xc4, 0xc9, 0x84,
+	0x32, 0x80, 0xc4, 0xf7, 0x42, 0x47, 0xa6, 0x31, 0x72, 0xb5, 0x7a, 0x97, 0x57, 0x2a, 0x5b, 0xfd,
+	0xb1, 0x32, 0xa8, 0xf6, 0xc7, 0x56, 0x0f, 0xda, 0x57, 0xb1, 0x2f, 0x91, 0x63, 0x12, 0x89, 0x30,
+	0xc1, 0xed, 0xa8, 0xe4, 0x57, 0xd4, 0x41, 0x04, 0x0d, 0x8e, 0x9e, 0x9f, 0x48, 0x8c, 0xa9, 0x0d,
+	0x35, 0x8e, 0xce, 0x94, 0x36, 0xcb, 0x50, 0x23, 0xcc, 0xcc, 0x56, 0x09, 0x55, 0x6e, 0x6b, 0x6f,
+	0xbe, 0x34, 0xc8, 0xd3, 0xa7, 0xf1, 0xfd, 0x2e, 0x43, 0xa8, 0x2b, 0x2f, 0x5a, 0x95, 0x99, 0x07,
+	0x25, 0xd9, 0x4a, 0x61, 0x35, 0x8a, 0xd9, 0xc5, 0xd2, 0x20, 0x67, 0xdd, 0xd5, 0x9a, 0x69, 0x2f,
+	0x6b, 0xa6, 0xcd, 0x73, 0x46, 0x16, 0x39, 0x23, 0xcf, 0x39, 0x23, 0xab, 0x9c, 0x91, 0xd7, 0x9c,
+	0x91, 0xf7, 0x9c, 0x69, 0x1f, 0x39, 0x23, 0x8f, 0x6f, 0x4c, 0x73, 0xff, 0xab, 0x1f, 0x1a, 0x7e,
+	0x05, 0x00, 0x00, 0xff, 0xff, 0x30, 0x9b, 0x76, 0x3c, 0x0a, 0x02, 0x00, 0x00,
 }

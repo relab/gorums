@@ -7,7 +7,7 @@ installprotocgorums:
 
 .PHONY: proto
 proto: installprotocgorums
-	protoc -I=../../../../:. --$(PROTOC_PLUGIN)=plugins=grpc+gorums:. byzq.proto
+	protoc -I=../../../../:../vendor/:. --$(PROTOC_PLUGIN)=plugins=grpc+gorums:. byzq.proto
 
 .PHONY: bench 
 bench:
