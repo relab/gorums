@@ -23,10 +23,8 @@ func main() {
 	vanity.ForEachFile(files, vanity.TurnOffGoEnumStringerAll)
 	vanity.ForEachFile(files, vanity.TurnOnEnumStringerAll)
 
-	vanity.ForEachFile(files, vanity.TurnOnEqualAll)
 	vanity.ForEachFile(files, vanity.TurnOffGoStringerAll)
 	vanity.ForEachFile(files, vanity.TurnOnStringerAll)
-	vanity.ForEachFile(files, vanity.TurnOnVerboseEqualAll)
 
 	resp := command.Generate(req)
 	command.Write(resp)
