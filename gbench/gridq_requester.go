@@ -14,7 +14,7 @@ import (
 )
 
 // GridQRequesterFactory implements RequesterFactory by creating a Requester which
-// issues requests to a register using the Gorums framework.
+// issues requests to a storage using the Gorums framework.
 type GridQRequesterFactory struct {
 	Addrs             []string
 	ReadQuorum        int

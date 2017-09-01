@@ -17,7 +17,7 @@ import (
 )
 
 // ByzqRequesterFactory implements RequesterFactory by creating a Requester which
-// issues requests to a register using the Byzq framework.
+// issues requests to a storage using the Byzq framework.
 type ByzqRequesterFactory struct {
 	Addrs             []string
 	PayloadSize       int

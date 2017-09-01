@@ -14,7 +14,7 @@ import (
 )
 
 // GorumsRequesterFactory implements RequesterFactory by creating a Requester which
-// issues requests to a register using the Gorums framework.
+// issues requests to a storage using the Gorums framework.
 type GorumsRequesterFactory struct {
 	Addrs             []string
 	ReadQuorum        int
@@ -67,7 +67,7 @@ func (gr *gorumsRequester) Setup() error {
 	}
 
 	ids := gr.mgr.NodeIDs()
-	qspec := newRegisterQSpec(gr.readq, gr.writeq)
+	qspec := newStorageQSpec(gr.readq, gr.writeq)
 	gr.config, err = gr.mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		return err
@@ -121,29 +121,29 @@ func (gr *gorumsRequester) Teardown() error {
 	return nil
 }
 
-type registerQSpec struct {
+type storageQSpec struct {
 	rq, wq int
 }
 
-func newRegisterQSpec(rq, wq int) rpc.QuorumSpec {
-	return &registerQSpec{
+func newStorageQSpec(rq, wq int) rpc.QuorumSpec {
+	return &storageQSpec{
 		rq: rq,
 		wq: wq,
 	}
 }
 
-func (rqs *registerQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
+func (rqs *storageQSpec) ReadQF(replies []*rpc.State) (*rpc.State, bool) {
 	if len(replies) < rqs.rq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *registerQSpec) ReadFutureQF(replies []*rpc.State) (*rpc.State, bool) {
+func (rqs *storageQSpec) ReadFutureQF(replies []*rpc.State) (*rpc.State, bool) {
 	return rqs.ReadQF(replies)
 }
 
-func (rqs *registerQSpec) ReadCustomReturnQF(replies []*rpc.State) (*rpc.MyState, bool) {
+func (rqs *storageQSpec) ReadCustomReturnQF(replies []*rpc.State) (*rpc.MyState, bool) {
 	state, ok := rqs.ReadQF(replies)
 	if !ok {
 		return nil, false
@@ -156,26 +156,26 @@ func (rqs *registerQSpec) ReadCustomReturnQF(replies []*rpc.State) (*rpc.MyState
 	return myState, ok
 }
 
-func (rqs *registerQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, int, bool) {
+func (rqs *storageQSpec) ReadCorrectableQF(replies []*rpc.State) (*rpc.State, int, bool) {
 	panic("not implemented")
 }
 
-func (rqs *registerQSpec) ReadPrelimQF(replies []*rpc.State) (*rpc.State, int, bool) {
+func (rqs *storageQSpec) ReadPrelimQF(replies []*rpc.State) (*rpc.State, int, bool) {
 	panic("not implemented")
 }
 
-func (rqs *registerQSpec) WriteQF(req *rpc.State, replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+func (rqs *storageQSpec) WriteQF(req *rpc.State, replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
 	if len(replies) < rqs.wq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *registerQSpec) WriteFutureQF(req *rpc.State, replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+func (rqs *storageQSpec) WriteFutureQF(req *rpc.State, replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
 	return rqs.WriteQF(req, replies)
 }
 
-func (rqs *registerQSpec) WritePerNodeQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
+func (rqs *storageQSpec) WritePerNodeQF(replies []*rpc.WriteResponse) (*rpc.WriteResponse, bool) {
 	if len(replies) < rqs.wq {
 		return nil, false
 	}

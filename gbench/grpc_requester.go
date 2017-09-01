@@ -15,7 +15,7 @@ import (
 )
 
 // GrpcRequesterFactory implements RequesterFactory by creating a Requester which
-// issues requests to a register using the gRPC framework.
+// issues requests to a storage using the gRPC framework.
 type GrpcRequesterFactory struct {
 	Addrs             []string
 	ReadQuorum        int
