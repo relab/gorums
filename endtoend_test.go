@@ -3,16 +3,76 @@ package gorums
 import (
 	"bytes"
 	"errors"
+	fmt "fmt"
 	"go/ast"
 	"go/parser"
 	"go/printer"
 	"go/token"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
+
+const (
+	gorumsBaseImport  = "github.com/relab/gorums"
+	devImport         = gorumsBaseImport + "/" + devFolder
+	testdataDevImport = gorumsBaseImport + "/" + testdataFolder + "/" + devFolder
+
+	devFolder      = "dev"
+	testdataFolder = "testdata"
+
+	regProtoFile = "register.proto"
+
+	devRegProtoRelPath = devFolder + "/" + regProtoFile
+
+	protoc        = "protoc"
+	protocIFlag   = "-I=../../../:."
+	protocOutFlag = "--gorums_out=plugins=grpc+gorums:"
+)
+
+func run(t *testing.T, name string, args ...string) {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	cmd.Env = append(cmd.Env, os.Environ()...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func runAndCaptureOutput(command string, args ...string) ([]byte, error) {
+	cmd := exec.Command(command, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("%v\n%s", err, out)
+	}
+	return bytes.TrimSuffix(out, []byte{'\n'}), nil
+}
+
+const (
+	protocVersionPrefix  = "libprotoc "
+	currentProtocVersion = "3.3.2"
+)
+
+func checkProtocVersion(t *testing.T) {
+	t.Helper()
+	out, err := runAndCaptureOutput("protoc", "--version")
+	if err != nil {
+		t.Skipf("skipping test due to protoc error: %v", err)
+	}
+	gotVersion := string(out)
+	gotVersion = strings.TrimPrefix(gotVersion, protocVersionPrefix)
+	if gotVersion != currentProtocVersion {
+		t.Skipf("skipping test due to old protoc version, got %q, required is %q", gotVersion, currentProtocVersion)
+	}
+}
 
 var devFilesToCopy = []struct {
 	name              string

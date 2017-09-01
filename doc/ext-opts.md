@@ -99,6 +99,6 @@ service Storage {
    c. update the logic in the `isQuorumCallVariant` function if necessary.
    d. update the error handling logic in `verifyExtensionsAndCreate`.
 5. Update the template files (`.tmpl` in `dev` folder) related to your option. This is were your on your own.
-6. To regenerate the gorums plugin, you need to run `make goldenanddev` so that new proto files will understand your option.
+6. To regenerate the gorums plugin, you need to run `make dev` so that new proto files will understand your option.
 7. Update the `dev/register.proto` file with your new option (probably on a new method).
 8. To use the new option in the `dev/register.proto` file, you need to run `make devproto`.

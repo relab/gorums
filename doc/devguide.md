@@ -28,9 +28,7 @@ The Makefile itself also serves as documentation; inspect it for details.
 | `gorumsprotoopts` | Compile the gorums protobuf options from the `gorums.proto` file. |
 | `static` | Bundle the static (generic) code used by the gorums plugin. |
 | `templates` | Generate the templates code bundle used by the gorums plugin. |
-| `golden` | Generate and update the golden `protoc-gen-gorums` compiler output used by a test. |
 | `dev` | Generate _gen.go files for the `dev` folder. |
-| `goldenanddev` | Run both the`golden` and `dev` target. |
 | `prof{cpu,mem,obj}` | Create a CPU/memory profile using a predefined benchmark. |
 | `getdep` | Download the 'dep' vendoring tool. |
 | `getchecktools` | Download the static analysis tools. |
@@ -61,10 +59,6 @@ program.
 1. If the change is in a "static" file it's enough to update the bundle of
    static code. This can be done by calling ```make genstatic```.
 
-1. If any change is done to the static or generated code, the file representing
-   the "golden" output of the generator must be regenerated. This can be done
-   by running ```make gengolden```.
-
 See the Makefile for more details.
 
 ## Testing
@@ -78,13 +72,6 @@ There are three main tests for this project:
 1. **End-to-end**: This test invokes the generator with the ```register.proto```
    example from ```dev``` and runs the integration test against the
    *generated* code.
-
-1. **Golden**: This test invokes the generator with the ```register.proto```
-   example from ```dev``` and compares the output against a golden output
-   file in the ```testdata``` folder. This test verifies that the generator
-   output does not change unexpectedly.  The golden output file should be
-   updated as described in the previous Workflow section if the output *is*
-   expected to change.
 
 ## Benchmarking
 

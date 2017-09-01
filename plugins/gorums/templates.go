@@ -3,7 +3,7 @@
 
 package gorums
 
-const calltype_common_definitions_tmpl = `{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+const calltype_common_definitions_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
 {{/* calltype_common_definitions.tmpl will only be executed for each 'calltype' template. */}}
 
 {{define "callGRPC"}}
@@ -103,7 +103,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 `
 
 const calltype_correctable_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* Remember to run 'make dev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
@@ -282,7 +282,7 @@ type {{.UnexportedTypeName}} struct {
 `
 
 const calltype_correctable_prelim_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* Remember to run 'make dev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
@@ -478,7 +478,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, wg *sync.WaitGroup, node *Node
 `
 
 const calltype_future_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* Remember to run 'make dev' after editing this file. */}}
 
 {{if not .IgnoreImports}}
 package {{.PackageName}}
@@ -626,7 +626,7 @@ type {{.UnexportedTypeName}} struct {
 `
 
 const calltype_multicast_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* Remember to run 'make dev' after editing this file. */}}
 
 {{if not .IgnoreImports}}
 package {{.PackageName}}
@@ -668,7 +668,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, arg *{{.F
 `
 
 const calltype_quorumcall_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* Remember to run 'make dev' after editing this file. */}}
 
 {{if not .IgnoreImports}}
 package {{.PackageName}}
@@ -770,7 +770,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 `
 
 const node_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* Remember to run 'make dev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
@@ -851,7 +851,7 @@ func (n *Node) close() error {
 `
 
 const qspec_tmpl = `
-{{/* Remember to run 'make goldenanddev' after editing this file. */}}
+{{/* Remember to run 'make dev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
 package {{.PackageName}}
