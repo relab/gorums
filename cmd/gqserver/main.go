@@ -21,7 +21,7 @@ import (
 
 var rerr = grpc.Errorf(codes.Internal, "something very wrong happened")
 
-type register struct {
+type storage struct {
 	sync.Mutex
 	row, col uint32
 	state    gridq.State
@@ -75,7 +75,7 @@ func main() {
 		rand.Seed(time.Now().Unix())
 	}
 
-	register := &register{
+	s := &storage{
 		row:     row,
 		col:     col,
 		doSleep: *sleep,
@@ -84,7 +84,7 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	gridq.RegisterRegisterServer(grpcServer, register)
+	gridq.RegisterStorageServer(grpcServer, s)
 	fmt.Println(grpcServer.Serve(l))
 	os.Exit(2)
 }
@@ -105,7 +105,7 @@ func parseRowCol(id string) (uint32, uint32, error) {
 	return uint32(row), uint32(col), nil
 }
 
-func (r *register) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadResponse, error) {
+func (r *storage) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadResponse, error) {
 	r.sleep()
 	if err := r.returnErr(); err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (r *register) Read(ctx context.Context, e *gridq.Empty) (*gridq.ReadRespons
 	}, nil
 }
 
-func (r *register) Write(ctx context.Context, s *gridq.State) (*gridq.WriteResponse, error) {
+func (r *storage) Write(ctx context.Context, s *gridq.State) (*gridq.WriteResponse, error) {
 	r.sleep()
 	if err := r.returnErr(); err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func (r *register) Write(ctx context.Context, s *gridq.State) (*gridq.WriteRespo
 	return wresp, nil
 }
 
-func (r *register) returnErr() error {
+func (r *storage) returnErr() error {
 	if r.errRate == 0 {
 		return nil
 	}
@@ -145,7 +145,7 @@ func (r *register) returnErr() error {
 	return nil
 }
 
-func (r *register) sleep() {
+func (r *storage) sleep() {
 	if !r.doSleep {
 		return
 	}
