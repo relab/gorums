@@ -345,7 +345,16 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	}
 
 	var cnodes []*Node
+	unique := make(map[uint32]struct{})
+	var deduped []uint32
 	for _, nid := range ids {
+		// Ensure that identical ids are only counted once.
+		if _, duplicate := unique[nid]; duplicate {
+			continue
+		}
+		unique[nid] = struct{}{}
+		deduped = append(deduped, nid)
+
 		node, found := m.lookup[nid]
 		if !found {
 			return nil, NodeNotFoundError(nid)
@@ -354,10 +363,10 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	}
 
 	// Node ids are sorted ensure a globally consistent configuration id.
-	sort.Sort(idSlice(ids))
+	sort.Sort(idSlice(deduped))
 
 	h := fnv.New32a()
-	for _, id := range ids {
+	for _, id := range deduped {
 		binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
