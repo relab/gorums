@@ -6,7 +6,7 @@ import (
 	qc "github.com/relab/gorums/dev"
 )
 
-func TestEqualGlobalConfigurationIDs(t *testing.T) {
+func TestEqualGlobalConfigurationIDsDifferentOrder(t *testing.T) {
 	// Equal set of addresses, but different order.
 	addrsOne := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
 	addrsTwo := []string{"localhost:8081", "localhost:8082", "localhost:8080"}
@@ -33,6 +33,34 @@ func TestEqualGlobalConfigurationIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error creating config two: %v", err)
 	}
+	if configOne.ID() != configTwo.ID() {
+		t.Errorf("global configuration ids differ, %d != %d",
+			configOne.ID(), configTwo.ID())
+	}
+}
+
+func TestEqualGlobalConfigurationIDsDuplicateID(t *testing.T) {
+	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
+
+	mgr, err := qc.NewManager(addrs, qc.WithNoConnect())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ids := mgr.NodeIDs()
+
+	// Create a configuration with all ids available in the manager.
+	configOne, err := mgr.NewConfiguration(ids, &MajorityQSpec{})
+	if err != nil {
+		t.Fatalf("error creating config one: %v", err)
+	}
+	// Create a configuration with all ids available in the manager and a duplicate.
+	configTwo, err := mgr.NewConfiguration(append(ids, ids[0]), &MajorityQSpec{})
+	if err != nil {
+		t.Fatalf("error creating config two: %v", err)
+	}
+
+	// Global ids should be equal.
 	if configOne.ID() != configTwo.ID() {
 		t.Errorf("global configuration ids differ, %d != %d",
 			configOne.ID(), configTwo.ID())
