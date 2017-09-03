@@ -1,6 +1,6 @@
 # byzq - Byzantine Quorum Protocol
 
-#### Byzantine Safe Register
+#### Byzantine Safe Register/Storage
 * Ref. Algo. 4.14 in RSDP.
 * Requires authenticated channels.
 * RequestID field of messages not needed since gRPC handles request matching.

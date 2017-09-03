@@ -7,7 +7,7 @@ option (gogoproto.equal_all) = true;
 
 package byzq;
 
-service Register {
+service Storage {
 	rpc Read(Key) returns (Value) {
 		option (gorums.qc) = true;
 		option (gorums.custom_return_type) = "Content";
