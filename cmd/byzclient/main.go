@@ -107,7 +107,7 @@ func main() {
 		dief("error creating config: %v", err)
 	}
 
-	registerState := &byzq.Content{
+	storageState := &byzq.Content{
 		Key:       "Hein",
 		Value:     "Meling",
 		Timestamp: -1,
@@ -116,9 +116,9 @@ func main() {
 	for {
 		if *writer {
 			// Writer client.
-			registerState.Value = strconv.Itoa(rand.Intn(1 << 8))
-			registerState.Timestamp++
-			signedState, err := qspec.Sign(registerState)
+			storageState.Value = strconv.Itoa(rand.Intn(1 << 8))
+			storageState.Timestamp++
+			signedState, err := qspec.Sign(storageState)
 			if err != nil {
 				dief("failed to sign message: %v", err)
 			}
@@ -130,12 +130,12 @@ func main() {
 			time.Sleep(15 * time.Second)
 		} else {
 			// Reader client.
-			val, err := conf.Read(context.Background(), &byzq.Key{Key: registerState.Key})
+			val, err := conf.Read(context.Background(), &byzq.Key{Key: storageState.Key})
 			if err != nil {
 				dief("error reading: %v", err)
 			}
-			registerState = val
-			fmt.Println("ReadReturn: " + registerState.String())
+			storageState = val
+			fmt.Println("ReadReturn: " + storageState.String())
 			time.Sleep(10000 * time.Millisecond)
 		}
 	}
