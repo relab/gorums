@@ -15,7 +15,7 @@ import (
 	"github.com/relab/gorums/byzq"
 )
 
-type register struct {
+type storage struct {
 	sync.RWMutex
 	state map[string]byzq.Value
 }
@@ -68,19 +68,19 @@ func serve(port int, keyFile string, noauth bool) {
 	}
 	grpcServer := grpc.NewServer(opts...)
 	smap := make(map[string]byzq.Value)
-	byzq.RegisterRegisterServer(grpcServer, &register{state: smap})
+	byzq.RegisterStorageServer(grpcServer, &storage{state: smap})
 	log.Printf("server %s running", l.Addr())
 	log.Fatal(grpcServer.Serve(l))
 }
 
-func (r *register) Read(ctx context.Context, k *byzq.Key) (*byzq.Value, error) {
+func (r *storage) Read(ctx context.Context, k *byzq.Key) (*byzq.Value, error) {
 	r.RLock()
 	value := r.state[k.Key]
 	r.RUnlock()
 	return &value, nil
 }
 
-func (r *register) Write(ctx context.Context, v *byzq.Value) (*byzq.WriteResponse, error) {
+func (r *storage) Write(ctx context.Context, v *byzq.Value) (*byzq.WriteResponse, error) {
 	wr := &byzq.WriteResponse{Timestamp: v.C.Timestamp}
 	r.Lock()
 	val, found := r.state[v.C.Key]
