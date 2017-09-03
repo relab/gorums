@@ -66,6 +66,20 @@ func (m *State) Reset()                    { *m = State{} }
 func (*State) ProtoMessage()               {}
 func (*State) Descriptor() ([]byte, []int) { return fileDescriptorGridq, []int{0} }
 
+func (m *State) GetValue() string {
+	if m != nil {
+		return m.Value
+	}
+	return ""
+}
+
+func (m *State) GetTimestamp() int64 {
+	if m != nil {
+		return m.Timestamp
+	}
+	return 0
+}
+
 type ReadResponse struct {
 	Row   uint32 `protobuf:"varint,1,opt,name=row,proto3" json:"row,omitempty"`
 	Col   uint32 `protobuf:"varint,2,opt,name=col,proto3" json:"col,omitempty"`
@@ -75,6 +89,20 @@ type ReadResponse struct {
 func (m *ReadResponse) Reset()                    { *m = ReadResponse{} }
 func (*ReadResponse) ProtoMessage()               {}
 func (*ReadResponse) Descriptor() ([]byte, []int) { return fileDescriptorGridq, []int{1} }
+
+func (m *ReadResponse) GetRow() uint32 {
+	if m != nil {
+		return m.Row
+	}
+	return 0
+}
+
+func (m *ReadResponse) GetCol() uint32 {
+	if m != nil {
+		return m.Col
+	}
+	return 0
+}
 
 func (m *ReadResponse) GetState() *State {
 	if m != nil {
@@ -93,6 +121,27 @@ func (m *WriteResponse) Reset()                    { *m = WriteResponse{} }
 func (*WriteResponse) ProtoMessage()               {}
 func (*WriteResponse) Descriptor() ([]byte, []int) { return fileDescriptorGridq, []int{2} }
 
+func (m *WriteResponse) GetRow() uint32 {
+	if m != nil {
+		return m.Row
+	}
+	return 0
+}
+
+func (m *WriteResponse) GetCol() uint32 {
+	if m != nil {
+		return m.Col
+	}
+	return 0
+}
+
+func (m *WriteResponse) GetNew() bool {
+	if m != nil {
+		return m.New
+	}
+	return false
+}
+
 type Empty struct {
 }
 
@@ -106,311 +155,29 @@ func init() {
 	proto.RegisterType((*WriteResponse)(nil), "gridq.WriteResponse")
 	proto.RegisterType((*Empty)(nil), "gridq.Empty")
 }
-func (this *State) VerboseEqual(that interface{}) error {
-	if that == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that == nil && this != nil")
-	}
-
-	that1, ok := that.(*State)
-	if !ok {
-		that2, ok := that.(State)
-		if ok {
-			that1 = &that2
-		} else {
-			return fmt.Errorf("that is not of type *State")
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that is type *State but is nil && this != nil")
-	} else if this == nil {
-		return fmt.Errorf("that is type *State but is not nil && this == nil")
-	}
-	if this.Value != that1.Value {
-		return fmt.Errorf("Value this(%v) Not Equal that(%v)", this.Value, that1.Value)
-	}
-	if this.Timestamp != that1.Timestamp {
-		return fmt.Errorf("Timestamp this(%v) Not Equal that(%v)", this.Timestamp, that1.Timestamp)
-	}
-	return nil
-}
-func (this *State) Equal(that interface{}) bool {
-	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
-	}
-
-	that1, ok := that.(*State)
-	if !ok {
-		that2, ok := that.(State)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
-	} else if this == nil {
-		return false
-	}
-	if this.Value != that1.Value {
-		return false
-	}
-	if this.Timestamp != that1.Timestamp {
-		return false
-	}
-	return true
-}
-func (this *ReadResponse) VerboseEqual(that interface{}) error {
-	if that == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that == nil && this != nil")
-	}
-
-	that1, ok := that.(*ReadResponse)
-	if !ok {
-		that2, ok := that.(ReadResponse)
-		if ok {
-			that1 = &that2
-		} else {
-			return fmt.Errorf("that is not of type *ReadResponse")
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that is type *ReadResponse but is nil && this != nil")
-	} else if this == nil {
-		return fmt.Errorf("that is type *ReadResponse but is not nil && this == nil")
-	}
-	if this.Row != that1.Row {
-		return fmt.Errorf("Row this(%v) Not Equal that(%v)", this.Row, that1.Row)
-	}
-	if this.Col != that1.Col {
-		return fmt.Errorf("Col this(%v) Not Equal that(%v)", this.Col, that1.Col)
-	}
-	if !this.State.Equal(that1.State) {
-		return fmt.Errorf("State this(%v) Not Equal that(%v)", this.State, that1.State)
-	}
-	return nil
-}
-func (this *ReadResponse) Equal(that interface{}) bool {
-	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
-	}
-
-	that1, ok := that.(*ReadResponse)
-	if !ok {
-		that2, ok := that.(ReadResponse)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
-	} else if this == nil {
-		return false
-	}
-	if this.Row != that1.Row {
-		return false
-	}
-	if this.Col != that1.Col {
-		return false
-	}
-	if !this.State.Equal(that1.State) {
-		return false
-	}
-	return true
-}
-func (this *WriteResponse) VerboseEqual(that interface{}) error {
-	if that == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that == nil && this != nil")
-	}
-
-	that1, ok := that.(*WriteResponse)
-	if !ok {
-		that2, ok := that.(WriteResponse)
-		if ok {
-			that1 = &that2
-		} else {
-			return fmt.Errorf("that is not of type *WriteResponse")
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that is type *WriteResponse but is nil && this != nil")
-	} else if this == nil {
-		return fmt.Errorf("that is type *WriteResponse but is not nil && this == nil")
-	}
-	if this.Row != that1.Row {
-		return fmt.Errorf("Row this(%v) Not Equal that(%v)", this.Row, that1.Row)
-	}
-	if this.Col != that1.Col {
-		return fmt.Errorf("Col this(%v) Not Equal that(%v)", this.Col, that1.Col)
-	}
-	if this.New != that1.New {
-		return fmt.Errorf("New this(%v) Not Equal that(%v)", this.New, that1.New)
-	}
-	return nil
-}
-func (this *WriteResponse) Equal(that interface{}) bool {
-	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
-	}
-
-	that1, ok := that.(*WriteResponse)
-	if !ok {
-		that2, ok := that.(WriteResponse)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
-	} else if this == nil {
-		return false
-	}
-	if this.Row != that1.Row {
-		return false
-	}
-	if this.Col != that1.Col {
-		return false
-	}
-	if this.New != that1.New {
-		return false
-	}
-	return true
-}
-func (this *Empty) VerboseEqual(that interface{}) error {
-	if that == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that == nil && this != nil")
-	}
-
-	that1, ok := that.(*Empty)
-	if !ok {
-		that2, ok := that.(Empty)
-		if ok {
-			that1 = &that2
-		} else {
-			return fmt.Errorf("that is not of type *Empty")
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return nil
-		}
-		return fmt.Errorf("that is type *Empty but is nil && this != nil")
-	} else if this == nil {
-		return fmt.Errorf("that is type *Empty but is not nil && this == nil")
-	}
-	return nil
-}
-func (this *Empty) Equal(that interface{}) bool {
-	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
-	}
-
-	that1, ok := that.(*Empty)
-	if !ok {
-		that2, ok := that.(Empty)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
-	} else if this == nil {
-		return false
-	}
-	return true
-}
 
 //  Reference Gorums specific imports to suppress errors if they are not otherwise used.
 var _ = codes.OK
 
-/* 'gorums' plugin for protoc-gen-go - generated from: config_qc_tmpl */
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_prelim_tmpl */
 
-// ReadReply encapsulates the reply from a Read quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type ReadReply struct {
-	NodeIDs []uint32
-	*ReadResponse
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_correctable_tmpl */
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_future_tmpl */
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_multicast_tmpl */
+
+/* 'gorums' plugin for protoc-gen-go - generated from: calltype_quorumcall_tmpl */
+
+/* Exported types and methods for quorum call method Read */
+
+// Read is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) Read(ctx context.Context, arg *Empty) (*ReadResponse, error) {
+	return c.read(ctx, arg)
 }
 
-func (r ReadReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.ReadResponse)
-}
-
-// Read invokes a Read quorum call on configuration c
-// and returns the result as a ReadReply.
-func (c *Configuration) Read(ctx context.Context, args *Empty) (*ReadReply, error) {
-	return c.mgr.read(ctx, c, args)
-}
-
-// WriteReply encapsulates the reply from a Write quorum call.
-// It contains the id of each node of the quorum that replied and a single reply.
-type WriteReply struct {
-	NodeIDs []uint32
-	*WriteResponse
-}
-
-func (r WriteReply) String() string {
-	return fmt.Sprintf("node ids: %v | answer: %v", r.NodeIDs, r.WriteResponse)
-}
-
-// Write invokes a Write quorum call on configuration c
-// and returns the result as a WriteReply.
-func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error) {
-	return c.mgr.write(ctx, c, args)
-}
-
-/* 'gorums' plugin for protoc-gen-go - generated from: mgr_qc_tmpl */
+/* Unexported types and methods for quorum call method Read */
 
 type readReply struct {
 	nid   uint32
@@ -418,9 +185,9 @@ type readReply struct {
 	err   error
 }
 
-func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (r *ReadReply, err error) {
+func (c *Configuration) read(ctx context.Context, a *Empty) (resp *ReadResponse, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
 		defer ti.tr.Finish()
 
@@ -429,11 +196,11 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (r *R
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.ReadResponse,
+				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
@@ -443,19 +210,15 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (r *R
 	}
 
 	replyChan := make(chan readReply, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCRead(newCtx, n, args, replyChan)
+		go callGRPCRead(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*ReadResponse, 0, c.n)
-		reply       = &ReadReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -463,37 +226,35 @@ func (m *Manager) read(ctx context.Context, c *Configuration, args *Empty) (r *R
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.ReadResponse, quorum = c.qspec.ReadQF(replyValues); quorum {
-				cancel()
-				return reply, nil
+			if resp, quorum = c.qspec.ReadQF(replyValues); quorum {
+				return resp, nil
 			}
-		case <-newCtx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCRead(ctx context.Context, node *Node, args *Empty, replyChan chan<- readReply) {
+func callGRPCRead(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *Empty, replyChan chan<- readReply) {
+	wg.Done()
 	reply := new(ReadResponse)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/gridq.Register/Read",
-		args,
+		"/gridq.Storage/Read",
+		arg,
 		reply,
 		node.conn,
 	)
@@ -506,15 +267,25 @@ func callGRPCRead(ctx context.Context, node *Node, args *Empty, replyChan chan<-
 	replyChan <- readReply{node.id, reply, err}
 }
 
+/* Exported types and methods for quorum call method Write */
+
+// Write is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteResponse, error) {
+	return c.write(ctx, arg)
+}
+
+/* Unexported types and methods for quorum call method Write */
+
 type writeReply struct {
 	nid   uint32
 	reply *WriteResponse
 	err   error
 }
 
-func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *WriteReply, err error) {
+func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
-	if m.opts.trace {
+	if c.mgr.opts.trace {
 		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
 		defer ti.tr.Finish()
 
@@ -523,11 +294,11 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
 		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
 			ti.tr.LazyLog(&qcresult{
-				ids:   r.NodeIDs,
-				reply: r.WriteResponse,
+				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
@@ -537,19 +308,15 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	}
 
 	replyChan := make(chan writeReply, c.n)
-	newCtx, cancel := context.WithCancel(ctx)
-
-	if m.opts.trace {
-		ti.tr.LazyLog(&payload{sent: true, msg: args}, false)
-	}
-
+	var wg sync.WaitGroup
+	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCWrite(newCtx, n, args, replyChan)
+		go callGRPCWrite(ctx, &wg, n, a, replyChan)
 	}
+	wg.Wait()
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
-		reply       = &WriteReply{NodeIDs: make([]uint32, 0, c.n)}
 		errCount    int
 		quorum      bool
 	)
@@ -557,37 +324,35 @@ func (m *Manager) write(ctx context.Context, c *Configuration, args *State) (r *
 	for {
 		select {
 		case r := <-replyChan:
-			reply.NodeIDs = append(reply.NodeIDs, r.nid)
 			if r.err != nil {
 				errCount++
 				break
 			}
-			if m.opts.trace {
+			if c.mgr.opts.trace {
 				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if reply.WriteResponse, quorum = c.qspec.WriteQF(replyValues); quorum {
-				cancel()
-				return reply, nil
+			if resp, quorum = c.qspec.WriteQF(replyValues); quorum {
+				return resp, nil
 			}
-		case <-newCtx.Done():
-			return reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
 		if errCount+len(replyValues) == c.n {
-			cancel()
-			return reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
-func callGRPCWrite(ctx context.Context, node *Node, args *State, replyChan chan<- writeReply) {
+func callGRPCWrite(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *State, replyChan chan<- writeReply) {
+	wg.Done()
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/gridq.Register/Write",
-		args,
+		"/gridq.Storage/Write",
+		arg,
 		reply,
 		node.conn,
 	)
@@ -611,9 +376,9 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
-	RegisterClient RegisterClient
+	StorageClient StorageClient
 
-	sync.Mutex
+	mu      sync.Mutex
 	lastErr error
 	latency time.Duration
 }
@@ -625,7 +390,7 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 
-	n.RegisterClient = NewRegisterClient(n.conn)
+	n.StorageClient = NewStorageClient(n.conn)
 
 	return nil
 }
@@ -674,13 +439,20 @@ func (c *Configuration) ID() uint32 {
 }
 
 // NodeIDs returns a slice containing the local ids of all the nodes in the
-// configuration.
+// configuration. IDs are returned in the same order as they were provided in
+// the creation of the Configuration.
 func (c *Configuration) NodeIDs() []uint32 {
 	ids := make([]uint32, len(c.nodes))
 	for i, node := range c.nodes {
 		ids[i] = node.ID()
 	}
 	return ids
+}
+
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Configuration.
+func (c *Configuration) Nodes() []*Node {
+	return c.nodes
 }
 
 // Size returns the number of nodes in the configuration.
@@ -764,8 +536,9 @@ const LevelNotSet = -1
 // Manager manages a pool of node configurations on which quorum remote
 // procedure calls can be made.
 type Manager struct {
-	sync.Mutex
-	nodes    map[uint32]*Node
+	mu       sync.Mutex
+	nodes    []*Node
+	lookup   map[uint32]*Node
 	configs  map[uint32]*Configuration
 	eventLog trace.EventLog
 
@@ -782,7 +555,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	m := &Manager{
-		nodes:   make(map[uint32]*Node),
+		lookup:  make(map[uint32]*Node),
 		configs: make(map[uint32]*Configuration),
 	}
 
@@ -790,31 +563,13 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		opt(&m.opts)
 	}
 
-	selfAddrIndex, selfID, err := m.parseSelfOptions(nodeAddrs)
-	if err != nil {
-		return nil, ManagerCreationError(err)
-	}
-
-	idSeen := false
-	for i, naddr := range nodeAddrs {
+	for _, naddr := range nodeAddrs {
 		node, err2 := m.createNode(naddr)
 		if err2 != nil {
 			return nil, ManagerCreationError(err2)
 		}
-		m.nodes[node.id] = node
-		if i == selfAddrIndex {
-			node.self = true
-			continue
-		}
-		if node.id == selfID {
-			node.self = true
-			idSeen = true
-		}
-	}
-	if selfID != 0 && !idSeen {
-		return nil, ManagerCreationError(
-			fmt.Errorf("WithSelfID provided, but no node with id %d found", selfID),
-		)
+		m.lookup[node.id] = node
+		m.nodes = append(m.nodes, node)
 	}
 
 	if m.opts.trace {
@@ -822,7 +577,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
-	err = m.connectAll()
+	err := m.connectAll()
 	if err != nil {
 		return nil, ManagerCreationError(err)
 	}
@@ -838,30 +593,9 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) parseSelfOptions(addrs []string) (int, uint32, error) {
-	if m.opts.selfAddr != "" && m.opts.selfID != 0 {
-		return 0, 0, fmt.Errorf("both WithSelfAddr and WithSelfID provided")
-	}
-	if m.opts.selfID != 0 {
-		return -1, m.opts.selfID, nil
-	}
-	if m.opts.selfAddr == "" {
-		return -1, 0, nil
-	}
-
-	seen, index := contains(m.opts.selfAddr, addrs)
-	if !seen {
-		return 0, 0, fmt.Errorf(
-			"option WithSelfAddr provided, but address %q was not present in address list",
-			m.opts.selfAddr)
-	}
-
-	return index, 0, nil
-}
-
 func (m *Manager) createNode(addr string) (*Node, error) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
@@ -872,7 +606,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 	_, _ = h.Write([]byte(tcpAddr.String()))
 	id := h.Sum32()
 
-	if _, found := m.nodes[id]; found {
+	if _, found := m.lookup[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)
 	}
 
@@ -895,9 +629,6 @@ func (m *Manager) connectAll() error {
 	}
 
 	for _, node := range m.nodes {
-		if node.self {
-			continue
-		}
 		err := node.connect(m.opts.grpcDialOpts...)
 		if err != nil {
 			if m.eventLog != nil {
@@ -911,9 +642,6 @@ func (m *Manager) connectAll() error {
 
 func (m *Manager) closeNodeConns() {
 	for _, node := range m.nodes {
-		if node.self {
-			continue
-		}
 		err := node.close()
 		if err == nil {
 			continue
@@ -934,67 +662,59 @@ func (m *Manager) Close() {
 	})
 }
 
-// NodeIDs returns the identifier of each available node.
+// NodeIDs returns the identifier of each available node. IDs are returned in
+// the same order as they were provided in the creation of the Manager.
 func (m *Manager) NodeIDs() []uint32 {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
-	for id := range m.nodes {
-		ids = append(ids, id)
+	for _, node := range m.nodes {
+		ids = append(ids, node.ID())
 	}
-	sort.Sort(idSlice(ids))
 	return ids
 }
 
 // Node returns the node with the given identifier if present.
 func (m *Manager) Node(id uint32) (node *Node, found bool) {
-	m.Lock()
-	defer m.Unlock()
-	node, found = m.nodes[id]
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	node, found = m.lookup[id]
 	return node, found
 }
 
-// Nodes returns a slice of each available node.
-func (m *Manager) Nodes(excludeSelf bool) []*Node {
-	m.Lock()
-	defer m.Unlock()
-	var nodes []*Node
-	for _, node := range m.nodes {
-		if excludeSelf && node.self {
-			continue
-		}
-		nodes = append(nodes, node)
-	}
-	OrderedBy(ID).Sort(nodes)
-	return nodes
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Manager.
+func (m *Manager) Nodes() []*Node {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.nodes
 }
 
 // ConfigurationIDs returns the identifier of each available
 // configuration.
 func (m *Manager) ConfigurationIDs() []uint32 {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	ids := make([]uint32, 0, len(m.configs))
 	for id := range m.configs {
 		ids = append(ids, id)
 	}
-	sort.Sort(idSlice(ids))
 	return ids
 }
 
 // Configuration returns the configuration with the given global
 // identifier if present.
 func (m *Manager) Configuration(id uint32) (config *Configuration, found bool) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	config, found = m.configs[id]
 	return config, found
 }
 
 // Configurations returns a slice of each available configuration.
 func (m *Manager) Configurations() []*Configuration {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	configs := make([]*Configuration, 0, len(m.configs))
 	for _, conf := range m.configs {
 		configs = append(configs, conf)
@@ -1004,8 +724,8 @@ func (m *Manager) Configurations() []*Configuration {
 
 // Size returns the number of nodes and configurations in the Manager.
 func (m *Manager) Size() (nodes, configs int) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return len(m.nodes), len(m.configs)
 }
 
@@ -1018,8 +738,8 @@ func (m *Manager) AddNode(addr string) error {
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
 func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
-	m.Lock()
-	defer m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	if len(ids) == 0 {
 		return nil, IllegalConfigError("need at least one node")
@@ -1027,24 +747,19 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	var cnodes []*Node
 	for _, nid := range ids {
-		node, found := m.nodes[nid]
+		node, found := m.lookup[nid]
 		if !found {
 			return nil, NodeNotFoundError(nid)
-		}
-		if node.self && m.selfSpecified() {
-			return nil, IllegalConfigError(
-				fmt.Sprintf("self (%d) can't be part of a configuration when a self-option is provided", nid),
-			)
 		}
 		cnodes = append(cnodes, node)
 	}
 
 	// Node ids are sorted ensure a globally consistent configuration id.
-	OrderedBy(ID).Sort(cnodes)
+	sort.Sort(idSlice(ids))
 
 	h := fnv.New32a()
-	for _, node := range cnodes {
-		binary.Write(h, binary.LittleEndian, node.id)
+	for _, id := range ids {
+		binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
@@ -1063,10 +778,6 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	m.configs[cid] = c
 
 	return c, nil
-}
-
-func (m *Manager) selfSpecified() bool {
-	return m.opts.selfAddr != "" || m.opts.selfID != 0
 }
 
 type idSlice []uint32
@@ -1088,8 +799,8 @@ func (n *Node) Address() string {
 }
 
 func (n *Node) String() string {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return fmt.Sprintf(
 		"node %d | addr: %s | latency: %v",
 		n.id, n.addr, n.latency,
@@ -1097,30 +808,30 @@ func (n *Node) String() string {
 }
 
 func (n *Node) setLastErr(err error) {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.lastErr = err
 }
 
 // LastErr returns the last error encountered (if any) when invoking a remote
 // procedure call on this node.
 func (n *Node) LastErr() error {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return n.lastErr
 }
 
 func (n *Node) setLatency(lat time.Duration) {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.latency = lat
 }
 
 // Latency returns the latency of the last successful remote procedure call
 // made to this node.
 func (n *Node) Latency() time.Duration {
-	n.Lock()
-	defer n.Unlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	return n.latency
 }
 
@@ -1214,8 +925,6 @@ type managerOptions struct {
 	logger       *log.Logger
 	noConnect    bool
 	trace        bool
-	selfAddr     string
-	selfID       uint32
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
@@ -1246,26 +955,9 @@ func WithNoConnect() ManagerOption {
 	}
 }
 
-// WithSelfAddr returns a ManagerOption which instructs the Manager not to connect
-// to the node with network address addr. The address must be present in the
-// list of node addresses provided to the Manager.
-func WithSelfAddr(addr string) ManagerOption {
-	return func(o *managerOptions) {
-		o.selfAddr = addr
-	}
-}
-
-// WithSelfID returns a ManagerOption which instructs the Manager not to
-// connect to the node with the given id. The node must be present in the list
-// of node addresses provided to the Manager.
-func WithSelfID(id uint32) ManagerOption {
-	return func(o *managerOptions) {
-		o.selfID = id
-	}
-}
-
 // WithTracing controls whether to trace qourum calls for this Manager instance
-// using the golang.org/x/net/trace package.
+// using the golang.org/x/net/trace package. Tracing is currently only supported
+// for regular quorum calls.
 func WithTracing() ManagerOption {
 	return func(o *managerOptions) {
 		o.trace = true
@@ -1328,13 +1020,13 @@ func (q qcresult) String() string {
 
 /* util.go */
 
-func contains(addr string, addrs []string) (found bool, index int) {
-	for i, a := range addrs {
-		if addr == a {
-			return true, i
+func appendIfNotPresent(set []uint32, x uint32) []uint32 {
+	for _, y := range set {
+		if y == x {
+			return set
 		}
 	}
-	return false, -1
+	return append(set, x)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -1345,97 +1037,97 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for Register service
+// Client API for Storage service
 
-type RegisterClient interface {
+type StorageClient interface {
 	Read(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ReadResponse, error)
 	Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
 }
 
-type registerClient struct {
+type storageClient struct {
 	cc *grpc.ClientConn
 }
 
-func NewRegisterClient(cc *grpc.ClientConn) RegisterClient {
-	return &registerClient{cc}
+func NewStorageClient(cc *grpc.ClientConn) StorageClient {
+	return &storageClient{cc}
 }
 
-func (c *registerClient) Read(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ReadResponse, error) {
+func (c *storageClient) Read(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ReadResponse, error) {
 	out := new(ReadResponse)
-	err := grpc.Invoke(ctx, "/gridq.Register/Read", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/gridq.Storage/Read", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+func (c *storageClient) Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
-	err := grpc.Invoke(ctx, "/gridq.Register/Write", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/gridq.Storage/Write", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for Register service
+// Server API for Storage service
 
-type RegisterServer interface {
+type StorageServer interface {
 	Read(context.Context, *Empty) (*ReadResponse, error)
 	Write(context.Context, *State) (*WriteResponse, error)
 }
 
-func RegisterRegisterServer(s *grpc.Server, srv RegisterServer) {
-	s.RegisterService(&_Register_serviceDesc, srv)
+func RegisterStorageServer(s *grpc.Server, srv StorageServer) {
+	s.RegisterService(&_Storage_serviceDesc, srv)
 }
 
-func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).Read(ctx, in)
+		return srv.(StorageServer).Read(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/gridq.Register/Read",
+		FullMethod: "/gridq.Storage/Read",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).Read(ctx, req.(*Empty))
+		return srv.(StorageServer).Read(ctx, req.(*Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(State)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).Write(ctx, in)
+		return srv.(StorageServer).Write(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/gridq.Register/Write",
+		FullMethod: "/gridq.Storage/Write",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).Write(ctx, req.(*State))
+		return srv.(StorageServer).Write(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _Register_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "gridq.Register",
-	HandlerType: (*RegisterServer)(nil),
+var _Storage_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "gridq.Storage",
+	HandlerType: (*StorageServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Read",
-			Handler:    _Register_Read_Handler,
+			Handler:    _Storage_Read_Handler,
 		},
 		{
 			MethodName: "Write",
-			Handler:    _Register_Write_Handler,
+			Handler:    _Storage_Write_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -2192,25 +1884,25 @@ var (
 func init() { proto.RegisterFile("gridq.proto", fileDescriptorGridq) }
 
 var fileDescriptorGridq = []byte{
-	// 318 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x09, 0x6e, 0x88, 0x02, 0xff, 0x94, 0x91, 0x41, 0x4e, 0x3a, 0x31,
-	0x14, 0xc6, 0xe7, 0xfd, 0x87, 0xf9, 0x0b, 0x0f, 0x48, 0x48, 0x65, 0x31, 0x21, 0xa6, 0x21, 0x8d,
-	0x0b, 0x16, 0x06, 0x22, 0x2e, 0xdd, 0x99, 0x70, 0x81, 0x9a, 0xe8, 0x7a, 0x80, 0x66, 0x9c, 0x84,
-	0xa1, 0x63, 0x5b, 0x24, 0xee, 0x38, 0x82, 0xc7, 0xf0, 0x02, 0xde, 0xc1, 0x25, 0x4b, 0x97, 0x50,
-	0x37, 0x2e, 0x3d, 0x82, 0x69, 0x67, 0x8c, 0xb2, 0x74, 0xd5, 0xef, 0x7b, 0x7d, 0xef, 0x7b, 0xbf,
-	0xa6, 0xd8, 0x4c, 0x55, 0x36, 0xbf, 0x1f, 0x16, 0x4a, 0x1a, 0x49, 0x22, 0x6f, 0x7a, 0xa7, 0x69,
-	0x66, 0xee, 0x56, 0xd3, 0xe1, 0x4c, 0xe6, 0x23, 0x25, 0x16, 0xc9, 0x74, 0x94, 0x4a, 0xb5, 0xca,
-	0x75, 0x75, 0x94, 0xcd, 0xec, 0x12, 0xa3, 0x6b, 0x93, 0x18, 0x41, 0xba, 0x18, 0x3d, 0x24, 0x8b,
-	0x95, 0x88, 0xa1, 0x0f, 0x83, 0x06, 0x2f, 0x0d, 0x39, 0xc1, 0x86, 0xc9, 0x72, 0xa1, 0x4d, 0x92,
-	0x17, 0xf1, 0xbf, 0x3e, 0x0c, 0x42, 0xfe, 0x53, 0x60, 0x37, 0xd8, 0xe2, 0x22, 0x99, 0x73, 0xa1,
-	0x0b, 0xb9, 0xd4, 0x82, 0x74, 0x30, 0x54, 0x72, 0xed, 0x13, 0xda, 0xdc, 0x49, 0x57, 0x99, 0xc9,
-	0x85, 0x9f, 0x6c, 0x73, 0x27, 0x09, 0xc3, 0x48, 0xbb, 0x85, 0x71, 0xd8, 0x87, 0x41, 0x73, 0xdc,
-	0x1a, 0x96, 0xe8, 0x1e, 0x82, 0x97, 0x57, 0x6c, 0x82, 0xed, 0x5b, 0x95, 0x19, 0xf1, 0xa7, 0xe0,
-	0x0e, 0x86, 0x4b, 0xb1, 0xf6, 0xb1, 0x75, 0xee, 0x24, 0x3b, 0xc2, 0x68, 0x92, 0x17, 0xe6, 0x71,
-	0xbc, 0xc4, 0x3a, 0x17, 0x69, 0xa6, 0x8d, 0x50, 0x64, 0x84, 0x35, 0xc7, 0x4c, 0xbe, 0x17, 0xfb,
-	0x8e, 0xde, 0x71, 0xe5, 0x7e, 0x3f, 0x87, 0xd5, 0x36, 0x2f, 0x31, 0x90, 0x73, 0x8c, 0x3c, 0x0c,
-	0x39, 0x40, 0xed, 0x75, 0x2b, 0x77, 0x00, 0x5a, 0x8e, 0x5c, 0x9d, 0x6d, 0xf7, 0x34, 0x78, 0xdb,
-	0xd3, 0x60, 0xb7, 0xa7, 0xb0, 0xb1, 0x14, 0x9e, 0x2d, 0x85, 0x57, 0x4b, 0x61, 0x6b, 0x29, 0xec,
-	0x2c, 0x85, 0x0f, 0x4b, 0x83, 0x4f, 0x4b, 0xe1, 0xe9, 0x9d, 0x06, 0xd3, 0xff, 0xfe, 0x27, 0x2e,
-	0xbe, 0x02, 0x00, 0x00, 0xff, 0xff, 0x9f, 0x9b, 0x0d, 0x13, 0xc5, 0x01, 0x00, 0x00,
+	// 307 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x91, 0xb1, 0x4e, 0x02, 0x31,
+	0x18, 0xc7, 0xaf, 0x1e, 0x15, 0xf9, 0x80, 0x84, 0x54, 0x86, 0x0b, 0x31, 0x0d, 0x69, 0x18, 0x98,
+	0x20, 0xe2, 0xe8, 0x66, 0xc2, 0x0b, 0x94, 0x44, 0xe7, 0x02, 0xcd, 0x79, 0x09, 0xa5, 0x67, 0xaf,
+	0x48, 0xdc, 0x78, 0x04, 0x5f, 0xc6, 0x77, 0x70, 0x64, 0x74, 0x94, 0xba, 0x38, 0xfa, 0x08, 0xa6,
+	0xbd, 0x33, 0xca, 0xe8, 0xd4, 0xff, 0xff, 0xeb, 0xf7, 0xfd, 0xbf, 0x5f, 0x53, 0x68, 0xa6, 0x26,
+	0x5b, 0x3e, 0x8c, 0x72, 0xa3, 0xad, 0x26, 0x38, 0x98, 0xde, 0x20, 0xcd, 0xec, 0xfd, 0x66, 0x3e,
+	0x5a, 0x68, 0x35, 0x36, 0x72, 0x25, 0xe6, 0xe3, 0x54, 0x9b, 0x8d, 0x2a, 0xaa, 0xa3, 0x6c, 0x66,
+	0xd7, 0x80, 0x67, 0x56, 0x58, 0x49, 0xba, 0x80, 0x1f, 0xc5, 0x6a, 0x23, 0x13, 0xd4, 0x47, 0xc3,
+	0x06, 0x2f, 0x0d, 0xb9, 0x80, 0x86, 0xcd, 0x94, 0x2c, 0xac, 0x50, 0x79, 0x72, 0xd2, 0x47, 0xc3,
+	0x98, 0xff, 0x16, 0xd8, 0x2d, 0xb4, 0xb8, 0x14, 0x4b, 0x2e, 0x8b, 0x5c, 0xaf, 0x0b, 0x49, 0x3a,
+	0x10, 0x1b, 0xbd, 0x0d, 0x09, 0x6d, 0xee, 0xa5, 0xaf, 0x2c, 0xf4, 0x2a, 0x4c, 0xb6, 0xb9, 0x97,
+	0x84, 0x01, 0x2e, 0xfc, 0xc2, 0x24, 0xee, 0xa3, 0x61, 0x73, 0xd2, 0x1a, 0x95, 0xe8, 0x01, 0x82,
+	0x97, 0x57, 0x6c, 0x0a, 0xed, 0x3b, 0x93, 0x59, 0xf9, 0xaf, 0xe0, 0x0e, 0xc4, 0x6b, 0xb9, 0x0d,
+	0xb1, 0x67, 0xdc, 0x4b, 0x56, 0x07, 0x3c, 0x55, 0xb9, 0x7d, 0x9a, 0x28, 0xa8, 0xcf, 0xac, 0x36,
+	0x22, 0x95, 0x64, 0x0c, 0x35, 0x8f, 0x4c, 0x7e, 0xf6, 0x86, 0x86, 0xde, 0x79, 0xe5, 0xfe, 0xbe,
+	0x86, 0xd5, 0x76, 0x2f, 0x09, 0x22, 0x97, 0x80, 0x03, 0x0b, 0x39, 0x22, 0xed, 0x75, 0x2b, 0x77,
+	0xc4, 0x59, 0x8e, 0xdc, 0x0c, 0xf6, 0x07, 0x1a, 0xbd, 0x1d, 0x68, 0xb4, 0x73, 0x14, 0xbd, 0x3a,
+	0x8a, 0xf6, 0x8e, 0xa2, 0x77, 0x47, 0xd1, 0xa7, 0xa3, 0xd1, 0x97, 0xa3, 0xe8, 0xf9, 0x83, 0x46,
+	0xf3, 0xd3, 0xf0, 0x01, 0x57, 0xdf, 0x01, 0x00, 0x00, 0xff, 0xff, 0x9c, 0x12, 0xd0, 0xf1, 0xbc,
+	0x01, 0x00, 0x00,
 }

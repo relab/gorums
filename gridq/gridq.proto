@@ -4,7 +4,7 @@ import "github.com/relab/gorums/gorums.proto";
 
 package gridq;
 
-service Register {
+service Storage {
 	rpc Read(Empty) returns (ReadResponse) {
 		option (gorums.qc) = true;
 	}
