@@ -86,7 +86,7 @@ reinstallprotoc:
 
 .PHONY: devproto
 devproto: reinstallprotoc
-	@echo generating gorumsdev register proto
+	@echo generating gorumsdev storage proto
 	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
 
 .PHONY: gorumsprotoopts
