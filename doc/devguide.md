@@ -2,7 +2,7 @@
 
 The repository contains two main components:
 
-- **dev:** the development code with a concrete (register) implementation for
+- **dev:** the development code with a concrete (storage) implementation for
   testing. The folder also contains templates for dynamic code and all the
   static code that will be bundled together with the generated code.
 - **-plugins/gorums:** second order plugin to ```protoc-gen-gorums```
@@ -24,7 +24,7 @@ The Makefile itself also serves as documentation; inspect it for details.
 | `benchremote` | Run a set of benchmarks that require separate running servers. See the benchmarks for details. |
 | `clean` | Run `go clean` for the whole repository and remove all `.test` and `.prof` files. |
 | `reinstallprotoc` | Install the `protoc-gen-gorums` binary with the gorums plugin included. |
-| `devproto` | Compile the development register.proto file in the `dev` folder. |
+| `devproto` | Compile the development storage.proto file in the `dev` folder. |
 | `gorumsprotoopts` | Compile the gorums protobuf options from the `gorums.proto` file. |
 | `static` | Bundle the static (generic) code used by the gorums plugin. |
 | `templates` | Generate the templates code bundle used by the gorums plugin. |
@@ -67,9 +67,9 @@ All tests can be invoked by running ```make test``` and/or ```make testrace```.
 There are three main tests for this project:
 
 1. **dev/config_rpc_test.go**: The integration test in this package
-   verifies that the concrete client/server register implementation works.
+   verifies that the concrete client/server storage implementation works.
 
-1. **End-to-end**: This test invokes the generator with the ```register.proto```
+1. **End-to-end**: This test invokes the generator with the ```storage.proto```
    example from ```dev``` and runs the integration test against the
    *generated* code.
 
