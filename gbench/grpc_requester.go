@@ -46,7 +46,7 @@ func (r *GrpcRequesterFactory) GetRequester(uint64) bench.Requester {
 
 type client struct {
 	conn   *grpc.ClientConn
-	client rpc.RegisterClient
+	client rpc.StorageClient
 }
 
 type grpcRequester struct {
@@ -77,7 +77,7 @@ func (gr *grpcRequester) Setup() error {
 		}
 		gr.clients[i] = &client{
 			conn:   conn,
-			client: rpc.NewRegisterClient(conn),
+			client: rpc.NewStorageClient(conn),
 		}
 	}
 
