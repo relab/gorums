@@ -27,6 +27,6 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
-	dev.RegisterStorageServer(grpcServer, dev.NewRegisterBench())
+	dev.RegisterStorageServer(grpcServer, dev.NewStorageBench())
 	log.Fatal(grpcServer.Serve(l))
 }

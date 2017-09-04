@@ -91,12 +91,12 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 	return stopGrpcServeFunc, closeListenersFunc
 }
 
-func TestSecureRegister(t *testing.T) {
+func TestSecureStorage(t *testing.T) {
 	defer leakCheck(t)()
 	servers := regServers{
-		{impl: qc.NewRegisterBasic()},
-		{impl: qc.NewRegisterBasic()},
-		{impl: qc.NewRegisterBasic()},
+		{impl: qc.NewStorageBasic()},
+		{impl: qc.NewStorageBasic()},
+		{impl: qc.NewStorageBasic()},
 	}
 	stopGrpcServe, closeListeners := secsetup(t, servers, false)
 	defer stopGrpcServe(allServers)
@@ -125,7 +125,7 @@ func TestSecureRegister(t *testing.T) {
 	ids := mgr.NodeIDs()
 
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
-	qspec := NewRegisterByTimestampQSpec(2, len(ids))
+	qspec := NewStorageByTimestampQSpec(2, len(ids))
 
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {

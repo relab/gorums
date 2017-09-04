@@ -70,33 +70,33 @@ func (mqs *MajorityQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.Write
 	return replies[0], true
 }
 
-type RegisterQSpec struct {
+type StorageQSpec struct {
 	rq, wq int
 }
 
-func NewRegisterQSpec(rq, wq int) qc.QuorumSpec {
-	return &RegisterQSpec{
+func NewStorageQSpec(rq, wq int) qc.QuorumSpec {
+	return &StorageQSpec{
 		rq: rq,
 		wq: wq,
 	}
 }
 
-func (rqs *RegisterQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
-	if len(replies) < rqs.rq {
+func (sqs *StorageQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
+	if len(replies) < sqs.rq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *RegisterQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
-	if len(replies) < rqs.rq {
+func (sqs *StorageQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
+	if len(replies) < sqs.rq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *RegisterQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
-	state, ok := rqs.ReadQF(replies)
+func (sqs *StorageQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
+	state, ok := sqs.ReadQF(replies)
 	if !ok {
 		return nil, false
 	}
@@ -108,30 +108,30 @@ func (rqs *RegisterQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, 
 	return myState, ok
 }
 
-func (rqs *RegisterQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
+func (sqs *StorageQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
-func (rqs *RegisterQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (sqs *StorageQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
-func (rqs *RegisterQSpec) WriteQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
-	if len(replies) < rqs.wq {
+func (sqs *StorageQSpec) WriteQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *RegisterQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
-	if len(replies) < rqs.wq {
+func (sqs *StorageQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *RegisterQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
-	if len(replies) < rqs.wq {
+func (sqs *StorageQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
 		return nil, false
 	}
 	return replies[0], true
@@ -142,35 +142,35 @@ const (
 	LevelStrong = 2
 )
 
-type RegisterByTimestampQSpec struct {
+type StorageByTimestampQSpec struct {
 	rq, wq int
 }
 
-func NewRegisterByTimestampQSpec(rq, wq int) qc.QuorumSpec {
-	return &RegisterByTimestampQSpec{
+func NewStorageByTimestampQSpec(rq, wq int) qc.QuorumSpec {
+	return &StorageByTimestampQSpec{
 		rq: rq,
 		wq: wq,
 	}
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
-	if len(replies) < rqs.rq {
+func (sqs *StorageByTimestampQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
+	if len(replies) < sqs.rq {
 		return nil, false
 	}
 	sort.Sort(ByTimestamp(replies))
 	return replies[len(replies)-1], true
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
-	if len(replies) < rqs.rq {
+func (sqs *StorageByTimestampQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
+	if len(replies) < sqs.rq {
 		return nil, false
 	}
 	sort.Sort(ByTimestamp(replies))
 	return replies[len(replies)-1], true
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
-	state, ok := rqs.ReadQF(replies)
+func (sqs *StorageByTimestampQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
+	state, ok := sqs.ReadQF(replies)
 	if !ok {
 		return nil, false
 	}
@@ -182,44 +182,44 @@ func (rqs *RegisterByTimestampQSpec) ReadCustomReturnQF(replies []*qc.State) (*q
 	return myState, ok
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
+func (sqs *StorageByTimestampQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
 	if len(replies) == 0 {
 		return nil, qc.LevelNotSet, false
 	}
 	sort.Sort(ByTimestamp(replies))
-	if len(replies) < rqs.rq {
+	if len(replies) < sqs.rq {
 		return replies[len(replies)-1], LevelWeak, false
 	}
 	return replies[len(replies)-1], LevelStrong, true
 }
 
-func (rqs *RegisterByTimestampQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (sqs *StorageByTimestampQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
 	if len(replies) == 0 {
 		return nil, qc.LevelNotSet, false
 	}
 	sort.Sort(ByTimestamp(replies))
-	if len(replies) < rqs.rq {
+	if len(replies) < sqs.rq {
 		return replies[len(replies)-1], LevelWeak, false
 	}
 	return replies[len(replies)-1], LevelStrong, true
 }
 
-func (rqs *RegisterByTimestampQSpec) WriteQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
-	if len(replies) < rqs.wq {
+func (sqs *StorageByTimestampQSpec) WriteQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *RegisterByTimestampQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
-	if len(replies) < rqs.wq {
+func (sqs *StorageByTimestampQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
 		return nil, false
 	}
 	return replies[0], true
 }
 
-func (rqs *RegisterByTimestampQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
-	if len(replies) < rqs.wq {
+func (sqs *StorageByTimestampQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
 		return nil, false
 	}
 	return replies[0], true

@@ -35,14 +35,14 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-func TestBasicRegister(t *testing.T) {
+func TestBasicStorage(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
 		},
 		false,
 	)
@@ -66,7 +66,7 @@ func TestBasicRegister(t *testing.T) {
 	ids := mgr.NodeIDs()
 
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
-	qspec := NewRegisterByTimestampQSpec(2, len(ids))
+	qspec := NewStorageByTimestampQSpec(2, len(ids))
 
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -114,9 +114,9 @@ func TestSingleServerRPC(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
 		},
 		false,
 	)
@@ -163,9 +163,9 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
 		},
 		false,
 	)
@@ -208,15 +208,15 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	}
 }
 
-func TestSlowRegister(t *testing.T) {
+func TestSlowStorage(t *testing.T) {
 	defer leakCheck(t)()
 	someErr := grpc.Errorf(codes.Unknown, "Some error")
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterSlow(time.Second)},
-			{impl: qc.NewRegisterSlow(time.Second)},
-			{impl: qc.NewRegisterError(someErr)},
+			{impl: qc.NewStorageSlow(time.Second)},
+			{impl: qc.NewStorageSlow(time.Second)},
+			{impl: qc.NewStorageError(someErr)},
 			// Q=2 below, one error server, two slow servers
 			// -> must timeout with one error received.
 		},
@@ -257,14 +257,14 @@ func TestSlowRegister(t *testing.T) {
 	}
 }
 
-func TestBasicRegisterUsingFuture(t *testing.T) {
+func TestBasicStorageUsingFuture(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
 		},
 		false,
 	)
@@ -281,7 +281,7 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	defer mgr.Close()
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(1, len(ids))
+	qspec := NewStorageQSpec(1, len(ids))
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
@@ -331,14 +331,14 @@ func TestBasicRegisterUsingFuture(t *testing.T) {
 	}
 }
 
-func TestBasicRegisterWithWriteAsync(t *testing.T) {
+func TestBasicStorageWithWriteAsync(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
 		},
 		false,
 	)
@@ -355,7 +355,7 @@ func TestBasicRegisterWithWriteAsync(t *testing.T) {
 	defer mgr.Close()
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(1, len(ids))
+	qspec := NewStorageQSpec(1, len(ids))
 
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -426,9 +426,9 @@ func TestManagerClose(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
 		},
 		false,
 	)
@@ -463,9 +463,9 @@ func TestQuorumCallCancel(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterSlow(time.Second)},
-			{impl: qc.NewRegisterSlow(time.Second)},
-			{impl: qc.NewRegisterSlow(time.Second)},
+			{impl: qc.NewStorageSlow(time.Second)},
+			{impl: qc.NewStorageSlow(time.Second)},
+			{impl: qc.NewStorageSlow(time.Second)},
 		},
 		false,
 	)
@@ -515,9 +515,9 @@ func TestBasicCorrectable(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterSlowWithState(5*time.Millisecond, stateOne)},
-			{impl: qc.NewRegisterSlowWithState(20*time.Millisecond, stateTwo)},
-			{impl: qc.NewRegisterSlowWithState(500*time.Millisecond, stateTwo)},
+			{impl: qc.NewStorageSlowWithState(5*time.Millisecond, stateOne)},
+			{impl: qc.NewStorageSlowWithState(20*time.Millisecond, stateTwo)},
+			{impl: qc.NewStorageSlowWithState(500*time.Millisecond, stateTwo)},
 		},
 		false,
 	)
@@ -535,7 +535,7 @@ func TestBasicCorrectable(t *testing.T) {
 
 	ids := mgr.NodeIDs()
 	majority := len(ids)/2 + 1
-	qspec := NewRegisterByTimestampQSpec(majority, majority)
+	qspec := NewStorageByTimestampQSpec(majority, majority)
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
@@ -575,10 +575,10 @@ func TestCorrectableWithLevels(t *testing.T) {
 	}
 
 	// We need the specific implementation so we call the Unlock method.
-	regServersImplementation := []*qc.RegisterServerLockedWithState{
-		qc.NewRegisterServerLockedWithState(stateOne, 0),
-		qc.NewRegisterServerLockedWithState(stateTwo, 0),
-		qc.NewRegisterServerLockedWithState(stateTwo, 0),
+	regServersImplementation := []*qc.StorageServerLockedWithState{
+		qc.NewStorageServerLockedWithState(stateOne, 0),
+		qc.NewStorageServerLockedWithState(stateTwo, 0),
+		qc.NewStorageServerLockedWithState(stateTwo, 0),
 	}
 
 	regServersInterface := []regServer{
@@ -606,7 +606,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 
 	ids := mgr.NodeIDs()
 	majority := len(ids)/2 + 1
-	qspec := NewRegisterByTimestampQSpec(majority, majority)
+	qspec := NewStorageByTimestampQSpec(majority, majority)
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
@@ -717,10 +717,10 @@ func TestCorrectablePrelim(t *testing.T) {
 	}
 
 	// We need the specific implementation so we call the Unlock and PerformReadPrelimChan methods.
-	regServersImplementation := []*qc.RegisterServerLockedWithState{
-		qc.NewRegisterServerLockedWithState(stateOne, 2),
-		qc.NewRegisterServerLockedWithState(stateTwo, 2),
-		qc.NewRegisterServerLockedWithState(stateTwo, 0),
+	regServersImplementation := []*qc.StorageServerLockedWithState{
+		qc.NewStorageServerLockedWithState(stateOne, 2),
+		qc.NewStorageServerLockedWithState(stateTwo, 2),
+		qc.NewStorageServerLockedWithState(stateTwo, 0),
 	}
 
 	regServersInterface := []regServer{
@@ -908,9 +908,9 @@ func TestPerNodeArg(t *testing.T) {
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
-			{impl: qc.NewRegisterBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
 		},
 		false,
 	)
@@ -934,7 +934,7 @@ func TestPerNodeArg(t *testing.T) {
 	ids := mgr.NodeIDs()
 
 	// Quorum spec: rq=2. wq=3, n=3, sort by timestamp.
-	qspec := NewRegisterByTimestampQSpec(2, len(ids))
+	qspec := NewStorageByTimestampQSpec(2, len(ids))
 
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -1123,13 +1123,13 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{impl: qc.NewRegisterBench()},
+			{impl: qc.NewStorageBench()},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{impl: qc.NewRegisterBench()},
-				regServer{impl: qc.NewRegisterBench()},
+				regServer{impl: qc.NewStorageBench()},
+				regServer{impl: qc.NewStorageBench()},
 			)
 		}
 	} else {
@@ -1159,7 +1159,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	defer mgr.Close()
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(rq, len(ids))
+	qspec := NewStorageQSpec(rq, len(ids))
 	ctx := context.Background()
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -1266,13 +1266,13 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{impl: qc.NewRegisterBench()},
+			{impl: qc.NewStorageBench()},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{impl: qc.NewRegisterBench()},
-				regServer{impl: qc.NewRegisterBench()},
+				regServer{impl: qc.NewStorageBench()},
+				regServer{impl: qc.NewStorageBench()},
 			)
 		}
 	} else {
@@ -1302,7 +1302,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 	defer mgr.Close()
 
 	ids := mgr.NodeIDs()
-	qspec := NewRegisterQSpec(0, wq)
+	qspec := NewStorageQSpec(0, wq)
 	ctx := context.Background()
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
@@ -1372,7 +1372,7 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
-			{impl: qc.NewRegisterBench()},
+			{impl: qc.NewStorageBench()},
 		}
 	} else {
 		rservers = []regServer{
@@ -1510,7 +1510,7 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.Ma
 }
 
 type regServer struct {
-	impl qc.RegisterTestServer
+	impl qc.StorageTestServer
 	addr string
 }
 
