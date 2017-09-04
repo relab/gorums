@@ -31,6 +31,8 @@ REG_PBGO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PBGO_NAME)
 
 GOGOPROTO_ALIAS 		:= google/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 
+BENCHMARK			:= BenchmarkRead1KQ2N3Local
+
 CHECKTOOLS			:= 	golang.org/x/tools/cmd/goimports \
 					github.com/golang/lint/golint \
 					github.com/jgautheron/goconst/cmd/goconst \
@@ -112,17 +114,17 @@ dev: static templates reinstallprotoc
 
 .PHONY: profcpu
 profcpu:
-	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=RegisterRead -cpuprofile cpu.prof
+	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=$(BENCHMARK) -cpuprofile cpu.prof
 	go tool pprof $(DEV_PKG).test cpu.prof
 
 .PHONY: profmem
 profmem:
-	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=RegisterRead -memprofile allocmem.prof
+	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=$(BENCHMARK) -memprofile allocmem.prof
 	go tool pprof -alloc_space $(DEV_PKG).test allocmem.prof
 
 .PHONY: profobj
 profobj:
-	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=RegisterRead -memprofile allocobj.prof
+	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=$(BENCHMARK) -memprofile allocobj.prof
 	go tool pprof -alloc_objects $(DEV_PKG).test allocobj.prof
 
 .PHONY: getdep
