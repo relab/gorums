@@ -25,9 +25,9 @@ const (
 	devFolder      = "dev"
 	testdataFolder = "testdata"
 
-	regProtoFile = "register.proto"
+	storageProtoFile = "storage.proto"
 
-	devRegProtoRelPath = devFolder + "/" + regProtoFile
+	devStorageProtoRelPath = devFolder + "/" + storageProtoFile
 
 	protoc        = "protoc"
 	protocIFlag   = "-I=../../../:."
@@ -100,7 +100,7 @@ var devFilesToCopy = []struct {
 		true,
 	},
 	{
-		"reg_server_udef.go",
+		"storage_server_udef.go",
 		"", "",
 		false,
 	},
@@ -186,7 +186,7 @@ func TestEndToEnd(t *testing.T) {
 	defer os.RemoveAll(testdataFolderPath)
 
 	// Run the proto compiler
-	run(t, protoc, protocIFlag, protocOutFlag+testdataFolder, devRegProtoRelPath)
+	run(t, protoc, protocIFlag, protocOutFlag+testdataFolder, devStorageProtoRelPath)
 
 	// Set file paths.
 	for i, file := range devFilesToCopy {
