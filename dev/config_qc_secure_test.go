@@ -60,7 +60,7 @@ func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n i
 		}
 		opts := []grpc.ServerOption{grpc.Creds(creds)}
 		servers[i] = grpc.NewServer(opts...)
-		qc.RegisterRegisterServer(servers[i], srvs[i].impl)
+		qc.RegisterStorageServer(servers[i], srvs[i].impl)
 
 		go func(i int, server *grpc.Server) {
 			_ = server.Serve(listeners[i])

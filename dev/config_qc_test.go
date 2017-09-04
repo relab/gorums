@@ -140,7 +140,7 @@ func TestSingleServerRPC(t *testing.T) {
 	nodes := mgr.Nodes()
 	ctx := context.Background()
 	for _, node := range nodes {
-		wreply, err := node.RegisterClient.Write(ctx, state)
+		wreply, err := node.StorageClient.Write(ctx, state)
 		if err != nil {
 			t.Fatalf("write quorum call error: %v", err)
 		}
@@ -148,7 +148,7 @@ func TestSingleServerRPC(t *testing.T) {
 			t.Fatalf("write reply was not marked as new")
 		}
 
-		rreply, err := node.RegisterClient.ReadNoQC(ctx, &qc.ReadRequest{})
+		rreply, err := node.StorageClient.ReadNoQC(ctx, &qc.ReadRequest{})
 		if err != nil {
 			t.Fatalf("read quorum call error: %v", err)
 		}
@@ -1394,7 +1394,7 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 		Timestamp: time.Now().UnixNano(),
 	}
 
-	rclient := qc.NewRegisterClient(conn)
+	rclient := qc.NewStorageClient(conn)
 	ctx := context.Background()
 
 	reply, err := rclient.Write(ctx, state)
@@ -1454,7 +1454,7 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.Ma
 	servers := make([]*grpc.Server, len(regServers))
 	for i := range servers {
 		servers[i] = grpc.NewServer()
-		qc.RegisterRegisterServer(servers[i], regServers[i].impl)
+		qc.RegisterStorageServer(servers[i], regServers[i].impl)
 		if regServers[i].addr == "" {
 			portSupplier.Lock()
 			regServers[i].addr = fmt.Sprintf("localhost:%d", portSupplier.p)

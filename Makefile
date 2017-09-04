@@ -24,8 +24,8 @@ PROTOC_I_FLAG			:= ../../../:.
 TESTDATA_DIR 			:= testdata
 TESTDATA_DEV_DIR 		:= $(TESTDATA_DIR)/$(DEV_PKG) 
 
-REG_PROTO_NAME			:= register.proto
-REG_PBGO_NAME			:= register.pb.go
+REG_PROTO_NAME			:= storage.proto
+REG_PBGO_NAME			:= storage.pb.go
 REG_PROTO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PROTO_NAME)
 REG_PBGO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PBGO_NAME)
 

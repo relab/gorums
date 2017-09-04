@@ -12,8 +12,7 @@ import "github.com/relab/gorums/gorums.proto";
 // Correctable QC w/prelim     M                   Error count                         M                           Stream of responses
 package dev;
 
-//TODO consider to rename Register to Storage following Leander's logic that it is a more understandable term.
-service Register {
+service Storage {
 	// ReadNoQC is a plain gRPC call.
 	rpc ReadNoQC(ReadRequest) returns (State) {}
 

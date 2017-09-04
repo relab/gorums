@@ -98,7 +98,7 @@ func callGRPCRead(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *Read
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/Read",
+		"/dev.Storage/Read",
 		arg,
 		reply,
 		node.conn,
@@ -196,7 +196,7 @@ func callGRPCReadCustomReturn(ctx context.Context, wg *sync.WaitGroup, node *Nod
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/ReadCustomReturn",
+		"/dev.Storage/ReadCustomReturn",
 		arg,
 		reply,
 		node.conn,
@@ -294,7 +294,7 @@ func callGRPCWrite(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *Sta
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/Write",
+		"/dev.Storage/Write",
 		arg,
 		reply,
 		node.conn,
@@ -395,7 +395,7 @@ func callGRPCWritePerNode(ctx context.Context, wg *sync.WaitGroup, node *Node, a
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/WritePerNode",
+		"/dev.Storage/WritePerNode",
 		arg,
 		reply,
 		node.conn,

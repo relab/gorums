@@ -11,7 +11,7 @@ import (
 // RegisterTestServer is a basic register server that in addition also can
 // signal when a read or write has completed.
 type RegisterTestServer interface {
-	RegisterServer
+	StorageServer
 	ReadExecuted()
 	WriteExecuted()
 }
@@ -97,7 +97,7 @@ func (r *RegisterServerBasic) WritePerNode(ctx context.Context, s *State) (*Writ
 }
 
 // WriteAsync implements the WriteAsync method from the RegisterServer interface.
-func (r *RegisterServerBasic) WriteAsync(stream Register_WriteAsyncServer) error {
+func (r *RegisterServerBasic) WriteAsync(stream Storage_WriteAsyncServer) error {
 	for {
 		state, err := stream.Recv()
 		if err == io.EOF {
@@ -119,7 +119,7 @@ func (r *RegisterServerBasic) ReadNoQC(ctx context.Context, rq *ReadRequest) (*S
 }
 
 // ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
-func (r *RegisterServerBasic) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
+func (r *RegisterServerBasic) ReadPrelim(rq *ReadRequest, rrts Storage_ReadPrelimServer) error {
 	return rrts.Send(&r.state)
 }
 
@@ -181,18 +181,18 @@ func (r *RegisterServerError) WritePerNode(ctx context.Context, s *State) (*Writ
 	return nil, r.err
 }
 
-// WriteAsync implements the WriteAsync method from the RegisterServer interface.
-func (r *RegisterServerError) WriteAsync(stream Register_WriteAsyncServer) error {
+// WriteAsync implements the WriteAsync method from the StorageServer interface.
+func (r *RegisterServerError) WriteAsync(stream Storage_WriteAsyncServer) error {
 	return r.err
 }
 
-// ReadNoQC implements the ReadNoQC method from the RegisterServer interface.
+// ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (r *RegisterServerError) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
-// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
-func (r *RegisterServerError) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
+// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
+func (r *RegisterServerError) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
 	return r.err
 }
 
@@ -270,20 +270,20 @@ func (r *RegisterServerSlow) WritePerNode(ctx context.Context, s *State) (*Write
 	return r.Write(ctx, s)
 }
 
-// WriteAsync implements the WriteAsync method from the RegisterServer interface.
-func (r *RegisterServerSlow) WriteAsync(stream Register_WriteAsyncServer) error {
+// WriteAsync implements the WriteAsync method from the StorageServer interface.
+func (r *RegisterServerSlow) WriteAsync(stream Storage_WriteAsyncServer) error {
 	// There are no replies to wait for.
 	return r.realServer.WriteAsync(stream)
 }
 
-// ReadNoQC implements the ReadNoQC method from the RegisterServer interface.
+// ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (r *RegisterServerSlow) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
 	time.Sleep(r.delay)
 	return r.Read(ctx, rq)
 }
 
-// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
-func (r *RegisterServerSlow) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
+// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
+func (r *RegisterServerSlow) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
 	panic("not implemented")
 }
 
@@ -354,8 +354,8 @@ func (r *RegisterServerBench) WritePerNode(ctx context.Context, s *State) (*Writ
 	return r.Write(ctx, s)
 }
 
-// WriteAsync implements the WriteAsync method from the RegisterServer interface.
-func (r *RegisterServerBench) WriteAsync(stream Register_WriteAsyncServer) error {
+// WriteAsync implements the WriteAsync method from the StorageServer interface.
+func (r *RegisterServerBench) WriteAsync(stream Storage_WriteAsyncServer) error {
 	for {
 		state, err := stream.Recv()
 		if err == io.EOF {
@@ -371,13 +371,13 @@ func (r *RegisterServerBench) WriteAsync(stream Register_WriteAsyncServer) error
 	}
 }
 
-// ReadNoQC implements the ReadNoQC method from the RegisterServer interface.
+// ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (r *RegisterServerBench) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
-// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
-func (r *RegisterServerBench) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
+// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
+func (r *RegisterServerBench) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
 	panic("not implemented")
 }
 
@@ -445,19 +445,19 @@ func (r *RegisterServerLockedWithState) WritePerNode(ctx context.Context, s *Sta
 	return r.Write(ctx, s)
 }
 
-// WriteAsync implements the WriteAsync method from the RegisterServer interface.
-func (r *RegisterServerLockedWithState) WriteAsync(stream Register_WriteAsyncServer) error {
+// WriteAsync implements the WriteAsync method from the StorageServer interface.
+func (r *RegisterServerLockedWithState) WriteAsync(stream Storage_WriteAsyncServer) error {
 	<-r.lock
 	return r.realServer.WriteAsync(stream)
 }
 
-// ReadNoQC implements the ReadNoQC method from the RegisterServer interface.
+// ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (r *RegisterServerLockedWithState) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return r.Read(ctx, rq)
 }
 
-// ReadPrelim implements the ReadPrelim method from the RegisterServer interface.
-func (r *RegisterServerLockedWithState) ReadPrelim(rq *ReadRequest, rrts Register_ReadPrelimServer) error {
+// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
+func (r *RegisterServerLockedWithState) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
 	<-r.lock
 
 	r.realServer.mu.RLock()
@@ -466,7 +466,7 @@ func (r *RegisterServerLockedWithState) ReadPrelim(rq *ReadRequest, rrts Registe
 
 	for i := 0; i < r.ReadPrelimNumReplies; i++ {
 		<-r.ReadPrelimLockChan
-		err := rrts.Send(&state)
+		err := srts.Send(&state)
 		if err != nil {
 			return err
 		}

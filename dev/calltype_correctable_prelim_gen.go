@@ -167,7 +167,7 @@ func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *Re
 
 func callGRPCReadPrelim(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *ReadRequest, replyChan chan<- readPrelimReply) {
 	wg.Done()
-	x := NewRegisterClient(node.conn)
+	x := NewStorageClient(node.conn)
 	y, err := x.ReadPrelim(ctx, arg)
 	if err != nil {
 		replyChan <- readPrelimReply{node.id, nil, err}

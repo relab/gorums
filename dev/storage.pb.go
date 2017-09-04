@@ -151,9 +151,9 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// Client API for Register service
+// Client API for Storage service
 
-type RegisterClient interface {
+type StorageClient interface {
 	// ReadNoQC is a plain gRPC call.
 	ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error)
 	// Read is a synchronous quorum call.
@@ -170,7 +170,7 @@ type RegisterClient interface {
 	// ReadPrelim is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
 	// TODO update DOC
-	ReadPrelim(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadPrelimClient, error)
+	ReadPrelim(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Storage_ReadPrelimClient, error)
 	// Write is a synchronous quorum call.
 	// The request argument (State) is passed to the associated
 	// quorum function, WriteQF, for this method.
@@ -182,72 +182,72 @@ type RegisterClient interface {
 	WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
 	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
 	// No replies are collected.
-	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error)
+	WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Storage_WriteAsyncClient, error)
 	// WritePerNode is a synchronous quorum call, where,
 	// for each node, a provided function is called to determine
 	// the argument to be sent to that node.
 	WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
 }
 
-type registerClient struct {
+type storageClient struct {
 	cc *grpc.ClientConn
 }
 
-func NewRegisterClient(cc *grpc.ClientConn) RegisterClient {
-	return &registerClient{cc}
+func NewStorageClient(cc *grpc.ClientConn) StorageClient {
+	return &storageClient{cc}
 }
 
-func (c *registerClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+func (c *storageClient) ReadNoQC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadNoQC", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Storage/ReadNoQC", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+func (c *storageClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/Read", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Storage/Read", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+func (c *storageClient) ReadFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadFuture", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Storage/ReadFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+func (c *storageClient) ReadCustomReturn(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadCustomReturn", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Storage/ReadCustomReturn", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
+func (c *storageClient) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*State, error) {
 	out := new(State)
-	err := grpc.Invoke(ctx, "/dev.Register/ReadCorrectable", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Storage/ReadCorrectable", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) ReadPrelim(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Register_ReadPrelimClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[0], c.cc, "/dev.Register/ReadPrelim", opts...)
+func (c *storageClient) ReadPrelim(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (Storage_ReadPrelimClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_Storage_serviceDesc.Streams[0], c.cc, "/dev.Storage/ReadPrelim", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &registerReadPrelimClient{stream}
+	x := &storageReadPrelimClient{stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -257,16 +257,16 @@ func (c *registerClient) ReadPrelim(ctx context.Context, in *ReadRequest, opts .
 	return x, nil
 }
 
-type Register_ReadPrelimClient interface {
+type Storage_ReadPrelimClient interface {
 	Recv() (*State, error)
 	grpc.ClientStream
 }
 
-type registerReadPrelimClient struct {
+type storageReadPrelimClient struct {
 	grpc.ClientStream
 }
 
-func (x *registerReadPrelimClient) Recv() (*State, error) {
+func (x *storageReadPrelimClient) Recv() (*State, error) {
 	m := new(State)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -274,48 +274,48 @@ func (x *registerReadPrelimClient) Recv() (*State, error) {
 	return m, nil
 }
 
-func (c *registerClient) Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+func (c *storageClient) Write(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
-	err := grpc.Invoke(ctx, "/dev.Register/Write", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Storage/Write", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+func (c *storageClient) WriteFuture(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
-	err := grpc.Invoke(ctx, "/dev.Register/WriteFuture", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Storage/WriteFuture", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *registerClient) WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Register_WriteAsyncClient, error) {
-	stream, err := grpc.NewClientStream(ctx, &_Register_serviceDesc.Streams[1], c.cc, "/dev.Register/WriteAsync", opts...)
+func (c *storageClient) WriteAsync(ctx context.Context, opts ...grpc.CallOption) (Storage_WriteAsyncClient, error) {
+	stream, err := grpc.NewClientStream(ctx, &_Storage_serviceDesc.Streams[1], c.cc, "/dev.Storage/WriteAsync", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &registerWriteAsyncClient{stream}
+	x := &storageWriteAsyncClient{stream}
 	return x, nil
 }
 
-type Register_WriteAsyncClient interface {
+type Storage_WriteAsyncClient interface {
 	Send(*State) error
 	CloseAndRecv() (*Empty, error)
 	grpc.ClientStream
 }
 
-type registerWriteAsyncClient struct {
+type storageWriteAsyncClient struct {
 	grpc.ClientStream
 }
 
-func (x *registerWriteAsyncClient) Send(m *State) error {
+func (x *storageWriteAsyncClient) Send(m *State) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *registerWriteAsyncClient) CloseAndRecv() (*Empty, error) {
+func (x *storageWriteAsyncClient) CloseAndRecv() (*Empty, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
@@ -326,18 +326,18 @@ func (x *registerWriteAsyncClient) CloseAndRecv() (*Empty, error) {
 	return m, nil
 }
 
-func (c *registerClient) WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
+func (c *storageClient) WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error) {
 	out := new(WriteResponse)
-	err := grpc.Invoke(ctx, "/dev.Register/WritePerNode", in, out, c.cc, opts...)
+	err := grpc.Invoke(ctx, "/dev.Storage/WritePerNode", in, out, c.cc, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// Server API for Register service
+// Server API for Storage service
 
-type RegisterServer interface {
+type StorageServer interface {
 	// ReadNoQC is a plain gRPC call.
 	ReadNoQC(context.Context, *ReadRequest) (*State, error)
 	// Read is a synchronous quorum call.
@@ -354,7 +354,7 @@ type RegisterServer interface {
 	// ReadPrelim is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
 	// TODO update DOC
-	ReadPrelim(*ReadRequest, Register_ReadPrelimServer) error
+	ReadPrelim(*ReadRequest, Storage_ReadPrelimServer) error
 	// Write is a synchronous quorum call.
 	// The request argument (State) is passed to the associated
 	// quorum function, WriteQF, for this method.
@@ -366,183 +366,183 @@ type RegisterServer interface {
 	WriteFuture(context.Context, *State) (*WriteResponse, error)
 	// WriteAsync is an asynchronous multicast to all nodes in a configuration.
 	// No replies are collected.
-	WriteAsync(Register_WriteAsyncServer) error
+	WriteAsync(Storage_WriteAsyncServer) error
 	// WritePerNode is a synchronous quorum call, where,
 	// for each node, a provided function is called to determine
 	// the argument to be sent to that node.
 	WritePerNode(context.Context, *State) (*WriteResponse, error)
 }
 
-func RegisterRegisterServer(s *grpc.Server, srv RegisterServer) {
-	s.RegisterService(&_Register_serviceDesc, srv)
+func RegisterStorageServer(s *grpc.Server, srv StorageServer) {
+	s.RegisterService(&_Storage_serviceDesc, srv)
 }
 
-func _Register_ReadNoQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_ReadNoQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).ReadNoQC(ctx, in)
+		return srv.(StorageServer).ReadNoQC(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/ReadNoQC",
+		FullMethod: "/dev.Storage/ReadNoQC",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).ReadNoQC(ctx, req.(*ReadRequest))
+		return srv.(StorageServer).ReadNoQC(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_Read_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).Read(ctx, in)
+		return srv.(StorageServer).Read(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/Read",
+		FullMethod: "/dev.Storage/Read",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).Read(ctx, req.(*ReadRequest))
+		return srv.(StorageServer).Read(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_ReadFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_ReadFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).ReadFuture(ctx, in)
+		return srv.(StorageServer).ReadFuture(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/ReadFuture",
+		FullMethod: "/dev.Storage/ReadFuture",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).ReadFuture(ctx, req.(*ReadRequest))
+		return srv.(StorageServer).ReadFuture(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_ReadCustomReturn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_ReadCustomReturn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).ReadCustomReturn(ctx, in)
+		return srv.(StorageServer).ReadCustomReturn(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/ReadCustomReturn",
+		FullMethod: "/dev.Storage/ReadCustomReturn",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).ReadCustomReturn(ctx, req.(*ReadRequest))
+		return srv.(StorageServer).ReadCustomReturn(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).ReadCorrectable(ctx, in)
+		return srv.(StorageServer).ReadCorrectable(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/ReadCorrectable",
+		FullMethod: "/dev.Storage/ReadCorrectable",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).ReadCorrectable(ctx, req.(*ReadRequest))
+		return srv.(StorageServer).ReadCorrectable(ctx, req.(*ReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_ReadPrelim_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Storage_ReadPrelim_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(ReadRequest)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(RegisterServer).ReadPrelim(m, &registerReadPrelimServer{stream})
+	return srv.(StorageServer).ReadPrelim(m, &storageReadPrelimServer{stream})
 }
 
-type Register_ReadPrelimServer interface {
+type Storage_ReadPrelimServer interface {
 	Send(*State) error
 	grpc.ServerStream
 }
 
-type registerReadPrelimServer struct {
+type storageReadPrelimServer struct {
 	grpc.ServerStream
 }
 
-func (x *registerReadPrelimServer) Send(m *State) error {
+func (x *storageReadPrelimServer) Send(m *State) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _Register_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_Write_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(State)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).Write(ctx, in)
+		return srv.(StorageServer).Write(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/Write",
+		FullMethod: "/dev.Storage/Write",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).Write(ctx, req.(*State))
+		return srv.(StorageServer).Write(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_WriteFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_WriteFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(State)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).WriteFuture(ctx, in)
+		return srv.(StorageServer).WriteFuture(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/WriteFuture",
+		FullMethod: "/dev.Storage/WriteFuture",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).WriteFuture(ctx, req.(*State))
+		return srv.(StorageServer).WriteFuture(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Register_WriteAsync_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(RegisterServer).WriteAsync(&registerWriteAsyncServer{stream})
+func _Storage_WriteAsync_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(StorageServer).WriteAsync(&storageWriteAsyncServer{stream})
 }
 
-type Register_WriteAsyncServer interface {
+type Storage_WriteAsyncServer interface {
 	SendAndClose(*Empty) error
 	Recv() (*State, error)
 	grpc.ServerStream
 }
 
-type registerWriteAsyncServer struct {
+type storageWriteAsyncServer struct {
 	grpc.ServerStream
 }
 
-func (x *registerWriteAsyncServer) SendAndClose(m *Empty) error {
+func (x *storageWriteAsyncServer) SendAndClose(m *Empty) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *registerWriteAsyncServer) Recv() (*State, error) {
+func (x *storageWriteAsyncServer) Recv() (*State, error) {
 	m := new(State)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
@@ -550,70 +550,70 @@ func (x *registerWriteAsyncServer) Recv() (*State, error) {
 	return m, nil
 }
 
-func _Register_WritePerNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _Storage_WritePerNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(State)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RegisterServer).WritePerNode(ctx, in)
+		return srv.(StorageServer).WritePerNode(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.Register/WritePerNode",
+		FullMethod: "/dev.Storage/WritePerNode",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RegisterServer).WritePerNode(ctx, req.(*State))
+		return srv.(StorageServer).WritePerNode(ctx, req.(*State))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _Register_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "dev.Register",
-	HandlerType: (*RegisterServer)(nil),
+var _Storage_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "dev.Storage",
+	HandlerType: (*StorageServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "ReadNoQC",
-			Handler:    _Register_ReadNoQC_Handler,
+			Handler:    _Storage_ReadNoQC_Handler,
 		},
 		{
 			MethodName: "Read",
-			Handler:    _Register_Read_Handler,
+			Handler:    _Storage_Read_Handler,
 		},
 		{
 			MethodName: "ReadFuture",
-			Handler:    _Register_ReadFuture_Handler,
+			Handler:    _Storage_ReadFuture_Handler,
 		},
 		{
 			MethodName: "ReadCustomReturn",
-			Handler:    _Register_ReadCustomReturn_Handler,
+			Handler:    _Storage_ReadCustomReturn_Handler,
 		},
 		{
 			MethodName: "ReadCorrectable",
-			Handler:    _Register_ReadCorrectable_Handler,
+			Handler:    _Storage_ReadCorrectable_Handler,
 		},
 		{
 			MethodName: "Write",
-			Handler:    _Register_Write_Handler,
+			Handler:    _Storage_Write_Handler,
 		},
 		{
 			MethodName: "WriteFuture",
-			Handler:    _Register_WriteFuture_Handler,
+			Handler:    _Storage_WriteFuture_Handler,
 		},
 		{
 			MethodName: "WritePerNode",
-			Handler:    _Register_WritePerNode_Handler,
+			Handler:    _Storage_WritePerNode_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "ReadPrelim",
-			Handler:       _Register_ReadPrelim_Handler,
+			Handler:       _Storage_ReadPrelim_Handler,
 			ServerStreams: true,
 		},
 		{
 			StreamName:    "WriteAsync",
-			Handler:       _Register_WriteAsync_Handler,
+			Handler:       _Storage_WriteAsync_Handler,
 			ClientStreams: true,
 		},
 	},
@@ -1389,33 +1389,33 @@ var (
 func init() { proto.RegisterFile("dev/storage.proto", fileDescriptorStorage) }
 
 var fileDescriptorStorage = []byte{
-	// 447 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x93, 0xbf, 0x6f, 0x13, 0x31,
-	0x14, 0xc7, 0xcf, 0x24, 0xa1, 0xe9, 0x2b, 0x55, 0x83, 0xc5, 0x60, 0x45, 0xc8, 0x2a, 0x56, 0x87,
-	0xa8, 0x42, 0x49, 0x29, 0x42, 0x20, 0x31, 0x95, 0xaa, 0x6c, 0x44, 0xc5, 0x45, 0x30, 0x3b, 0xb9,
-	0xa7, 0x70, 0x52, 0x2e, 0x0e, 0xfe, 0x11, 0xc8, 0xd6, 0x91, 0xb1, 0x13, 0x62, 0xec, 0xc8, 0xc8,
-	0x92, 0x7f, 0x80, 0x89, 0xb1, 0x23, 0x23, 0x3d, 0x16, 0x46, 0x24, 0xfe, 0x01, 0x64, 0x5f, 0x81,
-	0x66, 0x3a, 0xc4, 0x74, 0xcf, 0xfe, 0x7e, 0x3f, 0x7e, 0x5f, 0xbd, 0xa7, 0x83, 0xeb, 0x29, 0xce,
-	0x7a, 0xd6, 0x69, 0xa3, 0x46, 0xd8, 0x9d, 0x1a, 0xed, 0x34, 0xad, 0xa5, 0x38, 0x6b, 0x6f, 0x8d,
-	0x32, 0xf7, 0xd2, 0x0f, 0xba, 0x43, 0x9d, 0xf7, 0x0c, 0x8e, 0xd5, 0xa0, 0x37, 0xd2, 0xc6, 0xe7,
-	0xf6, 0xe2, 0x53, 0x5a, 0xc5, 0x43, 0x68, 0x1c, 0x39, 0xe5, 0x90, 0xde, 0x80, 0xc6, 0x73, 0x35,
-	0xf6, 0xc8, 0xc8, 0x26, 0xe9, 0xac, 0xca, 0xf2, 0x40, 0x6f, 0xc2, 0xea, 0xb3, 0x2c, 0x47, 0xeb,
-	0x54, 0x3e, 0x65, 0x57, 0x36, 0x49, 0xa7, 0x26, 0xff, 0x5e, 0x88, 0x23, 0x58, 0x79, 0x32, 0xff,
-	0x6f, 0x3c, 0x30, 0x07, 0x6f, 0x9c, 0x51, 0xac, 0x16, 0x95, 0xf2, 0x20, 0x6e, 0xc1, 0xfa, 0x0b,
-	0x93, 0x39, 0x94, 0x68, 0xa7, 0x7a, 0x62, 0x91, 0xb6, 0xa0, 0xd6, 0xc7, 0xd7, 0xf1, 0xe1, 0xa6,
-	0x0c, 0xa5, 0x58, 0x87, 0x35, 0x89, 0x2a, 0x95, 0xf8, 0xca, 0xa3, 0x75, 0x62, 0x05, 0x1a, 0x07,
-	0xf9, 0xd4, 0xcd, 0x77, 0xdf, 0xd5, 0xa1, 0x29, 0x71, 0x94, 0x59, 0x87, 0x86, 0x6e, 0x87, 0x5a,
-	0xa5, 0x7d, 0xfd, 0x74, 0x9f, 0xb6, 0xba, 0x29, 0xce, 0xba, 0x97, 0x98, 0x36, 0xc4, 0x9b, 0x98,
-	0x5d, 0x24, 0x74, 0x1b, 0xea, 0x41, 0xac, 0xf0, 0xd5, 0x8f, 0x17, 0x8c, 0xd0, 0x1d, 0x80, 0x60,
-	0x78, 0xec, 0x9d, 0x37, 0x58, 0x45, 0x9c, 0x06, 0x62, 0x0f, 0x5a, 0xc1, 0xb0, 0xef, 0xad, 0xd3,
-	0xb9, 0x44, 0xe7, 0xcd, 0xa4, 0x82, 0xdb, 0x08, 0x9d, 0x3e, 0xfd, 0x64, 0x7f, 0xc6, 0x7b, 0x0f,
-	0x36, 0xe2, 0x13, 0xda, 0x18, 0x1c, 0x3a, 0x35, 0x18, 0x57, 0x76, 0x7e, 0x1b, 0x3a, 0xef, 0x96,
-	0x59, 0x0f, 0x0d, 0x8e, 0xb3, 0xbc, 0x8a, 0x38, 0x59, 0x30, 0xb2, 0x43, 0xe8, 0x1d, 0x68, 0xc4,
-	0xf9, 0xd3, 0x4b, 0x62, 0x9b, 0xc6, 0x7a, 0x69, 0x2f, 0xa2, 0x19, 0x42, 0x7e, 0x08, 0x6d, 0xee,
-	0xc3, 0x5a, 0x94, 0x2e, 0x66, 0x52, 0x09, 0x9e, 0xfe, 0x06, 0x6f, 0x03, 0x44, 0x69, 0xcf, 0xce,
-	0x27, 0xc3, 0x25, 0xae, 0xac, 0xe3, 0x5a, 0x45, 0xfd, 0xfd, 0x82, 0x91, 0x0e, 0xa1, 0x0f, 0xe0,
-	0x5a, 0x74, 0x1f, 0xa2, 0xe9, 0xeb, 0xf4, 0x1f, 0x03, 0x7e, 0x5c, 0x30, 0xf2, 0x68, 0xeb, 0xec,
-	0x9c, 0x27, 0x5f, 0xce, 0x79, 0x72, 0x5c, 0x70, 0xf2, 0xb9, 0xe0, 0xe4, 0xac, 0xe0, 0xe4, 0x6b,
-	0xc1, 0xc9, 0xf7, 0x82, 0x27, 0x3f, 0x0a, 0x4e, 0x4e, 0xbe, 0xf1, 0x64, 0x70, 0x35, 0xfe, 0x12,
-	0x77, 0x7f, 0x05, 0x00, 0x00, 0xff, 0xff, 0xae, 0x9d, 0x96, 0x61, 0x52, 0x03, 0x00, 0x00,
+	// 445 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x9c, 0x93, 0x3f, 0x6f, 0x13, 0x41,
+	0x10, 0xc5, 0x6f, 0xb1, 0x8d, 0x9d, 0x09, 0x51, 0xcc, 0x8a, 0x62, 0x65, 0xa1, 0x55, 0x58, 0xa5,
+	0xb0, 0x22, 0x64, 0x87, 0x20, 0x04, 0x12, 0x55, 0x88, 0x42, 0x87, 0x15, 0xce, 0x08, 0xea, 0xb5,
+	0x6f, 0x64, 0x2c, 0xf9, 0xbc, 0xc7, 0xfe, 0x31, 0xb8, 0x4b, 0x49, 0x99, 0x06, 0x89, 0x32, 0x25,
+	0x25, 0xcd, 0x7d, 0x01, 0x2a, 0xca, 0x94, 0x94, 0xe4, 0x68, 0x28, 0x91, 0xf8, 0x02, 0x68, 0xf7,
+	0x02, 0xc4, 0xd5, 0x21, 0xaa, 0x9b, 0xdd, 0xf7, 0x7e, 0x3b, 0xa3, 0x37, 0x3a, 0xb8, 0x9e, 0xe0,
+	0xa2, 0x6f, 0xac, 0xd2, 0x72, 0x82, 0xbd, 0x4c, 0x2b, 0xab, 0x68, 0x2d, 0xc1, 0x45, 0x67, 0x7b,
+	0x32, 0xb5, 0x2f, 0xdd, 0xa8, 0x37, 0x56, 0x69, 0x5f, 0xe3, 0x4c, 0x8e, 0xfa, 0x13, 0xa5, 0x5d,
+	0x6a, 0x2e, 0x3e, 0xa5, 0x55, 0x3c, 0x84, 0xc6, 0xd0, 0x4a, 0x8b, 0xf4, 0x06, 0x34, 0x9e, 0xcb,
+	0x99, 0x43, 0x46, 0xb6, 0x48, 0x77, 0x2d, 0x2e, 0x0f, 0xf4, 0x26, 0xac, 0x3d, 0x9b, 0xa6, 0x68,
+	0xac, 0x4c, 0x33, 0x76, 0x65, 0x8b, 0x74, 0x6b, 0xf1, 0xdf, 0x0b, 0x31, 0x84, 0xe6, 0x93, 0xe5,
+	0x7f, 0xe3, 0x9e, 0x39, 0x7c, 0x63, 0xb5, 0x64, 0xb5, 0xa0, 0x94, 0x07, 0x71, 0x0b, 0x36, 0x5e,
+	0xe8, 0xa9, 0xc5, 0x18, 0x4d, 0xa6, 0xe6, 0x06, 0x69, 0x1b, 0x6a, 0x03, 0x7c, 0x1d, 0x1e, 0x6e,
+	0xc5, 0xbe, 0x14, 0x1b, 0xb0, 0x1e, 0xa3, 0x4c, 0x62, 0x7c, 0xe5, 0xd0, 0x58, 0xd1, 0x84, 0xc6,
+	0x61, 0x9a, 0xd9, 0xe5, 0xde, 0xbb, 0x3a, 0x34, 0x87, 0x65, 0x12, 0x74, 0x07, 0x5a, 0xde, 0x33,
+	0x50, 0x4f, 0x0f, 0x68, 0xbb, 0x97, 0xe0, 0xa2, 0x77, 0x09, 0xe9, 0x40, 0xb8, 0x09, 0xa3, 0x8b,
+	0x88, 0xee, 0x40, 0xdd, 0x8b, 0x15, 0xbe, 0xfa, 0x71, 0xce, 0x08, 0xdd, 0x05, 0xf0, 0x86, 0xc7,
+	0xce, 0x3a, 0x8d, 0x55, 0xc4, 0xa9, 0x27, 0xf6, 0xa1, 0xed, 0x0d, 0x07, 0xce, 0x58, 0x95, 0xc6,
+	0x68, 0x9d, 0x9e, 0x57, 0x70, 0x9b, 0xbe, 0xd3, 0xa7, 0x9f, 0xec, 0x4f, 0xba, 0xf7, 0x60, 0x33,
+	0x3c, 0xa1, 0xb4, 0xc6, 0xb1, 0x95, 0xa3, 0x59, 0x65, 0xe7, 0xb7, 0xbe, 0xf3, 0x5e, 0x39, 0xeb,
+	0x91, 0xc6, 0xd9, 0x34, 0xad, 0x22, 0x4e, 0x72, 0x46, 0x76, 0x09, 0xbd, 0x03, 0x8d, 0x10, 0x3f,
+	0xbd, 0x24, 0x76, 0x68, 0xa8, 0x57, 0xd6, 0x22, 0x5a, 0x7e, 0xc8, 0x0f, 0xbe, 0xcd, 0x7d, 0x58,
+	0x0f, 0xd2, 0x45, 0x26, 0x95, 0xe0, 0xe9, 0x6f, 0xf0, 0x36, 0x40, 0x90, 0xf6, 0xcd, 0x72, 0x3e,
+	0x5e, 0xe1, 0xca, 0x3a, 0x6c, 0x55, 0xd4, 0xdf, 0xe7, 0x8c, 0x74, 0x09, 0x7d, 0x00, 0xd7, 0x82,
+	0xfb, 0x08, 0xf5, 0x40, 0x25, 0xff, 0x38, 0xe0, 0xc7, 0x9c, 0x91, 0x47, 0xdb, 0x67, 0xe7, 0x3c,
+	0xfa, 0x72, 0xce, 0xa3, 0xe3, 0x82, 0x93, 0xcf, 0x05, 0x27, 0x67, 0x05, 0x27, 0x5f, 0x0b, 0x4e,
+	0xbe, 0x17, 0x3c, 0xfa, 0x51, 0x70, 0x72, 0xf2, 0x8d, 0x47, 0xa3, 0xab, 0xe1, 0x8f, 0xb8, 0xfb,
+	0x2b, 0x00, 0x00, 0xff, 0xff, 0x98, 0x61, 0xf9, 0x0b, 0x51, 0x03, 0x00, 0x00,
 }

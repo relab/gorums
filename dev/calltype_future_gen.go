@@ -139,7 +139,7 @@ func callGRPCReadFuture(ctx context.Context, wg *sync.WaitGroup, node *Node, arg
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/ReadFuture",
+		"/dev.Storage/ReadFuture",
 		arg,
 		reply,
 		node.conn,
@@ -278,7 +278,7 @@ func callGRPCWriteFuture(ctx context.Context, wg *sync.WaitGroup, node *Node, ar
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/WriteFuture",
+		"/dev.Storage/WriteFuture",
 		arg,
 		reply,
 		node.conn,

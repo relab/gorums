@@ -173,7 +173,7 @@ func callGRPCReadCorrectable(ctx context.Context, wg *sync.WaitGroup, node *Node
 	start := time.Now()
 	err := grpc.Invoke(
 		ctx,
-		"/dev.Register/ReadCorrectable",
+		"/dev.Storage/ReadCorrectable",
 		arg,
 		reply,
 		node.conn,

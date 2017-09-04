@@ -21,9 +21,9 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
-	RegisterClient RegisterClient
+	StorageClient StorageClient
 
-	WriteAsyncClient Register_WriteAsyncClient
+	WriteAsyncClient Storage_WriteAsyncClient
 
 	mu      sync.Mutex
 	lastErr error
@@ -37,9 +37,9 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
 
-	n.RegisterClient = NewRegisterClient(n.conn)
+	n.StorageClient = NewStorageClient(n.conn)
 
-	n.WriteAsyncClient, err = n.RegisterClient.WriteAsync(context.Background())
+	n.WriteAsyncClient, err = n.StorageClient.WriteAsync(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
