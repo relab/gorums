@@ -12,7 +12,7 @@ The repository contains two main components:
 1. Changes should be made to the development code in `dev`:
 	* Changes to "dynamic" code, i.e. code that is dependent on protobuf
 	  defintions, should by done by editing the respective `.tmpl` files.
-	* Changes to "static" code, i.e. code this **not** dependent on
+	* Changes to "static" code, i.e. code that is **not** dependent on
 	  protobuf definitions, should be done by editing the respective `.go`
 	  files.
 
