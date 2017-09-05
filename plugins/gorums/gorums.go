@@ -73,8 +73,8 @@ func (g *gorums) Name() string {
 	return "gorums"
 }
 
-// suffix text for common definitions template files
-const defSuffix = "common_definitions_tmpl"
+// commonDefSuffix is the name suffix for common definitions template files.
+const commonDefSuffix = "common_definitions_tmpl"
 
 // Init initializes the plugin.
 func (g *gorums) Init(gen *generator.Generator) {
@@ -87,13 +87,13 @@ func (g *gorums) Init(gen *generator.Generator) {
 
 	g.templates = make([]tmpl, 0, len(templates))
 	for name, devTemplate := range templates {
-		if strings.HasSuffix(name, defSuffix) {
-			// ignore common definitions (they are extracted below)
+		if strings.HasSuffix(name, commonDefSuffix) {
+			// Ignore common definitions, they are extracted below.
 			continue
 		}
-		// check if the template name has a common definitions template file
+		// Check if the template name has a common definitions template file.
 		prefix := strings.SplitN(name, "_", 2)[0]
-		commonDefName := prefix + "_" + defSuffix
+		commonDefName := prefix + "_" + commonDefSuffix
 		common := templates[commonDefName]
 		t := tmpl{
 			name: name,
@@ -102,7 +102,7 @@ func (g *gorums) Init(gen *generator.Generator) {
 		g.templates = append(g.templates, t)
 	}
 
-	// sort to ensure deterministic output
+	// Sort to ensure deterministic output.
 	sort.Sort(tmplSlice(g.templates))
 }
 
@@ -449,15 +449,15 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 
 	switch {
 	case !isQuorumCallVariant && sm.CustomReturnType != "":
-		// only QC variants can define custom return type
-		// because we want to avoid rewriting the plain gRPC methods
+		// Only QC variants can define custom return type
+		// because we want to avoid rewriting the plain gRPC methods.
 		return nil, fmt.Errorf(
 			"%s.%s: cannot combine non-quorum call method with the '%s' option",
 			service, method.GetName(), custRetName(),
 		)
 
 	case !isQuorumCallVariant && sm.QFWithReq:
-		// only QC variants need to process replies
+		// Only QC variants need to process replies.
 		return nil, fmt.Errorf(
 			"%s.%s: cannot combine non-quorum call method with the '%s' option",
 			service, method.GetName(), qfreqName(),
@@ -476,11 +476,11 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		)
 
 	case !isQuorumCallVariant && !sm.Multicast:
-		// plain gRPC; no further processing is done by gorums plugin
+		// Plain gRPC; no further processing is done by gorums plugin.
 		return nil, nil
 
 	default:
-		// all good
+		// All good.
 		return sm, nil
 	}
 }

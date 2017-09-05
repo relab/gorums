@@ -121,8 +121,8 @@ func getCustomReturnTypeExtension(method *descriptor.MethodDescriptorProto) stri
 	return ""
 }
 
-//TODO eliminate the follwing func by using the GetBoolExtension() as shown in the hasPerNodeArgExtension() func
-
+// TODO(meling): Eliminate the follwing func by using the GetBoolExtension() as
+// shown in the hasPerNodeArgExtension() func.
 func checkExtensionBoolValue(value interface{}) bool {
 	if value == nil {
 		return false
