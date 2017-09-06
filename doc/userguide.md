@@ -125,7 +125,7 @@ The implementation of this interface and running the servers is not described
 here. See
 [reg_server_udef.go](https://github.com/relab/gorums/blob/master/dev/reg_server_udef.go)
 for an example implementation and
-[config_rpc_test.go](https://github.com/relab/gorums/blob/master/dev/config_qc_test.go).
+[config_qc_test.go](https://github.com/relab/gorums/blob/master/dev/config_qc_test.go).
 for how to run at set of servers.
 
 We will now describe how to use the generated Gorums API. The first thing we
