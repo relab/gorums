@@ -714,7 +714,7 @@ func TestCorrectablePrelim(t *testing.T) {
 		Timestamp: 100,
 	}
 
-	// We need the specific implementation so we call the Unlock and PerformReadPrelimChan methods.
+	// We need the specific implementation so we call the Unlock and PerformSingleReadPrelim methods.
 	regServersImplementation := []*qc.StorageServerLockedWithState{
 		qc.NewStorageServerLockedWithState(stateOne, 2),
 		qc.NewStorageServerLockedWithState(stateTwo, 2),
@@ -775,16 +775,7 @@ func TestCorrectablePrelim(t *testing.T) {
 	}
 
 	// 0.2: Check that Get() returns nil, LevelNotSet, nil.
-	reply, level, err := correctable.Get()
-	if err != nil {
-		t.Fatalf("read correctable prelim: initial get: got unexpected error: %v", err)
-	}
-	if level != qc.LevelNotSet {
-		t.Fatalf("read correctable prelim: initial get: got level %v, want %v", level, qc.LevelNotSet)
-	}
-	if reply != nil {
-		t.Fatal("read correctable prelim: initial get: got reply, want none")
-	}
+	checkReplyAndLevel(t, correctable, qc.LevelNotSet, nil)
 
 	regServersImplementation[0].PerformSingleReadPrelim()
 
@@ -802,17 +793,8 @@ func TestCorrectablePrelim(t *testing.T) {
 	default:
 	}
 
-	// 1.2: Check that Get() returns stateTwo, 3, nil.
-	reply, level, err = correctable.Get()
-	if err != nil {
-		t.Fatalf("read correctable prelim: get (1): got unexpected error: %v", err)
-	}
-	if level != 1 {
-		t.Fatalf("read correctable prelim: get (1): got level %v, want %v", level, 1)
-	}
-	if reply.Value != stateOne.Value {
-		t.Fatalf("read correctable prelim: get (1):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateOne.Value)
-	}
+	// 1.2: Check that Get() returns stateOne, 1, nil.
+	checkReplyAndLevel(t, correctable, 1, stateOne)
 
 	regServersImplementation[0].PerformSingleReadPrelim()
 
@@ -830,17 +812,8 @@ func TestCorrectablePrelim(t *testing.T) {
 	default:
 	}
 
-	// 2.2: Check that Get() returns stateTwo, 3, nil.
-	reply, level, err = correctable.Get()
-	if err != nil {
-		t.Fatalf("read correctable prelim: get (2): got unexpected error: %v", err)
-	}
-	if level != 2 {
-		t.Fatalf("read correctable prelim: get (2): got level %v, want %v", level, 2)
-	}
-	if reply.Value != stateOne.Value {
-		t.Fatalf("read correctable prelim: get (2):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateOne.Value)
-	}
+	// 2.2: Check that Get() returns stateOne, 2, nil.
+	checkReplyAndLevel(t, correctable, 2, stateOne)
 
 	regServersImplementation[1].PerformSingleReadPrelim()
 
@@ -859,16 +832,7 @@ func TestCorrectablePrelim(t *testing.T) {
 	}
 
 	// 3.2: Check that Get() returns stateTwo, 3, nil.
-	reply, level, err = correctable.Get()
-	if err != nil {
-		t.Fatalf("read correctable prelim: get (3): got unexpected error: %v", err)
-	}
-	if level != 3 {
-		t.Fatalf("read correctable prelim: get (3): got level %v, want %v", level, 3)
-	}
-	if reply.Value != stateTwo.Value {
-		t.Fatalf("read correctable prelim: get (3):\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
-	}
+	checkReplyAndLevel(t, correctable, 3, stateTwo)
 
 	regServersImplementation[1].PerformSingleReadPrelim()
 
@@ -887,15 +851,26 @@ func TestCorrectablePrelim(t *testing.T) {
 	}
 
 	// 4.2: Check that Get() returns stateTwo, 4, nil.
-	reply, level, err = correctable.Get()
+	checkReplyAndLevel(t, correctable, 4, stateTwo)
+}
+
+func checkReplyAndLevel(t *testing.T, correctable *qc.ReadPrelimReply, expectedLevel int, expectedReply *qc.State) {
+	t.Helper()
+	reply, level, err := correctable.Get()
 	if err != nil {
-		t.Fatalf("read correctable prelim: final get: got unexpected error: %v", err)
+		t.Fatalf("read correctable prelim: get (%d): got unexpected error: %v", expectedLevel, err)
 	}
-	if level != 4 {
-		t.Fatalf("read correctable prelim: final get: got level %v, want %v", level, 4)
+	if level != expectedLevel {
+		t.Fatalf("read correctable prelim: get (%d): got level %v, want %v", expectedLevel, level, expectedLevel)
 	}
-	if reply.Value != stateTwo.Value {
-		t.Fatalf("read correctable prelim: get after done call:\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
+	if expectedReply == nil && reply != nil {
+		t.Fatalf("read correctable prelim: get (%d):\ngot reply:\n%v\nwant:\nnil", expectedLevel, reply.Value)
+	}
+	if reply == nil && expectedReply != nil {
+		t.Fatalf("read correctable prelim: get (%d):\ngot reply:\nnil\nwant:\n%v", expectedLevel, expectedReply.Value)
+	}
+	if reply != nil && expectedReply != nil && reply.Value != expectedReply.Value {
+		t.Fatalf("read correctable prelim: get (%d):\ngot reply:\n%v\nwant:\n%v", expectedLevel, reply.Value, expectedReply.Value)
 	}
 }
 
