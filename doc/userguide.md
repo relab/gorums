@@ -123,7 +123,7 @@ type StorageServer interface {
 
 The implementation of this interface and running the servers is not described
 here. See
-[reg_server_udef.go](https://github.com/relab/gorums/blob/master/dev/reg_server_udef.go)
+[storage_server_udef.go](https://github.com/relab/gorums/blob/master/dev/storage_server_udef.go)
 for an example implementation and
 [config_qc_test.go](https://github.com/relab/gorums/blob/master/dev/config_qc_test.go).
 for how to run at set of servers.
