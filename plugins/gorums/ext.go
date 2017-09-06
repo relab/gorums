@@ -36,69 +36,27 @@ func custRetName() string {
 }
 
 func hasQuorumCallExtension(method *descriptor.MethodDescriptorProto) bool {
-	if method.Options == nil {
-		return false
-	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_Qc)
-	if err != nil {
-		return false
-	}
-	return checkExtensionBoolValue(value)
+	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_Qc, false)
 }
 
 func hasCorrectableExtension(method *descriptor.MethodDescriptorProto) bool {
-	if method.Options == nil {
-		return false
-	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_Correctable)
-	if err != nil {
-		return false
-	}
-	return checkExtensionBoolValue(value)
+	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_Correctable, false)
 }
 
 func hasCorrectablePRExtension(method *descriptor.MethodDescriptorProto) bool {
-	if method.Options == nil {
-		return false
-	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_CorrectablePr)
-	if err != nil {
-		return false
-	}
-	return checkExtensionBoolValue(value)
+	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_CorrectablePr, false)
 }
 
 func hasMulticastExtension(method *descriptor.MethodDescriptorProto) bool {
-	if method.Options == nil {
-		return false
-	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_Multicast)
-	if err != nil {
-		return false
-	}
-	return checkExtensionBoolValue(value)
+	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_Multicast, false)
 }
 
 func hasFutureExtension(method *descriptor.MethodDescriptorProto) bool {
-	if method.Options == nil {
-		return false
-	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_QcFuture)
-	if err != nil {
-		return false
-	}
-	return checkExtensionBoolValue(value)
+	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_QcFuture, false)
 }
 
 func hasQFWithReqExtension(method *descriptor.MethodDescriptorProto) bool {
-	if method.Options == nil {
-		return false
-	}
-	value, err := proto.GetExtension(method.Options, gorumsproto.E_QfWithReq)
-	if err != nil {
-		return false
-	}
-	return checkExtensionBoolValue(value)
+	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_QfWithReq, false)
 }
 
 func hasPerNodeArgExtension(method *descriptor.MethodDescriptorProto) bool {
@@ -116,16 +74,4 @@ func getCustomReturnTypeExtension(method *descriptor.MethodDescriptorProto) stri
 		}
 	}
 	return ""
-}
-
-// TODO(meling): Eliminate the follwing func by using the GetBoolExtension() as
-// shown in the hasPerNodeArgExtension() func.
-func checkExtensionBoolValue(value interface{}) bool {
-	if value == nil {
-		return false
-	}
-	if value.(*bool) == nil {
-		return false
-	}
-	return true
 }
