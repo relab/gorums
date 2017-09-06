@@ -581,15 +581,13 @@ func TestCorrectableWithLevels(t *testing.T) {
 		qc.NewStorageServerLockedWithState(stateTwo, 0),
 	}
 
-	regServersInterface := []regServer{
-		{impl: regServersImplementation[0]},
-		{impl: regServersImplementation[1]},
-		{impl: regServersImplementation[2]},
-	}
-
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		regServersInterface,
+		[]regServer{
+			{impl: regServersImplementation[0]},
+			{impl: regServersImplementation[1]},
+			{impl: regServersImplementation[2]},
+		},
 		false,
 	)
 	defer closeListeners(allServers)
@@ -723,15 +721,13 @@ func TestCorrectablePrelim(t *testing.T) {
 		qc.NewStorageServerLockedWithState(stateTwo, 0),
 	}
 
-	regServersInterface := []regServer{
-		{impl: regServersImplementation[0]},
-		{impl: regServersImplementation[1]},
-		{impl: regServersImplementation[2]},
-	}
-
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		regServersInterface,
+		[]regServer{
+			{impl: regServersImplementation[0]},
+			{impl: regServersImplementation[1]},
+			{impl: regServersImplementation[2]},
+		},
 		false,
 	)
 	defer closeListeners(allServers)
