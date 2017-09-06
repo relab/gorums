@@ -102,10 +102,7 @@ func hasQFWithReqExtension(method *descriptor.MethodDescriptorProto) bool {
 }
 
 func hasPerNodeArgExtension(method *descriptor.MethodDescriptorProto) bool {
-	if method == nil {
-		return false
-	}
-	return proto.GetBoolExtension(method.Options, gorumsproto.E_PerNodeArg, false)
+	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_PerNodeArg, false)
 }
 
 func getCustomReturnTypeExtension(method *descriptor.MethodDescriptorProto) string {
