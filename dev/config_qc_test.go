@@ -748,7 +748,6 @@ func TestCorrectablePrelim(t *testing.T) {
 		t.Fatalf("error creating config: %v", err)
 	}
 
-	waitTimeout := time.Second
 	ctx := context.Background()
 	correctable := config.ReadPrelim(ctx, &qc.ReadRequest{})
 
@@ -764,94 +763,66 @@ func TestCorrectablePrelim(t *testing.T) {
 	regServersImplementation[1].Unlock()
 	regServersImplementation[2].Unlock()
 
-	// It should be possible to reduce code duplication below.
-	// TODO: DRY.
-
 	// 0.1: Check that Done() is not done.
 	select {
 	case <-correctable.Done():
-		t.Fatalf("read correctablae prelim: Done() was done before any reply was received")
+		t.Fatalf("read correctable prelim: Done() was done before any reply was received")
 	default:
 	}
 
 	// 0.2: Check that Get() returns nil, LevelNotSet, nil.
 	checkReplyAndLevel(t, correctable, qc.LevelNotSet, nil)
-
 	regServersImplementation[0].PerformSingleReadPrelim()
-
 	// Wait for level 1 notification.
-	select {
-	case <-levelOneChan:
-	case <-time.After(waitTimeout):
-		t.Fatalf("read correctable prelim: waiting for levelOneChan timed out (waited %v)", waitTimeout)
-	}
-
-	// 1.1: Check that Done() is not done.
-	select {
-	case <-correctable.Done():
-		t.Fatalf("read correctablae prelim: Done() was done at level 1")
-	default:
-	}
+	checkLevelAndDone(t, correctable, levelOneChan, 1, false)
 
 	// 1.2: Check that Get() returns stateOne, 1, nil.
 	checkReplyAndLevel(t, correctable, 1, stateOne)
-
 	regServersImplementation[0].PerformSingleReadPrelim()
-
 	// Wait for level 2 notification.
-	select {
-	case <-levelTwoChan:
-	case <-time.After(waitTimeout):
-		t.Fatalf("read correctable prelim: waiting for levelTwoChan timed out (waited %v)", waitTimeout)
-	}
-
-	// 2.2: Check that Done() is not done.
-	select {
-	case <-correctable.Done():
-		t.Fatalf("read correctablae prelim: Done() was done at level 2")
-	default:
-	}
+	checkLevelAndDone(t, correctable, levelTwoChan, 2, false)
 
 	// 2.2: Check that Get() returns stateOne, 2, nil.
 	checkReplyAndLevel(t, correctable, 2, stateOne)
-
 	regServersImplementation[1].PerformSingleReadPrelim()
-
 	// Wait for level 3 notification.
-	select {
-	case <-levelThreeChan:
-	case <-time.After(waitTimeout):
-		t.Fatalf("read correctable prelim: waiting for levelThreeChan timed out (waited %v)", waitTimeout)
-	}
-
-	// 3.1: Check that Done() is not done.
-	select {
-	case <-correctable.Done():
-		t.Fatalf("read correctablae prelim: Done() was done at level 3")
-	default:
-	}
+	checkLevelAndDone(t, correctable, levelThreeChan, 3, false)
 
 	// 3.2: Check that Get() returns stateTwo, 3, nil.
 	checkReplyAndLevel(t, correctable, 3, stateTwo)
-
 	regServersImplementation[1].PerformSingleReadPrelim()
-
 	// Wait for level 4 notification.
-	select {
-	case <-levelFourChan:
-	case <-time.After(waitTimeout):
-		t.Fatalf("read correctable prelim: waiting for levelFourChan timed out (waited %v)", waitTimeout)
-	}
-
-	// 4.1: Check that Done() is done.
-	select {
-	case <-correctable.Done():
-	case <-time.After(waitTimeout):
-		t.Fatalf("read correctable prelim: waiting for Done channel timed out (waited %v)", waitTimeout)
-	}
+	checkLevelAndDone(t, correctable, levelFourChan, 4, true)
 
 	// 4.2: Check that Get() returns stateTwo, 4, nil.
 	checkReplyAndLevel(t, correctable, 4, stateTwo)
+}
+
+func checkLevelAndDone(t *testing.T, correctable *qc.ReadPrelimReply, levelChan <-chan struct{}, expectedLevel int, expectedDone bool) {
+	t.Helper()
+	waitTimeout := time.Second
+	// Wait for level notification.
+	select {
+	case <-levelChan:
+	case <-time.After(waitTimeout):
+		t.Fatalf("read correctable prelim: waiting for level %d chan timed out (waited %v)", expectedLevel, waitTimeout)
+	}
+
+	if expectedDone {
+		// Check that Done() is done.
+		select {
+		case <-correctable.Done():
+		case <-time.After(waitTimeout):
+			t.Fatalf("read correctable prelim: waiting for Done channel timed out (waited %v)", waitTimeout)
+		}
+	} else {
+		// Check that Done() is not done.
+		select {
+		case <-correctable.Done():
+			t.Fatalf("read correctable prelim: Done() was done at level %d", expectedLevel)
+		default:
+		}
+	}
 }
 
 func checkReplyAndLevel(t *testing.T, correctable *qc.ReadPrelimReply, expectedLevel int, expectedReply *qc.State) {
