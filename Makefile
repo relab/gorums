@@ -148,7 +148,7 @@ check: getchecktools
 	@echo "vet"
 	@! go tool vet $(GORUMS_DIRS) 2>&1 | \
 		grep -vF 'vendor/' | \
-		grep -vE '^dev/config_rpc_test.go:.+: constant [0-9]+ not a string in call to Errorf'
+		grep -vE '^dev/config_qc_test.go:.+: constant [0-9]+ not a string in call to Errorf'
 	@echo "vet --shadow"
 	@! go tool vet --shadow $(GORUMS_DIRS) 2>&1 | grep -vF 'vendor/'
 	@echo "golint"
