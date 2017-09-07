@@ -42,7 +42,7 @@ func TestQuorumCallOrdering(t *testing.T) {
 	ids := mgr.NodeIDs()
 
 	// Quorum spec: rq=1 (not used), wq=3, n=5.
-	qspec := NewStorageQSpec(1, 2)
+	qspec := NewStorageQSpec(1, 3)
 
 	config, err := mgr.NewConfiguration(ids, qspec)
 	if err != nil {
