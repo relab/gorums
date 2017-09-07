@@ -169,8 +169,7 @@ type {{.UnexportedTypeName}} struct {
 	}
 }
 
-func callGRPC{{.MethodName}}(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	wg.Done()
+func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
 	x := New{{.ServName}}Client(node.conn)
 	y, err := x.{{.MethodName}}(ctx, arg)
 	if err != nil {
