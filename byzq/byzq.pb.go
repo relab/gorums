@@ -348,12 +348,9 @@ func (c *Configuration) read(ctx context.Context, a *Key) (resp *Content, err er
 	}
 
 	replyChan := make(chan readReply, c.n)
-	var wg sync.WaitGroup
-	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCRead(ctx, &wg, n, a, replyChan)
+		go callGRPCRead(ctx, n, a, replyChan)
 	}
-	wg.Wait()
 
 	var (
 		replyValues = make([]*Value, 0, c.n)
@@ -385,8 +382,7 @@ func (c *Configuration) read(ctx context.Context, a *Key) (resp *Content, err er
 	}
 }
 
-func callGRPCRead(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *Key, replyChan chan<- readReply) {
-	wg.Done()
+func callGRPCRead(ctx context.Context, node *Node, arg *Key, replyChan chan<- readReply) {
 	reply := new(Value)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -446,12 +442,9 @@ func (c *Configuration) write(ctx context.Context, a *Value) (resp *WriteRespons
 	}
 
 	replyChan := make(chan writeReply, c.n)
-	var wg sync.WaitGroup
-	wg.Add(c.n)
 	for _, n := range c.nodes {
-		go callGRPCWrite(ctx, &wg, n, a, replyChan)
+		go callGRPCWrite(ctx, n, a, replyChan)
 	}
-	wg.Wait()
 
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
@@ -483,8 +476,7 @@ func (c *Configuration) write(ctx context.Context, a *Value) (resp *WriteRespons
 	}
 }
 
-func callGRPCWrite(ctx context.Context, wg *sync.WaitGroup, node *Node, arg *Value, replyChan chan<- writeReply) {
-	wg.Done()
+func callGRPCWrite(ctx context.Context, node *Node, arg *Value, replyChan chan<- writeReply) {
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -884,7 +876,16 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	}
 
 	var cnodes []*Node
+	unique := make(map[uint32]struct{})
+	var deduped []uint32
 	for _, nid := range ids {
+		// Ensure that identical ids are only counted once.
+		if _, duplicate := unique[nid]; duplicate {
+			continue
+		}
+		unique[nid] = struct{}{}
+		deduped = append(deduped, nid)
+
 		node, found := m.lookup[nid]
 		if !found {
 			return nil, NodeNotFoundError(nid)
@@ -893,10 +894,10 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	}
 
 	// Node ids are sorted ensure a globally consistent configuration id.
-	sort.Sort(idSlice(ids))
+	sort.Sort(idSlice(deduped))
 
 	h := fnv.New32a()
-	for _, id := range ids {
+	for _, id := range deduped {
 		binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
