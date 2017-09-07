@@ -180,3 +180,8 @@ check: getchecktools
 .PHONY: updatedeps
 updatedeps:
 	dep ensure -update
+
+.PHONY: examples
+examples:
+	cd gridq && make proto
+	cd byzq && make proto

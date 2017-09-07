@@ -96,3 +96,4 @@ The Makefile itself also serves as documentation; inspect it for details.
 | `getdevtools` 	| Download all development tools (`getdep` and `getchecktools`).				|
 | `check` 		| Run a suite of static analysis tools.								|
 | `updatedeps` 		| Update vendored dependencies to the latest version available. 				|
+|  examples		| Compile protobuf definitions for examples (byzq and gridq) using the latest version of gorums.|
