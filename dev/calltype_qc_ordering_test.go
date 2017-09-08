@@ -13,14 +13,15 @@ import (
 
 func TestQuorumCallOrdering(t *testing.T) {
 	defer leakCheck(t)()
+	failMsg := make(chan string)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]regServer{
-			{impl: newStorageServerRequiringOrdering(t)},
-			{impl: newStorageServerRequiringOrdering(t)},
-			{impl: newStorageServerRequiringOrdering(t)},
-			{impl: newStorageServerRequiringOrdering(t)},
-			{impl: newStorageServerRequiringOrdering(t)},
+			{impl: newStorageServerRequiringOrdering(failMsg)},
+			{impl: newStorageServerRequiringOrdering(failMsg)},
+			{impl: newStorageServerRequiringOrdering(failMsg)},
+			{impl: newStorageServerRequiringOrdering(failMsg)},
+			{impl: newStorageServerRequiringOrdering(failMsg)},
 		},
 		false,
 	)
@@ -67,11 +68,16 @@ func TestQuorumCallOrdering(t *testing.T) {
 	//
 	// Servers will report error if a message received out-of-order.
 	for i := 1; i < maxNumberOfQCs; i++ {
-		_, err := config.Write(context.Background(), state)
-		if err != nil {
-			t.Fatalf("write quorum call error: %v", err)
+		select {
+		case err := <-failMsg:
+			t.Fatalf(err)
+		default:
+			_, err := config.Write(context.Background(), state)
+			if err != nil {
+				t.Fatalf("write quorum call error: %v", err)
+			}
+			state.Timestamp++
 		}
-		state.Timestamp++
 	}
 }
 
@@ -81,12 +87,12 @@ type storageServerRequiringOrdering struct {
 	mu        sync.Mutex
 	state     qc.State
 	writeResp qc.WriteResponse
-	t         *testing.T
+	failMsg   chan string
 }
 
 // NewStorageBasic returns a new basic storage server.
-func newStorageServerRequiringOrdering(t *testing.T) *storageServerRequiringOrdering {
-	return &storageServerRequiringOrdering{t: t}
+func newStorageServerRequiringOrdering(failMsg chan string) *storageServerRequiringOrdering {
+	return &storageServerRequiringOrdering{failMsg: failMsg}
 }
 
 // Read implements the Read method.
@@ -114,13 +120,11 @@ func (s *storageServerRequiringOrdering) Write(ctx context.Context, state *qc.St
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if state.Timestamp != s.state.Timestamp+1 {
-		// TODO(tormoder): Why does not calling t.Errorf (or anything on t) have an effect?
-		// Panic for now.
 		err := fmt.Sprintf(
 			"server: message received out-of-order: got: %d, expected: %d",
 			state.Timestamp, s.state.Timestamp+1,
 		)
-		panic(err)
+		s.failMsg <- err
 	} else {
 		s.state = *state
 	}
