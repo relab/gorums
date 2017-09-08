@@ -787,15 +787,14 @@ type Node struct {
 	addr string
 	conn *grpc.ClientConn
 
-
 {{range .Clients}}
 	{{.}} {{.}}
 {{end}}
 
 {{range .Services}}
-{{if .Multicast}}
+{{- if .ClientStreaming}}
 	{{.MethodName}}Client {{.ServName}}_{{.MethodName}}Client
-{{end}}
+{{- end -}}
 {{end}}
 
 	mu sync.Mutex
@@ -815,7 +814,7 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 {{end}}
 
 {{range .Services}}
-{{if .Multicast}}
+{{if .ClientStreaming}}
   	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
   	if err != nil {
   		return fmt.Errorf("stream creation failed: %v", err)

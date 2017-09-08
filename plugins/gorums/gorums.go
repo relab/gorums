@@ -311,6 +311,9 @@ type serviceMethod struct {
 	QFWithReq         bool
 	PerNodeArg        bool
 
+	ClientStreaming bool
+	ServerStreaming bool
+
 	ServName        string // Redundant, but keeps it simple.
 	ServPackageName string // Redundant, but makes it simpler.
 }
@@ -358,6 +361,10 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 			sm.RespName = g.typeName(method.GetOutputType())
 			// Response type with package (if needed)
 			sm.FQRespName = g.fqTypeName(method.GetOutputType())
+			// Is it a client stream method
+			sm.ClientStreaming = method.GetClientStreaming()
+			// Is it a server stream method
+			sm.ServerStreaming = method.GetServerStreaming()
 
 			if sm.CustomReturnType == "" {
 				sm.CustomRespName = sm.RespName
