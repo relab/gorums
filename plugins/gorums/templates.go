@@ -789,7 +789,7 @@ type Node struct {
 
 {{range .Clients}}
 	{{.}} {{.}}
-{{end}}
+{{- end}}
 
 {{range .Services}}
 {{- if .ClientStreaming}}
@@ -811,7 +811,7 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 
 {{range .Clients}}
 	n.{{.}} = New{{.}}(n.conn)
-{{end}}
+{{- end}}
 
 {{range .Services}}
 {{if .ClientStreaming}}
