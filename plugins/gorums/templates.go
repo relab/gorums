@@ -17,10 +17,10 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 		reply,
 		node.conn,
 	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		node.setLatency(time.Since(start))
-	default:
+	} else {
 		node.setLastErr(err)
 	}
 	replyChan <- {{.UnexportedTypeName}}{node.id, reply, err}
@@ -110,6 +110,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"golang.org/x/net/context")
 
@@ -486,6 +487,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 {{end}}
 
@@ -675,6 +677,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 {{end}}
 

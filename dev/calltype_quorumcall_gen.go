@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 /* Exported types and methods for quorum call method Read */
@@ -98,10 +99,10 @@ func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan c
 		reply,
 		node.conn,
 	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		node.setLatency(time.Since(start))
-	default:
+	} else {
 		node.setLastErr(err)
 	}
 	replyChan <- readReply{node.id, reply, err}
@@ -192,10 +193,10 @@ func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest,
 		reply,
 		node.conn,
 	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		node.setLatency(time.Since(start))
-	default:
+	} else {
 		node.setLastErr(err)
 	}
 	replyChan <- readCustomReturnReply{node.id, reply, err}
@@ -286,10 +287,10 @@ func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<-
 		reply,
 		node.conn,
 	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		node.setLatency(time.Since(start))
-	default:
+	} else {
 		node.setLastErr(err)
 	}
 	replyChan <- writeReply{node.id, reply, err}
@@ -383,10 +384,10 @@ func callGRPCWritePerNode(ctx context.Context, node *Node, arg *State, replyChan
 		reply,
 		node.conn,
 	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		node.setLatency(time.Since(start))
-	default:
+	} else {
 		node.setLastErr(err)
 	}
 	replyChan <- writePerNodeReply{node.id, reply, err}
