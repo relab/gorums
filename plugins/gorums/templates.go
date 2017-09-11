@@ -833,7 +833,7 @@ func (n *Node) close() error {
         // We should log this error, but we currently don't have access to the
         // logger in the manager.
 {{- range .Services -}}
-{{if .Multicast}}
+{{if .ClientStreaming}}
 	_, _ = n.{{.MethodName}}Client.CloseAndRecv()
 {{- end -}}
 {{end}}

@@ -9,7 +9,6 @@ var staticImports = []string{
 	"bytes",
 	"golang.org/x/net/trace",
 	"google.golang.org/grpc",
-	"google.golang.org/grpc/status",
 	"time",
 	"sort",
 	"sync",
