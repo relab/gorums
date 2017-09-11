@@ -1,7 +1,6 @@
 package dev_test
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -26,8 +25,14 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+var remoteStorageHost string
+
 func TestMain(m *testing.M) {
-	flag.Parse()
+	remoteStorageHost = os.Getenv("REMOTE_HOST")
+	if remoteStorageHost == "" {
+		remoteStorageHost = "localhost:8088"
+	}
+	log.Println(remoteStorageHost)
 	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
 	grpclog.SetLogger(silentLogger)
 	grpc.EnableTracing = false
@@ -1076,7 +1081,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 		}
 	} else {
 		rservers = []regServer{
-			{addr: "pitter31:8080"},
+			{addr: remoteStorageHost},
 		}
 		if !single {
 			rservers = append(
@@ -1219,7 +1224,7 @@ func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote
 		}
 	} else {
 		rservers = []regServer{
-			{addr: "pitter31:8080"},
+			{addr: remoteStorageHost},
 		}
 		if !single {
 			rservers = append(
@@ -1318,7 +1323,7 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 		}
 	} else {
 		rservers = []regServer{
-			{addr: "pitter33:8080"},
+			{addr: remoteStorageHost},
 		}
 	}
 
