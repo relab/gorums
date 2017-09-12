@@ -1075,8 +1075,6 @@ func BenchmarkRead1KQ1N1FutureParallelRemote(b *testing.B) {
 
 var replySink *qc.State
 
-var remoteStorageHost string
-
 func benchmarkRead(b *testing.B, psize, rq, n int, parallel, future, remote bool) {
 	sservers := make([]storageServer, n)
 	if remote {
