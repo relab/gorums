@@ -621,13 +621,10 @@ type {{.UnexportedTypeName}} struct {
 {{- end -}}
 `
 
-const calltype_multicast_tmpl = `
-{{/* Remember to run 'make dev' after editing this file. */}}
+const calltype_multicast_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
 
 {{if not .IgnoreImports}}
 package {{.PackageName}}
-
-import "golang.org/x/net/context"
 {{end}}
 
 {{range $elm := .Services}}
@@ -638,13 +635,13 @@ import "golang.org/x/net/context"
 
 // {{.MethodName}} is a one-way multicast call on all nodes in configuration c,
 // using the same argument arg. The call is asynchronous and has no return value.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) error {
-	return c.{{.UnexportedMethodName}}(ctx, arg)
+func (c *Configuration) {{.MethodName}}(arg *{{.FQReqName}}) error {
+	return c.{{.UnexportedMethodName}}(arg)
 }
 
 /* Unexported types and methods for multicast method {{.MethodName}} */
 
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, arg *{{.FQReqName}}) error {
+func (c *Configuration) {{.UnexportedMethodName}}(arg *{{.FQReqName}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.{{.MethodName}}Client.Send(arg)

@@ -404,9 +404,7 @@ func TestBasicStorageWithWriteAsync(t *testing.T) {
 	}
 
 	// Write a value using the WriteAsync stream.
-	ctx, cancel = context.WithTimeout(context.Background(), 25*time.Millisecond)
-	defer cancel()
-	err = config.WriteAsync(ctx, stateTwo)
+	err = config.WriteAsync(stateTwo)
 	if err != nil {
 		t.Fatalf("write-async quorum call error: %v", err)
 	}
