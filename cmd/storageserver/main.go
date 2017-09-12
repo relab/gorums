@@ -21,7 +21,7 @@ func main() {
 	}
 	flag.Parse()
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%s", *port))
+	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", *port))
 	if err != nil {
 		log.Fatal(err)
 	}

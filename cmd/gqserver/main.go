@@ -65,7 +65,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	l, err := net.Listen("tcp", fmt.Sprintf(":%s", *port))
+	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%s", *port))
 	if err != nil {
 		fmt.Println("error listening:", err)
 		os.Exit(2)
