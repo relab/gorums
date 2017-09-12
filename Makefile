@@ -71,7 +71,7 @@ stresstestdev:
 benchlocal:
 	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Local$$ -benchtime=5s
 
-.PHONY: ben/chremote
+.PHONY: benchremote
 benchremote:
 	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Remote$$ -benchtime=5s
 
