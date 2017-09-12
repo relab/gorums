@@ -251,6 +251,7 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 	g.P("\"golang.org/x/net/trace\"")
 	g.P()
 	g.P("\"google.golang.org/grpc/codes\"")
+	g.P("\"google.golang.org/grpc/status\"")
 	g.P(")")
 }
 
