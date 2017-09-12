@@ -57,10 +57,7 @@ func (s *StorageServerBasic) Read(ctx context.Context, rq *ReadRequest) (*State,
 
 // ReadCorrectable implements the ReadCorrectable method.
 func (s *StorageServerBasic) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	s.readExecutedChan <- struct{}{}
-	return &State{Value: s.state.Value, Timestamp: s.state.Timestamp}, nil
+	return s.Read(ctx, rq)
 }
 
 // ReadFuture implements the ReadFuture method.
@@ -119,16 +116,16 @@ func (s *StorageServerBasic) ReadNoQC(ctx context.Context, rq *ReadRequest) (*St
 }
 
 // ReadPrelim implements the ReadPrelim method from the StorageServer interface.
-func (s *StorageServerBasic) ReadPrelim(rq *ReadRequest, rrts Storage_ReadPrelimServer) error {
-	return rrts.Send(&s.state)
+func (s *StorageServerBasic) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
+	return srts.Send(&s.state)
 }
 
-// ReadExecuted returns when r has has completed a read.
+// ReadExecuted returns when s has completed a read.
 func (s *StorageServerBasic) ReadExecuted() {
 	<-s.readExecutedChan
 }
 
-// WriteExecuted returns when r has has completed a write.
+// WriteExecuted returns when s has completed a write.
 func (s *StorageServerBasic) WriteExecuted() {
 	<-s.writeExecutedChan
 }
@@ -188,7 +185,7 @@ func (s *StorageServerError) WriteAsync(stream Storage_WriteAsyncServer) error {
 
 // ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (s *StorageServerError) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
-	return s.Read(ctx, rq)
+	return nil, s.err
 }
 
 // ReadPrelim implements the ReadPrelim method from the StorageServer interface.
@@ -196,24 +193,24 @@ func (s *StorageServerError) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelim
 	return s.err
 }
 
-// ReadExecuted never returns since r always returns an error for Read.
+// ReadExecuted never returns since s always returns an error for Read.
 func (s *StorageServerError) ReadExecuted() {
 	<-make(chan struct{})
 }
 
-// WriteExecuted never returns since r always returns an error for Write.
+// WriteExecuted never returns since s always returns an error for Write.
 func (s *StorageServerError) WriteExecuted() {
 	<-make(chan struct{})
 }
 
 // StorageServerSlow represents a storage server that for any of its methods
-// waits a given duration before returing a reply.
+// waits a given duration before returning a reply.
 type StorageServerSlow struct {
 	delay      time.Duration
 	realServer StorageTestServer
 }
 
-// NewStorageSlow returns a new slow storage server.
+// NewStorageSlow returns a slow storage server.
 func NewStorageSlow(dur time.Duration) *StorageServerSlow {
 	return &StorageServerSlow{
 		delay:      dur,
@@ -221,8 +218,7 @@ func NewStorageSlow(dur time.Duration) *StorageServerSlow {
 	}
 }
 
-// NewStorageSlowWithState returns a new slow storage server with an initial
-// state set.
+// NewStorageSlowWithState returns a slow storage server with some initial state.
 func NewStorageSlowWithState(dur time.Duration, state *State) *StorageServerSlow {
 	return &StorageServerSlow{
 		delay:      dur,
@@ -238,14 +234,12 @@ func (s *StorageServerSlow) Read(ctx context.Context, rq *ReadRequest) (*State, 
 
 // ReadCorrectable implements the ReadCorrectable method.
 func (s *StorageServerSlow) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
-	time.Sleep(s.delay)
-	return s.realServer.Read(ctx, rq)
+	return s.Read(ctx, rq)
 }
 
 // ReadFuture implements the ReadFuture method.
 func (s *StorageServerSlow) ReadFuture(ctx context.Context, rq *ReadRequest) (*State, error) {
-	time.Sleep(s.delay)
-	return s.realServer.Read(ctx, rq)
+	return s.Read(ctx, rq)
 }
 
 // ReadCustomReturn implements the ReadCustomReturn method.
@@ -261,8 +255,7 @@ func (s *StorageServerSlow) Write(ctx context.Context, state *State) (*WriteResp
 
 // WriteFuture implements the WriteFuture method.
 func (s *StorageServerSlow) WriteFuture(ctx context.Context, state *State) (*WriteResponse, error) {
-	time.Sleep(s.delay)
-	return s.realServer.Write(ctx, state)
+	return s.Write(ctx, state)
 }
 
 // WritePerNode implements the WritePerNode method.
@@ -278,13 +271,13 @@ func (s *StorageServerSlow) WriteAsync(stream Storage_WriteAsyncServer) error {
 
 // ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (s *StorageServerSlow) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
-	time.Sleep(s.delay)
 	return s.Read(ctx, rq)
 }
 
 // ReadPrelim implements the ReadPrelim method from the StorageServer interface.
 func (s *StorageServerSlow) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
-	panic("not implemented")
+	time.Sleep(s.delay)
+	return s.realServer.ReadPrelim(rq, srts)
 }
 
 // ReadExecuted returns when r has has completed a read.
@@ -317,9 +310,7 @@ func (s *StorageServerBench) Read(ctx context.Context, rq *ReadRequest) (*State,
 
 // ReadCorrectable implements the ReadCorrectable method.
 func (s *StorageServerBench) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return &State{Value: s.state.Value, Timestamp: s.state.Timestamp}, nil
+	return s.Read(ctx, rq)
 }
 
 // ReadFuture implements the ReadFuture method.
@@ -378,7 +369,7 @@ func (s *StorageServerBench) ReadNoQC(ctx context.Context, rq *ReadRequest) (*St
 
 // ReadPrelim implements the ReadPrelim method from the StorageServer interface.
 func (s *StorageServerBench) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
-	panic("not implemented")
+	return srts.Send(&s.state)
 }
 
 // ReadExecuted is a no-op.
@@ -414,8 +405,7 @@ func (s *StorageServerLockedWithState) Read(ctx context.Context, rq *ReadRequest
 
 // ReadFuture implements the ReadFuture method.
 func (s *StorageServerLockedWithState) ReadFuture(ctx context.Context, rq *ReadRequest) (*State, error) {
-	<-s.lock
-	return s.realServer.ReadFuture(ctx, rq)
+	return s.Read(ctx, rq)
 }
 
 // ReadCustomReturn implements the ReadCustomReturn method.
@@ -425,8 +415,7 @@ func (s *StorageServerLockedWithState) ReadCustomReturn(ctx context.Context, rq 
 
 // ReadCorrectable implements the ReadCorrectable method.
 func (s *StorageServerLockedWithState) ReadCorrectable(ctx context.Context, rq *ReadRequest) (*State, error) {
-	<-s.lock
-	return s.realServer.ReadCorrectable(ctx, rq)
+	return s.Read(ctx, rq)
 }
 
 func (s *StorageServerLockedWithState) Write(ctx context.Context, state *State) (*WriteResponse, error) {
@@ -436,8 +425,7 @@ func (s *StorageServerLockedWithState) Write(ctx context.Context, state *State) 
 
 // WriteFuture implements the WriteFuture method.
 func (s *StorageServerLockedWithState) WriteFuture(ctx context.Context, state *State) (*WriteResponse, error) {
-	<-s.lock
-	return s.realServer.WriteFuture(ctx, state)
+	return s.Write(ctx, state)
 }
 
 // WritePerNode implements the WritePerNode method.
