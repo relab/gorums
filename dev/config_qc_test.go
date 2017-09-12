@@ -1159,58 +1159,55 @@ func benchmarkRead(b *testing.B, psize, rq, n int, single, parallel, future, rem
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkWrite1KQ2N3Local(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, false, false)
+	benchmarkWrite(b, 1<<10, 2, 3, false, false, false)
 }
 
 func BenchmarkWrite1KQ2N3Remote(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, false, true)
+	benchmarkWrite(b, 1<<10, 2, 3, false, false, true)
 }
 
 func BenchmarkWrite1KQ2N3ParallelLocal(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, true, false, false)
+	benchmarkWrite(b, 1<<10, 2, 3, true, false, false)
 }
 
 func BenchmarkWrite1KQ2N3ParallelRemote(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, true, false, true)
+	benchmarkWrite(b, 1<<10, 2, 3, true, false, true)
 }
 
 func BenchmarkWrite1KQ2N3FutureLocal(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, true, false)
+	benchmarkWrite(b, 1<<10, 2, 3, false, true, false)
 }
 
 func BenchmarkWrite1KQ2N3FutureRemote(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, true, true)
+	benchmarkWrite(b, 1<<10, 2, 3, false, true, true)
 }
 
 func BenchmarkWrite1KQ2N3FutureParallelLocal(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, true, true, false)
+	benchmarkWrite(b, 1<<10, 2, 3, true, true, false)
 }
 
 func BenchmarkWrited1KQ2N3FutureParallelRemote(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, true, true, true)
+	benchmarkWrite(b, 1<<10, 2, 3, true, true, true)
 }
 
 ///////////////////////////////////////////////////////////////
 
 var wreplySink *qc.WriteResponse
 
-func benchmarkWrite(b *testing.B, psize, wq int, parallel, future, remote bool) {
-	var rservers []storageServer
+func benchmarkWrite(b *testing.B, psize, wq, n int, parallel, future, remote bool) {
+	sservers := make([]storageServer, n)
 	if remote {
-		rservers = []storageServer{
-			{addr: remoteStorageHost},
-			{addr: remoteStorageHost},
-			{addr: remoteStorageHost},
+		for i := range sservers {
+			// TODO(tormoder): Fix addr assignment.
+			sservers[i] = storageServer{addr: remoteStorageHost}
 		}
 	} else {
-		rservers = []storageServer{
-			{impl: qc.NewStorageBench()},
-			{impl: qc.NewStorageBench()},
-			{impl: qc.NewStorageBench()},
+		for i := range sservers {
+			sservers[i] = storageServer{impl: qc.NewStorageBench()}
 		}
 	}
 
-	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, sservers, remote)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
