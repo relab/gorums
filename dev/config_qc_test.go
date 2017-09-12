@@ -961,136 +961,123 @@ func TestPerNodeArg(t *testing.T) {
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkRead1KQ1N3Local(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, false, false, false, false)
+	benchmarkRead(b, 1<<10, 1, 3, false, false, false, false)
 }
 
 func BenchmarkRead1KQ1N3Remote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, false, false, false, true)
+	benchmarkRead(b, 1<<10, 1, 3, false, false, false, true)
 }
 
 func BenchmarkRead1KQ1N3ParallelLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, false, true, false, false)
+	benchmarkRead(b, 1<<10, 1, 3, false, true, false, false)
 }
 
 func BenchmarkRead1KQ1N3ParallelRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, false, true, false, true)
+	benchmarkRead(b, 1<<10, 1, 3, false, true, false, true)
 }
 
 func BenchmarkRead1KQ1N3FutureLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, false, false, true, false)
+	benchmarkRead(b, 1<<10, 1, 3, false, false, true, false)
 }
 
 func BenchmarkRead1KQ1N3FutureRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, false, false, true, true)
+	benchmarkRead(b, 1<<10, 1, 3, false, false, true, true)
 }
 
 func BenchmarkRead1KQ1N3FutureParallelLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, false, true, true, false)
+	benchmarkRead(b, 1<<10, 1, 3, false, true, true, false)
 }
 
 func BenchmarkRead1KQ1N3FutureParallelRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, false, true, true, true)
+	benchmarkRead(b, 1<<10, 1, 3, false, true, true, true)
 }
 
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkRead1KQ2N3Local(b *testing.B) {
-	benchmarkRead(b, 1<<10, 2, false, false, false, false)
+	benchmarkRead(b, 1<<10, 2, 3, false, false, false, false)
 }
 
 func BenchmarkRead1KQ2N3Remote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 2, false, false, false, true)
+	benchmarkRead(b, 1<<10, 2, 3, false, false, false, true)
 }
 
 func BenchmarkRead1KQ2N3ParallelLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 2, false, true, false, false)
+	benchmarkRead(b, 1<<10, 2, 3, false, true, false, false)
 }
 
 func BenchmarkRead1KQ2N3ParallelRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 2, false, true, false, true)
+	benchmarkRead(b, 1<<10, 2, 3, false, true, false, true)
 }
 
 func BenchmarkRead1KQ2N3FutureLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 2, false, false, true, false)
+	benchmarkRead(b, 1<<10, 2, 3, false, false, true, false)
 }
 
 func BenchmarkRead1KQ2N3FutureRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 2, false, false, true, true)
+	benchmarkRead(b, 1<<10, 2, 3, false, false, true, true)
 }
 
 func BenchmarkRead1KQ2N3FutureParallelLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 2, false, true, true, false)
+	benchmarkRead(b, 1<<10, 2, 3, false, true, true, false)
 }
 
 func BenchmarkRead1KQ2N3FutureParallelRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 2, false, true, true, true)
+	benchmarkRead(b, 1<<10, 2, 3, false, true, true, true)
 }
 
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkRead1KQ1N1Local(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, true, false, false, false)
+	benchmarkRead(b, 1<<10, 1, 1, true, false, false, false)
 }
 
 func BenchmarkRead1KQ1N1Remote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, true, false, false, true)
+	benchmarkRead(b, 1<<10, 1, 1, true, false, false, true)
 }
 
 func BenchmarkRead1KQ1N1ParallelLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, true, true, false, false)
+	benchmarkRead(b, 1<<10, 1, 1, true, true, false, false)
 }
 
 func BenchmarkRead1KQ1N1ParallelRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, true, true, false, true)
+	benchmarkRead(b, 1<<10, 1, 1, true, true, false, true)
 }
 
 func BenchmarkRead1KQ1N1FutureLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, true, false, true, false)
+	benchmarkRead(b, 1<<10, 1, 1, true, false, true, false)
 }
 
 func BenchmarkRead1KQ1N1FutureRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, true, false, true, true)
+	benchmarkRead(b, 1<<10, 1, 1, true, false, true, true)
 }
 
 func BenchmarkRead1KQ1N1FutureParallelLocal(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, true, true, true, false)
+	benchmarkRead(b, 1<<10, 1, 1, true, true, true, false)
 }
 
 func BenchmarkRead1KQ1N1FutureParallelRemote(b *testing.B) {
-	benchmarkRead(b, 1<<10, 1, true, true, true, true)
+	benchmarkRead(b, 1<<10, 1, 1, true, true, true, true)
 }
 
 ///////////////////////////////////////////////////////////////
 
 var replySink *qc.State
 
-func benchmarkRead(b *testing.B, psize, rq int, single, parallel, future, remote bool) {
-	var rservers []storageServer
+func benchmarkRead(b *testing.B, psize, rq, n int, single, parallel, future, remote bool) {
+	sservers := make([]storageServer, n)
 	if remote {
-		rservers = []storageServer{
-			{addr: remoteStorageHost},
-		}
-		if !single {
-			rservers = append(
-				rservers,
-				storageServer{},
-				storageServer{},
-			)
+		for i := range sservers {
+			// TODO(tormoder): Fix addr assignment.
+			sservers[i] = storageServer{addr: remoteStorageHost}
 		}
 	} else {
-		rservers = []storageServer{
-			{impl: qc.NewStorageBench()},
-		}
-		if !single {
-			rservers = append(
-				rservers,
-				storageServer{impl: qc.NewStorageBench()},
-				storageServer{impl: qc.NewStorageBench()},
-			)
+		for i := range sservers {
+			sservers[i] = storageServer{impl: qc.NewStorageBench()}
 		}
 	}
 
-	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, sservers, remote)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
