@@ -561,18 +561,9 @@ func TestBasicCorrectable(t *testing.T) {
 
 	select {
 	case <-correctable.Done():
-		reply, level, err := correctable.Get()
-		if err != nil {
-			t.Fatalf("read correctable call: get: got error: %v, want none", err)
-		}
-		if level != LevelStrong {
-			t.Fatalf("read correctable: get: got level %v, want %v", level, LevelStrong)
-		}
-		if reply.Value != stateTwo.Value {
-			t.Fatalf("read correctable: get: reply:\ngot:\n%v\nwant:\n%v", reply.Value, stateTwo)
-		}
+		checkReplyAndLevel(t, correctable, LevelStrong, stateTwo)
 	case <-time.After(2 * time.Second):
-		t.Fatalf("read correctable: was not done and call did not timeout using context")
+		t.Fatalf("correctable: was not done and call did not timeout using context")
 	}
 }
 
@@ -624,7 +615,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 		t.Fatalf("error creating config: %v", err)
 	}
 
-	waitTimeout := time.Second
+	// waitTimeout := time.Second
 	ctx := context.Background()
 	correctable := config.ReadCorrectable(ctx, &qc.ReadRequest{})
 
@@ -640,80 +631,35 @@ func TestCorrectableWithLevels(t *testing.T) {
 	// Check that the level 1 watch channel is not done.
 	select {
 	case <-levelOneChan:
-		t.Fatalf("read correctable: level 1 (weak) chan was closed before any reply was received")
+		t.Fatalf("correctable: level 1 (weak) chan was closed before any reply was received")
 	default:
 	}
-
 	// Check that Done() is not done.
 	select {
 	case <-correctable.Done():
-		t.Fatalf("read correctable: Done() was done before any reply was received")
+		t.Fatalf("correctable: Done() was done before any reply was received")
 	default:
 	}
 
 	// Check that Get() returns nil, LevelNotSet, nil.
-	reply, level, err := correctable.Get()
-	if err != nil {
-		t.Fatalf("read correctable: initial get: got unexpected error: %v", err)
-	}
-	if level != qc.LevelNotSet {
-		t.Fatalf("read correctable: initial get: got level %v, want %v", level, qc.LevelNotSet)
-	}
-	if reply != nil {
-		t.Fatal("read correctable: initial get: got reply, want none")
-	}
-
+	checkReplyAndLevel(t, correctable, qc.LevelNotSet, nil)
 	// Unlock server with lowest timestamp for state.
 	storageServerImplementations[0].Unlock()
-
 	// Wait for level 1 (weak) notification.
-	select {
-	case <-levelOneChan:
-	case <-time.After(waitTimeout):
-		t.Fatalf("read correctable: waiting for levelOneChan timed out (waited %v)", waitTimeout)
-	}
+	checkLevelAndDone(t, correctable, levelOneChan, LevelWeak, false)
 
 	// Check that Get() returns stateOne, LevelWeak, nil.
-	reply, level, err = correctable.Get()
-	if err != nil {
-		t.Fatalf("read correctable: get after one reply: got unexpected error: %v", err)
-	}
-	if level != LevelWeak {
-		t.Fatalf("read correctable: get after one reply: got level %v, want %v", level, LevelWeak)
-	}
-	if reply.Value != stateOne.Value {
-		t.Fatalf("read correctable: get after one reply:\ngot reply:\n%v\nwant:\n%v", reply.Value, stateOne.Value)
-	}
-
+	checkReplyAndLevel(t, correctable, LevelWeak, stateOne)
 	// Unlock both of the two servers with the highest timestamp for state.
 	storageServerImplementations[1].Unlock()
 	storageServerImplementations[2].Unlock()
-
 	// Wait for Done channel notification.
-	select {
-	case <-correctable.Done():
-	case <-time.After(waitTimeout):
-		t.Fatalf("read correctable: waiting for Done channel timed out (waited %v)", waitTimeout)
-	}
+	checkLevelAndDone(t, correctable, levelOneChan, LevelWeak, true)
 
 	// Check that Get() returns stateTwo, LevelStrong, nil.
-	reply, level, err = correctable.Get()
-	if err != nil {
-		t.Fatalf("read correctable: get after done call: got unexpected error: %v", err)
-	}
-	if level != LevelStrong {
-		t.Fatalf("read correctable: get after done call: got level %v, want %v", level, LevelStrong)
-	}
-	if reply.Value != stateTwo.Value {
-		t.Fatalf("read correctable: get after done call:\ngot reply:\n%v\nwant:\n%v", reply.Value, stateTwo.Value)
-	}
-
+	checkReplyAndLevel(t, correctable, LevelStrong, stateTwo)
 	// Check that channel for level 5 (undefined) notification is closed.
-	select {
-	case <-levelFiveChan:
-	default:
-		t.Fatal("read correctable: call is complete but levelFive notification channel was not closed", waitTimeout)
-	}
+	checkLevelAndDone(t, correctable, levelFiveChan, LevelStrong, true)
 }
 
 func TestCorrectablePrelim(t *testing.T) {
@@ -780,7 +726,7 @@ func TestCorrectablePrelim(t *testing.T) {
 	// 0.1: Check that Done() is not done.
 	select {
 	case <-correctable.Done():
-		t.Fatalf("read correctable prelim: Done() was done before any reply was received")
+		t.Fatalf("correctable: Done() was done before any reply was received")
 	default:
 	}
 
@@ -812,14 +758,19 @@ func TestCorrectablePrelim(t *testing.T) {
 	checkReplyAndLevel(t, correctable, 4, stateTwo)
 }
 
-func checkLevelAndDone(t *testing.T, correctable *qc.ReadPrelimReply, levelChan <-chan struct{}, expectedLevel int, expectedDone bool) {
+type Correctable interface {
+	Get() (*qc.State, int, error)
+	Done() <-chan struct{}
+}
+
+func checkLevelAndDone(t *testing.T, correctable Correctable, levelChan <-chan struct{}, expectedLevel int, expectedDone bool) {
 	t.Helper()
 	waitTimeout := time.Second
 	// Wait for level notification.
 	select {
 	case <-levelChan:
 	case <-time.After(waitTimeout):
-		t.Fatalf("read correctable prelim: waiting for level %d chan timed out (waited %v)", expectedLevel, waitTimeout)
+		t.Fatalf("correctable: waiting for level %d chan timed out (waited %v)", expectedLevel, waitTimeout)
 	}
 
 	if expectedDone {
@@ -827,35 +778,35 @@ func checkLevelAndDone(t *testing.T, correctable *qc.ReadPrelimReply, levelChan 
 		select {
 		case <-correctable.Done():
 		case <-time.After(waitTimeout):
-			t.Fatalf("read correctable prelim: waiting for Done channel timed out (waited %v)", waitTimeout)
+			t.Fatalf("correctable: waiting for Done channel timed out (waited %v)", waitTimeout)
 		}
 	} else {
 		// Check that Done() is not done.
 		select {
 		case <-correctable.Done():
-			t.Fatalf("read correctable prelim: Done() was done at level %d", expectedLevel)
+			t.Fatalf("correctable: unexpected Done() at level %d", expectedLevel)
 		default:
 		}
 	}
 }
 
-func checkReplyAndLevel(t *testing.T, correctable *qc.ReadPrelimReply, expectedLevel int, expectedReply *qc.State) {
+func checkReplyAndLevel(t *testing.T, correctable Correctable, expectedLevel int, expectedReply *qc.State) {
 	t.Helper()
 	reply, level, err := correctable.Get()
 	if err != nil {
-		t.Fatalf("read correctable prelim: get (%d): got unexpected error: %v", expectedLevel, err)
+		t.Fatalf("correctable: get (%d): got unexpected error: %v", expectedLevel, err)
 	}
 	if level != expectedLevel {
-		t.Fatalf("read correctable prelim: get (%d): got level %v, want %v", expectedLevel, level, expectedLevel)
+		t.Fatalf("correctable: get (%d): got level %v, want %v", expectedLevel, level, expectedLevel)
 	}
 	if expectedReply == nil && reply != nil {
-		t.Fatalf("read correctable prelim: get (%d):\ngot reply:\n%v\nwant:\nnil", expectedLevel, reply.Value)
+		t.Fatalf("correctable: get (%d):\ngot reply:\n%v\nwant:\nnil", expectedLevel, reply.Value)
 	}
 	if reply == nil && expectedReply != nil {
-		t.Fatalf("read correctable prelim: get (%d):\ngot reply:\nnil\nwant:\n%v", expectedLevel, expectedReply.Value)
+		t.Fatalf("correctable: get (%d):\ngot reply:\nnil\nwant:\n%v", expectedLevel, expectedReply.Value)
 	}
 	if reply != nil && expectedReply != nil && reply.Value != expectedReply.Value {
-		t.Fatalf("read correctable prelim: get (%d):\ngot reply:\n%v\nwant:\n%v", expectedLevel, reply.Value, expectedReply.Value)
+		t.Fatalf("correctable: get (%d):\ngot reply:\n%v\nwant:\n%v", expectedLevel, reply.Value, expectedReply.Value)
 	}
 }
 
