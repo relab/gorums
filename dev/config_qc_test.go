@@ -1174,64 +1174,54 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkWrite1KQ2N3Local(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, false, false, false)
+	benchmarkWrite(b, 1<<10, 2, false, false, false)
 }
 
 func BenchmarkWrite1KQ2N3Remote(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, false, false, true)
+	benchmarkWrite(b, 1<<10, 2, false, false, true)
 }
 
 func BenchmarkWrite1KQ2N3ParallelLocal(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, true, false, false)
+	benchmarkWrite(b, 1<<10, 2, true, false, false)
 }
 
 func BenchmarkWrite1KQ2N3ParallelRemote(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, true, false, true)
+	benchmarkWrite(b, 1<<10, 2, true, false, true)
 }
 
 func BenchmarkWrite1KQ2N3FutureLocal(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, false, true, false)
+	benchmarkWrite(b, 1<<10, 2, false, true, false)
 }
 
 func BenchmarkWrite1KQ2N3FutureRemote(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, false, true, true)
+	benchmarkWrite(b, 1<<10, 2, false, true, true)
 }
 
 func BenchmarkWrite1KQ2N3FutureParallelLocal(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, true, true, false)
+	benchmarkWrite(b, 1<<10, 2, true, true, false)
 }
 
 func BenchmarkWrited1KQ2N3FutureParallelRemote(b *testing.B) {
-	benchmarkWrite(b, 1<<10, 2, false, true, true, true)
+	benchmarkWrite(b, 1<<10, 2, true, true, true)
 }
 
 ///////////////////////////////////////////////////////////////
 
 var wreplySink *qc.WriteResponse
 
-func benchmarkWrite(b *testing.B, size, wq int, single, parallel, future, remote bool) {
+func benchmarkWrite(b *testing.B, size, wq int, parallel, future, remote bool) {
 	var rservers []regServer
 	if !remote {
 		rservers = []regServer{
 			{impl: qc.NewStorageBench()},
-		}
-		if !single {
-			rservers = append(
-				rservers,
-				regServer{impl: qc.NewStorageBench()},
-				regServer{impl: qc.NewStorageBench()},
-			)
+			{impl: qc.NewStorageBench()},
+			{impl: qc.NewStorageBench()},
 		}
 	} else {
 		rservers = []regServer{
 			{addr: remoteStorageHost},
-		}
-		if !single {
-			rservers = append(
-				rservers,
-				regServer{},
-				regServer{},
-			)
+			{},
+			{},
 		}
 	}
 
