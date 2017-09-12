@@ -29,13 +29,9 @@ const (
 	serverKeyFile  = tlsDir + "server1.key"
 )
 
-func secsetup(t testing.TB, srvs regServers, remote bool) (func(n int), func(n int)) {
+func secsetup(t testing.TB, srvs regServers) (func(n int), func(n int)) {
 	if len(srvs) == 0 {
 		t.Fatal("setupServers: need at least one server")
-	}
-
-	if remote {
-		return func(int) {}, func(int) {}
 	}
 
 	var err error
@@ -98,7 +94,7 @@ func TestSecureStorage(t *testing.T) {
 		{impl: qc.NewStorageBasic()},
 		{impl: qc.NewStorageBasic()},
 	}
-	stopGrpcServe, closeListeners := secsetup(t, servers, false)
+	stopGrpcServe, closeListeners := secsetup(t, servers)
 	defer stopGrpcServe(allServers)
 
 	//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
