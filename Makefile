@@ -71,9 +71,11 @@ stresstestdev:
 benchlocal:
 	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Local$$ -benchtime=5s
 
-.PHONY: benchremote
-benchremote:
-	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Remote$$ -benchtime=5s
+.PHONY: benchremotewithlocalhost
+benchremotewithlocalhost:
+	@echo please run the script cmd/storagserver/start3.sh in a separate shell, and then press enter...
+	@read
+	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Remote$$ -benchtime=5s -remotehosts=localhost:8080,localhost:8081,localhost:8082
 
 .PHONY: clean
 clean:
