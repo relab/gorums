@@ -1,6 +1,7 @@
 package dev_test
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,24 +20,33 @@ import (
 
 	"golang.org/x/net/context"
 
-	"strconv"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 )
 
-var remoteStorageHost string
-
 func TestMain(m *testing.M) {
-	remoteStorageHost = os.Getenv("REMOTE_HOST")
-	if remoteStorageHost == "" {
-		remoteStorageHost = "localhost:8088"
+	// Flag definitions.
+	var hosts = flag.String(
+		"remotehosts",
+		"",
+		"comma separated list of 'addr:port' pairs to use as hosts for remote benchmarks",
+	)
+
+	// Parse and validate flags.
+	flag.Parse()
+	err := parseHostnames(*hosts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(2)
 	}
-	log.Println(remoteStorageHost)
+
+	// Disable gRPC tracing and logging.
 	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
 	grpclog.SetLogger(silentLogger)
 	grpc.EnableTracing = false
+
+	// Run tests/benchmarks.
 	res := m.Run()
 	os.Exit(res)
 }
@@ -1064,12 +1075,14 @@ func BenchmarkRead1KQ1N1FutureParallelRemote(b *testing.B) {
 
 var replySink *qc.State
 
+var remoteStorageHost string
+
 func benchmarkRead(b *testing.B, psize, rq, n int, parallel, future, remote bool) {
 	sservers := make([]storageServer, n)
 	if remote {
+		addrs := getRemoteBenchAddrs(b, n)
 		for i := range sservers {
-			// TODO(tormoder): Fix addr assignment.
-			sservers[i] = storageServer{addr: remoteStorageHost}
+			sservers[i] = storageServer{addr: addrs[i]}
 		}
 	} else {
 		for i := range sservers {
@@ -1197,9 +1210,9 @@ var wreplySink *qc.WriteResponse
 func benchmarkWrite(b *testing.B, psize, wq, n int, parallel, future, remote bool) {
 	sservers := make([]storageServer, n)
 	if remote {
+		addrs := getRemoteBenchAddrs(b, n)
 		for i := range sservers {
-			// TODO(tormoder): Fix addr assignment.
-			sservers[i] = storageServer{addr: remoteStorageHost}
+			sservers[i] = storageServer{addr: addrs[i]}
 		}
 	} else {
 		for i := range sservers {
@@ -1290,7 +1303,8 @@ var grpcReplySink *qc.State
 func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	var rservers []storageServer
 	if remote {
-		rservers = []storageServer{{addr: remoteStorageHost}}
+		addrs := getRemoteBenchAddrs(b, 1)
+		rservers = []storageServer{{addr: addrs[0]}}
 	} else {
 		rservers = []storageServer{{impl: qc.NewStorageBench()}}
 	}
@@ -1437,6 +1451,33 @@ func (rs storageServers) addrs() []string {
 		addrs[i] = server.addr
 	}
 	return addrs
+}
+
+var remoteBenchmarkHosts []string
+
+func parseHostnames(hostnames string) error {
+	if hostnames == "" {
+		return nil
+	}
+
+	hostPairsSplitted := strings.Split(hostnames, ",")
+	for i, hps := range hostPairsSplitted {
+		tmp := strings.Split(hps, ":")
+		if len(tmp) != 2 {
+			return fmt.Errorf("parseHostnames: malformed host address: host %d: %q", i, hps)
+		}
+		remoteBenchmarkHosts = append(remoteBenchmarkHosts, hps)
+	}
+
+	return nil
+}
+
+func getRemoteBenchAddrs(tb testing.TB, n int) []string {
+	tb.Helper()
+	if n > len(remoteBenchmarkHosts) {
+		tb.Fatalf("%d remote host(s) needed, %d provided", n, len(remoteBenchmarkHosts))
+	}
+	return remoteBenchmarkHosts[:n]
 }
 
 // waitForAllWrites must only be called when
