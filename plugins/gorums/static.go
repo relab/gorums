@@ -71,15 +71,6 @@ func (c *Configuration) tstring() string {
 // configuration.
 func Equal(a, b *Configuration) bool	{ return a.id == b.id }
 
-// NewTestConfiguration returns a new configuration with quorum size q and
-// node size n. No other fields are set. Configurations returned from this
-// constructor should only be used when testing quorum functions.
-func NewTestConfiguration(q, n int) *Configuration {
-	return &Configuration{
-		nodes: make([]*Node, n),
-	}
-}
-
 /* errors.go */
 
 // A NodeNotFoundError reports that a specified node could not be found.
