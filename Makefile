@@ -73,9 +73,15 @@ benchlocal:
 
 .PHONY: benchremotewithlocalhost
 benchremotewithlocalhost:
-	@echo please run the script cmd/storagserver/start3.sh in a separate shell, and then press enter...
+	cd cmd/storageserver; go build
+	cmd/storageserver/storageserver -port=8080 &
+	cmd/storageserver/storageserver -port=8081 &
+	cmd/storageserver/storageserver -port=8082 &
+	@echo starting storage servers in background... press enter to start benchmark.
 	@read
 	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Remote$$ -benchtime=5s -remotehosts=localhost:8080,localhost:8081,localhost:8082
+	@echo done running benchmark; killing storage servers
+	killall storageserver
 
 .PHONY: clean
 clean:
