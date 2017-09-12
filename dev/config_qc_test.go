@@ -1064,7 +1064,7 @@ func BenchmarkRead1KQ1N1FutureParallelRemote(b *testing.B) {
 
 var replySink *qc.State
 
-func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote bool) {
+func benchmarkRead(b *testing.B, psize, rq int, single, parallel, future, remote bool) {
 	var rservers []storageServer
 	if remote {
 		rservers = []storageServer{
@@ -1112,7 +1112,7 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 	}
 
 	state := &qc.State{
-		Value:     strings.Repeat("x", size),
+		Value:     strings.Repeat("x", psize),
 		Timestamp: time.Now().UnixNano(),
 	}
 
@@ -1207,7 +1207,7 @@ func BenchmarkWrited1KQ2N3FutureParallelRemote(b *testing.B) {
 
 var wreplySink *qc.WriteResponse
 
-func benchmarkWrite(b *testing.B, size, wq int, parallel, future, remote bool) {
+func benchmarkWrite(b *testing.B, psize, wq int, parallel, future, remote bool) {
 	var rservers []storageServer
 	if remote {
 		rservers = []storageServer{
@@ -1245,7 +1245,7 @@ func benchmarkWrite(b *testing.B, size, wq int, parallel, future, remote bool) {
 	}
 
 	state := &qc.State{
-		Value:     strings.Repeat("x", size),
+		Value:     strings.Repeat("x", psize),
 		Timestamp: time.Now().UnixNano(),
 	}
 
