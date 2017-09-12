@@ -44,7 +44,7 @@ func TestBasicStorage(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
@@ -118,7 +118,7 @@ func TestSingleServerRPC(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
@@ -167,7 +167,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
@@ -218,7 +218,7 @@ func TestSlowStorage(t *testing.T) {
 	someErr := grpc.Errorf(codes.Unknown, "Some error")
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageSlow(time.Second)},
 			{impl: qc.NewStorageSlow(time.Second)},
 			{impl: qc.NewStorageError(someErr)},
@@ -266,7 +266,7 @@ func TestBasicStorageUsingFuture(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
@@ -340,7 +340,7 @@ func TestBasicStorageWithWriteAsync(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
@@ -428,7 +428,7 @@ func TestManagerClose(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
@@ -465,7 +465,7 @@ func TestQuorumCallCancel(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageSlow(time.Second)},
 			{impl: qc.NewStorageSlow(time.Second)},
 			{impl: qc.NewStorageSlow(time.Second)},
@@ -517,7 +517,7 @@ func TestBasicCorrectable(t *testing.T) {
 
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageSlowWithState(5*time.Millisecond, stateOne)},
 			{impl: qc.NewStorageSlowWithState(20*time.Millisecond, stateTwo)},
 			{impl: qc.NewStorageSlowWithState(500*time.Millisecond, stateTwo)},
@@ -578,7 +578,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 	}
 
 	// We need the specific implementation so we call the Unlock method.
-	regServersImplementation := []*qc.StorageServerLockedWithState{
+	storageServerImplementations := []*qc.StorageServerLockedWithState{
 		qc.NewStorageServerLockedWithState(stateOne, 0),
 		qc.NewStorageServerLockedWithState(stateTwo, 0),
 		qc.NewStorageServerLockedWithState(stateTwo, 0),
@@ -586,10 +586,10 @@ func TestCorrectableWithLevels(t *testing.T) {
 
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
-			{impl: regServersImplementation[0]},
-			{impl: regServersImplementation[1]},
-			{impl: regServersImplementation[2]},
+		[]storageServer{
+			{impl: storageServerImplementations[0]},
+			{impl: storageServerImplementations[1]},
+			{impl: storageServerImplementations[2]},
 		},
 		false,
 	)
@@ -653,7 +653,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 	}
 
 	// Unlock server with lowest timestamp for state.
-	regServersImplementation[0].Unlock()
+	storageServerImplementations[0].Unlock()
 
 	// Wait for level 1 (weak) notification.
 	select {
@@ -675,8 +675,8 @@ func TestCorrectableWithLevels(t *testing.T) {
 	}
 
 	// Unlock both of the two servers with the highest timestamp for state.
-	regServersImplementation[1].Unlock()
-	regServersImplementation[2].Unlock()
+	storageServerImplementations[1].Unlock()
+	storageServerImplementations[2].Unlock()
 
 	// Wait for Done channel notification.
 	select {
@@ -718,7 +718,7 @@ func TestCorrectablePrelim(t *testing.T) {
 	}
 
 	// We need the specific implementation so we call the Unlock and PerformSingleReadPrelim methods.
-	regServersImplementation := []*qc.StorageServerLockedWithState{
+	storageServerImplementations := []*qc.StorageServerLockedWithState{
 		qc.NewStorageServerLockedWithState(stateOne, 2),
 		qc.NewStorageServerLockedWithState(stateTwo, 2),
 		qc.NewStorageServerLockedWithState(stateTwo, 0),
@@ -726,10 +726,10 @@ func TestCorrectablePrelim(t *testing.T) {
 
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
-			{impl: regServersImplementation[0]},
-			{impl: regServersImplementation[1]},
-			{impl: regServersImplementation[2]},
+		[]storageServer{
+			{impl: storageServerImplementations[0]},
+			{impl: storageServerImplementations[1]},
+			{impl: storageServerImplementations[2]},
 		},
 		false,
 	)
@@ -762,9 +762,9 @@ func TestCorrectablePrelim(t *testing.T) {
 	levelFourChan := correctable.Watch(4)
 
 	// Unlock all servers.
-	regServersImplementation[0].Unlock()
-	regServersImplementation[1].Unlock()
-	regServersImplementation[2].Unlock()
+	storageServerImplementations[0].Unlock()
+	storageServerImplementations[1].Unlock()
+	storageServerImplementations[2].Unlock()
 
 	// 0.1: Check that Done() is not done.
 	select {
@@ -775,25 +775,25 @@ func TestCorrectablePrelim(t *testing.T) {
 
 	// 0.2: Check that Get() returns nil, LevelNotSet, nil.
 	checkReplyAndLevel(t, correctable, qc.LevelNotSet, nil)
-	regServersImplementation[0].PerformSingleReadPrelim()
+	storageServerImplementations[0].PerformSingleReadPrelim()
 	// Wait for level 1 notification.
 	checkLevelAndDone(t, correctable, levelOneChan, 1, false)
 
 	// 1.2: Check that Get() returns stateOne, 1, nil.
 	checkReplyAndLevel(t, correctable, 1, stateOne)
-	regServersImplementation[0].PerformSingleReadPrelim()
+	storageServerImplementations[0].PerformSingleReadPrelim()
 	// Wait for level 2 notification.
 	checkLevelAndDone(t, correctable, levelTwoChan, 2, false)
 
 	// 2.2: Check that Get() returns stateOne, 2, nil.
 	checkReplyAndLevel(t, correctable, 2, stateOne)
-	regServersImplementation[1].PerformSingleReadPrelim()
+	storageServerImplementations[1].PerformSingleReadPrelim()
 	// Wait for level 3 notification.
 	checkLevelAndDone(t, correctable, levelThreeChan, 3, false)
 
 	// 3.2: Check that Get() returns stateTwo, 3, nil.
 	checkReplyAndLevel(t, correctable, 3, stateTwo)
-	regServersImplementation[1].PerformSingleReadPrelim()
+	storageServerImplementations[1].PerformSingleReadPrelim()
 	// Wait for level 4 notification.
 	checkLevelAndDone(t, correctable, levelFourChan, 4, true)
 
@@ -852,7 +852,7 @@ func TestPerNodeArg(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
@@ -1065,27 +1065,27 @@ func BenchmarkRead1KQ1N1FutureParallelRemote(b *testing.B) {
 var replySink *qc.State
 
 func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote bool) {
-	var rservers []regServer
+	var rservers []storageServer
 	if remote {
-		rservers = []regServer{
+		rservers = []storageServer{
 			{addr: remoteStorageHost},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{},
-				regServer{},
+				storageServer{},
+				storageServer{},
 			)
 		}
 	} else {
-		rservers = []regServer{
+		rservers = []storageServer{
 			{impl: qc.NewStorageBench()},
 		}
 		if !single {
 			rservers = append(
 				rservers,
-				regServer{impl: qc.NewStorageBench()},
-				regServer{impl: qc.NewStorageBench()},
+				storageServer{impl: qc.NewStorageBench()},
+				storageServer{impl: qc.NewStorageBench()},
 			)
 		}
 	}
@@ -1208,15 +1208,15 @@ func BenchmarkWrited1KQ2N3FutureParallelRemote(b *testing.B) {
 var wreplySink *qc.WriteResponse
 
 func benchmarkWrite(b *testing.B, size, wq int, parallel, future, remote bool) {
-	var rservers []regServer
+	var rservers []storageServer
 	if remote {
-		rservers = []regServer{
+		rservers = []storageServer{
 			{addr: remoteStorageHost},
 			{addr: remoteStorageHost},
 			{addr: remoteStorageHost},
 		}
 	} else {
-		rservers = []regServer{
+		rservers = []storageServer{
 			{impl: qc.NewStorageBench()},
 			{impl: qc.NewStorageBench()},
 			{impl: qc.NewStorageBench()},
@@ -1304,11 +1304,11 @@ func BenchmarkRead1KGRPCParallelRemote(b *testing.B) { benchReadGRPC(b, 1<<10, t
 var grpcReplySink *qc.State
 
 func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
-	var rservers []regServer
+	var rservers []storageServer
 	if remote {
-		rservers = []regServer{{addr: remoteStorageHost}}
+		rservers = []storageServer{{addr: remoteStorageHost}}
 	} else {
-		rservers = []regServer{{impl: qc.NewStorageBench()}}
+		rservers = []storageServer{{impl: qc.NewStorageBench()}}
 	}
 
 	servers, _, stopGrpcServe, closeListeners := setup(b, rservers, remote)
@@ -1366,8 +1366,8 @@ var portSupplier = struct {
 	sync.Mutex
 }{p: 22332}
 
-func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.ManagerOption, func(n int), func(n int)) {
-	if len(regServers) == 0 {
+func setup(t testing.TB, storServers []storageServer, remote bool) (storageServers, qc.ManagerOption, func(n int), func(n int)) {
+	if len(storServers) == 0 {
 		t.Fatal("setupServers: need at least one server")
 	}
 
@@ -1379,16 +1379,16 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.Ma
 	dialOpts := qc.WithGrpcDialOptions(grpcOpts...)
 
 	if remote {
-		return regServers, dialOpts, func(int) {}, func(int) {}
+		return storServers, dialOpts, func(int) {}, func(int) {}
 	}
 
-	servers := make([]*grpc.Server, len(regServers))
+	servers := make([]*grpc.Server, len(storServers))
 	for i := range servers {
 		servers[i] = grpc.NewServer()
-		qc.RegisterStorageServer(servers[i], regServers[i].impl)
-		if regServers[i].addr == "" {
+		qc.RegisterStorageServer(servers[i], storServers[i].impl)
+		if storServers[i].addr == "" {
 			portSupplier.Lock()
-			regServers[i].addr = fmt.Sprintf("localhost:%d", portSupplier.p)
+			storServers[i].addr = fmt.Sprintf("localhost:%d", portSupplier.p)
 			portSupplier.p++
 			portSupplier.Unlock()
 		}
@@ -1397,7 +1397,7 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.Ma
 	listeners := make([]net.Listener, len(servers))
 
 	var err error
-	for i, rs := range regServers {
+	for i, rs := range storServers {
 		listeners[i], err = net.Listen("tcp", rs.addr)
 		if err != nil {
 			t.Fatalf("failed to listen: %v", err)
@@ -1414,7 +1414,7 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.Ma
 		if err != nil {
 			t.Fatalf("failed to parse listener address: %v", err)
 		}
-		regServers[i].addr = "localhost:" + port
+		storServers[i].addr = "localhost:" + port
 	}
 
 	stopGrpcServeFunc := func(n int) {
@@ -1437,17 +1437,17 @@ func setup(t testing.TB, regServers []regServer, remote bool) (regServers, qc.Ma
 		}
 	}
 
-	return regServers, dialOpts, stopGrpcServeFunc, closeListenersFunc
+	return storServers, dialOpts, stopGrpcServeFunc, closeListenersFunc
 }
 
-type regServer struct {
+type storageServer struct {
 	impl qc.StorageTestServer
 	addr string
 }
 
-type regServers []regServer
+type storageServers []storageServer
 
-func (rs regServers) addrs() []string {
+func (rs storageServers) addrs() []string {
 	addrs := make([]string, len(rs))
 	for i, server := range rs {
 		addrs[i] = server.addr
@@ -1462,7 +1462,7 @@ func (rs regServers) addrs() []string {
 //
 // TODO: Adjust this to allow waiting for a
 // subset of writes.
-func (rs regServers) waitForAllWrites() {
+func (rs storageServers) waitForAllWrites() {
 	for _, server := range rs {
 		server.impl.WriteExecuted()
 	}

@@ -29,7 +29,7 @@ const (
 	serverKeyFile  = tlsDir + "server1.key"
 )
 
-func secsetup(t testing.TB, srvs regServers) (func(n int), func(n int)) {
+func secsetup(t testing.TB, srvs storageServers) (func(n int), func(n int)) {
 	if len(srvs) == 0 {
 		t.Fatal("setupServers: need at least one server")
 	}
@@ -89,7 +89,7 @@ func secsetup(t testing.TB, srvs regServers) (func(n int), func(n int)) {
 
 func TestSecureStorage(t *testing.T) {
 	defer leakCheck(t)()
-	servers := regServers{
+	servers := storageServers{
 		{impl: qc.NewStorageBasic()},
 		{impl: qc.NewStorageBasic()},
 		{impl: qc.NewStorageBasic()},

@@ -16,7 +16,7 @@ func TestQuorumCallOrdering(t *testing.T) {
 	failMsg := make(chan string)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
-		[]regServer{
+		[]storageServer{
 			{impl: newStorageServerRequiringOrdering(failMsg)},
 			{impl: newStorageServerRequiringOrdering(failMsg)},
 			{impl: newStorageServerRequiringOrdering(failMsg)},
