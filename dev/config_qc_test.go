@@ -1066,18 +1066,7 @@ var replySink *qc.State
 
 func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote bool) {
 	var rservers []regServer
-	if !remote {
-		rservers = []regServer{
-			{impl: qc.NewStorageBench()},
-		}
-		if !single {
-			rservers = append(
-				rservers,
-				regServer{impl: qc.NewStorageBench()},
-				regServer{impl: qc.NewStorageBench()},
-			)
-		}
-	} else {
+	if remote {
 		rservers = []regServer{
 			{addr: remoteStorageHost},
 		}
@@ -1086,6 +1075,17 @@ func benchmarkRead(b *testing.B, size, rq int, single, parallel, future, remote 
 				rservers,
 				regServer{},
 				regServer{},
+			)
+		}
+	} else {
+		rservers = []regServer{
+			{impl: qc.NewStorageBench()},
+		}
+		if !single {
+			rservers = append(
+				rservers,
+				regServer{impl: qc.NewStorageBench()},
+				regServer{impl: qc.NewStorageBench()},
 			)
 		}
 	}
@@ -1209,17 +1209,17 @@ var wreplySink *qc.WriteResponse
 
 func benchmarkWrite(b *testing.B, size, wq int, parallel, future, remote bool) {
 	var rservers []regServer
-	if !remote {
+	if remote {
 		rservers = []regServer{
-			{impl: qc.NewStorageBench()},
-			{impl: qc.NewStorageBench()},
-			{impl: qc.NewStorageBench()},
+			{addr: remoteStorageHost},
+			{addr: remoteStorageHost},
+			{addr: remoteStorageHost},
 		}
 	} else {
 		rservers = []regServer{
-			{addr: remoteStorageHost},
-			{},
-			{},
+			{impl: qc.NewStorageBench()},
+			{impl: qc.NewStorageBench()},
+			{impl: qc.NewStorageBench()},
 		}
 	}
 
@@ -1305,14 +1305,10 @@ var grpcReplySink *qc.State
 
 func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	var rservers []regServer
-	if !remote {
-		rservers = []regServer{
-			{impl: qc.NewStorageBench()},
-		}
+	if remote {
+		rservers = []regServer{{addr: remoteStorageHost}}
 	} else {
-		rservers = []regServer{
-			{addr: remoteStorageHost},
-		}
+		rservers = []regServer{{impl: qc.NewStorageBench()}}
 	}
 
 	servers, _, stopGrpcServe, closeListeners := setup(b, rservers, remote)
