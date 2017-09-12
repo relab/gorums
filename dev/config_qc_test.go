@@ -22,6 +22,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -60,6 +61,7 @@ func TestBasicStorage(t *testing.T) {
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -135,6 +137,7 @@ func TestSingleServerRPC(t *testing.T) {
 			{impl: qc.NewStorageBasic()},
 		},
 		false,
+		false,
 	)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
@@ -183,6 +186,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -237,6 +241,7 @@ func TestSlowStorage(t *testing.T) {
 			// -> must timeout with one error received.
 		},
 		false,
+		false,
 	)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
@@ -282,6 +287,7 @@ func TestBasicStorageUsingFuture(t *testing.T) {
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -356,6 +362,7 @@ func TestBasicStorageWithWriteAsync(t *testing.T) {
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -445,6 +452,7 @@ func TestManagerClose(t *testing.T) {
 			{impl: qc.NewStorageBasic()},
 		},
 		false,
+		false,
 	)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
@@ -481,6 +489,7 @@ func TestQuorumCallCancel(t *testing.T) {
 			{impl: qc.NewStorageSlow(time.Second)},
 			{impl: qc.NewStorageSlow(time.Second)},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -533,6 +542,7 @@ func TestBasicCorrectable(t *testing.T) {
 			{impl: qc.NewStorageSlowWithState(20*time.Millisecond, stateTwo)},
 			{impl: qc.NewStorageSlowWithState(500*time.Millisecond, stateTwo)},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -593,6 +603,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 			{impl: storageServerImplementations[1]},
 			{impl: storageServerImplementations[2]},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -688,6 +699,7 @@ func TestCorrectablePrelim(t *testing.T) {
 			{impl: storageServerImplementations[1]},
 			{impl: storageServerImplementations[2]},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -819,6 +831,7 @@ func TestPerNodeArg(t *testing.T) {
 			{impl: qc.NewStorageBasic()},
 			{impl: qc.NewStorageBasic()},
 		},
+		false,
 		false,
 	)
 	defer closeListeners(allServers)
@@ -1039,7 +1052,7 @@ func benchmarkRead(b *testing.B, psize, rq, n int, parallel, future, remote bool
 		}
 	}
 
-	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, sservers, remote)
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, sservers, remote, false)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
@@ -1169,7 +1182,7 @@ func benchmarkWrite(b *testing.B, psize, wq, n int, parallel, future, remote boo
 		}
 	}
 
-	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, sservers, remote)
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(b, sservers, remote, false)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
@@ -1258,10 +1271,11 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 		rservers = []storageServer{{impl: qc.NewStorageBench()}}
 	}
 
-	servers, _, stopGrpcServe, closeListeners := setup(b, rservers, remote)
+	servers, _, stopGrpcServe, closeListeners := setup(b, rservers, remote, false)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
+	//TODO why not use the grpc options??
 	conn, err := grpc.Dial(servers.addrs()[0], grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	if err != nil {
 		b.Fatalf("grpc dial: %v", err)
@@ -1313,7 +1327,7 @@ var portSupplier = struct {
 	sync.Mutex
 }{p: 22332}
 
-func setup(t testing.TB, storServers []storageServer, remote bool) (storageServers, qc.ManagerOption, func(n int), func(n int)) {
+func setup(t testing.TB, storServers []storageServer, remote, secure bool) (storageServers, qc.ManagerOption, func(n int), func(n int)) {
 	if len(storServers) == 0 {
 		t.Fatal("setupServers: need at least one server")
 	}
@@ -1321,7 +1335,16 @@ func setup(t testing.TB, storServers []storageServer, remote bool) (storageServe
 	grpcOpts := []grpc.DialOption{
 		grpc.WithBlock(),
 		grpc.WithTimeout(time.Second),
-		grpc.WithInsecure(),
+	}
+	if secure {
+		//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
+		clientCreds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
+		if err != nil {
+			t.Errorf("error creating credentials: %v", err)
+		}
+		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(clientCreds))
+	} else {
+		grpcOpts = append(grpcOpts, grpc.WithInsecure())
 	}
 	dialOpts := qc.WithGrpcDialOptions(grpcOpts...)
 
@@ -1331,7 +1354,16 @@ func setup(t testing.TB, storServers []storageServer, remote bool) (storageServe
 
 	servers := make([]*grpc.Server, len(storServers))
 	for i := range servers {
-		servers[i] = grpc.NewServer()
+		var opts []grpc.ServerOption
+		if secure {
+			//todo(meling) should store credentials in Manager or Node
+			creds, err := credentials.NewServerTLSFromFile(serverCertFile, serverKeyFile)
+			if err != nil {
+				t.Fatalf("failed to generate credentials %v", err)
+			}
+			opts = []grpc.ServerOption{grpc.Creds(creds)}
+		}
+		servers[i] = grpc.NewServer(opts...)
 		qc.RegisterStorageServer(servers[i], storServers[i].impl)
 		if storServers[i].addr == "" {
 			portSupplier.Lock()
