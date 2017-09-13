@@ -71,8 +71,7 @@ func main() {
 	if *noauth {
 		secDialOption = grpc.WithInsecure()
 	} else {
-		// TODO: Fix hardcoded youtube server name.
-		clientCreds, err := credentials.NewClientTLSFromFile("cert/ca.pem", "x.test.youtube.com")
+		clientCreds, err := credentials.NewClientTLSFromFile("cert/server.crt", "127.0.0.1")
 		if err != nil {
 			dief("error creating credentials: %v", err)
 		}

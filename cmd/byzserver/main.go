@@ -60,7 +60,7 @@ func serve(port int, keyFile string, noauth bool) {
 	}
 	opts := []grpc.ServerOption{}
 	if !noauth {
-		creds, err := credentials.NewServerTLSFromFile(keyFile+".pem", keyFile+".key")
+		creds, err := credentials.NewServerTLSFromFile(keyFile+".crt", keyFile+".key")
 		if err != nil {
 			log.Fatalf("failed to load credentials: %v", err)
 		}
