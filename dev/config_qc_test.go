@@ -22,7 +22,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -1337,12 +1336,7 @@ func setup(t testing.TB, storServers []storageServer, remote, secure bool) (stor
 		grpc.WithTimeout(time.Second),
 	}
 	if secure {
-		//TODO fix hardcoded youtube server name (can we get certificate for localhost servername?)
-		clientCreds, err := credentials.NewClientTLSFromFile(tlsDir+"ca.pem", "x.test.youtube.com")
-		if err != nil {
-			t.Errorf("error creating credentials: %v", err)
-		}
-		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(clientCreds))
+		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(clientCredentials(t)))
 	} else {
 		grpcOpts = append(grpcOpts, grpc.WithInsecure())
 	}
@@ -1356,12 +1350,7 @@ func setup(t testing.TB, storServers []storageServer, remote, secure bool) (stor
 	for i := range servers {
 		var opts []grpc.ServerOption
 		if secure {
-			//todo(meling) should store credentials in Manager or Node
-			creds, err := credentials.NewServerTLSFromFile(serverCertFile, serverKeyFile)
-			if err != nil {
-				t.Fatalf("failed to generate credentials %v", err)
-			}
-			opts = []grpc.ServerOption{grpc.Creds(creds)}
+			opts = []grpc.ServerOption{grpc.Creds(serverCredentials(t))}
 		}
 		servers[i] = grpc.NewServer(opts...)
 		qc.RegisterStorageServer(servers[i], storServers[i].impl)
