@@ -79,7 +79,7 @@ benchremotewithlocalhost:
 	@echo starting storage servers in background... press enter to start benchmark.
 	@read
 	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Remote$$ -benchtime=5s -remotehosts=localhost:8080,localhost:8081,localhost:8082
-	@echo done running benchmark; killing storage servers
+	@echo done running benchmark... killing storage servers
 	killall storageserver
 
 .PHONY: clean
