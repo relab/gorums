@@ -21,8 +21,7 @@ PROTOC_PLUGIN_PKG_PATH 		:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
 PROTOC_PLUGIN_NAME 		:= gorums_out
 PROTOC_I_FLAG			:= ../../../:.
 
-TESTDATA_DIR 			:= testdata
-TESTDATA_DEV_DIR 		:= $(TESTDATA_DIR)/$(DEV_PKG) 
+TMP_DEVGEN_DIR 			:= tmpdevgen 
 
 REG_PROTO_NAME			:= storage.proto
 REG_PBGO_NAME			:= storage.pb.go
@@ -117,8 +116,9 @@ templates:
 .PHONY: dev
 dev: static templates reinstallprotoc
 	@echo generating _gen.go files for dev
-	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:$(TESTDATA_DIR) $(REG_PROTO_DEV_RPATH)
-	rm -r $(TESTDATA_DEV_DIR)
+	mkdir $(TMP_DEVGEN_DIR)
+	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:$(TMP_DEVGEN_DIR) $(REG_PROTO_DEV_RPATH)
+	rm -r $(TMP_DEVGEN_DIR)
 
 .PHONY: profcpu
 profcpu:
