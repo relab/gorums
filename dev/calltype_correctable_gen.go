@@ -166,6 +166,11 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 }
 
 func callGRPCReadCorrectable(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readCorrectableReply) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- readCorrectableReply{node.id, nil, nil}
+		return
+	}
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(

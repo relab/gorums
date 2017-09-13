@@ -163,6 +163,11 @@ func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *Re
 }
 
 func callGRPCReadPrelim(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readPrelimReply) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- readPrelimReply{node.id, nil, nil}
+		return
+	}
 	x := NewStorageClient(node.conn)
 	y, err := x.ReadPrelim(ctx, arg)
 	if err != nil {

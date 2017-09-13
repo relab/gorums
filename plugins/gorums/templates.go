@@ -8,6 +8,11 @@ const calltype_common_definitions_tmpl = `{{/* Remember to run 'make dev' after 
 
 {{define "callGRPC"}}
 func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- {{.UnexportedTypeName}}{node.id, nil, nil}
+		return
+	}
 	reply := new({{.FQRespName}})
 	start := time.Now()
 	err := grpc.Invoke(
@@ -450,6 +455,11 @@ type {{.UnexportedTypeName}} struct {
 }
 
 func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- {{.UnexportedTypeName}}{node.id, nil, nil}
+		return
+	}
 	x := New{{.ServName}}Client(node.conn)
 	y, err := x.{{.MethodName}}(ctx, arg)
 	if err != nil {

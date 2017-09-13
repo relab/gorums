@@ -907,8 +907,7 @@ func TestPerNodeArg(t *testing.T) {
 	}
 
 	// Test nil return value from perNodeArg to indicate that we should ignore a node
-
-	/* DISABLED TODO need to implement logic to test for nil in quorumcall.tmpl
+	// Note that this feature requires that the corresponding quorum function tolerates nil replies.
 	nodeToIgnore := mgr.NodeIDs()[0]
 	perNodeArgNil := func(req qc.State, nodeID uint32) *qc.State {
 		if nodeID == nodeToIgnore {
@@ -928,8 +927,6 @@ func TestPerNodeArg(t *testing.T) {
 	if !wreply.New {
 		t.Error("write reply was not marked as new")
 	}
-	*/
-
 }
 
 ///////////////////////////////////////////////////////////////

@@ -131,6 +131,11 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Re
 }
 
 func callGRPCReadFuture(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- readFutureReply) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- readFutureReply{node.id, nil, nil}
+		return
+	}
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -266,6 +271,11 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *WriteFu
 }
 
 func callGRPCWriteFuture(ctx context.Context, node *Node, arg *State, replyChan chan<- writeFutureReply) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- writeFutureReply{node.id, nil, nil}
+		return
+	}
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(

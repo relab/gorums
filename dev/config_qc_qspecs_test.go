@@ -222,7 +222,14 @@ func (sqs *StorageByTimestampQSpec) WritePerNodeQF(replies []*qc.WriteResponse) 
 	if len(replies) < sqs.wq {
 		return nil, false
 	}
-	return replies[0], true
+	// Note: This quorum function is designed to tolerate nil values, since some nodes
+	// may not actually be invoked, but simply ignored with a nil from the perNodeArg function.
+	for _, reply := range replies {
+		if reply != nil {
+			return reply, true
+		}
+	}
+	return nil, false
 }
 
 type NeverQSpec struct{}

@@ -170,6 +170,11 @@ type {{.UnexportedTypeName}} struct {
 }
 
 func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- {{.UnexportedTypeName}}{node.id, nil, nil}
+		return
+	}
 	x := New{{.ServName}}Client(node.conn)
 	y, err := x.{{.MethodName}}(ctx, arg)
 	if err != nil {

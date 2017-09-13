@@ -3,6 +3,11 @@
 
 {{define "callGRPC"}}
 func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- {{.UnexportedTypeName}}{node.id, nil, nil}
+		return
+	}
 	reply := new({{.FQRespName}})
 	start := time.Now()
 	err := grpc.Invoke(

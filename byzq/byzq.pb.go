@@ -384,6 +384,11 @@ func (c *Configuration) read(ctx context.Context, a *Key) (resp *Content, err er
 }
 
 func callGRPCRead(ctx context.Context, node *Node, arg *Key, replyChan chan<- readReply) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- readReply{node.id, nil, nil}
+		return
+	}
 	reply := new(Value)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -478,6 +483,11 @@ func (c *Configuration) write(ctx context.Context, a *Value) (resp *WriteRespons
 }
 
 func callGRPCWrite(ctx context.Context, node *Node, arg *Value, replyChan chan<- writeReply) {
+	if arg == nil {
+		// send a nil reply to the for-select-loop
+		replyChan <- writeReply{node.id, nil, nil}
+		return
+	}
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
