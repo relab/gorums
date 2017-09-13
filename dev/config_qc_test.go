@@ -1271,8 +1271,6 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	//TODO(meling): Why not use the grpc options??
-	// Comment(tormoder): We are using the gRPC options?
 	conn, err := grpc.Dial(servers.addrs()[0], grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	if err != nil {
 		b.Fatalf("grpc dial: %v", err)
