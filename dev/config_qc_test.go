@@ -625,7 +625,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 		t.Fatalf("error creating config: %v", err)
 	}
 
-	// waitTimeout := time.Second
+	waitTimeout := time.Second
 	ctx := context.Background()
 	correctable := config.ReadCorrectable(ctx, &qc.ReadRequest{})
 
@@ -656,7 +656,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 	// Unlock server with lowest timestamp for state.
 	storageServerImplementations[0].Unlock()
 	// Wait for level 1 (weak) notification.
-	checkLevelAndDone(t, correctable, levelOneChan, LevelWeak, false)
+	checkLevelAndDone(t, correctable, levelOneChan, LevelWeak, false, waitTimeout)
 
 	// Check that Get() returns stateOne, LevelWeak, nil.
 	checkReplyAndLevel(t, correctable, LevelWeak, stateOne)
@@ -664,12 +664,12 @@ func TestCorrectableWithLevels(t *testing.T) {
 	storageServerImplementations[1].Unlock()
 	storageServerImplementations[2].Unlock()
 	// Wait for Done channel notification.
-	checkLevelAndDone(t, correctable, levelOneChan, LevelWeak, true)
+	checkLevelAndDone(t, correctable, levelOneChan, LevelWeak, true, waitTimeout)
 
 	// Check that Get() returns stateTwo, LevelStrong, nil.
 	checkReplyAndLevel(t, correctable, LevelStrong, stateTwo)
 	// Check that channel for level 5 (undefined) notification is closed.
-	checkLevelAndDone(t, correctable, levelFiveChan, LevelStrong, true)
+	checkLevelAndDone(t, correctable, levelFiveChan, LevelStrong, true, waitTimeout)
 }
 
 func TestCorrectablePrelim(t *testing.T) {
@@ -719,6 +719,7 @@ func TestCorrectablePrelim(t *testing.T) {
 		t.Fatalf("error creating config: %v", err)
 	}
 
+	waitTimeout := time.Second
 	ctx := context.Background()
 	correctable := config.ReadPrelim(ctx, &qc.ReadRequest{})
 
@@ -745,25 +746,25 @@ func TestCorrectablePrelim(t *testing.T) {
 	checkReplyAndLevel(t, correctable, qc.LevelNotSet, nil)
 	storageServerImplementations[0].PerformSingleReadPrelim()
 	// Wait for level 1 notification.
-	checkLevelAndDone(t, correctable, levelOneChan, 1, false)
+	checkLevelAndDone(t, correctable, levelOneChan, 1, false, waitTimeout)
 
 	// 1.2: Check that Get() returns stateOne, 1, nil.
 	checkReplyAndLevel(t, correctable, 1, stateOne)
 	storageServerImplementations[0].PerformSingleReadPrelim()
 	// Wait for level 2 notification.
-	checkLevelAndDone(t, correctable, levelTwoChan, 2, false)
+	checkLevelAndDone(t, correctable, levelTwoChan, 2, false, waitTimeout)
 
 	// 2.2: Check that Get() returns stateOne, 2, nil.
 	checkReplyAndLevel(t, correctable, 2, stateOne)
 	storageServerImplementations[1].PerformSingleReadPrelim()
 	// Wait for level 3 notification.
-	checkLevelAndDone(t, correctable, levelThreeChan, 3, false)
+	checkLevelAndDone(t, correctable, levelThreeChan, 3, false, waitTimeout)
 
 	// 3.2: Check that Get() returns stateTwo, 3, nil.
 	checkReplyAndLevel(t, correctable, 3, stateTwo)
 	storageServerImplementations[1].PerformSingleReadPrelim()
 	// Wait for level 4 notification.
-	checkLevelAndDone(t, correctable, levelFourChan, 4, true)
+	checkLevelAndDone(t, correctable, levelFourChan, 4, true, waitTimeout)
 
 	// 4.2: Check that Get() returns stateTwo, 4, nil.
 	checkReplyAndLevel(t, correctable, 4, stateTwo)
@@ -774,9 +775,8 @@ type Correctable interface {
 	Done() <-chan struct{}
 }
 
-func checkLevelAndDone(t *testing.T, correctable Correctable, levelChan <-chan struct{}, expectedLevel int, expectedDone bool) {
+func checkLevelAndDone(t *testing.T, correctable Correctable, levelChan <-chan struct{}, expectedLevel int, expectedDone bool, waitTimeout time.Duration) {
 	t.Helper()
-	waitTimeout := time.Second
 	// Wait for level notification.
 	select {
 	case <-levelChan:
