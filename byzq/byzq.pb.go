@@ -36,6 +36,7 @@ import (
 	"golang.org/x/net/trace"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 import (
@@ -392,10 +393,10 @@ func callGRPCRead(ctx context.Context, node *Node, arg *Key, replyChan chan<- re
 		reply,
 		node.conn,
 	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		node.setLatency(time.Since(start))
-	default:
+	} else {
 		node.setLastErr(err)
 	}
 	replyChan <- readReply{node.id, reply, err}
@@ -486,10 +487,10 @@ func callGRPCWrite(ctx context.Context, node *Node, arg *Value, replyChan chan<-
 		reply,
 		node.conn,
 	)
-	switch grpc.Code(err) { // nil -> codes.OK
-	case codes.OK, codes.Canceled:
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		node.setLatency(time.Since(start))
-	default:
+	} else {
 		node.setLastErr(err)
 	}
 	replyChan <- writeReply{node.id, reply, err}
@@ -601,15 +602,6 @@ func (c *Configuration) tstring() string {
 // Equal returns a boolean reporting whether a and b represents the same
 // configuration.
 func Equal(a, b *Configuration) bool { return a.id == b.id }
-
-// NewTestConfiguration returns a new configuration with quorum size q and
-// node size n. No other fields are set. Configurations returned from this
-// constructor should only be used when testing quorum functions.
-func NewTestConfiguration(q, n int) *Configuration {
-	return &Configuration{
-		nodes: make([]*Node, n),
-	}
-}
 
 /* errors.go */
 
