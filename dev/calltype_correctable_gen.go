@@ -7,11 +7,12 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"golang.org/x/net/context"
 )
 
 /* Exported types and methods for correctable method ReadCorrectable */
@@ -121,6 +122,30 @@ type readCorrectableReply struct {
 }
 
 func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, resp *ReadCorrectableReply) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCorrectable")
+		defer ti.tr.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.tr.LazyLog(&ti.firstLine, false)
+		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.tr.LazyLog(&qcresult{
+				ids:   resp.NodeIDs,
+				reply: resp.State,
+				err:   resp.err,
+			}, false)
+			if resp.err != nil {
+				ti.tr.SetError()
+			}
+		}()
+	}
+
 	replyChan := make(chan readCorrectableReply, c.n)
 	for _, n := range c.nodes {
 		go callGRPCReadCorrectable(ctx, n, a, replyChan)
@@ -142,6 +167,9 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 			if r.err != nil {
 				errCount++
 				break
+			}
+			if c.mgr.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)

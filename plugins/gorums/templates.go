@@ -113,11 +113,13 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"golang.org/x/net/context")
+)
 
 {{- end}}
 
@@ -258,6 +260,8 @@ type {{.UnexportedTypeName}} struct {
 }
 
 {{template "unexported_method_signature" . -}}
+	{{- template "trace" .}}
+
 	{{- template "callLoop" .}}
 
 	var (
@@ -276,6 +280,9 @@ type {{.UnexportedTypeName}} struct {
 			if r.err != nil {
 				errCount++
 				break
+			}
+			if c.mgr.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
@@ -318,8 +325,10 @@ package {{.PackageName}}
 import (
 	"io"
 	"sync"
-
+	"time"
+	
 	"golang.org/x/net/context"
+	"golang.org/x/net/trace"
 )
 {{- end}}
 
@@ -461,6 +470,8 @@ type {{.UnexportedTypeName}} struct {
 }
 
 {{template "unexported_method_signature" . -}}
+	{{- template "trace" .}}
+
 	{{- template "callLoop" .}}
 
 	var (
@@ -479,6 +490,9 @@ type {{.UnexportedTypeName}} struct {
 			if r.err != nil {
 				errCount++
 				break
+			}
+			if c.mgr.opts.trace {
+				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
