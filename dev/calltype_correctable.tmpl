@@ -38,21 +38,47 @@ type {{.TypeName}} struct {
 	donech chan struct{}
 }
 
-// {{.MethodName}} asynchronously invokes a
-// correctable {{.MethodName}} quorum call on configuration c and returns a
-// {{.TypeName}} which can be used to inspect any replies or errors
-// when available.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, args *{{.FQReqName}}) *{{.TypeName}} {
+{{if .PerNodeArg}}
+
+// {{.MethodName}} asynchronously invokes a 
+// correctable {{.MethodName}} quorum call on each node in configuration c,
+// with the argument returned by the provided perNode
+// function and returns a {{.TypeName}}, which can be used
+// to inspect the quorum call reply and error when available. 
+// The perNode function takes the provided arg and returns a {{.FQReqName}}
+// object to be passed to the given nodeID.
+// The perNode function should be thread-safe.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) *{{.TypeName}} {
 	corr := &{{.TypeName}}{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.{{.UnexportedMethodName}}(ctx, args, corr)
+		c.{{.UnexportedMethodName}}(ctx, arg, perNode, corr)
 	}()
 	return corr
 }
+
+{{else}}
+
+// {{.MethodName}} asynchronously invokes a
+// correctable {{.MethodName}} quorum call on configuration c and returns a
+// {{.TypeName}} which can be used to inspect any replies or errors
+// when available.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) *{{.TypeName}} {
+	corr := &{{.TypeName}}{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go func() {
+		c.{{.UnexportedMethodName}}(ctx, arg, corr)
+	}()
+	return corr
+}
+
+{{- end}}
 
 // Get returns the reply, level and any error associated with the
 // {{.MethodName}}. The method does not block until a (possibly

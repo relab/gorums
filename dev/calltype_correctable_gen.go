@@ -36,14 +36,14 @@ type ReadCorrectableReply struct {
 // correctable ReadCorrectable quorum call on configuration c and returns a
 // ReadCorrectableReply which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) ReadCorrectable(ctx context.Context, args *ReadRequest) *ReadCorrectableReply {
+func (c *Configuration) ReadCorrectable(ctx context.Context, arg *ReadRequest) *ReadCorrectableReply {
 	corr := &ReadCorrectableReply{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.readCorrectable(ctx, args, corr)
+		c.readCorrectable(ctx, arg, corr)
 	}()
 	return corr
 }

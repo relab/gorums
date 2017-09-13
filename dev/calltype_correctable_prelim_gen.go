@@ -33,14 +33,14 @@ type ReadPrelimReply struct {
 // with server side preliminary reply support on configuration c and returns a
 // ReadPrelimReply which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) ReadPrelim(ctx context.Context, args *ReadRequest) *ReadPrelimReply {
+func (c *Configuration) ReadPrelim(ctx context.Context, arg *ReadRequest) *ReadPrelimReply {
 	corr := &ReadPrelimReply{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.readPrelim(ctx, args, corr)
+		c.readPrelim(ctx, arg, corr)
 	}()
 	return corr
 }
