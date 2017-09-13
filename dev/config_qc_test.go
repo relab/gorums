@@ -1271,7 +1271,8 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	//TODO why not use the grpc options??
+	//TODO(meling): Why not use the grpc options??
+	// Comment(tormoder): We are using the gRPC options?
 	conn, err := grpc.Dial(servers.addrs()[0], grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	if err != nil {
 		b.Fatalf("grpc dial: %v", err)
@@ -1451,9 +1452,6 @@ func getRemoteBenchAddrs(tb testing.TB, n int) []string {
 // all servers in rs performs the write operation.
 // Calling this method when only using a subset of servers
 // is an error.
-//
-// TODO: Adjust this to allow waiting for a
-// subset of writes.
 func (rs storageServers) waitForAllWrites() {
 	for _, server := range rs {
 		server.impl.WriteExecuted()
