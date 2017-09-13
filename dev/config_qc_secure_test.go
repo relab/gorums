@@ -103,29 +103,6 @@ func serverCredentials(t testing.TB) credentials.TransportCredentials {
 	return credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{cert}})
 }
 
-const (
-	serverCRTFile = "../tls/server.crt"
-	serverKeyFile = "../tls/server.key"
-)
-
-func clientCredentialsFromFile(t testing.TB) credentials.TransportCredentials {
-	t.Helper()
-	clientCreds, err := credentials.NewClientTLSFromFile(serverCRTFile, "")
-	if err != nil {
-		t.Error(err)
-	}
-	return clientCreds
-}
-
-func serverCredentialsFromFile(t testing.TB) credentials.TransportCredentials {
-	t.Helper()
-	serverCreds, err := credentials.NewServerTLSFromFile(serverCRTFile, serverKeyFile)
-	if err != nil {
-		t.Error(err)
-	}
-	return serverCreds
-}
-
 func TestSecureStorage(t *testing.T) {
 	defer leakCheck(t)()
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
