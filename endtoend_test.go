@@ -3,7 +3,7 @@ package gorums
 import (
 	"bytes"
 	"errors"
-	fmt "fmt"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/printer"
@@ -18,16 +18,16 @@ import (
 )
 
 const (
-	gorumsBaseImport  = "github.com/relab/gorums"
-	devImport         = gorumsBaseImport + "/" + devFolder
-	testdataDevImport = gorumsBaseImport + "/" + testdataFolder + "/" + devFolder
+	gorumsBaseImport = "github.com/relab/gorums"
+	devImport        = gorumsBaseImport + "/" + devDir
+	e2eTestDevImport = gorumsBaseImport + "/" + e2eTestDir + "/" + devDir
 
-	devFolder      = "dev"
-	testdataFolder = "testdata"
+	devDir     = "dev"
+	e2eTestDir = "e2etest"
 
 	storageProtoFile = "storage.proto"
 
-	devStorageProtoRelPath = devFolder + "/" + storageProtoFile
+	devStorageProtoRelPath = devDir + "/" + storageProtoFile
 
 	protoc        = "protoc"
 	protocIFlag   = "-I=../../../:."
@@ -81,6 +81,11 @@ var devFilesToCopy = []struct {
 }{
 	{
 		"config_qc_test.go",
+		"", "",
+		true,
+	},
+	{
+		"config_qc_secure_test.go",
 		"", "",
 		true,
 	},
@@ -181,20 +186,24 @@ func rewriteGoFile(name, old, new string) error {
 func TestEndToEnd(t *testing.T) {
 	checkProtocVersion(t)
 
-	// Clean up afterwards
-	testdataFolderPath := filepath.Join(testdataFolder, devFolder)
-	defer os.RemoveAll(testdataFolderPath)
+	// Create temporary test dir.
+	err := os.MkdirAll(e2eTestDir, 0755)
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	defer os.RemoveAll(e2eTestDir)
 
-	// Run the proto compiler
-	run(t, protoc, protocIFlag, protocOutFlag+testdataFolder, devStorageProtoRelPath)
+	// Run the proto compiler.
+	run(t, protoc, protocIFlag, protocOutFlag+e2eTestDir, devStorageProtoRelPath)
 
 	// Set file paths.
+	e2eTestDevDirPath := filepath.Join(e2eTestDir, devDir)
 	for i, file := range devFilesToCopy {
-		devFilesToCopy[i].devPath = filepath.Join(devFolder, file.name)
-		devFilesToCopy[i].testPath = filepath.Join(testdataFolderPath, file.name)
+		devFilesToCopy[i].devPath = filepath.Join(devDir, file.name)
+		devFilesToCopy[i].testPath = filepath.Join(e2eTestDevDirPath, file.name)
 	}
 
-	// Copy relevant files from dev folder
+	// Copy relevant files from dev dir.
 	for _, file := range devFilesToCopy {
 		err := copy(file.testPath, file.devPath)
 		if err != nil {
@@ -202,17 +211,17 @@ func TestEndToEnd(t *testing.T) {
 		}
 	}
 
-	// Rewrite one import path for some test files
+	// Rewrite one import path for some test files.
 	for _, file := range devFilesToCopy {
 		if !file.rewriteImport {
 			continue
 		}
-		err := rewriteGoFile(file.testPath, devImport, testdataDevImport)
+		err := rewriteGoFile(file.testPath, devImport, e2eTestDevImport)
 		if err != nil {
 			t.Fatalf("error rewriting import for file %q: %v", file.testPath, err)
 		}
 	}
 
-	// Run go test
-	run(t, "go", "test", testdataDevImport)
+	// Run go test.
+	run(t, "go", "test", e2eTestDevImport)
 }
