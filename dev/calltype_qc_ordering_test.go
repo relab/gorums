@@ -24,6 +24,7 @@ func TestQuorumCallOrdering(t *testing.T) {
 			{impl: newStorageServerRequiringOrdering(failMsg)},
 		},
 		false,
+		false,
 	)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)

@@ -1,4 +1,4 @@
-package dev
+package dev_test
 
 import (
 	"sync"
