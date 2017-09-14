@@ -109,14 +109,18 @@ func main() {
 			WriteRatioPercent: *writera,
 			Concurrent:        *grpcc,
 		}
-	case byzq:
-		factory = &gbench.ByzqRequesterFactory{
-			Addrs:             addrs,
-			PayloadSize:       *psize,
-			QCTimeout:         *timeout,
-			WriteRatioPercent: *writera,
-			NoAuth:            *noauth,
-		}
+	// TODO This was moved to the byzq repo, and there are vendor issues.
+	// We need to figure out a way to solve this problem.
+	// Maybe the benchclient should be moved out to a separate repo so that
+	// the gorums repo doesn't need to depend on byzq and other things we want to have a gbench thing for.
+	// case byzq:
+	// 	factory = &byzbench.ByzqRequesterFactory{
+	// 		Addrs:             addrs,
+	// 		PayloadSize:       *psize,
+	// 		QCTimeout:         *timeout,
+	// 		WriteRatioPercent: *writera,
+	// 		NoAuth:            *noauth,
+	// 	}
 	case gridq:
 		factory = &gbench.GridQRequesterFactory{
 			Addrs:             addrs,

@@ -192,4 +192,3 @@ updatedeps:
 .PHONY: examples
 examples:
 	cd gridq && $(MAKE) proto
-	cd byzq && $(MAKE) proto
