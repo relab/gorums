@@ -32,6 +32,11 @@ func TestMain(m *testing.M) {
 		"",
 		"comma separated list of 'addr:port' pairs to use as hosts for remote benchmarks",
 	)
+	var portBase = flag.Int(
+		"portbase",
+		22332,
+		"use a specific port base (incremented for each needed test listener)",
+	)
 
 	// Parse and validate flags.
 	flag.Parse()
@@ -40,6 +45,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(2)
 	}
+	portSupplier.p = *portBase
 
 	// Disable gRPC tracing and logging.
 	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
@@ -1320,7 +1326,7 @@ const allServers = -1
 var portSupplier = struct {
 	p int
 	sync.Mutex
-}{p: 22332}
+}{}
 
 func setup(t testing.TB, storServers []storageServer, remote, secure bool) (storageServers, qc.ManagerOption, func(n int), func(n int)) {
 	if len(storServers) == 0 {
