@@ -222,6 +222,8 @@ func TestEndToEnd(t *testing.T) {
 		}
 	}
 
-	// Run go test.
-	run(t, "go", "test", e2eTestDevImport)
+	// Run go test. Use an explicit base for localhost ports to avoid
+	// "address already in use" errors with regular 'dev' package tests
+	// that may run concurrently.
+	run(t, "go", "test", e2eTestDevImport, "-portbase=30000")
 }
