@@ -95,6 +95,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		id:      id,
 		addr:    tcpAddr.String(),
 		latency: -1 * time.Second,
+		logger:  m.logger,
 	}
 
 	return node, nil

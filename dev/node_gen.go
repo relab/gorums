@@ -6,6 +6,7 @@ package dev
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -16,10 +17,11 @@ import (
 // can be made.
 type Node struct {
 	// Only assigned at creation.
-	id   uint32
-	self bool
-	addr string
-	conn *grpc.ClientConn
+	id     uint32
+	self   bool
+	addr   string
+	conn   *grpc.ClientConn
+	logger *log.Logger
 
 	StorageClient StorageClient
 
@@ -48,13 +50,13 @@ func (n *Node) connect(opts ...grpc.DialOption) error {
 }
 
 func (n *Node) close() error {
-	// TODO: Log error, mainly care about the connection error below.
-	// We should log this error, but we currently don't have access to the
-	// logger in the manager.
 	_, _ = n.WriteAsyncClient.CloseAndRecv()
 
 	if err := n.conn.Close(); err != nil {
-		return fmt.Errorf("conn close error: %v", err)
+		if n.logger != nil {
+			n.logger.Printf("%d: conn close error: %v", n.id, err)
+		}
+		return fmt.Errorf("%d: conn close error: %v", n.id, err)
 	}
 	return nil
 }
