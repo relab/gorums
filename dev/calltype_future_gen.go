@@ -68,24 +68,24 @@ type readFutureReply struct {
 func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *ReadFutureReply) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadFuture")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				ids:   resp.NodeIDs,
 				reply: resp.State,
 				err:   resp.err,
 			}, false)
 			if resp.err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -111,7 +111,7 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Re
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			if reply, quorum = c.qspec.ReadFutureQF(replyValues); quorum {
@@ -208,24 +208,24 @@ type writeFutureReply struct {
 func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *WriteFutureReply) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "WriteFuture")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				ids:   resp.NodeIDs,
 				reply: resp.WriteResponse,
 				err:   resp.err,
 			}, false)
 			if resp.err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -251,7 +251,7 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *WriteFu
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			if reply, quorum = c.qspec.WriteFutureQF(a, replyValues); quorum {

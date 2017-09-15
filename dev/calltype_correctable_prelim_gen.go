@@ -122,24 +122,24 @@ type readPrelimReply struct {
 func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *ReadPrelimReply) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadPrelim")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadPrelim")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				ids:   resp.NodeIDs,
 				reply: resp.State,
 				err:   resp.err,
 			}, false)
 			if resp.err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -167,7 +167,7 @@ func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *Re
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			reply, rlevel, quorum = c.qspec.ReadPrelimQF(replyValues)

@@ -10,7 +10,7 @@ import (
 )
 
 type traceInfo struct {
-	tr        trace.Trace
+	trace.Trace
 	firstLine firstLine
 }
 

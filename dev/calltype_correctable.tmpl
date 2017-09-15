@@ -177,7 +177,7 @@ type {{.UnexportedTypeName}} struct {
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}

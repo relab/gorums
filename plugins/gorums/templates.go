@@ -35,24 +35,24 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 {{define "trace"}}
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				ids:   resp.NodeIDs,
 				reply: resp.{{.CustomRespName}},
 				err:   resp.err,
 			}, false)
 			if resp.err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -61,23 +61,23 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 {{define "simple_trace"}}
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "{{.MethodName}}")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -282,7 +282,7 @@ type {{.UnexportedTypeName}} struct {
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
@@ -492,7 +492,7 @@ type {{.UnexportedTypeName}} struct {
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
@@ -668,7 +668,7 @@ type {{.UnexportedTypeName}} struct {
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}
@@ -812,7 +812,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 {{- if .QFWithReq}}

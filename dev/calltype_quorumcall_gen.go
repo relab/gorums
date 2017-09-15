@@ -33,23 +33,23 @@ type readReply struct {
 func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Read")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "Read")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -73,7 +73,7 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, 
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			if resp, quorum = c.qspec.ReadQF(replyValues); quorum {
@@ -132,23 +132,23 @@ type readCustomReturnReply struct {
 func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (resp *MyState, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -172,7 +172,7 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			if resp, quorum = c.qspec.ReadCustomReturnQF(replyValues); quorum {
@@ -231,23 +231,23 @@ type writeReply struct {
 func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "Write")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "Write")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -271,7 +271,7 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteRespons
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			if resp, quorum = c.qspec.WriteQF(a, replyValues); quorum {
@@ -333,23 +333,23 @@ type writePerNodeReply struct {
 func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg State, nodeID uint32) *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.tr = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
-		defer ti.tr.Finish()
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
+		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
 			ti.firstLine.deadline = deadline.Sub(time.Now())
 		}
-		ti.tr.LazyLog(&ti.firstLine, false)
-		ti.tr.LazyLog(&payload{sent: true, msg: a}, false)
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
 
 		defer func() {
-			ti.tr.LazyLog(&qcresult{
+			ti.LazyLog(&qcresult{
 				reply: resp,
 				err:   err,
 			}, false)
 			if err != nil {
-				ti.tr.SetError()
+				ti.SetError()
 			}
 		}()
 	}
@@ -373,7 +373,7 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 				break
 			}
 			if c.mgr.opts.trace {
-				ti.tr.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
 			if resp, quorum = c.qspec.WritePerNodeQF(replyValues); quorum {
