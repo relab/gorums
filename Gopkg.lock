@@ -2,12 +2,6 @@
 
 
 [[projects]]
-  branch = "master"
-  name = "github.com/codahale/hdrhistogram"
-  packages = ["."]
-  revision = "3a0bb77429bd3a61596f5e8a3172445844342120"
-
-[[projects]]
   name = "github.com/gogo/protobuf"
   packages = ["gogoproto","plugin/compare","plugin/defaultcheck","plugin/description","plugin/embedcheck","plugin/enumstringer","plugin/equal","plugin/face","plugin/gostring","plugin/marshalto","plugin/oneofcheck","plugin/populate","plugin/size","plugin/stringer","plugin/testgen","plugin/union","plugin/unmarshal","proto","protoc-gen-gogo/descriptor","protoc-gen-gogo/generator","protoc-gen-gogo/grpc","protoc-gen-gogo/plugin","vanity","vanity/command"]
   revision = "100ba4e885062801d56799d78530b73b178a78f3"
@@ -21,18 +15,6 @@
 
 [[projects]]
   branch = "master"
-  name = "github.com/tylertreat/bench"
-  packages = ["."]
-  revision = "1ade8b39c27966244392e0e5be9a3e2cfc685ae4"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/tylertreat/hdrhistogram-writer"
-  packages = ["."]
-  revision = "d105e3c15daaac745539bdd3e4a1f743b8feda09"
-
-[[projects]]
-  branch = "master"
   name = "golang.org/x/net"
   packages = ["context","http2","http2/hpack","idna","internal/timeseries","lex/httplex","trace"]
   revision = "66aacef3dd8a676686c7ae3716979581e8b03c47"
@@ -42,12 +24,6 @@
   name = "golang.org/x/text"
   packages = ["internal/gen","internal/triegen","internal/ucd","secure/bidirule","transform","unicode/bidi","unicode/cldr","unicode/norm","unicode/rangetable"]
   revision = "bd91bbf73e9a4a801adbfb97133c992678533126"
-
-[[projects]]
-  branch = "master"
-  name = "golang.org/x/time"
-  packages = ["rate"]
-  revision = "8be79e1e0910c292df4e79c241bb7e8f7e725959"
 
 [[projects]]
   branch = "master"
@@ -64,6 +40,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9763643195f1d8ff0ceeecd2ed0ace35a6110628d8e2037cab8c2388882782cf"
+  inputs-digest = "6478d38c1bb38e009d7a8a915b4496d28bf3b6a4546b3eb64ae9cc172a07f5d2"
   solver-name = "gps-cdcl"
   solver-version = 1
