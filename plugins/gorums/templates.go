@@ -110,7 +110,6 @@ const calltype_correctable_tmpl = `
 package {{.PackageName}}
 
 import (
-	"sync"
 	"time"
 
 	"golang.org/x/net/context"
@@ -127,23 +126,7 @@ import (
 
 {{if .Correctable}}
 
-/* Exported types and methods for correctable method {{.MethodName}} */
-
-// {{.TypeName}} is a reference to a correctable {{.MethodName}} quorum call.
-type {{.TypeName}} struct {
-	mu sync.Mutex
-	// the actual reply
-	*{{.FQCustomRespName}}
-	NodeIDs  []uint32
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
+/* Exported correctable method {{.MethodName}} */
 
 {{if .PerNodeArg}}
 
@@ -251,13 +234,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 	c.mu.Unlock()
 }
 
-/* Unexported types and methods for correctable method {{.MethodName}} */
-
-type {{.UnexportedTypeName}} struct {
-	nid   uint32
-	reply *{{.FQRespName}}
-	err   error
-}
+/* Unexported correctable method {{.MethodName}} */
 
 {{template "unexported_method_signature" . -}}
 	{{- template "trace" .}}
@@ -324,7 +301,6 @@ package {{.PackageName}}
 
 import (
 	"io"
-	"sync"
 	"time"
 	
 	"golang.org/x/net/context"
@@ -336,24 +312,7 @@ import (
 
 {{if .CorrectablePrelim}}
 
-/* Exported types and methods for correctable prelim method {{.MethodName}} */
-
-// {{.TypeName}} is a reference to a correctable quorum call
-// with server side preliminary reply support.
-type {{.TypeName}} struct {
-	mu sync.Mutex
-	// the actual reply
-	*{{.FQCustomRespName}}
-	NodeIDs  []uint32
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
+/* Exported correctable stream method {{.MethodName}} */
 
 {{if .PerNodeArg}}
 
@@ -461,13 +420,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 	c.mu.Unlock()
 }
 
-/* Unexported types and methods for correctable prelim method {{.MethodName}} */
-
-type {{.UnexportedTypeName}} struct {
-	nid   uint32
-	reply *{{.FQRespName}}
-	err   error
-}
+/* Unexported correctable stream method {{.MethodName}} */
 
 {{template "unexported_method_signature" . -}}
 	{{- template "trace" .}}
@@ -549,6 +502,61 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 {{- end -}}
 `
 
+const calltype_datatypes_tmpl = `
+{{/* Remember to run 'make dev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import "sync"
+{{- end}}
+
+{{range $elm := .ResponseTypes}}
+
+{{if or .Correctable .CorrectablePrelim}}
+// {{.TypeName}} for processing correctable {{.FQCustomRespName}} replies.
+type {{.TypeName}} struct {
+	mu sync.Mutex
+	// the actual reply
+	*{{.FQCustomRespName}}
+	NodeIDs  []uint32
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+{{- end}}
+
+{{if .Future}}
+// {{.TypeName}} is a future object for an asynchronous quorum call invocation.
+type {{.TypeName}} struct {
+	// the actual reply
+	*{{.FQCustomRespName}}
+	NodeIDs  []uint32
+	err   error
+	c     chan struct{}
+}
+{{- end}}
+
+{{- end}}
+
+{{range $elm := .InternalResponseTypes}}
+
+{{if or .Correctable .CorrectablePrelim .Future .QuorumCall}}
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+{{- end}}
+
+{{- end}}
+`
+
 const calltype_future_tmpl = `
 {{/* Remember to run 'make dev' after editing this file. */}}
 
@@ -571,16 +579,7 @@ import (
 
 {{if .Future}}
 
-/* Exported types and methods for asynchronous quorum call method {{.MethodName}} */
-
-// {{.TypeName}} is a future object for an asynchronous {{.MethodName}} quorum call invocation.
-type {{.TypeName}} struct {
-	// the actual reply
-	*{{.FQCustomRespName}}
-	NodeIDs  []uint32
-	err   error
-	c     chan struct{}
-}
+/* Exported asynchronous quorum call method {{.MethodName}} */
 
 {{if .PerNodeArg}}
 
@@ -639,13 +638,7 @@ func (f *{{.TypeName}}) Done() bool {
 	}
 }
 
-/* Unexported types and methods for asynchronous quorum call method {{.MethodName}} */
-
-type {{.UnexportedTypeName}} struct {
-	nid   uint32
-	reply *{{.FQRespName}}
-	err   error
-}
+/* Unexported asynchronous quorum call method {{.MethodName}} */
 
 {{template "unexported_method_signature" .}}
 	{{- template "trace" .}}
@@ -781,13 +774,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 
 {{- end}}
 
-/* Unexported types and methods for quorum call method {{.MethodName}} */
-
-type {{.UnexportedTypeName}} struct {
-	nid   uint32
-	reply *{{.FQRespName}}
-	err   error
-}
+/* Unexported quorum call method {{.MethodName}} */
 
 {{- if .PerNodeArg}}
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
@@ -974,6 +961,7 @@ var templates = map[string]string{
 	"calltype_common_definitions_tmpl": calltype_common_definitions_tmpl,
 	"calltype_correctable_tmpl":        calltype_correctable_tmpl,
 	"calltype_correctable_prelim_tmpl": calltype_correctable_prelim_tmpl,
+	"calltype_datatypes_tmpl":          calltype_datatypes_tmpl,
 	"calltype_future_tmpl":             calltype_future_tmpl,
 	"calltype_multicast_tmpl":          calltype_multicast_tmpl,
 	"calltype_quorumcall_tmpl":         calltype_quorumcall_tmpl,

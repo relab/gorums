@@ -43,13 +43,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 
 {{- end}}
 
-/* Unexported types and methods for quorum call method {{.MethodName}} */
-
-type {{.UnexportedTypeName}} struct {
-	nid   uint32
-	reply *{{.FQRespName}}
-	err   error
-}
+/* Unexported quorum call method {{.MethodName}} */
 
 {{- if .PerNodeArg}}
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {

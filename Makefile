@@ -116,7 +116,7 @@ templates:
 .PHONY: dev
 dev: static templates reinstallprotoc
 	@echo generating _gen.go files for dev
-	mkdir $(TMP_DEVGEN_DIR)
+	mkdir -p $(TMP_DEVGEN_DIR)
 	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:$(TMP_DEVGEN_DIR) $(REG_PROTO_DEV_RPATH)
 	rm -r $(TMP_DEVGEN_DIR)
 
