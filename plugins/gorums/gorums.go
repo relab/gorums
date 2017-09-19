@@ -335,11 +335,11 @@ type responseType struct {
 	Multicast          bool
 }
 
-type smSlice []serviceMethod
+type serviceMethods []serviceMethod
 
-func (p smSlice) Len() int      { return len(p) }
-func (p smSlice) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
-func (p smSlice) Less(i, j int) bool {
+func (p serviceMethods) Len() int      { return len(p) }
+func (p serviceMethods) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
+func (p serviceMethods) Less(i, j int) bool {
 	if p[i].ServName < p[j].ServName {
 		return true
 	} else if p[i].ServName > p[j].ServName {
@@ -409,11 +409,9 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 		}
 	}
 
-	//TODO replace []serviceMethod with smSlice (or other type name: serviceMethods)
-	var allRewrittenFlat []serviceMethod
-
 	// check for duplicate method names across multiple services.
 	// we prefix duplicate method names with the service name.
+	var allRewrittenFlat serviceMethods
 	for _, methodsForName := range smethods {
 		switch len(methodsForName) {
 		case 0:
@@ -429,8 +427,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 			}
 		}
 	}
-
-	sort.Sort(smSlice(allRewrittenFlat))
+	sort.Sort(serviceMethods(allRewrittenFlat))
 
 	var responseTypes, internalResponseTypes []responseType
 	for respType, sm := range respTypes {
