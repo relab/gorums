@@ -456,6 +456,13 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 		}
 		internalResponseTypes = append(internalResponseTypes, r)
 	}
+	sort.Slice(responseTypes, func(i, j int) bool {
+		return responseTypes[i].TypeName < responseTypes[j].TypeName
+	})
+	sort.Slice(internalResponseTypes, func(i, j int) bool {
+		return internalResponseTypes[i].UnexportedTypeName < internalResponseTypes[j].UnexportedTypeName
+	})
+
 	return clients, allRewrittenFlat, responseTypes, internalResponseTypes
 }
 

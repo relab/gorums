@@ -5,6 +5,22 @@ package dev
 
 import "sync"
 
+// CorrectableState for processing correctable State replies.
+type CorrectableState struct {
+	mu sync.Mutex
+	// the actual reply
+	*State
+	NodeIDs  []uint32
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+
 // CorrectableStreamState for processing correctable State replies.
 type CorrectableStreamState struct {
 	mu sync.Mutex
@@ -21,15 +37,6 @@ type CorrectableStreamState struct {
 	donech chan struct{}
 }
 
-// FutureWriteResponse is a future object for an asynchronous quorum call invocation.
-type FutureWriteResponse struct {
-	// the actual reply
-	*WriteResponse
-	NodeIDs []uint32
-	err     error
-	c       chan struct{}
-}
-
 // FutureState is a future object for an asynchronous quorum call invocation.
 type FutureState struct {
 	// the actual reply
@@ -39,20 +46,13 @@ type FutureState struct {
 	c       chan struct{}
 }
 
-// CorrectableState for processing correctable State replies.
-type CorrectableState struct {
-	mu sync.Mutex
+// FutureWriteResponse is a future object for an asynchronous quorum call invocation.
+type FutureWriteResponse struct {
 	// the actual reply
-	*State
-	NodeIDs  []uint32
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
+	*WriteResponse
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
 }
 
 type internalState struct {
