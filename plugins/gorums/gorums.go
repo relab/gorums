@@ -335,7 +335,7 @@ type responseType struct {
 	Multicast          bool
 }
 
-func NewResponseType(respType string, sm *serviceMethod) responseType {
+func newResponseType(respType string, sm *serviceMethod) responseType {
 	return responseType{
 		TypeName:           respType,
 		UnexportedTypeName: respType,
@@ -439,10 +439,10 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 
 	var responseTypes, internalResponseTypes []responseType
 	for respType, sm := range respTypes {
-		responseTypes = append(responseTypes, NewResponseType(respType, sm))
+		responseTypes = append(responseTypes, newResponseType(respType, sm))
 	}
 	for respType, sm := range internalRespTypes {
-		internalResponseTypes = append(internalResponseTypes, NewResponseType(respType, sm))
+		internalResponseTypes = append(internalResponseTypes, newResponseType(respType, sm))
 	}
 	sort.Slice(responseTypes, func(i, j int) bool {
 		return responseTypes[i].TypeName < responseTypes[j].TypeName
@@ -495,38 +495,38 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		// because we want to avoid rewriting the plain gRPC methods.
 		return nil, fmt.Errorf(
 			"%s.%s: cannot combine non-quorum call method with the '%s' option",
-			service, method.GetName(), custRetName(),
+			service, method.GetName(), customReturnTypeOptionName(),
 		)
 
 	case !isQuorumCallVariant && sm.QFWithReq:
 		// Only QC variants need to process replies.
 		return nil, fmt.Errorf(
 			"%s.%s: cannot combine non-quorum call method with the '%s' option",
-			service, method.GetName(), qfreqName(),
+			service, method.GetName(), qfRequestOptionName(),
 		)
 
 	case !sm.Multicast && method.GetClientStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: client-server streams is only valid with the '%s' option",
-			service, method.GetName(), mcastName(),
+			service, method.GetName(), multicastOptionName(),
 		)
 
 	case sm.Multicast && !method.GetClientStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: '%s' option is only valid for client-server streams methods",
-			service, method.GetName(), mcastName(),
+			service, method.GetName(), multicastOptionName(),
 		)
 
 	case !sm.CorrectableStream && method.GetServerStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: server-client streams is only valid with the '%s' option",
-			service, method.GetName(), corrPrName(),
+			service, method.GetName(), correctableStreamOptionName(),
 		)
 
 	case sm.CorrectableStream && !method.GetServerStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: '%s' option is only valid for server-client streams",
-			service, method.GetName(), corrPrName(),
+			service, method.GetName(), correctableStreamOptionName(),
 		)
 
 	case !isQuorumCallVariant && !sm.Multicast:

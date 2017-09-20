@@ -7,31 +7,19 @@ import (
 	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
 )
 
-// func qcName() string {
-// 	return gorumsproto.E_Qc.Name
-// }
-
-// func futureName() string {
-// 	return gorumsproto.E_QcFuture.Name
-// }
-
-// func corrName() string {
-// 	return gorumsproto.E_Correctable.Name
-// }
-
-func corrPrName() string {
+func correctableStreamOptionName() string {
 	return gorumsproto.E_CorrectableStream.Name
 }
 
-func mcastName() string {
+func multicastOptionName() string {
 	return gorumsproto.E_Multicast.Name
 }
 
-func qfreqName() string {
+func qfRequestOptionName() string {
 	return gorumsproto.E_QfWithReq.Name
 }
 
-func custRetName() string {
+func customReturnTypeOptionName() string {
 	return gorumsproto.E_CustomReturnType.Name
 }
 
