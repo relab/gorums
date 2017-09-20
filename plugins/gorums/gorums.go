@@ -505,6 +505,12 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 			service, method.GetName(), qfreqName(),
 		)
 
+	case !sm.Multicast && method.GetClientStreaming():
+		return nil, fmt.Errorf(
+			"%s.%s: client-server streams is only valid with the '%s' option",
+			service, method.GetName(), mcastName(),
+		)
+
 	case sm.Multicast && !method.GetClientStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: '%s' option is only valid for client-server streams methods",
