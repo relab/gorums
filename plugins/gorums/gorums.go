@@ -335,6 +335,20 @@ type responseType struct {
 	Multicast          bool
 }
 
+func NewResponseType(respType string, sm *serviceMethod) responseType {
+	return responseType{
+		TypeName:           respType,
+		UnexportedTypeName: respType,
+		FQRespName:         sm.FQRespName,
+		FQCustomRespName:   sm.FQCustomRespName,
+		QuorumCall:         sm.QuorumCall,
+		Future:             sm.Future,
+		Correctable:        sm.Correctable,
+		CorrectableStream:  sm.CorrectableStream,
+		Multicast:          sm.Multicast,
+	}
+}
+
 func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, pkgName string) ([]string, []serviceMethod, []responseType, []responseType) {
 	clients := make([]string, len(services))
 	smethods := make(map[string][]*serviceMethod)
@@ -425,30 +439,10 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 
 	var responseTypes, internalResponseTypes []responseType
 	for respType, sm := range respTypes {
-		r := responseType{
-			TypeName:          respType,
-			FQRespName:        sm.FQRespName,
-			FQCustomRespName:  sm.FQCustomRespName,
-			QuorumCall:        sm.QuorumCall,
-			Future:            sm.Future,
-			Correctable:       sm.Correctable,
-			CorrectableStream: sm.CorrectableStream,
-			Multicast:         sm.Multicast,
-		}
-		responseTypes = append(responseTypes, r)
+		responseTypes = append(responseTypes, NewResponseType(respType, sm))
 	}
 	for respType, sm := range internalRespTypes {
-		r := responseType{
-			UnexportedTypeName: respType,
-			FQRespName:         sm.FQRespName,
-			FQCustomRespName:   sm.FQCustomRespName,
-			QuorumCall:         sm.QuorumCall,
-			Future:             sm.Future,
-			Correctable:        sm.Correctable,
-			CorrectableStream:  sm.CorrectableStream,
-			Multicast:          sm.Multicast,
-		}
-		internalResponseTypes = append(internalResponseTypes, r)
+		internalResponseTypes = append(internalResponseTypes, NewResponseType(respType, sm))
 	}
 	sort.Slice(responseTypes, func(i, j int) bool {
 		return responseTypes[i].TypeName < responseTypes[j].TypeName
