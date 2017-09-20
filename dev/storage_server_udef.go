@@ -115,8 +115,8 @@ func (s *StorageServerBasic) ReadNoQC(ctx context.Context, rq *ReadRequest) (*St
 	return s.Read(ctx, rq)
 }
 
-// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
-func (s *StorageServerBasic) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
+// ReadCorrectableStream implements the ReadCorrectableStream method from the StorageServer interface.
+func (s *StorageServerBasic) ReadCorrectableStream(rq *ReadRequest, srts Storage_ReadCorrectableStreamServer) error {
 	return srts.Send(&s.state)
 }
 
@@ -188,8 +188,8 @@ func (s *StorageServerError) ReadNoQC(ctx context.Context, rq *ReadRequest) (*St
 	return nil, s.err
 }
 
-// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
-func (s *StorageServerError) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
+// ReadCorrectableStream implements the ReadCorrectableStream method from the StorageServer interface.
+func (s *StorageServerError) ReadCorrectableStream(rq *ReadRequest, srts Storage_ReadCorrectableStreamServer) error {
 	return s.err
 }
 
@@ -274,10 +274,10 @@ func (s *StorageServerSlow) ReadNoQC(ctx context.Context, rq *ReadRequest) (*Sta
 	return s.Read(ctx, rq)
 }
 
-// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
-func (s *StorageServerSlow) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
+// ReadCorrectableStream implements the ReadCorrectableStream method from the StorageServer interface.
+func (s *StorageServerSlow) ReadCorrectableStream(rq *ReadRequest, srts Storage_ReadCorrectableStreamServer) error {
 	time.Sleep(s.delay)
-	return s.realServer.ReadPrelim(rq, srts)
+	return s.realServer.ReadCorrectableStream(rq, srts)
 }
 
 // ReadExecuted returns when r has has completed a read.
@@ -367,8 +367,8 @@ func (s *StorageServerBench) ReadNoQC(ctx context.Context, rq *ReadRequest) (*St
 	return s.Read(ctx, rq)
 }
 
-// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
-func (s *StorageServerBench) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
+// ReadCorrectableStream implements the ReadCorrectableStream method from the StorageServer interface.
+func (s *StorageServerBench) ReadCorrectableStream(rq *ReadRequest, srts Storage_ReadCorrectableStreamServer) error {
 	return srts.Send(&s.state)
 }
 
@@ -381,19 +381,19 @@ func (s *StorageServerBench) WriteExecuted() {}
 // StorageServerLockedWithState represents a storage server with an initial
 // state that does not reply to any requests before it's unlocked.
 type StorageServerLockedWithState struct {
-	lock                 chan struct{}
-	realServer           *StorageServerBasic
-	ReadPrelimNumReplies int
-	ReadPrelimLockChan   chan struct{}
+	lock                            chan struct{}
+	realServer                      *StorageServerBasic
+	ReadCorrectableStreamNumReplies int
+	ReadCorrectableStreamLockChan   chan struct{}
 }
 
 // NewStorageServerLockedWithState returns a new locked storage server with an initial state.
-func NewStorageServerLockedWithState(state *State, ReadPrelimNumReplies int) *StorageServerLockedWithState {
+func NewStorageServerLockedWithState(state *State, ReadCorrectableStreamNumReplies int) *StorageServerLockedWithState {
 	return &StorageServerLockedWithState{
-		lock:                 make(chan struct{}),
-		realServer:           NewStorageBasicWithState(state),
-		ReadPrelimNumReplies: ReadPrelimNumReplies,
-		ReadPrelimLockChan:   make(chan struct{}, 1),
+		lock:                            make(chan struct{}),
+		realServer:                      NewStorageBasicWithState(state),
+		ReadCorrectableStreamNumReplies: ReadCorrectableStreamNumReplies,
+		ReadCorrectableStreamLockChan:   make(chan struct{}, 1),
 	}
 }
 
@@ -444,16 +444,16 @@ func (s *StorageServerLockedWithState) ReadNoQC(ctx context.Context, rq *ReadReq
 	return s.Read(ctx, rq)
 }
 
-// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
-func (s *StorageServerLockedWithState) ReadPrelim(rq *ReadRequest, srts Storage_ReadPrelimServer) error {
+// ReadCorrectableStream implements the ReadCorrectableStream method from the StorageServer interface.
+func (s *StorageServerLockedWithState) ReadCorrectableStream(rq *ReadRequest, srts Storage_ReadCorrectableStreamServer) error {
 	<-s.lock
 
 	s.realServer.mu.RLock()
 	state := s.realServer.state
 	s.realServer.mu.RUnlock()
 
-	for i := 0; i < s.ReadPrelimNumReplies; i++ {
-		<-s.ReadPrelimLockChan
+	for i := 0; i < s.ReadCorrectableStreamNumReplies; i++ {
+		<-s.ReadCorrectableStreamLockChan
 		err := srts.Send(&state)
 		if err != nil {
 			return err
@@ -478,8 +478,8 @@ func (s *StorageServerLockedWithState) Unlock() {
 	close(s.lock)
 }
 
-// PerformSingleReadPrelim lets the storage server send a single reply from a
-// single ReadPrelim method handler.
-func (s *StorageServerLockedWithState) PerformSingleReadPrelim() {
-	s.ReadPrelimLockChan <- struct{}{}
+// PerformSingleReadCorrectableStream lets the storage server send a single reply from a
+// single ReadCorrectableStream method handler.
+func (s *StorageServerLockedWithState) PerformSingleReadCorrectableStream() {
+	s.ReadCorrectableStreamLockChan <- struct{}{}
 }

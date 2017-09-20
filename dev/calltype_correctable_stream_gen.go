@@ -11,26 +11,26 @@ import (
 	"golang.org/x/net/trace"
 )
 
-/* Exported correctable stream method ReadPrelim */
+/* Exported correctable stream method ReadCorrectableStream */
 
-// ReadPrelim asynchronously invokes a correctable ReadPrelim quorum call
+// ReadCorrectableStream asynchronously invokes a correctable ReadCorrectableStream quorum call
 // with server side preliminary reply support on configuration c and returns a
 // CorrectableStreamState which can be used to inspect any replies or errors
 // when available.
-func (c *Configuration) ReadPrelim(ctx context.Context, arg *ReadRequest) *CorrectableStreamState {
+func (c *Configuration) ReadCorrectableStream(ctx context.Context, arg *ReadRequest) *CorrectableStreamState {
 	corr := &CorrectableStreamState{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
 	go func() {
-		c.readPrelim(ctx, arg, corr)
+		c.readCorrectableStream(ctx, arg, corr)
 	}()
 	return corr
 }
 
 // Get returns the reply, level and any error associated with the
-// ReadPrelim. The method does not block until a (possibly
+// ReadCorrectableStream. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
@@ -40,7 +40,7 @@ func (c *CorrectableStreamState) Get() (*State, int, error) {
 	return c.State, c.level, c.err
 }
 
-// Done returns a channel that's closed when the correctable ReadPrelim
+// Done returns a channel that's closed when the correctable ReadCorrectableStream
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or that the call returned an
 // error.
@@ -93,12 +93,12 @@ func (c *CorrectableStreamState) set(reply *State, level int, err error, done bo
 	c.mu.Unlock()
 }
 
-/* Unexported correctable stream method ReadPrelim */
+/* Unexported correctable stream method ReadCorrectableStream */
 
-func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *CorrectableStreamState) {
+func (c *Configuration) readCorrectableStream(ctx context.Context, a *ReadRequest, resp *CorrectableStreamState) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadPrelim")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadCorrectableStream")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -122,7 +122,7 @@ func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *Co
 
 	replyChan := make(chan internalState, c.n)
 	for _, n := range c.nodes {
-		go callGRPCReadPrelim(ctx, n, a, replyChan)
+		go callGRPCReadCorrectableStream(ctx, n, a, replyChan)
 	}
 
 	var (
@@ -146,7 +146,7 @@ func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *Co
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.ReadPrelimQF(replyValues)
+			reply, rlevel, quorum = c.qspec.ReadCorrectableStreamQF(replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -167,14 +167,14 @@ func (c *Configuration) readPrelim(ctx context.Context, a *ReadRequest, resp *Co
 	}
 }
 
-func callGRPCReadPrelim(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- internalState) {
+func callGRPCReadCorrectableStream(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- internalState) {
 	if arg == nil {
 		// send a nil reply to the for-select-loop
 		replyChan <- internalState{node.id, nil, nil}
 		return
 	}
 	x := NewStorageClient(node.conn)
-	y, err := x.ReadPrelim(ctx, arg)
+	y, err := x.ReadCorrectableStream(ctx, arg)
 	if err != nil {
 		replyChan <- internalState{node.id, nil, err}
 		return
