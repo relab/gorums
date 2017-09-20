@@ -5,22 +5,6 @@ package dev
 
 import "sync"
 
-// CorrectableState for processing correctable State replies.
-type CorrectableState struct {
-	mu sync.Mutex
-	// the actual reply
-	*State
-	NodeIDs  []uint32
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
-
 // CorrectableStreamState for processing correctable State replies.
 type CorrectableStreamState struct {
 	mu sync.Mutex
@@ -55,14 +39,30 @@ type FutureState struct {
 	c       chan struct{}
 }
 
-type internalWriteResponse struct {
-	nid   uint32
-	reply *WriteResponse
-	err   error
+// CorrectableState for processing correctable State replies.
+type CorrectableState struct {
+	mu sync.Mutex
+	// the actual reply
+	*State
+	NodeIDs  []uint32
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
 }
 
 type internalState struct {
 	nid   uint32
 	reply *State
+	err   error
+}
+
+type internalWriteResponse struct {
+	nid   uint32
+	reply *WriteResponse
 	err   error
 }

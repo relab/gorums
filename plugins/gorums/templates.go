@@ -293,7 +293,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 {{- end -}}
 `
 
-const calltype_correctable_prelim_tmpl = `
+const calltype_correctable_stream_tmpl = `
 {{/* Remember to run 'make dev' after editing this file. */}}
 
 {{- if not .IgnoreImports}}
@@ -960,7 +960,7 @@ type QuorumSpec interface {
 var templates = map[string]string{
 	"calltype_common_definitions_tmpl": calltype_common_definitions_tmpl,
 	"calltype_correctable_tmpl":        calltype_correctable_tmpl,
-	"calltype_correctable_prelim_tmpl": calltype_correctable_prelim_tmpl,
+	"calltype_correctable_stream_tmpl": calltype_correctable_stream_tmpl,
 	"calltype_datatypes_tmpl":          calltype_datatypes_tmpl,
 	"calltype_future_tmpl":             calltype_future_tmpl,
 	"calltype_multicast_tmpl":          calltype_multicast_tmpl,
