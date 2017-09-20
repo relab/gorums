@@ -335,26 +335,6 @@ type responseType struct {
 	Multicast          bool
 }
 
-type serviceMethods []serviceMethod
-
-func (p serviceMethods) Len() int      { return len(p) }
-func (p serviceMethods) Swap(i, j int) { p[i], p[j] = p[j], p[i] }
-func (p serviceMethods) Less(i, j int) bool {
-	if p[i].ServName < p[j].ServName {
-		return true
-	} else if p[i].ServName > p[j].ServName {
-		return false
-	} else {
-		if p[i].MethodName < p[j].MethodName {
-			return true
-		} else if p[i].MethodName > p[j].MethodName {
-			return false
-		} else {
-			return false
-		}
-	}
-}
-
 func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, pkgName string) ([]string, []serviceMethod, []responseType, []responseType) {
 	clients := make([]string, len(services))
 	smethods := make(map[string][]*serviceMethod)
@@ -411,7 +391,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 
 	// check for duplicate method names across multiple services.
 	// we prefix duplicate method names with the service name.
-	var allRewrittenFlat serviceMethods
+	var allRewrittenFlat []serviceMethod
 	for _, methodsForName := range smethods {
 		switch len(methodsForName) {
 		case 0:
@@ -427,7 +407,21 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 			}
 		}
 	}
-	sort.Sort(serviceMethods(allRewrittenFlat))
+	sort.Slice(allRewrittenFlat, func(i, j int) bool {
+		if allRewrittenFlat[i].ServName < allRewrittenFlat[j].ServName {
+			return true
+		} else if allRewrittenFlat[i].ServName > allRewrittenFlat[j].ServName {
+			return false
+		} else {
+			if allRewrittenFlat[i].MethodName < allRewrittenFlat[j].MethodName {
+				return true
+			} else if allRewrittenFlat[i].MethodName > allRewrittenFlat[j].MethodName {
+				return false
+			} else {
+				return false
+			}
+		}
+	})
 
 	var responseTypes, internalResponseTypes []responseType
 	for respType, sm := range respTypes {
