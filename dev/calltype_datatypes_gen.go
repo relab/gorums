@@ -5,15 +5,6 @@ package dev
 
 import "sync"
 
-// FutureState is a future object for an asynchronous quorum call invocation.
-type FutureState struct {
-	// the actual reply
-	*State
-	NodeIDs []uint32
-	err     error
-	c       chan struct{}
-}
-
 // CorrectableState for processing correctable State replies.
 type CorrectableState struct {
 	mu sync.Mutex
@@ -55,14 +46,23 @@ type FutureWriteResponse struct {
 	c       chan struct{}
 }
 
-type internalState struct {
-	nid   uint32
-	reply *State
-	err   error
+// FutureState is a future object for an asynchronous quorum call invocation.
+type FutureState struct {
+	// the actual reply
+	*State
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
 }
 
 type internalWriteResponse struct {
 	nid   uint32
 	reply *WriteResponse
+	err   error
+}
+
+type internalState struct {
+	nid   uint32
+	reply *State
 	err   error
 }

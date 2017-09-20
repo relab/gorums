@@ -678,7 +678,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 	checkLevelAndDone(t, correctable, levelFiveChan, LevelStrong, true, waitTimeout)
 }
 
-func TestCorrectablePrelim(t *testing.T) {
+func TestCorrectableStream(t *testing.T) {
 	defer leakCheck(t)()
 
 	stateOne := &qc.State{

@@ -310,7 +310,7 @@ import (
 
 {{range $elm := .Services}}
 
-{{if .CorrectablePrelim}}
+{{if .CorrectableStream}}
 
 /* Exported correctable stream method {{.MethodName}} */
 
@@ -513,7 +513,7 @@ import "sync"
 
 {{range $elm := .ResponseTypes}}
 
-{{if or .Correctable .CorrectablePrelim}}
+{{if or .Correctable .CorrectableStream}}
 // {{.TypeName}} for processing correctable {{.FQCustomRespName}} replies.
 type {{.TypeName}} struct {
 	mu sync.Mutex
@@ -546,7 +546,7 @@ type {{.TypeName}} struct {
 
 {{range $elm := .InternalResponseTypes}}
 
-{{if or .Correctable .CorrectablePrelim .Future .QuorumCall}}
+{{if or .Correctable .CorrectableStream .Future .QuorumCall}}
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
 	reply *{{.FQRespName}}
@@ -935,13 +935,13 @@ type QuorumSpec interface {
 {{end}}
 {{end -}}
 
-{{- if or (.Correctable) (.CorrectablePrelim)}}
+{{- if or (.Correctable) (.CorrectableStream)}}
 {{if .Correctable}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// correctable quorum call method.
 {{- end -}}
 
-{{if .CorrectablePrelim}}
+{{if .CorrectableStream}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} 
 	// correctable prelim quourm call method.
 {{- end -}}

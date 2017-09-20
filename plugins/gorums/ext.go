@@ -20,7 +20,7 @@ import (
 // }
 
 func corrPrName() string {
-	return gorumsproto.E_CorrectablePr.Name
+	return gorumsproto.E_CorrectableStream.Name
 }
 
 func mcastName() string {
@@ -43,8 +43,8 @@ func hasCorrectableExtension(method *descriptor.MethodDescriptorProto) bool {
 	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_Correctable, false)
 }
 
-func hasCorrectablePRExtension(method *descriptor.MethodDescriptorProto) bool {
-	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_CorrectablePr, false)
+func hasCorrectableStreamExtension(method *descriptor.MethodDescriptorProto) bool {
+	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_CorrectableStream, false)
 }
 
 func hasMulticastExtension(method *descriptor.MethodDescriptorProto) bool {

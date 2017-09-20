@@ -310,7 +310,7 @@ type serviceMethod struct {
 
 	QuorumCall        bool
 	Correctable       bool
-	CorrectablePrelim bool
+	CorrectableStream bool
 	Future            bool
 	Multicast         bool
 	QFWithReq         bool
@@ -330,7 +330,7 @@ type responseType struct {
 	FQCustomRespName   string
 	QuorumCall         bool
 	Correctable        bool
-	CorrectablePrelim  bool
+	CorrectableStream  bool
 	Future             bool
 	Multicast          bool
 }
@@ -438,7 +438,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 			QuorumCall:        sm.QuorumCall,
 			Future:            sm.Future,
 			Correctable:       sm.Correctable,
-			CorrectablePrelim: sm.CorrectablePrelim,
+			CorrectableStream: sm.CorrectableStream,
 			Multicast:         sm.Multicast,
 		}
 		responseTypes = append(responseTypes, r)
@@ -451,7 +451,7 @@ func (g *gorums) generateServiceMethods(services []*pb.ServiceDescriptorProto, p
 			QuorumCall:         sm.QuorumCall,
 			Future:             sm.Future,
 			Correctable:        sm.Correctable,
-			CorrectablePrelim:  sm.CorrectablePrelim,
+			CorrectableStream:  sm.CorrectableStream,
 			Multicast:          sm.Multicast,
 		}
 		internalResponseTypes = append(internalResponseTypes, r)
@@ -464,7 +464,7 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		QuorumCall:        hasQuorumCallExtension(method),
 		Future:            hasFutureExtension(method),
 		Correctable:       hasCorrectableExtension(method),
-		CorrectablePrelim: hasCorrectablePRExtension(method),
+		CorrectableStream: hasCorrectableStreamExtension(method),
 		Multicast:         hasMulticastExtension(method),
 		QFWithReq:         hasQFWithReqExtension(method),
 		PerNodeArg:        hasPerNodeArgExtension(method),
@@ -475,7 +475,7 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		"QuorumCall":        sm.QuorumCall,
 		"Future":            sm.Future,
 		"Correctable":       sm.Correctable,
-		"CorrectableStream": sm.CorrectablePrelim,
+		"CorrectableStream": sm.CorrectableStream,
 		"Multicast":         sm.Multicast,
 	}
 	firstOption := ""
@@ -516,13 +516,13 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 			service, method.GetName(), mcastName(),
 		)
 
-	case !sm.CorrectablePrelim && method.GetServerStreaming():
+	case !sm.CorrectableStream && method.GetServerStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: server-client streams is only valid with the '%s' option",
 			service, method.GetName(), corrPrName(),
 		)
 
-	case sm.CorrectablePrelim && !method.GetServerStreaming():
+	case sm.CorrectableStream && !method.GetServerStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: '%s' option is only valid for server-client streams",
 			service, method.GetName(), corrPrName(),
@@ -539,5 +539,5 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 }
 
 func isQuorumCallVariant(sm *serviceMethod) bool {
-	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectablePrelim
+	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectableStream
 }

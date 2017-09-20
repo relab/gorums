@@ -26,13 +26,13 @@ type QuorumSpec interface {
 {{end}}
 {{end -}}
 
-{{- if or (.Correctable) (.CorrectablePrelim)}}
+{{- if or (.Correctable) (.CorrectableStream)}}
 {{if .Correctable}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
 	// correctable quorum call method.
 {{- end -}}
 
-{{if .CorrectablePrelim}}
+{{if .CorrectableStream}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}} 
 	// correctable prelim quourm call method.
 {{- end -}}

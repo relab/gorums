@@ -44,7 +44,7 @@ service Storage {
 	// returns a correctable object for retrieving results.
 	// TODO update DOC
 	rpc ReadPrelim(ReadRequest) returns (stream State) {
-		option (gorums.correctable_pr) = true;
+		option (gorums.correctable_stream) = true;
 	}
 
 	// Write is a synchronous quorum call.
