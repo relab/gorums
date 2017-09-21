@@ -18,7 +18,6 @@ import (
 type Node struct {
 	// Only assigned at creation.
 	id     uint32
-	self   bool
 	addr   string
 	conn   *grpc.ClientConn
 	logger *log.Logger
