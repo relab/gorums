@@ -6,7 +6,6 @@ package {{.PackageName}}
 
 import (
 	"io"
-	"sync"
 	"time"
 	
 	"golang.org/x/net/context"
@@ -16,26 +15,9 @@ import (
 
 {{range $elm := .Services}}
 
-{{if .CorrectablePrelim}}
+{{if .CorrectableStream}}
 
-/* Exported types and methods for correctable prelim method {{.MethodName}} */
-
-// {{.TypeName}} is a reference to a correctable quorum call
-// with server side preliminary reply support.
-type {{.TypeName}} struct {
-	mu sync.Mutex
-	// the actual reply
-	*{{.FQCustomRespName}}
-	NodeIDs  []uint32
-	level    int
-	err      error
-	done     bool
-	watchers []*struct {
-		level int
-		ch    chan struct{}
-	}
-	donech chan struct{}
-}
+/* Exported correctable stream method {{.MethodName}} */
 
 {{if .PerNodeArg}}
 
@@ -143,13 +125,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 	c.mu.Unlock()
 }
 
-/* Unexported types and methods for correctable prelim method {{.MethodName}} */
-
-type {{.UnexportedTypeName}} struct {
-	nid   uint32
-	reply *{{.FQRespName}}
-	err   error
-}
+/* Unexported correctable stream method {{.MethodName}} */
 
 {{template "unexported_method_signature" . -}}
 	{{- template "trace" .}}

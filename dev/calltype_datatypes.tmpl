@@ -1,0 +1,53 @@
+
+{{/* Remember to run 'make dev' after editing this file. */}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+
+import "sync"
+{{- end}}
+
+{{range $elm := .ResponseTypes}}
+
+{{if or .Correctable .CorrectableStream}}
+// {{.TypeName}} for processing correctable {{.FQCustomRespName}} replies.
+type {{.TypeName}} struct {
+	mu sync.Mutex
+	// the actual reply
+	*{{.FQCustomRespName}}
+	NodeIDs  []uint32
+	level    int
+	err      error
+	done     bool
+	watchers []*struct {
+		level int
+		ch    chan struct{}
+	}
+	donech chan struct{}
+}
+{{- end}}
+
+{{if .Future}}
+// {{.TypeName}} is a future object for an asynchronous quorum call invocation.
+type {{.TypeName}} struct {
+	// the actual reply
+	*{{.FQCustomRespName}}
+	NodeIDs  []uint32
+	err   error
+	c     chan struct{}
+}
+{{- end}}
+
+{{- end}}
+
+{{range $elm := .InternalResponseTypes}}
+
+{{if or .Correctable .CorrectableStream .Future .QuorumCall}}
+type {{.UnexportedTypeName}} struct {
+	nid   uint32
+	reply *{{.FQRespName}}
+	err   error
+}
+{{- end}}
+
+{{- end}}

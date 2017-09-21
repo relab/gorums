@@ -678,7 +678,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 	checkLevelAndDone(t, correctable, levelFiveChan, LevelStrong, true, waitTimeout)
 }
 
-func TestCorrectablePrelim(t *testing.T) {
+func TestCorrectableStream(t *testing.T) {
 	defer leakCheck(t)()
 
 	stateOne := &qc.State{
@@ -690,7 +690,7 @@ func TestCorrectablePrelim(t *testing.T) {
 		Timestamp: 100,
 	}
 
-	// We need the specific implementation so we call the Unlock and PerformSingleReadPrelim methods.
+	// We need the specific implementation so we call the Unlock and PerformSingleReadCorrectableStream methods.
 	storageServerImplementations := []*qc.StorageServerLockedWithState{
 		qc.NewStorageServerLockedWithState(stateOne, 2),
 		qc.NewStorageServerLockedWithState(stateTwo, 2),
@@ -720,14 +720,14 @@ func TestCorrectablePrelim(t *testing.T) {
 	defer mgr.Close()
 
 	ids := mgr.NodeIDs()
-	config, err := mgr.NewConfiguration(ids, &ReadPrelimTestQSpec{})
+	config, err := mgr.NewConfiguration(ids, &ReadCorrectableStreamTestQSpec{})
 	if err != nil {
 		t.Fatalf("error creating config: %v", err)
 	}
 
 	waitTimeout := time.Second
 	ctx := context.Background()
-	correctable := config.ReadPrelim(ctx, &qc.ReadRequest{})
+	correctable := config.ReadCorrectableStream(ctx, &qc.ReadRequest{})
 
 	// We need these watchers for testing to know that a server has replied and
 	// gorums has processed the reply.
@@ -750,25 +750,25 @@ func TestCorrectablePrelim(t *testing.T) {
 
 	// 0.2: Check that Get() returns nil, LevelNotSet, nil.
 	checkReplyAndLevel(t, correctable, qc.LevelNotSet, nil)
-	storageServerImplementations[0].PerformSingleReadPrelim()
+	storageServerImplementations[0].PerformSingleReadCorrectableStream()
 	// Wait for level 1 notification.
 	checkLevelAndDone(t, correctable, levelOneChan, 1, false, waitTimeout)
 
 	// 1.2: Check that Get() returns stateOne, 1, nil.
 	checkReplyAndLevel(t, correctable, 1, stateOne)
-	storageServerImplementations[0].PerformSingleReadPrelim()
+	storageServerImplementations[0].PerformSingleReadCorrectableStream()
 	// Wait for level 2 notification.
 	checkLevelAndDone(t, correctable, levelTwoChan, 2, false, waitTimeout)
 
 	// 2.2: Check that Get() returns stateOne, 2, nil.
 	checkReplyAndLevel(t, correctable, 2, stateOne)
-	storageServerImplementations[1].PerformSingleReadPrelim()
+	storageServerImplementations[1].PerformSingleReadCorrectableStream()
 	// Wait for level 3 notification.
 	checkLevelAndDone(t, correctable, levelThreeChan, 3, false, waitTimeout)
 
 	// 3.2: Check that Get() returns stateTwo, 3, nil.
 	checkReplyAndLevel(t, correctable, 3, stateTwo)
-	storageServerImplementations[1].PerformSingleReadPrelim()
+	storageServerImplementations[1].PerformSingleReadCorrectableStream()
 	// Wait for level 4 notification.
 	checkLevelAndDone(t, correctable, levelFourChan, 4, true, waitTimeout)
 

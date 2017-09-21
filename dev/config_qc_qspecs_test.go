@@ -45,7 +45,7 @@ func (mqs *MajorityQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int
 	panic("not implemented")
 }
 
-func (mqs *MajorityQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (mqs *MajorityQSpec) ReadCorrectableStreamQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
@@ -112,7 +112,7 @@ func (sqs *StorageQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int,
 	panic("not implemented")
 }
 
-func (sqs *StorageQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (sqs *StorageQSpec) ReadCorrectableStreamQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
@@ -193,7 +193,7 @@ func (sqs *StorageByTimestampQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.
 	return replies[len(replies)-1], LevelStrong, true
 }
 
-func (sqs *StorageByTimestampQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (sqs *StorageByTimestampQSpec) ReadCorrectableStreamQF(replies []*qc.State) (*qc.State, int, bool) {
 	if len(replies) == 0 {
 		return nil, qc.LevelNotSet, false
 	}
@@ -250,7 +250,7 @@ func (*NeverQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool)
 	return nil, qc.LevelNotSet, false
 }
 
-func (*NeverQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (*NeverQSpec) ReadCorrectableStreamQF(replies []*qc.State) (*qc.State, int, bool) {
 	return nil, qc.LevelNotSet, false
 }
 
@@ -266,25 +266,25 @@ func (*NeverQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteRespons
 	return nil, false
 }
 
-type ReadPrelimTestQSpec struct{}
+type ReadCorrectableStreamTestQSpec struct{}
 
-func (*ReadPrelimTestQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
+func (*ReadCorrectableStreamTestQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
 	panic("not implemented")
 }
 
-func (*ReadPrelimTestQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
+func (*ReadCorrectableStreamTestQSpec) ReadFutureQF(replies []*qc.State) (*qc.State, bool) {
 	panic("not implemented")
 }
 
-func (*ReadPrelimTestQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
+func (*ReadCorrectableStreamTestQSpec) ReadCustomReturnQF(replies []*qc.State) (*qc.MyState, bool) {
 	panic("not implemented")
 }
 
-func (*ReadPrelimTestQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
+func (*ReadCorrectableStreamTestQSpec) ReadCorrectableQF(replies []*qc.State) (*qc.State, int, bool) {
 	panic("not implemented")
 }
 
-func (*ReadPrelimTestQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, bool) {
+func (*ReadCorrectableStreamTestQSpec) ReadCorrectableStreamQF(replies []*qc.State) (*qc.State, int, bool) {
 	switch len(replies) {
 	case 0:
 		return nil, qc.LevelNotSet, false
@@ -301,14 +301,14 @@ func (*ReadPrelimTestQSpec) ReadPrelimQF(replies []*qc.State) (*qc.State, int, b
 	}
 }
 
-func (*ReadPrelimTestQSpec) WriteQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+func (*ReadCorrectableStreamTestQSpec) WriteQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	panic("not implemented")
 }
 
-func (*ReadPrelimTestQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+func (*ReadCorrectableStreamTestQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	panic("not implemented")
 }
 
-func (*ReadPrelimTestQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+func (*ReadCorrectableStreamTestQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	panic("not implemented")
 }
