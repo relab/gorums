@@ -123,7 +123,8 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 		}()
 	}
 
-	replyChan := make(chan internalState, c.n)
+	expected := c.n
+	replyChan := make(chan internalState, expected)
 	for _, n := range c.nodes {
 		go callGRPCReadCorrectable(ctx, n, a, replyChan)
 	}
@@ -171,11 +172,6 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 }
 
 func callGRPCReadCorrectable(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- internalState) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- internalState{node.id, nil, nil}
-		return
-	}
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(

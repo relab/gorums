@@ -47,13 +47,14 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, 
 		}()
 	}
 
-	replyChan := make(chan internalState, c.n)
+	expected := c.n
+	replyChan := make(chan internalState, expected)
 	for _, n := range c.nodes {
 		go callGRPCRead(ctx, n, a, replyChan)
 	}
 
 	var (
-		replyValues = make([]*State, 0, c.n)
+		replyValues = make([]*State, 0, expected)
 		errCount    int
 		quorum      bool
 	)
@@ -76,18 +77,13 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, 
 			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
 func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- internalState) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- internalState{node.id, nil, nil}
-		return
-	}
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -139,13 +135,14 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 		}()
 	}
 
-	replyChan := make(chan internalState, c.n)
+	expected := c.n
+	replyChan := make(chan internalState, expected)
 	for _, n := range c.nodes {
 		go callGRPCReadCustomReturn(ctx, n, a, replyChan)
 	}
 
 	var (
-		replyValues = make([]*State, 0, c.n)
+		replyValues = make([]*State, 0, expected)
 		errCount    int
 		quorum      bool
 	)
@@ -168,18 +165,13 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
 func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- internalState) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- internalState{node.id, nil, nil}
-		return
-	}
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -231,13 +223,14 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteRespons
 		}()
 	}
 
-	replyChan := make(chan internalWriteResponse, c.n)
+	expected := c.n
+	replyChan := make(chan internalWriteResponse, expected)
 	for _, n := range c.nodes {
 		go callGRPCWrite(ctx, n, a, replyChan)
 	}
 
 	var (
-		replyValues = make([]*WriteResponse, 0, c.n)
+		replyValues = make([]*WriteResponse, 0, expected)
 		errCount    int
 		quorum      bool
 	)
@@ -260,18 +253,13 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteRespons
 			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
 func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<- internalWriteResponse) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- internalWriteResponse{node.id, nil, nil}
-		return
-	}
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -326,13 +314,19 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 		}()
 	}
 
-	replyChan := make(chan internalWriteResponse, c.n)
+	expected := c.n
+	replyChan := make(chan internalWriteResponse, expected)
 	for _, n := range c.nodes {
-		go callGRPCWritePerNode(ctx, n, f(*a, n.id), replyChan)
+		a := f(*a, n.id)
+		if a == nil {
+			expected--
+			continue
+		}
+		go callGRPCWritePerNode(ctx, n, a, replyChan)
 	}
 
 	var (
-		replyValues = make([]*WriteResponse, 0, c.n)
+		replyValues = make([]*WriteResponse, 0, expected)
 		errCount    int
 		quorum      bool
 	)
@@ -355,18 +349,13 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
 }
 
 func callGRPCWritePerNode(ctx context.Context, node *Node, arg *State, replyChan chan<- internalWriteResponse) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- internalWriteResponse{node.id, nil, nil}
-		return
-	}
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(

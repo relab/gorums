@@ -120,7 +120,8 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, a *ReadReques
 		}()
 	}
 
-	replyChan := make(chan internalState, c.n)
+	expected := c.n
+	replyChan := make(chan internalState, expected)
 	for _, n := range c.nodes {
 		go callGRPCReadCorrectableStream(ctx, n, a, replyChan)
 	}

@@ -55,7 +55,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 	{{template "callLoop" .}}
 
 	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		replyValues = make([]*{{.FQRespName}}, 0, expected)
 		errCount    int
 		quorum      bool
 	)
@@ -82,7 +82,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
