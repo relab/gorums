@@ -8,11 +8,6 @@ const calltype_common_definitions_tmpl = `{{/* Remember to run 'make dev' after 
 
 {{define "callGRPC"}}
 func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}}, replyChan chan<- {{.UnexportedTypeName}}) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- {{.UnexportedTypeName}}{node.id, nil, nil}
-		return
-	}
 	reply := new({{.FQRespName}})
 	start := time.Now()
 	err := grpc.Invoke(
@@ -92,14 +87,18 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 {{end}}
 
 {{define "callLoop"}}
-	replyChan := make(chan {{.UnexportedTypeName}}, c.n)
-	for _, n := range c.nodes {
+  expected := c.n
+  replyChan := make(chan {{.UnexportedTypeName}}, expected)
+  for _, n := range c.nodes {
 {{- if .PerNodeArg}}
-		go callGRPC{{.MethodName}}(ctx, n, f(*a, n.id), replyChan)
-{{else}}
-		go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+    a := f(*a, n.id)
+    if a == nil {
+      expected--
+      continue
+    }
 {{end -}}
-	}
+    go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+  }
 {{end}}
 `
 
@@ -786,7 +785,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 	{{template "callLoop" .}}
 
 	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		replyValues = make([]*{{.FQRespName}}, 0, expected)
 		errCount    int
 		quorum      bool
 	)
@@ -813,7 +812,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 		}
 	}
