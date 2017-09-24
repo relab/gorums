@@ -130,6 +130,15 @@ func TestBasicStorage(t *testing.T) {
 	for _, m := range nodes {
 		t.Logf("%v", m)
 	}
+
+	// Do read call with nil argument
+	rreply, err = config.Read(ctx, nil)
+	if err == nil {
+		t.Fatalf("expected error, not nil")
+	}
+	if rreply != nil {
+		t.Fatalf("expected nil reply, not: %v", rreply)
+	}
 }
 
 func TestSingleServerRPC(t *testing.T) {
@@ -932,6 +941,14 @@ func TestPerNodeArg(t *testing.T) {
 	t.Logf("wreply: %v\n", wreply)
 	if !wreply.New {
 		t.Error("write reply was not marked as new")
+	}
+
+	wreply, err = config.WritePerNode(ctx, nil, perNodeArgNil)
+	if err == nil {
+		t.Fatalf("expected error, not nil")
+	}
+	if wreply != nil {
+		t.Fatalf("expected nil reply, not: %v", wreply)
 	}
 }
 
