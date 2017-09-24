@@ -75,7 +75,8 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Fu
 		}()
 	}
 
-	replyChan := make(chan internalState, c.n)
+	expected := c.n
+	replyChan := make(chan internalState, expected)
 	for _, n := range c.nodes {
 		go callGRPCReadFuture(ctx, n, a, replyChan)
 	}
@@ -116,11 +117,6 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Fu
 }
 
 func callGRPCReadFuture(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- internalState) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- internalState{node.id, nil, nil}
-		return
-	}
 	reply := new(State)
 	start := time.Now()
 	err := grpc.Invoke(
@@ -200,7 +196,8 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *FutureW
 		}()
 	}
 
-	replyChan := make(chan internalWriteResponse, c.n)
+	expected := c.n
+	replyChan := make(chan internalWriteResponse, expected)
 	for _, n := range c.nodes {
 		go callGRPCWriteFuture(ctx, n, a, replyChan)
 	}
@@ -241,11 +238,6 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *FutureW
 }
 
 func callGRPCWriteFuture(ctx context.Context, node *Node, arg *State, replyChan chan<- internalWriteResponse) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- internalWriteResponse{node.id, nil, nil}
-		return
-	}
 	reply := new(WriteResponse)
 	start := time.Now()
 	err := grpc.Invoke(
