@@ -118,7 +118,7 @@ func (f *{{.TypeName}}) Done() bool {
 			return
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 			return
 		}

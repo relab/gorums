@@ -164,7 +164,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 			return
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}

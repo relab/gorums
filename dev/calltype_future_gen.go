@@ -109,7 +109,7 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Fu
 			return
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			resp.State, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 			return
 		}
@@ -230,7 +230,7 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *FutureW
 			return
 		}
 
-		if errCount+len(replyValues) == c.n {
+		if errCount+len(replyValues) == expected {
 			resp.WriteResponse, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
 			return
 		}

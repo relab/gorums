@@ -161,7 +161,7 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, a *ReadReques
 			return
 		}
 
-		if errCount == c.n { // Can't rely on reply count.
+		if errCount == expected { // Can't rely on reply count.
 			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
 			return
 		}
@@ -169,11 +169,6 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, a *ReadReques
 }
 
 func callGRPCReadCorrectableStream(ctx context.Context, node *Node, arg *ReadRequest, replyChan chan<- internalState) {
-	if arg == nil {
-		// send a nil reply to the for-select-loop
-		replyChan <- internalState{node.id, nil, nil}
-		return
-	}
 	x := NewStorageClient(node.conn)
 	y, err := x.ReadCorrectableStream(ctx, arg)
 	if err != nil {
