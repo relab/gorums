@@ -109,7 +109,6 @@ func TestBasicStorage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("write quorum call error: %v", err)
 	}
-	t.Logf("wreply: %v\n", wreply)
 	if !wreply.New {
 		t.Error("write reply was not marked as new")
 	}
@@ -119,31 +118,36 @@ func TestBasicStorage(t *testing.T) {
 	defer cancel()
 	rreply, err := config.Read(ctx, &qc.ReadRequest{})
 	if err != nil {
-		t.Fatalf("read quorum call error: %v", err)
+		t.Errorf("read quorum call error: %v", err)
 	}
-	t.Logf("rreply: %v\n", rreply)
 	if rreply.Value != state.Value {
-		t.Fatalf("read reply: got state %v, want state %v", rreply, state)
+		t.Errorf("read reply: got state %v, want state %v", rreply, state)
 	}
 
-	nodes := mgr.Nodes()
-	for _, m := range nodes {
-		t.Logf("%v", m)
-	}
-
-	// defer func() {
-	// 	if r := recover(); r == nil {
-	// 		t.Fatalf("expected panic for nil argument to Read function")
-	// 	}
-	// }()
-	// Do read call with nil argument
+	// Do read call with nil argument; this works and returns a reply
+	// because the ReadRequest{} is never used on the server side.
 	rreply, err = config.Read(ctx, nil)
-	if rreply != nil {
-		t.Logf("got reply: %v", rreply)
+	if rreply == nil {
+		t.Error("expected non-nil reply")
 	}
 	if err != nil {
-		t.Logf("got err: %v", err)
+		t.Errorf("read quorum call error: %v", err)
 	}
+	if rreply != nil && rreply.Value != state.Value {
+		t.Errorf("read reply: got state %v, want state %v", rreply, state)
+	}
+
+	// Perform write call with nil argument; expect a panic since the
+	// the server side needs the State{} object.
+	// TODO this test does not work because the Write() call creates
+	// multiple goroutines, and it is one of these other goroutines that
+	// causes the panic, and so this recover() call does not work.
+	// defer func() {
+	// 	if r := recover(); r == nil {
+	// 		t.Fatalf("expected panic for nil argument to Write function")
+	// 	}
+	// }()
+	// config.Write(ctx, nil)
 }
 
 func TestSingleServerRPC(t *testing.T) {
