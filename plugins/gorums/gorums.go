@@ -105,7 +105,9 @@ func (g *gorums) Init(gen *generator.Generator) {
 	}
 
 	// Sort to ensure deterministic output.
-	sort.Sort(tmplSlice(g.templates))
+	sort.Slice(g.templates, func(i, j int) bool {
+		return g.templates[i].name < g.templates[j].name
+	})
 }
 
 // Given a type name defined in a .proto, return its object.
@@ -134,12 +136,6 @@ type tmpl struct {
 	name string
 	t    *template.Template
 }
-
-type tmplSlice []tmpl
-
-func (p tmplSlice) Len() int           { return len(p) }
-func (p tmplSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-func (p tmplSlice) Less(i, j int) bool { return p[i].name < p[j].name }
 
 // Generate generates code for the services in the given file.
 func (g *gorums) Generate(file *generator.FileDescriptor) {
@@ -170,6 +166,7 @@ func (g *gorums) referenceToSuppressErrs() {
 	g.P()
 	g.P("// Reference Gorums specific imports to suppress errors if they are not otherwise used.")
 	g.P("var _ = codes.OK")
+	g.P("var _ = bytes.MinRead")
 }
 
 func (g *gorums) processTemplates() error {
