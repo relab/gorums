@@ -144,7 +144,9 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	g.pkgData.Clients, g.pkgData.Services, g.pkgData.ResponseTypes, g.pkgData.InternalResponseTypes =
 		g.generateServiceMethods(file.FileDescriptorProto.Service, g.pkgData.PackageName)
 
-	g.referenceToSuppressErrs()
+	g.P("\n// Reference Gorums specific imports to suppress errors if they are not otherwise used.")
+	g.P("var _ = codes.OK")
+	g.P("var _ = bytes.MinRead")
 
 	g.pkgData.IgnoreImports = true
 	if err := g.processTemplates(); err != nil {
@@ -156,14 +158,8 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 		die(err)
 	}
 
-	g.embedStaticResources()
-}
-
-func (g *gorums) referenceToSuppressErrs() {
-	g.P()
-	g.P("// Reference Gorums specific imports to suppress errors if they are not otherwise used.")
-	g.P("var _ = codes.OK")
-	g.P("var _ = bytes.MinRead")
+	g.P("/* Static resources */")
+	g.P(staticResources)
 }
 
 func (g *gorums) processTemplates() error {
@@ -180,7 +176,6 @@ func (g *gorums) processTemplates() error {
 			g.P(gocode)
 		}
 	}
-
 	return nil
 }
 
@@ -209,11 +204,6 @@ func (g *gorums) generateDevFiles() error {
 		}
 	}
 	return nil
-}
-
-func (g *gorums) embedStaticResources() {
-	g.P("/* Static resources */")
-	g.P(staticResources)
 }
 
 // GenerateImports generates the import declaration for this file.
