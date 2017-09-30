@@ -304,8 +304,8 @@ type serviceMethod struct {
 }
 
 type responseType struct {
-	TypeName           string
-	UnexportedTypeName string
+	TypeName           string // Equal to UnexportedTypeName to facilitate reuse of this struct
+	UnexportedTypeName string // Equal to TypeName to facilitate reuse of this struct
 	FQRespName         string
 	FQCustomRespName   string
 	QuorumCall         bool
@@ -313,20 +313,6 @@ type responseType struct {
 	CorrectableStream  bool
 	Future             bool
 	Multicast          bool
-}
-
-func newResponseType(respType string, sm *serviceMethod) responseType {
-	return responseType{
-		TypeName:           respType,
-		UnexportedTypeName: respType,
-		FQRespName:         sm.FQRespName,
-		FQCustomRespName:   sm.FQCustomRespName,
-		QuorumCall:         sm.QuorumCall,
-		Future:             sm.Future,
-		Correctable:        sm.Correctable,
-		CorrectableStream:  sm.CorrectableStream,
-		Multicast:          sm.Multicast,
-	}
 }
 
 func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
@@ -384,25 +370,31 @@ func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 		}
 	}
 	g.pkgData.Services = flattenDuplicateServiceMethods(smethods)
+	g.pkgData.ResponseTypes = sortedResponseTypes(respTypes)
+	g.pkgData.InternalResponseTypes = sortedResponseTypes(internalRespTypes)
+}
 
-	var responseTypes, internalResponseTypes []responseType
+func sortedResponseTypes(respTypes map[string]*serviceMethod) (responseTypes []responseType) {
 	for respType, sm := range respTypes {
-		responseTypes = append(responseTypes, newResponseType(respType, sm))
-	}
-	for respType, sm := range internalRespTypes {
-		internalResponseTypes = append(internalResponseTypes, newResponseType(respType, sm))
+		responseTypes = append(responseTypes, responseType{
+			TypeName:           respType,
+			UnexportedTypeName: respType,
+			FQRespName:         sm.FQRespName,
+			FQCustomRespName:   sm.FQCustomRespName,
+			QuorumCall:         sm.QuorumCall,
+			Future:             sm.Future,
+			Correctable:        sm.Correctable,
+			CorrectableStream:  sm.CorrectableStream,
+			Multicast:          sm.Multicast,
+		})
 	}
 	sort.Slice(responseTypes, func(i, j int) bool {
 		return responseTypes[i].TypeName < responseTypes[j].TypeName
 	})
-	sort.Slice(internalResponseTypes, func(i, j int) bool {
-		return internalResponseTypes[i].UnexportedTypeName < internalResponseTypes[j].UnexportedTypeName
-	})
-
-	g.pkgData.ResponseTypes, g.pkgData.InternalResponseTypes = responseTypes, internalResponseTypes
+	return
 }
 
-// Check for and flatten duplicate methods across multiple services.
+// Check for and flatten duplicate method names across multiple services.
 // Duplicates methods names are prefixed with the service name.
 func flattenDuplicateServiceMethods(smethods map[string][]*serviceMethod) (allRewrittenFlat []serviceMethod) {
 	for _, methodsForName := range smethods {
