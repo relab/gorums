@@ -57,7 +57,7 @@ func init() {
 // gorums is an implementation of the Go protocol buffer compiler's
 // plugin architecture. It generates bindings for gorums support.
 type gorums struct {
-	gen       *generator.Generator
+	*generator.Generator
 	logger    *log.Logger
 	templates []tmpl
 	pkgData   struct {
@@ -80,7 +80,7 @@ const commonDefSuffix = "common_definitions_tmpl"
 
 // Init initializes the plugin.
 func (g *gorums) Init(gen *generator.Generator) {
-	g.gen = gen
+	g.Generator = gen
 
 	g.logger = log.New(os.Stdout, "gorums: ", 0)
 	if !logEnabled() {
@@ -110,14 +110,14 @@ func (g *gorums) Init(gen *generator.Generator) {
 // Given a type name defined in a .proto, return its object.
 // Also record that we're using it, to guarantee the associated import.
 func (g *gorums) objectNamed(name string) generator.Object {
-	g.gen.RecordTypeUse(name)
-	return g.gen.ObjectNamed(name)
+	g.RecordTypeUse(name)
+	return g.ObjectNamed(name)
 }
 
 // Given a type name defined in a .proto, return its fully qualified name as we
 // will print it.
 func (g *gorums) fqTypeName(str string) string {
-	return g.gen.TypeName(g.objectNamed(str))
+	return g.TypeName(g.objectNamed(str))
 }
 
 // Given a type name defined in a .proto, return its name as we will print it.
@@ -125,9 +125,6 @@ func (g *gorums) fqTypeName(str string) string {
 func (g *gorums) typeName(str string) string {
 	return generator.CamelCaseSlice(g.objectNamed(str).TypeName())
 }
-
-// P forwards to g.gen.P.
-func (g *gorums) P(args ...interface{}) { g.gen.P(args...) }
 
 type tmpl struct {
 	name string
@@ -351,8 +348,7 @@ func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 				sm.FQCustomRespName = sm.FQRespName
 			} else {
 				s := strings.Split(sm.CustomReturnType, ".")
-				customRespName := strings.Join(s[len(s)-1:], "")
-				sm.CustomRespName = customRespName
+				sm.CustomRespName = strings.Join(s[len(s)-1:], "")
 				sm.FQCustomRespName = sm.CustomReturnType
 			}
 
