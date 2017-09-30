@@ -159,8 +159,7 @@ func (g *gorums) processTemplates() error {
 	g.pkgData.IgnoreImports = true
 	for _, tmpl := range g.templates {
 		out := new(bytes.Buffer)
-		err := tmpl.Execute(out, g.pkgData)
-		if err != nil {
+		if err := tmpl.Execute(out, g.pkgData); err != nil {
 			return fmt.Errorf("error executing template for %q: %v", tmpl.name, err)
 		}
 		if gocode := strings.TrimSpace(out.String()); len(gocode) > 0 {
@@ -360,9 +359,7 @@ func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 			respTypes[sm.TypeName] = sm
 			internalRespTypes[sm.UnexportedTypeName] = sm
 
-			methodsForName := smethods[sm.MethodName]
-			methodsForName = append(methodsForName, sm)
-			smethods[sm.MethodName] = methodsForName
+			smethods[sm.MethodName] = append(smethods[sm.MethodName], sm)
 		}
 	}
 	g.pkgData.Services = flattenDuplicateServiceMethods(smethods)
