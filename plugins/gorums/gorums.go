@@ -331,12 +331,12 @@ func newResponseType(respType string, sm *serviceMethod) responseType {
 
 func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 	g.pkgData.PackageName = file.GetPackage()
-	clients := make([]string, len(file.FileDescriptorProto.Service))
+	g.pkgData.Clients = make([]string, len(file.FileDescriptorProto.Service))
 	smethods := make(map[string][]*serviceMethod)
 	respTypes := make(map[string]*serviceMethod)
 	internalRespTypes := make(map[string]*serviceMethod)
 	for i, service := range file.FileDescriptorProto.Service {
-		clients[i] = service.GetName() + "Client"
+		g.pkgData.Clients[i] = service.GetName() + "Client"
 		for _, method := range service.Method {
 			sm, err := verifyExtensionsAndCreate(service.GetName(), method)
 			if err != nil {
@@ -383,10 +383,28 @@ func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 			smethods[sm.MethodName] = methodsForName
 		}
 	}
+	g.pkgData.Services = flattenDuplicateServiceMethods(smethods)
 
-	// check for duplicate method names across multiple services.
-	// we prefix duplicate method names with the service name.
-	var allRewrittenFlat []serviceMethod
+	var responseTypes, internalResponseTypes []responseType
+	for respType, sm := range respTypes {
+		responseTypes = append(responseTypes, newResponseType(respType, sm))
+	}
+	for respType, sm := range internalRespTypes {
+		internalResponseTypes = append(internalResponseTypes, newResponseType(respType, sm))
+	}
+	sort.Slice(responseTypes, func(i, j int) bool {
+		return responseTypes[i].TypeName < responseTypes[j].TypeName
+	})
+	sort.Slice(internalResponseTypes, func(i, j int) bool {
+		return internalResponseTypes[i].UnexportedTypeName < internalResponseTypes[j].UnexportedTypeName
+	})
+
+	g.pkgData.ResponseTypes, g.pkgData.InternalResponseTypes = responseTypes, internalResponseTypes
+}
+
+// Check for and flatten duplicate methods across multiple services.
+// Duplicates methods names are prefixed with the service name.
+func flattenDuplicateServiceMethods(smethods map[string][]*serviceMethod) (allRewrittenFlat []serviceMethod) {
 	for _, methodsForName := range smethods {
 		switch len(methodsForName) {
 		case 0:
@@ -417,23 +435,7 @@ func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 			}
 		}
 	})
-
-	var responseTypes, internalResponseTypes []responseType
-	for respType, sm := range respTypes {
-		responseTypes = append(responseTypes, newResponseType(respType, sm))
-	}
-	for respType, sm := range internalRespTypes {
-		internalResponseTypes = append(internalResponseTypes, newResponseType(respType, sm))
-	}
-	sort.Slice(responseTypes, func(i, j int) bool {
-		return responseTypes[i].TypeName < responseTypes[j].TypeName
-	})
-	sort.Slice(internalResponseTypes, func(i, j int) bool {
-		return internalResponseTypes[i].UnexportedTypeName < internalResponseTypes[j].UnexportedTypeName
-	})
-
-	g.pkgData.Clients, g.pkgData.Services = clients, allRewrittenFlat
-	g.pkgData.ResponseTypes, g.pkgData.InternalResponseTypes = responseTypes, internalResponseTypes
+	return
 }
 
 func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto) (*serviceMethod, error) {
