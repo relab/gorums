@@ -943,6 +943,9 @@ func TestPerNodeArg(t *testing.T) {
 		req.Timestamp = time.Now().UnixNano()
 		return &req
 	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	wreply, err = config.WritePerNode(ctx, req, perNodeArgNil)
 	if err != nil {
 		t.Fatalf("write quorum call error: %v", err)
@@ -957,7 +960,7 @@ func TestPerNodeArg(t *testing.T) {
 			t.Fatalf("expected panic for nil argument to WritePerNode function")
 		}
 	}()
-	config.WritePerNode(ctx, nil, perNodeArgNil)
+	config.WritePerNode(context.Background(), nil, perNodeArgNil)
 }
 
 ///////////////////////////////////////////////////////////////
