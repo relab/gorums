@@ -188,7 +188,3 @@ check: getchecktools
 .PHONY: updatedeps
 updatedeps:
 	dep ensure -update
-
-.PHONY: examples
-examples:
-	cd gridq && $(MAKE) proto
