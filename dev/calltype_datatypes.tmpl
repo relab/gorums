@@ -7,7 +7,7 @@ package {{.PackageName}}
 import "sync"
 {{- end}}
 
-{{range $elm := .ResponseTypes}}
+{{range .ResponseTypes}}
 
 {{if or .Correctable .CorrectableStream}}
 // {{.TypeName}} for processing correctable {{.FQCustomRespName}} replies.
@@ -40,7 +40,7 @@ type {{.TypeName}} struct {
 
 {{- end}}
 
-{{range $elm := .InternalResponseTypes}}
+{{range .InternalResponseTypes}}
 
 {{if or .Correctable .CorrectableStream .Future .QuorumCall}}
 type {{.UnexportedTypeName}} struct {

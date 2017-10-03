@@ -123,7 +123,7 @@ import (
 
 {{- end}}
 
-{{range $elm := .Services}}
+{{range .Services}}
 
 {{if .Correctable}}
 
@@ -309,7 +309,7 @@ import (
 )
 {{- end}}
 
-{{range $elm := .Services}}
+{{range .Services}}
 
 {{if .CorrectableStream}}
 
@@ -507,7 +507,7 @@ package {{.PackageName}}
 import "sync"
 {{- end}}
 
-{{range $elm := .ResponseTypes}}
+{{range .ResponseTypes}}
 
 {{if or .Correctable .CorrectableStream}}
 // {{.TypeName}} for processing correctable {{.FQCustomRespName}} replies.
@@ -540,7 +540,7 @@ type {{.TypeName}} struct {
 
 {{- end}}
 
-{{range $elm := .InternalResponseTypes}}
+{{range .InternalResponseTypes}}
 
 {{if or .Correctable .CorrectableStream .Future .QuorumCall}}
 type {{.UnexportedTypeName}} struct {
@@ -571,7 +571,7 @@ import (
 )
 {{end}}
 
-{{range $elm := .Services}}
+{{range .Services}}
 
 {{if .Future}}
 
@@ -692,7 +692,7 @@ const calltype_multicast_tmpl = `{{/* Remember to run 'make dev' after editing t
 package {{.PackageName}}
 {{end}}
 
-{{range $elm := .Services}}
+{{range .Services}}
 
 {{if .Multicast}}
 
@@ -743,7 +743,7 @@ import (
 )
 {{end}}
 
-{{range $elm := .Services}}
+{{range .Services}}
 
 {{if .QuorumCall}}
 
@@ -911,7 +911,7 @@ package {{.PackageName}}
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
-{{- range $elm := .Services}}
+{{- range .Services}}
 {{- if or (.QuorumCall) (.Future)}}
 {{- if .QuorumCall}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}

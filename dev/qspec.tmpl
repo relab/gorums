@@ -7,7 +7,7 @@ package {{.PackageName}}
 
 // QuorumSpec is the interface that wraps every quorum function.
 type QuorumSpec interface {
-{{- range $elm := .Services}}
+{{- range .Services}}
 {{- if or (.QuorumCall) (.Future)}}
 {{- if .QuorumCall}}
 	// {{.MethodName}}QF is the quorum function for the {{.MethodName}}
