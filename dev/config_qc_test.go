@@ -960,7 +960,10 @@ func TestPerNodeArg(t *testing.T) {
 			t.Fatalf("expected panic for nil argument to WritePerNode function")
 		}
 	}()
-	config.WritePerNode(context.Background(), nil, perNodeArgNil)
+	_, err = config.WritePerNode(context.Background(), nil, perNodeArgNil)
+	if err != nil {
+		t.Errorf("write quorum call error: %v", err)
+	}
 }
 
 ///////////////////////////////////////////////////////////////
