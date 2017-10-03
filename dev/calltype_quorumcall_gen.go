@@ -317,12 +317,12 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 	expected := c.n
 	replyChan := make(chan internalWriteResponse, expected)
 	for _, n := range c.nodes {
-		a := f(*a, n.id)
-		if a == nil {
+		nodeArg := f(*a, n.id)
+		if nodeArg == nil {
 			expected--
 			continue
 		}
-		go callGRPCWritePerNode(ctx, n, a, replyChan)
+		go callGRPCWritePerNode(ctx, n, nodeArg, replyChan)
 	}
 
 	var (

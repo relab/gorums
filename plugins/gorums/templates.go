@@ -91,13 +91,15 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
   replyChan := make(chan {{.UnexportedTypeName}}, expected)
   for _, n := range c.nodes {
 {{- if .PerNodeArg}}
-    a := f(*a, n.id)
-    if a == nil {
+    nodeArg := f(*a, n.id)
+    if nodeArg == nil {
       expected--
       continue
     }
-{{end -}}
+    go callGRPC{{.MethodName}}(ctx, n, nodeArg, replyChan)
+{{- else}}
     go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+{{end -}}
   }
 {{end}}
 `
