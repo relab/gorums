@@ -147,12 +147,18 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 		die(err)
 	}
 
-	if err := g.generateDevFiles(file.GetName()); err != nil {
-		die(err)
-	}
-
 	g.P("/* Static resources */")
 	g.P(staticResources)
+
+	if os.Getenv("GORUMSGENDEV") == "1" {
+		// Generated _gen.go files (from storage.proto) in the dev/ folder
+		// only if GORUMSGENDEV is set to 1; see 'dev' target in Makefile.
+		// This execution path should only be performed when running the
+		// plugin from within the gorums repo and is meant for development.
+		if err := g.generateDevFiles(file.GetName()); err != nil {
+			die(err)
+		}
+	}
 }
 
 func (g *gorums) processTemplates() error {
@@ -173,10 +179,6 @@ func (g *gorums) processTemplates() error {
 }
 
 func (g *gorums) generateDevFiles(filename string) error {
-	if !produceDevFiles() {
-		return nil
-	}
-
 	g.pkgData.IgnoreImports = false
 	for _, tmpl := range g.templates {
 		out := new(bytes.Buffer)
@@ -257,10 +259,6 @@ var ignoreImport = map[string]bool{
 func die(err error) {
 	fmt.Fprintf(os.Stderr, "gorums: %v\n", err)
 	os.Exit(2)
-}
-
-func produceDevFiles() bool {
-	return os.Getenv("GORUMSGENDEV") == "1"
 }
 
 func logEnabled() bool {
