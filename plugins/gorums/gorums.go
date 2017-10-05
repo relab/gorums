@@ -212,48 +212,17 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 		return
 	}
 
-	if hasMessageWithByteField(file) {
-		ignoreImport["bytes"] = true
-	}
-
-	if len(file.Messages()) > 0 {
-		ignoreImport["io"] = true
-		ignoreImport["strings"] = true
-	}
-
+	staticImports = append(staticImports,
+		"golang.org/x/net/trace",
+		"google.golang.org/grpc/codes",
+		"google.golang.org/grpc/status",
+	)
 	sort.Strings(staticImports)
-	g.P("import (")
+	imports := generator.NewPluginImports(g.Generator)
 	for _, simport := range staticImports {
-		if ignore := ignoreImport[simport]; ignore {
-			continue
-		}
-		g.P("\"", simport, "\"")
+		imports.NewImport(simport).Use()
 	}
-	g.P()
-	g.P("\"golang.org/x/net/trace\"")
-	g.P()
-	g.P("\"google.golang.org/grpc/codes\"")
-	g.P("\"google.golang.org/grpc/status\"")
-	g.P(")")
-}
-
-func hasMessageWithByteField(file *generator.FileDescriptor) bool {
-	for _, msg := range file.Messages() {
-		for _, field := range msg.Field {
-			if field.IsBytes() {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-var ignoreImport = map[string]bool{
-	"fmt":  true,
-	"math": true,
-	"golang.org/x/net/context": true,
-	"golang.org/x/net/trace":   true,
-	"google.golang.org/grpc":   true,
+	imports.GenerateImports(file)
 }
 
 func die(err error) {
