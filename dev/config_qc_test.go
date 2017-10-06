@@ -1410,14 +1410,6 @@ func setup(t testing.TB, storServers []storageServer, remote, secure bool) (stor
 		}(i, server)
 	}
 
-	for i, listener := range listeners {
-		_, port, err := net.SplitHostPort(listener.Addr().String())
-		if err != nil {
-			t.Fatalf("failed to parse listener address: %v", err)
-		}
-		storServers[i].addr = "localhost:" + port
-	}
-
 	stopGrpcServeFunc := func(n int) {
 		if n < 0 || n > len(servers) {
 			for _, s := range servers {
