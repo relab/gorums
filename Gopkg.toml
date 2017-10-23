@@ -24,6 +24,7 @@
 [[constraint]]
   name = "github.com/gogo/protobuf"
   branch = "master"
+  source = "https://github.com/meling/protobuf.git"
 
 [[constraint]]
   branch = "master"
