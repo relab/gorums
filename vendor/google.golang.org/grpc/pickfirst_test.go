@@ -128,11 +128,7 @@ func TestNewAddressWhileBlockingPickfirst(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			// This RPC blocks until NewAddress is called.
-<<<<<<< HEAD
 			Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
-=======
-			Invoke(context.Background(), "/foo/bar", &req, &reply, cc, FailFast(false))
->>>>>>> abe533cb0ad35b13fa3070087e9e651a45004734
 		}()
 	}
 	time.Sleep(50 * time.Millisecond)
@@ -169,11 +165,7 @@ func TestCloseWithPendingRPCPickfirst(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			// This RPC blocks until NewAddress is called.
-<<<<<<< HEAD
 			Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
-=======
-			Invoke(context.Background(), "/foo/bar", &req, &reply, cc, FailFast(false))
->>>>>>> abe533cb0ad35b13fa3070087e9e651a45004734
 		}()
 	}
 	time.Sleep(50 * time.Millisecond)
