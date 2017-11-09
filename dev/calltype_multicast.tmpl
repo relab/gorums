@@ -1,7 +1,9 @@
 {{/* Remember to run 'make dev' after editing this file. */}}
 
+{{ $Pkg := .PackageName }}
+
 {{if not .IgnoreImports}}
-package {{.PackageName}}
+package {{ $Pkg }}
 {{end}}
 
 {{range .Services}}

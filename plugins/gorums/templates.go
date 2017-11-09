@@ -104,11 +104,12 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 {{end}}
 `
 
-const calltype_correctable_tmpl = `
-{{/* Remember to run 'make dev' after editing this file. */}}
+const calltype_correctable_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
 
-{{- if not .IgnoreImports}}
-package {{.PackageName}}
+{{ $Pkg := .PackageName }}
+
+{{if not .IgnoreImports}}
+package {{ $Pkg }}
 
 import (
 	"time"
@@ -294,11 +295,12 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 {{- end -}}
 `
 
-const calltype_correctable_stream_tmpl = `
-{{/* Remember to run 'make dev' after editing this file. */}}
+const calltype_correctable_stream_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
 
-{{- if not .IgnoreImports}}
-package {{.PackageName}}
+{{ $Pkg := .PackageName }}
+
+{{if not .IgnoreImports}}
+package {{ $Pkg }}
 
 import (
 	"io"
@@ -498,11 +500,12 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 {{- end -}}
 `
 
-const calltype_datatypes_tmpl = `
-{{/* Remember to run 'make dev' after editing this file. */}}
+const calltype_datatypes_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
 
-{{- if not .IgnoreImports}}
-package {{.PackageName}}
+{{ $Pkg := .PackageName }}
+
+{{if not .IgnoreImports}}
+package {{ $Pkg }}
 
 import "sync"
 {{- end}}
@@ -553,11 +556,12 @@ type {{.UnexportedTypeName}} struct {
 {{- end}}
 `
 
-const calltype_future_tmpl = `
-{{/* Remember to run 'make dev' after editing this file. */}}
+const calltype_future_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
+
+{{ $Pkg := .PackageName }}
 
 {{if not .IgnoreImports}}
-package {{.PackageName}}
+package {{ $Pkg }}
 
 import (
 	"time"
@@ -688,8 +692,10 @@ func (f *{{.TypeName}}) Done() bool {
 
 const calltype_multicast_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
 
+{{ $Pkg := .PackageName }}
+
 {{if not .IgnoreImports}}
-package {{.PackageName}}
+package {{ $Pkg }}
 {{end}}
 
 {{range .Services}}
@@ -725,11 +731,12 @@ func (c *Configuration) {{.UnexportedMethodName}}(arg *{{.FQReqName}}) error {
 {{- end -}}
 `
 
-const calltype_quorumcall_tmpl = `
-{{/* Remember to run 'make dev' after editing this file. */}}
+const calltype_quorumcall_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
+
+{{ $Pkg := .PackageName }}
 
 {{if not .IgnoreImports}}
-package {{.PackageName}}
+package {{ $Pkg }}
 
 import (
 	"time"

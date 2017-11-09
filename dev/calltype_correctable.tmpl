@@ -1,8 +1,9 @@
-
 {{/* Remember to run 'make dev' after editing this file. */}}
 
-{{- if not .IgnoreImports}}
-package {{.PackageName}}
+{{ $Pkg := .PackageName }}
+
+{{if not .IgnoreImports}}
+package {{ $Pkg }}
 
 import (
 	"time"
