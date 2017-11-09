@@ -9,6 +9,7 @@ import (
 
 	qc "github.com/relab/gorums/dev"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 // To generate new keys and certificates you can use the certstrap
@@ -104,7 +105,7 @@ func serverCredentials(t testing.TB) credentials.TransportCredentials {
 }
 
 func TestSecureStorage(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{

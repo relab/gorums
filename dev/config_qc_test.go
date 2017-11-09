@@ -7,8 +7,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"runtime"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 func TestMain(m *testing.M) {
@@ -58,7 +57,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestBasicStorage(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -151,7 +150,7 @@ func TestBasicStorage(t *testing.T) {
 }
 
 func TestSingleServerRPC(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -201,7 +200,7 @@ func TestSingleServerRPC(t *testing.T) {
 }
 
 func TestExitHandleRepliesLoop(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -252,7 +251,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 }
 
 func TestSlowStorage(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	someErr := grpc.Errorf(codes.Unknown, "Some error")
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
@@ -302,7 +301,7 @@ func TestSlowStorage(t *testing.T) {
 }
 
 func TestBasicStorageUsingFuture(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -377,7 +376,7 @@ func TestBasicStorageUsingFuture(t *testing.T) {
 }
 
 func TestBasicStorageWithWriteAsync(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -466,7 +465,7 @@ func TestBasicStorageWithWriteAsync(t *testing.T) {
 }
 
 func TestManagerClose(t *testing.T) {
-	defer leakCheck(t)()
+
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -504,7 +503,7 @@ func TestManagerClose(t *testing.T) {
 }
 
 func TestQuorumCallCancel(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -547,7 +546,7 @@ func TestQuorumCallCancel(t *testing.T) {
 }
 
 func TestBasicCorrectable(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 
 	stateOne := &qc.State{
 		Value:     "42",
@@ -601,7 +600,7 @@ func TestBasicCorrectable(t *testing.T) {
 }
 
 func TestCorrectableWithLevels(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 
 	stateOne := &qc.State{
 		Value:     "42",
@@ -697,7 +696,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 }
 
 func TestCorrectableStream(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 
 	stateOne := &qc.State{
 		Value:     "42",
@@ -846,7 +845,7 @@ func checkReplyAndLevel(t *testing.T, correctable Correctable, expectedLevel int
 }
 
 func TestPerNodeArg(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -1490,74 +1489,3 @@ type ByTimestamp []*qc.State
 func (a ByTimestamp) Len() int           { return len(a) }
 func (a ByTimestamp) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByTimestamp) Less(i, j int) bool { return a[i].Timestamp < a[j].Timestamp }
-
-// leakCheck snapshots the currently-running goroutines and returns a
-// function to be run at the end of tests to see whether any
-// goroutines leaked.
-//
-// From https://github.com/grpc/grpc-go
-// Copyright 2014, Google Inc.
-func leakCheck(t testing.TB) func() {
-	orig := map[string]bool{}
-	for _, g := range interestingGoroutines() {
-		orig[g] = true
-	}
-	return func() {
-		// Loop, waiting for goroutines to shut down.
-		// Wait up to 5 seconds, but finish as quickly as possible.
-		deadline := time.Now().Add(5 * time.Second)
-		for {
-			var leaked []string
-			for _, g := range interestingGoroutines() {
-				if !orig[g] {
-					leaked = append(leaked, g)
-				}
-			}
-			if len(leaked) == 0 {
-				return
-			}
-			if time.Now().Before(deadline) {
-				time.Sleep(50 * time.Millisecond)
-				continue
-			}
-			for _, g := range leaked {
-				t.Errorf("Leaked goroutine: %v", g)
-			}
-			return
-		}
-	}
-}
-
-// interestingGoroutines returns all goroutines we care about for the purpose
-// of leak checking. It excludes testing or runtime ones.
-//
-// From https://github.com/grpc/grpc-go
-// Copyright 2014, Google Inc.
-func interestingGoroutines() (gs []string) {
-	buf := make([]byte, 2<<20)
-	buf = buf[:runtime.Stack(buf, true)]
-	for _, g := range strings.Split(string(buf), "\n\n") {
-		sl := strings.SplitN(g, "\n", 2)
-		if len(sl) != 2 {
-			continue
-		}
-		stack := strings.TrimSpace(sl[1])
-		if stack == "" ||
-			strings.Contains(stack, "testing.runTests") ||
-			strings.Contains(stack, "testing.RunTests") ||
-			strings.Contains(stack, "testing.Main(") ||
-			strings.Contains(stack, "runtime.goexit") ||
-			strings.Contains(stack, "created by runtime.gc") ||
-			strings.Contains(stack, "interestingGoroutines") ||
-			strings.Contains(stack, "runtime.MHeap_Scavenger") ||
-			strings.Contains(stack, "signal.signal_recv") ||
-			strings.Contains(stack, "sigterm.handler") ||
-			strings.Contains(stack, "runtime_mcall") ||
-			strings.Contains(stack, "goroutine in C code") {
-			continue
-		}
-		gs = append(gs, g)
-	}
-	sort.Strings(gs)
-	return
-}

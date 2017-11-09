@@ -27,7 +27,6 @@ import reflect "reflect"
 
 import io "io"
 import encoding_binary "encoding/binary"
-import github_com_gogo_protobuf_proto "github.com/gogo/protobuf/proto"
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ = proto.Marshal
@@ -1392,16 +1391,16 @@ func (m *IntMerge) Unmarshal(dAtA []byte) error {
 		}
 	}
 	if hasFields[0]&uint64(0x00000001) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("Int64")
+		return proto.NewRequiredNotSetError("Int64")
 	}
 	if hasFields[0]&uint64(0x00000002) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("Sint32")
+		return proto.NewRequiredNotSetError("Sint32")
 	}
 	if hasFields[0]&uint64(0x00000004) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("Uint32")
+		return proto.NewRequiredNotSetError("Uint32")
 	}
 	if hasFields[0]&uint64(0x00000008) == 0 {
-		return github_com_gogo_protobuf_proto.NewRequiredNotSetError("Sfixed32")
+		return proto.NewRequiredNotSetError("Sfixed32")
 	}
 
 	if iNdEx > l {
