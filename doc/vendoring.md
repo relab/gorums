@@ -20,9 +20,9 @@ then you probably don't want to vendor your dependencies into that project.
 
 #### Raft
 
-The [Raft project](https://github.com/relabs/raft) is an example of a library that isn't compiled into a binary, 
+The [Raft project](https://github.com/relab/raft) is an example of a library that isn't compiled into a binary, 
 and so doesn't use vendoring. The corresponding Raft key-value storage implementation, that is, the
-[rkv project](https://github.com/relabs/rkv), on the other hand does compile to a binary and therefore needs a
+[rkv project](https://github.com/relab/rkv), on the other hand does compile to a binary and therefore needs a
 `vendor` folder to pin the specific libraries that it depends on. This allows the `rkv` binary to decide which
 version of a dependent library is to be used, and not the Raft library itself.
 
@@ -36,8 +36,8 @@ However, if the library is stable, then this should not be a problem.
 
 Some projects decide to keep both the "library" parts and the binaries in the same repository. In such cases,
 the repository **should vendor** its external dependencies. There are several examples of this repository
-organization for some smaller demo applications, such as the [byzq](https://github.com/relabs/byzq) and
-[recstore](https://github.com/relabs/recstore) repositories, where both the library code and the command binaries
+organization for some smaller demo applications, such as the [byzq](https://github.com/relab/byzq) and
+[recstore](https://github.com/relab/recstore) repositories, where both the library code and the command binaries
 are in the same repo. 
 
 However, these currently do not vendor their dependencies, even though they probably should. This is just
