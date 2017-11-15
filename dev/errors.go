@@ -43,3 +43,13 @@ func (e QuorumCallError) Error() string {
 		e.Reason, e.ErrCount, e.ReplyCount,
 	)
 }
+
+// CallGRPCError is used to report that a single gRPC call failed.
+type CallGRPCError struct {
+	NodeID uint32
+	Cause  error
+}
+
+func (e CallGRPCError) Error() string {
+	return e.Cause.Error()
+}

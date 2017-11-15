@@ -30,6 +30,13 @@ type Configuration struct {
 	n	int
 	mgr	*Manager
 	qspec	QuorumSpec
+	errs	chan CallGRPCError
+}
+
+// SubError returns a channel for listening to individual node errors. Currently
+// only a single listener is supported.
+func (c *Configuration) SubError() <-chan CallGRPCError {
+	return c.errs
 }
 
 // ID reports the identifier for the configuration.
@@ -113,6 +120,16 @@ func (e QuorumCallError) Error() string {
 		"quorum call error: %s (errors: %d, replies: %d)",
 		e.Reason, e.ErrCount, e.ReplyCount,
 	)
+}
+
+// CallGRPCError is used to report that a single gRPC call failed.
+type CallGRPCError struct {
+	NodeID	uint32
+	Cause	error
+}
+
+func (e CallGRPCError) Error() string {
+	return e.Cause.Error()
 }
 
 /* level.go */
