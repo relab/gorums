@@ -1,9 +1,11 @@
 # Vendoring your Dependencies
 
 Vendoring is Go's approach to managing a project's dependencies. A project's dependencies can be placed in a
-subfolder called `vendor` inside your project folder, to prevent the compiler from using a possibly outdated
-version of a package stored in the user's `$GOPATH`. There are tools to manage the content of the `vendor` folder. 
-Gorums uses the [dep](https://github.com/golang/dep) tool to manage its dependencies.
+folder called `vendor` inside your project folder. Vendoring is used to specify the exact version of a set of
+external dependencies. It enables reproducible builds and can also make a project self contained. Vendoring
+ensures that a specific version of a package is used, regardless of the version stored in a user's `$GOPATH`.
+There exists several tools to manage the content of the `vendor` folder. Gorums uses the
+[dep](https://github.com/golang/dep) tool to manage its dependencies.
 
 ## Vendoring with Gorums
 
@@ -14,7 +16,7 @@ your project, there are two options:
 
 1. If your project is a library (that doesn't compile into a binary) to be used by others, 
 then you probably don't want to vendor your dependencies into that project.
-1. If your project produces a binary, then you may want to vendor your dependencies.
+1. If your project produces a binary, you most likely want to vendor your dependencies.
 
 ### Examples
 
