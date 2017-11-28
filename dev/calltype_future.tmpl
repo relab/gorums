@@ -88,10 +88,10 @@ func (f *{{.TypeName}}) Done() bool {
 	{{template "callLoop" .}}
 
 	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		replyValues = 	make([]*{{.FQRespName}}, 0, c.n)
 		reply		*{{.FQCustomRespName}}
-		errCount    int
-		quorum      bool
+		errs 		[]GRPCError
+		quorum      	bool
 	)
 
 	for {
@@ -99,7 +99,7 @@ func (f *{{.TypeName}}) Done() bool {
 		case r := <-replyChan:
 			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -115,12 +115,12 @@ func (f *{{.TypeName}}) Done() bool {
 				return
 			}
 		case <-ctx.Done():
-			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 
-		if errCount+len(replyValues) == expected {
-			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}

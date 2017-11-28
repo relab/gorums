@@ -57,7 +57,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, expected)
-		errCount    int
+		errs []GRPCError
 		quorum      bool
 	)
 
@@ -65,7 +65,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -80,11 +80,11 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 		}
 
-		if errCount+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
 }

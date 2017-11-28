@@ -56,7 +56,7 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, 
 
 	var (
 		replyValues = make([]*State, 0, expected)
-		errCount    int
+		errs        []GRPCError
 		quorum      bool
 	)
 
@@ -64,7 +64,7 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, 
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -75,11 +75,11 @@ func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, 
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 		}
 
-		if errCount+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
 }
@@ -144,7 +144,7 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 
 	var (
 		replyValues = make([]*State, 0, expected)
-		errCount    int
+		errs        []GRPCError
 		quorum      bool
 	)
 
@@ -152,7 +152,7 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -163,11 +163,11 @@ func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (r
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 		}
 
-		if errCount+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
 }
@@ -232,7 +232,7 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteRespons
 
 	var (
 		replyValues = make([]*WriteResponse, 0, expected)
-		errCount    int
+		errs        []GRPCError
 		quorum      bool
 	)
 
@@ -240,7 +240,7 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteRespons
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -251,11 +251,11 @@ func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteRespons
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 		}
 
-		if errCount+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
 }
@@ -328,7 +328,7 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 
 	var (
 		replyValues = make([]*WriteResponse, 0, expected)
-		errCount    int
+		errs        []GRPCError
 		quorum      bool
 	)
 
@@ -336,7 +336,7 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -347,11 +347,11 @@ func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg S
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 		}
 
-		if errCount+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
 }

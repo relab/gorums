@@ -85,7 +85,7 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Fu
 	var (
 		replyValues = make([]*State, 0, c.n)
 		reply       *State
-		errCount    int
+		errs        []GRPCError
 		quorum      bool
 	)
 
@@ -94,7 +94,7 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Fu
 		case r := <-replyChan:
 			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -106,12 +106,12 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Fu
 				return
 			}
 		case <-ctx.Done():
-			resp.State, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.State, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 
-		if errCount+len(replyValues) == expected {
-			resp.State, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			resp.State, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -206,7 +206,7 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *FutureW
 	var (
 		replyValues = make([]*WriteResponse, 0, c.n)
 		reply       *WriteResponse
-		errCount    int
+		errs        []GRPCError
 		quorum      bool
 	)
 
@@ -215,7 +215,7 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *FutureW
 		case r := <-replyChan:
 			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -227,12 +227,12 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *FutureW
 				return
 			}
 		case <-ctx.Done():
-			resp.WriteResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.WriteResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 
-		if errCount+len(replyValues) == expected {
-			resp.WriteResponse, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			resp.WriteResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
