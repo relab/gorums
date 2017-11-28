@@ -244,12 +244,12 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 	{{- template "callLoop" .}}
 
 	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n)
-		clevel      = LevelNotSet
+		replyValues 	= make([]*{{.FQRespName}}, 0, c.n)
+		clevel      	= LevelNotSet
 		reply		*{{.FQCustomRespName}}
-		rlevel      int
-		errCount    int
-		quorum      bool
+		rlevel		int
+		errs 		[]GRPCError
+		quorum      	bool
 	)
 
 	for {
@@ -257,7 +257,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 		case r := <-replyChan:
 			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -278,12 +278,12 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
 			return
 		}
 
-		if errCount+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+		if len(errs)+len(replyValues) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
 			return
 		}
 	}
@@ -431,12 +431,12 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 	{{- template "callLoop" .}}
 
 	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
-		clevel      = LevelNotSet
+		replyValues 	= make([]*{{.FQRespName}}, 0, c.n*2)
+		clevel      	= LevelNotSet
 		reply		*{{.FQCustomRespName}}
-		rlevel      int
-		errCount    int
-		quorum      bool
+		rlevel      	int
+		errs 		[]GRPCError
+		quorum      	bool
 	)
 
 	for {
@@ -444,7 +444,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 		case r := <-replyChan:
 			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -465,12 +465,12 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
 			return
 		}
 
-		if errCount == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
 			return
 		}
 	}
@@ -646,10 +646,10 @@ func (f *{{.TypeName}}) Done() bool {
 	{{template "callLoop" .}}
 
 	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n)
+		replyValues = 	make([]*{{.FQRespName}}, 0, c.n)
 		reply		*{{.FQCustomRespName}}
-		errCount    int
-		quorum      bool
+		errs 		[]GRPCError
+		quorum      	bool
 	)
 
 	for {
@@ -657,7 +657,7 @@ func (f *{{.TypeName}}) Done() bool {
 		case r := <-replyChan:
 			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -673,12 +673,12 @@ func (f *{{.TypeName}}) Done() bool {
 				return
 			}
 		case <-ctx.Done():
-			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 
-		if errCount+len(replyValues) == expected {
-			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			resp.{{.CustomRespName}}, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -790,7 +790,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, expected)
-		errCount    int
+		errs []GRPCError
 		quorum      bool
 	)
 
@@ -798,7 +798,7 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -813,11 +813,11 @@ func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQR
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 		}
 
-		if errCount+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", errCount, len(replyValues)}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
 }

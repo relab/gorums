@@ -33,14 +33,15 @@ func ManagerCreationError(err error) error {
 
 // A QuorumCallError is used to report that a quorum call failed.
 type QuorumCallError struct {
-	Reason               string
-	ErrCount, ReplyCount int
+	Reason     string
+	ReplyCount int
+	Errors     []GRPCError
 }
 
 func (e QuorumCallError) Error() string {
 	return fmt.Sprintf(
 		"quorum call error: %s (errors: %d, replies: %d)",
-		e.Reason, e.ErrCount, e.ReplyCount,
+		e.Reason, len(e.Errors), e.ReplyCount,
 	)
 }
 
@@ -51,5 +52,5 @@ type GRPCError struct {
 }
 
 func (e GRPCError) Error() string {
-	return e.Cause.Error()
+	return fmt.Sprintf("node %d: %v", e.Cause.Error())
 }

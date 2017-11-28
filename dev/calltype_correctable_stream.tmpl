@@ -134,12 +134,12 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 	{{- template "callLoop" .}}
 
 	var (
-		replyValues = make([]*{{.FQRespName}}, 0, c.n*2)
-		clevel      = LevelNotSet
+		replyValues 	= make([]*{{.FQRespName}}, 0, c.n*2)
+		clevel      	= LevelNotSet
 		reply		*{{.FQCustomRespName}}
-		rlevel      int
-		errCount    int
-		quorum      bool
+		rlevel      	int
+		errs 		[]GRPCError
+		quorum      	bool
 	)
 
 	for {
@@ -147,7 +147,7 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 		case r := <-replyChan:
 			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -168,12 +168,12 @@ func (c *{{.TypeName}}) set(reply *{{.FQCustomRespName}}, level int, err error, 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
 			return
 		}
 
-		if errCount == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
 			return
 		}
 	}

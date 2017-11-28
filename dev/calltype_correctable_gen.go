@@ -135,7 +135,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 		clevel      = LevelNotSet
 		reply       *State
 		rlevel      int
-		errCount    int
+		errs        []GRPCError
 		quorum      bool
 	)
 
@@ -144,7 +144,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 		case r := <-replyChan:
 			resp.NodeIDs = append(resp.NodeIDs, r.nid)
 			if r.err != nil {
-				errCount++
+				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			if c.mgr.opts.trace {
@@ -161,12 +161,12 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), errCount, len(replyValues)}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
 			return
 		}
 
-		if errCount+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", errCount, len(replyValues)}, true)
+		if len(errs)+len(replyValues) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
 			return
 		}
 	}
