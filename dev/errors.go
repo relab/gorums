@@ -1,6 +1,9 @@
 package dev
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+)
 
 // A NodeNotFoundError reports that a specified node could not be found.
 type NodeNotFoundError uint32
@@ -43,6 +46,18 @@ func (e QuorumCallError) Error() string {
 		"quorum call error: %s (errors: %d, replies: %d)",
 		e.Reason, len(e.Errors), e.ReplyCount,
 	)
+}
+
+// AllErrors returns a string with this error and the sub-errors.
+func (e QuorumCallError) AllErrors() string {
+	var b bytes.Buffer
+	b.WriteString(e.Error())
+	b.WriteString("\n")
+	for _, err := range e.Errors {
+		b.WriteString(err.Error())
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // GRPCError is used to report that a single gRPC call failed.
