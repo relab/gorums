@@ -130,7 +130,7 @@ type GRPCError struct {
 }
 
 func (e GRPCError) Error() string {
-	return fmt.Sprintf("node %d: %v", e.Cause.Error())
+	return fmt.Sprintf("node %d: %v", e.NodeID, e.Cause.Error())
 }
 
 /* level.go */
