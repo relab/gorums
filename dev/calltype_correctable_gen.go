@@ -27,9 +27,7 @@ func (c *Configuration) ReadCorrectable(ctx context.Context, arg *ReadRequest) *
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
-	go func() {
-		c.readCorrectable(ctx, arg, corr)
-	}()
+	go c.readCorrectable(ctx, arg, corr)
 	return corr
 }
 

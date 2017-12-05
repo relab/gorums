@@ -146,9 +146,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
-	go func() {
-		c.{{.UnexportedMethodName}}(ctx, arg, perNode, corr)
-	}()
+	go c.{{.UnexportedMethodName}}(ctx, arg, perNode, corr)
 	return corr
 }
 
@@ -164,9 +162,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
-	go func() {
-		c.{{.UnexportedMethodName}}(ctx, arg, corr)
-	}()
+	go c.{{.UnexportedMethodName}}(ctx, arg, corr)
 	return corr
 }
 
@@ -333,9 +329,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 		NodeIDs: make([]uint32, 0, c.n),
 		donech: make(chan struct{}),
 	}
-	go func() {
-		c.{{.UnexportedMethodName}}(ctx, arg, perNode, corr)
-	}()
+	go c.{{.UnexportedMethodName}}(ctx, arg, perNode, corr)
 	return corr
 }
 
@@ -351,9 +345,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}
 		NodeIDs: make([]uint32, 0, c.n),
 		donech: make(chan struct{}),
 	}
-	go func() {
-		c.{{.UnexportedMethodName}}(ctx, arg, corr)
-	}()
+	go c.{{.UnexportedMethodName}}(ctx, arg, corr)
 	return corr
 }
 
