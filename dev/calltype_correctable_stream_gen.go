@@ -24,9 +24,7 @@ func (c *Configuration) ReadCorrectableStream(ctx context.Context, arg *ReadRequ
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
-	go func() {
-		c.readCorrectableStream(ctx, arg, corr)
-	}()
+	go c.readCorrectableStream(ctx, arg, corr)
 	return corr
 }
 
