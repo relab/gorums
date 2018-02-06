@@ -2,18 +2,34 @@ package dev
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"time"
 )
 
-// ID returns the ID of m.
+// ID returns the ID of n.
 func (n *Node) ID() uint32 {
-	return n.id
+	if n != nil {
+		return n.id
+	}
+	return 0
 }
 
-// Address returns network address of m.
+// Address returns network address of n.
 func (n *Node) Address() string {
-	return n.addr
+	if n != nil {
+		return n.addr
+	}
+	return ""
+}
+
+// Port returns network port of n.
+func (n *Node) Port() string {
+	if n != nil {
+		_, port, _ := net.SplitHostPort(n.addr)
+		return port
+	}
+	return ""
 }
 
 func (n *Node) String() string {
