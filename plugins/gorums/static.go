@@ -117,20 +117,18 @@ type QuorumCallError struct {
 }
 
 func (e QuorumCallError) Error() string {
-	return fmt.Sprintf(
-		"quorum call error: %s (errors: %d, replies: %d)",
-		e.Reason, len(e.Errors), e.ReplyCount,
-	)
-}
-
-// AllErrors returns a string with this error and the sub-errors.
-func (e QuorumCallError) AllErrors() string {
 	var b bytes.Buffer
-	b.WriteString(e.Error())
-	b.WriteString("\n")
+	b.WriteString("quorum call error: ")
+	b.WriteString(e.Reason)
+	b.WriteString(fmt.Sprintf(" (errors: %d, replies: %d)", len(e.Errors), e.ReplyCount))
+	if len(e.Errors) == 0 {
+		return b.String()
+	}
+	b.WriteString("grpc errors:\n")
 	for _, err := range e.Errors {
-		b.WriteString(err.Error())
-		b.WriteString("\n")
+		b.WriteByte('\t')
+		b.WriteString(fmt.Sprintf("node %d: %v", err.NodeID, err.Cause))
+		b.WriteByte('\n')
 	}
 	return b.String()
 }
