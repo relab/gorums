@@ -124,7 +124,7 @@ func (e QuorumCallError) Error() string {
 	if len(e.Errors) == 0 {
 		return b.String()
 	}
-	b.WriteString("grpc errors:\n")
+	b.WriteString("\ngrpc errors:\n")
 	for _, err := range e.Errors {
 		b.WriteByte('\t')
 		b.WriteString(fmt.Sprintf("node %d: %v", err.NodeID, err.Cause))
