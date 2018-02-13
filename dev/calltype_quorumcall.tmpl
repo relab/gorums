@@ -30,27 +30,13 @@ import (
 // result. The perNode function takes a request arg and
 // returns a {{.FQReqName}} object to be passed to the given nodeID.
 // The perNode function should be thread-safe.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}, perNode func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (*{{.FQCustomRespName}}, error) {
-	return c.{{.UnexportedMethodName}}(ctx, arg, perNode)
-}
-
-{{else}}
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+{{- else}}
 
 // {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, arg *{{.FQReqName}}) (*{{.FQCustomRespName}}, error) {
-	return c.{{.UnexportedMethodName}}(ctx, arg)
-}
-
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
 {{- end}}
-
-/* Unexported quorum call method {{.MethodName}} */
-
-{{- if .PerNodeArg}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
-{{- else}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
-{{- end -}}
 	{{- template "simple_trace" .}}
 
 	{{template "callLoop" .}}

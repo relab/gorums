@@ -19,12 +19,7 @@ import (
 
 // Read is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result.
-func (c *Configuration) Read(ctx context.Context, arg *ReadRequest) (*State, error) {
-	return c.read(ctx, arg)
-}
-
-/* Unexported quorum call method Read */
-func (c *Configuration) read(ctx context.Context, a *ReadRequest) (resp *State, err error) {
+func (c *Configuration) Read(ctx context.Context, a *ReadRequest) (resp *State, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "Read")
@@ -107,12 +102,7 @@ func callGRPCRead(ctx context.Context, node *Node, arg *ReadRequest, replyChan c
 
 // ReadCustomReturn is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result.
-func (c *Configuration) ReadCustomReturn(ctx context.Context, arg *ReadRequest) (*MyState, error) {
-	return c.readCustomReturn(ctx, arg)
-}
-
-/* Unexported quorum call method ReadCustomReturn */
-func (c *Configuration) readCustomReturn(ctx context.Context, a *ReadRequest) (resp *MyState, err error) {
+func (c *Configuration) ReadCustomReturn(ctx context.Context, a *ReadRequest) (resp *MyState, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadCustomReturn")
@@ -195,12 +185,7 @@ func callGRPCReadCustomReturn(ctx context.Context, node *Node, arg *ReadRequest,
 
 // Write is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result.
-func (c *Configuration) Write(ctx context.Context, arg *State) (*WriteResponse, error) {
-	return c.write(ctx, arg)
-}
-
-/* Unexported quorum call method Write */
-func (c *Configuration) write(ctx context.Context, a *State) (resp *WriteResponse, err error) {
+func (c *Configuration) Write(ctx context.Context, a *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "Write")
@@ -286,12 +271,7 @@ func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<-
 // result. The perNode function takes a request arg and
 // returns a State object to be passed to the given nodeID.
 // The perNode function should be thread-safe.
-func (c *Configuration) WritePerNode(ctx context.Context, arg *State, perNode func(arg State, nodeID uint32) *State) (*WriteResponse, error) {
-	return c.writePerNode(ctx, arg, perNode)
-}
-
-/* Unexported quorum call method WritePerNode */
-func (c *Configuration) writePerNode(ctx context.Context, a *State, f func(arg State, nodeID uint32) *State) (resp *WriteResponse, err error) {
+func (c *Configuration) WritePerNode(ctx context.Context, a *State, f func(arg State, nodeID uint32) *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
