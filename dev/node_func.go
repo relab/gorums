@@ -33,12 +33,22 @@ func (n *Node) Port() string {
 }
 
 func (n *Node) String() string {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return fmt.Sprintf(
-		"node %d | addr: %s | latency: %v",
-		n.id, n.addr, n.latency,
-	)
+	if n != nil {
+		return fmt.Sprintf("addr: %s", n.addr)
+	}
+	return ""
+}
+
+func (n *Node) FullString() string {
+	if n != nil {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		return fmt.Sprintf(
+			"node %d | addr: %s | latency: %v",
+			n.id, n.addr, n.latency,
+		)
+	}
+	return ""
 }
 
 func (n *Node) setLastErr(err error) {
