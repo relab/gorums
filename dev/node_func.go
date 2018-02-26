@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -141,6 +142,14 @@ func (ms *MultiSorter) Less(i, j int) bool {
 // ID sorts nodes by their identifier in increasing order.
 var ID = func(n1, n2 *Node) bool {
 	return n1.id < n2.id
+}
+
+// Port sorts nodes by their port number in increasing order.
+// Warning: This function may be removed in the future.
+var Port = func(n1, n2 *Node) bool {
+	p1, _ := strconv.Atoi(n1.Port())
+	p2, _ := strconv.Atoi(n2.Port())
+	return p1 < p2
 }
 
 // Latency sorts nodes by latency in increasing order. Latencies less then
