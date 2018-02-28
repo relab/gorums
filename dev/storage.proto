@@ -81,6 +81,23 @@ service Storage {
 		option (gorums.qc)		= true;
 		option (gorums.per_node_arg) 	= true;
 	}
+
+	// WriteAdapter is a synchronous quorum call, where the server-side 
+	// request argument is MyState, which is derived from the client-provided
+	// State argument, and may be different for each node, depending on the
+	// logic provided in the WriteAdapterAdapter method of the CallAdapter interface.
+	// The CallAdapter interface may share data (type struct) with the
+	// QuorumSpec interface, and thus have access to the same data.
+	// This adapter can be used to add encryption or signatures on a per
+	// node basis, or send different versions of the State message to
+	// the different nodes.
+	//
+	// Note that the client-provided type may be the same as the server-side type,
+	// i.e. gorums.adapter could also be "MyState".
+	rpc WriteAdapter(MyState) returns (WriteResponse) {
+		option (gorums.qc)		= true;
+		option (gorums.adapter) = "State";
+	}
 }
 
 message State {

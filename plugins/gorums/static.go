@@ -31,6 +31,7 @@ type Configuration struct {
 	n	int
 	mgr	*Manager
 	qspec	QuorumSpec
+	adapt	CallAdapter
 	errs	chan GRPCError
 }
 
@@ -357,7 +358,7 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, adapter ...CallAdapter) (*Configuration, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -404,6 +405,12 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 		mgr:	m,
 		qspec:	qspec,
 	}
+	if adapter != nil {
+		if len(adapter) > 1 {
+			return nil, IllegalConfigError("only a single CallAdapter is allowed")
+		}
+		c.adapt = adapter[0]
+	}
 	m.configs[cid] = c
 
 	return c, nil
@@ -416,6 +423,8 @@ func (p idSlice) Less(i, j int) bool	{ return p[i] < p[j] }
 func (p idSlice) Swap(i, j int)		{ p[i], p[j] = p[j], p[i] }
 
 /* node_func.go */
+
+const nilAngleString = "<nil>"
 
 // ID returns the ID of n.
 func (n *Node) ID() uint32 {
@@ -430,7 +439,7 @@ func (n *Node) Address() string {
 	if n != nil {
 		return n.addr
 	}
-	return ""
+	return nilAngleString
 }
 
 // Port returns network port of n.
@@ -439,14 +448,14 @@ func (n *Node) Port() string {
 		_, port, _ := net.SplitHostPort(n.addr)
 		return port
 	}
-	return ""
+	return nilAngleString
 }
 
 func (n *Node) String() string {
 	if n != nil {
 		return fmt.Sprintf("addr: %s", n.addr)
 	}
-	return ""
+	return nilAngleString
 }
 
 func (n *Node) FullString() string {
@@ -458,7 +467,7 @@ func (n *Node) FullString() string {
 			n.id, n.addr, n.latency,
 		)
 	}
-	return ""
+	return nilAngleString
 }
 
 func (n *Node) setLastErr(err error) {

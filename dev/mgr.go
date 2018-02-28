@@ -219,7 +219,7 @@ func (m *Manager) AddNode(addr string) error {
 
 // NewConfiguration returns a new configuration given quorum specification and
 // a timeout.
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec, adapter ...CallAdapter) (*Configuration, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -265,6 +265,12 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 		n:     len(cnodes),
 		mgr:   m,
 		qspec: qspec,
+	}
+	if adapter != nil {
+		if len(adapter) > 1 {
+			return nil, IllegalConfigError("only a single CallAdapter is allowed")
+		}
+		c.adapt = adapter[0]
 	}
 	m.configs[cid] = c
 

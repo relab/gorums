@@ -7,11 +7,11 @@ import (
 )
 
 type MajorityQSpec struct {
-	q int
+	n, q int
 }
 
-func NewMajorityQSpec(n int) qc.QuorumSpec {
-	return &MajorityQSpec{q: n/2 + 1}
+func NewMajorityQSpec(n int) *MajorityQSpec {
+	return &MajorityQSpec{n: n, q: n/2 + 1}
 }
 
 func (mqs *MajorityQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
@@ -68,6 +68,22 @@ func (mqs *MajorityQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.Write
 		return nil, false
 	}
 	return replies[0], true
+}
+
+func (mqs *MajorityQSpec) WriteAdapterQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < mqs.q {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+// WriteAdapterAdapter implements the CallAdapter interface.
+func (mqs *MajorityQSpec) WriteAdapterAdapter(a *qc.State) []*qc.MyState {
+	args := make([]*qc.MyState, mqs.n)
+	for i := 0; i < mqs.n; i++ {
+		args[i] = &qc.MyState{Value: a.GetValue(), Timestamp: a.GetTimestamp()}
+	}
+	return args
 }
 
 type StorageQSpec struct {
@@ -131,6 +147,13 @@ func (sqs *StorageQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteRespons
 }
 
 func (sqs *StorageQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+func (sqs *StorageQSpec) WriteAdapterQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	if len(replies) < sqs.wq {
 		return nil, false
 	}
@@ -225,6 +248,13 @@ func (sqs *StorageByTimestampQSpec) WritePerNodeQF(replies []*qc.WriteResponse) 
 	return replies[0], true
 }
 
+func (sqs *StorageByTimestampQSpec) WriteAdapterQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
+		return nil, false
+	}
+	return replies[0], true
+}
+
 type NeverQSpec struct{}
 
 func (*NeverQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
@@ -256,6 +286,10 @@ func (*NeverQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteResponse) (*q
 }
 
 func (*NeverQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	return nil, false
+}
+
+func (*NeverQSpec) WriteAdapterQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	return nil, false
 }
 
@@ -303,5 +337,9 @@ func (*ReadCorrectableStreamTestQSpec) WriteFutureQF(req *qc.State, replies []*q
 }
 
 func (*ReadCorrectableStreamTestQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	panic("not implemented")
+}
+
+func (*ReadCorrectableStreamTestQSpec) WriteAdapterQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	panic("not implemented")
 }

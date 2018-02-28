@@ -93,6 +93,12 @@ func (s *StorageServerBasic) WritePerNode(ctx context.Context, state *State) (*W
 	return s.Write(ctx, state)
 }
 
+// WriteAdapter implements the WriteAdapter method.
+func (s *StorageServerBasic) WriteAdapter(ctx context.Context, mystate *MyState) (*WriteResponse, error) {
+	state := &State{Value: mystate.GetValue(), Timestamp: mystate.GetTimestamp()}
+	return s.Write(ctx, state)
+}
+
 // WriteAsync implements the WriteAsync method from the StorageServer interface.
 func (s *StorageServerBasic) WriteAsync(stream Storage_WriteAsyncServer) error {
 	for {
@@ -175,6 +181,11 @@ func (s *StorageServerError) WriteFuture(ctx context.Context, state *State) (*Wr
 
 // WritePerNode implements the WritePerNode method.
 func (s *StorageServerError) WritePerNode(ctx context.Context, state *State) (*WriteResponse, error) {
+	return nil, s.err
+}
+
+// WriteAdapter implements the WriteAdapter method.
+func (s *StorageServerError) WriteAdapter(ctx context.Context, mystate *MyState) (*WriteResponse, error) {
 	return nil, s.err
 }
 
@@ -263,6 +274,12 @@ func (s *StorageServerSlow) WritePerNode(ctx context.Context, state *State) (*Wr
 	return s.Write(ctx, state)
 }
 
+// WriteAdapter implements the WriteAdapter method.
+func (s *StorageServerSlow) WriteAdapter(ctx context.Context, mystate *MyState) (*WriteResponse, error) {
+	state := &State{Value: mystate.GetValue(), Timestamp: mystate.GetTimestamp()}
+	return s.Write(ctx, state)
+}
+
 // WriteAsync implements the WriteAsync method from the StorageServer interface.
 func (s *StorageServerSlow) WriteAsync(stream Storage_WriteAsyncServer) error {
 	// There are no replies to wait for.
@@ -342,6 +359,12 @@ func (s *StorageServerBench) WriteFuture(ctx context.Context, state *State) (*Wr
 
 // WritePerNode implements the WritePerNode method.
 func (s *StorageServerBench) WritePerNode(ctx context.Context, state *State) (*WriteResponse, error) {
+	return s.Write(ctx, state)
+}
+
+// WriteAdapter implements the WriteAdapter method.
+func (s *StorageServerBench) WriteAdapter(ctx context.Context, mystate *MyState) (*WriteResponse, error) {
+	state := &State{Value: mystate.GetValue(), Timestamp: mystate.GetTimestamp()}
 	return s.Write(ctx, state)
 }
 
@@ -430,6 +453,12 @@ func (s *StorageServerLockedWithState) WriteFuture(ctx context.Context, state *S
 
 // WritePerNode implements the WritePerNode method.
 func (s *StorageServerLockedWithState) WritePerNode(ctx context.Context, state *State) (*WriteResponse, error) {
+	return s.Write(ctx, state)
+}
+
+// WriteAdapter implements the WriteAdapter method.
+func (s *StorageServerLockedWithState) WriteAdapter(ctx context.Context, mystate *MyState) (*WriteResponse, error) {
+	state := &State{Value: mystate.GetValue(), Timestamp: mystate.GetTimestamp()}
 	return s.Write(ctx, state)
 }
 

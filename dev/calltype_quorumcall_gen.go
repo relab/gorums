@@ -264,6 +264,90 @@ func callGRPCWrite(ctx context.Context, node *Node, arg *State, replyChan chan<-
 	replyChan <- internalWriteResponse{node.id, reply, err}
 }
 
+/* Exported types and methods for quorum call method WriteAdapter */
+
+// WriteAdapter is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) WriteAdapter(ctx context.Context, a *State) (resp *WriteResponse, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "WriteAdapter")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = deadline.Sub(time.Now())
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: a}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{
+				reply: resp,
+				err:   err,
+			}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	args := c.adapt.WriteAdapterAdapter(a)
+	expected := c.n
+	replyChan := make(chan internalWriteResponse, expected)
+	for i, n := range c.nodes {
+		go callGRPCWriteAdapter(ctx, n, args[i], replyChan)
+	}
+
+	var (
+		replyValues = make([]*WriteResponse, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+			if resp, quorum = c.qspec.WriteAdapterQF(replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+func callGRPCWriteAdapter(ctx context.Context, node *Node, arg *MyState, replyChan chan<- internalWriteResponse) {
+	reply := new(WriteResponse)
+	start := time.Now()
+	err := grpc.Invoke(
+		ctx,
+		"/dev.Storage/WriteAdapter",
+		arg,
+		reply,
+		node.conn,
+	)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		node.setLatency(time.Since(start))
+	} else {
+		node.setLastErr(err)
+	}
+	replyChan <- internalWriteResponse{node.id, reply, err}
+}
+
 /* Exported types and methods for quorum call method WritePerNode */
 
 // WritePerNode is invoked as a quorum call on each node in configuration c,

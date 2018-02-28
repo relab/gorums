@@ -1,0 +1,36 @@
+{{/* Remember to run 'make dev' after editing this file. */}}
+
+{{define "CAcomment"}}
+// {{.MethodName}}Adapter is the call adapter for the {{.MethodName}}
+{{- if .QuorumCall}}
+// quorum call method.
+{{- end -}}
+{{- if .Future}}
+// asynchronous quorum call method.
+{{- end -}}
+{{- if .Multicast}}
+// multicast method.
+{{- end -}}
+{{- if .Correctable}}
+// correctable quorum call method.
+{{- end -}}
+{{- if .CorrectableStream}}
+// correctable stream quourm call method.
+{{- end -}}
+{{end}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+{{- end}}
+
+// CallAdapter interface must be implemented for methods that wish
+// to perform translation from client-side input types to per-node
+// server-side input types.
+type CallAdapter interface {
+{{range .Services}}
+{{if .CallAdapter}}
+{{template "CAcomment" .}}
+{{.MethodName}}Adapter(req *{{.FQCustomReqName}}) []*{{.FQReqName}}
+{{end}}
+{{end}}
+}

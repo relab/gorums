@@ -965,6 +965,68 @@ func TestPerNodeArg(t *testing.T) {
 	}
 }
 
+func TestCallAdapter(t *testing.T) {
+	defer leakcheck.Check(t)
+	servers, dialOpts, stopGrpcServe, closeListeners := setup(
+		t,
+		[]storageServer{
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+			{impl: qc.NewStorageBasic()},
+		},
+		false,
+		false,
+	)
+	defer closeListeners(allServers)
+	defer stopGrpcServe(allServers)
+
+	mgrOpts := []qc.ManagerOption{
+		dialOpts,
+		qc.WithTracing(),
+	}
+	mgr, err := qc.NewManager(
+		servers.addrs(),
+		mgrOpts...,
+	)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	defer mgr.Close()
+
+	ids := mgr.NodeIDs()
+	qspec := NewMajorityQSpec(len(ids))
+	config, err := mgr.NewConfiguration(ids, qspec, qspec) // the MajorityQSpec also implements CallAdapter
+	if err != nil {
+		t.Fatalf("error creating config: %v", err)
+	}
+
+	// Perform write adapter call
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	req := &qc.State{Value: "Gorums", Timestamp: time.Now().UnixNano()}
+	wreply, err := config.WriteAdapter(ctx, req)
+	if err != nil {
+		t.Fatalf("write quorum call error: %v", err)
+	}
+	t.Logf("wreply: %v\n", wreply)
+	if !wreply.New {
+		t.Error("write reply was not marked as new")
+	}
+
+	// Do read call
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	rreply, err := config.Read(ctx, &qc.ReadRequest{})
+	if err != nil {
+		t.Fatalf("read quorum call error: %v", err)
+	}
+	t.Logf("rreply: %v\n", rreply)
+	// valNodeID, _ := strconv.ParseUint(rreply.Value, 10, 32)
+	// if rreply.Value != state[uint32(valNodeID)].Value {
+	// 	t.Fatalf("read reply: got state %v, want state %v", rreply.Value, state[uint32(valNodeID)].Value)
+	// }
+}
+
 ///////////////////////////////////////////////////////////////
 
 func BenchmarkRead1KQ1N3Local(b *testing.B) {

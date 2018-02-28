@@ -30,6 +30,10 @@ type QuorumSpec interface {
 	// quorum call method.
 	WriteQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)
 
+	// WriteAdapterQF is the quorum function for the WriteAdapter
+	// quorum call method.
+	WriteAdapterQF(replies []*WriteResponse) (*WriteResponse, bool)
+
 	// WriteFutureQF is the quorum function for the WriteFuture
 	// asynchronous quorum call method.
 	WriteFutureQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)

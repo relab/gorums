@@ -63,3 +63,16 @@ func getCustomReturnTypeExtension(method *descriptor.MethodDescriptorProto) stri
 	}
 	return ""
 }
+
+func getAdapterExtension(method *descriptor.MethodDescriptorProto) string {
+	if method == nil {
+		return ""
+	}
+	if method.Options != nil {
+		v, err := proto.GetExtension(method.Options, gorumsproto.E_Adapter)
+		if err == nil && v.(*string) != nil {
+			return *(v.(*string))
+		}
+	}
+	return ""
+}

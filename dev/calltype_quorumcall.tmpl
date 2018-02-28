@@ -35,11 +35,20 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}, 
 
 // {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQCustomReqName}}) (resp *{{.FQCustomRespName}}, err error) {
 {{- end}}
 	{{- template "simple_trace" .}}
 
-	{{template "callLoop" .}}
+{{if .CallAdapter}}
+	args := c.adapt.{{.MethodName}}Adapter(a)
+	expected := c.n
+	replyChan := make(chan {{.UnexportedTypeName}}, expected)
+	for i, n := range c.nodes {
+	  go callGRPC{{.MethodName}}(ctx, n, args[i], replyChan)
+	}
+{{else}}
+{{template "callLoop" .}}
+{{end}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, expected)

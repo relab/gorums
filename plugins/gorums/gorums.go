@@ -240,6 +240,7 @@ type serviceMethod struct {
 	MethodName           string
 	UnexportedMethodName string
 	RPCName              string
+	CustomRequestType    string
 	CustomReturnType     string
 
 	FQRespName       string
@@ -247,6 +248,8 @@ type serviceMethod struct {
 	FQCustomRespName string
 	CustomRespName   string
 	FQReqName        string
+	FQCustomReqName  string
+	CustomReqName    string
 	CallType         string
 
 	TypeName           string
@@ -259,6 +262,7 @@ type serviceMethod struct {
 	Multicast         bool
 	QFWithReq         bool
 	PerNodeArg        bool
+	CallAdapter       bool
 
 	ClientStreaming bool
 	ServerStreaming bool
@@ -317,6 +321,16 @@ func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 				s := strings.Split(sm.CustomReturnType, ".")
 				sm.CustomRespName = strings.Join(s[len(s)-1:], "")
 				sm.FQCustomRespName = sm.CustomReturnType
+			}
+			if sm.CustomRequestType != "" {
+				sm.CallAdapter = true
+				// s := strings.Split(sm.CustomRequestType, ".")
+				// sm.CustomReqName = strings.Join(s[len(s)-1:], "")
+				sm.FQCustomReqName = sm.CustomRequestType
+			} else {
+				// sm.CallAdapter = false
+				// sm.CustomReqName = sm.ReqName
+				sm.FQCustomReqName = sm.FQReqName
 			}
 
 			sm.MethodName = generator.CamelCase(method.GetName())
@@ -400,6 +414,7 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		Multicast:         hasMulticastExtension(method),
 		QFWithReq:         hasQFWithReqExtension(method),
 		PerNodeArg:        hasPerNodeArgExtension(method),
+		CustomRequestType: getAdapterExtension(method),
 		CustomReturnType:  getCustomReturnTypeExtension(method),
 	}
 
