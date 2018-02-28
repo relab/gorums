@@ -12,6 +12,7 @@ var staticImports = []string{
 	"sort",
 	"sync",
 	"strings",
+	"strconv",
 	"net",
 	"log",
 	"hash/fnv",
@@ -442,12 +443,22 @@ func (n *Node) Port() string {
 }
 
 func (n *Node) String() string {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return fmt.Sprintf(
-		"node %d | addr: %s | latency: %v",
-		n.id, n.addr, n.latency,
-	)
+	if n != nil {
+		return fmt.Sprintf("addr: %s", n.addr)
+	}
+	return ""
+}
+
+func (n *Node) FullString() string {
+	if n != nil {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		return fmt.Sprintf(
+			"node %d | addr: %s | latency: %v",
+			n.id, n.addr, n.latency,
+		)
+	}
+	return ""
 }
 
 func (n *Node) setLastErr(err error) {
@@ -540,6 +551,14 @@ func (ms *MultiSorter) Less(i, j int) bool {
 // ID sorts nodes by their identifier in increasing order.
 var ID = func(n1, n2 *Node) bool {
 	return n1.id < n2.id
+}
+
+// Port sorts nodes by their port number in increasing order.
+// Warning: This function may be removed in the future.
+var Port = func(n1, n2 *Node) bool {
+	p1, _ := strconv.Atoi(n1.Port())
+	p2, _ := strconv.Atoi(n2.Port())
+	return p1 < p2
 }
 
 // Latency sorts nodes by latency in increasing order. Latencies less then

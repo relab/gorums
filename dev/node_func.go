@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"time"
 )
+
+const nilAngleString = "<nil>"
 
 // ID returns the ID of n.
 func (n *Node) ID() uint32 {
@@ -20,7 +23,7 @@ func (n *Node) Address() string {
 	if n != nil {
 		return n.addr
 	}
-	return ""
+	return nilAngleString
 }
 
 // Port returns network port of n.
@@ -29,16 +32,26 @@ func (n *Node) Port() string {
 		_, port, _ := net.SplitHostPort(n.addr)
 		return port
 	}
-	return ""
+	return nilAngleString
 }
 
 func (n *Node) String() string {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return fmt.Sprintf(
-		"node %d | addr: %s | latency: %v",
-		n.id, n.addr, n.latency,
-	)
+	if n != nil {
+		return fmt.Sprintf("addr: %s", n.addr)
+	}
+	return nilAngleString
+}
+
+func (n *Node) FullString() string {
+	if n != nil {
+		n.mu.Lock()
+		defer n.mu.Unlock()
+		return fmt.Sprintf(
+			"node %d | addr: %s | latency: %v",
+			n.id, n.addr, n.latency,
+		)
+	}
+	return nilAngleString
 }
 
 func (n *Node) setLastErr(err error) {
@@ -131,6 +144,14 @@ func (ms *MultiSorter) Less(i, j int) bool {
 // ID sorts nodes by their identifier in increasing order.
 var ID = func(n1, n2 *Node) bool {
 	return n1.id < n2.id
+}
+
+// Port sorts nodes by their port number in increasing order.
+// Warning: This function may be removed in the future.
+var Port = func(n1, n2 *Node) bool {
+	p1, _ := strconv.Atoi(n1.Port())
+	p2, _ := strconv.Atoi(n2.Port())
+	return p1 < p2
 }
 
 // Latency sorts nodes by latency in increasing order. Latencies less then
