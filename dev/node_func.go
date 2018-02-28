@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const nilAngleString = "<nil>"
+
 // ID returns the ID of n.
 func (n *Node) ID() uint32 {
 	if n != nil {
@@ -20,7 +22,7 @@ func (n *Node) Address() string {
 	if n != nil {
 		return n.addr
 	}
-	return ""
+	return nilAngleString
 }
 
 // Port returns network port of n.
@@ -29,14 +31,14 @@ func (n *Node) Port() string {
 		_, port, _ := net.SplitHostPort(n.addr)
 		return port
 	}
-	return ""
+	return nilAngleString
 }
 
 func (n *Node) String() string {
 	if n != nil {
 		return fmt.Sprintf("addr: %s", n.addr)
 	}
-	return ""
+	return nilAngleString
 }
 
 func (n *Node) FullString() string {
@@ -48,7 +50,7 @@ func (n *Node) FullString() string {
 			n.id, n.addr, n.latency,
 		)
 	}
-	return ""
+	return nilAngleString
 }
 
 func (n *Node) setLastErr(err error) {
