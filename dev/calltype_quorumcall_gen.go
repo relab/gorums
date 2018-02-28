@@ -292,11 +292,15 @@ func (c *Configuration) WriteAdapter(ctx context.Context, a *State) (resp *Write
 		}()
 	}
 
-	args := c.adapt.WriteAdapterAdapter(a)
 	expected := c.n
 	replyChan := make(chan internalWriteResponse, expected)
-	for i, n := range c.nodes {
-		go callGRPCWriteAdapter(ctx, n, args[i], replyChan)
+	for _, n := range c.nodes {
+		nodeArg := c.adapt.WriteAdapterAdapter(a, n)
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		go callGRPCWriteAdapter(ctx, n, nodeArg, replyChan)
 	}
 
 	var (
