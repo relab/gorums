@@ -35,7 +35,7 @@ type CallAdapter interface {
 {{range .Services}}
 {{if .CallAdapter}}
 {{template "CAcomment" .}}
-{{.MethodName}}Adapter(req *{{.FQCustomReqName}}) []*{{.FQReqName}}
+{{.MethodName}}Adapter(req *{{.FQCustomReqName}}, node *Node) *{{.FQReqName}}
 {{end}}
 {{end}}
 }
@@ -803,11 +803,15 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQCustomReqNa
 	{{- template "simple_trace" .}}
 
 {{if .CallAdapter}}
-	args := c.adapt.{{.MethodName}}Adapter(a)
 	expected := c.n
 	replyChan := make(chan {{.UnexportedTypeName}}, expected)
-	for i, n := range c.nodes {
-	  go callGRPC{{.MethodName}}(ctx, n, args[i], replyChan)
+	for _, n := range c.nodes {
+		nodeArg := c.adapt.{{.MethodName}}Adapter(a, n)
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		go callGRPC{{.MethodName}}(ctx, n, nodeArg, replyChan)
 	}
 {{else}}
 {{template "callLoop" .}}

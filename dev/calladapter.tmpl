@@ -30,7 +30,7 @@ type CallAdapter interface {
 {{range .Services}}
 {{if .CallAdapter}}
 {{template "CAcomment" .}}
-{{.MethodName}}Adapter(req *{{.FQCustomReqName}}) []*{{.FQReqName}}
+{{.MethodName}}Adapter(req *{{.FQCustomReqName}}, node *Node) *{{.FQReqName}}
 {{end}}
 {{end}}
 }
