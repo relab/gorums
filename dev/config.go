@@ -10,6 +10,7 @@ type Configuration struct {
 	n     int
 	mgr   *Manager
 	qspec QuorumSpec
+	adapt CallAdapter
 	errs  chan GRPCError
 }
 

@@ -16,4 +16,5 @@ extend google.protobuf.MethodOptions {
   bool per_node_arg = 50006;
 
   string custom_return_type = 51000;
+  string adapter = 51001;
 }

@@ -3,6 +3,44 @@
 
 package gorums
 
+const calladapter_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
+
+{{define "CAcomment"}}
+// {{.MethodName}}Adapter is the call adapter for the {{.MethodName}}
+{{- if .QuorumCall}}
+// quorum call method.
+{{- end -}}
+{{- if .Future}}
+// asynchronous quorum call method.
+{{- end -}}
+{{- if .Multicast}}
+// multicast method.
+{{- end -}}
+{{- if .Correctable}}
+// correctable quorum call method.
+{{- end -}}
+{{- if .CorrectableStream}}
+// correctable stream quourm call method.
+{{- end -}}
+{{end}}
+
+{{- if not .IgnoreImports}}
+package {{.PackageName}}
+{{- end}}
+
+// CallAdapter interface must be implemented for methods that wish
+// to perform translation from client-side input types to per-node
+// server-side input types.
+type CallAdapter interface {
+{{range .Services}}
+{{if .CallAdapter}}
+{{template "CAcomment" .}}
+{{.MethodName}}Adapter(req *{{.FQCustomReqName}}) []*{{.FQReqName}}
+{{end}}
+{{end}}
+}
+`
+
 const calltype_common_definitions_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
 {{/* calltype_common_definitions.tmpl will only be executed for each 'calltype' template. */}}
 
@@ -760,11 +798,20 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}, 
 
 // {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQCustomReqName}}) (resp *{{.FQCustomRespName}}, err error) {
 {{- end}}
 	{{- template "simple_trace" .}}
 
-	{{template "callLoop" .}}
+{{if .CallAdapter}}
+	args := c.adapt.{{.MethodName}}Adapter(a)
+	expected := c.n
+	replyChan := make(chan {{.UnexportedTypeName}}, expected)
+	for i, n := range c.nodes {
+	  go callGRPC{{.MethodName}}(ctx, n, args[i], replyChan)
+	}
+{{else}}
+{{template "callLoop" .}}
+{{end}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, expected)
@@ -938,6 +985,7 @@ type QuorumSpec interface {
 `
 
 var templates = map[string]string{
+	"calladapter_tmpl":                 calladapter_tmpl,
 	"calltype_common_definitions_tmpl": calltype_common_definitions_tmpl,
 	"calltype_correctable_tmpl":        calltype_correctable_tmpl,
 	"calltype_correctable_stream_tmpl": calltype_correctable_stream_tmpl,
