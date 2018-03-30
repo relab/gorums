@@ -240,7 +240,8 @@ type serviceMethod struct {
 	MethodName           string
 	UnexportedMethodName string
 	RPCName              string
-	CustomRequestType    string
+	PerCallAdapterType   string
+	PerNodeAdapterType   string
 	CustomReturnType     string
 
 	FQRespName       string
@@ -262,7 +263,8 @@ type serviceMethod struct {
 	Multicast         bool
 	QFWithReq         bool
 	PerNodeArg        bool
-	CallAdapter       bool
+	PerCallAdapter    bool
+	PerNodeAdapter    bool
 
 	ClientStreaming bool
 	ServerStreaming bool
@@ -322,14 +324,16 @@ func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 				sm.CustomRespName = strings.Join(s[len(s)-1:], "")
 				sm.FQCustomRespName = sm.CustomReturnType
 			}
-			if sm.CustomRequestType != "" {
-				sm.CallAdapter = true
-				// s := strings.Split(sm.CustomRequestType, ".")
-				// sm.CustomReqName = strings.Join(s[len(s)-1:], "")
-				sm.FQCustomReqName = sm.CustomRequestType
-			} else {
-				// sm.CallAdapter = false
-				// sm.CustomReqName = sm.ReqName
+			//TODO Decide if we want to allow combining Call and Node adapters. (fallthrough)
+			switch {
+			case sm.PerCallAdapterType != "":
+				sm.PerCallAdapter = true
+				sm.FQCustomReqName = sm.PerCallAdapterType
+				// fallthrough
+			case sm.PerNodeAdapterType != "":
+				sm.PerNodeAdapter = true
+				sm.FQCustomReqName = sm.PerCallAdapterType
+			default:
 				sm.FQCustomReqName = sm.FQReqName
 			}
 
@@ -407,15 +411,16 @@ func flattenDuplicateServiceMethods(smethods map[string][]*serviceMethod) (allRe
 
 func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto) (*serviceMethod, error) {
 	sm := &serviceMethod{
-		QuorumCall:        hasQuorumCallExtension(method),
-		Future:            hasFutureExtension(method),
-		Correctable:       hasCorrectableExtension(method),
-		CorrectableStream: hasCorrectableStreamExtension(method),
-		Multicast:         hasMulticastExtension(method),
-		QFWithReq:         hasQFWithReqExtension(method),
-		PerNodeArg:        hasPerNodeArgExtension(method),
-		CustomRequestType: getAdapterExtension(method),
-		CustomReturnType:  getCustomReturnTypeExtension(method),
+		QuorumCall:         hasQuorumCallExtension(method),
+		Future:             hasFutureExtension(method),
+		Correctable:        hasCorrectableExtension(method),
+		CorrectableStream:  hasCorrectableStreamExtension(method),
+		Multicast:          hasMulticastExtension(method),
+		QFWithReq:          hasQFWithReqExtension(method),
+		PerNodeArg:         hasPerNodeArgExtension(method),
+		PerCallAdapterType: getPerCallAdapterExtension(method),
+		PerNodeAdapterType: getPerNodeAdapterExtension(method),
+		CustomReturnType:   getCustomReturnTypeExtension(method),
 	}
 
 	mutuallyIncompatible := map[string]bool{

@@ -11,5 +11,5 @@ type CallAdapter interface {
 
 	// WriteAdapterAdapter is the call adapter for the WriteAdapter
 	// quorum call method.
-	WriteAdapterAdapter(req *State, node *Node) *MyState
+	WriteAdapterAdapter(req *State) *MyState
 }

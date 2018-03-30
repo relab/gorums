@@ -292,15 +292,11 @@ func (c *Configuration) WriteAdapter(ctx context.Context, a *State) (resp *Write
 		}()
 	}
 
+	arg := c.adapt.WriteAdapterAdapter(a)
 	expected := c.n
 	replyChan := make(chan internalWriteResponse, expected)
 	for _, n := range c.nodes {
-		nodeArg := c.adapt.WriteAdapterAdapter(a, n)
-		if nodeArg == nil {
-			expected--
-			continue
-		}
-		go callGRPCWriteAdapter(ctx, n, nodeArg, replyChan)
+		go callGRPCWriteAdapter(ctx, n, arg, replyChan)
 	}
 
 	var (
@@ -359,7 +355,7 @@ func callGRPCWriteAdapter(ctx context.Context, node *Node, arg *MyState, replyCh
 // result. The perNode function takes a request arg and
 // returns a State object to be passed to the given nodeID.
 // The perNode function should be thread-safe.
-func (c *Configuration) WritePerNode(ctx context.Context, a *State, f func(arg State, nodeID uint32) *State) (resp *WriteResponse, err error) {
+func (c *Configuration) WritePerNode(ctx context.Context, a *State, f func(*State, *Node) *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "WritePerNode")
@@ -386,12 +382,13 @@ func (c *Configuration) WritePerNode(ctx context.Context, a *State, f func(arg S
 	expected := c.n
 	replyChan := make(chan internalWriteResponse, expected)
 	for _, n := range c.nodes {
-		nodeArg := f(*a, n.id)
-		if nodeArg == nil {
+		arg := f(a, n)
+		if arg == nil {
 			expected--
 			continue
 		}
-		go callGRPCWritePerNode(ctx, n, nodeArg, replyChan)
+
+		go callGRPCWritePerNode(ctx, n, arg, replyChan)
 	}
 
 	var (

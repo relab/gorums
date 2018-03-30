@@ -896,7 +896,8 @@ func TestPerNodeArg(t *testing.T) {
 	req := &qc.State{}
 
 	var cnt int64
-	perNodeArg := func(req qc.State, nodeID uint32) *qc.State {
+	perNodeArg := func(req *qc.State, node *qc.Node) *qc.State {
+		nodeID := node.ID()
 		if atomic.LoadInt64(&cnt) > 1 {
 			time.Sleep(250 * time.Millisecond)
 			t.Logf("delay sending to node %d\n", nodeID)
@@ -905,7 +906,7 @@ func TestPerNodeArg(t *testing.T) {
 		t.Logf("sending to node %d\n", nodeID)
 		req.Value = fmt.Sprintf("%d", nodeID)
 		req.Timestamp = time.Now().UnixNano()
-		return &req
+		return req
 	}
 	wreply, err := config.WritePerNode(ctx, req, perNodeArg)
 	if err != nil {
@@ -932,7 +933,8 @@ func TestPerNodeArg(t *testing.T) {
 	// Test nil return value from perNodeArg to indicate that we should ignore a node
 	// Note that this feature requires that the corresponding quorum function tolerates nil replies.
 	nodeToIgnore := mgr.NodeIDs()[0]
-	perNodeArgNil := func(req qc.State, nodeID uint32) *qc.State {
+	perNodeArgNil := func(req *qc.State, node *qc.Node) *qc.State {
+		nodeID := node.ID()
 		if nodeID == nodeToIgnore {
 			t.Logf("ignoring node %d\n", nodeID)
 			return nil
@@ -940,7 +942,7 @@ func TestPerNodeArg(t *testing.T) {
 		t.Logf("sending to node %d\n", nodeID)
 		req.Value = fmt.Sprintf("%d", nodeID)
 		req.Timestamp = time.Now().UnixNano()
-		return &req
+		return req
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
