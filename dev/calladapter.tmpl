@@ -28,9 +28,13 @@ package {{.PackageName}}
 // server-side input types.
 type CallAdapter interface {
 {{range .Services}}
-{{if .CallAdapter}}
+{{if .PerNodeAdapter}}
 {{template "CAcomment" .}}
-{{.MethodName}}Adapter(req *{{.FQCustomReqName}}, node *Node) *{{.FQReqName}}
+{{.MethodName}}NodeAdapter(req *{{.FQCustomReqName}}, node *Node) *{{.FQReqName}}
+{{end}}
+{{if .PerCallAdapter}}
+{{template "CAcomment" .}}
+{{.MethodName}}Adapter(req *{{.FQCustomReqName}}) *{{.FQReqName}}
 {{end}}
 {{end}}
 }

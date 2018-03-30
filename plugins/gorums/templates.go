@@ -33,9 +33,13 @@ package {{.PackageName}}
 // server-side input types.
 type CallAdapter interface {
 {{range .Services}}
-{{if .CallAdapter}}
+{{if .PerNodeAdapter}}
 {{template "CAcomment" .}}
-{{.MethodName}}Adapter(req *{{.FQCustomReqName}}, node *Node) *{{.FQReqName}}
+{{.MethodName}}NodeAdapter(req *{{.FQCustomReqName}}, node *Node) *{{.FQReqName}}
+{{end}}
+{{if .PerCallAdapter}}
+{{template "CAcomment" .}}
+{{.MethodName}}Adapter(req *{{.FQCustomReqName}}) *{{.FQReqName}}
 {{end}}
 {{end}}
 }
@@ -118,28 +122,37 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 
 {{define "unexported_method_signature"}}
 {{- if .PerNodeArg}}
-func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}, resp *{{.TypeName}}) {
+func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(*{{.FQReqName}}, *Node) *{{.FQReqName}}, resp *{{.TypeName}}) {
 {{- else}}
 func (c *Configuration) {{.UnexportedMethodName}}(ctx context.Context, a *{{.FQReqName}}, resp *{{.TypeName}}) {
 {{- end -}}
 {{end}}
 
 {{define "callLoop"}}
+{{- if .PerCallAdapter}}
+  arg := c.adapt.{{.MethodName}}Adapter(a)
+{{- end}}
+{{- if .PerNodeAdapter}}
+  f := c.adapt.{{.MethodName}}NodeAdapter
+{{- end}}
   expected := c.n
   replyChan := make(chan {{.UnexportedTypeName}}, expected)
   for _, n := range c.nodes {
-{{- if .PerNodeArg}}
-    nodeArg := f(*a, n.id)
-    if nodeArg == nil {
-      expected--
-      continue
-    }
-    go callGRPC{{.MethodName}}(ctx, n, nodeArg, replyChan)
-{{- else}}
-    go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+{{- if or .PerNodeArg .PerNodeAdapter}}
+	arg := f(a, n)
+	if arg == nil {
+		expected--
+		continue
+	}
 {{end -}}
-  }
+{{- if or .PerCallAdapter .PerNodeArg .PerNodeAdapter}}
+	go callGRPC{{.MethodName}}(ctx, n, arg, replyChan)
+{{- else -}}
+	go callGRPC{{.MethodName}}(ctx, n, a, replyChan)
+{{end -}}
+}
 {{end}}
+
 `
 
 const calltype_correctable_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
@@ -793,7 +806,7 @@ import (
 // result. The perNode function takes a request arg and
 // returns a {{.FQReqName}} object to be passed to the given nodeID.
 // The perNode function should be thread-safe.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(*{{.FQReqName}}, *Node) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
 {{- else}}
 
 // {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
@@ -802,20 +815,7 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQCustomReqNa
 {{- end}}
 	{{- template "simple_trace" .}}
 
-{{if .CallAdapter}}
-	expected := c.n
-	replyChan := make(chan {{.UnexportedTypeName}}, expected)
-	for _, n := range c.nodes {
-		nodeArg := c.adapt.{{.MethodName}}Adapter(a, n)
-		if nodeArg == nil {
-			expected--
-			continue
-		}
-		go callGRPC{{.MethodName}}(ctx, n, nodeArg, replyChan)
-	}
-{{else}}
-{{template "callLoop" .}}
-{{end}}
+	{{template "callLoop" .}}
 
 	var (
 		replyValues = make([]*{{.FQRespName}}, 0, expected)

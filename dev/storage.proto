@@ -96,7 +96,8 @@ service Storage {
 	// i.e. gorums.adapter could also be "MyState".
 	rpc WriteAdapter(MyState) returns (WriteResponse) {
 		option (gorums.qc)		= true;
-		option (gorums.adapter) = "State";
+		option (gorums.per_call_adapter) = "State";
+		option (gorums.per_node_adapter) = "State";
 	}
 }
 

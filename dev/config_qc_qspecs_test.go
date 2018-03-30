@@ -77,8 +77,13 @@ func (mqs *MajorityQSpec) WriteAdapterQF(replies []*qc.WriteResponse) (*qc.Write
 	return replies[0], true
 }
 
+// WriteAdapterNodeAdapter implements the CallAdapter interface.
+func (mqs *MajorityQSpec) WriteAdapterNodeAdapter(a *qc.State, n *qc.Node) *qc.MyState {
+	return &qc.MyState{Value: a.GetValue(), Timestamp: a.GetTimestamp()}
+}
+
 // WriteAdapterAdapter implements the CallAdapter interface.
-func (mqs *MajorityQSpec) WriteAdapterAdapter(a *qc.State, n *qc.Node) *qc.MyState {
+func (mqs *MajorityQSpec) WriteAdapterAdapter(a *qc.State) *qc.MyState {
 	return &qc.MyState{Value: a.GetValue(), Timestamp: a.GetTimestamp()}
 }
 

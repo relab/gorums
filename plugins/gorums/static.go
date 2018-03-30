@@ -6,8 +6,6 @@ package gorums
 var staticImports = []string{
 	"fmt",
 	"io",
-	"golang.org/x/net/trace",
-	"google.golang.org/grpc",
 	"time",
 	"sort",
 	"sync",
@@ -17,6 +15,9 @@ var staticImports = []string{
 	"log",
 	"hash/fnv",
 	"encoding/binary",
+	"golang.org/x/net/context",
+	"golang.org/x/net/trace",
+	"google.golang.org/grpc",
 	"bytes",
 }
 
@@ -144,6 +145,19 @@ type GRPCError struct {
 func (e GRPCError) Error() string {
 	return fmt.Sprintf("node %d: %v", e.NodeID, e.Cause.Error())
 }
+
+/* interceptor.go */
+
+// QuorumInvoker is called by QuorumClientInterceptor to complete quorum calls.
+type QuorumInvoker func(ctx context.Context, method string, req, reply interface{}, cc *ConfigConn, opts ...grpc.CallOption) error
+
+// QuorumClientInterceptor intercepts the execution of a quorum call on the client.
+// invoker is the handler to complete the quorum call
+// and it is the responsibility of the interceptor to call it.
+// This is an EXPERIMENTAL API.
+type QuorumClientInterceptor func(ctx context.Context, method string, req, reply interface{}, cc *ConfigConn, invoker QuorumInvoker, opts ...grpc.CallOption) error
+
+type ConfigConn []*grpc.ClientConn
 
 /* level.go */
 
