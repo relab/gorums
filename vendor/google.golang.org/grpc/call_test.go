@@ -66,17 +66,16 @@ type testStreamHandler struct {
 }
 
 func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
-	p := &parser{r: s}
 	for {
-		pf, req, err := p.recvMsg(math.MaxInt32)
+		isCompressed, req, err := recvMsg(s, math.MaxInt32)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return
 		}
-		if pf != compressionNone {
-			t.Errorf("Received the mistaken message format %d, want %d", pf, compressionNone)
+		if isCompressed {
+			t.Errorf("Received compressed message want non-compressed message")
 			return
 		}
 		var v string
@@ -105,12 +104,12 @@ func (h *testStreamHandler) handleStream(t *testing.T, s *transport.Stream) {
 		}
 	}
 	// send a response back to end the stream.
-	hdr, data, err := encode(testCodec{}, &expectedResponse, nil, nil, nil)
+	data, err := encode(testCodec{}, &expectedResponse, nil, nil, nil)
 	if err != nil {
 		t.Errorf("Failed to encode the response: %v", err)
 		return
 	}
-	h.t.Write(s, hdr, data, &transport.Options{})
+	h.t.Write(s, data, &transport.Options{})
 	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
 
@@ -217,7 +216,7 @@ func TestInvoke(t *testing.T) {
 	defer leakcheck.Check(t)
 	server, cc := setUp(t, 0, math.MaxUint32)
 	var reply string
-	if err := Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply, cc); err != nil || reply != expectedResponse {
+	if err := cc.Invoke(context.Background(), "/foo/bar", &expectedRequest, &reply); err != nil || reply != expectedResponse {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) = %v, want <nil>", err)
 	}
 	cc.Close()
@@ -229,7 +228,7 @@ func TestInvokeLargeErr(t *testing.T) {
 	server, cc := setUp(t, 0, math.MaxUint32)
 	var reply string
 	req := "hello"
-	err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
+	err := cc.Invoke(context.Background(), "/foo/bar", &req, &reply)
 	if _, ok := status.FromError(err); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}
@@ -246,7 +245,7 @@ func TestInvokeErrorSpecialChars(t *testing.T) {
 	server, cc := setUp(t, 0, math.MaxUint32)
 	var reply string
 	req := "weird error"
-	err := Invoke(context.Background(), "/foo/bar", &req, &reply, cc)
+	err := cc.Invoke(context.Background(), "/foo/bar", &req, &reply)
 	if _, ok := status.FromError(err); !ok {
 		t.Fatalf("grpc.Invoke(_, _, _, _, _) receives non rpc error.")
 	}
@@ -266,7 +265,7 @@ func TestInvokeCancel(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		Invoke(ctx, "/foo/bar", &req, &reply, cc)
+		cc.Invoke(ctx, "/foo/bar", &req, &reply)
 	}
 	if canceled != 0 {
 		t.Fatalf("received %d of 100 canceled requests", canceled)
@@ -285,7 +284,7 @@ func TestInvokeCancelClosedNonFailFast(t *testing.T) {
 	req := "hello"
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := Invoke(ctx, "/foo/bar", &req, &reply, cc, FailFast(false)); err == nil {
+	if err := cc.Invoke(ctx, "/foo/bar", &req, &reply, FailFast(false)); err == nil {
 		t.Fatalf("canceled invoke on closed connection should fail")
 	}
 	server.stop()
