@@ -9,10 +9,11 @@ import (
 
 	qc "github.com/relab/gorums/dev"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/test/leakcheck"
 )
 
 func TestQuorumCallOrdering(t *testing.T) {
-	defer leakCheck(t)()
+	defer leakcheck.Check(t)
 	failMsg := make(chan string)
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
@@ -152,8 +153,8 @@ func (s *storageServerRequiringOrdering) ReadNoQC(ctx context.Context, rq *qc.Re
 	panic("not implemented")
 }
 
-// ReadPrelim implements the ReadPrelim method from the StorageServer interface.
-func (s *storageServerRequiringOrdering) ReadPrelim(rq *qc.ReadRequest, rrts qc.Storage_ReadPrelimServer) error {
+// ReadCorrectableStream implements the ReadCorrectableStream method from the StorageServer interface.
+func (s *storageServerRequiringOrdering) ReadCorrectableStream(rq *qc.ReadRequest, rrts qc.Storage_ReadCorrectableStreamServer) error {
 	panic("not implemented")
 }
 
