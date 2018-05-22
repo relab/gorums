@@ -1,6 +1,9 @@
 sudo: false
 language: go
 
+before_install:
+  - protoc --version
+
 os:
   - linux
   - osx
