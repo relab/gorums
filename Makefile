@@ -171,7 +171,7 @@ check: getchecktools
 		grep -vE '("_"|.pb.go)' ; \
 	done
 	@echo "errcheck"
-	@errcheck -ignore 'bytes:WriteString,encoding/binary:Write,io:WriteString,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close' $(GORUMS_PKGS)
+	@errcheck -ignore 'fmt:Fprint*,bytes:WriteString,encoding/binary:Write,io:WriteString,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close' $(GORUMS_PKGS)
 	@echo "ineffassign"
 	@for dir in $(GORUMS_DIRS); do \
 		ineffassign -n $$dir ; \
