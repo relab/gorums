@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/leakcheck"
 )
 
@@ -252,7 +253,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 
 func TestSlowStorage(t *testing.T) {
 	defer leakcheck.Check(t)
-	someErr := grpc.Errorf(codes.Unknown, "Some error")
+	someErr := status.Errorf(codes.Unknown, "Some error")
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
