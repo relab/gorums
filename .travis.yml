@@ -1,9 +1,6 @@
 sudo: false
 language: go
 
-before_install:
-  - protoc --version
-
 os:
   - linux
   - osx
@@ -17,3 +14,12 @@ matrix:
   allow_failures:
     - go: master
   fast_finish: true
+
+before_install:
+  - export PATH=$HOME/protobuf/bin:$PATH
+
+install:
+  - mkdir -p $HOME/protobuf && pushd $HOME/protobuf
+    && curl -LO 'https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip'
+    && unzip protoc-3.5.1-linux-x86_64.zip
+    && popd
