@@ -451,6 +451,8 @@ func (n *Node) String() string {
 	return nilAngleString
 }
 
+// FullString returns a more descriptive string representation of n that
+// includes id, network address and latency information.
 func (n *Node) FullString() string {
 	if n != nil {
 		n.mu.Lock()
