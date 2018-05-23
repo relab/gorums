@@ -20,6 +20,6 @@ before_install:
 
 install:
   - mkdir -p $HOME/protobuf && pushd $HOME/protobuf
-    && curl -LO https://github.com/google/protobuf/releases/download/v3.5.1/protoc-3.5.1-$TRAVIS_OS_NAME-x86_64.zip
-    && unzip protoc-3.5.1-$TRAVIS_OS_NAME-x86_64.zip
+    && curl -LO https://github.com/google/protobuf/releases/download/v$PROTOBUF_VERSION/protoc-$PROTOBUF_VERSION-$TRAVIS_OS_NAME-x86_64.zip
+    && unzip protoc-$PROTOBUF_VERSION-$TRAVIS_OS_NAME-x86_64.zip
     && popd
