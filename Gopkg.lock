@@ -28,9 +28,10 @@
     "protoc-gen-gogo/grpc",
     "protoc-gen-gogo/plugin",
     "vanity",
-    "vanity/command"
+    "vanity/command",
+    "version"
   ]
-  revision = "1ef32a8b9fc3f8ec940126907cedb5998f6318e4"
+  revision = "30cf7ac33676b5786e78c746683f0d4cd64fa75b"
   source = "https://github.com/gogo/protobuf.git"
 
 [[projects]]
@@ -55,10 +56,9 @@
     "http2/hpack",
     "idna",
     "internal/timeseries",
-    "lex/httplex",
     "trace"
   ]
-  revision = "5f9ae10d9af5b1c89ae6904293b14b064d4ada23"
+  revision = "9ef9f5bb98a1fdc41f8cf6c250a4404b4085e389"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -85,7 +85,7 @@
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "86e600f69ee4704c6efbf6a2a40a5c10700e76c2"
+  revision = "11a468237815f3a3ddf9f7c6e8b6b3b382a24d15"
 
 [[projects]]
   branch = "master"
@@ -104,7 +104,6 @@
     "grpclb/grpc_lb_v1/messages",
     "grpclog",
     "internal",
-    "internal/msgdecoder",
     "keepalive",
     "metadata",
     "naming",
@@ -118,11 +117,11 @@
     "test/leakcheck",
     "transport"
   ]
-  revision = "1cd00ab9ab450a951fa28cd1b834332e232f7264"
+  revision = "d33a92319019fc969bb3e428348297ddf01257d1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a7993e8af2e68c650092a708b3152339ec38e2bb3a2c086fa9cec5e1de5ad20a"
+  inputs-digest = "86843c7c05c5659722bca1c09d2327f62d4194615227d86b191f778c69a6cabb"
   solver-name = "gps-cdcl"
   solver-version = 1

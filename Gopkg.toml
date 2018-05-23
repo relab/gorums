@@ -28,14 +28,6 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/tylertreat/bench"
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/tylertreat/hdrhistogram-writer"
-
-[[constraint]]
-  branch = "master"
   name = "golang.org/x/net"
 
 [[constraint]]
