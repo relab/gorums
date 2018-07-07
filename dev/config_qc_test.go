@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -48,8 +47,8 @@ func TestMain(m *testing.M) {
 	portSupplier.p = *portBase
 
 	// Disable gRPC tracing and logging.
-	silentLogger := log.New(ioutil.Discard, "", log.LstdFlags)
-	grpclog.SetLogger(silentLogger)
+	silentLogger := grpclog.NewLoggerV2(ioutil.Discard, ioutil.Discard, ioutil.Discard)
+	grpclog.SetLoggerV2(silentLogger)
 	grpc.EnableTracing = false
 
 	// Run tests/benchmarks.
