@@ -1306,8 +1306,9 @@ func benchReadGRPC(b *testing.B, size int, parallel, remote bool) {
 	servers, _, stopGrpcServe, closeListeners := setup(b, rservers, remote, false)
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
-
-	conn, err := grpc.Dial(servers.addrs()[0], grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(time.Second))
+	dctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(dctx, servers.addrs()[0], grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		b.Fatalf("grpc dial: %v", err)
 	}
