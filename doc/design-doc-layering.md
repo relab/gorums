@@ -11,6 +11,8 @@ Examples of such layers includes
 
 * The Raft implementation presented in Meland's thesis, while not using any layering, had some design challenges in deciding how to structure the Key-Value storage application vs the Raft protocol implementation. Perhaps a layering approach could alleviate this tension.
 
+* A more formalized layer approach can replace the current solution for `custom_return_type` and `per_node_arg` options, and the various proposed `call_adapter` options (partially implemented in the `call-adapter` branch).
+
 Frausing's thesis provided two implementations of such layering, one based on interceptors and the metadata support in gRPC, and one where the layer was designed as two separate gRPC services, one with a prefix `g` to separate it from the actual service that applications should use. Please see Frausing's thesis for additional details, and his code on [GitHub](https://github.com/tfrausin/reconf). There is also a question and an answer in this [gRPC issue](https://github.com/grpc/grpc-go/issues/2091).
 
 The metadata approach is not type safe because everything must be converted to a string, and in Frausing's implementation, this requires a custom marshalling and unmarshalling implementation. Moreover, it seems that there is a larger overhead with this approach compared to the alternative with using separate gRPC interfaces.
