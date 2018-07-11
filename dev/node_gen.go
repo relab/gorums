@@ -32,9 +32,11 @@ type Node struct {
 	latency time.Duration
 }
 
-func (n *Node) connect(opts ...grpc.DialOption) error {
+func (n *Node) connect(opts managerOptions) error {
 	var err error
-	n.conn, err = grpc.Dial(n.addr, opts...)
+	ctx, cancel := context.WithTimeout(context.Background(), opts.nodeDialTimeout)
+	defer cancel()
+	n.conn, err = grpc.DialContext(ctx, n.addr, opts.grpcDialOpts...)
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %v", err)
 	}
