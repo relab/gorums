@@ -119,7 +119,7 @@ func TestSecureStorage(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(servers.addrs(), dialOpts)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}

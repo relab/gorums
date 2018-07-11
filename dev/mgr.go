@@ -111,7 +111,7 @@ func (m *Manager) connectAll() error {
 	}
 
 	for _, node := range m.nodes {
-		err := node.connect(m.opts.grpcDialOpts...)
+		err := node.connect(m.opts)
 		if err != nil {
 			if m.eventLog != nil {
 				m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)

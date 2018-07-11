@@ -71,13 +71,10 @@ func TestBasicStorage(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgrOpts := []qc.ManagerOption{
+	mgr, err := qc.NewManager(servers.addrs(),
 		dialOpts,
 		qc.WithTracing(),
-	}
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		mgrOpts...,
+		qc.WithDialTimeout(time.Second),
 	)
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -164,10 +161,7 @@ func TestSingleServerRPC(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -214,10 +208,7 @@ func TestExitHandleRepliesLoop(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -268,10 +259,7 @@ func TestSlowStorage(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -315,10 +303,7 @@ func TestBasicStorageUsingFuture(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -390,10 +375,7 @@ func TestBasicStorageWithWriteAsync(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -465,7 +447,6 @@ func TestBasicStorageWithWriteAsync(t *testing.T) {
 }
 
 func TestManagerClose(t *testing.T) {
-
 	servers, dialOpts, stopGrpcServe, closeListeners := setup(
 		t,
 		[]storageServer{
@@ -479,10 +460,7 @@ func TestManagerClose(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -517,10 +495,7 @@ func TestQuorumCallCancel(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -570,10 +545,7 @@ func TestBasicCorrectable(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -631,10 +603,7 @@ func TestCorrectableWithLevels(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -727,10 +696,7 @@ func TestCorrectableStream(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -859,13 +825,10 @@ func TestPerNodeArg(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgrOpts := []qc.ManagerOption{
+	mgr, err := qc.NewManager(servers.addrs(),
 		dialOpts,
 		qc.WithTracing(),
-	}
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		mgrOpts...,
+		qc.WithDialTimeout(time.Second),
 	)
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -1088,10 +1051,7 @@ func benchmarkRead(b *testing.B, psize, rq, n int, parallel, future, remote bool
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		b.Fatalf("%v", err)
 	}
@@ -1218,10 +1178,7 @@ func benchmarkWrite(b *testing.B, psize, wq, n int, parallel, future, remote boo
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		dialOpts,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		b.Fatalf("%v", err)
 	}
@@ -1366,7 +1323,6 @@ func setup(t testing.TB, storServers []storageServer, remote, secure bool) (stor
 
 	grpcOpts := []grpc.DialOption{
 		grpc.WithBlock(),
-		grpc.WithTimeout(time.Second),
 	}
 	if secure {
 		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(clientCredentials(t)))

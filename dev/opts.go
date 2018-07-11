@@ -2,23 +2,32 @@ package dev
 
 import (
 	"log"
+	"time"
 
 	"google.golang.org/grpc"
 )
 
 type managerOptions struct {
-	grpcDialOpts []grpc.DialOption
-	logger       *log.Logger
-	noConnect    bool
-	trace        bool
+	grpcDialOpts    []grpc.DialOption
+	nodeDialTimeout time.Duration
+	logger          *log.Logger
+	noConnect       bool
+	trace           bool
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
 type ManagerOption func(*managerOptions)
 
+// WithDialTimeout returns a ManagerOption which is used to set the dial
+// context timeout to be used when initially connecting to each node in its pool.
+func WithDialTimeout(timeout time.Duration) ManagerOption {
+	return func(o *managerOptions) {
+		o.nodeDialTimeout = timeout
+	}
+}
+
 // WithGrpcDialOptions returns a ManagerOption which sets any gRPC dial options
-// the Manager should use when initially connecting to each node in its
-// pool.
+// the Manager should use when initially connecting to each node in its pool.
 func WithGrpcDialOptions(opts ...grpc.DialOption) ManagerOption {
 	return func(o *managerOptions) {
 		o.grpcDialOpts = opts
