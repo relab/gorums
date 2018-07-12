@@ -35,7 +35,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
+			ti.firstLine.deadline = time.Until(deadline)
 		}
 		ti.LazyLog(&ti.firstLine, false)
 		ti.LazyLog(&payload{sent: true, msg: a}, false)
@@ -61,7 +61,7 @@ func callGRPC{{.MethodName}}(ctx context.Context, node *Node, arg *{{.FQReqName}
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
+			ti.firstLine.deadline = time.Until(deadline)
 		}
 		ti.LazyLog(&ti.firstLine, false)
 		ti.LazyLog(&payload{sent: true, msg: a}, false)

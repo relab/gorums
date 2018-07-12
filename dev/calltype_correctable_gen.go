@@ -105,7 +105,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, a *ReadRequest, res
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
+			ti.firstLine.deadline = time.Until(deadline)
 		}
 		ti.LazyLog(&ti.firstLine, false)
 		ti.LazyLog(&payload{sent: true, msg: a}, false)

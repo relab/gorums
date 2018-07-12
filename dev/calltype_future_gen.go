@@ -59,7 +59,7 @@ func (c *Configuration) readFuture(ctx context.Context, a *ReadRequest, resp *Fu
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
+			ti.firstLine.deadline = time.Until(deadline)
 		}
 		ti.LazyLog(&ti.firstLine, false)
 		ti.LazyLog(&payload{sent: true, msg: a}, false)
@@ -180,7 +180,7 @@ func (c *Configuration) writeFuture(ctx context.Context, a *State, resp *FutureW
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = deadline.Sub(time.Now())
+			ti.firstLine.deadline = time.Until(deadline)
 		}
 		ti.LazyLog(&ti.firstLine, false)
 		ti.LazyLog(&payload{sent: true, msg: a}, false)
