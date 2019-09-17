@@ -33,12 +33,12 @@ GOGOPROTO_ALIAS 		:= google/protobuf/descriptor.proto=github.com/gogo/protobuf/p
 BENCHMARK			:= BenchmarkRead1KQ2N3Local
 
 CHECKTOOLS			:= 	golang.org/x/tools/cmd/goimports \
-					github.com/golang/lint/golint \
+					golang.org/x/lint \
 					github.com/jgautheron/goconst/cmd/goconst \
 					github.com/kisielk/errcheck \
 					github.com/gordonklaus/ineffassign \
 					github.com/mdempsky/unconvert \
-					honnef.co/go/tools/cmd/megacheck/ \
+					honnef.co/go/tools/staticcheck \
 					mvdan.cc/interfacer \
 					github.com/client9/misspell/cmd/misspell
 
@@ -135,16 +135,12 @@ profobj:
 	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=$(BENCHMARK) -memprofile allocobj.prof
 	go tool pprof -alloc_objects $(DEV_PKG).test allocobj.prof
 
-.PHONY: getdep
-getdep:
-	go get -u github.com/golang/dep/cmd/dep
-
 .PHONY: getchecktools
 getchecktools:
 	go get -u $(CHECKTOOLS)
 
 .PHONY: getdevtools
-getdevtools: getdep getchecktools
+getdevtools: getchecktools
 
 .PHONY: check
 check: getchecktools
@@ -187,4 +183,4 @@ check: getchecktools
 
 .PHONY: updatedeps
 updatedeps:
-	dep ensure -update
+	go mod tidy
