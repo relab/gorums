@@ -8,8 +8,8 @@ import (
 	"time"
 
 	qc "github.com/relab/gorums/dev"
+	"github.com/relab/gorums/internal/leakcheck"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/test/leakcheck"
 )
 
 // To generate new keys and certificates you can use the certstrap

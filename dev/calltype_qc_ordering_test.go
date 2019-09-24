@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	qc "github.com/relab/gorums/dev"
+	"github.com/relab/gorums/internal/leakcheck"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc/test/leakcheck"
 )
 
 func TestQuorumCallOrdering(t *testing.T) {

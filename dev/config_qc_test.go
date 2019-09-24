@@ -14,6 +14,7 @@ import (
 	"time"
 
 	qc "github.com/relab/gorums/dev"
+	"github.com/relab/gorums/internal/leakcheck"
 
 	"golang.org/x/net/context"
 
@@ -21,7 +22,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/leakcheck"
 )
 
 func TestMain(m *testing.M) {
