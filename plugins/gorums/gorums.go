@@ -41,6 +41,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -218,11 +219,13 @@ func (g *gorums) GenerateImports(file *generator.FileDescriptor) {
 		"google.golang.org/grpc/status",
 	)
 	sort.Strings(staticImports)
-	imports := generator.NewPluginImports(g.Generator)
+
+	// TODO: Find a way to ensure that we don't print duplicate imports
 	for _, simport := range staticImports {
-		imports.NewImport(simport).Use()
+		wantedName := generator.GoPackageName(path.Base(simport))
+		importPath := generator.GoImportPath(simport)
+		g.PrintImport(wantedName, importPath)
 	}
-	imports.GenerateImports(file)
 }
 
 func die(err error) {
