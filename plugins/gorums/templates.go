@@ -112,9 +112,9 @@ const calltype_correctable_tmpl = `{{/* Remember to run 'make dev' after editing
 package {{ $Pkg }}
 
 import (
+	"context"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
 	"google.golang.org/grpc"
@@ -299,10 +299,10 @@ const calltype_correctable_stream_tmpl = `{{/* Remember to run 'make dev' after 
 package {{ $Pkg }}
 
 import (
+	"context"
 	"io"
 	"time"
-	
-	"golang.org/x/net/context"
+
 	"golang.org/x/net/trace"
 )
 {{- end}}
@@ -556,9 +556,9 @@ const calltype_future_tmpl = `{{/* Remember to run 'make dev' after editing this
 package {{ $Pkg }}
 
 import (
+	"context"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
 	"google.golang.org/grpc"
@@ -731,9 +731,9 @@ const calltype_quorumcall_tmpl = `{{/* Remember to run 'make dev' after editing 
 package {{ $Pkg }}
 
 import (
+	"context"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 
 	"google.golang.org/grpc"
