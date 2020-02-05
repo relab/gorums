@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	qc "github.com/relab/gorums/dev"
 	"github.com/relab/gorums/internal/leakcheck"
@@ -30,13 +31,7 @@ func TestQuorumCallOrdering(t *testing.T) {
 	defer closeListeners(allServers)
 	defer stopGrpcServe(allServers)
 
-	mgrOpts := []qc.ManagerOption{
-		dialOpts,
-	}
-	mgr, err := qc.NewManager(
-		servers.addrs(),
-		mgrOpts...,
-	)
+	mgr, err := qc.NewManager(servers.addrs(), dialOpts, qc.WithDialTimeout(time.Second))
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
