@@ -56,12 +56,6 @@ type FutureWriteResponse struct {
 	c       chan struct{}
 }
 
-type internalState struct {
-	nid   uint32
-	reply *State
-	err   error
-}
-
 type internalWriteResponse struct {
 	nid   uint32
 	reply *WriteResponse

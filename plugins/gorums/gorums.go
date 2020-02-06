@@ -295,6 +295,7 @@ type serviceMethod struct {
 	CustomRespName   string
 	FQReqName        string
 	CallType         string
+	OrderingIDField  string
 
 	TypeName           string
 	UnexportedTypeName string
@@ -306,6 +307,7 @@ type serviceMethod struct {
 	Multicast         bool
 	QFWithReq         bool
 	PerNodeArg        bool
+	StrictOrdering    bool
 
 	ClientStreaming bool
 	ServerStreaming bool
@@ -319,11 +321,13 @@ type responseType struct {
 	UnexportedTypeName string // Equal to TypeName to facilitate reuse of this struct
 	FQRespName         string
 	FQCustomRespName   string
+	OrderingIDField    string
 	QuorumCall         bool
 	Correctable        bool
 	CorrectableStream  bool
 	Future             bool
 	Multicast          bool
+	StrictOrdering     bool
 }
 
 func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
@@ -389,11 +393,13 @@ func sortedResponseTypes(respTypes map[string]*serviceMethod) (responseTypes []r
 			UnexportedTypeName: respType,
 			FQRespName:         sm.FQRespName,
 			FQCustomRespName:   sm.FQCustomRespName,
+			OrderingIDField:    sm.OrderingIDField,
 			QuorumCall:         sm.QuorumCall,
 			Future:             sm.Future,
 			Correctable:        sm.Correctable,
 			CorrectableStream:  sm.CorrectableStream,
 			Multicast:          sm.Multicast,
+			StrictOrdering:     sm.StrictOrdering,
 		})
 	}
 	sort.Slice(responseTypes, func(i, j int) bool {
@@ -447,7 +453,9 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		Multicast:         hasMulticastExtension(method),
 		QFWithReq:         hasQFWithReqExtension(method),
 		PerNodeArg:        hasPerNodeArgExtension(method),
+		StrictOrdering:    hasStrictOrderingExtension(method),
 		CustomReturnType:  getCustomReturnTypeExtension(method),
+		OrderingIDField:   getStrictOrderingIDField(method),
 	}
 
 	mutuallyIncompatible := map[string]bool{
@@ -456,6 +464,7 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 		"Correctable":       sm.Correctable,
 		"CorrectableStream": sm.CorrectableStream,
 		"Multicast":         sm.Multicast,
+		"StrictOrdering":    sm.StrictOrdering,
 	}
 	firstOption := ""
 	for optionName, optionSet := range mutuallyIncompatible {
@@ -489,10 +498,10 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 			service, method.GetName(), qfRequestOptionName(),
 		)
 
-	case !sm.Multicast && method.GetClientStreaming():
+	case (!sm.Multicast && !sm.StrictOrdering) && method.GetClientStreaming():
 		return nil, fmt.Errorf(
-			"%s.%s: client-server streams is only valid with the '%s' option",
-			service, method.GetName(), multicastOptionName(),
+			"%s.%s: client-server streams is only valid with the '%s or %s' options",
+			service, method.GetName(), multicastOptionName(), strictOrderingOptionName(),
 		)
 
 	case sm.Multicast && !method.GetClientStreaming():
@@ -501,16 +510,22 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 			service, method.GetName(), multicastOptionName(),
 		)
 
-	case !sm.CorrectableStream && method.GetServerStreaming():
+	case (!sm.CorrectableStream && !sm.StrictOrdering) && method.GetServerStreaming():
 		return nil, fmt.Errorf(
-			"%s.%s: server-client streams is only valid with the '%s' option",
-			service, method.GetName(), correctableStreamOptionName(),
+			"%s.%s: server-client streams is only valid with the '%s or %s' options",
+			service, method.GetName(), correctableStreamOptionName(), strictOrderingOptionName(),
 		)
 
 	case sm.CorrectableStream && !method.GetServerStreaming():
 		return nil, fmt.Errorf(
 			"%s.%s: '%s' option is only valid for server-client streams",
 			service, method.GetName(), correctableStreamOptionName(),
+		)
+
+	case sm.StrictOrdering && (!method.GetClientStreaming() || !method.GetServerStreaming()):
+		return nil, fmt.Errorf(
+			"%s.%s: '%s' option is only valid for bidirectional stream methods",
+			service, method.GetName(), strictOrderingOptionName(),
 		)
 
 	case !isQuorumCallVariant && !sm.Multicast:
@@ -524,5 +539,5 @@ func verifyExtensionsAndCreate(service string, method *pb.MethodDescriptorProto)
 }
 
 func isQuorumCallVariant(sm *serviceMethod) bool {
-	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectableStream
+	return sm.QuorumCall || sm.Future || sm.Correctable || sm.CorrectableStream || sm.StrictOrdering
 }

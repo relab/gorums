@@ -26,6 +26,9 @@ type QuorumSpec interface {
 	// asynchronous quorum call method.
 	ReadFutureQF(replies []*State) (*State, bool)
 
+	// ReadOrderedQF is the quorum function for the ReadOrdered
+	ReadOrderedQF(replies []*State)
+
 	// WriteQF is the quorum function for the Write
 	// quorum call method.
 	WriteQF(req *State, replies []*WriteResponse) (*WriteResponse, bool)

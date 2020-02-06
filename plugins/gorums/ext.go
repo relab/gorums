@@ -19,6 +19,10 @@ func qfRequestOptionName() string {
 	return gorumsproto.E_QfWithReq.Name
 }
 
+func strictOrderingOptionName() string {
+	return gorumsproto.E_QcStrictOrdering.Name
+}
+
 func customReturnTypeOptionName() string {
 	return gorumsproto.E_CustomReturnType.Name
 }
@@ -49,6 +53,32 @@ func hasQFWithReqExtension(method *descriptor.MethodDescriptorProto) bool {
 
 func hasPerNodeArgExtension(method *descriptor.MethodDescriptorProto) bool {
 	return method != nil && proto.GetBoolExtension(method.Options, gorumsproto.E_PerNodeArg, false)
+}
+
+func hasStrictOrderingExtension(method *descriptor.MethodDescriptorProto) bool {
+	if method == nil {
+		return false
+	}
+	if method.Options != nil {
+		v, err := proto.GetExtension(method.Options, gorumsproto.E_QcStrictOrdering)
+		if err == nil && v.(*string) != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func getStrictOrderingIDField(method *descriptor.MethodDescriptorProto) string {
+	if method == nil {
+		return ""
+	}
+	if method.Options != nil {
+		v, err := proto.GetExtension(method.Options, gorumsproto.E_QcStrictOrdering)
+		if err == nil && v.(*string) != nil {
+			return *(v.(*string))
+		}
+	}
+	return ""
 }
 
 func getCustomReturnTypeExtension(method *descriptor.MethodDescriptorProto) string {

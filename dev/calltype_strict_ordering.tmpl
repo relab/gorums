@@ -1,0 +1,206 @@
+{{/* Remember to run 'make dev' after editing this file. */}}
+
+{{ $Pkg := .PackageName }}
+
+{{if not .IgnoreImports}}
+package {{ $Pkg }}
+
+import (
+	"context"
+	"fmt"
+	"sync"
+
+	"google.golang.org/grpc/status"
+)
+{{end}}
+
+{{range .Services}}
+
+{{if .StrictOrdering}}
+
+{{ $stream := printf "%s_%sClient" .ServName .MethodName }}
+{{ $state := printf "%sStream" .MethodName }}
+/* Exported types and methods for strictly ordered quorum call method {{.MethodName}} */
+type {{$state}} struct {
+	mu      sync.Mutex
+	nextID  uint64
+	streams map[uint32]{{$stream}}
+	sendQ   map[uint32]chan<- {{.FQReqName}} // Maps a node ID to the send channel for that node
+	recvQ   map[uint64]<-chan {{.UnexportedTypeName}} // Maps a message ID to the receive channel for that message
+	cancel  func()
+}
+
+func (c *Configuration) New{{$state}}() (*{{$state}}, error) {
+	s := &{{$state}}{
+		streams: make(map[uint32]{{$stream}}),
+		sendQ: make(map[uint32]chan {{.FQReqName}}),
+		recvQ: make(map[uint64]chan {{.UnexportedTypeName}}),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
+
+	for _, node := range c.nodes {
+		s.sendQ[node.id] = make(chan {{.FQReqName}}, 1)
+		stream, err := node.conn.{{.MethodName}}(ctx)
+		if err != nil {
+			cancel()
+			close(s.sendQ[node.id])
+			return nil, fmt.Errorf("stream creation failed: %w", err)
+		}
+		s.streams[node.id] = stream
+
+		go s.sendMsgs(node)
+		go s.recvMsgs(node)
+	}
+
+	return s, nil
+}
+
+func (s *{{$state}}) sendMsgs(node *Node) {
+	stream := s.streams[node.id]
+	sendQ := s.sendQ[node.id]
+	for msg := range sendQ {
+		err := stream.SendMsg(msg)
+		// TODO: figure out how to handle a stream ending prematurely
+		if err != nil {
+			if err != io.EOF {
+				node.setLastErr(err)
+			}
+			return
+		}
+	}
+}
+
+func (s *{{$state}}) recvMsgs(node *Node) {
+	stream := s.streams[node.id]
+	msg := new({{.FQRespName}})
+	for {
+		err := stream.RecvMsg(msg)
+		// TODO: figure out how to handle a stream ending prematurely
+		if err != nil {
+			if err != io.EOF {
+				node.setLastErr(err)
+			}
+			return
+		}
+		s.mu.Lock()
+		id := msg.{{.OrderingIDField}}
+		if c, ok := s.recvQ[id]; ok {
+			c <- {{.UnexportedTypeName}}{node.id, msg, err}
+		}
+		s.mu.Unlock()
+	}
+}
+
+func (s *{{$state}}) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, c := range s.sendQ {
+		close(c)
+	}
+	for id, cs := range s.streams {
+		err = cs.CloseSend()
+		if err == nil {
+			continue
+		}
+		if m.logger != nil {
+			m.logger.Printf("error closing {{$state}} for node %d: %v", id, err)
+		}
+	}
+}
+
+func (s *{{$state}}) getNextID() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nextID++
+	return s.nextID
+}
+
+{{if .PerNodeArg}}
+
+// {{.MethodName}} is invoked as a quorum call on each node in configuration c,
+// with the argument returned by the provided perNode function and returns the
+// result. The perNode function takes a request arg and
+// returns a {{.FQReqName}} object to be passed to the given nodeID.
+// The perNode function should be thread-safe.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, s *{{$state}}, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+{{- else}}
+
+// {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
+// using the same argument arg, and returns the result.
+func (c *Configuration) {{.MethodName}}(ctx context.Context, s *{{$state}}, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+{{- end}}
+	{{- template "simple_trace" .}}
+
+	msgID := s.getNextID()
+	// get the ID which will be used to return the correct responses for a request
+	a.{{.OrderingIDField}} = msgID
+	
+	// set up a channel to collect replies
+	replies := make(chan {{.UnexportedTypeName}}, c.n)
+	s.mu.Lock()
+	s.recvQ[msgID] = replies
+	s.mu.Unlock()
+	
+	defer func() {
+		// remove the replies channel when we are done
+		s.mu.Lock()
+		delete(s.recvQ, msgID)
+		close(replies)
+		s.mu.Unlock()
+	}()
+	
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+{{- if .PerNodeArg}}
+		nodeArg := f(*a, n.ID())
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		nodeArg.{{.OrderingIDField}} = msgID
+		s.sendQ[n.ID()] <- nodeArg
+{{- else}}
+		s.sendQ[n.ID()] <- a
+{{end -}}
+	}
+
+	var (
+		replyValues = make([]*{{.FQRespName}}, 0, expected)
+		errs []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replies:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+			replyValues = append(replyValues, r.reply)
+{{- if .QFWithReq}}
+			if resp, quorum = c.qspec.{{.MethodName}}QF(a, replyValues); quorum {
+{{else}}
+			if resp, quorum = c.qspec.{{.MethodName}}QF(replyValues); quorum {
+{{end -}}
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+{{- end -}}
+{{- end -}}

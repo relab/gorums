@@ -25,7 +25,8 @@ type Node struct {
 
 	StorageClient StorageClient
 
-	WriteAsyncClient Storage_WriteAsyncClient
+	ReadOrderedClient Storage_ReadOrderedClient
+	WriteAsyncClient  Storage_WriteAsyncClient
 
 	mu      sync.Mutex
 	lastErr error
@@ -43,6 +44,11 @@ func (n *Node) connect(opts managerOptions) error {
 
 	n.StorageClient = NewStorageClient(n.conn)
 
+	n.ReadOrderedClient, err = n.StorageClient.ReadOrdered(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
+
 	n.WriteAsyncClient, err = n.StorageClient.WriteAsync(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
@@ -52,6 +58,7 @@ func (n *Node) connect(opts managerOptions) error {
 }
 
 func (n *Node) close() error {
+	_, _ = n.ReadOrderedClient.CloseAndRecv()
 	_, _ = n.WriteAsyncClient.CloseAndRecv()
 
 	if err := n.conn.Close(); err != nil {
