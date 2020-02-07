@@ -14,10 +14,13 @@
 {{- if .CorrectableStream}}
 // correctable stream quourm call method.
 {{- end -}}
+{{- if .StrictOrdering }}
+// quorum call method with strict ordering.
+{{- end -}}
 {{end}}
 
 {{define "QFreply"}}
-{{- if or (.QuorumCall) (.Future) -}}
+{{- if or (.QuorumCall) (.Future) (.StrictOrdering) -}}
 (*{{.FQCustomRespName}}, bool)
 {{end -}}
 {{- if or (.Correctable) (.CorrectableStream) -}}

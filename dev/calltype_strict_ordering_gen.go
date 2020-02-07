@@ -7,9 +7,11 @@ package dev
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
+	"time"
 
-	"google.golang.org/grpc/status"
+	"golang.org/x/net/trace"
 )
 
 /* Exported types and methods for strictly ordered quorum call method ReadOrdered */
@@ -17,15 +19,15 @@ type ReadOrderedStream struct {
 	mu      sync.Mutex
 	nextID  uint64
 	streams map[uint32]Storage_ReadOrderedClient
-	sendQ   map[uint32]chan<- ReadRequest   // Maps a node ID to the send channel for that node
-	recvQ   map[uint64]<-chan internalState // Maps a message ID to the receive channel for that message
+	sendQ   map[uint32]chan *ReadRequest  // Maps a node ID to the send channel for that node
+	recvQ   map[uint64]chan internalState // Maps a message ID to the receive channel for that message
 	cancel  func()
 }
 
 func (c *Configuration) NewReadOrderedStream() (*ReadOrderedStream, error) {
 	s := &ReadOrderedStream{
 		streams: make(map[uint32]Storage_ReadOrderedClient),
-		sendQ:   make(map[uint32]chan ReadRequest),
+		sendQ:   make(map[uint32]chan *ReadRequest),
 		recvQ:   make(map[uint64]chan internalState),
 	}
 
@@ -33,8 +35,8 @@ func (c *Configuration) NewReadOrderedStream() (*ReadOrderedStream, error) {
 	s.cancel = cancel
 
 	for _, node := range c.nodes {
-		s.sendQ[node.id] = make(chan ReadRequest, 1)
-		stream, err := node.conn.ReadOrdered(ctx)
+		s.sendQ[node.id] = make(chan *ReadRequest, 1)
+		stream, err := node.ReadOrdered(ctx)
 		if err != nil {
 			cancel()
 			close(s.sendQ[node.id])
@@ -92,14 +94,9 @@ func (s *ReadOrderedStream) Close() {
 	for _, c := range s.sendQ {
 		close(c)
 	}
-	for id, cs := range s.streams {
-		err = cs.CloseSend()
-		if err == nil {
-			continue
-		}
-		if m.logger != nil {
-			m.logger.Printf("error closing ReadOrderedStream for node %d: %v", id, err)
-		}
+	for _, cs := range s.streams {
+		// TODO: figure out if the error needs to be handled
+		cs.CloseSend()
 	}
 }
 

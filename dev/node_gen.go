@@ -58,7 +58,7 @@ func (n *Node) connect(opts managerOptions) error {
 }
 
 func (n *Node) close() error {
-	_, _ = n.ReadOrderedClient.CloseAndRecv()
+	_ = n.ReadOrderedClient.CloseSend()
 	_, _ = n.WriteAsyncClient.CloseAndRecv()
 
 	if err := n.conn.Close(); err != nil {

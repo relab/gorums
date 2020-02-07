@@ -90,7 +90,7 @@ service Storage {
 message State {
 	string Value 	= 1;
 	int64 Timestamp = 2;
-	int64 GorumsMessageID = 3;
+	uint64 GorumsMessageID = 3;
 }
 
 message MyState {
@@ -104,7 +104,7 @@ message WriteResponse {
 }
 
 message ReadRequest {
-	int64 GorumsMessageID = 1;
+	uint64 GorumsMessageID = 1;
 }
 
 message Empty {}

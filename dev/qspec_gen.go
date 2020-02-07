@@ -27,7 +27,8 @@ type QuorumSpec interface {
 	ReadFutureQF(replies []*State) (*State, bool)
 
 	// ReadOrderedQF is the quorum function for the ReadOrdered
-	ReadOrderedQF(replies []*State)
+	// quorum call method with strict ordering.
+	ReadOrderedQF(replies []*State) (*State, bool)
 
 	// WriteQF is the quorum function for the Write
 	// quorum call method.

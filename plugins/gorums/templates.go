@@ -537,7 +537,7 @@ type {{.TypeName}} struct {
 
 {{range .InternalResponseTypes}}
 
-{{if or .Correctable .CorrectableStream .Future .QuorumCall}}
+{{if or .Correctable .CorrectableStream .Future .QuorumCall .StrictOrdering}}
 type {{.UnexportedTypeName}} struct {
 	nid   uint32
 	reply *{{.FQRespName}}
@@ -816,9 +816,11 @@ package {{ $Pkg }}
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync"
+	"time"
 
-	"google.golang.org/grpc/status"
+	"golang.org/x/net/trace"
 )
 {{end}}
 
@@ -833,15 +835,15 @@ type {{$state}} struct {
 	mu      sync.Mutex
 	nextID  uint64
 	streams map[uint32]{{$stream}}
-	sendQ   map[uint32]chan<- {{.FQReqName}} // Maps a node ID to the send channel for that node
-	recvQ   map[uint64]<-chan {{.UnexportedTypeName}} // Maps a message ID to the receive channel for that message
+	sendQ   map[uint32]chan *{{.FQReqName}} // Maps a node ID to the send channel for that node
+	recvQ   map[uint64]chan {{.UnexportedTypeName}} // Maps a message ID to the receive channel for that message
 	cancel  func()
 }
 
 func (c *Configuration) New{{$state}}() (*{{$state}}, error) {
 	s := &{{$state}}{
 		streams: make(map[uint32]{{$stream}}),
-		sendQ: make(map[uint32]chan {{.FQReqName}}),
+		sendQ: make(map[uint32]chan *{{.FQReqName}}),
 		recvQ: make(map[uint64]chan {{.UnexportedTypeName}}),
 	}
 
@@ -849,8 +851,8 @@ func (c *Configuration) New{{$state}}() (*{{$state}}, error) {
 	s.cancel = cancel
 
 	for _, node := range c.nodes {
-		s.sendQ[node.id] = make(chan {{.FQReqName}}, 1)
-		stream, err := node.conn.{{.MethodName}}(ctx)
+		s.sendQ[node.id] = make(chan *{{.FQReqName}}, 1)
+		stream, err := node.{{.MethodName}}(ctx)
 		if err != nil {
 			cancel()
 			close(s.sendQ[node.id])
@@ -908,14 +910,9 @@ func (s *{{$state}}) Close() {
 	for _, c := range s.sendQ {
 		close(c)
 	}
-	for id, cs := range s.streams {
-		err = cs.CloseSend()
-		if err == nil {
-			continue
-		}
-		if m.logger != nil {
-			m.logger.Printf("error closing {{$state}} for node %d: %v", id, err)
-		}
+	for _, cs := range s.streams {
+		// TODO: figure out if the error needs to be handled
+		cs.CloseSend()
 	}
 }
 
@@ -1082,7 +1079,9 @@ func (n *Node) connect(opts managerOptions) error {
 
 func (n *Node) close() error {
 {{- range .Services -}}
-{{if .ClientStreaming}}
+{{if and .ClientStreaming .ServerStreaming}}
+	_ = n.{{.MethodName}}Client.CloseSend()
+{{- else if .ClientStreaming}}
 	_, _ = n.{{.MethodName}}Client.CloseAndRecv()
 {{- end -}}
 {{end}}
@@ -1113,10 +1112,13 @@ const qspec_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}
 {{- if .CorrectableStream}}
 // correctable stream quourm call method.
 {{- end -}}
+{{- if .StrictOrdering }}
+// quorum call method with strict ordering.
+{{- end -}}
 {{end}}
 
 {{define "QFreply"}}
-{{- if or (.QuorumCall) (.Future) -}}
+{{- if or (.QuorumCall) (.Future) (.StrictOrdering) -}}
 (*{{.FQCustomRespName}}, bool)
 {{end -}}
 {{- if or (.Correctable) (.CorrectableStream) -}}
