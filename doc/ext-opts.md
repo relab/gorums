@@ -10,6 +10,7 @@ Below is shown an example service definition from a proto file. Gorums currently
 | Correctable   | `gorums.correctable` | TBD - TODO Rename this call type? |
 | Correctable Prelim  | `gorums.correctable_pr` | TBD - TODO Rename this call type? |
 | Multicast     | `gorums.multicast` | One way multicast. No replies are collected. |
+| Strict Ordering | `gorums.qc_strict_ordering` | A quorum call variant that enforces strict ordering of messages by using GRPC streams instead of unary RPCs. |
 
 Each call type may in addition specify some advanced options:
 
@@ -84,6 +85,18 @@ service Storage {
 	rpc WritePerNode(State) returns (WriteResponse) {
 		option (gorums.qc)		= true;
 		option (gorums.per_node_arg) 	= true;
+	}
+
+	// WriteOrdered is a synchronous quorum call that enforces a strict
+	// ordering of the messages that are sent to a node, such that
+	// a quorum call Q1 will deliver its messages to the nodes
+	// respectively before a later quorum call Q2 delivers its messages.
+	// The order of replies is not guaranteed for concurrent quorum calls.
+	rpc WriteOrdered(stream State) returns (stream WriteResponse) {
+		// The option specifies a common field in the `State` and `WriteResponse`
+		// messages of type `uint32` that gorums can use to keep track of which
+		// requests and replies belong together.
+		option (gorums.qc_strict_ordering) = "GorumsMessageID";
 	}
 }
 ```

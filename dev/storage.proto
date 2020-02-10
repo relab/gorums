@@ -82,7 +82,15 @@ service Storage {
 		option (gorums.per_node_arg) 	= true;
 	}
 
+	// WriteOrdered is a synchronous quorum call that enforces a strict
+	// ordering of the messages that are sent to a node, such that
+	// a quorum call Q1 will deliver its messages to the nodes
+	// respectively before a later quorum call Q2 delivers its messages.
+	// The order of replies is not guaranteed for concurrent quorum calls.
 	rpc WriteOrdered(stream State) returns (stream WriteResponse) {
+		// The option specifies a common field in the `State` and `WriteResponse`
+		// messages of type `uint32` that gorums can use to keep track of which
+		// requests and replies belong together.
 		option (gorums.qc_strict_ordering) = "GorumsMessageID";
 	}
 }
