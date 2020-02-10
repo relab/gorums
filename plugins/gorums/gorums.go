@@ -174,6 +174,8 @@ func (g *gorums) Generate(file *generator.FileDescriptor) {
 	gb.P("\n// Reference Gorums specific imports to suppress errors if they are not otherwise used.")
 	gb.P("var _ = codes.OK")
 	gb.P("var _ = bytes.MinRead")
+	gb.P("var _ = atomic.AddUint32")
+	gb.P("var _ = status.Code")
 
 	if err := g.processTemplates(gb); err != nil {
 		die(err)
@@ -250,6 +252,11 @@ func (g *gorums) generateImports(gb *gorumsBuffer) {
 		"google.golang.org/grpc/codes",
 		"google.golang.org/grpc/status",
 		"context",
+		"sync",
+		"strings",
+		"hash/fnv",
+		"encoding/binary",
+		"sync/atomic",
 	)
 	sort.Strings(staticImports)
 

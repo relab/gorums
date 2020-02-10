@@ -7,6 +7,7 @@ package {{.PackageName}}
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"sync"
 	"time"
@@ -32,6 +33,11 @@ type Node struct {
 {{- if .ClientStreaming}}
 	{{.MethodName}}Client {{.ServName}}_{{.MethodName}}Client
 {{- end -}}
+{{- if .StrictOrdering }}
+	{{.UnexportedMethodName}}Send chan *{{.FQReqName}}
+	{{.UnexportedMethodName}}Recv map[uint32]chan *{{.UnexportedTypeName}}
+	{{.UnexportedMethodName}}Lock *sync.RWMutex
+{{- end -}}
 {{end}}
 
 	mu sync.Mutex
@@ -54,11 +60,15 @@ func (n *Node) connect(opts managerOptions) error {
 
 {{range .Services}}
 {{if .ClientStreaming}}
-  	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
-  	if err != nil {
-  		return fmt.Errorf("stream creation failed: %v", err)
-  	}
+	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
 {{end}}
+{{if .StrictOrdering}}
+	go n.{{.UnexportedMethodName}}SendMsgs()
+	go n.{{.UnexportedMethodName}}RecvMsgs()
+{{end -}}
 {{end -}}
 
 	return nil
@@ -71,13 +81,57 @@ func (n *Node) close() error {
 {{- else if .ClientStreaming}}
 	_, _ = n.{{.MethodName}}Client.CloseAndRecv()
 {{- end -}}
+{{if .StrictOrdering}}
+	close(n.{{.UnexportedMethodName}}Send)
+{{- end -}}
 {{end}}
 
 	if err := n.conn.Close(); err != nil {
 		if n.logger != nil {
 			n.logger.Printf("%d: conn close error: %v", n.id, err)
 		}
-    	return fmt.Errorf("%d: conn close error: %v", n.id, err)
-    }
+		return fmt.Errorf("%d: conn close error: %v", n.id, err)
+	}
 	return nil
 }
+
+{{range .Services}}
+{{- if .StrictOrdering}}
+func (n *Node) {{.UnexportedMethodName}}SendMsgs() {
+	for msg := range n.{{.UnexportedMethodName}}Send {
+		err := n.{{.MethodName}}Client.SendMsg(msg)
+		if err != nil {
+			if err != io.EOF {
+				if n.logger != nil {
+					n.logger.Printf("%d: {{.MethodName}} send error: %v", n.id, err)
+				}
+				n.setLastErr(err)
+			}
+			return
+		}
+	}
+}
+
+func (n *Node) {{.UnexportedMethodName}}RecvMsgs() {
+	for {
+		msg := new({{.FQRespName}})
+		err := n.{{.MethodName}}Client.RecvMsg(msg)
+		if err != nil {
+			if err != io.EOF {
+				if n.logger != nil {
+					n.logger.Printf("%d: {{.MethodName}} receive error: %v", n.id, err)
+				}
+				n.setLastErr(err)
+			}
+			return
+		}
+		id := msg.{{.OrderingIDField}}
+		n.{{.UnexportedMethodName}}Lock.RLock()
+		if c, ok := n.{{.UnexportedMethodName}}Recv[id]; ok {
+			c <- &{{.UnexportedTypeName}}{n.id, msg, nil}
+		}
+		n.{{.UnexportedMethodName}}Lock.RUnlock()
+	}
+}
+{{- end -}}
+{{end}}

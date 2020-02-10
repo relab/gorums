@@ -4,6 +4,7 @@ package dev_test
 
 import (
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func TestQuorumCallOrdering(t *testing.T) {
 		case err := <-failMsg:
 			t.Fatalf(err)
 		default:
-			_, err := config.Write(context.Background(), state)
+			_, err := config.WriteOrdered(context.Background(), state)
 			if err != nil {
 				t.Fatalf("write quorum call error: %v", err)
 			}
@@ -126,6 +127,46 @@ func (s *storageServerRequiringOrdering) Write(ctx context.Context, state *qc.St
 		s.state = *state
 	}
 	return &s.writeResp, nil
+}
+
+// WriteOrdered implements the WriteOrdered method.
+func (s *storageServerRequiringOrdering) WriteOrdered(srv qc.Storage_WriteOrderedServer) error {
+	ctx := srv.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		state, err := srv.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+
+		s.mu.Lock()
+		if state.Timestamp != s.state.Timestamp+1 {
+			err := fmt.Sprintf(
+				"server: message received out-of-order: got: %d, expected: %d",
+				state.Timestamp, s.state.Timestamp+1,
+			)
+			s.failMsg <- err
+		} else {
+			s.state = *state
+		}
+		s.mu.Unlock()
+
+		err = srv.Send(&qc.WriteResponse{GorumsMessageID: state.GorumsMessageID})
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 // WriteFuture implements the WriteFuture method.

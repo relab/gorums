@@ -7,6 +7,7 @@ package dev
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"sync"
 	"time"
@@ -25,8 +26,11 @@ type Node struct {
 
 	StorageClient StorageClient
 
-	ReadOrderedClient Storage_ReadOrderedClient
-	WriteAsyncClient  Storage_WriteAsyncClient
+	WriteAsyncClient   Storage_WriteAsyncClient
+	WriteOrderedClient Storage_WriteOrderedClient
+	writeOrderedSend   chan *State
+	writeOrderedRecv   map[uint32]chan *internalWriteResponse
+	writeOrderedLock   *sync.RWMutex
 
 	mu      sync.Mutex
 	lastErr error
@@ -44,22 +48,26 @@ func (n *Node) connect(opts managerOptions) error {
 
 	n.StorageClient = NewStorageClient(n.conn)
 
-	n.ReadOrderedClient, err = n.StorageClient.ReadOrdered(context.Background())
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
-
 	n.WriteAsyncClient, err = n.StorageClient.WriteAsync(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
 
+	n.WriteOrderedClient, err = n.StorageClient.WriteOrdered(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
+
+	go n.writeOrderedSendMsgs()
+	go n.writeOrderedRecvMsgs()
+
 	return nil
 }
 
 func (n *Node) close() error {
-	_ = n.ReadOrderedClient.CloseSend()
 	_, _ = n.WriteAsyncClient.CloseAndRecv()
+	_ = n.WriteOrderedClient.CloseSend()
+	close(n.writeOrderedSend)
 
 	if err := n.conn.Close(); err != nil {
 		if n.logger != nil {
@@ -68,4 +76,41 @@ func (n *Node) close() error {
 		return fmt.Errorf("%d: conn close error: %v", n.id, err)
 	}
 	return nil
+}
+
+func (n *Node) writeOrderedSendMsgs() {
+	for msg := range n.writeOrderedSend {
+		err := n.WriteOrderedClient.SendMsg(msg)
+		if err != nil {
+			if err != io.EOF {
+				if n.logger != nil {
+					n.logger.Printf("%d: WriteOrdered send error: %v", n.id, err)
+				}
+				n.setLastErr(err)
+			}
+			return
+		}
+	}
+}
+
+func (n *Node) writeOrderedRecvMsgs() {
+	for {
+		msg := new(WriteResponse)
+		err := n.WriteOrderedClient.RecvMsg(msg)
+		if err != nil {
+			if err != io.EOF {
+				if n.logger != nil {
+					n.logger.Printf("%d: WriteOrdered receive error: %v", n.id, err)
+				}
+				n.setLastErr(err)
+			}
+			return
+		}
+		id := msg.GorumsMessageID
+		n.writeOrderedLock.RLock()
+		if c, ok := n.writeOrderedRecv[id]; ok {
+			c <- &internalWriteResponse{n.id, msg, nil}
+		}
+		n.writeOrderedLock.RUnlock()
+	}
 }

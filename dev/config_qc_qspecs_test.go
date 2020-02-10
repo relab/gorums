@@ -70,6 +70,10 @@ func (mqs *MajorityQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.Write
 	return replies[0], true
 }
 
+func (mqs *MajorityQSpec) WriteOrderedQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	panic("not implemented")
+}
+
 type StorageQSpec struct {
 	rq, wq int
 }
@@ -131,6 +135,13 @@ func (sqs *StorageQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteRespons
 }
 
 func (sqs *StorageQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	if len(replies) < sqs.wq {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+func (sqs *StorageQSpec) WriteOrderedQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	if len(replies) < sqs.wq {
 		return nil, false
 	}
@@ -225,6 +236,10 @@ func (sqs *StorageByTimestampQSpec) WritePerNodeQF(replies []*qc.WriteResponse) 
 	return replies[0], true
 }
 
+func (sqs *StorageByTimestampQSpec) WriteOrderedQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	panic("not implemented")
+}
+
 type NeverQSpec struct{}
 
 func (*NeverQSpec) ReadQF(replies []*qc.State) (*qc.State, bool) {
@@ -256,6 +271,10 @@ func (*NeverQSpec) WriteFutureQF(req *qc.State, replies []*qc.WriteResponse) (*q
 }
 
 func (*NeverQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	return nil, false
+}
+
+func (*NeverQSpec) WriteOrderedQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	return nil, false
 }
 
@@ -303,5 +322,9 @@ func (*ReadCorrectableStreamTestQSpec) WriteFutureQF(req *qc.State, replies []*q
 }
 
 func (*ReadCorrectableStreamTestQSpec) WritePerNodeQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
+	panic("not implemented")
+}
+
+func (*ReadCorrectableStreamTestQSpec) WriteOrderedQF(replies []*qc.WriteResponse) (*qc.WriteResponse, bool) {
 	panic("not implemented")
 }

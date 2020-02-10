@@ -82,7 +82,7 @@ service Storage {
 		option (gorums.per_node_arg) 	= true;
 	}
 
-	rpc ReadOrdered(stream ReadRequest) returns (stream State) {
+	rpc WriteOrdered(stream State) returns (stream WriteResponse) {
 		option (gorums.qc_strict_ordering) = "GorumsMessageID";
 	}
 }
@@ -90,7 +90,7 @@ service Storage {
 message State {
 	string Value 	= 1;
 	int64 Timestamp = 2;
-	uint64 GorumsMessageID = 3;
+	uint32 GorumsMessageID = 3;
 }
 
 message MyState {
@@ -101,10 +101,9 @@ message MyState {
 
 message WriteResponse {
 	bool New = 1;
+	uint32 GorumsMessageID = 2;
 }
 
-message ReadRequest {
-	uint64 GorumsMessageID = 1;
-}
+message ReadRequest {}
 
 message Empty {}

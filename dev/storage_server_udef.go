@@ -110,6 +110,11 @@ func (s *StorageServerBasic) WriteAsync(stream Storage_WriteAsyncServer) error {
 	}
 }
 
+// WriteOrdered is not implemented
+func (s *StorageServerBasic) WriteOrdered(srv Storage_WriteOrderedServer) error {
+	return writeOrderedStub(srv)
+}
+
 // ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (s *StorageServerBasic) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return s.Read(ctx, rq)
@@ -181,6 +186,11 @@ func (s *StorageServerError) WritePerNode(ctx context.Context, state *State) (*W
 // WriteAsync implements the WriteAsync method from the StorageServer interface.
 func (s *StorageServerError) WriteAsync(stream Storage_WriteAsyncServer) error {
 	return s.err
+}
+
+// WriteOrdered implements the WriteOrdered method from the StorageServer interface
+func (s *StorageServerError) WriteOrdered(srv Storage_WriteOrderedServer) error {
+	return writeOrderedStub(srv)
 }
 
 // ReadNoQC implements the ReadNoQC method from the StorageServer interface.
@@ -267,6 +277,11 @@ func (s *StorageServerSlow) WritePerNode(ctx context.Context, state *State) (*Wr
 func (s *StorageServerSlow) WriteAsync(stream Storage_WriteAsyncServer) error {
 	// There are no replies to wait for.
 	return s.realServer.WriteAsync(stream)
+}
+
+// WriteOrdered is not implemented
+func (s *StorageServerSlow) WriteOrdered(srv Storage_WriteOrderedServer) error {
+	return writeOrderedStub(srv)
 }
 
 // ReadNoQC implements the ReadNoQC method from the StorageServer interface.
@@ -362,6 +377,11 @@ func (s *StorageServerBench) WriteAsync(stream Storage_WriteAsyncServer) error {
 	}
 }
 
+// WriteOrdered is not implemented
+func (s *StorageServerBench) WriteOrdered(srv Storage_WriteOrderedServer) error {
+	return writeOrderedStub(srv)
+}
+
 // ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (s *StorageServerBench) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return s.Read(ctx, rq)
@@ -439,6 +459,11 @@ func (s *StorageServerLockedWithState) WriteAsync(stream Storage_WriteAsyncServe
 	return s.realServer.WriteAsync(stream)
 }
 
+// WriteOrdered is not implemented
+func (s *StorageServerLockedWithState) WriteOrdered(srv Storage_WriteOrderedServer) error {
+	return writeOrderedStub(srv)
+}
+
 // ReadNoQC implements the ReadNoQC method from the StorageServer interface.
 func (s *StorageServerLockedWithState) ReadNoQC(ctx context.Context, rq *ReadRequest) (*State, error) {
 	return s.Read(ctx, rq)
@@ -482,4 +507,24 @@ func (s *StorageServerLockedWithState) Unlock() {
 // single ReadCorrectableStream method handler.
 func (s *StorageServerLockedWithState) PerformSingleReadCorrectableStream() {
 	s.ReadCorrectableStreamLockChan <- struct{}{}
+}
+
+func writeOrderedStub(srv Storage_WriteOrderedServer) error {
+	ctx := srv.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		_, err := srv.Recv()
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		panic("not implemented")
+	}
 }

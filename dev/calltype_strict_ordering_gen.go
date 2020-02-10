@@ -6,113 +6,19 @@ package dev
 
 import (
 	"context"
-	"fmt"
-	"io"
-	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
 )
 
-/* Exported types and methods for strictly ordered quorum call method ReadOrdered */
-type ReadOrderedStream struct {
-	mu      sync.Mutex
-	nextID  uint64
-	streams map[uint32]Storage_ReadOrderedClient
-	sendQ   map[uint32]chan *ReadRequest  // Maps a node ID to the send channel for that node
-	recvQ   map[uint64]chan internalState // Maps a message ID to the receive channel for that message
-	cancel  func()
-}
+/* Exported types and methods for strictly ordered quorum call method WriteOrdered */
 
-func (c *Configuration) NewReadOrderedStream() (*ReadOrderedStream, error) {
-	s := &ReadOrderedStream{
-		streams: make(map[uint32]Storage_ReadOrderedClient),
-		sendQ:   make(map[uint32]chan *ReadRequest),
-		recvQ:   make(map[uint64]chan internalState),
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	s.cancel = cancel
-
-	for _, node := range c.nodes {
-		s.sendQ[node.id] = make(chan *ReadRequest, 1)
-		stream, err := node.ReadOrdered(ctx)
-		if err != nil {
-			cancel()
-			close(s.sendQ[node.id])
-			return nil, fmt.Errorf("stream creation failed: %w", err)
-		}
-		s.streams[node.id] = stream
-
-		go s.sendMsgs(node)
-		go s.recvMsgs(node)
-	}
-
-	return s, nil
-}
-
-func (s *ReadOrderedStream) sendMsgs(node *Node) {
-	stream := s.streams[node.id]
-	sendQ := s.sendQ[node.id]
-	for msg := range sendQ {
-		err := stream.SendMsg(msg)
-		// TODO: figure out how to handle a stream ending prematurely
-		if err != nil {
-			if err != io.EOF {
-				node.setLastErr(err)
-			}
-			return
-		}
-	}
-}
-
-func (s *ReadOrderedStream) recvMsgs(node *Node) {
-	stream := s.streams[node.id]
-	msg := new(State)
-	for {
-		err := stream.RecvMsg(msg)
-		// TODO: figure out how to handle a stream ending prematurely
-		if err != nil {
-			if err != io.EOF {
-				node.setLastErr(err)
-			}
-			return
-		}
-		s.mu.Lock()
-		id := msg.GorumsMessageID
-		if c, ok := s.recvQ[id]; ok {
-			c <- internalState{node.id, msg, err}
-		}
-		s.mu.Unlock()
-	}
-}
-
-func (s *ReadOrderedStream) Close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for _, c := range s.sendQ {
-		close(c)
-	}
-	for _, cs := range s.streams {
-		// TODO: figure out if the error needs to be handled
-		cs.CloseSend()
-	}
-}
-
-func (s *ReadOrderedStream) getNextID() uint64 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.nextID++
-	return s.nextID
-}
-
-// ReadOrdered is invoked as a quorum call on all nodes in configuration c,
+// WriteOrdered is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result.
-func (c *Configuration) ReadOrdered(ctx context.Context, s *ReadOrderedStream, a *ReadRequest) (resp *State, err error) {
+func (c *Configuration) WriteOrdered(ctx context.Context, a *State) (resp *WriteResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadOrdered")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "WriteOrdered")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -133,32 +39,32 @@ func (c *Configuration) ReadOrdered(ctx context.Context, s *ReadOrderedStream, a
 		}()
 	}
 
-	msgID := s.getNextID()
+	msgID := c.mgr.nextWriteOrderedID()
 	// get the ID which will be used to return the correct responses for a request
 	a.GorumsMessageID = msgID
 
 	// set up a channel to collect replies
-	replies := make(chan internalState, c.n)
-	s.mu.Lock()
-	s.recvQ[msgID] = replies
-	s.mu.Unlock()
+	replies := make(chan *internalWriteResponse, c.n)
+	c.mgr.writeOrderedLock.Lock()
+	c.mgr.writeOrderedRecv[msgID] = replies
+	c.mgr.writeOrderedLock.Unlock()
 
 	defer func() {
 		// remove the replies channel when we are done
-		s.mu.Lock()
-		delete(s.recvQ, msgID)
+		c.mgr.writeOrderedLock.Lock()
+		delete(c.mgr.writeOrderedRecv, msgID)
 		close(replies)
-		s.mu.Unlock()
+		c.mgr.writeOrderedLock.Unlock()
 	}()
 
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
-		s.sendQ[n.ID()] <- a
+		n.writeOrderedSend <- a
 	}
 
 	var (
-		replyValues = make([]*State, 0, expected)
+		replyValues = make([]*WriteResponse, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -166,6 +72,8 @@ func (c *Configuration) ReadOrdered(ctx context.Context, s *ReadOrderedStream, a
 	for {
 		select {
 		case r := <-replies:
+			// TODO: An error from SendMsg/RecvMsg means that the stream has closed, so we probably don't need to check
+			// for errors here.
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -174,7 +82,7 @@ func (c *Configuration) ReadOrdered(ctx context.Context, s *ReadOrderedStream, a
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.ReadOrderedQF(replyValues); quorum {
+			if resp, quorum = c.qspec.WriteOrderedQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():

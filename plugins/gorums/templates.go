@@ -815,9 +815,6 @@ package {{ $Pkg }}
 
 import (
 	"context"
-	"fmt"
-	"io"
-	"sync"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -828,101 +825,7 @@ import (
 
 {{if .StrictOrdering}}
 
-{{ $stream := printf "%s_%sClient" .ServName .MethodName }}
-{{ $state := printf "%sStream" .MethodName }}
 /* Exported types and methods for strictly ordered quorum call method {{.MethodName}} */
-type {{$state}} struct {
-	mu      sync.Mutex
-	nextID  uint64
-	streams map[uint32]{{$stream}}
-	sendQ   map[uint32]chan *{{.FQReqName}} // Maps a node ID to the send channel for that node
-	recvQ   map[uint64]chan {{.UnexportedTypeName}} // Maps a message ID to the receive channel for that message
-	cancel  func()
-}
-
-func (c *Configuration) New{{$state}}() (*{{$state}}, error) {
-	s := &{{$state}}{
-		streams: make(map[uint32]{{$stream}}),
-		sendQ: make(map[uint32]chan *{{.FQReqName}}),
-		recvQ: make(map[uint64]chan {{.UnexportedTypeName}}),
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	s.cancel = cancel
-
-	for _, node := range c.nodes {
-		s.sendQ[node.id] = make(chan *{{.FQReqName}}, 1)
-		stream, err := node.{{.MethodName}}(ctx)
-		if err != nil {
-			cancel()
-			close(s.sendQ[node.id])
-			return nil, fmt.Errorf("stream creation failed: %w", err)
-		}
-		s.streams[node.id] = stream
-
-		go s.sendMsgs(node)
-		go s.recvMsgs(node)
-	}
-
-	return s, nil
-}
-
-func (s *{{$state}}) sendMsgs(node *Node) {
-	stream := s.streams[node.id]
-	sendQ := s.sendQ[node.id]
-	for msg := range sendQ {
-		err := stream.SendMsg(msg)
-		// TODO: figure out how to handle a stream ending prematurely
-		if err != nil {
-			if err != io.EOF {
-				node.setLastErr(err)
-			}
-			return
-		}
-	}
-}
-
-func (s *{{$state}}) recvMsgs(node *Node) {
-	stream := s.streams[node.id]
-	msg := new({{.FQRespName}})
-	for {
-		err := stream.RecvMsg(msg)
-		// TODO: figure out how to handle a stream ending prematurely
-		if err != nil {
-			if err != io.EOF {
-				node.setLastErr(err)
-			}
-			return
-		}
-		s.mu.Lock()
-		id := msg.{{.OrderingIDField}}
-		if c, ok := s.recvQ[id]; ok {
-			c <- {{.UnexportedTypeName}}{node.id, msg, err}
-		}
-		s.mu.Unlock()
-	}
-}
-
-func (s *{{$state}}) Close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for _, c := range s.sendQ {
-		close(c)
-	}
-	for _, cs := range s.streams {
-		// TODO: figure out if the error needs to be handled
-		cs.CloseSend()
-	}
-}
-
-func (s *{{$state}}) getNextID() uint64 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.nextID++
-	return s.nextID
-}
-
 {{if .PerNodeArg}}
 
 // {{.MethodName}} is invoked as a quorum call on each node in configuration c,
@@ -930,31 +833,31 @@ func (s *{{$state}}) getNextID() uint64 {
 // result. The perNode function takes a request arg and
 // returns a {{.FQReqName}} object to be passed to the given nodeID.
 // The perNode function should be thread-safe.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, s *{{$state}}, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}, f func(arg {{.FQReqName}}, nodeID uint32) *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
 {{- else}}
 
 // {{.MethodName}} is invoked as a quorum call on all nodes in configuration c,
 // using the same argument arg, and returns the result.
-func (c *Configuration) {{.MethodName}}(ctx context.Context, s *{{$state}}, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
+func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}) (resp *{{.FQCustomRespName}}, err error) {
 {{- end}}
 	{{- template "simple_trace" .}}
 
-	msgID := s.getNextID()
+	msgID := c.mgr.next{{.MethodName}}ID()
 	// get the ID which will be used to return the correct responses for a request
 	a.{{.OrderingIDField}} = msgID
 	
 	// set up a channel to collect replies
-	replies := make(chan {{.UnexportedTypeName}}, c.n)
-	s.mu.Lock()
-	s.recvQ[msgID] = replies
-	s.mu.Unlock()
+	replies := make(chan *{{.UnexportedTypeName}}, c.n)
+	c.mgr.{{.UnexportedMethodName}}Lock.Lock()
+	c.mgr.{{.UnexportedMethodName}}Recv[msgID] = replies
+	c.mgr.{{.UnexportedMethodName}}Lock.Unlock()
 	
 	defer func() {
 		// remove the replies channel when we are done
-		s.mu.Lock()
-		delete(s.recvQ, msgID)
+		c.mgr.{{.UnexportedMethodName}}Lock.Lock()
+		delete(c.mgr.{{.UnexportedMethodName}}Recv, msgID)
 		close(replies)
-		s.mu.Unlock()
+		c.mgr.{{.UnexportedMethodName}}Lock.Unlock()
 	}()
 	
 	// push the message to the nodes
@@ -967,9 +870,9 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, s *{{$state}}, a *{
 			continue
 		}
 		nodeArg.{{.OrderingIDField}} = msgID
-		s.sendQ[n.ID()] <- nodeArg
+		n.{{.UnexportedMethodName}}Send <- nodeArg
 {{- else}}
-		s.sendQ[n.ID()] <- a
+		n.{{.UnexportedMethodName}}Send <- a
 {{end -}}
 	}
 
@@ -982,6 +885,8 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, s *{{$state}}, a *{
 	for {
 		select {
 		case r := <-replies:
+			// TODO: An error from SendMsg/RecvMsg means that the stream has closed, so we probably don't need to check
+			// for errors here.
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -1011,6 +916,321 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, s *{{$state}}, a *{
 {{- end -}}
 `
 
+const mgr_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
+
+{{ $Pkg := .PackageName }}
+
+{{if not .IgnoreImports}}
+package {{ $Pkg }}
+
+import (
+	"encoding/binary"
+	"fmt"
+	"hash/fnv"
+	"log"
+	"net"
+	"sort"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"golang.org/x/net/trace"
+)
+{{end}}
+
+// Manager manages a pool of node configurations on which quorum remote
+// procedure calls can be made.
+type Manager struct {
+	mu       sync.Mutex
+	nodes    []*Node
+	lookup   map[uint32]*Node
+	configs  map[uint32]*Configuration
+	eventLog trace.EventLog
+
+	closeOnce sync.Once
+	logger    *log.Logger
+	opts      managerOptions
+
+{{range .Services}}
+{{- if .StrictOrdering}}
+	{{.UnexportedMethodName}}ID uint32
+	{{.UnexportedMethodName}}Recv map[uint32]chan *{{.UnexportedTypeName}}
+	{{.UnexportedMethodName}}Lock sync.RWMutex
+{{- end -}}
+{{end}}
+}
+
+// NewManager attempts to connect to the given set of node addresses and if
+// successful returns a new Manager containing connections to those nodes.
+func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
+	if len(nodeAddrs) == 0 {
+		return nil, fmt.Errorf("could not create manager: no nodes provided")
+	}
+
+	m := &Manager{
+		lookup:  make(map[uint32]*Node),
+		configs: make(map[uint32]*Configuration),
+{{range .Services}}
+{{- if .StrictOrdering}}
+		{{.UnexportedMethodName}}Recv: make(map[uint32]chan *{{.UnexportedTypeName}}),
+{{- end -}}
+{{end}}
+	}
+
+	for _, opt := range opts {
+		opt(&m.opts)
+	}
+
+	for _, naddr := range nodeAddrs {
+		node, err2 := m.createNode(naddr)
+		if err2 != nil {
+			return nil, ManagerCreationError(err2)
+		}
+		m.lookup[node.id] = node
+		m.nodes = append(m.nodes, node)
+	}
+
+	if m.opts.trace {
+		title := strings.Join(nodeAddrs, ",")
+		m.eventLog = trace.NewEventLog("gorums.Manager", title)
+	}
+
+	err := m.connectAll()
+	if err != nil {
+		return nil, ManagerCreationError(err)
+	}
+
+	if m.opts.logger != nil {
+		m.logger = m.opts.logger
+	}
+
+	if m.eventLog != nil {
+		m.eventLog.Printf("ready")
+	}
+
+	return m, nil
+}
+
+func (m *Manager) createNode(addr string) (*Node, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("create node %s error: %v", addr, err)
+	}
+
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(tcpAddr.String()))
+	id := h.Sum32()
+
+	if _, found := m.lookup[id]; found {
+		return nil, fmt.Errorf("create node %s error: node already exists", addr)
+	}
+
+	node := &Node{
+		id:      id,
+		addr:    tcpAddr.String(),
+		latency: -1 * time.Second,
+		logger:  m.logger,
+{{range .Services}}
+{{- if .StrictOrdering}}
+		{{.UnexportedMethodName}}Send: make(chan *{{.FQReqName}}),
+		{{.UnexportedMethodName}}Recv: m.{{.UnexportedMethodName}}Recv,
+		{{.UnexportedMethodName}}Lock: &m.{{.UnexportedMethodName}}Lock,
+{{- end -}}
+{{end}}
+	}
+
+	return node, nil
+}
+
+func (m *Manager) connectAll() error {
+	if m.opts.noConnect {
+		return nil
+	}
+
+	if m.eventLog != nil {
+		m.eventLog.Printf("connecting")
+	}
+
+	for _, node := range m.nodes {
+		err := node.connect(m.opts)
+		if err != nil {
+			if m.eventLog != nil {
+				m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
+			}
+			return fmt.Errorf("connect node %s error: %v", node.addr, err)
+		}
+	}
+	return nil
+}
+
+func (m *Manager) closeNodeConns() {
+	for _, node := range m.nodes {
+		err := node.close()
+		if err == nil {
+			continue
+		}
+		if m.logger != nil {
+			m.logger.Printf("node %d: error closing: %v", node.id, err)
+		}
+	}
+}
+
+// Close closes all node connections and any client streams.
+func (m *Manager) Close() {
+	m.closeOnce.Do(func() {
+		if m.eventLog != nil {
+			m.eventLog.Printf("closing")
+		}
+		m.closeNodeConns()
+	})
+}
+
+// NodeIDs returns the identifier of each available node. IDs are returned in
+// the same order as they were provided in the creation of the Manager.
+func (m *Manager) NodeIDs() []uint32 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ids := make([]uint32, 0, len(m.nodes))
+	for _, node := range m.nodes {
+		ids = append(ids, node.ID())
+	}
+	return ids
+}
+
+// Node returns the node with the given identifier if present.
+func (m *Manager) Node(id uint32) (node *Node, found bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	node, found = m.lookup[id]
+	return node, found
+}
+
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Manager.
+func (m *Manager) Nodes() []*Node {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.nodes
+}
+
+// ConfigurationIDs returns the identifier of each available
+// configuration.
+func (m *Manager) ConfigurationIDs() []uint32 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ids := make([]uint32, 0, len(m.configs))
+	for id := range m.configs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// Configuration returns the configuration with the given global
+// identifier if present.
+func (m *Manager) Configuration(id uint32) (config *Configuration, found bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	config, found = m.configs[id]
+	return config, found
+}
+
+// Configurations returns a slice of each available configuration.
+func (m *Manager) Configurations() []*Configuration {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	configs := make([]*Configuration, 0, len(m.configs))
+	for _, conf := range m.configs {
+		configs = append(configs, conf)
+	}
+	return configs
+}
+
+// Size returns the number of nodes and configurations in the Manager.
+func (m *Manager) Size() (nodes, configs int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.nodes), len(m.configs)
+}
+
+// AddNode attempts to dial to the provide node address. The node is
+// added to the Manager's pool of nodes if a connection was established.
+func (m *Manager) AddNode(addr string) error {
+	panic("not implemented")
+}
+
+// NewConfiguration returns a new configuration given quorum specification and
+// a timeout.
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(ids) == 0 {
+		return nil, IllegalConfigError("need at least one node")
+	}
+
+	var cnodes []*Node
+	unique := make(map[uint32]struct{})
+	var deduped []uint32
+	for _, nid := range ids {
+		// Ensure that identical ids are only counted once.
+		if _, duplicate := unique[nid]; duplicate {
+			continue
+		}
+		unique[nid] = struct{}{}
+		deduped = append(deduped, nid)
+
+		node, found := m.lookup[nid]
+		if !found {
+			return nil, NodeNotFoundError(nid)
+		}
+		cnodes = append(cnodes, node)
+	}
+
+	// Node ids are sorted ensure a globally consistent configuration id.
+	sort.Sort(idSlice(deduped))
+
+	h := fnv.New32a()
+	for _, id := range deduped {
+		binary.Write(h, binary.LittleEndian, id)
+	}
+	cid := h.Sum32()
+
+	conf, found := m.configs[cid]
+	if found {
+		return conf, nil
+	}
+
+	c := &Configuration{
+		id:    cid,
+		nodes: cnodes,
+		n:     len(cnodes),
+		mgr:   m,
+		qspec: qspec,
+	}
+	m.configs[cid] = c
+
+	return c, nil
+}
+
+{{range .Services}}
+{{- if .StrictOrdering}}
+func (m *Manager) next{{.MethodName}}ID() uint32 {
+	return atomic.AddUint32(&m.{{.UnexportedMethodName}}ID, 1)
+}
+{{- end -}}
+{{end}}
+
+type idSlice []uint32
+
+func (p idSlice) Len() int           { return len(p) }
+func (p idSlice) Less(i, j int) bool { return p[i] < p[j] }
+func (p idSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+`
+
 const node_tmpl = `
 {{/* Remember to run 'make dev' after editing this file. */}}
 
@@ -1020,6 +1240,7 @@ package {{.PackageName}}
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"sync"
 	"time"
@@ -1045,6 +1266,11 @@ type Node struct {
 {{- if .ClientStreaming}}
 	{{.MethodName}}Client {{.ServName}}_{{.MethodName}}Client
 {{- end -}}
+{{- if .StrictOrdering }}
+	{{.UnexportedMethodName}}Send chan *{{.FQReqName}}
+	{{.UnexportedMethodName}}Recv map[uint32]chan *{{.UnexportedTypeName}}
+	{{.UnexportedMethodName}}Lock *sync.RWMutex
+{{- end -}}
 {{end}}
 
 	mu sync.Mutex
@@ -1067,11 +1293,15 @@ func (n *Node) connect(opts managerOptions) error {
 
 {{range .Services}}
 {{if .ClientStreaming}}
-  	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
-  	if err != nil {
-  		return fmt.Errorf("stream creation failed: %v", err)
-  	}
+	n.{{.MethodName}}Client, err = n.{{.ServName}}Client.{{.MethodName}}(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
 {{end}}
+{{if .StrictOrdering}}
+	go n.{{.UnexportedMethodName}}SendMsgs()
+	go n.{{.UnexportedMethodName}}RecvMsgs()
+{{end -}}
 {{end -}}
 
 	return nil
@@ -1084,16 +1314,60 @@ func (n *Node) close() error {
 {{- else if .ClientStreaming}}
 	_, _ = n.{{.MethodName}}Client.CloseAndRecv()
 {{- end -}}
+{{if .StrictOrdering}}
+	close(n.{{.UnexportedMethodName}}Send)
+{{- end -}}
 {{end}}
 
 	if err := n.conn.Close(); err != nil {
 		if n.logger != nil {
 			n.logger.Printf("%d: conn close error: %v", n.id, err)
 		}
-    	return fmt.Errorf("%d: conn close error: %v", n.id, err)
-    }
+		return fmt.Errorf("%d: conn close error: %v", n.id, err)
+	}
 	return nil
 }
+
+{{range .Services}}
+{{- if .StrictOrdering}}
+func (n *Node) {{.UnexportedMethodName}}SendMsgs() {
+	for msg := range n.{{.UnexportedMethodName}}Send {
+		err := n.{{.MethodName}}Client.SendMsg(msg)
+		if err != nil {
+			if err != io.EOF {
+				if n.logger != nil {
+					n.logger.Printf("%d: {{.MethodName}} send error: %v", n.id, err)
+				}
+				n.setLastErr(err)
+			}
+			return
+		}
+	}
+}
+
+func (n *Node) {{.UnexportedMethodName}}RecvMsgs() {
+	for {
+		msg := new({{.FQRespName}})
+		err := n.{{.MethodName}}Client.RecvMsg(msg)
+		if err != nil {
+			if err != io.EOF {
+				if n.logger != nil {
+					n.logger.Printf("%d: {{.MethodName}} receive error: %v", n.id, err)
+				}
+				n.setLastErr(err)
+			}
+			return
+		}
+		id := msg.{{.OrderingIDField}}
+		n.{{.UnexportedMethodName}}Lock.RLock()
+		if c, ok := n.{{.UnexportedMethodName}}Recv[id]; ok {
+			c <- &{{.UnexportedTypeName}}{n.id, msg, nil}
+		}
+		n.{{.UnexportedMethodName}}Lock.RUnlock()
+	}
+}
+{{- end -}}
+{{end}}
 `
 
 const qspec_tmpl = `{{/* Remember to run 'make dev' after editing this file. */}}
@@ -1158,6 +1432,7 @@ var templates = map[string]string{
 	"calltype_multicast_tmpl":          calltype_multicast_tmpl,
 	"calltype_quorumcall_tmpl":         calltype_quorumcall_tmpl,
 	"calltype_strict_ordering_tmpl":    calltype_strict_ordering_tmpl,
+	"mgr_tmpl":                         mgr_tmpl,
 	"node_tmpl":                        node_tmpl,
 	"qspec_tmpl":                       qspec_tmpl,
 }
