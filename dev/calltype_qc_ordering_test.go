@@ -70,7 +70,8 @@ func TestQuorumCallOrdering(t *testing.T) {
 		case err := <-failMsg:
 			t.Fatalf(err)
 		default:
-			_, err := config.WriteOrdered(context.Background(), state)
+			s := *state
+			_, err := config.WriteOrdered(context.Background(), &s)
 			if err != nil {
 				t.Fatalf("write quorum call error: %v", err)
 			}
