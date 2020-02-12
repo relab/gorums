@@ -35,7 +35,7 @@ type Node struct {
 {{- end -}}
 {{- if .StrictOrdering }}
 	{{.UnexportedMethodName}}Send chan *{{.FQReqName}}
-	{{.UnexportedMethodName}}Recv map[uint32]chan *{{.UnexportedTypeName}}
+	{{.UnexportedMethodName}}Recv map[{{.OrderingIDType}}]chan *{{.UnexportedTypeName}}
 	{{.UnexportedMethodName}}Lock *sync.RWMutex
 {{- end -}}
 {{end}}

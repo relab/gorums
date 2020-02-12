@@ -303,6 +303,7 @@ type serviceMethod struct {
 	FQReqName        string
 	CallType         string
 	OrderingIDField  string
+	OrderingIDType   string
 
 	TypeName           string
 	UnexportedTypeName string
@@ -329,6 +330,7 @@ type responseType struct {
 	FQRespName         string
 	FQCustomRespName   string
 	OrderingIDField    string
+	OrderingIDType     string
 	QuorumCall         bool
 	Correctable        bool
 	CorrectableStream  bool
@@ -336,6 +338,9 @@ type responseType struct {
 	Multicast          bool
 	StrictOrdering     bool
 }
+
+// valid integer types for message ID field
+var integerTypes = map[string]struct{}{"uint32": {}, "uint64": {}}
 
 func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 	g.pkgData.PackageName = file.GetPackage()
@@ -367,6 +372,35 @@ func (g *gorums) generateServiceMethods(file *generator.FileDescriptor) {
 			sm.ClientStreaming = method.GetClientStreaming()
 			// Is it a server stream method
 			sm.ServerStreaming = method.GetServerStreaming()
+
+			if sm.StrictOrdering {
+				// get type of ID fields and check that they are valid
+				inputMsg := file.GetMessage(g.typeName(method.GetInputType()))
+				inputIDField := inputMsg.GetFieldDescriptor(sm.OrderingIDField)
+				if inputIDField == nil {
+					die(fmt.Errorf("Input type (%s) missing ID field %s", inputMsg.GetName(), sm.OrderingIDField))
+				}
+				sm.OrderingIDType, _ = g.GoType(nil, inputIDField)
+				if _, valid := integerTypes[sm.OrderingIDType]; !valid {
+					die(fmt.Errorf(
+						"ID field (%s) in input type (%s) does not have a valid unsigned integer type (got: %s)",
+						sm.OrderingIDField, inputMsg.GetName(), sm.OrderingIDType,
+					))
+				}
+
+				outputMsg := file.GetMessage(g.typeName(method.GetOutputType()))
+				outputIDField := outputMsg.GetFieldDescriptor(sm.OrderingIDField)
+				if outputIDField == nil {
+					die(fmt.Errorf("Output type (%s) missing ID field %s", outputMsg.GetName(), sm.OrderingIDField))
+				}
+				outputType, _ := g.GoType(nil, outputIDField)
+				if outputType != sm.OrderingIDType {
+					die(fmt.Errorf(
+						"Input type (%s) and output type (%s) do not have matching type for ID field %s",
+						inputMsg.GetName(), outputMsg.GetName(), sm.OrderingIDType,
+					))
+				}
+			}
 
 			if sm.CustomReturnType == "" {
 				sm.CustomRespName = sm.RespName
@@ -401,6 +435,7 @@ func sortedResponseTypes(respTypes map[string]*serviceMethod) (responseTypes []r
 			FQRespName:         sm.FQRespName,
 			FQCustomRespName:   sm.FQCustomRespName,
 			OrderingIDField:    sm.OrderingIDField,
+			OrderingIDType:     sm.OrderingIDType,
 			QuorumCall:         sm.QuorumCall,
 			Future:             sm.Future,
 			Correctable:        sm.Correctable,

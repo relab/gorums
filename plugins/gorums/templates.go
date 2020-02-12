@@ -954,8 +954,8 @@ type Manager struct {
 
 {{range .Services}}
 {{- if .StrictOrdering}}
-	{{.UnexportedMethodName}}ID uint32
-	{{.UnexportedMethodName}}Recv map[uint32]chan *{{.UnexportedTypeName}}
+	{{.UnexportedMethodName}}ID {{.OrderingIDType}}
+	{{.UnexportedMethodName}}Recv map[{{.OrderingIDType}}]chan *{{.UnexportedTypeName}}
 	{{.UnexportedMethodName}}Lock sync.RWMutex
 {{- end -}}
 {{end}}
@@ -973,7 +973,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		configs: make(map[uint32]*Configuration),
 {{range .Services}}
 {{- if .StrictOrdering}}
-		{{.UnexportedMethodName}}Recv: make(map[uint32]chan *{{.UnexportedTypeName}}),
+		{{.UnexportedMethodName}}Recv: make(map[{{.OrderingIDType}}]chan *{{.UnexportedTypeName}}),
 {{- end -}}
 {{end}}
 	}
@@ -1218,8 +1218,13 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 {{range .Services}}
 {{- if .StrictOrdering}}
-func (m *Manager) next{{.MethodName}}ID() uint32 {
+func (m *Manager) next{{.MethodName}}ID() {{.OrderingIDType}} {
+{{if eq .OrderingIDType "uint32" -}}
 	return atomic.AddUint32(&m.{{.UnexportedMethodName}}ID, 1)
+{{- end -}}
+{{if eq .OrderingIDType "uint64" -}}
+	return atomic.AddUint64(&m.{{.UnexportedMethodName}}ID, 1)
+{{- end -}}
 }
 {{- end -}}
 {{end}}
@@ -1268,7 +1273,7 @@ type Node struct {
 {{- end -}}
 {{- if .StrictOrdering }}
 	{{.UnexportedMethodName}}Send chan *{{.FQReqName}}
-	{{.UnexportedMethodName}}Recv map[uint32]chan *{{.UnexportedTypeName}}
+	{{.UnexportedMethodName}}Recv map[{{.OrderingIDType}}]chan *{{.UnexportedTypeName}}
 	{{.UnexportedMethodName}}Lock *sync.RWMutex
 {{- end -}}
 {{end}}
