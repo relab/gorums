@@ -347,3 +347,52 @@ func ExampleStorageClient() {
 	cancel()
 }
 ```
+
+### Strict Ordering
+
+A problem with the regular quorum call implementation is that a message from a
+quorum call Q2 may arrive at a node before a message from another quorum call Q1
+arrives, even though Q1 was called before Q2. This problem is discussed in issue
+[#16](https://github.com/relab/gorums/issues/16)
+
+A different quorum call implementation is available that does not suffer from
+this issue. This implementation has some different requirements due to its use
+of GRPC streams. The `WriteOrdered` RPC shown below uses the "Strict Ordering"
+quorum call variant:
+
+```protobuf
+// WriteOrdered is a synchronous quorum call that enforces a strict
+// ordering of the messages that are sent to a node, such that
+// a quorum call Q1 will deliver its messages to the nodes
+// respectively before a later quorum call Q2 delivers its messages.
+// The order of replies is not guaranteed for concurrent quorum calls.
+rpc WriteOrdered(stream State) returns (stream WriteResponse) {
+	// The option specifies a common field in the `State` and `WriteResponse`
+	// messages of type an unsigned integer type that gorums can use to keep
+	// track of which requests and replies belong together.
+	option (gorums.qc_strict_ordering) = "GorumsMessageID";
+}
+```
+
+The option `qc_strict_ordering` requires that both the request `State` and the
+response `WriteResponse` are streams and have a common field with the specified
+name, in this case "GorumsMessageID", and the same unsigned integer type (for
+example `uint64`).
+
+The client side code will be the same as for a normal quorum call, but the
+server code needs to receive and send messages on the stream while preserving
+the ID between request and response. To simplify this, a helper function will be
+generated. The function is named after the name of the RPC, ending with
+"ServerLoop". For the rpc shown above, this function would be named
+`WriteOrderedServerLoop`. This function takes two arguments: the GRPC stream and
+a function to generate a response from a reply. It can be used like this:
+
+```go
+// StorageServerBasic implements the GRPC server API
+// WriteOrdered implements the RPC `WriteOrdered`
+func (s *StorageServerBasic) WriteOrdered(srv Storage_WriteOrderedServer) error {
+	return WriteOrderedServerLoop(srv, func(req *State) *WriteResponse {
+		// process state and return a *WriteResponse
+	})
+}
+```

@@ -94,8 +94,8 @@ service Storage {
 	// The order of replies is not guaranteed for concurrent quorum calls.
 	rpc WriteOrdered(stream State) returns (stream WriteResponse) {
 		// The option specifies a common field in the `State` and `WriteResponse`
-		// messages of type `uint32` that gorums can use to keep track of which
-		// requests and replies belong together.
+		// messages of type an unsigned integer type that gorums can use to keep
+		// track of which requests and replies belong together.
 		option (gorums.qc_strict_ordering) = "GorumsMessageID";
 	}
 }

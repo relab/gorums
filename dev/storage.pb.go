@@ -381,6 +381,11 @@ type StorageClient interface {
 	// to that node. This is useful for quorum calls where the different
 	// servers/nodes expect a variation over the input argument.
 	WritePerNode(ctx context.Context, in *State, opts ...grpc.CallOption) (*WriteResponse, error)
+	// WriteOrdered is a synchronous quorum call that enforces a strict
+	// ordering of the messages that are sent to a node, such that
+	// a quorum call Q1 will deliver its messages to the nodes
+	// respectively before a later quorum call Q2 delivers its messages.
+	// The order of replies is not guaranteed for concurrent quorum calls.
 	WriteOrdered(ctx context.Context, opts ...grpc.CallOption) (Storage_WriteOrderedClient, error)
 }
 
@@ -600,6 +605,11 @@ type StorageServer interface {
 	// to that node. This is useful for quorum calls where the different
 	// servers/nodes expect a variation over the input argument.
 	WritePerNode(context.Context, *State) (*WriteResponse, error)
+	// WriteOrdered is a synchronous quorum call that enforces a strict
+	// ordering of the messages that are sent to a node, such that
+	// a quorum call Q1 will deliver its messages to the nodes
+	// respectively before a later quorum call Q2 delivers its messages.
+	// The order of replies is not guaranteed for concurrent quorum calls.
 	WriteOrdered(Storage_WriteOrderedServer) error
 }
 
