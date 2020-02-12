@@ -4,7 +4,6 @@ package dev_test
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"testing"
 	"time"
@@ -132,23 +131,9 @@ func (s *storageServerRequiringOrdering) Write(ctx context.Context, state *qc.St
 
 // WriteOrdered implements the WriteOrdered method.
 func (s *storageServerRequiringOrdering) WriteOrdered(srv qc.Storage_WriteOrderedServer) error {
-	ctx := srv.Context()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		state, err := srv.Recv()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-
+	return qc.WriteOrderedServerLoop(srv, func(state *qc.State) *qc.WriteResponse {
 		s.mu.Lock()
+		defer s.mu.Unlock()
 		if state.Timestamp != s.state.Timestamp+1 {
 			err := fmt.Sprintf(
 				"server: message received out-of-order: got: %d, expected: %d",
@@ -158,16 +143,9 @@ func (s *storageServerRequiringOrdering) WriteOrdered(srv qc.Storage_WriteOrdere
 		} else {
 			s.state = *state
 		}
-		s.mu.Unlock()
-
-		err = srv.Send(&qc.WriteResponse{GorumsMessageID: state.GorumsMessageID})
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
+		resp := s.writeResp
+		return &resp
+	})
 }
 
 // WriteFuture implements the WriteFuture method.

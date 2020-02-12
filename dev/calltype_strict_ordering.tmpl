@@ -104,5 +104,26 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}) 
 	}
 }
 
+func {{.MethodName}}ServerLoop(srv {{.ServName}}_{{.MethodName}}Server, getResponse func(*{{.FQReqName}}) *{{.FQRespName}}) error {
+	ctx := srv.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		req, err := srv.Recv()
+		if err != nil {
+			return err
+		}
+		resp := getResponse(req)
+		resp.{{.OrderingIDField}} = req.{{.OrderingIDField}}
+		err = srv.Send(resp)
+		if err != nil {
+			return err
+		}
+	}
+}
+
 {{- end -}}
 {{- end -}}

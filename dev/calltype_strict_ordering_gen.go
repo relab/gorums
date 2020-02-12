@@ -94,3 +94,24 @@ func (c *Configuration) WriteOrdered(ctx context.Context, a *State) (resp *Write
 		}
 	}
 }
+
+func WriteOrderedServerLoop(srv Storage_WriteOrderedServer, getResponse func(*State) *WriteResponse) error {
+	ctx := srv.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		req, err := srv.Recv()
+		if err != nil {
+			return err
+		}
+		resp := getResponse(req)
+		resp.GorumsMessageID = req.GorumsMessageID
+		err = srv.Send(resp)
+		if err != nil {
+			return err
+		}
+	}
+}

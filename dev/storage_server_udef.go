@@ -510,21 +510,7 @@ func (s *StorageServerLockedWithState) PerformSingleReadCorrectableStream() {
 }
 
 func writeOrderedStub(srv Storage_WriteOrderedServer) error {
-	ctx := srv.Context()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		_, err := srv.Recv()
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
+	return WriteOrderedServerLoop(srv, func(req *State) *WriteResponse {
 		panic("not implemented")
-	}
+	})
 }
