@@ -104,6 +104,10 @@ func (c *Configuration) {{.MethodName}}(ctx context.Context, a *{{.FQReqName}}) 
 	}
 }
 
+// {{.MethodName}}ServerLoop is a helper function that will process receive
+// messages on srv, generate a response message using getResponse, and send
+// the response back on srv. The function returns when the stream ends, and
+// returns the error that caused it to end.
 func {{.MethodName}}ServerLoop(srv {{.ServName}}_{{.MethodName}}Server, getResponse func(*{{.FQReqName}}) *{{.FQRespName}}) error {
 	ctx := srv.Context()
 	for {

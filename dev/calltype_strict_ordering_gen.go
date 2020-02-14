@@ -95,6 +95,10 @@ func (c *Configuration) WriteOrdered(ctx context.Context, a *State) (resp *Write
 	}
 }
 
+// WriteOrderedServerLoop is a helper function that will process receive
+// messages on srv, generate a response message using getResponse, and send
+// the response back on srv. The function returns when the stream ends, and
+// returns the error that caused it to end.
 func WriteOrderedServerLoop(srv Storage_WriteOrderedServer, getResponse func(*State) *WriteResponse) error {
 	ctx := srv.Context()
 	for {
