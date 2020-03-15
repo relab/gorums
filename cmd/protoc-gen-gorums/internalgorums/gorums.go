@@ -3,6 +3,7 @@ package internalgorums
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
@@ -13,8 +14,6 @@ import (
 )
 
 // TODO(meling) replace github.com/relab/gorums with gorums.io as import package
-
-// TODO(meling) replace panic with log.Fatalf()
 
 var importMap = map[string]protogen.GoImportPath{
 	"io":      protogen.GoImportPath("io"),
@@ -60,7 +59,7 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		// To build multiple services, make separate proto files and
 		// run the plugin separately for each proto file.
 		// These cannot share the same Go package.
-		panic("Gorums does not support multiple services in the same proto file.")
+		log.Fatalln("Gorums does not support multiple services in the same proto file.")
 	}
 	filename := file.GeneratedFilenamePrefix + "_gorums.pb.go"
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
@@ -204,64 +203,55 @@ func hasMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Extens
 }
 
 // validateMethodExtensions returns the method option for the
-// call type of the given method. If the method support multiple
-// call types validation will fail with a panic.
+// call type of the given method. If the method specifies multiple
+// call types, validation will fail with a panic.
 func validateMethodExtensions(method *protogen.Method) *protoimpl.ExtensionInfo {
 	methExt := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
 	var firstOption *protoimpl.ExtensionInfo
 	for _, callType := range gorumsCallTypes {
 		if proto.HasExtension(methExt, callType) {
 			if firstOption != nil {
-				panic(fmt.Sprintf("%s.%s: cannot combine options: '%s' and '%s'",
-					method.Parent.Desc.Name(), method.Desc.Name(), firstOption.Name, callType.Name))
+				log.Fatalf("%s.%s: cannot combine options: '%s' and '%s'",
+					method.Parent.Desc.Name(), method.Desc.Name(), firstOption.Name, callType.Name)
 			}
 			firstOption = callType
 		}
 	}
 
 	isQuorumCallVariant := hasMethodOption(method, callTypesWithInternal...)
-
 	switch {
 	case !isQuorumCallVariant && proto.GetExtension(methExt, gorums.E_CustomReturnType) != "":
 		// Only QC variants can define custom return type
 		// (we don't support rewriting the plain gRPC methods.)
-		panic(fmt.Sprintf(
+		log.Fatalf(
 			"%s.%s: cannot combine non-quorum call method with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CustomReturnType.Name,
-		))
+			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CustomReturnType.Name)
 
 	case !isQuorumCallVariant && hasMethodOption(method, gorums.E_QfWithReq):
 		// Only QC variants need to process replies.
-		panic(fmt.Sprintf(
+		log.Fatalf(
 			"%s.%s: cannot combine non-quorum call method with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_QfWithReq.Name,
-		))
+			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_QfWithReq.Name)
 
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
-		panic(fmt.Errorf(
+		log.Fatalf(
 			"%s.%s: client-server streams is only valid with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name,
-		))
+			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name)
 
 	case hasMethodOption(method, gorums.E_Multicast) && !method.Desc.IsStreamingClient():
-		panic(fmt.Errorf(
+		log.Fatalf(
 			"%s.%s: '%s' option is only valid for client-server streams methods",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name,
-		))
+			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name)
 
 	case !hasMethodOption(method, gorums.E_CorrectableStream) && method.Desc.IsStreamingServer():
-		panic(fmt.Errorf(
+		log.Fatalf(
 			"%s.%s: server-client streams is only valid with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name,
-		))
+			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name)
 
 	case hasMethodOption(method, gorums.E_CorrectableStream) && !method.Desc.IsStreamingServer():
-		panic(fmt.Errorf(
+		log.Fatalf(
 			"%s.%s: '%s' option is only valid for server-client streams",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name,
-		))
-
+			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name)
 	}
-
 	return firstOption
 }

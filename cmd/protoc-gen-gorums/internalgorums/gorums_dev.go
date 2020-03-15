@@ -2,6 +2,7 @@ package internalgorums
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"google.golang.org/protobuf/compiler/protogen"
@@ -18,7 +19,7 @@ func GenerateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.Fil
 		// To build multiple services, make separate proto files and
 		// run the plugin separately for each proto file.
 		// These cannot share the same Go package.
-		panic("Gorums does not support multiple services in the same proto file.")
+		log.Fatalln("Gorums does not support multiple services in the same proto file.")
 	}
 
 	// generate dev file for given gorumsType
