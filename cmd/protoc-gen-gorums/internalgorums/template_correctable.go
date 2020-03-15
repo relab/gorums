@@ -77,23 +77,22 @@ func (c *{{$correctableOut}}) Done() <-chan struct{} {
 func (c *{{$correctableOut}}) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if level < c.level {
 		close(ch)
-		c.mu.Unlock()
 		return ch
 	}
 	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
-	c.mu.Unlock()
 	return ch
 }
 
 func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, done bool) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.done {
-		c.mu.Unlock()
 		panic("set(...) called on a done correctable")
 	}
 	c.{{$customOut}}, c.level, c.err, c.done = reply, level, err, done
@@ -104,7 +103,6 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 				close(watcher.ch)
 			}
 		}
-		c.mu.Unlock()
 		return
 	}
 	for i := range c.watchers {
@@ -113,7 +111,6 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 			c.watchers[i] = nil
 		}
 	}
-	c.mu.Unlock()
 }
 `
 

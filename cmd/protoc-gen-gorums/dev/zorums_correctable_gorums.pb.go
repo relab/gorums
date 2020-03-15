@@ -48,23 +48,22 @@ func (c *CorrectableReadResponse) Done() <-chan struct{} {
 func (c *CorrectableReadResponse) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if level < c.level {
 		close(ch)
-		c.mu.Unlock()
 		return ch
 	}
 	c.watchers = append(c.watchers, &struct {
 		level int
 		ch    chan struct{}
 	}{level, ch})
-	c.mu.Unlock()
 	return ch
 }
 
 func (c *CorrectableReadResponse) set(reply *MyReadResponse, level int, err error, done bool) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.done {
-		c.mu.Unlock()
 		panic("set(...) called on a done correctable")
 	}
 	c.MyReadResponse, c.level, c.err, c.done = reply, level, err, done
@@ -75,7 +74,6 @@ func (c *CorrectableReadResponse) set(reply *MyReadResponse, level int, err erro
 				close(watcher.ch)
 			}
 		}
-		c.mu.Unlock()
 		return
 	}
 	for i := range c.watchers {
@@ -84,7 +82,6 @@ func (c *CorrectableReadResponse) set(reply *MyReadResponse, level int, err erro
 			c.watchers[i] = nil
 		}
 	}
-	c.mu.Unlock()
 }
 
 func (c *Configuration) readCorrectable(ctx context.Context, in *ReadRequest, resp *CorrectableReadResponse, opts ...grpc.CallOption) {
