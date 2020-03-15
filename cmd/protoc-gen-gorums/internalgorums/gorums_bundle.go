@@ -90,18 +90,6 @@ func findIdentifiers(fset *token.FileSet, info *loader.PackageInfo) map[string]s
 		}
 		if pkg := obj.Pkg(); pkg != nil && pkg.Path() != packagePath {
 			switch obj := obj.(type) {
-			case *types.Const:
-				// only need to store one identifier for each imported package
-				pkgIdent[pkg.Path()] = obj.Name()
-
-			case *types.TypeName:
-				// only need to store one identifier for each imported package
-				pkgIdent[pkg.Path()] = obj.Name()
-
-			case *types.Var:
-				// only need to store one identifier for each imported package
-				pkgIdent[pkg.Path()] = obj.Name()
-
 			case *types.Func:
 				if typ := obj.Type(); typ != nil {
 					if recv := typ.(*types.Signature).Recv(); recv != nil {
@@ -109,6 +97,10 @@ func findIdentifiers(fset *token.FileSet, info *loader.PackageInfo) map[string]s
 						continue
 					}
 				}
+				// only need to store one identifier for each imported package
+				pkgIdent[pkg.Path()] = obj.Name()
+
+			case *types.Const, *types.TypeName, *types.Var:
 				// only need to store one identifier for each imported package
 				pkgIdent[pkg.Path()] = obj.Name()
 			}
