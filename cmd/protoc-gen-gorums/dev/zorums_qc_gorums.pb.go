@@ -37,7 +37,7 @@ func (c *Configuration) ReadQuorumCall(ctx context.Context, in *ReadRequest, opt
 	expected := c.n
 	replyChan := make(chan internalReadResponse, expected)
 	for _, n := range c.nodes {
-		go callGRPCReadQuorumCall(ctx, n, in, replyChan)
+		go n.ReadQuorumCall(ctx, in, replyChan)
 	}
 
 	var (
@@ -71,17 +71,17 @@ func (c *Configuration) ReadQuorumCall(ctx context.Context, in *ReadRequest, opt
 	}
 }
 
-func callGRPCReadQuorumCall(ctx context.Context, node *Node, in *ReadRequest, replyChan chan<- internalReadResponse) {
+func (n *Node) ReadQuorumCall(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
 	reply := new(ReadResponse)
 	start := time.Now()
-	err := node.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCall", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCall", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		node.setLatency(time.Since(start))
+		n.setLatency(time.Since(start))
 	} else {
-		node.setLastErr(err)
+		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{node.id, reply, err}
+	replyChan <- internalReadResponse{n.id, reply, err}
 }
 
 // ReadQuorumCallPerNodeArg is a quorum call invoked on each node in configuration c,
@@ -118,7 +118,7 @@ func (c *Configuration) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRe
 			expected--
 			continue
 		}
-		go callGRPCReadQuorumCallPerNodeArg(ctx, n, nodeArg, replyChan)
+		go n.ReadQuorumCallPerNodeArg(ctx, nodeArg, replyChan)
 	}
 
 	var (
@@ -152,17 +152,17 @@ func (c *Configuration) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRe
 	}
 }
 
-func callGRPCReadQuorumCallPerNodeArg(ctx context.Context, node *Node, in *ReadRequest, replyChan chan<- internalReadResponse) {
+func (n *Node) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
 	reply := new(ReadResponse)
 	start := time.Now()
-	err := node.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallPerNodeArg", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallPerNodeArg", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		node.setLatency(time.Since(start))
+		n.setLatency(time.Since(start))
 	} else {
-		node.setLastErr(err)
+		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{node.id, reply, err}
+	replyChan <- internalReadResponse{n.id, reply, err}
 }
 
 // ReadQuorumCallQFWithRequestArg is a quorum call invoked on all nodes in configuration c,
@@ -191,7 +191,7 @@ func (c *Configuration) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *
 	expected := c.n
 	replyChan := make(chan internalReadResponse, expected)
 	for _, n := range c.nodes {
-		go callGRPCReadQuorumCallQFWithRequestArg(ctx, n, in, replyChan)
+		go n.ReadQuorumCallQFWithRequestArg(ctx, in, replyChan)
 	}
 
 	var (
@@ -225,17 +225,17 @@ func (c *Configuration) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *
 	}
 }
 
-func callGRPCReadQuorumCallQFWithRequestArg(ctx context.Context, node *Node, in *ReadRequest, replyChan chan<- internalReadResponse) {
+func (n *Node) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
 	reply := new(ReadResponse)
 	start := time.Now()
-	err := node.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallQFWithRequestArg", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallQFWithRequestArg", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		node.setLatency(time.Since(start))
+		n.setLatency(time.Since(start))
 	} else {
-		node.setLastErr(err)
+		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{node.id, reply, err}
+	replyChan <- internalReadResponse{n.id, reply, err}
 }
 
 // ReadQuorumCallCustomReturnType is a quorum call invoked on all nodes in configuration c,
@@ -264,7 +264,7 @@ func (c *Configuration) ReadQuorumCallCustomReturnType(ctx context.Context, in *
 	expected := c.n
 	replyChan := make(chan internalReadResponse, expected)
 	for _, n := range c.nodes {
-		go callGRPCReadQuorumCallCustomReturnType(ctx, n, in, replyChan)
+		go n.ReadQuorumCallCustomReturnType(ctx, in, replyChan)
 	}
 
 	var (
@@ -298,17 +298,17 @@ func (c *Configuration) ReadQuorumCallCustomReturnType(ctx context.Context, in *
 	}
 }
 
-func callGRPCReadQuorumCallCustomReturnType(ctx context.Context, node *Node, in *ReadRequest, replyChan chan<- internalReadResponse) {
+func (n *Node) ReadQuorumCallCustomReturnType(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
 	reply := new(ReadResponse)
 	start := time.Now()
-	err := node.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallCustomReturnType", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallCustomReturnType", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		node.setLatency(time.Since(start))
+		n.setLatency(time.Since(start))
 	} else {
-		node.setLastErr(err)
+		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{node.id, reply, err}
+	replyChan <- internalReadResponse{n.id, reply, err}
 }
 
 // ReadQuorumCallCombo does it all. Comment testing.
@@ -341,7 +341,7 @@ func (c *Configuration) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest
 			expected--
 			continue
 		}
-		go callGRPCReadQuorumCallCombo(ctx, n, nodeArg, replyChan)
+		go n.ReadQuorumCallCombo(ctx, nodeArg, replyChan)
 	}
 
 	var (
@@ -375,15 +375,15 @@ func (c *Configuration) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest
 	}
 }
 
-func callGRPCReadQuorumCallCombo(ctx context.Context, node *Node, in *ReadRequest, replyChan chan<- internalReadResponse) {
+func (n *Node) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
 	reply := new(ReadResponse)
 	start := time.Now()
-	err := node.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallCombo", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallCombo", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		node.setLatency(time.Since(start))
+		n.setLatency(time.Since(start))
 	} else {
-		node.setLastErr(err)
+		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{node.id, reply, err}
+	replyChan <- internalReadResponse{n.id, reply, err}
 }

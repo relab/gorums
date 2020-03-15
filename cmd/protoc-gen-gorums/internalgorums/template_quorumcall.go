@@ -51,9 +51,9 @@ var quorumCallLoop = `
 			expected--
 			continue
 		}
-		go callGRPC{{$method}}(ctx, n, nodeArg, replyChan)
+		go n.{{$method}}(ctx, nodeArg, replyChan)
 		{{else}}
-		go callGRPC{{$method}}(ctx, n, in, replyChan)
+		go n.{{$method}}(ctx, in, replyChan)
 		{{end -}}
 	}
 `
@@ -87,19 +87,18 @@ var quorumCallReply = `
 }
 `
 
-//TODO(meling) we could consider to make this a method on Node
-var callGrpc = `
-func callGRPC{{$method}}(ctx {{$context}}, node *Node, in *{{$in}}, replyChan chan<- {{$intOut}}) {
+var nodeCallGrpc = `
+func (n *Node) {{$method}}(ctx {{$context}}, in *{{$in}}, replyChan chan<- {{$intOut}}) {
 	reply := new({{$out}})
 	start := {{use "time.Now" .GenFile}}()
-	err := node.conn.Invoke(ctx, "{{fullName .Method}}", in, reply)
+	err := n.conn.Invoke(ctx, "{{fullName .Method}}", in, reply)
 	s, ok := {{use "status.FromError" .GenFile}}(err)
 	if ok && (s.Code() == {{use "codes.OK" .GenFile}} || s.Code() == codes.Canceled) {
-		node.setLatency(time.Since(start))
+		n.setLatency(time.Since(start))
 	} else {
-		node.setLastErr(err)
+		n.setLastErr(err)
 	}
-	replyChan <- {{$intOut}}{node.id, reply, err}
+	replyChan <- {{$intOut}}{n.id, reply, err}
 }
 `
 
@@ -109,4 +108,4 @@ var quorumCall = commonVariables +
 	quorumCallSignature +
 	quorumCallLoop +
 	quorumCallReply +
-	callGrpc
+	nodeCallGrpc

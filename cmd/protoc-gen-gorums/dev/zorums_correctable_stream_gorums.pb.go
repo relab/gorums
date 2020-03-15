@@ -111,7 +111,7 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, in *ReadReque
 	expected := c.n
 	replyChan := make(chan internalReadResponse, expected)
 	for _, n := range c.nodes {
-		go callGRPCReadCorrectableStream(ctx, n, in, replyChan)
+		go n.ReadCorrectableStream(ctx, in, replyChan)
 	}
 
 	var (
@@ -158,11 +158,11 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, in *ReadReque
 	}
 }
 
-func callGRPCReadCorrectableStream(ctx context.Context, node *Node, in *ReadRequest, replyChan chan<- internalReadResponse) {
-	x := NewReaderServiceClient(node.conn)
+func (n *Node) ReadCorrectableStream(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
+	x := NewReaderServiceClient(n.conn)
 	y, err := x.ReadCorrectableStream(ctx, in)
 	if err != nil {
-		replyChan <- internalReadResponse{node.id, nil, err}
+		replyChan <- internalReadResponse{n.id, nil, err}
 		return
 	}
 
@@ -171,7 +171,7 @@ func callGRPCReadCorrectableStream(ctx context.Context, node *Node, in *ReadRequ
 		if err == io.EOF {
 			return
 		}
-		replyChan <- internalReadResponse{node.id, reply, err}
+		replyChan <- internalReadResponse{n.id, reply, err}
 		if err != nil {
 			return
 		}

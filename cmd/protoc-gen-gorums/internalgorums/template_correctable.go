@@ -175,11 +175,11 @@ var correctableCallReply = `
 `
 
 var correctableStreamCallGrpc = `
-func callGRPC{{$method}}(ctx {{$context}}, node *Node, in *{{$in}}, replyChan chan<- {{$intOut}}) {
-	x := New{{serviceName .Method}}Client(node.conn)
+func (n *Node) {{$method}}(ctx {{$context}}, in *{{$in}}, replyChan chan<- {{$intOut}}) {
+	x := New{{serviceName .Method}}Client(n.conn)
 	y, err := x.{{$method}}(ctx, in)
 	if err != nil {
-		replyChan <- {{$intOut}}{node.id, nil, err}
+		replyChan <- {{$intOut}}{n.id, nil, err}
 		return
 	}
 
@@ -188,7 +188,7 @@ func callGRPC{{$method}}(ctx {{$context}}, node *Node, in *{{$in}}, replyChan ch
 		if err == {{use "io.EOF" .GenFile}} {
 			return
 		}
-		replyChan <- {{$intOut}}{node.id, reply, err}
+		replyChan <- {{$intOut}}{n.id, reply, err}
 		if err != nil {
 			return
 		}
@@ -205,7 +205,7 @@ var correctableCall = commonVariables +
 	correctableCallUnexportedSignature +
 	quorumCallLoop +
 	correctableCallReply +
-	callGrpc
+	nodeCallGrpc
 
 var correctableStreamCall = commonVariables +
 	correctableCallVariables +

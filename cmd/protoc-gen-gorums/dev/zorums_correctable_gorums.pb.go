@@ -111,7 +111,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, in *ReadRequest, re
 	expected := c.n
 	replyChan := make(chan internalReadResponse, expected)
 	for _, n := range c.nodes {
-		go callGRPCReadCorrectable(ctx, n, in, replyChan)
+		go n.ReadCorrectable(ctx, in, replyChan)
 	}
 
 	var (
@@ -157,15 +157,15 @@ func (c *Configuration) readCorrectable(ctx context.Context, in *ReadRequest, re
 	}
 }
 
-func callGRPCReadCorrectable(ctx context.Context, node *Node, in *ReadRequest, replyChan chan<- internalReadResponse) {
+func (n *Node) ReadCorrectable(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
 	reply := new(ReadResponse)
 	start := time.Now()
-	err := node.conn.Invoke(ctx, "/dev.ReaderService/ReadCorrectable", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadCorrectable", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		node.setLatency(time.Since(start))
+		n.setLatency(time.Since(start))
 	} else {
-		node.setLastErr(err)
+		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{node.id, reply, err}
+	replyChan <- internalReadResponse{n.id, reply, err}
 }

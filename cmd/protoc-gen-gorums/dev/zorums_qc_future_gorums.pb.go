@@ -67,7 +67,7 @@ func (c *Configuration) readQuorumCallFuture(ctx context.Context, in *ReadReques
 	expected := c.n
 	replyChan := make(chan internalReadResponse, expected)
 	for _, n := range c.nodes {
-		go callGRPCReadQuorumCallFuture(ctx, n, in, replyChan)
+		go n.ReadQuorumCallFuture(ctx, in, replyChan)
 	}
 
 	var (
@@ -106,15 +106,15 @@ func (c *Configuration) readQuorumCallFuture(ctx context.Context, in *ReadReques
 	}
 }
 
-func callGRPCReadQuorumCallFuture(ctx context.Context, node *Node, in *ReadRequest, replyChan chan<- internalReadResponse) {
+func (n *Node) ReadQuorumCallFuture(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
 	reply := new(ReadResponse)
 	start := time.Now()
-	err := node.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallFuture", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallFuture", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		node.setLatency(time.Since(start))
+		n.setLatency(time.Since(start))
 	} else {
-		node.setLastErr(err)
+		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{node.id, reply, err}
+	replyChan <- internalReadResponse{n.id, reply, err}
 }

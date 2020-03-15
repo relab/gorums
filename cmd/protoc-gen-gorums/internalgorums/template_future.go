@@ -115,4 +115,4 @@ var futureCall = commonVariables +
 	futureCallUnexportedSignature +
 	quorumCallLoop +
 	futureCallReply +
-	callGrpc
+	nodeCallGrpc
