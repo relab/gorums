@@ -49,3 +49,5 @@ out
 
 .vscode
 
+cmd/protoc-gen-gorums/internalgorums/template_static.go.bak
+
