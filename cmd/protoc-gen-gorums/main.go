@@ -1,35 +1,64 @@
 package main
 
 import (
-	"github.com/gogo/protobuf/protoc-gen-gogo/descriptor"
-	"github.com/gogo/protobuf/vanity"
-	"github.com/gogo/protobuf/vanity/command"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
 
-	_ "github.com/relab/gorums/plugins/gorums"
+	gengorums "github.com/relab/gorums/cmd/protoc-gen-gorums/internalgorums"
+
+	"google.golang.org/protobuf/compiler/protogen"
 )
 
+var devTypes = []string{
+	"node",
+	"qspec",
+	"types",
+	"qc",
+	"qc_future",
+	"correctable",
+	"correctable_stream",
+	"multicast",
+}
+
 func main() {
-	req := command.Read()
-	files := req.GetProtoFile()
-	files = vanity.FilterFiles(files, vanity.NotGoogleProtobufDescriptorProto)
-
-	vanity.ForEachFieldInFilesExcludingExtensions(vanity.OnlyProto2(files), vanity.TurnOffNullableForNativeTypesWithoutDefaultsOnly)
-
-	for _, opt := range []func(*descriptor.FileDescriptorProto){
-		vanity.TurnOnMarshalerAll,
-		vanity.TurnOnSizerAll,
-		vanity.TurnOnUnmarshalerAll,
-		vanity.TurnOnStringerAll,
-		vanity.TurnOnEnumStringerAll,
-
-		vanity.TurnOffGoUnrecognizedAll,
-		vanity.TurnOffGoEnumPrefixAll,
-		vanity.TurnOffGoEnumStringerAll,
-		vanity.TurnOffGoStringerAll,
-	} {
-		vanity.ForEachFile(files, opt)
+	if len(os.Args) == 2 && os.Args[1] == "--version" {
+		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), gengorums.VersionString())
+		os.Exit(1)
 	}
 
-	resp := command.Generate(req)
-	command.Write(resp)
+	var (
+		flags  flag.FlagSet
+		dev    = flags.Bool("dev", false, "generate development files in dev folder")
+		trace  = flags.Bool("trace", false, "enable tracing")
+		bundle = flags.String("bundle", "", "generate static gorums file in given file")
+		opts   = &protogen.Options{
+			ParamFunc: flags.Set,
+		}
+	)
+
+	protogen.Run(opts, func(gen *protogen.Plugin) error {
+		if *trace {
+			gengorums.SetTrace(*trace)
+			fmt.Fprintf(os.Stderr, "Generating code with tracing enabled\n")
+		}
+		for _, f := range gen.Files {
+			if f.Generate {
+				switch {
+				case *dev:
+					fmt.Fprintf(os.Stderr, "Generating development files in dev folder\n")
+					for _, gorumsType := range devTypes {
+						gengorums.GenerateDevFile(gorumsType, gen, f)
+					}
+				case *bundle != "":
+					fmt.Fprintf(os.Stderr, "Generating bundle file: %s\n", *bundle)
+					gengorums.GenerateBundleFile(*bundle)
+				default:
+					gengorums.GenerateFile(gen, f)
+				}
+			}
+		}
+		return nil
+	})
 }
