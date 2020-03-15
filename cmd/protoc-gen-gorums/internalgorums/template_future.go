@@ -1,9 +1,8 @@
 package internalgorums
 
 var futureCallVariables = `
-{{quorumCallImports .GenFile}}
-{{$context := context .GenFile}}
-{{$opts := opts .GenFile .Method}}
+{{$context := use "context.Context" .GenFile}}
+{{$opts := use "grpc.CallOption" .GenFile}}
 {{$futureOut := printf "Future%s" $out}}
 `
 

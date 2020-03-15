@@ -35,7 +35,7 @@ var correctableDataType = `
 {{range $customOut, $correctableOut := mapCorrectableOutType .GenFile .Services}}
 // {{$correctableOut}} is a correctable object for processing replies.
 type {{$correctableOut}} struct {
-	mu {{mutex $genFile}}
+	mu {{use "sync.Mutex" $genFile}}
 	// the actual reply
 	*{{$customOut}}
 	NodeIDs  []uint32

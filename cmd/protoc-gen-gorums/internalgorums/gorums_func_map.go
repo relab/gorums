@@ -24,27 +24,21 @@ func mustExecute(t *template.Template, data interface{}) string {
 	return b.String()
 }
 
-// TODO(meling) consider making these import funcs generic: {{lookup .GenFile "io" "EOF"}}
 var funcMap = template.FuncMap{
-	//TODO(meling) avoid to use these imports; instead make separate funcs to return identifier string
-	"quorumCallImports": func(g *protogen.GeneratedFile) string {
-		g.QualifiedGoIdent(contextPackage.Ident("Context"))
-		g.QualifiedGoIdent(timePackage.Ident("Duration"))
-		g.QualifiedGoIdent(statusPackage.Ident("FromError"))
-		g.QualifiedGoIdent(codesPackage.Ident("OK"))
-		return ""
-	},
-	"eof": func(g *protogen.GeneratedFile) string {
-		return g.QualifiedGoIdent(ioPackage.Ident("EOF"))
-	},
-	"mutex": func(g *protogen.GeneratedFile) string {
-		return g.QualifiedGoIdent(syncPackage.Ident("Mutex"))
-	},
-	"context": func(g *protogen.GeneratedFile) string {
-		return g.QualifiedGoIdent(contextPackage.Ident("Context"))
-	},
-	"errorf": func(g *protogen.GeneratedFile) string {
-		return g.QualifiedGoIdent(fmtPackage.Ident("Errorf"))
+	// this function will stop the generator if incorrect input is used
+	// the output contains the descriptive strings below to help debug any bad inputs.
+	"use": func(pkgIdent string, g *protogen.GeneratedFile) string {
+		cnt := strings.Count(pkgIdent, ".")
+		if cnt != 1 {
+			return "UNEXPECTED INPUT; expected last package element and identifier: " + pkgIdent
+		}
+		i := strings.Index(pkgIdent, ".")
+		path, ident := pkgIdent[0:i], pkgIdent[i+1:]
+		pkg, ok := importMap[path]
+		if !ok {
+			return "IMPORT NOT FOUND: " + path
+		}
+		return g.QualifiedGoIdent(pkg.Ident(ident))
 	},
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
@@ -65,9 +59,6 @@ var funcMap = template.FuncMap{
 				", uint32) *" + g.QualifiedGoIdent(method.Input.GoIdent)
 		}
 		return ""
-	},
-	"opts": func(g *protogen.GeneratedFile, method *protogen.Method) string {
-		return g.QualifiedGoIdent(grpcPackage.Ident("CallOption"))
 	},
 	"out": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Output.GoIdent)

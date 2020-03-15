@@ -11,9 +11,8 @@ var commonVariables = `
 `
 
 var quorumCallVariables = `
-{{quorumCallImports .GenFile}}
-{{$context := context .GenFile}}
-{{$opts := opts .GenFile .Method}}
+{{$context := use "context.Context" .GenFile}}
+{{$opts := use "grpc.CallOption" .GenFile}}
 `
 
 var quorumCallComment = `
@@ -92,10 +91,10 @@ var quorumCallReply = `
 var callGrpc = `
 func callGRPC{{$method}}(ctx {{$context}}, node *Node, in *{{$in}}, replyChan chan<- {{$intOut}}) {
 	reply := new({{$out}})
-	start := time.Now()
+	start := {{use "time.Now" .GenFile}}()
 	err := node.conn.Invoke(ctx, "{{fullName .Method}}", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+	s, ok := {{use "status.FromError" .GenFile}}(err)
+	if ok && (s.Code() == {{use "codes.OK" .GenFile}} || s.Code() == codes.Canceled) {
 		node.setLatency(time.Since(start))
 	} else {
 		node.setLastErr(err)

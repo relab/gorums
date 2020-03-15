@@ -25,12 +25,12 @@ var traceDefinition = `
 {{define "trace"}}
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "{{.Method.GoName}}")
+		ti.Trace = {{use "trace.New" .GenFile}}("gorums."+c.tstring()+".Sent", "{{.Method.GoName}}")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
 		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
+			ti.firstLine.deadline = {{use "time.Until" .GenFile}}(deadline)
 		}
 		ti.LazyLog(&ti.firstLine, false)
 		ti.LazyLog(&payload{sent: true, msg: in}, false)
@@ -57,8 +57,6 @@ var notrace = `
 `
 
 func qcresult(g *protogen.GeneratedFile, method *protogen.Method) string {
-	g.QualifiedGoIdent(tracePackage.Ident("New"))
-	g.QualifiedGoIdent(timePackage.Ident("Until"))
 	if hasMethodOption(method, callTypesWithPromiseObject...) {
 		return fmt.Sprintf("&qcresult{ids: resp.NodeIDs, reply: resp.%s, err: resp.err}", customOut(g, method))
 	}

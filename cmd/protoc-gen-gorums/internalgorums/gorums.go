@@ -37,24 +37,8 @@ func addImport(path, ident string, g *protogen.GeneratedFile) string {
 		impPath = protogen.GoImportPath(path)
 		importMap[pkg] = impPath
 	}
-	s := g.QualifiedGoIdent(impPath.Ident(ident))
-	return s
+	return g.QualifiedGoIdent(impPath.Ident(ident))
 }
-
-// TODO replace uses of these with the importMap above
-const (
-	ioPackage      = protogen.GoImportPath("io")
-	timePackage    = protogen.GoImportPath("time")
-	fmtPackage     = protogen.GoImportPath("fmt")
-	logPackage     = protogen.GoImportPath("log")
-	syncPackage    = protogen.GoImportPath("sync")
-	contextPackage = protogen.GoImportPath("context")
-	tracePackage   = protogen.GoImportPath("golang.org/x/net/trace")
-	grpcPackage    = protogen.GoImportPath("google.golang.org/grpc")
-	codesPackage   = protogen.GoImportPath("google.golang.org/grpc/codes")
-	statusPackage  = protogen.GoImportPath("google.golang.org/grpc/status")
-	gorumsPackage  = protogen.GoImportPath("github.com/relab/gorums")
-)
 
 type servicesData struct {
 	GenFile  *protogen.GeneratedFile

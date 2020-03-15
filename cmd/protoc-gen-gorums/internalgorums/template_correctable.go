@@ -1,8 +1,8 @@
 package internalgorums
 
 var correctableCallVariables = `
-{{$context := context .GenFile}}
-{{$opts := opts .GenFile .Method}}
+{{$context := use "context.Context" .GenFile}}
+{{$opts := use "grpc.CallOption" .GenFile}}
 {{$correctableOut := printf "Correctable%s" $out}}
 {{$appendFn := printf "append"}}
 {{if correctableStream .Method}}
@@ -185,7 +185,7 @@ func callGRPC{{$method}}(ctx {{$context}}, node *Node, in *{{$in}}, replyChan ch
 
 	for {
 		reply, err := y.Recv()
-		if err == {{eof .GenFile}} {
+		if err == {{use "io.EOF" .GenFile}} {
 			return
 		}
 		replyChan <- {{$intOut}}{node.id, reply, err}
@@ -195,8 +195,8 @@ func callGRPC{{$method}}(ctx {{$context}}, node *Node, in *{{$in}}, replyChan ch
 	}
 }
 `
+
 var correctableCall = commonVariables +
-	`{{quorumCallImports .GenFile}}` +
 	correctableCallVariables +
 	correctableCallComment +
 	correctableCallSignature +

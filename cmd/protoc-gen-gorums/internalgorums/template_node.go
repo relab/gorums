@@ -17,8 +17,8 @@ type nodeServices struct {
 `
 
 var nodeConnectStream = `
-{{$context := context .GenFile}}
-{{$genFile := .GenFile}}
+{{$context := use "context.Context" .GenFile}}
+{{$errorf := use "fmt.Errorf" .GenFile}}
 func (n *Node) connectStream(ctx {{$context}}) (err error) {
 	{{- range .Services}}
 	n.{{.GoName}}Client = New{{.GoName}}Client(n.conn)
@@ -27,7 +27,6 @@ func (n *Node) connectStream(ctx {{$context}}) (err error) {
 	{{- range .Services -}}
 	{{$serviceName := .GoName}}
 	{{- range streamMethods .Methods}}
-	{{- $errorf := errorf $genFile}}
 	n.{{$serviceName}}_{{.GoName}}Client, err = n.{{$serviceName}}Client.{{.GoName}}(ctx)
   	if err != nil {
   		return {{$errorf}}("stream creation failed: %v", err)
