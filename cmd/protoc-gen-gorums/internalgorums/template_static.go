@@ -8,19 +8,19 @@ package internalgorums
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
 	"bytes":                  "Buffer",
-	"context":                "WithTimeout",
+	"context":                "Background",
 	"encoding/binary":        "LittleEndian",
-	"fmt":                    "Sprintf",
-	"golang.org/x/net/trace": "NewEventLog",
-	"google.golang.org/grpc": "DialOption",
+	"fmt":                    "Errorf",
+	"golang.org/x/net/trace": "EventLog",
+	"google.golang.org/grpc": "ClientConn",
 	"hash/fnv":               "New32a",
 	"io":                     "WriteString",
 	"log":                    "Logger",
-	"net":                    "SplitHostPort",
+	"net":                    "ResolveTCPAddr",
 	"sort":                   "Sort",
 	"strconv":                "Atoi",
 	"strings":                "Join",
-	"sync":                   "Once",
+	"sync":                   "Mutex",
 	"time":                   "Duration",
 }
 
