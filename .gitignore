@@ -48,6 +48,8 @@ priv-key.pem
 out
 
 .vscode
+ideas.txt
+*.code-workspace
 
 cmd/protoc-gen-gorums/internalgorums/template_static.go.bak
 
