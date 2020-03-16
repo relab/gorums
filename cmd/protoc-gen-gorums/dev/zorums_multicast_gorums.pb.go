@@ -6,7 +6,7 @@ package dev
 func (c *Configuration) ReadMulticast(in *ReadRequest) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.Send(in)
+			err := n.readMulticastClient.Send(in)
 			if err == nil {
 				return
 			}

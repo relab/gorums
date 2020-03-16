@@ -11,7 +11,7 @@ var multicastMethod = `
 func (c *Configuration) {{$method}}(in *{{$in}}) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.Send(in)
+			err := n.{{unexport $method}}Client.Send(in)
 			if err == nil {
 				return
 			}

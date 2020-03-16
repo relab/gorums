@@ -9,12 +9,12 @@ import (
 
 type nodeServices struct {
 	ReaderServiceClient
-	ReaderService_ReadMulticastClient
+	readMulticastClient ReaderService_ReadMulticastClient
 }
 
 func (n *Node) connectStream(ctx context.Context) (err error) {
 	n.ReaderServiceClient = NewReaderServiceClient(n.conn)
-	n.ReaderService_ReadMulticastClient, err = n.ReaderServiceClient.ReadMulticast(ctx)
+	n.readMulticastClient, err = n.ReaderServiceClient.ReadMulticast(ctx)
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
@@ -22,6 +22,6 @@ func (n *Node) connectStream(ctx context.Context) (err error) {
 }
 
 func (n *Node) closeStream() (err error) {
-	_, err = n.CloseAndRecv()
+	_, err = n.readMulticastClient.CloseAndRecv()
 	return err
 }
