@@ -17,3 +17,19 @@ func (c *Configuration) ReadMulticast(in *ReadRequest) error {
 	}
 	return nil
 }
+
+// ReadMulticast2 is testing whether multiple streams work.
+func (c *Configuration) ReadMulticast2(in *ReadRequest) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.readMulticast2Client.Send(in)
+			if err == nil {
+				return
+			}
+			if c.mgr.logger != nil {
+				c.mgr.logger.Printf("%d: ReadMulticast2 stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+	return nil
+}

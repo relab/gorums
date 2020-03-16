@@ -41,6 +41,10 @@ service ReaderService {
   rpc ReadMulticast(stream ReadRequest) returns (ReadResponse) {
     option (gorums.multicast) = true;
   }
+  // ReadMulticast2 is testing whether multiple streams work.
+  rpc ReadMulticast2(stream ReadRequest) returns (ReadResponse) {
+    option (gorums.multicast) = true;
+  }
   rpc ReadQuorumCallFuture(ReadRequest) returns (ReadResponse) {
     option (gorums.qc_future) = true;
   }
