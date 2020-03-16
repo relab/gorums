@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
@@ -14,40 +13,6 @@ import (
 )
 
 // TODO(meling) replace github.com/relab/gorums with gorums.io as import package
-
-var importMap = map[string]protogen.GoImportPath{
-	"io":      protogen.GoImportPath("io"),
-	"time":    protogen.GoImportPath("time"),
-	"fmt":     protogen.GoImportPath("fmt"),
-	"log":     protogen.GoImportPath("log"),
-	"sync":    protogen.GoImportPath("sync"),
-	"context": protogen.GoImportPath("context"),
-	"trace":   protogen.GoImportPath("golang.org/x/net/trace"),
-	"grpc":    protogen.GoImportPath("google.golang.org/grpc"),
-	"codes":   protogen.GoImportPath("google.golang.org/grpc/codes"),
-	"status":  protogen.GoImportPath("google.golang.org/grpc/status"),
-	"gorums":  protogen.GoImportPath("github.com/relab/gorums"),
-}
-
-func addImport(path, ident string, g *protogen.GeneratedFile) string {
-	pkg := path[strings.LastIndex(path, "/")+1:]
-	impPath, ok := importMap[pkg]
-	if !ok {
-		impPath = protogen.GoImportPath(path)
-		importMap[pkg] = impPath
-	}
-	return g.QualifiedGoIdent(impPath.Ident(ident))
-}
-
-type servicesData struct {
-	GenFile  *protogen.GeneratedFile
-	Services []*protogen.Service
-}
-
-type methodData struct {
-	GenFile *protogen.GeneratedFile
-	Method  *protogen.Method
-}
 
 // GenerateFile generates a _gorums.pb.go file containing Gorums service definitions.
 func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
@@ -115,6 +80,16 @@ func callTypeName(method *protogen.Method) string {
 		return callTypeName
 	}
 	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
+}
+
+type servicesData struct {
+	GenFile  *protogen.GeneratedFile
+	Services []*protogen.Service
+}
+
+type methodData struct {
+	GenFile *protogen.GeneratedFile
+	Method  *protogen.Method
 }
 
 // hasGorumsType returns true if one of the service methods specify

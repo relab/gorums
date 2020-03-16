@@ -12,16 +12,30 @@ import (
 	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
-func parseTemplate(name, tmpl string) *template.Template {
-	return template.Must(template.New(name).Funcs(funcMap).Parse(trace() + tmpl))
+// importMap holds the mapping between short-hand import name
+// and full import path for the default package.
+var importMap = map[string]protogen.GoImportPath{
+	"io":      protogen.GoImportPath("io"),
+	"time":    protogen.GoImportPath("time"),
+	"fmt":     protogen.GoImportPath("fmt"),
+	"log":     protogen.GoImportPath("log"),
+	"sync":    protogen.GoImportPath("sync"),
+	"context": protogen.GoImportPath("context"),
+	"trace":   protogen.GoImportPath("golang.org/x/net/trace"),
+	"grpc":    protogen.GoImportPath("google.golang.org/grpc"),
+	"codes":   protogen.GoImportPath("google.golang.org/grpc/codes"),
+	"status":  protogen.GoImportPath("google.golang.org/grpc/status"),
+	"gorums":  protogen.GoImportPath("github.com/relab/gorums"),
 }
 
-func mustExecute(t *template.Template, data interface{}) string {
-	var b bytes.Buffer
-	if err := t.Execute(&b, data); err != nil {
-		panic(err)
+func addImport(path, ident string, g *protogen.GeneratedFile) string {
+	pkg := path[strings.LastIndex(path, "/")+1:]
+	impPath, ok := importMap[pkg]
+	if !ok {
+		impPath = protogen.GoImportPath(path)
+		importMap[pkg] = impPath
 	}
-	return b.String()
+	return g.QualifiedGoIdent(impPath.Ident(ident))
 }
 
 var funcMap = template.FuncMap{
@@ -113,3 +127,15 @@ func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
 }
 
 func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }
+
+func parseTemplate(name, tmpl string) *template.Template {
+	return template.Must(template.New(name).Funcs(funcMap).Parse(trace() + tmpl))
+}
+
+func mustExecute(t *template.Template, data interface{}) string {
+	var b bytes.Buffer
+	if err := t.Execute(&b, data); err != nil {
+		panic(err)
+	}
+	return b.String()
+}

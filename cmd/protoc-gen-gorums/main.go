@@ -32,7 +32,7 @@ func main() {
 		flags  flag.FlagSet
 		dev    = flags.Bool("dev", false, "generate development files in dev folder")
 		trace  = flags.Bool("trace", false, "enable tracing")
-		bundle = flags.String("bundle", "", "generate static gorums file in given file")
+		bundle = flags.String("bundle", "", "generate static gorums code in given file")
 		opts   = &protogen.Options{
 			ParamFunc: flags.Set,
 		}
