@@ -10,7 +10,7 @@ type nodeServices struct {
 	{{.GoName}}Client
 	{{- $serviceName := .GoName}}
 	{{- range streamMethods .Methods}}
-	{{$serviceName}}_{{.GoName}}Client
+	{{unexport .GoName}}Client {{$serviceName}}_{{.GoName}}Client
 	{{- end -}}
 	{{- end}}
 }
@@ -27,7 +27,7 @@ func (n *Node) connectStream(ctx {{$context}}) (err error) {
 	{{- range .Services -}}
 	{{$serviceName := .GoName}}
 	{{- range streamMethods .Methods}}
-	n.{{$serviceName}}_{{.GoName}}Client, err = n.{{$serviceName}}Client.{{.GoName}}(ctx)
+	n.{{unexport .GoName}}Client, err = n.{{$serviceName}}Client.{{.GoName}}(ctx)
   	if err != nil {
   		return {{$errorf}}("stream creation failed: %v", err)
   	}
@@ -41,7 +41,7 @@ var nodeCloseStream = `
 func (n *Node) closeStream() (err error) {
 	{{- range .Services -}}
 	{{- range streamMethods .Methods}}
-	_, err = n.CloseAndRecv()
+	_, err = n.{{unexport .GoName}}Client.CloseAndRecv()
 	{{- end -}}
 	{{end}}
 	return err
