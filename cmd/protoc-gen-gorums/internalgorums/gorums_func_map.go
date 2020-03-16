@@ -85,23 +85,7 @@ var funcMap = template.FuncMap{
 		}
 		return ""
 	},
-	"callTypeName": func(method *protogen.Method) string {
-		ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-		if proto.HasExtension(ext, gorums.E_Qc) {
-			return "quorum"
-		}
-		if proto.HasExtension(ext, gorums.E_QcFuture) {
-			return "asynchronous quorum"
-		}
-		if proto.HasExtension(ext, gorums.E_Correctable) {
-			return "correctable quorum"
-		}
-		if proto.HasExtension(ext, gorums.E_CorrectableStream) {
-			return "correctable stream quorum"
-		}
-		// should not reach here
-		panic(fmt.Sprintf("method %s does not support any quorum calls", method.GoName))
-	},
+	"callTypeName": callTypeName,
 	"fullName": func(method *protogen.Method) string {
 		return fmt.Sprintf("/%s/%s", method.Parent.Desc.FullName(), method.Desc.Name())
 	},

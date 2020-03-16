@@ -109,6 +109,14 @@ func genGorumsMethod(g *protogen.GeneratedFile, method *protogen.Method) string 
 	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
 }
 
+func callTypeName(method *protogen.Method) string {
+	methodOption := validateMethodExtensions(method)
+	if callTypeName, ok := gorumsCallTypeNames[methodOption]; ok {
+		return callTypeName
+	}
+	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
+}
+
 // hasGorumsType returns true if one of the service methods specify
 // the given gorums type.
 func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
@@ -142,6 +150,14 @@ var gorumsCallTypeTemplates = map[*protoimpl.ExtensionInfo]string{
 	gorums.E_Correctable:       correctableCall,
 	gorums.E_CorrectableStream: correctableStreamCall,
 	gorums.E_Multicast:         multicastCall,
+}
+
+var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{
+	gorums.E_Qc:                "quorum",
+	gorums.E_QcFuture:          "asynchronous quorum",
+	gorums.E_Correctable:       "correctable quorum",
+	gorums.E_CorrectableStream: "correctable stream quorum",
+	gorums.E_Multicast:         "multicast",
 }
 
 // gorumsCallTypes should list all available call types supported by Gorums.
