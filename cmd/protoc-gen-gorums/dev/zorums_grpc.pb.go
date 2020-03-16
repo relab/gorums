@@ -30,6 +30,8 @@ type ReaderServiceClient interface {
 	ReadQuorumCallCombo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	// ReadMulticast is testing a comment.
 	ReadMulticast(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticastClient, error)
+	// ReadMulticast2 is testing whether multiple streams work.
+	ReadMulticast2(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticast2Client, error)
 	ReadQuorumCallFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
 	ReadCorrectableStream(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (ReaderService_ReadCorrectableStreamClient, error)
@@ -131,6 +133,40 @@ func (x *readerServiceReadMulticastClient) CloseAndRecv() (*ReadResponse, error)
 	return m, nil
 }
 
+func (c *readerServiceClient) ReadMulticast2(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticast2Client, error) {
+	stream, err := c.cc.NewStream(ctx, &_ReaderService_serviceDesc.Streams[1], "/dev.ReaderService/ReadMulticast2", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &readerServiceReadMulticast2Client{stream}
+	return x, nil
+}
+
+type ReaderService_ReadMulticast2Client interface {
+	Send(*ReadRequest) error
+	CloseAndRecv() (*ReadResponse, error)
+	grpc.ClientStream
+}
+
+type readerServiceReadMulticast2Client struct {
+	grpc.ClientStream
+}
+
+func (x *readerServiceReadMulticast2Client) Send(m *ReadRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *readerServiceReadMulticast2Client) CloseAndRecv() (*ReadResponse, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(ReadResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *readerServiceClient) ReadQuorumCallFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
 	out := new(ReadResponse)
 	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallFuture", in, out, opts...)
@@ -150,7 +186,7 @@ func (c *readerServiceClient) ReadCorrectable(ctx context.Context, in *ReadReque
 }
 
 func (c *readerServiceClient) ReadCorrectableStream(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (ReaderService_ReadCorrectableStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ReaderService_serviceDesc.Streams[1], "/dev.ReaderService/ReadCorrectableStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ReaderService_serviceDesc.Streams[2], "/dev.ReaderService/ReadCorrectableStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +228,8 @@ type ReaderServiceServer interface {
 	ReadQuorumCallCombo(context.Context, *ReadRequest) (*ReadResponse, error)
 	// ReadMulticast is testing a comment.
 	ReadMulticast(ReaderService_ReadMulticastServer) error
+	// ReadMulticast2 is testing whether multiple streams work.
+	ReadMulticast2(ReaderService_ReadMulticast2Server) error
 	ReadQuorumCallFuture(context.Context, *ReadRequest) (*ReadResponse, error)
 	ReadCorrectable(context.Context, *ReadRequest) (*ReadResponse, error)
 	ReadCorrectableStream(*ReadRequest, ReaderService_ReadCorrectableStreamServer) error
@@ -221,6 +259,9 @@ func (*UnimplementedReaderServiceServer) ReadQuorumCallCombo(context.Context, *R
 }
 func (*UnimplementedReaderServiceServer) ReadMulticast(ReaderService_ReadMulticastServer) error {
 	return status.Errorf(codes.Unimplemented, "method ReadMulticast not implemented")
+}
+func (*UnimplementedReaderServiceServer) ReadMulticast2(ReaderService_ReadMulticast2Server) error {
+	return status.Errorf(codes.Unimplemented, "method ReadMulticast2 not implemented")
 }
 func (*UnimplementedReaderServiceServer) ReadQuorumCallFuture(context.Context, *ReadRequest) (*ReadResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadQuorumCallFuture not implemented")
@@ -370,6 +411,32 @@ func (x *readerServiceReadMulticastServer) Recv() (*ReadRequest, error) {
 	return m, nil
 }
 
+func _ReaderService_ReadMulticast2_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ReaderServiceServer).ReadMulticast2(&readerServiceReadMulticast2Server{stream})
+}
+
+type ReaderService_ReadMulticast2Server interface {
+	SendAndClose(*ReadResponse) error
+	Recv() (*ReadRequest, error)
+	grpc.ServerStream
+}
+
+type readerServiceReadMulticast2Server struct {
+	grpc.ServerStream
+}
+
+func (x *readerServiceReadMulticast2Server) SendAndClose(m *ReadResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *readerServiceReadMulticast2Server) Recv() (*ReadRequest, error) {
+	m := new(ReadRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func _ReaderService_ReadQuorumCallFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ReadRequest)
 	if err := dec(in); err != nil {
@@ -468,6 +535,11 @@ var _ReaderService_serviceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "ReadMulticast",
 			Handler:       _ReaderService_ReadMulticast_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "ReadMulticast2",
+			Handler:       _ReaderService_ReadMulticast2_Handler,
 			ClientStreams: true,
 		},
 		{
