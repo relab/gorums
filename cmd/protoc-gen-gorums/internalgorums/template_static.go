@@ -436,7 +436,7 @@ func (n *Node) connect(opts managerOptions) error {
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %w", err)
 	}
-	return n.connectStream(ctx) // call generated method
+	return n.connectStream() // call generated method
 }
 
 // close this node for further calls and optionally stream.

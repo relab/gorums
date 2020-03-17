@@ -13,13 +13,13 @@ type nodeServices struct {
 	readMulticast2Client ReaderService_ReadMulticast2Client
 }
 
-func (n *Node) connectStream(ctx context.Context) (err error) {
+func (n *Node) connectStream() (err error) {
 	n.ReaderServiceClient = NewReaderServiceClient(n.conn)
-	n.readMulticastClient, err = n.ReaderServiceClient.ReadMulticast(ctx)
+	n.readMulticastClient, err = n.ReaderServiceClient.ReadMulticast(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
-	n.readMulticast2Client, err = n.ReaderServiceClient.ReadMulticast2(ctx)
+	n.readMulticast2Client, err = n.ReaderServiceClient.ReadMulticast2(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
