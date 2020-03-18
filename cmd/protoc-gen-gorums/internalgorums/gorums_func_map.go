@@ -74,10 +74,9 @@ var funcMap = template.FuncMap{
 		}
 		return ""
 	},
-	"out": func(g *protogen.GeneratedFile, method *protogen.Method) string {
-		return g.QualifiedGoIdent(method.Output.GoIdent)
-	},
-	"customOut": customOut,
+	"out":         out,
+	"internalOut": internalOut,
+	"customOut":   customOut,
 	"withQFArg": func(method *protogen.Method, arg string) string {
 		if hasMethodOption(method, gorums.E_QfWithReq) {
 			return arg
@@ -114,6 +113,11 @@ var funcMap = template.FuncMap{
 	"mapCorrectableOutType": mapCorrectableOutType,
 	"mapFutureOutType":      mapFutureOutType,
 	"qcresult":              qcresult,
+	"contains":              strings.Contains,
+}
+
+func out(g *protogen.GeneratedFile, method *protogen.Method) string {
+	return g.QualifiedGoIdent(method.Output.GoIdent)
 }
 
 func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
@@ -124,6 +128,11 @@ func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
 		outType.GoName = customOutType
 	}
 	return g.QualifiedGoIdent(outType)
+}
+
+func internalOut(g *protogen.GeneratedFile, method *protogen.Method) string {
+	out := g.QualifiedGoIdent(method.Output.GoIdent)
+	return fmt.Sprintf("internal%s", out[strings.LastIndex(out, ".")+1:])
 }
 
 func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }

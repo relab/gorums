@@ -3,12 +3,19 @@
 package dev
 
 import (
+	empty "github.com/golang/protobuf/ptypes/empty"
 	sync "sync"
 )
 
 type internalReadResponse struct {
 	nid   uint32
 	reply *ReadResponse
+	err   error
+}
+
+type internalEmpty struct {
+	nid   uint32
+	reply *empty.Empty
 	err   error
 }
 

@@ -1,5 +1,12 @@
 package internalgorums
 
+var multicastRefImports = `
+{{if contains $out "."}}
+// Reference imports to suppress errors if they are not otherwise used.
+var _ {{$out}}
+{{end}}
+`
+
 var multicastMethod = `
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
@@ -24,4 +31,4 @@ func (c *Configuration) {{$method}}(in *{{$in}}) error {
 }
 `
 
-var multicastCall = commonVariables + multicastMethod
+var multicastCall = commonVariables + multicastRefImports + multicastMethod

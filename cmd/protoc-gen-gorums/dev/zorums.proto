@@ -5,6 +5,7 @@ package dev;
 option go_package = "cmd/protoc-gen-gorums/dev";
 
 import "gorums.proto";
+import "google/protobuf/empty.proto";
 
 message ReadRequest { string Value = 1; }
 message ReadResponse { int64 Result = 1; }
@@ -54,5 +55,16 @@ service ReaderService {
   }
   rpc ReadCorrectableStream(ReadRequest) returns (stream ReadResponse) {
     option (gorums.correctable_stream) = true;
+  }
+
+  // ReadEmpty and other methods for testing imported protos
+  rpc ReadEmpty(google.protobuf.Empty) returns (ReadResponse) {
+    option (gorums.qc) = true;
+  }
+  rpc ReadEmpty2(ReadRequest) returns (google.protobuf.Empty) {
+    option (gorums.qc) = true;
+  }
+  rpc ReadMulticast3(stream ReadRequest) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
   }
 }

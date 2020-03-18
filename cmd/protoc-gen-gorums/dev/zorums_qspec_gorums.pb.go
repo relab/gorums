@@ -2,6 +2,10 @@
 
 package dev
 
+import (
+	empty "github.com/golang/protobuf/ptypes/empty"
+)
+
 // QuorumSpec is the interface of quorum functions for ReaderService.
 type QuorumSpec interface {
 
@@ -36,4 +40,12 @@ type QuorumSpec interface {
 	// ReadCorrectableStreamQF is the quorum function for the ReadCorrectableStream
 	// correctable stream quorum call method.
 	ReadCorrectableStreamQF(replies []*ReadResponse) (*ReadResponse, int, bool)
+
+	// ReadEmptyQF is the quorum function for the ReadEmpty
+	// quorum call method.
+	ReadEmptyQF(replies []*ReadResponse) (*ReadResponse, bool)
+
+	// ReadEmpty2QF is the quorum function for the ReadEmpty2
+	// quorum call method.
+	ReadEmpty2QF(replies []*empty.Empty) (*empty.Empty, bool)
 }

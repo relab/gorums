@@ -4,6 +4,7 @@ package dev
 
 import (
 	context "context"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	trace "golang.org/x/net/trace"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -386,4 +387,149 @@ func (n *Node) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest, replyCh
 		n.setLastErr(err)
 	}
 	replyChan <- internalReadResponse{n.id, reply, err}
+}
+
+// ReadEmpty and other methods for testing imported protos
+func (c *Configuration) ReadEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (resp *ReadResponse, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadEmpty")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalReadResponse, expected)
+	for _, n := range c.nodes {
+		go n.ReadEmpty(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*ReadResponse, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if resp, quorum = c.qspec.ReadEmptyQF(replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+func (n *Node) ReadEmpty(ctx context.Context, in *empty.Empty, replyChan chan<- internalReadResponse) {
+	reply := new(ReadResponse)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadEmpty", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalReadResponse{n.id, reply, err}
+}
+
+// ReadEmpty2 is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) ReadEmpty2(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (resp *empty.Empty, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadEmpty2")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalEmpty, expected)
+	for _, n := range c.nodes {
+		go n.ReadEmpty2(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*empty.Empty, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if resp, quorum = c.qspec.ReadEmpty2QF(replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+func (n *Node) ReadEmpty2(ctx context.Context, in *ReadRequest, replyChan chan<- internalEmpty) {
+	reply := new(empty.Empty)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadEmpty2", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalEmpty{n.id, reply, err}
 }

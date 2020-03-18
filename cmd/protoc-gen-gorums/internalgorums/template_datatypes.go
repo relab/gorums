@@ -68,10 +68,10 @@ func mapType(g *protogen.GeneratedFile, services []*protogen.Service, mapFn mapF
 	return s
 }
 
-func internal(_ *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
+func internal(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 	if hasMethodOption(method, callTypesWithInternal...) {
-		out := method.Output.GoIdent.GoName
-		s[out] = fmt.Sprintf("internal%s", out)
+		out := out(g, method)
+		s[out] = internalOut(g, method)
 	}
 }
 

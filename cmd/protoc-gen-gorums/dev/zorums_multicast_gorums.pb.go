@@ -2,6 +2,10 @@
 
 package dev
 
+import (
+	empty "github.com/golang/protobuf/ptypes/empty"
+)
+
 // ReadMulticast is testing a comment.
 func (c *Configuration) ReadMulticast(in *ReadRequest) error {
 	for _, node := range c.nodes {
@@ -28,6 +32,26 @@ func (c *Configuration) ReadMulticast2(in *ReadRequest) error {
 			}
 			if c.mgr.logger != nil {
 				c.mgr.logger.Printf("%d: ReadMulticast2 stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+	return nil
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
+
+// ReadMulticast3 is a one-way multicast call on all nodes in configuration c,
+// with the same in argument. The call is asynchronous and has no return value.
+func (c *Configuration) ReadMulticast3(in *ReadRequest) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.readMulticast3Client.Send(in)
+			if err == nil {
+				return
+			}
+			if c.mgr.logger != nil {
+				c.mgr.logger.Printf("%d: ReadMulticast3 stream send error: %v", n.id, err)
 			}
 		}(node)
 	}
