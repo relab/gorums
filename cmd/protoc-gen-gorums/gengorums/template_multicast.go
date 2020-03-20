@@ -1,4 +1,4 @@
-package internalgorums
+package gengorums
 
 var multicastRefImports = `
 {{if contains $out "."}}

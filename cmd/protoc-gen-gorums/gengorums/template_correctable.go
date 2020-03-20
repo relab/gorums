@@ -1,4 +1,4 @@
-package internalgorums
+package gengorums
 
 var correctableCallVariables = `
 {{$context := use "context.Context" .GenFile}}

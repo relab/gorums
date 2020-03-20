@@ -1,4 +1,4 @@
-package internalgorums
+package gengorums
 
 import (
 	"fmt"

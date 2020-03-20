@@ -1,4 +1,4 @@
-package internalgorums
+package gengorums
 
 // Common variables used in several template functions.
 var commonVariables = `

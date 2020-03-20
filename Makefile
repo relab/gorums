@@ -1,6 +1,6 @@
 PLUGIN_PATH		:= cmd/protoc-gen-gorums
 dev_path		:= $(PLUGIN_PATH)/dev
-gen_path		:= $(PLUGIN_PATH)/internalgorums
+gen_path		:= $(PLUGIN_PATH)/gengorums
 tests_path		:= $(PLUGIN_PATH)/tests
 zorums_proto	:= $(dev_path)/zorums.proto
 gen_files		:= $(shell find $(dev_path) -name "zorums*.pb.go")

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	gengorums "github.com/relab/gorums/cmd/protoc-gen-gorums/internalgorums"
+	"github.com/relab/gorums/cmd/protoc-gen-gorums/gengorums"
 
 	"google.golang.org/protobuf/compiler/protogen"
 )

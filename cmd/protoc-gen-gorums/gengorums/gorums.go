@@ -1,5 +1,5 @@
-// Package internalgorums is internal to the gorums protobuf module.
-package internalgorums
+// Package gengorums is internal to the gorums protobuf module.
+package gengorums
 
 import (
 	"fmt"

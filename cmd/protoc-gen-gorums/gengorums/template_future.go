@@ -1,4 +1,4 @@
-package internalgorums
+package gengorums
 
 var futureCallVariables = `
 {{$context := use "context.Context" .GenFile}}
