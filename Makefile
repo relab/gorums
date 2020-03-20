@@ -1,16 +1,22 @@
-PLUGIN_PATH				:= cmd/protoc-gen-gorums
-PLUGIN_DEV_PATH			:= $(PLUGIN_PATH)/dev
-PLUGIN_INTERNAL_PATH	:= $(PLUGIN_PATH)/internalgorums
-PLUGIN_TESTS_PATH		:= $(PLUGIN_PATH)/tests
-PLUGIN_STATIC_FILE		:= $(PLUGIN_INTERNAL_PATH)/template_static.go
+PLUGIN_PATH		:= cmd/protoc-gen-gorums
+dev_path		:= $(PLUGIN_PATH)/dev
+gen_path		:= $(PLUGIN_PATH)/internalgorums
+tests_path		:= $(PLUGIN_PATH)/tests
+zorums_proto	:= $(dev_path)/zorums.proto
+gen_files		:= $(shell find $(dev_path) -name "zorums*.pb.go")
+static_file		:= $(gen_path)/template_static.go
+static_files	:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
 
-# TODO clean up the make targets to include relevant dependent src files
+.PHONY: dev download install-tools installgorums clean
 
-# TODO evaluate if these should be PHONY (dev and devsingle shouldn't, but need to make dependency handling)
-.PHONY: clean download install-tools dev devsingle
-
-clean:
-	rm -f $(PLUGIN_STATIC_FILE).bak
+dev: installgorums
+	@echo Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder
+	rm -f $(dev_path)/*.pb.go
+	protoc -I$(dev_path):. \
+		--go_out=:. \
+		--go-grpc_out=:. \
+		--gorums_out=dev=true,trace=true:. \
+		$(zorums_proto)
 
 # TODO(meling) remove this when v2 released; for now, it is necessary for compiling gorums.proto
 .PHONY: getv1
@@ -27,35 +33,22 @@ install-tools: download
 	@echo Installing tools from tools.go
 	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % go install %
 
-gorumsproto: install-tools
+gorums.pb.go: gorums.proto
 	@echo Generating gorums proto options
 	@protoc --go_out=paths=source_relative:. gorums.proto
 
-installgorums: gorumsproto
+installgorums: gorums.pb.go
 	@echo Installing protoc-gen-gorums compiler plugin for protoc
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
 
-bundle: installgorums
-	cp $(PLUGIN_STATIC_FILE) $(PLUGIN_STATIC_FILE).bak
-	protoc -I$(PLUGIN_DEV_PATH):. --gorums_out=bundle=$(PLUGIN_STATIC_FILE):. $(PLUGIN_DEV_PATH)/zorums.proto
+bundle: installgorums $(static_file)
 
-dev: installgorums
-	@echo Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder
-	rm -f $(PLUGIN_DEV_PATH)/*.pb.go
-	protoc -I$(PLUGIN_DEV_PATH):. \
-		--go_out=:. \
-		--go-grpc_out=:. \
-		--gorums_out=dev=true,trace=true:. \
-		$(PLUGIN_DEV_PATH)/zorums.proto
+$(static_file): $(static_files)
+	cp $(static_file) $(static_file).bak
+	protoc -I$(dev_path):. --gorums_out=bundle=$(static_file):. $(zorums_proto)
 
-devsingle: installgorums
-	@echo Generating Gorums code for zorums.proto as a single _gorums.pb.go file in dev folder
-	rm -f $(PLUGIN_DEV_PATH)/*.pb.go
-	protoc -I$(PLUGIN_DEV_PATH):. \
-		--go_out=:. \
-		--go-grpc_out=:. \
-		--gorums_out=trace=true:. \
-		$(PLUGIN_DEV_PATH)/zorums.proto
+clean:
+	rm -f $(static_file).bak
 
 # TODO(meling) make test case comparing generated code with old code
 
@@ -65,4 +58,4 @@ qc: installgorums
 		--go_out=paths=source_relative:. \
 		--go-grpc_out=paths=source_relative:. \
 		--gorums_out=paths=source_relative,trace=true:. \
-		$(PLUGIN_TESTS_PATH)/quorumcall/quorumcall.proto
+		$(tests_path)/quorumcall/quorumcall.proto
