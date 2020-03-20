@@ -42,9 +42,8 @@ var funcMap = template.FuncMap{
 	// this function will stop the generator if incorrect input is used
 	// the output contains the descriptive strings below to help debug any bad inputs.
 	"use": func(pkgIdent string, g *protogen.GeneratedFile) string {
-		cnt := strings.Count(pkgIdent, ".")
-		if cnt != 1 {
-			return "UNEXPECTED INPUT; expected last package element and identifier: " + pkgIdent
+		if strings.Count(pkgIdent, ".") != 1 {
+			return "EXPECTED PACKAGE NAME AND IDENTIFIER, but got: " + pkgIdent
 		}
 		i := strings.Index(pkgIdent, ".")
 		path, ident := pkgIdent[0:i], pkgIdent[i+1:]
