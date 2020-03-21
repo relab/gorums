@@ -46,7 +46,10 @@ var futureCallBody = `
 }
 `
 
+// These API functions are generated only once per return type,
+// since they are otherwise identical for this return type.
 var futureCallInterface = `
+{{if not (hasAPIType "$futureOut")}}
 // Get returns the reply and any error associated with the {{$method}}.
 // The method blocks until a reply or error is available.
 func (f *{{$futureOut}}) Get() (*{{$customOut}}, error) {
@@ -63,6 +66,7 @@ func (f *{{$futureOut}}) Done() bool {
 		return false
 	}
 }
+{{end}}
 `
 
 var futureCallUnexportedSignature = `

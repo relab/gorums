@@ -6,32 +6,50 @@ import (
 	empty "github.com/golang/protobuf/ptypes/empty"
 )
 
-// ReadMulticast is testing a comment.
-func (c *Configuration) ReadMulticast(in *ReadRequest) error {
+// Multicast plain. Response type is not needed here.
+func (c *Configuration) Multicast(in *Request) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.readMulticastClient.Send(in)
+			err := n.multicastClient.Send(in)
 			if err == nil {
 				return
 			}
 			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: ReadMulticast stream send error: %v", n.id, err)
+				c.mgr.logger.Printf("%d: Multicast stream send error: %v", n.id, err)
 			}
 		}(node)
 	}
 	return nil
 }
 
-// ReadMulticast2 is testing whether multiple streams work.
-func (c *Configuration) ReadMulticast2(in *ReadRequest) error {
+// MulticastPerNodeArg with per_node_arg option.
+// TODO(meling) currently this is not supported, but compiles as if
+// per_node_arg wasn't specified.
+func (c *Configuration) MulticastPerNodeArg(in *Request) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.readMulticast2Client.Send(in)
+			err := n.multicastPerNodeArgClient.Send(in)
 			if err == nil {
 				return
 			}
 			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: ReadMulticast2 stream send error: %v", n.id, err)
+				c.mgr.logger.Printf("%d: MulticastPerNodeArg stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+	return nil
+}
+
+// Multicast2 is testing whether multiple streams work.
+func (c *Configuration) Multicast2(in *Request) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.multicast2Client.Send(in)
+			if err == nil {
+				return
+			}
+			if c.mgr.logger != nil {
+				c.mgr.logger.Printf("%d: Multicast2 stream send error: %v", n.id, err)
 			}
 		}(node)
 	}
@@ -41,17 +59,35 @@ func (c *Configuration) ReadMulticast2(in *ReadRequest) error {
 // Reference imports to suppress errors if they are not otherwise used.
 var _ empty.Empty
 
-// ReadMulticast3 is a one-way multicast call on all nodes in configuration c,
-// with the same in argument. The call is asynchronous and has no return value.
-func (c *Configuration) ReadMulticast3(in *ReadRequest) error {
+// Multicast3 is testing imported message type.
+func (c *Configuration) Multicast3(in *Request) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
-			err := n.readMulticast3Client.Send(in)
+			err := n.multicast3Client.Send(in)
 			if err == nil {
 				return
 			}
 			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: ReadMulticast3 stream send error: %v", n.id, err)
+				c.mgr.logger.Printf("%d: Multicast3 stream send error: %v", n.id, err)
+			}
+		}(node)
+	}
+	return nil
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
+
+// Multicast4 is testing imported message type.
+func (c *Configuration) Multicast4(in *empty.Empty) error {
+	for _, node := range c.nodes {
+		go func(n *Node) {
+			err := n.multicast4Client.Send(in)
+			if err == nil {
+				return
+			}
+			if c.mgr.logger != nil {
+				c.mgr.logger.Printf("%d: Multicast4 stream send error: %v", n.id, err)
 			}
 		}(node)
 	}

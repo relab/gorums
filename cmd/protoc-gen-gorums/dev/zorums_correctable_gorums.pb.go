@@ -11,41 +11,41 @@ import (
 	time "time"
 )
 
-// ReadCorrectable asynchronously invokes a correctable quorum call on each node
-// in configuration c and returns a CorrectableReadResponse, which can be used
+// Correctable asynchronously invokes a correctable quorum call on each node
+// in configuration c and returns a CorrectableResponse, which can be used
 // to inspect any replies or errors when available.
-func (c *Configuration) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) *CorrectableReadResponse {
-	corr := &CorrectableReadResponse{
+func (c *Configuration) Correctable(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableResponse {
+	corr := &CorrectableResponse{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
-	go c.readCorrectable(ctx, in, corr, opts...)
+	go c.correctable(ctx, in, corr, opts...)
 	return corr
 }
 
 // Get returns the reply, level and any error associated with the
-// ReadCorrectable. The method does not block until a (possibly
+// Correctable. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *CorrectableReadResponse) Get() (*MyReadResponse, int, error) {
+func (c *CorrectableResponse) Get() (*MyResponse, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.MyReadResponse, c.level, c.err
+	return c.MyResponse, c.level, c.err
 }
 
-// Done returns a channel that will be closed when the correctable ReadCorrectable
+// Done returns a channel that will be closed when the correctable Correctable
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or the call returned an error.
-func (c *CorrectableReadResponse) Done() <-chan struct{} {
+func (c *CorrectableResponse) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that will be closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // regardless of the specified level.
-func (c *CorrectableReadResponse) Watch(level int) <-chan struct{} {
+func (c *CorrectableResponse) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -60,13 +60,13 @@ func (c *CorrectableReadResponse) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *CorrectableReadResponse) set(reply *MyReadResponse, level int, err error, done bool) {
+func (c *CorrectableResponse) set(reply *MyResponse, level int, err error, done bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
 		panic("set(...) called on a done correctable")
 	}
-	c.MyReadResponse, c.level, c.err, c.done = reply, level, err, done
+	c.MyResponse, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -84,10 +84,10 @@ func (c *CorrectableReadResponse) set(reply *MyReadResponse, level int, err erro
 	}
 }
 
-func (c *Configuration) readCorrectable(ctx context.Context, in *ReadRequest, resp *CorrectableReadResponse, opts ...grpc.CallOption) {
+func (c *Configuration) correctable(ctx context.Context, in *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadCorrectable")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "Correctable")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -98,7 +98,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, in *ReadRequest, re
 		ti.LazyLog(&payload{sent: true, msg: in}, false)
 
 		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyReadResponse, err: resp.err}, false)
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
 			if resp.err != nil {
 				ti.SetError()
 			}
@@ -106,15 +106,15 @@ func (c *Configuration) readCorrectable(ctx context.Context, in *ReadRequest, re
 	}
 
 	expected := c.n
-	replyChan := make(chan internalReadResponse, expected)
+	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
-		go n.ReadCorrectable(ctx, in, replyChan)
+		go n.Correctable(ctx, in, replyChan)
 	}
 
 	var (
-		replyValues = make([]*ReadResponse, 0, c.n)
+		replyValues = make([]*Response, 0, c.n)
 		clevel      = LevelNotSet
-		reply       *MyReadResponse
+		reply       *MyResponse
 		rlevel      int
 		errs        []GRPCError
 		quorum      bool
@@ -134,7 +134,7 @@ func (c *Configuration) readCorrectable(ctx context.Context, in *ReadRequest, re
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.ReadCorrectableQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableQF(replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -154,15 +154,15 @@ func (c *Configuration) readCorrectable(ctx context.Context, in *ReadRequest, re
 	}
 }
 
-func (n *Node) ReadCorrectable(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
-	reply := new(ReadResponse)
+func (n *Node) Correctable(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadCorrectable", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/Correctable", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
 	} else {
 		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{n.id, reply, err}
+	replyChan <- internalResponse{n.id, reply, err}
 }

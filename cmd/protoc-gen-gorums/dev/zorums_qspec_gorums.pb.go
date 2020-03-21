@@ -6,50 +6,74 @@ import (
 	empty "github.com/golang/protobuf/ptypes/empty"
 )
 
-// QuorumSpec is the interface of quorum functions for ReaderService.
+// QuorumSpec is the interface of quorum functions for ZorumsService.
 type QuorumSpec interface {
 
-	// ReadQuorumCallQF is the quorum function for the ReadQuorumCall
+	// QuorumCallQF is the quorum function for the QuorumCall
 	// quorum call method.
-	ReadQuorumCallQF(replies []*ReadResponse) (*ReadResponse, bool)
+	QuorumCallQF(replies []*Response) (*Response, bool)
 
-	// ReadQuorumCallPerNodeArgQF is the quorum function for the ReadQuorumCallPerNodeArg
+	// QuorumCallPerNodeArgQF is the quorum function for the QuorumCallPerNodeArg
 	// quorum call method.
-	ReadQuorumCallPerNodeArgQF(replies []*ReadResponse) (*ReadResponse, bool)
+	QuorumCallPerNodeArgQF(replies []*Response) (*Response, bool)
 
-	// ReadQuorumCallQFWithRequestArgQF is the quorum function for the ReadQuorumCallQFWithRequestArg
+	// QuorumCallQFWithRequestArgQF is the quorum function for the QuorumCallQFWithRequestArg
 	// quorum call method.
-	ReadQuorumCallQFWithRequestArgQF(in *ReadRequest, replies []*ReadResponse) (*ReadResponse, bool)
+	QuorumCallQFWithRequestArgQF(in *Request, replies []*Response) (*Response, bool)
 
-	// ReadQuorumCallCustomReturnTypeQF is the quorum function for the ReadQuorumCallCustomReturnType
+	// QuorumCallCustomReturnTypeQF is the quorum function for the QuorumCallCustomReturnType
 	// quorum call method.
-	ReadQuorumCallCustomReturnTypeQF(replies []*ReadResponse) (*MyReadResponse, bool)
+	QuorumCallCustomReturnTypeQF(replies []*Response) (*MyResponse, bool)
 
-	// ReadQuorumCallComboQF is the quorum function for the ReadQuorumCallCombo
+	// QuorumCallComboQF is the quorum function for the QuorumCallCombo
 	// quorum call method.
-	ReadQuorumCallComboQF(in *ReadRequest, replies []*ReadResponse) (*MyReadResponse, bool)
+	QuorumCallComboQF(in *Request, replies []*Response) (*MyResponse, bool)
 
-	// ReadQuorumCallFutureQF is the quorum function for the ReadQuorumCallFuture
+	// QuorumCallEmptyQF is the quorum function for the QuorumCallEmpty
+	// quorum call method.
+	QuorumCallEmptyQF(replies []*Response) (*Response, bool)
+
+	// QuorumCallEmpty2QF is the quorum function for the QuorumCallEmpty2
+	// quorum call method.
+	QuorumCallEmpty2QF(replies []*empty.Empty) (*empty.Empty, bool)
+
+	// QuorumCallFutureQF is the quorum function for the QuorumCallFuture
 	// asynchronous quorum call method.
-	ReadQuorumCallFutureQF(replies []*ReadResponse) (*ReadResponse, bool)
+	QuorumCallFutureQF(replies []*Response) (*Response, bool)
 
-	// ReadCorrectableQF is the quorum function for the ReadCorrectable
+	// QuorumCallFuturePerNodeArgQF is the quorum function for the QuorumCallFuturePerNodeArg
+	// asynchronous quorum call method.
+	QuorumCallFuturePerNodeArgQF(replies []*Response) (*Response, bool)
+
+	// QuorumCallfutureQFWithRequestArgQF is the quorum function for the QuorumCallfutureQFWithRequestArg
+	// asynchronous quorum call method.
+	QuorumCallfutureQFWithRequestArgQF(in *Request, replies []*Response) (*Response, bool)
+
+	// QuorumCallFutureCustomReturnTypeQF is the quorum function for the QuorumCallFutureCustomReturnType
+	// asynchronous quorum call method.
+	QuorumCallFutureCustomReturnTypeQF(replies []*Response) (*MyResponse, bool)
+
+	// QuorumCallFutureComboQF is the quorum function for the QuorumCallFutureCombo
+	// asynchronous quorum call method.
+	QuorumCallFutureComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+
+	// QuorumCallFuture2QF is the quorum function for the QuorumCallFuture2
+	// asynchronous quorum call method.
+	QuorumCallFuture2QF(replies []*Response) (*Response, bool)
+
+	// QuorumCallFutureEmptyQF is the quorum function for the QuorumCallFutureEmpty
+	// asynchronous quorum call method.
+	QuorumCallFutureEmptyQF(replies []*empty.Empty) (*empty.Empty, bool)
+
+	// QuorumCallFutureEmpty2QF is the quorum function for the QuorumCallFutureEmpty2
+	// asynchronous quorum call method.
+	QuorumCallFutureEmpty2QF(replies []*Response) (*Response, bool)
+
+	// CorrectableQF is the quorum function for the Correctable
 	// correctable quorum call method.
-	ReadCorrectableQF(replies []*ReadResponse) (*MyReadResponse, int, bool)
+	CorrectableQF(replies []*Response) (*MyResponse, int, bool)
 
-	// ReadCorrectableStreamQF is the quorum function for the ReadCorrectableStream
+	// CorrectableStreamQF is the quorum function for the CorrectableStream
 	// correctable stream quorum call method.
-	ReadCorrectableStreamQF(replies []*ReadResponse) (*ReadResponse, int, bool)
-
-	// ReadEmptyQF is the quorum function for the ReadEmpty
-	// quorum call method.
-	ReadEmptyQF(replies []*ReadResponse) (*ReadResponse, bool)
-
-	// ReadEmpty2QF is the quorum function for the ReadEmpty2
-	// quorum call method.
-	ReadEmpty2QF(replies []*empty.Empty) (*empty.Empty, bool)
-
-	// ReadFutureEmptyQF is the quorum function for the ReadFutureEmpty
-	// asynchronous quorum call method.
-	ReadFutureEmptyQF(replies []*empty.Empty) (*empty.Empty, bool)
+	CorrectableStreamQF(replies []*Response) (*Response, int, bool)
 }

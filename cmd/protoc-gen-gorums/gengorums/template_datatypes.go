@@ -95,7 +95,7 @@ func future(g *protogen.GeneratedFile, method *protogen.Method, s map[string]str
 }
 
 func futureOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	out := g.QualifiedGoIdent(method.Output.GoIdent)
+	out := customOut(g, method)
 	return fmt.Sprintf("Future%s", out[strings.LastIndex(out, ".")+1:])
 }
 
@@ -105,6 +105,10 @@ func field(typeName string) string {
 	return typeName[strings.LastIndex(typeName, ".")+1:]
 }
 
+// customOut returns the output type to be used for the given method.
+// This may be the output type specified in the rpc line,
+// or if a custom_return_type option is provided for the method,
+// this provided custom type will be returned.
 func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
 	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
 	customOutType := fmt.Sprintf("%v", proto.GetExtension(ext, gorums.E_CustomReturnType))

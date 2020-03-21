@@ -10,42 +10,42 @@ import (
 	time "time"
 )
 
-// ReadCorrectableStream asynchronously invokes a correctable quorum call on each node
-// in configuration c and returns a CorrectableStreamReadResponse, which can be used
+// CorrectableStream asynchronously invokes a correctable quorum call on each node
+// in configuration c and returns a CorrectableStreamResponse, which can be used
 // to inspect any replies or errors when available.
 // This method supports server-side preliminary replies (correctable stream).
-func (c *Configuration) ReadCorrectableStream(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) *CorrectableStreamReadResponse {
-	corr := &CorrectableStreamReadResponse{
+func (c *Configuration) CorrectableStream(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableStreamResponse {
+	corr := &CorrectableStreamResponse{
 		level:   LevelNotSet,
 		NodeIDs: make([]uint32, 0, c.n),
 		donech:  make(chan struct{}),
 	}
-	go c.readCorrectableStream(ctx, in, corr, opts...)
+	go c.correctableStream(ctx, in, corr, opts...)
 	return corr
 }
 
 // Get returns the reply, level and any error associated with the
-// ReadCorrectableStream. The method does not block until a (possibly
+// CorrectableStream. The method does not block until a (possibly
 // itermidiate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *CorrectableStreamReadResponse) Get() (*ReadResponse, int, error) {
+func (c *CorrectableStreamResponse) Get() (*Response, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.ReadResponse, c.level, c.err
+	return c.Response, c.level, c.err
 }
 
-// Done returns a channel that will be closed when the correctable ReadCorrectableStream
+// Done returns a channel that will be closed when the correctable CorrectableStream
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or the call returned an error.
-func (c *CorrectableStreamReadResponse) Done() <-chan struct{} {
+func (c *CorrectableStreamResponse) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that will be closed when a reply or error at or above the
 // specified level is available. If the call is done, the channel is closed
 // regardless of the specified level.
-func (c *CorrectableStreamReadResponse) Watch(level int) <-chan struct{} {
+func (c *CorrectableStreamResponse) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -60,13 +60,13 @@ func (c *CorrectableStreamReadResponse) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *CorrectableStreamReadResponse) set(reply *ReadResponse, level int, err error, done bool) {
+func (c *CorrectableStreamResponse) set(reply *Response, level int, err error, done bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
 		panic("set(...) called on a done correctable")
 	}
-	c.ReadResponse, c.level, c.err, c.done = reply, level, err, done
+	c.Response, c.level, c.err, c.done = reply, level, err, done
 	if done {
 		close(c.donech)
 		for _, watcher := range c.watchers {
@@ -84,10 +84,10 @@ func (c *CorrectableStreamReadResponse) set(reply *ReadResponse, level int, err 
 	}
 }
 
-func (c *Configuration) readCorrectableStream(ctx context.Context, in *ReadRequest, resp *CorrectableStreamReadResponse, opts ...grpc.CallOption) {
+func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadCorrectableStream")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStream")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -98,7 +98,7 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, in *ReadReque
 		ti.LazyLog(&payload{sent: true, msg: in}, false)
 
 		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.ReadResponse, err: resp.err}, false)
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
 			if resp.err != nil {
 				ti.SetError()
 			}
@@ -106,16 +106,16 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, in *ReadReque
 	}
 
 	expected := c.n
-	replyChan := make(chan internalReadResponse, expected)
+	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
-		go n.ReadCorrectableStream(ctx, in, replyChan)
+		go n.CorrectableStream(ctx, in, replyChan)
 	}
 
 	var (
 		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*ReadResponse, 0, c.n*2)
+		replyValues = make([]*Response, 0, c.n*2)
 		clevel      = LevelNotSet
-		reply       *ReadResponse
+		reply       *Response
 		rlevel      int
 		errs        []GRPCError
 		quorum      bool
@@ -135,7 +135,7 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, in *ReadReque
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.ReadCorrectableStreamQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamQF(replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -155,11 +155,11 @@ func (c *Configuration) readCorrectableStream(ctx context.Context, in *ReadReque
 	}
 }
 
-func (n *Node) ReadCorrectableStream(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
-	x := NewReaderServiceClient(n.conn)
-	y, err := x.ReadCorrectableStream(ctx, in)
+func (n *Node) CorrectableStream(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	x := NewZorumsServiceClient(n.conn)
+	y, err := x.CorrectableStream(ctx, in)
 	if err != nil {
-		replyChan <- internalReadResponse{n.id, nil, err}
+		replyChan <- internalResponse{n.id, nil, err}
 		return
 	}
 
@@ -168,7 +168,7 @@ func (n *Node) ReadCorrectableStream(ctx context.Context, in *ReadRequest, reply
 		if err == io.EOF {
 			return
 		}
-		replyChan <- internalReadResponse{n.id, reply, err}
+		replyChan <- internalResponse{n.id, reply, err}
 		if err != nil {
 			return
 		}

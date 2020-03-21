@@ -12,12 +12,11 @@ import (
 	time "time"
 )
 
-// ReadQuorumCall is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-func (c *Configuration) ReadQuorumCall(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (resp *ReadResponse, err error) {
+// QuorumCall plain.
+func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadQuorumCall")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCall")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -36,13 +35,13 @@ func (c *Configuration) ReadQuorumCall(ctx context.Context, in *ReadRequest, opt
 	}
 
 	expected := c.n
-	replyChan := make(chan internalReadResponse, expected)
+	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
-		go n.ReadQuorumCall(ctx, in, replyChan)
+		go n.QuorumCall(ctx, in, replyChan)
 	}
 
 	var (
-		replyValues = make([]*ReadResponse, 0, expected)
+		replyValues = make([]*Response, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -60,7 +59,7 @@ func (c *Configuration) ReadQuorumCall(ctx context.Context, in *ReadRequest, opt
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.ReadQuorumCallQF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -72,28 +71,24 @@ func (c *Configuration) ReadQuorumCall(ctx context.Context, in *ReadRequest, opt
 	}
 }
 
-func (n *Node) ReadQuorumCall(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
-	reply := new(ReadResponse)
+func (n *Node) QuorumCall(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCall", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCall", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
 	} else {
 		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{n.id, reply, err}
+	replyChan <- internalResponse{n.id, reply, err}
 }
 
-// ReadQuorumCallPerNodeArg is a quorum call invoked on each node in configuration c,
-// with the argument returned by the provided function f, and returns the combined result.
-// The per node function f receives a copy of the ReadRequest request argument and
-// returns a ReadRequest manipulated to be passed to the given nodeID.
-// The function f must be thread-safe.
-func (c *Configuration) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRequest, f func(*ReadRequest, uint32) *ReadRequest, opts ...grpc.CallOption) (resp *ReadResponse, err error) {
+// QuorumCall with per_node_arg option.
+func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadQuorumCallPerNodeArg")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallPerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -112,18 +107,18 @@ func (c *Configuration) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRe
 	}
 
 	expected := c.n
-	replyChan := make(chan internalReadResponse, expected)
+	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
 		nodeArg := f(in, n.id)
 		if nodeArg == nil {
 			expected--
 			continue
 		}
-		go n.ReadQuorumCallPerNodeArg(ctx, nodeArg, replyChan)
+		go n.QuorumCallPerNodeArg(ctx, nodeArg, replyChan)
 	}
 
 	var (
-		replyValues = make([]*ReadResponse, 0, expected)
+		replyValues = make([]*Response, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -141,7 +136,7 @@ func (c *Configuration) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRe
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.ReadQuorumCallPerNodeArgQF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallPerNodeArgQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -153,25 +148,24 @@ func (c *Configuration) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRe
 	}
 }
 
-func (n *Node) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
-	reply := new(ReadResponse)
+func (n *Node) QuorumCallPerNodeArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallPerNodeArg", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallPerNodeArg", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
 	} else {
 		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{n.id, reply, err}
+	replyChan <- internalResponse{n.id, reply, err}
 }
 
-// ReadQuorumCallQFWithRequestArg is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-func (c *Configuration) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (resp *ReadResponse, err error) {
+// QuorumCall with qf_with_req option.
+func (c *Configuration) QuorumCallQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadQuorumCallQFWithRequestArg")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallQFWithRequestArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -190,13 +184,13 @@ func (c *Configuration) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *
 	}
 
 	expected := c.n
-	replyChan := make(chan internalReadResponse, expected)
+	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
-		go n.ReadQuorumCallQFWithRequestArg(ctx, in, replyChan)
+		go n.QuorumCallQFWithRequestArg(ctx, in, replyChan)
 	}
 
 	var (
-		replyValues = make([]*ReadResponse, 0, expected)
+		replyValues = make([]*Response, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -214,7 +208,7 @@ func (c *Configuration) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.ReadQuorumCallQFWithRequestArgQF(in, replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallQFWithRequestArgQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -226,25 +220,24 @@ func (c *Configuration) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *
 	}
 }
 
-func (n *Node) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
-	reply := new(ReadResponse)
+func (n *Node) QuorumCallQFWithRequestArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallQFWithRequestArg", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallQFWithRequestArg", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
 	} else {
 		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{n.id, reply, err}
+	replyChan <- internalResponse{n.id, reply, err}
 }
 
-// ReadQuorumCallCustomReturnType is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-func (c *Configuration) ReadQuorumCallCustomReturnType(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (resp *MyReadResponse, err error) {
+// QuorumCall with custom_return_type option.
+func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadQuorumCallCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -263,13 +256,13 @@ func (c *Configuration) ReadQuorumCallCustomReturnType(ctx context.Context, in *
 	}
 
 	expected := c.n
-	replyChan := make(chan internalReadResponse, expected)
+	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
-		go n.ReadQuorumCallCustomReturnType(ctx, in, replyChan)
+		go n.QuorumCallCustomReturnType(ctx, in, replyChan)
 	}
 
 	var (
-		replyValues = make([]*ReadResponse, 0, expected)
+		replyValues = make([]*Response, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -287,7 +280,7 @@ func (c *Configuration) ReadQuorumCallCustomReturnType(ctx context.Context, in *
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.ReadQuorumCallCustomReturnTypeQF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallCustomReturnTypeQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -299,24 +292,24 @@ func (c *Configuration) ReadQuorumCallCustomReturnType(ctx context.Context, in *
 	}
 }
 
-func (n *Node) ReadQuorumCallCustomReturnType(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
-	reply := new(ReadResponse)
+func (n *Node) QuorumCallCustomReturnType(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallCustomReturnType", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallCustomReturnType", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
 	} else {
 		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{n.id, reply, err}
+	replyChan <- internalResponse{n.id, reply, err}
 }
 
-// ReadQuorumCallCombo does it all. Comment testing.
-func (c *Configuration) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest, f func(*ReadRequest, uint32) *ReadRequest, opts ...grpc.CallOption) (resp *MyReadResponse, err error) {
+// QuorumCallCombo with all supported options.
+func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadQuorumCallCombo")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -335,18 +328,18 @@ func (c *Configuration) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest
 	}
 
 	expected := c.n
-	replyChan := make(chan internalReadResponse, expected)
+	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
 		nodeArg := f(in, n.id)
 		if nodeArg == nil {
 			expected--
 			continue
 		}
-		go n.ReadQuorumCallCombo(ctx, nodeArg, replyChan)
+		go n.QuorumCallCombo(ctx, nodeArg, replyChan)
 	}
 
 	var (
-		replyValues = make([]*ReadResponse, 0, expected)
+		replyValues = make([]*Response, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -364,7 +357,7 @@ func (c *Configuration) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.ReadQuorumCallComboQF(in, replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallComboQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -376,24 +369,24 @@ func (c *Configuration) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest
 	}
 }
 
-func (n *Node) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest, replyChan chan<- internalReadResponse) {
-	reply := new(ReadResponse)
+func (n *Node) QuorumCallCombo(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallCombo", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallCombo", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
 	} else {
 		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{n.id, reply, err}
+	replyChan <- internalResponse{n.id, reply, err}
 }
 
-// ReadEmpty and other methods for testing imported protos
-func (c *Configuration) ReadEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (resp *ReadResponse, err error) {
+// QuorumCallEmpty for testing imported message type.
+func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadEmpty")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -412,13 +405,13 @@ func (c *Configuration) ReadEmpty(ctx context.Context, in *empty.Empty, opts ...
 	}
 
 	expected := c.n
-	replyChan := make(chan internalReadResponse, expected)
+	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
-		go n.ReadEmpty(ctx, in, replyChan)
+		go n.QuorumCallEmpty(ctx, in, replyChan)
 	}
 
 	var (
-		replyValues = make([]*ReadResponse, 0, expected)
+		replyValues = make([]*Response, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -436,7 +429,7 @@ func (c *Configuration) ReadEmpty(ctx context.Context, in *empty.Empty, opts ...
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.ReadEmptyQF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallEmptyQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -448,25 +441,24 @@ func (c *Configuration) ReadEmpty(ctx context.Context, in *empty.Empty, opts ...
 	}
 }
 
-func (n *Node) ReadEmpty(ctx context.Context, in *empty.Empty, replyChan chan<- internalReadResponse) {
-	reply := new(ReadResponse)
+func (n *Node) QuorumCallEmpty(ctx context.Context, in *empty.Empty, replyChan chan<- internalResponse) {
+	reply := new(Response)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadEmpty", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallEmpty", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
 	} else {
 		n.setLastErr(err)
 	}
-	replyChan <- internalReadResponse{n.id, reply, err}
+	replyChan <- internalResponse{n.id, reply, err}
 }
 
-// ReadEmpty2 is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-func (c *Configuration) ReadEmpty2(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (resp *empty.Empty, err error) {
+// QuorumCallEmpty2 for testing imported message type.
+func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *empty.Empty, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ReadEmpty2")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -487,7 +479,7 @@ func (c *Configuration) ReadEmpty2(ctx context.Context, in *ReadRequest, opts ..
 	expected := c.n
 	replyChan := make(chan internalEmpty, expected)
 	for _, n := range c.nodes {
-		go n.ReadEmpty2(ctx, in, replyChan)
+		go n.QuorumCallEmpty2(ctx, in, replyChan)
 	}
 
 	var (
@@ -509,7 +501,7 @@ func (c *Configuration) ReadEmpty2(ctx context.Context, in *ReadRequest, opts ..
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.ReadEmpty2QF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallEmpty2QF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -521,10 +513,10 @@ func (c *Configuration) ReadEmpty2(ctx context.Context, in *ReadRequest, opts ..
 	}
 }
 
-func (n *Node) ReadEmpty2(ctx context.Context, in *ReadRequest, replyChan chan<- internalEmpty) {
+func (n *Node) QuorumCallEmpty2(ctx context.Context, in *Request, replyChan chan<- internalEmpty) {
 	reply := new(empty.Empty)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ReaderService/ReadEmpty2", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallEmpty2", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))

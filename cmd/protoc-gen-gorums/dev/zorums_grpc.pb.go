@@ -18,254 +18,266 @@ var _ grpc.ClientConn
 // is compatible with the grpc package it is being compiled against.
 const _ = grpc.SupportPackageIsVersion4
 
-// ReaderServiceClient is the client API for ReaderService service.
+// ZorumsServiceClient is the client API for ZorumsService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
-type ReaderServiceClient interface {
-	ReadGrpc(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
-	ReadQuorumCall(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
-	ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
-	ReadQuorumCallQFWithRequestArg(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
-	ReadQuorumCallCustomReturnType(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
-	// ReadQuorumCallCombo does it all. Comment testing.
-	ReadQuorumCallCombo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
-	// ReadMulticast is testing a comment.
-	ReadMulticast(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticastClient, error)
-	// ReadMulticast2 is testing whether multiple streams work.
-	ReadMulticast2(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticast2Client, error)
-	ReadQuorumCallFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
-	ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error)
-	ReadCorrectableStream(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (ReaderService_ReadCorrectableStreamClient, error)
-	// ReadEmpty and other methods for testing imported protos
-	ReadEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*ReadResponse, error)
-	ReadEmpty2(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*empty.Empty, error)
-	ReadMulticast3(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticast3Client, error)
-	// ReadFutureEmpty and other methods for testing imported protos
-	ReadFutureEmpty(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*empty.Empty, error)
+type ZorumsServiceClient interface {
+	// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
+	// they are added to the _grpc.pb.go generated file.
+	GRPCCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCall plain.
+	QuorumCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCall with per_node_arg option.
+	QuorumCallPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCall with qf_with_req option.
+	QuorumCallQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCall with custom_return_type option.
+	QuorumCallCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallCombo with all supported options.
+	QuorumCallCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallEmpty for testing imported message type.
+	QuorumCallEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallEmpty2 for testing imported message type.
+	QuorumCallEmpty2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error)
+	// Multicast plain. Response type is not needed here.
+	Multicast(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_MulticastClient, error)
+	// MulticastPerNodeArg with per_node_arg option.
+	// TODO(meling) currently this is not supported, but compiles as if
+	// per_node_arg wasn't specified.
+	MulticastPerNodeArg(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_MulticastPerNodeArgClient, error)
+	// Multicast2 is testing whether multiple streams work.
+	Multicast2(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast2Client, error)
+	// Multicast3 is testing imported message type.
+	Multicast3(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast3Client, error)
+	// Multicast4 is testing imported message type.
+	Multicast4(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast4Client, error)
+	// QuorumCallFuture plain.
+	QuorumCallFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallFuturePerNodeArg with per_node_arg option.
+	QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallfutureQFWithRequestArg with qf_with_req option.
+	QuorumCallfutureQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallFutureCustomReturnType with custom_return_type option.
+	QuorumCallFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallFutureCombo with all supported options.
+	QuorumCallFutureCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallFuture2 plain; with same return type: Response.
+	QuorumCallFuture2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// QuorumCallFutureEmpty for testing imported message type.
+	QuorumCallFutureEmpty(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error)
+	// QuorumCallFutureEmpty2 for testing imported message type; with same return
+	// type as QuorumCallFuture: Response.
+	QuorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*Response, error)
+	Correctable(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	CorrectableStream(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamClient, error)
 }
 
-type readerServiceClient struct {
+type zorumsServiceClient struct {
 	cc *grpc.ClientConn
 }
 
-func NewReaderServiceClient(cc *grpc.ClientConn) ReaderServiceClient {
-	return &readerServiceClient{cc}
+func NewZorumsServiceClient(cc *grpc.ClientConn) ZorumsServiceClient {
+	return &zorumsServiceClient{cc}
 }
 
-func (c *readerServiceClient) ReadGrpc(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadGrpc", in, out, opts...)
+func (c *zorumsServiceClient) GRPCCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/GRPCCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *readerServiceClient) ReadQuorumCall(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadQuorumCall", in, out, opts...)
+func (c *zorumsServiceClient) QuorumCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *readerServiceClient) ReadQuorumCallPerNodeArg(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallPerNodeArg", in, out, opts...)
+func (c *zorumsServiceClient) QuorumCallPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallPerNodeArg", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *readerServiceClient) ReadQuorumCallQFWithRequestArg(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallQFWithRequestArg", in, out, opts...)
+func (c *zorumsServiceClient) QuorumCallQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallQFWithRequestArg", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *readerServiceClient) ReadQuorumCallCustomReturnType(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallCustomReturnType", in, out, opts...)
+func (c *zorumsServiceClient) QuorumCallCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallCustomReturnType", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *readerServiceClient) ReadQuorumCallCombo(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallCombo", in, out, opts...)
+func (c *zorumsServiceClient) QuorumCallCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallCombo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *readerServiceClient) ReadMulticast(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticastClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ReaderService_serviceDesc.Streams[0], "/dev.ReaderService/ReadMulticast", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &readerServiceReadMulticastClient{stream}
-	return x, nil
-}
-
-type ReaderService_ReadMulticastClient interface {
-	Send(*ReadRequest) error
-	CloseAndRecv() (*ReadResponse, error)
-	grpc.ClientStream
-}
-
-type readerServiceReadMulticastClient struct {
-	grpc.ClientStream
-}
-
-func (x *readerServiceReadMulticastClient) Send(m *ReadRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *readerServiceReadMulticastClient) CloseAndRecv() (*ReadResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(ReadResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *readerServiceClient) ReadMulticast2(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticast2Client, error) {
-	stream, err := c.cc.NewStream(ctx, &_ReaderService_serviceDesc.Streams[1], "/dev.ReaderService/ReadMulticast2", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &readerServiceReadMulticast2Client{stream}
-	return x, nil
-}
-
-type ReaderService_ReadMulticast2Client interface {
-	Send(*ReadRequest) error
-	CloseAndRecv() (*ReadResponse, error)
-	grpc.ClientStream
-}
-
-type readerServiceReadMulticast2Client struct {
-	grpc.ClientStream
-}
-
-func (x *readerServiceReadMulticast2Client) Send(m *ReadRequest) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *readerServiceReadMulticast2Client) CloseAndRecv() (*ReadResponse, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(ReadResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *readerServiceClient) ReadQuorumCallFuture(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadQuorumCallFuture", in, out, opts...)
+func (c *zorumsServiceClient) QuorumCallEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallEmpty", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *readerServiceClient) ReadCorrectable(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadCorrectable", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *readerServiceClient) ReadCorrectableStream(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (ReaderService_ReadCorrectableStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ReaderService_serviceDesc.Streams[2], "/dev.ReaderService/ReadCorrectableStream", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &readerServiceReadCorrectableStreamClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type ReaderService_ReadCorrectableStreamClient interface {
-	Recv() (*ReadResponse, error)
-	grpc.ClientStream
-}
-
-type readerServiceReadCorrectableStreamClient struct {
-	grpc.ClientStream
-}
-
-func (x *readerServiceReadCorrectableStreamClient) Recv() (*ReadResponse, error) {
-	m := new(ReadResponse)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *readerServiceClient) ReadEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*ReadResponse, error) {
-	out := new(ReadResponse)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadEmpty", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *readerServiceClient) ReadEmpty2(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*empty.Empty, error) {
+func (c *zorumsServiceClient) QuorumCallEmpty2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadEmpty2", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallEmpty2", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *readerServiceClient) ReadMulticast3(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticast3Client, error) {
-	stream, err := c.cc.NewStream(ctx, &_ReaderService_serviceDesc.Streams[3], "/dev.ReaderService/ReadMulticast3", opts...)
+func (c *zorumsServiceClient) Multicast(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_MulticastClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[0], "/dev.ZorumsService/Multicast", opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &readerServiceReadMulticast3Client{stream}
+	x := &zorumsServiceMulticastClient{stream}
 	return x, nil
 }
 
-type ReaderService_ReadMulticast3Client interface {
-	Send(*ReadRequest) error
+type ZorumsService_MulticastClient interface {
+	Send(*Request) error
+	CloseAndRecv() (*Response, error)
+	grpc.ClientStream
+}
+
+type zorumsServiceMulticastClient struct {
+	grpc.ClientStream
+}
+
+func (x *zorumsServiceMulticastClient) Send(m *Request) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *zorumsServiceMulticastClient) CloseAndRecv() (*Response, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(Response)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *zorumsServiceClient) MulticastPerNodeArg(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_MulticastPerNodeArgClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[1], "/dev.ZorumsService/MulticastPerNodeArg", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &zorumsServiceMulticastPerNodeArgClient{stream}
+	return x, nil
+}
+
+type ZorumsService_MulticastPerNodeArgClient interface {
+	Send(*Request) error
+	CloseAndRecv() (*Response, error)
+	grpc.ClientStream
+}
+
+type zorumsServiceMulticastPerNodeArgClient struct {
+	grpc.ClientStream
+}
+
+func (x *zorumsServiceMulticastPerNodeArgClient) Send(m *Request) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *zorumsServiceMulticastPerNodeArgClient) CloseAndRecv() (*Response, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(Response)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *zorumsServiceClient) Multicast2(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast2Client, error) {
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[2], "/dev.ZorumsService/Multicast2", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &zorumsServiceMulticast2Client{stream}
+	return x, nil
+}
+
+type ZorumsService_Multicast2Client interface {
+	Send(*Request) error
+	CloseAndRecv() (*Response, error)
+	grpc.ClientStream
+}
+
+type zorumsServiceMulticast2Client struct {
+	grpc.ClientStream
+}
+
+func (x *zorumsServiceMulticast2Client) Send(m *Request) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *zorumsServiceMulticast2Client) CloseAndRecv() (*Response, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(Response)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *zorumsServiceClient) Multicast3(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast3Client, error) {
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[3], "/dev.ZorumsService/Multicast3", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &zorumsServiceMulticast3Client{stream}
+	return x, nil
+}
+
+type ZorumsService_Multicast3Client interface {
+	Send(*Request) error
 	CloseAndRecv() (*empty.Empty, error)
 	grpc.ClientStream
 }
 
-type readerServiceReadMulticast3Client struct {
+type zorumsServiceMulticast3Client struct {
 	grpc.ClientStream
 }
 
-func (x *readerServiceReadMulticast3Client) Send(m *ReadRequest) error {
+func (x *zorumsServiceMulticast3Client) Send(m *Request) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *readerServiceReadMulticast3Client) CloseAndRecv() (*empty.Empty, error) {
+func (x *zorumsServiceMulticast3Client) CloseAndRecv() (*empty.Empty, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
@@ -276,459 +288,843 @@ func (x *readerServiceReadMulticast3Client) CloseAndRecv() (*empty.Empty, error)
 	return m, nil
 }
 
-func (c *readerServiceClient) ReadFutureEmpty(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*empty.Empty, error) {
-	out := new(empty.Empty)
-	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadFutureEmpty", in, out, opts...)
+func (c *zorumsServiceClient) Multicast4(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast4Client, error) {
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[4], "/dev.ZorumsService/Multicast4", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &zorumsServiceMulticast4Client{stream}
+	return x, nil
+}
+
+type ZorumsService_Multicast4Client interface {
+	Send(*empty.Empty) error
+	CloseAndRecv() (*empty.Empty, error)
+	grpc.ClientStream
+}
+
+type zorumsServiceMulticast4Client struct {
+	grpc.ClientStream
+}
+
+func (x *zorumsServiceMulticast4Client) Send(m *empty.Empty) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *zorumsServiceMulticast4Client) CloseAndRecv() (*empty.Empty, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(empty.Empty)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *zorumsServiceClient) QuorumCallFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFuture", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// ReaderServiceServer is the server API for ReaderService service.
-type ReaderServiceServer interface {
-	ReadGrpc(context.Context, *ReadRequest) (*ReadResponse, error)
-	ReadQuorumCall(context.Context, *ReadRequest) (*ReadResponse, error)
-	ReadQuorumCallPerNodeArg(context.Context, *ReadRequest) (*ReadResponse, error)
-	ReadQuorumCallQFWithRequestArg(context.Context, *ReadRequest) (*ReadResponse, error)
-	ReadQuorumCallCustomReturnType(context.Context, *ReadRequest) (*ReadResponse, error)
-	// ReadQuorumCallCombo does it all. Comment testing.
-	ReadQuorumCallCombo(context.Context, *ReadRequest) (*ReadResponse, error)
-	// ReadMulticast is testing a comment.
-	ReadMulticast(ReaderService_ReadMulticastServer) error
-	// ReadMulticast2 is testing whether multiple streams work.
-	ReadMulticast2(ReaderService_ReadMulticast2Server) error
-	ReadQuorumCallFuture(context.Context, *ReadRequest) (*ReadResponse, error)
-	ReadCorrectable(context.Context, *ReadRequest) (*ReadResponse, error)
-	ReadCorrectableStream(*ReadRequest, ReaderService_ReadCorrectableStreamServer) error
-	// ReadEmpty and other methods for testing imported protos
-	ReadEmpty(context.Context, *empty.Empty) (*ReadResponse, error)
-	ReadEmpty2(context.Context, *ReadRequest) (*empty.Empty, error)
-	ReadMulticast3(ReaderService_ReadMulticast3Server) error
-	// ReadFutureEmpty and other methods for testing imported protos
-	ReadFutureEmpty(context.Context, *ReadRequest) (*empty.Empty, error)
-}
-
-// UnimplementedReaderServiceServer can be embedded to have forward compatible implementations.
-type UnimplementedReaderServiceServer struct {
-}
-
-func (*UnimplementedReaderServiceServer) ReadGrpc(context.Context, *ReadRequest) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadGrpc not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadQuorumCall(context.Context, *ReadRequest) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadQuorumCall not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadQuorumCallPerNodeArg(context.Context, *ReadRequest) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadQuorumCallPerNodeArg not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadQuorumCallQFWithRequestArg(context.Context, *ReadRequest) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadQuorumCallQFWithRequestArg not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadQuorumCallCustomReturnType(context.Context, *ReadRequest) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadQuorumCallCustomReturnType not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadQuorumCallCombo(context.Context, *ReadRequest) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadQuorumCallCombo not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadMulticast(ReaderService_ReadMulticastServer) error {
-	return status.Errorf(codes.Unimplemented, "method ReadMulticast not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadMulticast2(ReaderService_ReadMulticast2Server) error {
-	return status.Errorf(codes.Unimplemented, "method ReadMulticast2 not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadQuorumCallFuture(context.Context, *ReadRequest) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadQuorumCallFuture not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadCorrectable(context.Context, *ReadRequest) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadCorrectable not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadCorrectableStream(*ReadRequest, ReaderService_ReadCorrectableStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method ReadCorrectableStream not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadEmpty(context.Context, *empty.Empty) (*ReadResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadEmpty not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadEmpty2(context.Context, *ReadRequest) (*empty.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadEmpty2 not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadMulticast3(ReaderService_ReadMulticast3Server) error {
-	return status.Errorf(codes.Unimplemented, "method ReadMulticast3 not implemented")
-}
-func (*UnimplementedReaderServiceServer) ReadFutureEmpty(context.Context, *ReadRequest) (*empty.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadFutureEmpty not implemented")
-}
-
-func RegisterReaderServiceServer(s *grpc.Server, srv ReaderServiceServer) {
-	s.RegisterService(&_ReaderService_serviceDesc, srv)
-}
-
-func _ReaderService_ReadGrpc_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
-	if err := dec(in); err != nil {
+func (c *zorumsServiceClient) QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFuturePerNodeArg", in, out, opts...)
+	if err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadGrpc(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadGrpc",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadGrpc(ctx, req.(*ReadRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return out, nil
 }
 
-func _ReaderService_ReadQuorumCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
-	if err := dec(in); err != nil {
+func (c *zorumsServiceClient) QuorumCallfutureQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallfutureQFWithRequestArg", in, out, opts...)
+	if err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadQuorumCall(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadQuorumCall",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadQuorumCall(ctx, req.(*ReadRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return out, nil
 }
 
-func _ReaderService_ReadQuorumCallPerNodeArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
-	if err := dec(in); err != nil {
+func (c *zorumsServiceClient) QuorumCallFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFutureCustomReturnType", in, out, opts...)
+	if err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadQuorumCallPerNodeArg(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadQuorumCallPerNodeArg",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadQuorumCallPerNodeArg(ctx, req.(*ReadRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return out, nil
 }
 
-func _ReaderService_ReadQuorumCallQFWithRequestArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
-	if err := dec(in); err != nil {
+func (c *zorumsServiceClient) QuorumCallFutureCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFutureCombo", in, out, opts...)
+	if err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadQuorumCallQFWithRequestArg(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadQuorumCallQFWithRequestArg",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadQuorumCallQFWithRequestArg(ctx, req.(*ReadRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return out, nil
 }
 
-func _ReaderService_ReadQuorumCallCustomReturnType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
-	if err := dec(in); err != nil {
+func (c *zorumsServiceClient) QuorumCallFuture2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFuture2", in, out, opts...)
+	if err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadQuorumCallCustomReturnType(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadQuorumCallCustomReturnType",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadQuorumCallCustomReturnType(ctx, req.(*ReadRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return out, nil
 }
 
-func _ReaderService_ReadQuorumCallCombo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
-	if err := dec(in); err != nil {
+func (c *zorumsServiceClient) QuorumCallFutureEmpty(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFutureEmpty", in, out, opts...)
+	if err != nil {
 		return nil, err
 	}
-	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadQuorumCallCombo(ctx, in)
+	return out, nil
+}
+
+func (c *zorumsServiceClient) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFutureEmpty2", in, out, opts...)
+	if err != nil {
+		return nil, err
 	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadQuorumCallCombo",
+	return out, nil
+}
+
+func (c *zorumsServiceClient) Correctable(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Correctable", in, out, opts...)
+	if err != nil {
+		return nil, err
 	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadQuorumCallCombo(ctx, req.(*ReadRequest))
+	return out, nil
+}
+
+func (c *zorumsServiceClient) CorrectableStream(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[5], "/dev.ZorumsService/CorrectableStream", opts...)
+	if err != nil {
+		return nil, err
 	}
-	return interceptor(ctx, in, info, handler)
+	x := &zorumsServiceCorrectableStreamClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
 
-func _ReaderService_ReadMulticast_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ReaderServiceServer).ReadMulticast(&readerServiceReadMulticastServer{stream})
+type ZorumsService_CorrectableStreamClient interface {
+	Recv() (*Response, error)
+	grpc.ClientStream
 }
 
-type ReaderService_ReadMulticastServer interface {
-	SendAndClose(*ReadResponse) error
-	Recv() (*ReadRequest, error)
-	grpc.ServerStream
+type zorumsServiceCorrectableStreamClient struct {
+	grpc.ClientStream
 }
 
-type readerServiceReadMulticastServer struct {
-	grpc.ServerStream
-}
-
-func (x *readerServiceReadMulticastServer) SendAndClose(m *ReadResponse) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *readerServiceReadMulticastServer) Recv() (*ReadRequest, error) {
-	m := new(ReadRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func (x *zorumsServiceCorrectableStreamClient) Recv() (*Response, error) {
+	m := new(Response)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func _ReaderService_ReadMulticast2_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ReaderServiceServer).ReadMulticast2(&readerServiceReadMulticast2Server{stream})
+// ZorumsServiceServer is the server API for ZorumsService service.
+type ZorumsServiceServer interface {
+	// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
+	// they are added to the _grpc.pb.go generated file.
+	GRPCCall(context.Context, *Request) (*Response, error)
+	// QuorumCall plain.
+	QuorumCall(context.Context, *Request) (*Response, error)
+	// QuorumCall with per_node_arg option.
+	QuorumCallPerNodeArg(context.Context, *Request) (*Response, error)
+	// QuorumCall with qf_with_req option.
+	QuorumCallQFWithRequestArg(context.Context, *Request) (*Response, error)
+	// QuorumCall with custom_return_type option.
+	QuorumCallCustomReturnType(context.Context, *Request) (*Response, error)
+	// QuorumCallCombo with all supported options.
+	QuorumCallCombo(context.Context, *Request) (*Response, error)
+	// QuorumCallEmpty for testing imported message type.
+	QuorumCallEmpty(context.Context, *empty.Empty) (*Response, error)
+	// QuorumCallEmpty2 for testing imported message type.
+	QuorumCallEmpty2(context.Context, *Request) (*empty.Empty, error)
+	// Multicast plain. Response type is not needed here.
+	Multicast(ZorumsService_MulticastServer) error
+	// MulticastPerNodeArg with per_node_arg option.
+	// TODO(meling) currently this is not supported, but compiles as if
+	// per_node_arg wasn't specified.
+	MulticastPerNodeArg(ZorumsService_MulticastPerNodeArgServer) error
+	// Multicast2 is testing whether multiple streams work.
+	Multicast2(ZorumsService_Multicast2Server) error
+	// Multicast3 is testing imported message type.
+	Multicast3(ZorumsService_Multicast3Server) error
+	// Multicast4 is testing imported message type.
+	Multicast4(ZorumsService_Multicast4Server) error
+	// QuorumCallFuture plain.
+	QuorumCallFuture(context.Context, *Request) (*Response, error)
+	// QuorumCallFuturePerNodeArg with per_node_arg option.
+	QuorumCallFuturePerNodeArg(context.Context, *Request) (*Response, error)
+	// QuorumCallfutureQFWithRequestArg with qf_with_req option.
+	QuorumCallfutureQFWithRequestArg(context.Context, *Request) (*Response, error)
+	// QuorumCallFutureCustomReturnType with custom_return_type option.
+	QuorumCallFutureCustomReturnType(context.Context, *Request) (*Response, error)
+	// QuorumCallFutureCombo with all supported options.
+	QuorumCallFutureCombo(context.Context, *Request) (*Response, error)
+	// QuorumCallFuture2 plain; with same return type: Response.
+	QuorumCallFuture2(context.Context, *Request) (*Response, error)
+	// QuorumCallFutureEmpty for testing imported message type.
+	QuorumCallFutureEmpty(context.Context, *Request) (*empty.Empty, error)
+	// QuorumCallFutureEmpty2 for testing imported message type; with same return
+	// type as QuorumCallFuture: Response.
+	QuorumCallFutureEmpty2(context.Context, *empty.Empty) (*Response, error)
+	Correctable(context.Context, *Request) (*Response, error)
+	CorrectableStream(*Request, ZorumsService_CorrectableStreamServer) error
 }
 
-type ReaderService_ReadMulticast2Server interface {
-	SendAndClose(*ReadResponse) error
-	Recv() (*ReadRequest, error)
-	grpc.ServerStream
+// UnimplementedZorumsServiceServer can be embedded to have forward compatible implementations.
+type UnimplementedZorumsServiceServer struct {
 }
 
-type readerServiceReadMulticast2Server struct {
-	grpc.ServerStream
+func (*UnimplementedZorumsServiceServer) GRPCCall(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GRPCCall not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCall(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCall not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallPerNodeArg(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallPerNodeArg not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallQFWithRequestArg(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallQFWithRequestArg not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallCustomReturnType(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallCustomReturnType not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallCombo(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallCombo not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallEmpty(context.Context, *empty.Empty) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallEmpty not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallEmpty2(context.Context, *Request) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallEmpty2 not implemented")
+}
+func (*UnimplementedZorumsServiceServer) Multicast(ZorumsService_MulticastServer) error {
+	return status.Errorf(codes.Unimplemented, "method Multicast not implemented")
+}
+func (*UnimplementedZorumsServiceServer) MulticastPerNodeArg(ZorumsService_MulticastPerNodeArgServer) error {
+	return status.Errorf(codes.Unimplemented, "method MulticastPerNodeArg not implemented")
+}
+func (*UnimplementedZorumsServiceServer) Multicast2(ZorumsService_Multicast2Server) error {
+	return status.Errorf(codes.Unimplemented, "method Multicast2 not implemented")
+}
+func (*UnimplementedZorumsServiceServer) Multicast3(ZorumsService_Multicast3Server) error {
+	return status.Errorf(codes.Unimplemented, "method Multicast3 not implemented")
+}
+func (*UnimplementedZorumsServiceServer) Multicast4(ZorumsService_Multicast4Server) error {
+	return status.Errorf(codes.Unimplemented, "method Multicast4 not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallFuture(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFuture not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallFuturePerNodeArg(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFuturePerNodeArg not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallfutureQFWithRequestArg(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallfutureQFWithRequestArg not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallFutureCustomReturnType(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFutureCustomReturnType not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallFutureCombo(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFutureCombo not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallFuture2(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFuture2 not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallFutureEmpty(context.Context, *Request) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFutureEmpty not implemented")
+}
+func (*UnimplementedZorumsServiceServer) QuorumCallFutureEmpty2(context.Context, *empty.Empty) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFutureEmpty2 not implemented")
+}
+func (*UnimplementedZorumsServiceServer) Correctable(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Correctable not implemented")
+}
+func (*UnimplementedZorumsServiceServer) CorrectableStream(*Request, ZorumsService_CorrectableStreamServer) error {
+	return status.Errorf(codes.Unimplemented, "method CorrectableStream not implemented")
 }
 
-func (x *readerServiceReadMulticast2Server) SendAndClose(m *ReadResponse) error {
-	return x.ServerStream.SendMsg(m)
+func RegisterZorumsServiceServer(s *grpc.Server, srv ZorumsServiceServer) {
+	s.RegisterService(&_ZorumsService_serviceDesc, srv)
 }
 
-func (x *readerServiceReadMulticast2Server) Recv() (*ReadRequest, error) {
-	m := new(ReadRequest)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func _ReaderService_ReadQuorumCallFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
+func _ZorumsService_GRPCCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadQuorumCallFuture(ctx, in)
+		return srv.(ZorumsServiceServer).GRPCCall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadQuorumCallFuture",
+		FullMethod: "/dev.ZorumsService/GRPCCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadQuorumCallFuture(ctx, req.(*ReadRequest))
+		return srv.(ZorumsServiceServer).GRPCCall(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ReaderService_ReadCorrectable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
+func _ZorumsService_QuorumCall_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadCorrectable(ctx, in)
+		return srv.(ZorumsServiceServer).QuorumCall(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadCorrectable",
+		FullMethod: "/dev.ZorumsService/QuorumCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadCorrectable(ctx, req.(*ReadRequest))
+		return srv.(ZorumsServiceServer).QuorumCall(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ReaderService_ReadCorrectableStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ReadRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
+func _ZorumsService_QuorumCallPerNodeArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
 	}
-	return srv.(ReaderServiceServer).ReadCorrectableStream(m, &readerServiceReadCorrectableStreamServer{stream})
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallPerNodeArg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallPerNodeArg",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallPerNodeArg(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-type ReaderService_ReadCorrectableStreamServer interface {
-	Send(*ReadResponse) error
-	grpc.ServerStream
+func _ZorumsService_QuorumCallQFWithRequestArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallQFWithRequestArg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallQFWithRequestArg",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallQFWithRequestArg(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-type readerServiceReadCorrectableStreamServer struct {
-	grpc.ServerStream
+func _ZorumsService_QuorumCallCustomReturnType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallCustomReturnType(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallCustomReturnType",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallCustomReturnType(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func (x *readerServiceReadCorrectableStreamServer) Send(m *ReadResponse) error {
-	return x.ServerStream.SendMsg(m)
+func _ZorumsService_QuorumCallCombo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallCombo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallCombo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallCombo(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _ReaderService_ReadEmpty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ZorumsService_QuorumCallEmpty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(empty.Empty)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadEmpty(ctx, in)
+		return srv.(ZorumsServiceServer).QuorumCallEmpty(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadEmpty",
+		FullMethod: "/dev.ZorumsService/QuorumCallEmpty",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadEmpty(ctx, req.(*empty.Empty))
+		return srv.(ZorumsServiceServer).QuorumCallEmpty(ctx, req.(*empty.Empty))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ReaderService_ReadEmpty2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
+func _ZorumsService_QuorumCallEmpty2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadEmpty2(ctx, in)
+		return srv.(ZorumsServiceServer).QuorumCallEmpty2(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadEmpty2",
+		FullMethod: "/dev.ZorumsService/QuorumCallEmpty2",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadEmpty2(ctx, req.(*ReadRequest))
+		return srv.(ZorumsServiceServer).QuorumCallEmpty2(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ReaderService_ReadMulticast3_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ReaderServiceServer).ReadMulticast3(&readerServiceReadMulticast3Server{stream})
+func _ZorumsService_Multicast_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ZorumsServiceServer).Multicast(&zorumsServiceMulticastServer{stream})
 }
 
-type ReaderService_ReadMulticast3Server interface {
-	SendAndClose(*empty.Empty) error
-	Recv() (*ReadRequest, error)
+type ZorumsService_MulticastServer interface {
+	SendAndClose(*Response) error
+	Recv() (*Request, error)
 	grpc.ServerStream
 }
 
-type readerServiceReadMulticast3Server struct {
+type zorumsServiceMulticastServer struct {
 	grpc.ServerStream
 }
 
-func (x *readerServiceReadMulticast3Server) SendAndClose(m *empty.Empty) error {
+func (x *zorumsServiceMulticastServer) SendAndClose(m *Response) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *readerServiceReadMulticast3Server) Recv() (*ReadRequest, error) {
-	m := new(ReadRequest)
+func (x *zorumsServiceMulticastServer) Recv() (*Request, error) {
+	m := new(Request)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func _ReaderService_ReadFutureEmpty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadRequest)
+func _ZorumsService_MulticastPerNodeArg_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ZorumsServiceServer).MulticastPerNodeArg(&zorumsServiceMulticastPerNodeArgServer{stream})
+}
+
+type ZorumsService_MulticastPerNodeArgServer interface {
+	SendAndClose(*Response) error
+	Recv() (*Request, error)
+	grpc.ServerStream
+}
+
+type zorumsServiceMulticastPerNodeArgServer struct {
+	grpc.ServerStream
+}
+
+func (x *zorumsServiceMulticastPerNodeArgServer) SendAndClose(m *Response) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *zorumsServiceMulticastPerNodeArgServer) Recv() (*Request, error) {
+	m := new(Request)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _ZorumsService_Multicast2_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ZorumsServiceServer).Multicast2(&zorumsServiceMulticast2Server{stream})
+}
+
+type ZorumsService_Multicast2Server interface {
+	SendAndClose(*Response) error
+	Recv() (*Request, error)
+	grpc.ServerStream
+}
+
+type zorumsServiceMulticast2Server struct {
+	grpc.ServerStream
+}
+
+func (x *zorumsServiceMulticast2Server) SendAndClose(m *Response) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *zorumsServiceMulticast2Server) Recv() (*Request, error) {
+	m := new(Request)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _ZorumsService_Multicast3_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ZorumsServiceServer).Multicast3(&zorumsServiceMulticast3Server{stream})
+}
+
+type ZorumsService_Multicast3Server interface {
+	SendAndClose(*empty.Empty) error
+	Recv() (*Request, error)
+	grpc.ServerStream
+}
+
+type zorumsServiceMulticast3Server struct {
+	grpc.ServerStream
+}
+
+func (x *zorumsServiceMulticast3Server) SendAndClose(m *empty.Empty) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *zorumsServiceMulticast3Server) Recv() (*Request, error) {
+	m := new(Request)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _ZorumsService_Multicast4_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ZorumsServiceServer).Multicast4(&zorumsServiceMulticast4Server{stream})
+}
+
+type ZorumsService_Multicast4Server interface {
+	SendAndClose(*empty.Empty) error
+	Recv() (*empty.Empty, error)
+	grpc.ServerStream
+}
+
+type zorumsServiceMulticast4Server struct {
+	grpc.ServerStream
+}
+
+func (x *zorumsServiceMulticast4Server) SendAndClose(m *empty.Empty) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *zorumsServiceMulticast4Server) Recv() (*empty.Empty, error) {
+	m := new(empty.Empty)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func _ZorumsService_QuorumCallFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ReaderServiceServer).ReadFutureEmpty(ctx, in)
+		return srv.(ZorumsServiceServer).QuorumCallFuture(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ReaderService/ReadFutureEmpty",
+		FullMethod: "/dev.ZorumsService/QuorumCallFuture",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ReaderServiceServer).ReadFutureEmpty(ctx, req.(*ReadRequest))
+		return srv.(ZorumsServiceServer).QuorumCallFuture(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-var _ReaderService_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "dev.ReaderService",
-	HandlerType: (*ReaderServiceServer)(nil),
+func _ZorumsService_QuorumCallFuturePerNodeArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallFuturePerNodeArg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallFuturePerNodeArg",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallFuturePerNodeArg(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_QuorumCallfutureQFWithRequestArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallfutureQFWithRequestArg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallfutureQFWithRequestArg",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallfutureQFWithRequestArg(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_QuorumCallFutureCustomReturnType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallFutureCustomReturnType(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallFutureCustomReturnType",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallFutureCustomReturnType(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_QuorumCallFutureCombo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallFutureCombo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallFutureCombo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallFutureCombo(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_QuorumCallFuture2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallFuture2(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallFuture2",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallFuture2(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_QuorumCallFutureEmpty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallFutureEmpty(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallFutureEmpty",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallFutureEmpty(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_QuorumCallFutureEmpty2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(empty.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).QuorumCallFutureEmpty2(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/QuorumCallFutureEmpty2",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).QuorumCallFutureEmpty2(ctx, req.(*empty.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_Correctable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).Correctable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/Correctable",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).Correctable(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_CorrectableStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Request)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ZorumsServiceServer).CorrectableStream(m, &zorumsServiceCorrectableStreamServer{stream})
+}
+
+type ZorumsService_CorrectableStreamServer interface {
+	Send(*Response) error
+	grpc.ServerStream
+}
+
+type zorumsServiceCorrectableStreamServer struct {
+	grpc.ServerStream
+}
+
+func (x *zorumsServiceCorrectableStreamServer) Send(m *Response) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+var _ZorumsService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "dev.ZorumsService",
+	HandlerType: (*ZorumsServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "ReadGrpc",
-			Handler:    _ReaderService_ReadGrpc_Handler,
+			MethodName: "GRPCCall",
+			Handler:    _ZorumsService_GRPCCall_Handler,
 		},
 		{
-			MethodName: "ReadQuorumCall",
-			Handler:    _ReaderService_ReadQuorumCall_Handler,
+			MethodName: "QuorumCall",
+			Handler:    _ZorumsService_QuorumCall_Handler,
 		},
 		{
-			MethodName: "ReadQuorumCallPerNodeArg",
-			Handler:    _ReaderService_ReadQuorumCallPerNodeArg_Handler,
+			MethodName: "QuorumCallPerNodeArg",
+			Handler:    _ZorumsService_QuorumCallPerNodeArg_Handler,
 		},
 		{
-			MethodName: "ReadQuorumCallQFWithRequestArg",
-			Handler:    _ReaderService_ReadQuorumCallQFWithRequestArg_Handler,
+			MethodName: "QuorumCallQFWithRequestArg",
+			Handler:    _ZorumsService_QuorumCallQFWithRequestArg_Handler,
 		},
 		{
-			MethodName: "ReadQuorumCallCustomReturnType",
-			Handler:    _ReaderService_ReadQuorumCallCustomReturnType_Handler,
+			MethodName: "QuorumCallCustomReturnType",
+			Handler:    _ZorumsService_QuorumCallCustomReturnType_Handler,
 		},
 		{
-			MethodName: "ReadQuorumCallCombo",
-			Handler:    _ReaderService_ReadQuorumCallCombo_Handler,
+			MethodName: "QuorumCallCombo",
+			Handler:    _ZorumsService_QuorumCallCombo_Handler,
 		},
 		{
-			MethodName: "ReadQuorumCallFuture",
-			Handler:    _ReaderService_ReadQuorumCallFuture_Handler,
+			MethodName: "QuorumCallEmpty",
+			Handler:    _ZorumsService_QuorumCallEmpty_Handler,
 		},
 		{
-			MethodName: "ReadCorrectable",
-			Handler:    _ReaderService_ReadCorrectable_Handler,
+			MethodName: "QuorumCallEmpty2",
+			Handler:    _ZorumsService_QuorumCallEmpty2_Handler,
 		},
 		{
-			MethodName: "ReadEmpty",
-			Handler:    _ReaderService_ReadEmpty_Handler,
+			MethodName: "QuorumCallFuture",
+			Handler:    _ZorumsService_QuorumCallFuture_Handler,
 		},
 		{
-			MethodName: "ReadEmpty2",
-			Handler:    _ReaderService_ReadEmpty2_Handler,
+			MethodName: "QuorumCallFuturePerNodeArg",
+			Handler:    _ZorumsService_QuorumCallFuturePerNodeArg_Handler,
 		},
 		{
-			MethodName: "ReadFutureEmpty",
-			Handler:    _ReaderService_ReadFutureEmpty_Handler,
+			MethodName: "QuorumCallfutureQFWithRequestArg",
+			Handler:    _ZorumsService_QuorumCallfutureQFWithRequestArg_Handler,
+		},
+		{
+			MethodName: "QuorumCallFutureCustomReturnType",
+			Handler:    _ZorumsService_QuorumCallFutureCustomReturnType_Handler,
+		},
+		{
+			MethodName: "QuorumCallFutureCombo",
+			Handler:    _ZorumsService_QuorumCallFutureCombo_Handler,
+		},
+		{
+			MethodName: "QuorumCallFuture2",
+			Handler:    _ZorumsService_QuorumCallFuture2_Handler,
+		},
+		{
+			MethodName: "QuorumCallFutureEmpty",
+			Handler:    _ZorumsService_QuorumCallFutureEmpty_Handler,
+		},
+		{
+			MethodName: "QuorumCallFutureEmpty2",
+			Handler:    _ZorumsService_QuorumCallFutureEmpty2_Handler,
+		},
+		{
+			MethodName: "Correctable",
+			Handler:    _ZorumsService_Correctable_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "ReadMulticast",
-			Handler:       _ReaderService_ReadMulticast_Handler,
+			StreamName:    "Multicast",
+			Handler:       _ZorumsService_Multicast_Handler,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "ReadMulticast2",
-			Handler:       _ReaderService_ReadMulticast2_Handler,
+			StreamName:    "MulticastPerNodeArg",
+			Handler:       _ZorumsService_MulticastPerNodeArg_Handler,
 			ClientStreams: true,
 		},
 		{
-			StreamName:    "ReadCorrectableStream",
-			Handler:       _ReaderService_ReadCorrectableStream_Handler,
+			StreamName:    "Multicast2",
+			Handler:       _ZorumsService_Multicast2_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "Multicast3",
+			Handler:       _ZorumsService_Multicast3_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "Multicast4",
+			Handler:       _ZorumsService_Multicast4_Handler,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "CorrectableStream",
+			Handler:       _ZorumsService_CorrectableStream_Handler,
 			ServerStreams: true,
-		},
-		{
-			StreamName:    "ReadMulticast3",
-			Handler:       _ReaderService_ReadMulticast3_Handler,
-			ClientStreams: true,
 		},
 	},
 	Metadata: "zorums.proto",

@@ -8,23 +8,33 @@ import (
 )
 
 type nodeServices struct {
-	ReaderServiceClient
-	readMulticastClient  ReaderService_ReadMulticastClient
-	readMulticast2Client ReaderService_ReadMulticast2Client
-	readMulticast3Client ReaderService_ReadMulticast3Client
+	ZorumsServiceClient
+	multicastClient           ZorumsService_MulticastClient
+	multicastPerNodeArgClient ZorumsService_MulticastPerNodeArgClient
+	multicast2Client          ZorumsService_Multicast2Client
+	multicast3Client          ZorumsService_Multicast3Client
+	multicast4Client          ZorumsService_Multicast4Client
 }
 
 func (n *Node) connectStream() (err error) {
-	n.ReaderServiceClient = NewReaderServiceClient(n.conn)
-	n.readMulticastClient, err = n.ReaderServiceClient.ReadMulticast(context.Background())
+	n.ZorumsServiceClient = NewZorumsServiceClient(n.conn)
+	n.multicastClient, err = n.ZorumsServiceClient.Multicast(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
-	n.readMulticast2Client, err = n.ReaderServiceClient.ReadMulticast2(context.Background())
+	n.multicastPerNodeArgClient, err = n.ZorumsServiceClient.MulticastPerNodeArg(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
-	n.readMulticast3Client, err = n.ReaderServiceClient.ReadMulticast3(context.Background())
+	n.multicast2Client, err = n.ZorumsServiceClient.Multicast2(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
+	n.multicast3Client, err = n.ZorumsServiceClient.Multicast3(context.Background())
+	if err != nil {
+		return fmt.Errorf("stream creation failed: %v", err)
+	}
+	n.multicast4Client, err = n.ZorumsServiceClient.Multicast4(context.Background())
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
@@ -32,8 +42,10 @@ func (n *Node) connectStream() (err error) {
 }
 
 func (n *Node) closeStream() (err error) {
-	_, err = n.readMulticastClient.CloseAndRecv()
-	_, err = n.readMulticast2Client.CloseAndRecv()
-	_, err = n.readMulticast3Client.CloseAndRecv()
+	_, err = n.multicastClient.CloseAndRecv()
+	_, err = n.multicastPerNodeArgClient.CloseAndRecv()
+	_, err = n.multicast2Client.CloseAndRecv()
+	_, err = n.multicast3Client.CloseAndRecv()
+	_, err = n.multicast4Client.CloseAndRecv()
 	return err
 }

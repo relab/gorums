@@ -1,5 +1,7 @@
 package gengorums
 
+// TODO(meling) consider to replace this check with the hasAPIType func;
+// hash map keys must be prefixed with calltype or filename.
 var multicastRefImports = `
 {{if contains $out "."}}
 // Reference imports to suppress errors if they are not otherwise used.
@@ -7,6 +9,7 @@ var _ {{$out}}
 {{end}}
 `
 
+// TODO(meling) multicast does not support per_node_arg yet.
 var multicastMethod = `
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}

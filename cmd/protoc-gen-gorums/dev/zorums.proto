@@ -7,72 +7,151 @@ option go_package = "cmd/protoc-gen-gorums/dev";
 import "gorums.proto";
 import "google/protobuf/empty.proto";
 
-message ReadRequest { string Value = 1; }
-message ReadResponse { int64 Result = 1; }
-message MyReadResponse {
+message Request { string Value = 1; }
+message Response { int64 Result = 1; }
+message MyResponse {
   string Value = 1;
   int64 Result = 2;
 }
 
-service ReaderService {
-  rpc ReadGrpc(ReadRequest) returns (ReadResponse) {}
-  rpc ReadQuorumCall(ReadRequest) returns (ReadResponse) {
-    option (gorums.qc) = true;
-  }
-  rpc ReadQuorumCallPerNodeArg(ReadRequest) returns (ReadResponse) {
+// TODO(meling) clean up proto file:
+// - Test all call types with local and imported message types
+// - Test all call types with all options
+// - Add doc comment to each RPC, describing what it aims to test
+// - Also need a minimal style proto file to ensure that methods also generate
+// correct code when certain imports are not used.
+// - Should check what happens if someone uses Gorums reserved names in the
+// proto file, such as Configuration, Manager, etc.
+
+// ZorumsService is not meant to be implemented. The generated
+// service methods must pass compilation, but no further tests are done.
+// Other tests are provided to test the actual generated code.
+// The RPCs in this service aims to test various uses of Gorums's
+// options and call types, including imported message types and
+// multiple RPCs reusing the same input and output types.
+service ZorumsService {
+  // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
+  // they are added to the _grpc.pb.go generated file.
+  rpc GRPCCall(Request) returns (Response) {}
+
+  // ---------------------------------------------------------------
+  // QuorumCall variants
+  // ---------------------------------------------------------------
+
+  // QuorumCall plain.
+  rpc QuorumCall(Request) returns (Response) { option (gorums.qc) = true; }
+  // QuorumCall with per_node_arg option.
+  rpc QuorumCallPerNodeArg(Request) returns (Response) {
     option (gorums.qc) = true;
     option (gorums.per_node_arg) = true;
   }
-  rpc ReadQuorumCallQFWithRequestArg(ReadRequest) returns (ReadResponse) {
+  // QuorumCall with qf_with_req option.
+  rpc QuorumCallQFWithRequestArg(Request) returns (Response) {
     option (gorums.qc) = true;
     option (gorums.qf_with_req) = true;
   }
-  rpc ReadQuorumCallCustomReturnType(ReadRequest) returns (ReadResponse) {
+  // QuorumCall with custom_return_type option.
+  rpc QuorumCallCustomReturnType(Request) returns (Response) {
     option (gorums.qc) = true;
-    option (gorums.custom_return_type) = "MyReadResponse";
+    option (gorums.custom_return_type) = "MyResponse";
   }
-  // ReadQuorumCallCombo does it all. Comment testing.
-  rpc ReadQuorumCallCombo(ReadRequest) returns (ReadResponse) {
+  // QuorumCallCombo with all supported options.
+  rpc QuorumCallCombo(Request) returns (Response) {
     option (gorums.qc) = true;
     option (gorums.qf_with_req) = true;
     option (gorums.per_node_arg) = true;
-    option (gorums.custom_return_type) = "MyReadResponse";
+    option (gorums.custom_return_type) = "MyResponse";
   }
-  // ReadMulticast is testing a comment.
-  rpc ReadMulticast(stream ReadRequest) returns (ReadResponse) {
+  // QuorumCallEmpty for testing imported message type.
+  rpc QuorumCallEmpty(google.protobuf.Empty) returns (Response) {
+    option (gorums.qc) = true;
+  }
+  // QuorumCallEmpty2 for testing imported message type.
+  rpc QuorumCallEmpty2(Request) returns (google.protobuf.Empty) {
+    option (gorums.qc) = true;
+  }
+
+  // ---------------------------------------------------------------
+  // Multicast variants
+  // ---------------------------------------------------------------
+
+  // Multicast plain. Response type is not needed here.
+  rpc Multicast(stream Request) returns (Response) {
     option (gorums.multicast) = true;
   }
-  // ReadMulticast2 is testing whether multiple streams work.
-  rpc ReadMulticast2(stream ReadRequest) returns (ReadResponse) {
+  // MulticastPerNodeArg with per_node_arg option.
+  // TODO(meling) currently this is not supported, but compiles as if
+  // per_node_arg wasn't specified.
+  rpc MulticastPerNodeArg(stream Request) returns (Response) {
+    option (gorums.multicast) = true;
+    option (gorums.per_node_arg) = true;
+  }
+  // Multicast2 is testing whether multiple streams work.
+  rpc Multicast2(stream Request) returns (Response) {
     option (gorums.multicast) = true;
   }
-  rpc ReadQuorumCallFuture(ReadRequest) returns (ReadResponse) {
+  // Multicast3 is testing imported message type.
+  rpc Multicast3(stream Request) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
+  // Multicast4 is testing imported message type.
+  rpc Multicast4(stream google.protobuf.Empty) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
+
+  // ---------------------------------------------------------------
+  // Future variants
+  // ---------------------------------------------------------------
+
+  // QuorumCallFuture plain.
+  rpc QuorumCallFuture(Request) returns (Response) {
     option (gorums.qc_future) = true;
   }
-  rpc ReadCorrectable(ReadRequest) returns (ReadResponse) {
-    option (gorums.correctable) = true;
-    option (gorums.custom_return_type) = "MyReadResponse";
+  // QuorumCallFuturePerNodeArg with per_node_arg option.
+  rpc QuorumCallFuturePerNodeArg(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.per_node_arg) = true;
   }
-  rpc ReadCorrectableStream(ReadRequest) returns (stream ReadResponse) {
+  // QuorumCallfutureQFWithRequestArg with qf_with_req option.
+  rpc QuorumCallfutureQFWithRequestArg(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.qf_with_req) = true;
+  }
+  // QuorumCallFutureCustomReturnType with custom_return_type option.
+  rpc QuorumCallFutureCustomReturnType(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  // QuorumCallFutureCombo with all supported options.
+  rpc QuorumCallFutureCombo(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.qf_with_req) = true;
+    option (gorums.per_node_arg) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  // QuorumCallFuture2 plain; with same return type: Response.
+  rpc QuorumCallFuture2(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+  }
+  // QuorumCallFutureEmpty for testing imported message type.
+  rpc QuorumCallFutureEmpty(Request) returns (google.protobuf.Empty) {
+    option (gorums.qc_future) = true;
+  }
+  // QuorumCallFutureEmpty2 for testing imported message type; with same return
+  // type as QuorumCallFuture: Response.
+  rpc QuorumCallFutureEmpty2(google.protobuf.Empty) returns (Response) {
+    option (gorums.qc_future) = true;
+  }
+
+  // ---------------------------------------------------------------
+  // Correctable variants
+  // ---------------------------------------------------------------
+
+  rpc Correctable(Request) returns (Response) {
+    option (gorums.correctable) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  rpc CorrectableStream(Request) returns (stream Response) {
     option (gorums.correctable_stream) = true;
   }
-
-  // ReadEmpty and other methods for testing imported protos
-  rpc ReadEmpty(google.protobuf.Empty) returns (ReadResponse) {
-    option (gorums.qc) = true;
-  }
-  rpc ReadEmpty2(ReadRequest) returns (google.protobuf.Empty) {
-    option (gorums.qc) = true;
-  }
-  rpc ReadMulticast3(stream ReadRequest) returns (google.protobuf.Empty) {
-    option (gorums.multicast) = true;
-  }
-
-  // ReadFutureEmpty and other methods for testing imported protos
-  rpc ReadFutureEmpty(ReadRequest) returns (google.protobuf.Empty) {
-    option (gorums.qc_future) = true;
-  }
-  // rpc ReadFutureEmpty2(google.protobuf.Empty) returns (ReadResponse) {
-  //   option (gorums.qc_future) = true;
-  // }
 }

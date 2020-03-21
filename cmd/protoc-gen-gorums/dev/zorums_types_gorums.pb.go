@@ -7,9 +7,9 @@ import (
 	sync "sync"
 )
 
-type internalReadResponse struct {
+type internalResponse struct {
 	nid   uint32
-	reply *ReadResponse
+	reply *Response
 	err   error
 }
 
@@ -19,10 +19,19 @@ type internalEmpty struct {
 	err   error
 }
 
-// FutureReadResponse is a future object for processing replies.
-type FutureReadResponse struct {
+// FutureMyResponse is a future object for processing replies.
+type FutureMyResponse struct {
 	// the actual reply
-	*ReadResponse
+	*MyResponse
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
+}
+
+// FutureResponse is a future object for processing replies.
+type FutureResponse struct {
+	// the actual reply
+	*Response
 	NodeIDs []uint32
 	err     error
 	c       chan struct{}
@@ -37,11 +46,11 @@ type FutureEmpty struct {
 	c       chan struct{}
 }
 
-// CorrectableReadResponse is a correctable object for processing replies.
-type CorrectableReadResponse struct {
+// CorrectableResponse is a correctable object for processing replies.
+type CorrectableResponse struct {
 	mu sync.Mutex
 	// the actual reply
-	*MyReadResponse
+	*MyResponse
 	NodeIDs  []uint32
 	level    int
 	err      error
@@ -53,11 +62,11 @@ type CorrectableReadResponse struct {
 	donech chan struct{}
 }
 
-// CorrectableStreamReadResponse is a correctable object for processing replies.
-type CorrectableStreamReadResponse struct {
+// CorrectableStreamResponse is a correctable object for processing replies.
+type CorrectableStreamResponse struct {
 	mu sync.Mutex
 	// the actual reply
-	*ReadResponse
+	*Response
 	NodeIDs  []uint32
 	level    int
 	err      error
