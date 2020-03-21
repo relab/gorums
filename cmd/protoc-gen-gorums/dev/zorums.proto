@@ -67,4 +67,12 @@ service ReaderService {
   rpc ReadMulticast3(stream ReadRequest) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;
   }
+
+  // ReadFutureEmpty and other methods for testing imported protos
+  rpc ReadFutureEmpty(ReadRequest) returns (google.protobuf.Empty) {
+    option (gorums.qc_future) = true;
+  }
+  // rpc ReadFutureEmpty2(google.protobuf.Empty) returns (ReadResponse) {
+  //   option (gorums.qc_future) = true;
+  // }
 }

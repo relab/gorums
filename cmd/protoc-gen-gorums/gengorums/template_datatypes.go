@@ -2,9 +2,12 @@ package gengorums
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
 var internalOutDataType = `
@@ -68,6 +71,10 @@ func mapType(g *protogen.GeneratedFile, services []*protogen.Service, mapFn mapF
 	return s
 }
 
+func out(g *protogen.GeneratedFile, method *protogen.Method) string {
+	return g.QualifiedGoIdent(method.Output.GoIdent)
+}
+
 func internal(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 	if hasMethodOption(method, callTypesWithInternal...) {
 		out := out(g, method)
@@ -75,20 +82,48 @@ func internal(g *protogen.GeneratedFile, method *protogen.Method, s map[string]s
 	}
 }
 
+func internalOut(g *protogen.GeneratedFile, method *protogen.Method) string {
+	out := g.QualifiedGoIdent(method.Output.GoIdent)
+	return fmt.Sprintf("internal%s", out[strings.LastIndex(out, ".")+1:])
+}
+
 func future(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 	if hasMethodOption(method, gorums.E_QcFuture) {
 		out := customOut(g, method)
-		s[out] = fmt.Sprintf("Future%s", method.Output.GoIdent.GoName)
+		s[out] = futureOut(g, method)
 	}
+}
+
+func futureOut(g *protogen.GeneratedFile, method *protogen.Method) string {
+	out := g.QualifiedGoIdent(method.Output.GoIdent)
+	return fmt.Sprintf("Future%s", out[strings.LastIndex(out, ".")+1:])
+}
+
+// field derives an embedded field name from the given typeName.
+// If typeName contains a package, this will be removed.
+func field(typeName string) string {
+	return typeName[strings.LastIndex(typeName, ".")+1:]
+}
+
+func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
+	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
+	customOutType := fmt.Sprintf("%v", proto.GetExtension(ext, gorums.E_CustomReturnType))
+	outType := method.Output.GoIdent
+	if customOutType != "" {
+		outType.GoName = customOutType
+	}
+	return g.QualifiedGoIdent(outType)
 }
 
 func correctable(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 	//TODO fix stream version; not clear if it needs a separate mapping function
 	if hasMethodOption(method, gorums.E_Correctable) {
+		//TODO(meling) fix customOut for Correctable
 		out := customOut(g, method)
 		s[out] = fmt.Sprintf("Correctable%s", method.Output.GoIdent.GoName)
 	}
 	if hasMethodOption(method, gorums.E_CorrectableStream) {
+		//TODO(meling) fix customOut for CorrectableStream
 		out := customOut(g, method)
 		s[out] = fmt.Sprintf("CorrectableStream%s", method.Output.GoIdent.GoName)
 	}

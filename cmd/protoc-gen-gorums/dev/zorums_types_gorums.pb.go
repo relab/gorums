@@ -28,6 +28,15 @@ type FutureReadResponse struct {
 	c       chan struct{}
 }
 
+// FutureEmpty is a future object for processing replies.
+type FutureEmpty struct {
+	// the actual reply
+	*empty.Empty
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
+}
+
 // CorrectableReadResponse is a correctable object for processing replies.
 type CorrectableReadResponse struct {
 	mu sync.Mutex

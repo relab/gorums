@@ -48,4 +48,8 @@ type QuorumSpec interface {
 	// ReadEmpty2QF is the quorum function for the ReadEmpty2
 	// quorum call method.
 	ReadEmpty2QF(replies []*empty.Empty) (*empty.Empty, bool)
+
+	// ReadFutureEmptyQF is the quorum function for the ReadFutureEmpty
+	// asynchronous quorum call method.
+	ReadFutureEmptyQF(replies []*empty.Empty) (*empty.Empty, bool)
 }

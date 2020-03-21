@@ -3,7 +3,7 @@ package gengorums
 var futureCallVariables = `
 {{$context := use "context.Context" .GenFile}}
 {{$opts := use "grpc.CallOption" .GenFile}}
-{{$futureOut := printf "Future%s" $out}}
+{{$futureOut := futureOut .GenFile .Method}}
 `
 
 var futureCallComment = `
@@ -51,7 +51,7 @@ var futureCallInterface = `
 // The method blocks until a reply or error is available.
 func (f *{{$futureOut}}) Get() (*{{$customOut}}, error) {
 	<-f.c
-	return f.{{$customOut}}, f.err
+	return f.{{$customOutField}}, f.err
 }
 
 // Done reports if a reply and/or error is available for the {{$method}}.
@@ -91,15 +91,15 @@ var futureCallReply = `
 			{{template "traceLazyLog"}}
 			replyValues = append(replyValues, r.reply)
 			if reply, quorum = c.qspec.{{$method}}QF({{withQFArg .Method "in, "}}replyValues); quorum {
-				resp.{{$customOut}}, resp.err = reply, nil
+				resp.{{$customOutField}}, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.{{$customOut}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.{{$customOut}}, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}

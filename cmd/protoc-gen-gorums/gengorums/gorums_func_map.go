@@ -8,8 +8,6 @@ import (
 
 	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
 // importMap holds the mapping between short-hand import name
@@ -76,6 +74,8 @@ var funcMap = template.FuncMap{
 	"out":         out,
 	"internalOut": internalOut,
 	"customOut":   customOut,
+	"field":       field,
+	"futureOut":   futureOut,
 	"withQFArg": func(method *protogen.Method, arg string) string {
 		if hasMethodOption(method, gorums.E_QfWithReq) {
 			return arg
@@ -113,25 +113,6 @@ var funcMap = template.FuncMap{
 	"mapFutureOutType":      mapFutureOutType,
 	"qcresult":              qcresult,
 	"contains":              strings.Contains,
-}
-
-func out(g *protogen.GeneratedFile, method *protogen.Method) string {
-	return g.QualifiedGoIdent(method.Output.GoIdent)
-}
-
-func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	customOutType := fmt.Sprintf("%v", proto.GetExtension(ext, gorums.E_CustomReturnType))
-	outType := method.Output.GoIdent
-	if customOutType != "" {
-		outType.GoName = customOutType
-	}
-	return g.QualifiedGoIdent(outType)
-}
-
-func internalOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	out := g.QualifiedGoIdent(method.Output.GoIdent)
-	return fmt.Sprintf("internal%s", out[strings.LastIndex(out, ".")+1:])
 }
 
 func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }

@@ -40,6 +40,8 @@ type ReaderServiceClient interface {
 	ReadEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*ReadResponse, error)
 	ReadEmpty2(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*empty.Empty, error)
 	ReadMulticast3(ctx context.Context, opts ...grpc.CallOption) (ReaderService_ReadMulticast3Client, error)
+	// ReadFutureEmpty and other methods for testing imported protos
+	ReadFutureEmpty(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type readerServiceClient struct {
@@ -274,6 +276,15 @@ func (x *readerServiceReadMulticast3Client) CloseAndRecv() (*empty.Empty, error)
 	return m, nil
 }
 
+func (c *readerServiceClient) ReadFutureEmpty(ctx context.Context, in *ReadRequest, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/dev.ReaderService/ReadFutureEmpty", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ReaderServiceServer is the server API for ReaderService service.
 type ReaderServiceServer interface {
 	ReadGrpc(context.Context, *ReadRequest) (*ReadResponse, error)
@@ -294,6 +305,8 @@ type ReaderServiceServer interface {
 	ReadEmpty(context.Context, *empty.Empty) (*ReadResponse, error)
 	ReadEmpty2(context.Context, *ReadRequest) (*empty.Empty, error)
 	ReadMulticast3(ReaderService_ReadMulticast3Server) error
+	// ReadFutureEmpty and other methods for testing imported protos
+	ReadFutureEmpty(context.Context, *ReadRequest) (*empty.Empty, error)
 }
 
 // UnimplementedReaderServiceServer can be embedded to have forward compatible implementations.
@@ -341,6 +354,9 @@ func (*UnimplementedReaderServiceServer) ReadEmpty2(context.Context, *ReadReques
 }
 func (*UnimplementedReaderServiceServer) ReadMulticast3(ReaderService_ReadMulticast3Server) error {
 	return status.Errorf(codes.Unimplemented, "method ReadMulticast3 not implemented")
+}
+func (*UnimplementedReaderServiceServer) ReadFutureEmpty(context.Context, *ReadRequest) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadFutureEmpty not implemented")
 }
 
 func RegisterReaderServiceServer(s *grpc.Server, srv ReaderServiceServer) {
@@ -626,6 +642,24 @@ func (x *readerServiceReadMulticast3Server) Recv() (*ReadRequest, error) {
 	return m, nil
 }
 
+func _ReaderService_ReadFutureEmpty_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReaderServiceServer).ReadFutureEmpty(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ReaderService/ReadFutureEmpty",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReaderServiceServer).ReadFutureEmpty(ctx, req.(*ReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _ReaderService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "dev.ReaderService",
 	HandlerType: (*ReaderServiceServer)(nil),
@@ -669,6 +703,10 @@ var _ReaderService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadEmpty2",
 			Handler:    _ReaderService_ReadEmpty2_Handler,
+		},
+		{
+			MethodName: "ReadFutureEmpty",
+			Handler:    _ReaderService_ReadFutureEmpty_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
