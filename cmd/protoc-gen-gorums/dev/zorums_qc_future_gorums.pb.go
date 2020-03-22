@@ -195,23 +195,23 @@ func (n *Node) QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, repl
 	replyChan <- internalResponse{n.id, reply, err}
 }
 
-// QuorumCallfutureQFWithRequestArg with qf_with_req option.
-func (c *Configuration) QuorumCallfutureQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureResponse {
+// QuorumCallFutureQFWithRequestArg with qf_with_req option.
+func (c *Configuration) QuorumCallFutureQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureResponse {
 	fut := &FutureResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
 	go func() {
 		defer close(fut.c)
-		c.quorumCallfutureQFWithRequestArg(ctx, in, fut, opts...)
+		c.quorumCallFutureQFWithRequestArg(ctx, in, fut, opts...)
 	}()
 	return fut
 }
 
-func (c *Configuration) quorumCallfutureQFWithRequestArg(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
+func (c *Configuration) quorumCallFutureQFWithRequestArg(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallfutureQFWithRequestArg")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureQFWithRequestArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -232,7 +232,7 @@ func (c *Configuration) quorumCallfutureQFWithRequestArg(ctx context.Context, in
 	expected := c.n
 	replyChan := make(chan internalResponse, expected)
 	for _, n := range c.nodes {
-		go n.QuorumCallfutureQFWithRequestArg(ctx, in, replyChan)
+		go n.QuorumCallFutureQFWithRequestArg(ctx, in, replyChan)
 	}
 
 	var (
@@ -256,7 +256,7 @@ func (c *Configuration) quorumCallfutureQFWithRequestArg(ctx context.Context, in
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallfutureQFWithRequestArgQF(in, replyValues); quorum {
+			if reply, quorum = c.qspec.QuorumCallFutureQFWithRequestArgQF(in, replyValues); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
@@ -271,10 +271,10 @@ func (c *Configuration) quorumCallfutureQFWithRequestArg(ctx context.Context, in
 	}
 }
 
-func (n *Node) QuorumCallfutureQFWithRequestArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+func (n *Node) QuorumCallFutureQFWithRequestArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
 	reply := new(Response)
 	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallfutureQFWithRequestArg", in, reply)
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallFutureQFWithRequestArg", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))

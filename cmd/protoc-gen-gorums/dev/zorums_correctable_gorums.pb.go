@@ -4,6 +4,7 @@ package dev
 
 import (
 	context "context"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	trace "golang.org/x/net/trace"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -11,9 +12,7 @@ import (
 	time "time"
 )
 
-// Correctable asynchronously invokes a correctable quorum call on each node
-// in configuration c and returns a CorrectableResponse, which can be used
-// to inspect any replies or errors when available.
+// Correctable plain.
 func (c *Configuration) Correctable(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableResponse {
 	corr := &CorrectableResponse{
 		level:   LevelNotSet,
@@ -22,66 +21,6 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request, opts ...gr
 	}
 	go c.correctable(ctx, in, corr, opts...)
 	return corr
-}
-
-// Get returns the reply, level and any error associated with the
-// Correctable. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *CorrectableResponse) Get() (*MyResponse, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.MyResponse, c.level, c.err
-}
-
-// Done returns a channel that will be closed when the correctable Correctable
-// quorum call is done. A call is considered done when the quorum function has
-// signaled that a quorum of replies was received or the call returned an error.
-func (c *CorrectableResponse) Done() <-chan struct{} {
-	return c.donech
-}
-
-// Watch returns a channel that will be closed when a reply or error at or above the
-// specified level is available. If the call is done, the channel is closed
-// regardless of the specified level.
-func (c *CorrectableResponse) Watch(level int) <-chan struct{} {
-	ch := make(chan struct{})
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if level < c.level {
-		close(ch)
-		return ch
-	}
-	c.watchers = append(c.watchers, &struct {
-		level int
-		ch    chan struct{}
-	}{level, ch})
-	return ch
-}
-
-func (c *CorrectableResponse) set(reply *MyResponse, level int, err error, done bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.done {
-		panic("set(...) called on a done correctable")
-	}
-	c.MyResponse, c.level, c.err, c.done = reply, level, err, done
-	if done {
-		close(c.donech)
-		for _, watcher := range c.watchers {
-			if watcher != nil {
-				close(watcher.ch)
-			}
-		}
-		return
-	}
-	for i := range c.watchers {
-		if c.watchers[i] != nil && c.watchers[i].level <= level {
-			close(c.watchers[i].ch)
-			c.watchers[i] = nil
-		}
-	}
 }
 
 func (c *Configuration) correctable(ctx context.Context, in *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
@@ -98,7 +37,7 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 		ti.LazyLog(&payload{sent: true, msg: in}, false)
 
 		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
 			if resp.err != nil {
 				ti.SetError()
 			}
@@ -114,7 +53,7 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 	var (
 		replyValues = make([]*Response, 0, c.n)
 		clevel      = LevelNotSet
-		reply       *MyResponse
+		reply       *Response
 		rlevel      int
 		errs        []GRPCError
 		quorum      bool
@@ -158,6 +97,581 @@ func (n *Node) Correctable(ctx context.Context, in *Request, replyChan chan<- in
 	reply := new(Response)
 	start := time.Now()
 	err := n.conn.Invoke(ctx, "/dev.ZorumsService/Correctable", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// CorrectablePerNodeArg with per_node_arg option.
+func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) *CorrectableResponse {
+	corr := &CorrectableResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctablePerNodeArg(ctx, in, f, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectablePerNodeArg")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.id)
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		go n.CorrectablePerNodeArg(ctx, nodeArg, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		clevel      = LevelNotSet
+		reply       *Response
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectablePerNodeArgQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectablePerNodeArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/CorrectablePerNodeArg", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// CorrectableQFWithRequestArg with qf_with_req option.
+func (c *Configuration) CorrectableQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableResponse {
+	corr := &CorrectableResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableQFWithRequestArg(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableQFWithRequestArg(ctx context.Context, in *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableQFWithRequestArg")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableQFWithRequestArg(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		clevel      = LevelNotSet
+		reply       *Response
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableQFWithRequestArgQF(in, replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableQFWithRequestArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/CorrectableQFWithRequestArg", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// CorrectableCustomReturnType with custom_return_type option.
+func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableMyResponse {
+	corr := &CorrectableMyResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableCustomReturnType(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Request, resp *CorrectableMyResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableCustomReturnType")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableCustomReturnType(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		clevel      = LevelNotSet
+		reply       *MyResponse
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableCustomReturnTypeQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableCustomReturnType(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/CorrectableCustomReturnType", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// CorrectableCombo with all supported options.
+func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) *CorrectableMyResponse {
+	corr := &CorrectableMyResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableCombo(ctx, in, f, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableMyResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableCombo")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.id)
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		go n.CorrectableCombo(ctx, nodeArg, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		clevel      = LevelNotSet
+		reply       *MyResponse
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableComboQF(in, replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableCombo(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/CorrectableCombo", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// CorrectableEmpty for testing imported message type.
+func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableEmpty {
+	corr := &CorrectableEmpty{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableEmpty(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp *CorrectableEmpty, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableEmpty")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Empty, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalEmpty, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableEmpty(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*empty.Empty, 0, c.n)
+		clevel      = LevelNotSet
+		reply       *empty.Empty
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableEmptyQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableEmpty(ctx context.Context, in *Request, replyChan chan<- internalEmpty) {
+	reply := new(empty.Empty)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/CorrectableEmpty", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalEmpty{n.id, reply, err}
+}
+
+// CorrectableEmpty2 for testing imported message type; with same return
+// type as Correctable: Response.
+func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) *CorrectableResponse {
+	corr := &CorrectableResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableEmpty2(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, resp *CorrectableResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableEmpty2")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableEmpty2(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		clevel      = LevelNotSet
+		reply       *Response
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableEmpty2QF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableEmpty2(ctx context.Context, in *empty.Empty, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/dev.ZorumsService/CorrectableEmpty2", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))

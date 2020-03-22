@@ -3,7 +3,7 @@ package gengorums
 var futureCallVariables = `
 {{$context := use "context.Context" .GenFile}}
 {{$opts := use "grpc.CallOption" .GenFile}}
-{{$futureOut := futureOut .GenFile .Method}}
+{{$futureOut := futureOut $customOut}}
 `
 
 var futureCallComment = `

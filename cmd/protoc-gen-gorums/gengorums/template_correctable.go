@@ -3,11 +3,11 @@ package gengorums
 var correctableCallVariables = `
 {{$context := use "context.Context" .GenFile}}
 {{$opts := use "grpc.CallOption" .GenFile}}
-{{$correctableOut := printf "Correctable%s" $out}}
+{{$correctableOut := correctableOut $customOut}}
 {{$appendFn := printf "append"}}
 {{if correctableStream .Method}}
 {{$appendFn = printf "appendIfNotPresent"}}
-{{$correctableOut = printf "CorrectableStream%s" $out}}
+{{$correctableOut = correctableStreamOut $customOut}}
 {{end}}
 `
 
@@ -49,68 +49,6 @@ var correctableCallBody = `
 	}
 	go c.{{unexport .Method.GoName}}(ctx, in{{perNodeArg .Method ", f"}}, corr, opts...)
 	return corr
-}
-`
-
-var correctableCallInterface = `
-// Get returns the reply, level and any error associated with the
-// {{$method}}. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.{{$customOut}}, c.level, c.err
-}
-
-// Done returns a channel that will be closed when the correctable {{$method}}
-// quorum call is done. A call is considered done when the quorum function has
-// signaled that a quorum of replies was received or the call returned an error.
-func (c *{{$correctableOut}}) Done() <-chan struct{} {
-	return c.donech
-}
-
-// Watch returns a channel that will be closed when a reply or error at or above the
-// specified level is available. If the call is done, the channel is closed
-// regardless of the specified level.
-func (c *{{$correctableOut}}) Watch(level int) <-chan struct{} {
-	ch := make(chan struct{})
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if level < c.level {
-		close(ch)
-		return ch
-	}
-	c.watchers = append(c.watchers, &struct {
-		level int
-		ch    chan struct{}
-	}{level, ch})
-	return ch
-}
-
-func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, done bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.done {
-		panic("set(...) called on a done correctable")
-	}
-	c.{{$customOut}}, c.level, c.err, c.done = reply, level, err, done
-	if done {
-		close(c.donech)
-		for _, watcher := range c.watchers {
-			if watcher != nil {
-				close(watcher.ch)
-			}
-		}
-		return
-	}
-	for i := range c.watchers {
-		if c.watchers[i] != nil && c.watchers[i].level <= level {
-			close(c.watchers[i].ch)
-			c.watchers[i] = nil
-		}
-	}
 }
 `
 
@@ -193,24 +131,15 @@ func (n *Node) {{$method}}(ctx {{$context}}, in *{{$in}}, replyChan chan<- {{$in
 }
 `
 
-var correctableCall = commonVariables +
+var correctableCommon = commonVariables +
 	correctableCallVariables +
 	correctableCallComment +
 	correctableCallSignature +
 	correctableCallBody +
-	correctableCallInterface +
 	correctableCallUnexportedSignature +
 	quorumCallLoop +
-	correctableCallReply +
-	nodeCallGrpc
+	correctableCallReply
 
-var correctableStreamCall = commonVariables +
-	correctableCallVariables +
-	correctableCallComment +
-	correctableCallSignature +
-	correctableCallBody +
-	correctableCallInterface +
-	correctableCallUnexportedSignature +
-	quorumCallLoop +
-	correctableCallReply +
-	correctableStreamCallGrpc
+var correctableCall = correctableCommon + nodeCallGrpc
+
+var correctableStreamCall = correctableCommon + correctableStreamCallGrpc

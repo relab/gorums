@@ -45,9 +45,9 @@ type QuorumSpec interface {
 	// asynchronous quorum call method.
 	QuorumCallFuturePerNodeArgQF(replies []*Response) (*Response, bool)
 
-	// QuorumCallfutureQFWithRequestArgQF is the quorum function for the QuorumCallfutureQFWithRequestArg
+	// QuorumCallFutureQFWithRequestArgQF is the quorum function for the QuorumCallFutureQFWithRequestArg
 	// asynchronous quorum call method.
-	QuorumCallfutureQFWithRequestArgQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallFutureQFWithRequestArgQF(in *Request, replies []*Response) (*Response, bool)
 
 	// QuorumCallFutureCustomReturnTypeQF is the quorum function for the QuorumCallFutureCustomReturnType
 	// asynchronous quorum call method.
@@ -71,9 +71,57 @@ type QuorumSpec interface {
 
 	// CorrectableQF is the quorum function for the Correctable
 	// correctable quorum call method.
-	CorrectableQF(replies []*Response) (*MyResponse, int, bool)
+	CorrectableQF(replies []*Response) (*Response, int, bool)
+
+	// CorrectablePerNodeArgQF is the quorum function for the CorrectablePerNodeArg
+	// correctable quorum call method.
+	CorrectablePerNodeArgQF(replies []*Response) (*Response, int, bool)
+
+	// CorrectableQFWithRequestArgQF is the quorum function for the CorrectableQFWithRequestArg
+	// correctable quorum call method.
+	CorrectableQFWithRequestArgQF(in *Request, replies []*Response) (*Response, int, bool)
+
+	// CorrectableCustomReturnTypeQF is the quorum function for the CorrectableCustomReturnType
+	// correctable quorum call method.
+	CorrectableCustomReturnTypeQF(replies []*Response) (*MyResponse, int, bool)
+
+	// CorrectableComboQF is the quorum function for the CorrectableCombo
+	// correctable quorum call method.
+	CorrectableComboQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+
+	// CorrectableEmptyQF is the quorum function for the CorrectableEmpty
+	// correctable quorum call method.
+	CorrectableEmptyQF(replies []*empty.Empty) (*empty.Empty, int, bool)
+
+	// CorrectableEmpty2QF is the quorum function for the CorrectableEmpty2
+	// correctable quorum call method.
+	CorrectableEmpty2QF(replies []*Response) (*Response, int, bool)
 
 	// CorrectableStreamQF is the quorum function for the CorrectableStream
 	// correctable stream quorum call method.
 	CorrectableStreamQF(replies []*Response) (*Response, int, bool)
+
+	// CorrectableStreamPerNodeArgQF is the quorum function for the CorrectableStreamPerNodeArg
+	// correctable stream quorum call method.
+	CorrectableStreamPerNodeArgQF(replies []*Response) (*Response, int, bool)
+
+	// CorrectableStreamQFWithRequestArgQF is the quorum function for the CorrectableStreamQFWithRequestArg
+	// correctable stream quorum call method.
+	CorrectableStreamQFWithRequestArgQF(in *Request, replies []*Response) (*Response, int, bool)
+
+	// CorrectableStreamCustomReturnTypeQF is the quorum function for the CorrectableStreamCustomReturnType
+	// correctable stream quorum call method.
+	CorrectableStreamCustomReturnTypeQF(replies []*Response) (*MyResponse, int, bool)
+
+	// CorrectableStreamComboQF is the quorum function for the CorrectableStreamCombo
+	// correctable stream quorum call method.
+	CorrectableStreamComboQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+
+	// CorrectableStreamEmptyQF is the quorum function for the CorrectableStreamEmpty
+	// correctable stream quorum call method.
+	CorrectableStreamEmptyQF(replies []*empty.Empty) (*empty.Empty, int, bool)
+
+	// CorrectableStreamEmpty2QF is the quorum function for the CorrectableStreamEmpty2
+	// correctable stream quorum call method.
+	CorrectableStreamEmpty2QF(replies []*Response) (*Response, int, bool)
 }

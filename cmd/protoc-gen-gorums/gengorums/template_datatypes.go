@@ -1,17 +1,7 @@
 package gengorums
 
-import (
-	"fmt"
-	"strings"
-
-	"github.com/relab/gorums"
-	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/runtime/protoimpl"
-)
-
 var internalOutDataType = `
-{{range $out, $intOut := mapInternalOutType .GenFile .Services}}
+{{range $intOut, $out := mapInternalOutType .GenFile .Services}}
 type {{$intOut}} struct {
 	nid   uint32
 	reply *{{$out}}
@@ -24,7 +14,7 @@ type {{$intOut}} struct {
 // for a future call type. That is, if multiple future calls use the same
 // return type, this struct and associated methods are only generated once.
 var futureDataType = `
-{{range $customOut, $futureOut := mapFutureOutType .GenFile .Services}}
+{{range $futureOut, $customOut := mapFutureOutType .GenFile .Services}}
 {{$customOutField := field $customOut}}
 // {{$futureOut}} is a future object for processing replies.
 type {{$futureOut}} struct {
@@ -54,9 +44,13 @@ func (f *{{$futureOut}}) Done() bool {
 {{end}}
 `
 
+// This struct and API functions are generated only once per return type
+// for a correctable call type. That is, if multiple correctable calls use the same
+// return type, this struct and associated methods are only generated once.
 var correctableDataType = `
 {{$genFile := .GenFile}}
-{{range $customOut, $correctableOut := mapCorrectableOutType .GenFile .Services}}
+{{range $correctableOut, $customOut := mapCorrectableOutType .GenFile .Services}}
+{{$customOutField := field $customOut}}
 // {{$correctableOut}} is a correctable object for processing replies.
 type {{$correctableOut}} struct {
 	mu {{use "sync.Mutex" $genFile}}
@@ -72,96 +66,69 @@ type {{$correctableOut}} struct {
 	}
 	donech chan struct{}
 }
+
+// Get returns the reply, level and any error associated with the
+// called method. The method does not block until a (possibly
+// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// reply has yet been received. The Done or Watch methods should be used to
+// ensure that a reply is available.
+func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.{{$customOutField}}, c.level, c.err
+}
+
+// Done returns a channel that will be closed when the correctable
+// quorum call is done. A call is considered done when the quorum function has
+// signaled that a quorum of replies was received or the call returned an error.
+func (c *{{$correctableOut}}) Done() <-chan struct{} {
+	return c.donech
+}
+
+// Watch returns a channel that will be closed when a reply or error at or above the
+// specified level is available. If the call is done, the channel is closed
+// regardless of the specified level.
+func (c *{{$correctableOut}}) Watch(level int) <-chan struct{} {
+	ch := make(chan struct{})
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if level < c.level {
+		close(ch)
+		return ch
+	}
+	c.watchers = append(c.watchers, &struct {
+		level int
+		ch    chan struct{}
+	}{level, ch})
+	return ch
+}
+
+func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, done bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.done {
+		panic("set(...) called on a done correctable")
+	}
+	c.{{$customOutField}}, c.level, c.err, c.done = reply, level, err, done
+	if done {
+		close(c.donech)
+		for _, watcher := range c.watchers {
+			if watcher != nil {
+				close(watcher.ch)
+			}
+		}
+		return
+	}
+	for i := range c.watchers {
+		if c.watchers[i] != nil && c.watchers[i].level <= level {
+			close(c.watchers[i].ch)
+			c.watchers[i] = nil
+		}
+	}
+}
 {{end}}
 `
 
 var datatypes = internalOutDataType +
 	futureDataType +
 	correctableDataType
-
-type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
-
-// mapType returns a map of types as defined by the function mapFn.
-func mapType(g *protogen.GeneratedFile, services []*protogen.Service, mapFn mapFunc) (s map[string]string) {
-	s = make(map[string]string)
-	for _, service := range services {
-		for _, method := range service.Methods {
-			mapFn(g, method, s)
-		}
-	}
-	return s
-}
-
-func out(g *protogen.GeneratedFile, method *protogen.Method) string {
-	return g.QualifiedGoIdent(method.Output.GoIdent)
-}
-
-func internal(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-	if hasMethodOption(method, callTypesWithInternal...) {
-		out := out(g, method)
-		s[out] = internalOut(g, method)
-	}
-}
-
-func internalOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	out := g.QualifiedGoIdent(method.Output.GoIdent)
-	return fmt.Sprintf("internal%s", out[strings.LastIndex(out, ".")+1:])
-}
-
-func future(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-	if hasMethodOption(method, gorums.E_QcFuture) {
-		out := customOut(g, method)
-		s[out] = futureOut(g, method)
-	}
-}
-
-func futureOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	out := customOut(g, method)
-	return fmt.Sprintf("Future%s", out[strings.LastIndex(out, ".")+1:])
-}
-
-// field derives an embedded field name from the given typeName.
-// If typeName contains a package, this will be removed.
-func field(typeName string) string {
-	return typeName[strings.LastIndex(typeName, ".")+1:]
-}
-
-// customOut returns the output type to be used for the given method.
-// This may be the output type specified in the rpc line,
-// or if a custom_return_type option is provided for the method,
-// this provided custom type will be returned.
-func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	customOutType := fmt.Sprintf("%v", proto.GetExtension(ext, gorums.E_CustomReturnType))
-	outType := method.Output.GoIdent
-	if customOutType != "" {
-		outType.GoName = customOutType
-	}
-	return g.QualifiedGoIdent(outType)
-}
-
-func correctable(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-	//TODO fix stream version; not clear if it needs a separate mapping function
-	if hasMethodOption(method, gorums.E_Correctable) {
-		//TODO(meling) fix customOut for Correctable
-		out := customOut(g, method)
-		s[out] = fmt.Sprintf("Correctable%s", method.Output.GoIdent.GoName)
-	}
-	if hasMethodOption(method, gorums.E_CorrectableStream) {
-		//TODO(meling) fix customOut for CorrectableStream
-		out := customOut(g, method)
-		s[out] = fmt.Sprintf("CorrectableStream%s", method.Output.GoIdent.GoName)
-	}
-}
-
-func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, internal)
-}
-
-func mapFutureOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, future)
-}
-
-func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, correctable)
-}
