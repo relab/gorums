@@ -30,6 +30,7 @@ message MyResponse {
 // options and call types, including imported message types and
 // multiple RPCs reusing the same input and output types.
 service ZorumsService {
+
   // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
   // they are added to the _grpc.pb.go generated file.
   rpc GRPCCall(Request) returns (Response) {}
@@ -73,6 +74,9 @@ service ZorumsService {
 
   // ---------------------------------------------------------------
   // Multicast variants
+  // The multicast call type does not support options 'qf_with_req'
+  // and 'custom_return_type', since multicast is one-way and so it
+  // doesn't make sense to operate on response types.
   // ---------------------------------------------------------------
 
   // Multicast plain. Response type is not needed here.
@@ -81,7 +85,7 @@ service ZorumsService {
   }
   // MulticastPerNodeArg with per_node_arg option.
   // TODO(meling) currently this is not supported, but compiles as if
-  // per_node_arg wasn't specified.
+  // per_node_arg wasn't specified. Need to implement support.
   rpc MulticastPerNodeArg(stream Request) returns (Response) {
     option (gorums.multicast) = true;
     option (gorums.per_node_arg) = true;
