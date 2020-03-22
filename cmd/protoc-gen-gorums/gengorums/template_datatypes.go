@@ -20,8 +20,12 @@ type {{$intOut}} struct {
 {{end}}
 `
 
+// This struct and API functions are generated only once per return type
+// for a future call type. That is, if multiple future calls use the same
+// return type, this struct and associated methods are only generated once.
 var futureDataType = `
 {{range $customOut, $futureOut := mapFutureOutType .GenFile .Services}}
+{{$customOutField := field $customOut}}
 // {{$futureOut}} is a future object for processing replies.
 type {{$futureOut}} struct {
 	// the actual reply
@@ -29,6 +33,23 @@ type {{$futureOut}} struct {
 	NodeIDs  []uint32
 	err      error
 	c        chan struct{}
+}
+
+// Get returns the reply and any error associated with the called method.
+// The method blocks until a reply or error is available.
+func (f *{{$futureOut}}) Get() (*{{$customOut}}, error) {
+	<-f.c
+	return f.{{$customOutField}}, f.err
+}
+
+// Done reports if a reply and/or error is available for the called method.
+func (f *{{$futureOut}}) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
 }
 {{end}}
 `

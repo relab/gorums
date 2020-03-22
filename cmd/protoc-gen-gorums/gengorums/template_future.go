@@ -46,29 +46,6 @@ var futureCallBody = `
 }
 `
 
-// These API functions are generated only once per return type,
-// since they are otherwise identical for this return type.
-var futureCallInterface = `
-{{if not (hasAPIType "$futureOut")}}
-// Get returns the reply and any error associated with the {{$method}}.
-// The method blocks until a reply or error is available.
-func (f *{{$futureOut}}) Get() (*{{$customOut}}, error) {
-	<-f.c
-	return f.{{$customOutField}}, f.err
-}
-
-// Done reports if a reply and/or error is available for the {{$method}}.
-func (f *{{$futureOut}}) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-{{end}}
-`
-
 var futureCallUnexportedSignature = `
 func (c *Configuration) {{unexport .Method.GoName}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
@@ -115,7 +92,6 @@ var futureCall = commonVariables +
 	futureCallComment +
 	futureCallSignature +
 	futureCallBody +
-	futureCallInterface +
 	futureCallUnexportedSignature +
 	quorumCallLoop +
 	futureCallReply +

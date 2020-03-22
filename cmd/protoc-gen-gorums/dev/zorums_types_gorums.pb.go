@@ -28,6 +28,23 @@ type FutureMyResponse struct {
 	c       chan struct{}
 }
 
+// Get returns the reply and any error associated with the called method.
+// The method blocks until a reply or error is available.
+func (f *FutureMyResponse) Get() (*MyResponse, error) {
+	<-f.c
+	return f.MyResponse, f.err
+}
+
+// Done reports if a reply and/or error is available for the called method.
+func (f *FutureMyResponse) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
 // FutureResponse is a future object for processing replies.
 type FutureResponse struct {
 	// the actual reply
@@ -37,6 +54,23 @@ type FutureResponse struct {
 	c       chan struct{}
 }
 
+// Get returns the reply and any error associated with the called method.
+// The method blocks until a reply or error is available.
+func (f *FutureResponse) Get() (*Response, error) {
+	<-f.c
+	return f.Response, f.err
+}
+
+// Done reports if a reply and/or error is available for the called method.
+func (f *FutureResponse) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
+}
+
 // FutureEmpty is a future object for processing replies.
 type FutureEmpty struct {
 	// the actual reply
@@ -44,6 +78,23 @@ type FutureEmpty struct {
 	NodeIDs []uint32
 	err     error
 	c       chan struct{}
+}
+
+// Get returns the reply and any error associated with the called method.
+// The method blocks until a reply or error is available.
+func (f *FutureEmpty) Get() (*empty.Empty, error) {
+	<-f.c
+	return f.Empty, f.err
+}
+
+// Done reports if a reply and/or error is available for the called method.
+func (f *FutureEmpty) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
 }
 
 // CorrectableResponse is a correctable object for processing replies.

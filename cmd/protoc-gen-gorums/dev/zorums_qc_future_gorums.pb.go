@@ -25,23 +25,6 @@ func (c *Configuration) QuorumCallFuture(ctx context.Context, in *Request, opts 
 	return fut
 }
 
-// Get returns the reply and any error associated with the QuorumCallFuture.
-// The method blocks until a reply or error is available.
-func (f *FutureResponse) Get() (*Response, error) {
-	<-f.c
-	return f.Response, f.err
-}
-
-// Done reports if a reply and/or error is available for the QuorumCallFuture.
-func (f *FutureResponse) Done() bool {
-	select {
-	case <-f.c:
-		return true
-	default:
-		return false
-	}
-}
-
 func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {

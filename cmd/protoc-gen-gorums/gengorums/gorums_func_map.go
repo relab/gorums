@@ -36,21 +36,6 @@ func addImport(path, ident string, g *protogen.GeneratedFile) string {
 	return g.QualifiedGoIdent(impPath.Ident(ident))
 }
 
-var apiTypes = make(map[string]bool)
-
-// hasAPIType returns true if the given type name has been seen before;
-// otherwise, the type name is recorded and false is returned.
-// This is useful when two or more RPC methods share the same promise types
-// (Future/Correctable/CorrectableStream), since these are composed from the
-// gRPC return type, but share the API methods that are otherwise identical.
-func hasAPIType(apiType string) bool {
-	if apiTypes[apiType] {
-		return true
-	}
-	apiTypes[apiType] = true
-	return false
-}
-
 var funcMap = template.FuncMap{
 	// this function will stop the generator if incorrect input is used
 	// the output contains the descriptive strings below to help debug any bad inputs.
@@ -80,9 +65,8 @@ var funcMap = template.FuncMap{
 	},
 	"perNodeFnType": func(g *protogen.GeneratedFile, method *protogen.Method, arg string) string {
 		if hasMethodOption(method, gorums.E_PerNodeArg) {
-			return arg +
-				" func(*" + g.QualifiedGoIdent(method.Input.GoIdent) +
-				", uint32) *" + g.QualifiedGoIdent(method.Input.GoIdent)
+			inType := g.QualifiedGoIdent(method.Input.GoIdent)
+			return arg + " func(*" + inType + ", uint32) *" + inType
 		}
 		return ""
 	},
@@ -91,7 +75,6 @@ var funcMap = template.FuncMap{
 	"customOut":   customOut,
 	"field":       field,
 	"futureOut":   futureOut,
-	"hasAPIType":  hasAPIType,
 	"withQFArg": func(method *protogen.Method, arg string) string {
 		if hasMethodOption(method, gorums.E_QfWithReq) {
 			return arg
