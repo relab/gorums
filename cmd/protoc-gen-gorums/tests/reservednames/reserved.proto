@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package dev;
+
+option go_package = "cmd/protoc-gen-gorums/tests/reservednames";
+
+import "gorums.proto";
+
+message Configuration { string Conf = 1; }
+message Manager { string Mgr = 1; }
+
+// TODO(meling) clean up proto file:
+// - Also need a minimal style proto file to ensure that methods also generate
+// correct code when certain imports are not used.
+// - Should check what happens if someone uses Gorums reserved names in the
+// proto file, such as Configuration, Manager, etc.
+
+service Reserved {
+  rpc ConfTest(Configuration) returns (Manager) {}
+  rpc QuorumCall(Configuration) returns (Manager) { option (gorums.qc) = true; }
+}

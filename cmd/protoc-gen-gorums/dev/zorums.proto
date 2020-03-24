@@ -14,15 +14,6 @@ message MyResponse {
   int64 Result = 2;
 }
 
-// TODO(meling) clean up proto file:
-// - Test all call types with local and imported message types
-// - Test all call types with all options
-// - Add doc comment to each RPC, describing what it aims to test
-// - Also need a minimal style proto file to ensure that methods also generate
-// correct code when certain imports are not used.
-// - Should check what happens if someone uses Gorums reserved names in the
-// proto file, such as Configuration, Manager, etc.
-
 // ZorumsService is not meant to be implemented. The generated
 // service methods must pass compilation, but no further tests are done.
 // Other tests are provided to test the actual generated code.

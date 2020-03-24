@@ -201,7 +201,6 @@ var Latency = func(n1, n2 *Node) bool {
 		return false
 	}
 	return n1.latency < n2.latency
-
 }
 
 // Error sorts nodes by their LastErr() status in increasing order. A
