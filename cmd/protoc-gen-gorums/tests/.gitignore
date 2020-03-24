@@ -1,0 +1,2 @@
+# We don't want to commit generated code for the test proto files
+*.pb.go
