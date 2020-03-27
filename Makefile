@@ -1,11 +1,14 @@
-PLUGIN_PATH		:= cmd/protoc-gen-gorums
-dev_path		:= $(PLUGIN_PATH)/dev
-gen_path		:= $(PLUGIN_PATH)/gengorums
-tests_path		:= $(PLUGIN_PATH)/tests
-zorums_proto	:= $(dev_path)/zorums.proto
-gen_files		:= $(shell find $(dev_path) -name "zorums*.pb.go")
-static_file		:= $(gen_path)/template_static.go
-static_files	:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
+PLUGIN_PATH				:= cmd/protoc-gen-gorums
+dev_path				:= $(PLUGIN_PATH)/dev
+gen_path				:= $(PLUGIN_PATH)/gengorums
+tests_path				:= $(PLUGIN_PATH)/tests
+zorums_proto			:= $(dev_path)/zorums.proto
+gen_files				:= $(shell find $(dev_path) -name "zorums*.pb.go")
+static_file				:= $(gen_path)/template_static.go
+static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
+test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing*")
+failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
+test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
 
 .PHONY: dev download install-tools installgorums clean
 
@@ -50,12 +53,20 @@ $(static_file): $(static_files)
 clean:
 	rm -f $(static_file).bak
 
-# TODO(meling) make test case comparing generated code with old code
+.PHONY: gentests $(test_files)
 
-.PHONY: qc
-qc: installgorums
-	protoc -I. \
+gentests: $(test_files) $(failing_test_files)
+
+$(test_files): installgorums
+	@protoc -I. \
 		--go_out=paths=source_relative:. \
 		--go-grpc_out=paths=source_relative:. \
-		--gorums_out=paths=source_relative,trace=true:. \
-		$(tests_path)/quorumcall/quorumcall.proto
+		--gorums_out=paths=source_relative,trace=true:. $@ \
+	|| (echo "unexpected failure with exit code: $$?")
+
+$(failing_test_files): installgorums
+	@protoc -I. \
+		--go_out=paths=source_relative:. \
+		--go-grpc_out=paths=source_relative:. \
+		--gorums_out=paths=source_relative,trace=true:. $@ \
+	&& (echo "expected protoc to fail but got exit code: $$?")

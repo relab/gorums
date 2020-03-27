@@ -1,54 +1,16 @@
+// Test that Gorums can generate a single quorum call method.
+
 syntax = "proto3";
-
-package quorumcall;
-
+package gorums.tests.quorumcall;
 option go_package = "cmd/protoc-gen-gorums/tests/quorumcall";
 
 import "gorums.proto";
 
-message ReadRequest { string Value = 1; }
-message ReadResponse { int64 Result = 1; }
-message MyReadResponse {
-  string Value = 1;
-  int64 Result = 2;
-}
-
-service ReaderService {
-  rpc ReadGrpc(ReadRequest) returns (ReadResponse) {}
+service QuorumCallService {
   rpc ReadQuorumCall(ReadRequest) returns (ReadResponse) {
     option (gorums.qc) = true;
   }
-  rpc ReadQuorumCallPerNodeArg(ReadRequest) returns (ReadResponse) {
-    option (gorums.qc) = true;
-    option (gorums.per_node_arg) = true;
-  }
-  rpc ReadQuorumCallQFWithRequestArg(ReadRequest) returns (ReadResponse) {
-    option (gorums.qc) = true;
-    option (gorums.qf_with_req) = true;
-  }
-  rpc ReadQuorumCallCustomReturnType(ReadRequest) returns (ReadResponse) {
-    option (gorums.qc) = true;
-    option (gorums.custom_return_type) = "MyReadResponse";
-  }
-  // ReadQuorumCallCombo does it all. Comment testing.
-  rpc ReadQuorumCallCombo(ReadRequest) returns (ReadResponse) {
-    option (gorums.qc) = true;
-    option (gorums.qf_with_req) = true;
-    option (gorums.per_node_arg) = true;
-    option (gorums.custom_return_type) = "MyReadResponse";
-  }
-  // ReadMulticast is testing a comment.
-  rpc ReadMulticast(stream ReadRequest) returns (ReadResponse) {
-    option (gorums.multicast) = true;
-  }
-  rpc ReadQuorumCallFuture(ReadRequest) returns (ReadResponse) {
-    option (gorums.qc_future) = true;
-  }
-  rpc ReadCorrectable(ReadRequest) returns (ReadResponse) {
-    option (gorums.correctable) = true;
-    option (gorums.custom_return_type) = "MyReadResponse";
-  }
-  rpc ReadCorrectableStream(ReadRequest) returns (stream ReadResponse) {
-    option (gorums.correctable_stream) = true;
-  }
 }
+
+message ReadRequest { string Value = 1; }
+message ReadResponse { int64 Result = 1; }

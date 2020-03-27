@@ -1,0 +1,12 @@
+// Test to ensure that Gorums can pass through non-Gorums methods.
+
+syntax = "proto3";
+package gorums.tests.grpc;
+option go_package = "cmd/protoc-gen-gorums/tests/grpc";
+
+service Storage {
+  rpc Read(ReadRequest) returns (ReadResponse) {}
+}
+
+message ReadRequest {}
+message ReadResponse {}
