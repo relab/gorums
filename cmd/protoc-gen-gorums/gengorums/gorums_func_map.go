@@ -20,12 +20,17 @@ var importMap = map[string]protogen.GoImportPath{
 	"fmt":     protogen.GoImportPath("fmt"),
 	"log":     protogen.GoImportPath("log"),
 	"sync":    protogen.GoImportPath("sync"),
+	"atomic":  protogen.GoImportPath("sync/atomic"),
 	"context": protogen.GoImportPath("context"),
 	"trace":   protogen.GoImportPath("golang.org/x/net/trace"),
 	"grpc":    protogen.GoImportPath("google.golang.org/grpc"),
 	"codes":   protogen.GoImportPath("google.golang.org/grpc/codes"),
 	"status":  protogen.GoImportPath("google.golang.org/grpc/status"),
 	"gorums":  protogen.GoImportPath("github.com/relab/gorums"),
+	"rand":    protogen.GoImportPath("math/rand"),
+	"backoff": protogen.GoImportPath("google.golang.org/grpc/backoff"),
+	"math":    protogen.GoImportPath("math"),
+	"ptypes":  protogen.GoImportPath("github.com/golang/protobuf/ptypes"),
 }
 
 func addImport(path, ident string, g *protogen.GeneratedFile) string {
@@ -99,23 +104,25 @@ var funcMap = template.FuncMap{
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
 	},
-	"out":                   out,
-	"internalOut":           internalOut,
-	"customOut":             customOut,
-	"futureOut":             futureOut,
-	"correctableOut":        correctableOut,
-	"correctableStreamOut":  correctableStreamOut,
-	"mapInternalOutType":    mapInternalOutType,
-	"mapCorrectableOutType": mapCorrectableOutType,
-	"mapFutureOutType":      mapFutureOutType,
-	"streamMethods":         streamMethods,
-	"callTypeName":          callTypeName,
-	"qspecServices":         qspecServices,
-	"qspecMethods":          qspecMethods,
-	"unexport":              unexport,
-	"qcresult":              qcresult,
-	"contains":              strings.Contains,
-	"field":                 field,
+	"out":                       out,
+	"internalOut":               internalOut,
+	"customOut":                 customOut,
+	"futureOut":                 futureOut,
+	"correctableOut":            correctableOut,
+	"correctableStreamOut":      correctableStreamOut,
+	"mapInternalOutType":        mapInternalOutType,
+	"mapCorrectableOutType":     mapCorrectableOutType,
+	"mapFutureOutType":          mapFutureOutType,
+	"streamMethods":             streamMethods,
+	"callTypeName":              callTypeName,
+	"qspecServices":             qspecServices,
+	"qspecMethods":              qspecMethods,
+	"unexport":                  unexport,
+	"qcresult":                  qcresult,
+	"contains":                  strings.Contains,
+	"field":                     field,
+	"numStrictOrderingMethods":  numStrictOrderingMethods,
+	"exclusivelyStrictOrdering": exclusivelyStrictOrdering,
 }
 
 type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
@@ -224,4 +231,25 @@ func mustExecute(t *template.Template, data interface{}) string {
 		panic(err)
 	}
 	return b.String()
+}
+
+func numStrictOrderingMethods(services []*protogen.Service) int {
+	count := 0
+	for _, service := range services {
+		for _, method := range service.Methods {
+			if hasMethodOption(method, gorums.E_StrictOrdering) {
+				count++
+			}
+		}
+	}
+	return count
+}
+
+func exclusivelyStrictOrdering(service *protogen.Service) bool {
+	for _, method := range service.Methods {
+		if !hasMethodOption(method, gorums.E_StrictOrdering) {
+			return false
+		}
+	}
+	return true
 }

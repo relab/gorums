@@ -21,9 +21,13 @@ type Node struct {
 	id      uint32
 	addr    string
 	conn    *grpc.ClientConn
+	cancel  func()
 	mu      sync.Mutex
 	lastErr error
 	latency time.Duration
+
+	strictOrdering *strictOrderingStream
+
 	// embed generated nodeServices
 	nodeServices
 }
@@ -37,7 +41,16 @@ func (n *Node) connect(opts managerOptions) error {
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %w", err)
 	}
-	return n.connectStream() // call generated method
+	// a context for all of the streams
+	ctx, n.cancel = context.WithCancel(context.Background())
+	// only start strictOrdering RPCs when needed
+	if numStrictOrderingMethods > 0 {
+		err = n.strictOrdering.connect(ctx, n.conn)
+		if err != nil {
+			return fmt.Errorf("starting stream failed: %w", err)
+		}
+	}
+	return n.connectStream(ctx) // call generated method
 }
 
 // close this node for further calls and optionally stream.
@@ -45,7 +58,9 @@ func (n *Node) close() error {
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("%d: conn close error: %w", n.id, err)
 	}
-	return n.closeStream() // call generated method
+	err := n.closeStream() // call generated method
+	n.cancel()
+	return err
 }
 
 // ID returns the ID of n.

@@ -3,6 +3,7 @@ syntax = "proto3";
 package gorums;
 
 import "google/protobuf/descriptor.proto";
+import "google/protobuf/any.proto";
 
 option go_package = "github.com/relab/gorums";
 
@@ -14,6 +15,17 @@ extend google.protobuf.MethodOptions {
   bool qc_future = 50004;
   bool qf_with_req = 50005;
   bool per_node_arg = 50006;
+  bool strict_ordering = 50007;
 
   string custom_return_type = 51000;
+}
+
+service Gorums {
+  rpc StrictOrdering(stream Message) returns (stream Message);
+}
+
+message Message {
+  uint64 ID = 1;
+  string URL = 2;
+  google.protobuf.Any Data = 3;
 }
