@@ -1,3 +1,4 @@
+all: basic qc strictordering
 
 .PHONY: basic
 basic:
@@ -13,6 +14,13 @@ qc:
 		--go-grpc_out=paths=source_relative:. \
 		--gorums_out=trace=true,paths=source_relative:. \
 		quorumcall/quorumcall.proto
+
+.PHONY: strictordering
+strictordering:
+	@protoc -I../../..:. \
+		--go_out=paths=source_relative:. \
+		--gorums_out=trace=true,paths=source_relative:. \
+		strictordering/strictordering.proto
 
 .PHONY: clean
 clean:
