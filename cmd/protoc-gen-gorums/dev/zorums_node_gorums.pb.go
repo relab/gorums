@@ -16,25 +16,27 @@ type nodeServices struct {
 	multicast4Client          ZorumsService_Multicast4Client
 }
 
-func (n *Node) connectStream() (err error) {
+func (n *Node) connectStream(ctx context.Context) (err error) {
+
 	n.ZorumsServiceClient = NewZorumsServiceClient(n.conn)
-	n.multicastClient, err = n.ZorumsServiceClient.Multicast(context.Background())
+
+	n.multicastClient, err = n.ZorumsServiceClient.Multicast(ctx)
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
-	n.multicastPerNodeArgClient, err = n.ZorumsServiceClient.MulticastPerNodeArg(context.Background())
+	n.multicastPerNodeArgClient, err = n.ZorumsServiceClient.MulticastPerNodeArg(ctx)
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
-	n.multicast2Client, err = n.ZorumsServiceClient.Multicast2(context.Background())
+	n.multicast2Client, err = n.ZorumsServiceClient.Multicast2(ctx)
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
-	n.multicast3Client, err = n.ZorumsServiceClient.Multicast3(context.Background())
+	n.multicast3Client, err = n.ZorumsServiceClient.Multicast3(ctx)
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}
-	n.multicast4Client, err = n.ZorumsServiceClient.Multicast4(context.Background())
+	n.multicast4Client, err = n.ZorumsServiceClient.Multicast4(ctx)
 	if err != nil {
 		return fmt.Errorf("stream creation failed: %v", err)
 	}

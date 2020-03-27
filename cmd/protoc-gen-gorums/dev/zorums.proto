@@ -7,11 +7,14 @@ option go_package = "cmd/protoc-gen-gorums/dev";
 import "gorums.proto";
 import "google/protobuf/empty.proto";
 
-message Request { string Value = 1; }
-message Response { int64 Result = 1; }
+message Request { 
+  string Value = 1;
+}
+message Response { 
+  int64 Result = 1;
+}
 message MyResponse {
   string Value = 1;
-  int64 Result = 2;
 }
 
 // ZorumsService is not meant to be implemented. The generated
@@ -216,5 +219,38 @@ service ZorumsService {
   // type as Correctable: Response.
   rpc CorrectableStreamEmpty2(google.protobuf.Empty) returns (stream Response) {
     option (gorums.correctable_stream) = true;
+  }
+
+  // ---------------------------------------------------------------
+  // Strict Ordering RPCs
+  // ---------------------------------------------------------------
+  rpc StrictOrderingQC(Request) returns (Response) {
+    option (gorums.qc) = true;
+    option (gorums.strict_ordering) = true;
+  }
+  rpc StrictOrderingPerNodeArg(Request) returns (Response) {
+    option (gorums.qc) = true;
+    option (gorums.strict_ordering) = true;
+    option (gorums.per_node_arg) = true;
+  }
+  rpc StrictOrderingQFWithReq(Request) returns (Response) {
+    option (gorums.qc) = true;
+    option (gorums.strict_ordering) = true;
+    option (gorums.qf_with_req) = true;
+  }
+  rpc StrictOrderingCustomReturnType(Request) returns (Response) {
+    option (gorums.qc) = true;
+    option (gorums.strict_ordering) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  rpc StrictOrderingCombi(Request) returns (Response) {
+    option (gorums.qc) = true;
+    option (gorums.strict_ordering) = true;
+    option (gorums.per_node_arg) = true;
+    option (gorums.qf_with_req) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  rpc StrictOrderingUnaryRPC(Request) returns (Response) {
+    option (gorums.strict_ordering) = true;
   }
 }

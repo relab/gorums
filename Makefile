@@ -9,6 +9,7 @@ static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -no
 test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing*")
 failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
 test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
+strictordering			:= internal/strictordering
 
 .PHONY: dev download install-tools installgorums clean
 
@@ -40,7 +41,15 @@ gorums.pb.go: gorums.proto
 	@echo Generating gorums proto options
 	@protoc --go_out=paths=source_relative:. gorums.proto
 
-installgorums: gorums.pb.go
+gorums_grpc.pb.go: gorums.proto
+	@echo Generating gorums GRPC services
+	@protoc --go-grpc_out=paths=source_relative:. gorums.proto
+
+$(strictordering)/strictordering.pb.go: $(strictordering)/strictordering.proto
+	@echo Generating strictordering proto options
+	@protoc --go_out=paths=source_relative:. $(strictordering)/strictordering.proto
+
+installgorums: gorums.pb.go gorums_grpc.pb.go $(strictordering)/strictordering.pb.go
 	@echo Installing protoc-gen-gorums compiler plugin for protoc
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
 

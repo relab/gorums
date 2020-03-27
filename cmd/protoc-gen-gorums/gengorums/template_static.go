@@ -7,21 +7,29 @@ package gengorums
 // These identifiers are used by the Gorums protoc plugin to generate
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
-	"bytes":                  "Buffer",
-	"context":                "Background",
-	"encoding/binary":        "LittleEndian",
-	"fmt":                    "Errorf",
-	"golang.org/x/net/trace": "EventLog",
-	"google.golang.org/grpc": "ClientConn",
-	"hash/fnv":               "New32a",
-	"io":                     "WriteString",
-	"log":                    "Logger",
-	"net":                    "ResolveTCPAddr",
-	"sort":                   "Sort",
-	"strconv":                "Atoi",
-	"strings":                "Join",
-	"sync":                   "Mutex",
-	"time":                   "Duration",
+	"bytes":                          "Buffer",
+	"context":                        "Background",
+	"encoding/binary":                "LittleEndian",
+	"fmt":                            "Errorf",
+	"github.com/relab/gorums":        "GorumsClient",
+	"golang.org/x/net/trace":         "EventLog",
+	"google.golang.org/grpc":         "Backoff",
+	"google.golang.org/grpc/backoff": "BaseDelay",
+	"google.golang.org/grpc/codes":   "Unavailable",
+	"google.golang.org/grpc/status":  "Errorf",
+	"google.golang.org/protobuf/types/known/anypb": "Any",
+	"hash/fnv":    "New32a",
+	"io":          "WriteString",
+	"log":         "Logger",
+	"math":        "Min",
+	"math/rand":   "Float64",
+	"net":         "Listener",
+	"sort":        "Sort",
+	"strconv":     "Atoi",
+	"strings":     "Join",
+	"sync":        "Mutex",
+	"sync/atomic": "AddUint64",
+	"time":        "After",
 }
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
@@ -159,6 +167,8 @@ type Manager struct {
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      managerOptions
+
+	*strictOrderingManager
 }
 
 // NewManager attempts to connect to the given set of node addresses and if
@@ -169,12 +179,22 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	m := &Manager{
-		lookup:  make(map[uint32]*Node),
-		configs: make(map[uint32]*Configuration),
+		lookup:                make(map[uint32]*Node),
+		configs:               make(map[uint32]*Configuration),
+		strictOrderingManager: newStrictOrderingManager(),
+		opts: managerOptions{
+			backoff: backoff.DefaultConfig,
+		},
 	}
 
 	for _, opt := range opts {
 		opt(&m.opts)
+	}
+
+	if m.opts.backoff != backoff.DefaultConfig {
+		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
+			grpc.ConnectParams{Backoff: m.opts.backoff},
+		))
 	}
 
 	for _, naddr := range nodeAddrs {
@@ -229,6 +249,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		addr:    tcpAddr.String(),
 		latency: -1 * time.Second,
 	}
+	node.strictOrdering = m.createStream(node, m.opts.backoff)
 
 	return node, nil
 }
@@ -420,9 +441,13 @@ type Node struct {
 	id      uint32
 	addr    string
 	conn    *grpc.ClientConn
+	cancel  func()
 	mu      sync.Mutex
 	lastErr error
 	latency time.Duration
+
+	strictOrdering *strictOrderingStream
+
 	// embed generated nodeServices
 	nodeServices
 }
@@ -436,7 +461,16 @@ func (n *Node) connect(opts managerOptions) error {
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %w", err)
 	}
-	return n.connectStream() // call generated method
+	// a context for all of the streams
+	ctx, n.cancel = context.WithCancel(context.Background())
+	// only start strictOrdering RPCs when needed
+	if numStrictOrderingMethods > 0 {
+		err = n.strictOrdering.connect(ctx, n.conn)
+		if err != nil {
+			return fmt.Errorf("starting stream failed: %w", err)
+		}
+	}
+	return n.connectStream(ctx) // call generated method
 }
 
 // close this node for further calls and optionally stream.
@@ -444,7 +478,9 @@ func (n *Node) close() error {
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("%d: conn close error: %w", n.id, err)
 	}
-	return n.closeStream() // call generated method
+	err := n.closeStream() // call generated method
+	n.cancel()
+	return err
 }
 
 // ID returns the ID of n.
@@ -618,6 +654,7 @@ type managerOptions struct {
 	logger          *log.Logger
 	noConnect       bool
 	trace           bool
+	backoff         backoff.Config
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
@@ -661,6 +698,224 @@ func WithNoConnect() ManagerOption {
 func WithTracing() ManagerOption {
 	return func(o *managerOptions) {
 		o.trace = true
+	}
+}
+
+// WithBackoff allows for changing the backoff delays used by Gorums.
+func WithBackoff(backoff backoff.Config) ManagerOption {
+	return func(o *managerOptions) {
+		o.backoff = backoff
+	}
+}
+
+type strictOrderingServer struct {
+	handlers map[string]requestHandler
+}
+
+func newStrictOrderingServer() *strictOrderingServer {
+	return &strictOrderingServer{
+		handlers: make(map[string]requestHandler),
+	}
+}
+
+func (s *strictOrderingServer) registerHandler(url string, handler requestHandler) {
+	s.handlers[url] = handler
+}
+
+func (s *strictOrderingServer) StrictOrdering(srv gorums.Gorums_StrictOrderingServer) error {
+	for {
+		req, err := srv.Recv()
+		if err != nil {
+			return err
+		}
+		// handle the request if a handler is available for this rpc
+		if handler, ok := s.handlers[req.GetURL()]; ok {
+			resp := handler(req)
+			resp.ID = req.GetID()
+			err = srv.Send(resp)
+			if err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// GorumsServer serves all strict ordering based RPCs using registered handlers
+type GorumsServer struct {
+	srv        *strictOrderingServer
+	grpcServer *grpc.Server
+}
+
+// NewGorumsServer returns a new instance of GorumsServer
+func NewGorumsServer() *GorumsServer {
+	s := &GorumsServer{
+		srv:        newStrictOrderingServer(),
+		grpcServer: grpc.NewServer(),
+	}
+	gorums.RegisterGorumsServer(s.grpcServer, s.srv)
+	return s
+}
+
+// Serve starts serving on the listener
+func (s *GorumsServer) Serve(listener net.Listener) {
+	s.grpcServer.Serve(listener)
+}
+
+// GracefulStop waits for all RPCs to finish before stopping.
+func (s *GorumsServer) GracefulStop() {
+	s.grpcServer.GracefulStop()
+}
+
+// Stop stops the server immediately
+func (s *GorumsServer) Stop() {
+	s.grpcServer.Stop()
+}
+
+type strictOrderingResult struct {
+	nid   uint32
+	reply *anypb.Any
+	err   error
+}
+
+type requestHandler func(*gorums.Message) *gorums.Message
+
+type strictOrderingManager struct {
+	msgID    uint64
+	recvQ    map[uint64]chan *strictOrderingResult
+	recvQMut sync.RWMutex
+}
+
+func newStrictOrderingManager() *strictOrderingManager {
+	return &strictOrderingManager{
+		recvQ: make(map[uint64]chan *strictOrderingResult),
+	}
+}
+
+func (m *strictOrderingManager) createStream(node *Node, backoff backoff.Config) *strictOrderingStream {
+	return &strictOrderingStream{
+		node:      node,
+		nextMsgID: m.nextMsgID,
+		backoff:   backoff,
+		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		sendQ:     make(chan *gorums.Message),
+		recvQ:     m.recvQ,
+		recvQMut:  &m.recvQMut,
+	}
+}
+
+func (m *strictOrderingManager) nextMsgID() uint64 {
+	return atomic.AddUint64(&m.msgID, 1)
+}
+
+type strictOrderingStream struct {
+	node         *Node         // needed for ID and setLastError
+	nextMsgID    func() uint64 // needed for Node RPC methods
+	backoff      backoff.Config
+	rand         *rand.Rand
+	gorumsClient gorums.GorumsClient
+	gorumsStream gorums.Gorums_StrictOrderingClient
+	streamMut    sync.RWMutex
+	streamBroken bool
+	sendQ        chan *gorums.Message
+	recvQ        map[uint64]chan *strictOrderingResult
+	recvQMut     *sync.RWMutex
+}
+
+func (s *strictOrderingStream) connect(ctx context.Context, conn *grpc.ClientConn) error {
+	var err error
+	s.gorumsClient = gorums.NewGorumsClient(conn)
+	s.gorumsStream, err = s.gorumsClient.StrictOrdering(ctx)
+	if err != nil {
+		return err
+	}
+	go s.sendMsgs()
+	go s.recvMsgs(ctx)
+	return nil
+}
+
+func (s *strictOrderingStream) sendMsgs() {
+	for req := range s.sendQ {
+		// return error if stream is broken
+		if s.streamBroken {
+			err := status.Errorf(codes.Unavailable, "stream is down")
+			s.recvQMut.RLock()
+			if c, ok := s.recvQ[req.GetID()]; ok {
+				c <- &strictOrderingResult{nid: s.node.ID(), reply: nil, err: err}
+			}
+			s.recvQMut.RUnlock()
+			continue
+		}
+		// else try to send message
+		s.streamMut.RLock()
+		err := s.gorumsStream.SendMsg(req)
+		if err == nil {
+			s.streamMut.RUnlock()
+			continue
+		}
+		s.streamBroken = true
+		s.streamMut.RUnlock()
+		// return the error
+		s.recvQMut.RLock()
+		if c, ok := s.recvQ[req.GetID()]; ok {
+			c <- &strictOrderingResult{nid: s.node.ID(), reply: nil, err: err}
+		}
+		s.recvQMut.RUnlock()
+	}
+}
+
+func (s *strictOrderingStream) recvMsgs(ctx context.Context) {
+	for {
+		resp := new(gorums.Message)
+		s.streamMut.RLock()
+		err := s.gorumsStream.RecvMsg(resp)
+		if err != nil {
+			s.streamBroken = true
+			s.streamMut.RUnlock()
+			s.node.setLastErr(err)
+			// attempt to reconnect
+			s.reconnectStream(ctx)
+		} else {
+			s.streamMut.RUnlock()
+			s.recvQMut.RLock()
+			if c, ok := s.recvQ[resp.GetID()]; ok {
+				c <- &strictOrderingResult{nid: s.node.ID(), reply: resp.GetData(), err: nil}
+			}
+			s.recvQMut.RUnlock()
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+	}
+}
+
+func (s *strictOrderingStream) reconnectStream(ctx context.Context) {
+	s.streamMut.Lock()
+	defer s.streamMut.Unlock()
+
+	var retries float64
+	for {
+		var err error
+		s.gorumsStream, err = s.gorumsClient.StrictOrdering(ctx)
+		if err == nil {
+			s.streamBroken = false
+			return
+		}
+		delay := float64(s.backoff.BaseDelay)
+		max := float64(s.backoff.MaxDelay)
+		for r := retries; delay < max && r > 0; r-- {
+			delay *= s.backoff.Multiplier
+		}
+		delay = math.Min(delay, max)
+		delay *= 1 + s.backoff.Jitter*(rand.Float64()*2-1)
+		select {
+		case <-time.After(time.Duration(delay)):
+			retries++
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"golang.org/x/net/trace"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 )
 
 // Manager manages a pool of node configurations on which quorum remote
@@ -26,6 +28,8 @@ type Manager struct {
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      managerOptions
+
+	*strictOrderingManager
 }
 
 // NewManager attempts to connect to the given set of node addresses and if
@@ -36,12 +40,22 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	m := &Manager{
-		lookup:  make(map[uint32]*Node),
-		configs: make(map[uint32]*Configuration),
+		lookup:                make(map[uint32]*Node),
+		configs:               make(map[uint32]*Configuration),
+		strictOrderingManager: newStrictOrderingManager(),
+		opts: managerOptions{
+			backoff: backoff.DefaultConfig,
+		},
 	}
 
 	for _, opt := range opts {
 		opt(&m.opts)
+	}
+
+	if m.opts.backoff != backoff.DefaultConfig {
+		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
+			grpc.ConnectParams{Backoff: m.opts.backoff},
+		))
 	}
 
 	for _, naddr := range nodeAddrs {
@@ -96,6 +110,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		addr:    tcpAddr.String(),
 		latency: -1 * time.Second,
 	}
+	node.strictOrdering = m.createStream(node, m.opts.backoff)
 
 	return node, nil
 }
