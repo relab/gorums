@@ -32,8 +32,6 @@ func GenerateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.Fil
 	g.P()
 	data := servicesData{g, file.Services}
 	switch gorumsType {
-	case "globals":
-		g.P(mustExecute(parseTemplate("Globals", globals), data))
 	case "node":
 		g.P(mustExecute(parseTemplate("Node", node), data))
 	case "qspec":

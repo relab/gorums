@@ -12,7 +12,6 @@ import (
 )
 
 var devTypes = []string{
-	"globals",
 	"node",
 	"qspec",
 	"types",

@@ -1,5 +1,9 @@
 package gengorums
 
+var globals = `
+const hasStrictOrderingMethods = {{hasStrictOrderingMethods .Services}}
+`
+
 var internalOutDataType = `
 {{range $intOut, $out := mapInternalOutType .GenFile .Services}}
 type {{$intOut}} struct {
@@ -129,6 +133,7 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 {{end}}
 `
 
-var datatypes = internalOutDataType +
+var datatypes = globals +
+	internalOutDataType +
 	futureDataType +
 	correctableDataType

@@ -55,8 +55,6 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
 func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
 	data := servicesData{g, file.Services}
-	g.P(mustExecute(parseTemplate("Globals", globals), data))
-	g.P()
 	g.P(mustExecute(parseTemplate("Node", node), data))
 	g.P()
 	g.P(mustExecute(parseTemplate("QuorumSpec", qspecInterface), data))
@@ -137,7 +135,7 @@ type methodData struct {
 // the given gorums type.
 func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
 	// TODO(meling) try to avoid this loop slice; reuse devTypes??
-	for _, gType := range []string{"globals", "node", "qspec", "types"} {
+	for _, gType := range []string{"node", "qspec", "types"} {
 		if gorumsType == gType {
 			return true
 		}

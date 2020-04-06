@@ -121,7 +121,7 @@ var funcMap = template.FuncMap{
 	"qcresult":                  qcresult,
 	"contains":                  strings.Contains,
 	"field":                     field,
-	"numStrictOrderingMethods":  numStrictOrderingMethods,
+	"hasStrictOrderingMethods":  hasStrictOrderingMethods,
 	"exclusivelyStrictOrdering": exclusivelyStrictOrdering,
 }
 
@@ -233,16 +233,15 @@ func mustExecute(t *template.Template, data interface{}) string {
 	return b.String()
 }
 
-func numStrictOrderingMethods(services []*protogen.Service) int {
-	count := 0
+func hasStrictOrderingMethods(services []*protogen.Service) bool {
 	for _, service := range services {
 		for _, method := range service.Methods {
 			if hasMethodOption(method, gorums.E_StrictOrdering) {
-				count++
+				return true
 			}
 		}
 	}
-	return count
+	return false
 }
 
 func exclusivelyStrictOrdering(service *protogen.Service) bool {
