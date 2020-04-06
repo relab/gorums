@@ -10,8 +10,7 @@ import (
 
 // GenerateDevFile generates a _{{gorumsType}}_gorums.pb.go file containing Gorums service definitions.
 func GenerateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.File) {
-	if len(file.Services) == 0 || !hasGorumsType(file.Services, gorumsType) &&
-		!hasStrictOrderingType(file.Services, gorumsType) {
+	if len(file.Services) == 0 || !hasGorumsType(file.Services, gorumsType) {
 		// there is nothing for this plugin to do
 		fmt.Fprintf(os.Stderr, "ignoring %s\n", gorumsType)
 		return
@@ -42,7 +41,7 @@ func GenerateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.Fil
 		if methodOption, ok := gorumsTypes[gorumsType]; ok {
 			genGorumsMethods(data, methodOption)
 		} else if methodOption, ok := strictOrderingTypes[gorumsType]; ok {
-			genStrictOrderingMethods(data, methodOption)
+			genGorumsMethods(data, methodOption)
 		}
 	}
 	g.P()
