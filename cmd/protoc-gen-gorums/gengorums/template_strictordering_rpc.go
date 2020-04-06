@@ -10,20 +10,14 @@ var strictOrderingRPCSignature = `func (n *Node) {{$method}}(` +
 
 var strictOrderingRPCPreamble = `
 	// get the ID which will be used to return the correct responses for a request
-	msgID := n.strictOrdering.nextMsgID()
+	msgID := n.nextMsgID()
 	
 	// set up a channel to collect replies
 	replies := make(chan *strictOrderingResult, 1)
-	n.strictOrdering.recvQMut.Lock()
-	n.strictOrdering.recvQ[msgID] = replies
-	n.strictOrdering.recvQMut.Unlock()
+	n.putChan(msgID, replies)
 	
-	defer func() {
-		// remove the replies channel when we are done
-		n.strictOrdering.recvQMut.Lock()
-		delete(n.strictOrdering.recvQ, msgID)
-		n.strictOrdering.recvQMut.Unlock()
-	}()
+	// remove the replies channel when we are done
+	defer n.deleteChan(msgID)
 `
 
 var strictOrderingRPCBody = `
@@ -31,12 +25,12 @@ var strictOrderingRPCBody = `
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
-	msg := &{{$gorumsMsg}}{
+	msg := &GorumsMessage{
 		ID: msgID,
-		URL: "{{fullName .Method}}",
+		Method: "{{fullName .Method}}",
 		Data: data,
 	}
-	n.strictOrdering.sendQ <- msg
+	n.sendQ <- msg
 
 	select {
 	case r := <-replies:

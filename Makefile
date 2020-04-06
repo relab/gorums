@@ -9,13 +9,13 @@ static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -no
 test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing*")
 failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
 test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
-strictordering			:= internal/strictordering
+internal_so				:= internal/strictordering
 
 .PHONY: dev download install-tools installgorums clean
 
-dev: installgorums
+dev: installgorums $(dev_path)/strictordering.pb.go $(dev_path)/strictordering_grpc.pb.go
 	@echo Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder
-	rm -f $(dev_path)/*.pb.go
+	rm -f $(dev_path)/zorums*.pb.go
 	protoc -I$(dev_path):. \
 		--go_out=:. \
 		--go-grpc_out=:. \
@@ -41,15 +41,19 @@ gorums.pb.go: gorums.proto
 	@echo Generating gorums proto options
 	@protoc --go_out=paths=source_relative:. gorums.proto
 
-gorums_grpc.pb.go: gorums.proto
-	@echo Generating gorums GRPC services
-	@protoc --go-grpc_out=paths=source_relative:. gorums.proto
-
-$(strictordering)/strictordering.pb.go: $(strictordering)/strictordering.proto
+$(internal_so)/opts.pb.go: $(internal_so)/opts.proto
 	@echo Generating strictordering proto options
-	@protoc --go_out=paths=source_relative:. $(strictordering)/strictordering.proto
+	@protoc --go_out=paths=source_relative:. $(internal_so)/opts.proto
 
-installgorums: gorums.pb.go gorums_grpc.pb.go $(strictordering)/strictordering.pb.go
+$(dev_path)/strictordering.pb.go: $(dev_path)/strictordering.proto
+	@echo Generating strictordering protocol buffers
+	@protoc --go_out=paths=source_relative:. $(dev_path)/strictordering.proto
+
+$(dev_path)/strictordering_grpc.pb.go: $(dev_path)/strictordering.proto
+	@echo Generating strictordering gRPC service
+	@protoc --go-grpc_out=paths=source_relative:. $(dev_path)/strictordering.proto
+
+installgorums: gorums.pb.go $(internal_so)/opts.pb.go
 	@echo Installing protoc-gen-gorums compiler plugin for protoc
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
 

@@ -4,7 +4,6 @@ var strictOrderingVariables = `
 {{$marshalAny := use "ptypes.MarshalAny" .GenFile}}
 {{$unmarshalAny := use "ptypes.UnmarshalAny" .GenFile}}
 {{$errorf := use "fmt.Errorf" .GenFile}}
-{{$gorumsMsg := use "gorums.Message" .GenFile}}
 `
 
 var strictOrderingPreamble = `
@@ -15,16 +14,10 @@ var strictOrderingPreamble = `
 	
 	// set up a channel to collect replies
 	replies := make(chan *strictOrderingResult, c.n)
-	c.mgr.recvQMut.Lock()
-	c.mgr.recvQ[msgID] = replies
-	c.mgr.recvQMut.Unlock()
+	c.mgr.putChan(msgID, replies)
 	
-	defer func() {
-		// remove the replies channel when we are done
-		c.mgr.recvQMut.Lock()
-		delete(c.mgr.recvQ, msgID)
-		c.mgr.recvQMut.Unlock()
-	}()
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
 `
 
 var strictOrderingLoop = `
@@ -33,9 +26,9 @@ var strictOrderingLoop = `
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
-	msg := &{{$gorumsMsg}}{
+	msg := &GorumsMessage{
 		ID: msgID,
-		URL: "{{fullName .Method}}",
+		Method: "{{fullName .Method}}",
 		Data: data,
 	}
 {{end -}}
@@ -53,15 +46,13 @@ var strictOrderingLoop = `
 		if err != nil {
 			return nil, {{$errorf}}("failed to marshal message: %w", err)
 		}
-		msg := &{{$gorumsMsg}}{
+		msg := &GorumsMessage{
 			ID: msgID,
-			URL: "{{fullName .Method}}",
+			Method: "{{fullName .Method}}",
 			Data: data,
 		}
-		n.strictOrdering.sendQ <- msg
-{{- else}}
-		n.strictOrdering.sendQ <- msg
-{{- end}}
+		{{- end}}
+		n.sendQ <- msg
 	}
 `
 
@@ -109,19 +100,19 @@ type {{$method}}Handler interface {
 
 // Register{{$method}}Handler sets the handler for {{$method}}.
 func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
-	s.srv.registerHandler("{{fullName .Method}}", func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
+	s.srv.registerHandler("{{fullName .Method}}", func(in *GorumsMessage) *GorumsMessage {
 		req := new({{$in}})
 		err := {{$unmarshalAny}}(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new({{$gorumsMsg}})
+			return new(GorumsMessage)
 		}
 		resp := handler.{{$method}}(req)
 		data, err := {{$marshalAny}}(resp)
 		if err != nil {
-			return new({{$gorumsMsg}})
+			return new(GorumsMessage)
 		}
-		return &{{$gorumsMsg}}{Data: data, URL: in.GetURL()}
+		return &GorumsMessage{Data: data, Method: in.GetMethod()}
 	})
 }
 `

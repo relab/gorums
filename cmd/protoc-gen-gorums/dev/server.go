@@ -3,9 +3,14 @@ package dev
 import (
 	"net"
 
-	"github.com/relab/gorums"
 	"google.golang.org/grpc"
 )
+
+// requestHandler is used to fetch a response message based on the request.
+// A requestHandler should receive a message from the server, unmarshal it into
+// the proper type for that Method's request type, call a user provided Handler,
+// and return a marshaled result to the server.
+type requestHandler func(*GorumsMessage) *GorumsMessage
 
 type strictOrderingServer struct {
 	handlers map[string]requestHandler
@@ -17,18 +22,18 @@ func newStrictOrderingServer() *strictOrderingServer {
 	}
 }
 
-func (s *strictOrderingServer) registerHandler(url string, handler requestHandler) {
-	s.handlers[url] = handler
+func (s *strictOrderingServer) registerHandler(method string, handler requestHandler) {
+	s.handlers[method] = handler
 }
 
-func (s *strictOrderingServer) StrictOrdering(srv gorums.Gorums_StrictOrderingServer) error {
+func (s *strictOrderingServer) NodeStream(srv GorumsStrictOrdering_NodeStreamServer) error {
 	for {
 		req, err := srv.Recv()
 		if err != nil {
 			return err
 		}
 		// handle the request if a handler is available for this rpc
-		if handler, ok := s.handlers[req.GetURL()]; ok {
+		if handler, ok := s.handlers[req.GetMethod()]; ok {
 			resp := handler(req)
 			resp.ID = req.GetID()
 			err = srv.Send(resp)
@@ -51,7 +56,7 @@ func NewGorumsServer() *GorumsServer {
 		srv:        newStrictOrderingServer(),
 		grpcServer: grpc.NewServer(),
 	}
-	gorums.RegisterGorumsServer(s.grpcServer, s.srv)
+	RegisterGorumsStrictOrderingServer(s.grpcServer, s.srv)
 	return s
 }
 

@@ -29,7 +29,7 @@ type Manager struct {
 	logger    *log.Logger
 	opts      managerOptions
 
-	*strictOrderingManager
+	*receiveQueue
 }
 
 // NewManager attempts to connect to the given set of node addresses and if
@@ -40,9 +40,9 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	}
 
 	m := &Manager{
-		lookup:                make(map[uint32]*Node),
-		configs:               make(map[uint32]*Configuration),
-		strictOrderingManager: newStrictOrderingManager(),
+		lookup:       make(map[uint32]*Node),
+		configs:      make(map[uint32]*Configuration),
+		receiveQueue: newReceiveQueue(),
 		opts: managerOptions{
 			backoff: backoff.DefaultConfig,
 		},
@@ -110,7 +110,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		addr:    tcpAddr.String(),
 		latency: -1 * time.Second,
 	}
-	node.strictOrdering = m.createStream(node, m.opts.backoff)
+	node.createOrderedStream(m.receiveQueue, m.opts.backoff)
 
 	return node, nil
 }
