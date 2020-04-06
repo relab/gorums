@@ -6,38 +6,31 @@ import (
 	context "context"
 	fmt "fmt"
 	ptypes "github.com/golang/protobuf/ptypes"
-	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
 )
 
 func (n *Node) StrictOrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 
 	// get the ID which will be used to return the correct responses for a request
-	msgID := n.strictOrdering.nextMsgID()
+	msgID := n.nextMsgID()
 
 	// set up a channel to collect replies
 	replies := make(chan *strictOrderingResult, 1)
-	n.strictOrdering.recvQMut.Lock()
-	n.strictOrdering.recvQ[msgID] = replies
-	n.strictOrdering.recvQMut.Unlock()
+	n.putChan(msgID, replies)
 
-	defer func() {
-		// remove the replies channel when we are done
-		n.strictOrdering.recvQMut.Lock()
-		delete(n.strictOrdering.recvQ, msgID)
-		n.strictOrdering.recvQMut.Unlock()
-	}()
+	// remove the replies channel when we are done
+	defer n.deleteChan(msgID)
 
 	data, err := ptypes.MarshalAny(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
-	msg := &gorums.Message{
-		ID:   msgID,
-		URL:  "/dev.ZorumsService/StrictOrderingUnaryRPC",
-		Data: data,
+	msg := &GorumsMessage{
+		ID:     msgID,
+		Method: "/dev.ZorumsService/StrictOrderingUnaryRPC",
+		Data:   data,
 	}
-	n.strictOrdering.sendQ <- msg
+	n.sendQ <- msg
 
 	select {
 	case r := <-replies:
@@ -62,18 +55,18 @@ type StrictOrderingUnaryRPCHandler interface {
 
 // RegisterStrictOrderingUnaryRPCHandler sets the handler for StrictOrderingUnaryRPC.
 func (s *GorumsServer) RegisterStrictOrderingUnaryRPCHandler(handler StrictOrderingUnaryRPCHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingUnaryRPC", func(in *gorums.Message) *gorums.Message {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingUnaryRPC", func(in *GorumsMessage) *GorumsMessage {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
 		resp := handler.StrictOrderingUnaryRPC(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
-		return &gorums.Message{Data: data, URL: in.GetURL()}
+		return &GorumsMessage{Data: data, Method: in.GetMethod()}
 	})
 }

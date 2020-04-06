@@ -6,7 +6,6 @@ import (
 	context "context"
 	fmt "fmt"
 	ptypes "github.com/golang/protobuf/ptypes"
-	gorums "github.com/relab/gorums"
 	trace "golang.org/x/net/trace"
 	grpc "google.golang.org/grpc"
 	time "time"
@@ -41,30 +40,24 @@ func (c *Configuration) StrictOrderingQC(ctx context.Context, in *Request, opts 
 
 	// set up a channel to collect replies
 	replies := make(chan *strictOrderingResult, c.n)
-	c.mgr.recvQMut.Lock()
-	c.mgr.recvQ[msgID] = replies
-	c.mgr.recvQMut.Unlock()
+	c.mgr.putChan(msgID, replies)
 
-	defer func() {
-		// remove the replies channel when we are done
-		c.mgr.recvQMut.Lock()
-		delete(c.mgr.recvQ, msgID)
-		c.mgr.recvQMut.Unlock()
-	}()
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
 
 	data, err := ptypes.MarshalAny(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
-	msg := &gorums.Message{
-		ID:   msgID,
-		URL:  "/dev.ZorumsService/StrictOrderingQC",
-		Data: data,
+	msg := &GorumsMessage{
+		ID:     msgID,
+		Method: "/dev.ZorumsService/StrictOrderingQC",
+		Data:   data,
 	}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
-		n.strictOrdering.sendQ <- msg
+		n.sendQ <- msg
 	}
 
 	var (
@@ -112,19 +105,19 @@ type StrictOrderingQCHandler interface {
 
 // RegisterStrictOrderingQCHandler sets the handler for StrictOrderingQC.
 func (s *GorumsServer) RegisterStrictOrderingQCHandler(handler StrictOrderingQCHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingQC", func(in *gorums.Message) *gorums.Message {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingQC", func(in *GorumsMessage) *GorumsMessage {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
 		resp := handler.StrictOrderingQC(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
-		return &gorums.Message{Data: data, URL: in.GetURL()}
+		return &GorumsMessage{Data: data, Method: in.GetMethod()}
 	})
 }
 
@@ -159,16 +152,10 @@ func (c *Configuration) StrictOrderingPerNodeArg(ctx context.Context, in *Reques
 
 	// set up a channel to collect replies
 	replies := make(chan *strictOrderingResult, c.n)
-	c.mgr.recvQMut.Lock()
-	c.mgr.recvQ[msgID] = replies
-	c.mgr.recvQMut.Unlock()
+	c.mgr.putChan(msgID, replies)
 
-	defer func() {
-		// remove the replies channel when we are done
-		c.mgr.recvQMut.Lock()
-		delete(c.mgr.recvQ, msgID)
-		c.mgr.recvQMut.Unlock()
-	}()
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
 
 	// push the message to the nodes
 	expected := c.n
@@ -182,12 +169,12 @@ func (c *Configuration) StrictOrderingPerNodeArg(ctx context.Context, in *Reques
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
-		msg := &gorums.Message{
-			ID:   msgID,
-			URL:  "/dev.ZorumsService/StrictOrderingPerNodeArg",
-			Data: data,
+		msg := &GorumsMessage{
+			ID:     msgID,
+			Method: "/dev.ZorumsService/StrictOrderingPerNodeArg",
+			Data:   data,
 		}
-		n.strictOrdering.sendQ <- msg
+		n.sendQ <- msg
 	}
 
 	var (
@@ -235,19 +222,19 @@ type StrictOrderingPerNodeArgHandler interface {
 
 // RegisterStrictOrderingPerNodeArgHandler sets the handler for StrictOrderingPerNodeArg.
 func (s *GorumsServer) RegisterStrictOrderingPerNodeArgHandler(handler StrictOrderingPerNodeArgHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingPerNodeArg", func(in *gorums.Message) *gorums.Message {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingPerNodeArg", func(in *GorumsMessage) *GorumsMessage {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
 		resp := handler.StrictOrderingPerNodeArg(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
-		return &gorums.Message{Data: data, URL: in.GetURL()}
+		return &GorumsMessage{Data: data, Method: in.GetMethod()}
 	})
 }
 
@@ -279,30 +266,24 @@ func (c *Configuration) StrictOrderingQFWithReq(ctx context.Context, in *Request
 
 	// set up a channel to collect replies
 	replies := make(chan *strictOrderingResult, c.n)
-	c.mgr.recvQMut.Lock()
-	c.mgr.recvQ[msgID] = replies
-	c.mgr.recvQMut.Unlock()
+	c.mgr.putChan(msgID, replies)
 
-	defer func() {
-		// remove the replies channel when we are done
-		c.mgr.recvQMut.Lock()
-		delete(c.mgr.recvQ, msgID)
-		c.mgr.recvQMut.Unlock()
-	}()
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
 
 	data, err := ptypes.MarshalAny(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
-	msg := &gorums.Message{
-		ID:   msgID,
-		URL:  "/dev.ZorumsService/StrictOrderingQFWithReq",
-		Data: data,
+	msg := &GorumsMessage{
+		ID:     msgID,
+		Method: "/dev.ZorumsService/StrictOrderingQFWithReq",
+		Data:   data,
 	}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
-		n.strictOrdering.sendQ <- msg
+		n.sendQ <- msg
 	}
 
 	var (
@@ -350,19 +331,19 @@ type StrictOrderingQFWithReqHandler interface {
 
 // RegisterStrictOrderingQFWithReqHandler sets the handler for StrictOrderingQFWithReq.
 func (s *GorumsServer) RegisterStrictOrderingQFWithReqHandler(handler StrictOrderingQFWithReqHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingQFWithReq", func(in *gorums.Message) *gorums.Message {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingQFWithReq", func(in *GorumsMessage) *GorumsMessage {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
 		resp := handler.StrictOrderingQFWithReq(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
-		return &gorums.Message{Data: data, URL: in.GetURL()}
+		return &GorumsMessage{Data: data, Method: in.GetMethod()}
 	})
 }
 
@@ -394,30 +375,24 @@ func (c *Configuration) StrictOrderingCustomReturnType(ctx context.Context, in *
 
 	// set up a channel to collect replies
 	replies := make(chan *strictOrderingResult, c.n)
-	c.mgr.recvQMut.Lock()
-	c.mgr.recvQ[msgID] = replies
-	c.mgr.recvQMut.Unlock()
+	c.mgr.putChan(msgID, replies)
 
-	defer func() {
-		// remove the replies channel when we are done
-		c.mgr.recvQMut.Lock()
-		delete(c.mgr.recvQ, msgID)
-		c.mgr.recvQMut.Unlock()
-	}()
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
 
 	data, err := ptypes.MarshalAny(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
-	msg := &gorums.Message{
-		ID:   msgID,
-		URL:  "/dev.ZorumsService/StrictOrderingCustomReturnType",
-		Data: data,
+	msg := &GorumsMessage{
+		ID:     msgID,
+		Method: "/dev.ZorumsService/StrictOrderingCustomReturnType",
+		Data:   data,
 	}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
-		n.strictOrdering.sendQ <- msg
+		n.sendQ <- msg
 	}
 
 	var (
@@ -465,19 +440,19 @@ type StrictOrderingCustomReturnTypeHandler interface {
 
 // RegisterStrictOrderingCustomReturnTypeHandler sets the handler for StrictOrderingCustomReturnType.
 func (s *GorumsServer) RegisterStrictOrderingCustomReturnTypeHandler(handler StrictOrderingCustomReturnTypeHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingCustomReturnType", func(in *gorums.Message) *gorums.Message {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingCustomReturnType", func(in *GorumsMessage) *GorumsMessage {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
 		resp := handler.StrictOrderingCustomReturnType(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
-		return &gorums.Message{Data: data, URL: in.GetURL()}
+		return &GorumsMessage{Data: data, Method: in.GetMethod()}
 	})
 }
 
@@ -512,16 +487,10 @@ func (c *Configuration) StrictOrderingCombi(ctx context.Context, in *Request, f 
 
 	// set up a channel to collect replies
 	replies := make(chan *strictOrderingResult, c.n)
-	c.mgr.recvQMut.Lock()
-	c.mgr.recvQ[msgID] = replies
-	c.mgr.recvQMut.Unlock()
+	c.mgr.putChan(msgID, replies)
 
-	defer func() {
-		// remove the replies channel when we are done
-		c.mgr.recvQMut.Lock()
-		delete(c.mgr.recvQ, msgID)
-		c.mgr.recvQMut.Unlock()
-	}()
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
 
 	// push the message to the nodes
 	expected := c.n
@@ -535,12 +504,12 @@ func (c *Configuration) StrictOrderingCombi(ctx context.Context, in *Request, f 
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
-		msg := &gorums.Message{
-			ID:   msgID,
-			URL:  "/dev.ZorumsService/StrictOrderingCombi",
-			Data: data,
+		msg := &GorumsMessage{
+			ID:     msgID,
+			Method: "/dev.ZorumsService/StrictOrderingCombi",
+			Data:   data,
 		}
-		n.strictOrdering.sendQ <- msg
+		n.sendQ <- msg
 	}
 
 	var (
@@ -588,18 +557,18 @@ type StrictOrderingCombiHandler interface {
 
 // RegisterStrictOrderingCombiHandler sets the handler for StrictOrderingCombi.
 func (s *GorumsServer) RegisterStrictOrderingCombiHandler(handler StrictOrderingCombiHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingCombi", func(in *gorums.Message) *gorums.Message {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingCombi", func(in *GorumsMessage) *GorumsMessage {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
 		resp := handler.StrictOrderingCombi(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
-			return new(gorums.Message)
+			return new(GorumsMessage)
 		}
-		return &gorums.Message{Data: data, URL: in.GetURL()}
+		return &GorumsMessage{Data: data, Method: in.GetMethod()}
 	})
 }

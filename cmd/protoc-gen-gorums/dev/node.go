@@ -3,6 +3,7 @@ package dev
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net"
 	"sort"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 )
 
 const nilAngleString = "<nil>"
@@ -26,10 +28,20 @@ type Node struct {
 	lastErr error
 	latency time.Duration
 
-	strictOrdering *strictOrderingStream
+	*orderedNodeStream
 
 	// embed generated nodeServices
 	nodeServices
+}
+
+func (n *Node) createOrderedStream(rq *receiveQueue, backoff backoff.Config) {
+	n.orderedNodeStream = &orderedNodeStream{
+		receiveQueue: rq,
+		sendQ:        make(chan *GorumsMessage),
+		node:         n,
+		backoff:      backoff,
+		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
 }
 
 // connect to this node to facilitate gRPC calls and optionally client streams.
@@ -45,7 +57,7 @@ func (n *Node) connect(opts managerOptions) error {
 	ctx, n.cancel = context.WithCancel(context.Background())
 	// only start strictOrdering RPCs when needed
 	if numStrictOrderingMethods > 0 {
-		err = n.strictOrdering.connect(ctx, n.conn)
+		err = n.connectOrderedStream(ctx, n.conn)
 		if err != nil {
 			return fmt.Errorf("starting stream failed: %w", err)
 		}
