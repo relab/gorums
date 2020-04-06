@@ -56,7 +56,7 @@ func (n *Node) connect(opts managerOptions) error {
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())
 	// only start strictOrdering RPCs when needed
-	if numStrictOrderingMethods > 0 {
+	if hasStrictOrderingMethods {
 		err = n.connectOrderedStream(ctx, n.conn)
 		if err != nil {
 			return fmt.Errorf("starting stream failed: %w", err)

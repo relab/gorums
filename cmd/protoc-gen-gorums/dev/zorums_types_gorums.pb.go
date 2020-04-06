@@ -7,6 +7,8 @@ import (
 	sync "sync"
 )
 
+const hasStrictOrderingMethods = true
+
 type internalEmpty struct {
 	nid   uint32
 	reply *empty.Empty
