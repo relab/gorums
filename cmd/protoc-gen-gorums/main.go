@@ -20,8 +20,8 @@ var devTypes = []string{
 	"correctable",
 	"correctable_stream",
 	"multicast",
-	"strict_ordering_qc",
-	"strict_ordering_rpc",
+	"ordered_qc",
+	"ordered_rpc",
 }
 
 func main() {

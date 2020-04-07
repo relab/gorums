@@ -14,7 +14,7 @@ extend google.protobuf.MethodOptions {
   bool qc_future = 50004;
   bool qf_with_req = 50005;
   bool per_node_arg = 50006;
-  bool strict_ordering = 50007;
+  bool ordered = 50007;
 
   string custom_return_type = 51000;
 }

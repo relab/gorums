@@ -60,7 +60,7 @@ func qcresult(g *protogen.GeneratedFile, method *protogen.Method) string {
 	if hasMethodOption(method, callTypesWithPromiseObject...) {
 		return fmt.Sprintf("&qcresult{ids: resp.NodeIDs, reply: resp.%s, err: resp.err}", field(customOut(g, method)))
 	}
-	if hasMethodOption(method, gorums.E_Qc, gorums.E_StrictOrdering) {
+	if hasMethodOption(method, gorums.E_Qc, gorums.E_Ordered) {
 		return "&qcresult{reply: resp, err: err}"
 	}
 	return ""

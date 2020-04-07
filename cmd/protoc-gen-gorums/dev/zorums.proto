@@ -226,31 +226,31 @@ service ZorumsService {
   // ---------------------------------------------------------------
   rpc StrictOrderingQC(Request) returns (Response) {
     option (gorums.qc) = true;
-    option (gorums.strict_ordering) = true;
+    option (gorums.ordered) = true;
   }
   rpc StrictOrderingPerNodeArg(Request) returns (Response) {
     option (gorums.qc) = true;
-    option (gorums.strict_ordering) = true;
+    option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
   }
   rpc StrictOrderingQFWithReq(Request) returns (Response) {
     option (gorums.qc) = true;
-    option (gorums.strict_ordering) = true;
+    option (gorums.ordered) = true;
     option (gorums.qf_with_req) = true;
   }
   rpc StrictOrderingCustomReturnType(Request) returns (Response) {
     option (gorums.qc) = true;
-    option (gorums.strict_ordering) = true;
+    option (gorums.ordered) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   rpc StrictOrderingCombi(Request) returns (Response) {
     option (gorums.qc) = true;
-    option (gorums.strict_ordering) = true;
+    option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.qf_with_req) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   rpc StrictOrderingUnaryRPC(Request) returns (Response) {
-    option (gorums.strict_ordering) = true;
+    option (gorums.ordered) = true;
   }
 }

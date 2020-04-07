@@ -236,7 +236,7 @@ func mustExecute(t *template.Template, data interface{}) string {
 func hasStrictOrderingMethods(services []*protogen.Service) bool {
 	for _, service := range services {
 		for _, method := range service.Methods {
-			if hasMethodOption(method, gorums.E_StrictOrdering) {
+			if hasMethodOption(method, gorums.E_Ordered) {
 				return true
 			}
 		}
@@ -246,7 +246,7 @@ func hasStrictOrderingMethods(services []*protogen.Service) bool {
 
 func exclusivelyStrictOrdering(service *protogen.Service) bool {
 	for _, method := range service.Methods {
-		if !hasMethodOption(method, gorums.E_StrictOrdering) {
+		if !hasMethodOption(method, gorums.E_Ordered) {
 			return false
 		}
 	}
