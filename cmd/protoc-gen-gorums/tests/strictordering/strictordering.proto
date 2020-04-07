@@ -9,11 +9,11 @@ option go_package = "github.com/relab/gorums/cmd/protoc-gen-gorums/tests/stricto
 service GorumsTest {
 	rpc QC(Request) returns (Response) {
 		option (gorums.qc) = true;
-		option (gorums.strict_ordering) = true;
+		option (gorums.ordered) = true;
 	}
 
 	rpc UnaryRPC(Request) returns (Response) {
-		option (gorums.strict_ordering) = true;
+		option (gorums.ordered) = true;
 	}
 }
 

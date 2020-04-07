@@ -126,22 +126,22 @@ type QuorumSpec interface {
 	CorrectableStreamEmpty2QF(replies []*Response) (*Response, int, bool)
 
 	// StrictOrderingQCQF is the quorum function for the StrictOrderingQC
-	// strict ordering quorum call method.
+	// ordered quorum call method.
 	StrictOrderingQCQF(replies []*Response) (*Response, bool)
 
 	// StrictOrderingPerNodeArgQF is the quorum function for the StrictOrderingPerNodeArg
-	// strict ordering quorum call method.
+	// ordered quorum call method.
 	StrictOrderingPerNodeArgQF(replies []*Response) (*Response, bool)
 
 	// StrictOrderingQFWithReqQF is the quorum function for the StrictOrderingQFWithReq
-	// strict ordering quorum call method.
+	// ordered quorum call method.
 	StrictOrderingQFWithReqQF(in *Request, replies []*Response) (*Response, bool)
 
 	// StrictOrderingCustomReturnTypeQF is the quorum function for the StrictOrderingCustomReturnType
-	// strict ordering quorum call method.
+	// ordered quorum call method.
 	StrictOrderingCustomReturnTypeQF(replies []*Response) (*MyResponse, bool)
 
 	// StrictOrderingCombiQF is the quorum function for the StrictOrderingCombi
-	// strict ordering quorum call method.
+	// ordered quorum call method.
 	StrictOrderingCombiQF(in *Request, replies []*Response) (*MyResponse, bool)
 }
