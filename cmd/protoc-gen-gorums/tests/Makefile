@@ -1,11 +1,11 @@
-all: basic qc strictordering
+all: grpc qc strictordering
 
-.PHONY: basic
-basic:
+.PHONY: grpc
+grpc:
 	@protoc \
 		--go_out=paths=source_relative:. \
 		--go-grpc_out=paths=source_relative:. \
-		basic/basic.proto
+		grpc/grpc.proto
 
 .PHONY: qc
 qc:
@@ -25,4 +25,4 @@ strictordering:
 .PHONY: clean
 clean:
 	@rm -f quorumcall/*.go
-	@rm -f basic/*.go
+	@rm -f grpc/*.go
