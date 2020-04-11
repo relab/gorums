@@ -3,11 +3,12 @@ package strictordering
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc"
 )
 
 type portSupplier struct {
@@ -52,7 +53,7 @@ func (s *testSrv) UnaryRPC(req *Request) *Response {
 	}
 }
 
-type testQSpec struct{
+type testQSpec struct {
 	quorum int
 }
 
@@ -86,7 +87,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	// client setup
 	man, err := NewManager([]string{lis.Addr().String()},
 		WithGrpcDialOptions(grpc.WithInsecure()),
-		WithDialTimeout(10 * time.Second),
+		WithDialTimeout(10*time.Second),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
@@ -132,7 +133,7 @@ func TestQCOrdering(t *testing.T) {
 	// client setup
 	man, err := NewManager(addrs,
 		WithGrpcDialOptions(grpc.WithInsecure()),
-		WithDialTimeout(10 * time.Second),
+		WithDialTimeout(10*time.Second),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
@@ -181,7 +182,7 @@ func TestMixedOrdering(t *testing.T) {
 	// client setup
 	man, err := NewManager(addrs,
 		WithGrpcDialOptions(grpc.WithInsecure()),
-		WithDialTimeout(10 * time.Second),
+		WithDialTimeout(10*time.Second),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
@@ -208,14 +209,16 @@ func TestMixedOrdering(t *testing.T) {
 		wg.Add(len(nodes))
 		for _, node := range nodes {
 			go func(node *Node) {
+				defer wg.Done()
 				resp, err := node.UnaryRPC(context.Background(), &Request{Num: num})
 				if err != nil {
-					t.Fatalf("RPC error: %v", err)
+					t.Errorf("RPC error: %v", err)
+					return
 				}
 				if !resp.GetInOrder() {
-					t.Fatalf("Message received out of order.")
+					t.Errorf("Message received out of order.")
+					return
 				}
-				wg.Done()
 			}(node)
 		}
 		wg.Wait()
