@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package gorums;
+package strictordering;
 
-option go_package = "github.com/relab/gorums/cmd/protoc-gen-gorums/dev";
+option go_package = "github.com/relab/gorums/strictordering";
 
 import "google/protobuf/any.proto";
 

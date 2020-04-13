@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/relab/gorums/strictordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
@@ -60,19 +61,19 @@ func (m *receiveQueue) putResult(id uint64, result *strictOrderingResult) {
 
 type orderedNodeStream struct {
 	*receiveQueue
-	sendQ        chan *GorumsMessage
+	sendQ        chan *strictordering.GorumsMessage
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
 	rand         *rand.Rand
-	gorumsClient GorumsStrictOrderingClient
-	gorumsStream GorumsStrictOrdering_NodeStreamClient
+	gorumsClient strictordering.GorumsStrictOrderingClient
+	gorumsStream strictordering.GorumsStrictOrdering_NodeStreamClient
 	streamMut    sync.RWMutex
 	streamBroken bool
 }
 
 func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc.ClientConn) error {
 	var err error
-	s.gorumsClient = NewGorumsStrictOrderingClient(conn)
+	s.gorumsClient = strictordering.NewGorumsStrictOrderingClient(conn)
 	s.gorumsStream, err = s.gorumsClient.NodeStream(ctx)
 	if err != nil {
 		return err
@@ -107,7 +108,7 @@ func (s *orderedNodeStream) sendMsgs() {
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := new(GorumsMessage)
+		resp := new(strictordering.GorumsMessage)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {

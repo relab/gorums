@@ -10,10 +10,11 @@ test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing
 failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
 test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
 internal_so				:= internal/strictordering
+public_so				:= strictordering/
 
 .PHONY: dev download install-tools installgorums clean
 
-dev: installgorums $(dev_path)/strictordering.pb.go $(dev_path)/strictordering_grpc.pb.go
+dev: installgorums $(public_so)/strictordering.pb.go $(public_so)/strictordering_grpc.pb.go
 	@echo Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder
 	rm -f $(dev_path)/zorums*.pb.go
 	protoc -I$(dev_path):. \
@@ -45,13 +46,13 @@ $(internal_so)/opts.pb.go: $(internal_so)/opts.proto
 	@echo Generating strictordering proto options
 	@protoc --go_out=paths=source_relative:. $(internal_so)/opts.proto
 
-$(dev_path)/strictordering.pb.go: $(dev_path)/strictordering.proto
+$(public_so)/strictordering.pb.go: $(public_so)/strictordering.proto
 	@echo Generating strictordering protocol buffers
-	@protoc --go_out=paths=source_relative:. $(dev_path)/strictordering.proto
+	@protoc --go_out=paths=source_relative:. $(public_so)/strictordering.proto
 
-$(dev_path)/strictordering_grpc.pb.go: $(dev_path)/strictordering.proto
+$(public_so)/strictordering_grpc.pb.go: $(public_so)/strictordering.proto
 	@echo Generating strictordering gRPC service
-	@protoc --go-grpc_out=paths=source_relative:. $(dev_path)/strictordering.proto
+	@protoc --go-grpc_out=paths=source_relative:. $(public_so)/strictordering.proto
 
 installgorums: gorums.pb.go $(internal_so)/opts.pb.go
 	@echo Installing protoc-gen-gorums compiler plugin for protoc

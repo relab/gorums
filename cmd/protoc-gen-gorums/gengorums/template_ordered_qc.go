@@ -4,6 +4,7 @@ var strictOrderingVariables = `
 {{$marshalAny := use "ptypes.MarshalAny" .GenFile}}
 {{$unmarshalAny := use "ptypes.UnmarshalAny" .GenFile}}
 {{$errorf := use "fmt.Errorf" .GenFile}}
+{{$gorumsMsg := use "strictordering.GorumsMessage" .GenFile}}
 `
 
 var strictOrderingPreamble = `
@@ -26,7 +27,7 @@ var strictOrderingLoop = `
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
-	msg := &GorumsMessage{
+	msg := &{{$gorumsMsg}}{
 		ID: msgID,
 		Method: "{{fullName .Method}}",
 		Data: data,
@@ -46,7 +47,7 @@ var strictOrderingLoop = `
 		if err != nil {
 			return nil, {{$errorf}}("failed to marshal message: %w", err)
 		}
-		msg := &GorumsMessage{
+		msg := &{{$gorumsMsg}}{
 			ID: msgID,
 			Method: "{{fullName .Method}}",
 			Data: data,
@@ -100,19 +101,19 @@ type {{$method}}Handler interface {
 
 // Register{{$method}}Handler sets the handler for {{$method}}.
 func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
-	s.srv.registerHandler("{{fullName .Method}}", func(in *GorumsMessage) *GorumsMessage {
+	s.srv.registerHandler("{{fullName .Method}}", func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
 		req := new({{$in}})
 		err := {{$unmarshalAny}}(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(GorumsMessage)
+			return new({{$gorumsMsg}})
 		}
 		resp := handler.{{$method}}(req)
 		data, err := {{$marshalAny}}(resp)
 		if err != nil {
-			return new(GorumsMessage)
+			return new({{$gorumsMsg}})
 		}
-		return &GorumsMessage{Data: data, Method: in.GetMethod()}
+		return &{{$gorumsMsg}}{Data: data, Method: in.GetMethod()}
 	})
 }
 `

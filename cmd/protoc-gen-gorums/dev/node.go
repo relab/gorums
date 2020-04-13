@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/relab/gorums/strictordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 )
@@ -37,7 +38,7 @@ type Node struct {
 func (n *Node) createOrderedStream(rq *receiveQueue, backoff backoff.Config) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *GorumsMessage),
+		sendQ:        make(chan *strictordering.GorumsMessage),
 		node:         n,
 		backoff:      backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),

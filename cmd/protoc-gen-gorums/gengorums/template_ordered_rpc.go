@@ -25,7 +25,7 @@ var strictOrderingRPCBody = `
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
-	msg := &GorumsMessage{
+	msg := &{{$gorumsMsg}}{
 		ID: msgID,
 		Method: "{{fullName .Method}}",
 		Data: data,

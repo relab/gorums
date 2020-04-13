@@ -3,6 +3,7 @@ package dev
 import (
 	"net"
 
+	"github.com/relab/gorums/strictordering"
 	"google.golang.org/grpc"
 )
 
@@ -10,7 +11,7 @@ import (
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*GorumsMessage) *GorumsMessage
+type requestHandler func(*strictordering.GorumsMessage) *strictordering.GorumsMessage
 
 type strictOrderingServer struct {
 	handlers map[string]requestHandler
@@ -26,7 +27,7 @@ func (s *strictOrderingServer) registerHandler(method string, handler requestHan
 	s.handlers[method] = handler
 }
 
-func (s *strictOrderingServer) NodeStream(srv GorumsStrictOrdering_NodeStreamServer) error {
+func (s *strictOrderingServer) NodeStream(srv strictordering.GorumsStrictOrdering_NodeStreamServer) error {
 	for {
 		req, err := srv.Recv()
 		if err != nil {
@@ -56,7 +57,7 @@ func NewGorumsServer() *GorumsServer {
 		srv:        newStrictOrderingServer(),
 		grpcServer: grpc.NewServer(),
 	}
-	RegisterGorumsStrictOrderingServer(s.grpcServer, s.srv)
+	strictordering.RegisterGorumsStrictOrderingServer(s.grpcServer, s.srv)
 	return s
 }
 
