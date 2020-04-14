@@ -11,19 +11,6 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
-var devTypes = []string{
-	"node",
-	"qspec",
-	"types",
-	"qc",
-	"qc_future",
-	"correctable",
-	"correctable_stream",
-	"multicast",
-	"ordered_qc",
-	"ordered_rpc",
-}
-
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
 		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), gengorums.VersionString())
@@ -50,9 +37,7 @@ func main() {
 				switch {
 				case *dev:
 					fmt.Fprintf(os.Stderr, "Generating development files in dev folder\n")
-					for _, gorumsType := range devTypes {
-						gengorums.GenerateDevFile(gorumsType, gen, f)
-					}
+					gengorums.GenerateDevFiles(gen, f)
 				case *bundle != "":
 					fmt.Fprintf(os.Stderr, "Generating bundle file: %s\n", *bundle)
 					gengorums.GenerateBundleFile(*bundle)

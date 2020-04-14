@@ -55,12 +55,12 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
 func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
 	data := servicesData{g, file.Services}
-	g.P(mustExecute(parseTemplate("Node", node), data))
-	g.P()
-	g.P(mustExecute(parseTemplate("QuorumSpec", qspecInterface), data))
-	g.P()
-	g.P(mustExecute(parseTemplate("DataTypes", datatypes), data))
-	g.P()
+	for gorumsType, templateString := range devTypes {
+		if templateString != "" {
+			g.P(mustExecute(parseTemplate(gorumsType, templateString), data))
+			g.P()
+		}
+	}
 	genGorumsMethods(data, gorumsCallTypes...)
 	g.P()
 	// generate all strict ordering methods
@@ -114,11 +114,8 @@ type methodData struct {
 // hasGorumsType returns true if one of the service methods specify
 // the given gorums type.
 func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
-	// TODO(meling) try to avoid this loop slice; reuse devTypes??
-	for _, gType := range []string{"node", "qspec", "types"} {
-		if gorumsType == gType {
-			return true
-		}
+	if devTypes[gorumsType] != "" {
+		return true
 	}
 	if methodOption, ok := gorumsTypes[gorumsType]; ok {
 		return checkMethodOptions(services, methodOption)
@@ -139,6 +136,22 @@ func hasStrictOrderingType(services []*protogen.Service, typeName string) bool {
 		}
 	}
 	return false
+}
+
+// devTypes maps from different Gorums type names to template strings for
+// those types. These allow us to generate different dev/zorums_{type}.pb.go
+// files for the different keys.
+var devTypes = map[string]string{
+	"node":               node,
+	"qspec":              qspecInterface,
+	"types":              datatypes,
+	"qc":                 "",
+	"qc_future":          "",
+	"correctable":        "",
+	"correctable_stream": "",
+	"multicast":          "",
+	"ordered_qc":         "",
+	"ordered_rpc":        "",
 }
 
 // compute index to start of option name
