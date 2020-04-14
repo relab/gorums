@@ -71,6 +71,7 @@ clean:
 gentests: $(test_files) $(failing_test_files)
 
 $(test_files): installgorums
+	@echo Running protoc test with source files expected to pass
 	@protoc -I. \
 		--go_out=paths=source_relative:. \
 		--go-grpc_out=paths=source_relative:. \
@@ -78,8 +79,9 @@ $(test_files): installgorums
 	|| (echo "unexpected failure with exit code: $$?")
 
 $(failing_test_files): installgorums
+	@echo "Running protoc test with source files expected to fail (output is suppressed)"
 	@protoc -I. \
 		--go_out=paths=source_relative:. \
 		--go-grpc_out=paths=source_relative:. \
-		--gorums_out=paths=source_relative,trace=true:. $@ \
-	&& (echo "expected protoc to fail but got exit code: $$?")
+		--gorums_out=paths=source_relative,trace=true:. $@ 2> /dev/null \
+	&& (echo "expected protoc to fail but got exit code: $$?") || (exit 0)
