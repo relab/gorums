@@ -526,3 +526,561 @@ func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCH
 		return &ordering.Message{Data: data, Method: in.GetMethod()}
 	})
 }
+
+// StrictOrderingFuture asynchronously invokes a quorum call on configuration c
+// and returns a FutureResponse, which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) StrictOrderingFuture(ctx context.Context, in *Request) (*FutureResponse, error) {
+	fut := &FutureResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	id, expected, replyChan, err := c.strictOrderingFutureSend(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		defer close(fut.c)
+		c.strictOrderingFutureRecv(ctx, in, id, expected, replyChan, fut)
+	}()
+	return fut, nil
+}
+
+func (c *Configuration) strictOrderingFutureSend(ctx context.Context, in *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
+
+	data, err := ptypes.MarshalAny(in)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:     msgID,
+		Method: "/dev.ZorumsService/StrictOrderingFuture",
+		Data:   data,
+	}
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	return msgID, expected, replyChan, nil
+}
+
+func (c *Configuration) strictOrderingFutureRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureResponse) {
+	defer c.mgr.deleteChan(msgID)
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *Response
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			data := new(Response)
+			err := ptypes.UnmarshalAny(r.reply, data)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, data)
+			if reply, quorum = c.qspec.StrictOrderingFutureQF(in, replyValues); quorum {
+				resp.Response, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+// StrictOrderingFutureHandler is the server API for the StrictOrderingFuture rpc.
+type StrictOrderingFutureHandler interface {
+	StrictOrderingFuture(*Request) *Response
+}
+
+// RegisterStrictOrderingFutureHandler sets the handler for StrictOrderingFuture.
+func (s *GorumsServer) RegisterStrictOrderingFutureHandler(handler StrictOrderingFutureHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFuture", func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := ptypes.UnmarshalAny(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.StrictOrderingFuture(req)
+		data, err := ptypes.MarshalAny(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, Method: in.GetMethod()}
+	})
+}
+
+// StrictOrderingFuturePerNodeArg asynchronously invokes a quorum call on each node in
+// configuration c, with the argument returned by the provided function f
+// and returns the result as a FutureResponse, which can be used to inspect
+// the quorum call reply and error when available.
+// The provide per node function f takes the provided Request argument
+// and returns an Response object to be passed to the given nodeID.
+// The per node function f should be thread-safe.
+func (c *Configuration) StrictOrderingFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (*FutureResponse, error) {
+	fut := &FutureResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	id, expected, replyChan, err := c.strictOrderingFuturePerNodeArgSend(ctx, in, f)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		defer close(fut.c)
+		c.strictOrderingFuturePerNodeArgRecv(ctx, in, id, expected, replyChan, fut)
+	}()
+	return fut, nil
+}
+
+func (c *Configuration) strictOrderingFuturePerNodeArgSend(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
+
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.ID())
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		data, err := ptypes.MarshalAny(nodeArg)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+		}
+		msg := &ordering.Message{
+			ID:     msgID,
+			Method: "/dev.ZorumsService/StrictOrderingFuturePerNodeArg",
+			Data:   data,
+		}
+		n.sendQ <- msg
+	}
+
+	return msgID, expected, replyChan, nil
+}
+
+func (c *Configuration) strictOrderingFuturePerNodeArgRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureResponse) {
+	defer c.mgr.deleteChan(msgID)
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *Response
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			data := new(Response)
+			err := ptypes.UnmarshalAny(r.reply, data)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, data)
+			if reply, quorum = c.qspec.StrictOrderingFuturePerNodeArgQF(in, replyValues); quorum {
+				resp.Response, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+// StrictOrderingFuturePerNodeArgHandler is the server API for the StrictOrderingFuturePerNodeArg rpc.
+type StrictOrderingFuturePerNodeArgHandler interface {
+	StrictOrderingFuturePerNodeArg(*Request) *Response
+}
+
+// RegisterStrictOrderingFuturePerNodeArgHandler sets the handler for StrictOrderingFuturePerNodeArg.
+func (s *GorumsServer) RegisterStrictOrderingFuturePerNodeArgHandler(handler StrictOrderingFuturePerNodeArgHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFuturePerNodeArg", func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := ptypes.UnmarshalAny(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.StrictOrderingFuturePerNodeArg(req)
+		data, err := ptypes.MarshalAny(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, Method: in.GetMethod()}
+	})
+}
+
+// StrictOrderingFutureQFWithReq asynchronously invokes a quorum call on configuration c
+// and returns a FutureResponse, which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) StrictOrderingFutureQFWithReq(ctx context.Context, in *Request) (*FutureResponse, error) {
+	fut := &FutureResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	id, expected, replyChan, err := c.strictOrderingFutureQFWithReqSend(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		defer close(fut.c)
+		c.strictOrderingFutureQFWithReqRecv(ctx, in, id, expected, replyChan, fut)
+	}()
+	return fut, nil
+}
+
+func (c *Configuration) strictOrderingFutureQFWithReqSend(ctx context.Context, in *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
+
+	data, err := ptypes.MarshalAny(in)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:     msgID,
+		Method: "/dev.ZorumsService/StrictOrderingFutureQFWithReq",
+		Data:   data,
+	}
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	return msgID, expected, replyChan, nil
+}
+
+func (c *Configuration) strictOrderingFutureQFWithReqRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureResponse) {
+	defer c.mgr.deleteChan(msgID)
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *Response
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			data := new(Response)
+			err := ptypes.UnmarshalAny(r.reply, data)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, data)
+			if reply, quorum = c.qspec.StrictOrderingFutureQFWithReqQF(in, replyValues); quorum {
+				resp.Response, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+// StrictOrderingFutureQFWithReqHandler is the server API for the StrictOrderingFutureQFWithReq rpc.
+type StrictOrderingFutureQFWithReqHandler interface {
+	StrictOrderingFutureQFWithReq(*Request) *Response
+}
+
+// RegisterStrictOrderingFutureQFWithReqHandler sets the handler for StrictOrderingFutureQFWithReq.
+func (s *GorumsServer) RegisterStrictOrderingFutureQFWithReqHandler(handler StrictOrderingFutureQFWithReqHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFutureQFWithReq", func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := ptypes.UnmarshalAny(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.StrictOrderingFutureQFWithReq(req)
+		data, err := ptypes.MarshalAny(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, Method: in.GetMethod()}
+	})
+}
+
+// StrictOrderingFutureCustomReturnType asynchronously invokes a quorum call on configuration c
+// and returns a FutureMyResponse, which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) StrictOrderingFutureCustomReturnType(ctx context.Context, in *Request) (*FutureMyResponse, error) {
+	fut := &FutureMyResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	id, expected, replyChan, err := c.strictOrderingFutureCustomReturnTypeSend(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		defer close(fut.c)
+		c.strictOrderingFutureCustomReturnTypeRecv(ctx, in, id, expected, replyChan, fut)
+	}()
+	return fut, nil
+}
+
+func (c *Configuration) strictOrderingFutureCustomReturnTypeSend(ctx context.Context, in *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
+
+	data, err := ptypes.MarshalAny(in)
+	if err != nil {
+		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:     msgID,
+		Method: "/dev.ZorumsService/StrictOrderingFutureCustomReturnType",
+		Data:   data,
+	}
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	return msgID, expected, replyChan, nil
+}
+
+func (c *Configuration) strictOrderingFutureCustomReturnTypeRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureMyResponse) {
+	defer c.mgr.deleteChan(msgID)
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *MyResponse
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			data := new(Response)
+			err := ptypes.UnmarshalAny(r.reply, data)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, data)
+			if reply, quorum = c.qspec.StrictOrderingFutureCustomReturnTypeQF(in, replyValues); quorum {
+				resp.MyResponse, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+// StrictOrderingFutureCustomReturnTypeHandler is the server API for the StrictOrderingFutureCustomReturnType rpc.
+type StrictOrderingFutureCustomReturnTypeHandler interface {
+	StrictOrderingFutureCustomReturnType(*Request) *Response
+}
+
+// RegisterStrictOrderingFutureCustomReturnTypeHandler sets the handler for StrictOrderingFutureCustomReturnType.
+func (s *GorumsServer) RegisterStrictOrderingFutureCustomReturnTypeHandler(handler StrictOrderingFutureCustomReturnTypeHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFutureCustomReturnType", func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := ptypes.UnmarshalAny(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.StrictOrderingFutureCustomReturnType(req)
+		data, err := ptypes.MarshalAny(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, Method: in.GetMethod()}
+	})
+}
+
+// StrictOrderingFutureCombi asynchronously invokes a quorum call on each node in
+// configuration c, with the argument returned by the provided function f
+// and returns the result as a FutureMyResponse, which can be used to inspect
+// the quorum call reply and error when available.
+// The provide per node function f takes the provided Request argument
+// and returns an Response object to be passed to the given nodeID.
+// The per node function f should be thread-safe.
+func (c *Configuration) StrictOrderingFutureCombi(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (*FutureMyResponse, error) {
+	fut := &FutureMyResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	id, expected, replyChan, err := c.strictOrderingFutureCombiSend(ctx, in, f)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		defer close(fut.c)
+		c.strictOrderingFutureCombiRecv(ctx, in, id, expected, replyChan, fut)
+	}()
+	return fut, nil
+}
+
+func (c *Configuration) strictOrderingFutureCombiSend(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
+
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.ID())
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		data, err := ptypes.MarshalAny(nodeArg)
+		if err != nil {
+			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+		}
+		msg := &ordering.Message{
+			ID:     msgID,
+			Method: "/dev.ZorumsService/StrictOrderingFutureCombi",
+			Data:   data,
+		}
+		n.sendQ <- msg
+	}
+
+	return msgID, expected, replyChan, nil
+}
+
+func (c *Configuration) strictOrderingFutureCombiRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureMyResponse) {
+	defer c.mgr.deleteChan(msgID)
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *MyResponse
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			data := new(Response)
+			err := ptypes.UnmarshalAny(r.reply, data)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, data)
+			if reply, quorum = c.qspec.StrictOrderingFutureCombiQF(in, replyValues); quorum {
+				resp.MyResponse, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+// StrictOrderingFutureCombiHandler is the server API for the StrictOrderingFutureCombi rpc.
+type StrictOrderingFutureCombiHandler interface {
+	StrictOrderingFutureCombi(*Request) *Response
+}
+
+// RegisterStrictOrderingFutureCombiHandler sets the handler for StrictOrderingFutureCombi.
+func (s *GorumsServer) RegisterStrictOrderingFutureCombiHandler(handler StrictOrderingFutureCombiHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFutureCombi", func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := ptypes.UnmarshalAny(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.StrictOrderingFutureCombi(req)
+		data, err := ptypes.MarshalAny(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, Method: in.GetMethod()}
+	})
+}
