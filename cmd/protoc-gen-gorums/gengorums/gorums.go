@@ -221,7 +221,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		template:  futureCall,
 		outPrefix: "Future",
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_QcFuture)
+			return hasMethodOption(m, gorums.E_QcFuture) && !hasMethodOption(m, gorums.E_Ordered)
 		},
 	},
 	gorums.E_Correctable.Name[index:]: {
@@ -269,7 +269,17 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 				docName:  "ordered quorum",
 				template: orderingQC,
 				chkFn: func(m *protogen.Method) bool {
-					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall)
+					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall) &&
+						!hasMethodOption(m, ordering.E_OrderedFuture)
+				},
+			},
+			ordering.E_OrderedFuture.Name[soIndex:]: {
+				extInfo:   ordering.E_OrderedFuture,
+				docName:   "asynchronous ordered quorum",
+				template:  orderedFutureCall,
+				outPrefix: "Future",
+				chkFn: func(m *protogen.Method) bool {
+					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_QcFuture)
 				},
 			},
 			ordering.E_OrderedRpc.Name[soIndex:]: {
