@@ -12,6 +12,11 @@ service GorumsTest {
     option (gorums.ordered) = true;
   }
 
+  rpc QCFuture(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+  }
+  
   rpc UnaryRPC(Request) returns (Response) { option (gorums.ordered) = true; }
 }
 
