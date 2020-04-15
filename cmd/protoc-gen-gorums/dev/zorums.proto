@@ -221,4 +221,28 @@ service ZorumsService {
   rpc OrderingUnaryRPC(Request) returns (Response) {
     option (gorums.ordered) = true;
   }
+  rpc StrictOrderingFuture(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+  }
+  rpc StrictOrderingFuturePerNodeArg(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+    option (gorums.per_node_arg) = true;
+  }
+  rpc StrictOrderingFutureQFWithReq(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+  }
+  rpc StrictOrderingFutureCustomReturnType(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  rpc StrictOrderingFutureCombi(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+    option (gorums.per_node_arg) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
 }
