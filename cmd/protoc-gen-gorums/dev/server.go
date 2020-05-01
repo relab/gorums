@@ -17,7 +17,7 @@ type orderingServer struct {
 	handlers map[string]requestHandler
 }
 
-func newStrictOrderingServer() *orderingServer {
+func newOrderingServer() *orderingServer {
 	return &orderingServer{
 		handlers: make(map[string]requestHandler),
 	}
@@ -45,7 +45,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	}
 }
 
-// GorumsServer serves all strict ordering based RPCs using registered handlers
+// GorumsServer serves all ordering based RPCs using registered handlers
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
@@ -54,7 +54,7 @@ type GorumsServer struct {
 // NewGorumsServer returns a new instance of GorumsServer
 func NewGorumsServer() *GorumsServer {
 	s := &GorumsServer{
-		srv:        newStrictOrderingServer(),
+		srv:        newOrderingServer(),
 		grpcServer: grpc.NewServer(),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
