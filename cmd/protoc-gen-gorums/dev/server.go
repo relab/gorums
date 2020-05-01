@@ -3,6 +3,7 @@ package dev
 import (
 	"net"
 
+	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 )
 
@@ -10,23 +11,23 @@ import (
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*GorumsMessage) *GorumsMessage
+type requestHandler func(*ordering.Message) *ordering.Message
 
-type strictOrderingServer struct {
+type orderingServer struct {
 	handlers map[string]requestHandler
 }
 
-func newStrictOrderingServer() *strictOrderingServer {
-	return &strictOrderingServer{
+func newOrderingServer() *orderingServer {
+	return &orderingServer{
 		handlers: make(map[string]requestHandler),
 	}
 }
 
-func (s *strictOrderingServer) registerHandler(method string, handler requestHandler) {
+func (s *orderingServer) registerHandler(method string, handler requestHandler) {
 	s.handlers[method] = handler
 }
 
-func (s *strictOrderingServer) NodeStream(srv GorumsStrictOrdering_NodeStreamServer) error {
+func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	for {
 		req, err := srv.Recv()
 		if err != nil {
@@ -44,19 +45,19 @@ func (s *strictOrderingServer) NodeStream(srv GorumsStrictOrdering_NodeStreamSer
 	}
 }
 
-// GorumsServer serves all strict ordering based RPCs using registered handlers
+// GorumsServer serves all ordering based RPCs using registered handlers
 type GorumsServer struct {
-	srv        *strictOrderingServer
+	srv        *orderingServer
 	grpcServer *grpc.Server
 }
 
 // NewGorumsServer returns a new instance of GorumsServer
 func NewGorumsServer() *GorumsServer {
 	s := &GorumsServer{
-		srv:        newStrictOrderingServer(),
+		srv:        newOrderingServer(),
 		grpcServer: grpc.NewServer(),
 	}
-	RegisterGorumsStrictOrderingServer(s.grpcServer, s.srv)
+	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }
 

@@ -1,4 +1,4 @@
-package strictordering
+package ordering
 
 import (
 	"context"

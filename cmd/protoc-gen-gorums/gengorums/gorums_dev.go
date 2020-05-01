@@ -41,7 +41,7 @@ func generateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.Fil
 		g.P(mustExecute(parseTemplate(gorumsType, templateString), data))
 	} else if methodOption, ok := gorumsTypes[gorumsType]; ok {
 		genGorumsMethods(data, methodOption)
-	} else if methodOption, ok := strictOrderingTypes[gorumsType]; ok {
+	} else if methodOption, ok := orderingTypes[gorumsType]; ok {
 		genGorumsMethods(data, methodOption)
 	}
 	g.P()

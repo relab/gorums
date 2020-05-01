@@ -7,26 +7,23 @@ package gengorums
 // These identifiers are used by the Gorums protoc plugin to generate
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
-	"bytes":                                 "Buffer",
-	"context":                               "Background",
-	"encoding/binary":                       "LittleEndian",
-	"fmt":                                   "Errorf",
-	"github.com/golang/protobuf/ptypes/any": "Any",
-	"golang.org/x/net/trace":                "EventLog",
-	"google.golang.org/grpc":                "CallOption",
-	"google.golang.org/grpc/backoff":        "Config",
-	"google.golang.org/grpc/codes":          "Unavailable",
-	"google.golang.org/grpc/status":         "Errorf",
-	"google.golang.org/protobuf/reflect/protoreflect": "FileDescriptor",
-	"google.golang.org/protobuf/runtime/protoimpl":    "DescBuilder",
-	"google.golang.org/protobuf/types/known/anypb":    "Any",
+	"bytes":                            "Buffer",
+	"context":                          "Background",
+	"encoding/binary":                  "LittleEndian",
+	"fmt":                              "Errorf",
+	"github.com/relab/gorums/ordering": "GorumsClient",
+	"golang.org/x/net/trace":           "EventLog",
+	"google.golang.org/grpc":           "ClientConn",
+	"google.golang.org/grpc/backoff":   "Config",
+	"google.golang.org/grpc/codes":     "Unavailable",
+	"google.golang.org/grpc/status":    "Errorf",
+	"google.golang.org/protobuf/types/known/anypb": "Any",
 	"hash/fnv":    "New32a",
 	"io":          "WriteString",
 	"log":         "Logger",
 	"math":        "Min",
 	"math/rand":   "Float64",
 	"net":         "Listener",
-	"reflect":     "TypeOf",
 	"sort":        "Sort",
 	"strconv":     "Atoi",
 	"strings":     "Join",
@@ -458,7 +455,7 @@ type Node struct {
 func (n *Node) createOrderedStream(rq *receiveQueue, backoff backoff.Config) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *GorumsMessage),
+		sendQ:        make(chan *ordering.Message),
 		node:         n,
 		backoff:      backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -476,7 +473,7 @@ func (n *Node) connect(opts managerOptions) error {
 	}
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())
-	// only start strictOrdering RPCs when needed
+	// only start ordering RPCs when needed
 	if hasStrictOrderingMethods {
 		err = n.connectOrderedStream(ctx, n.conn)
 		if err != nil {
@@ -704,7 +701,7 @@ func WithNoConnect() ManagerOption {
 	}
 }
 
-// WithTracing controls whether to trace qourum calls for this Manager instance
+// WithTracing controls whether to trace quorum calls for this Manager instance
 // using the golang.org/x/net/trace package. Tracing is currently only supported
 // for regular quorum calls.
 func WithTracing() ManagerOption {
@@ -720,76 +717,7 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 	}
 }
 
-// requestHandler is used to fetch a response message based on the request.
-// A requestHandler should receive a message from the server, unmarshal it into
-// the proper type for that Method's request type, call a user provided Handler,
-// and return a marshaled result to the server.
-type requestHandler func(*GorumsMessage) *GorumsMessage
-
-type strictOrderingServer struct {
-	handlers map[string]requestHandler
-}
-
-func newStrictOrderingServer() *strictOrderingServer {
-	return &strictOrderingServer{
-		handlers: make(map[string]requestHandler),
-	}
-}
-
-func (s *strictOrderingServer) registerHandler(method string, handler requestHandler) {
-	s.handlers[method] = handler
-}
-
-func (s *strictOrderingServer) NodeStream(srv GorumsStrictOrdering_NodeStreamServer) error {
-	for {
-		req, err := srv.Recv()
-		if err != nil {
-			return err
-		}
-		// handle the request if a handler is available for this rpc
-		if handler, ok := s.handlers[req.GetMethod()]; ok {
-			resp := handler(req)
-			resp.ID = req.GetID()
-			err = srv.Send(resp)
-			if err != nil {
-				return err
-			}
-		}
-	}
-}
-
-// GorumsServer serves all strict ordering based RPCs using registered handlers
-type GorumsServer struct {
-	srv        *strictOrderingServer
-	grpcServer *grpc.Server
-}
-
-// NewGorumsServer returns a new instance of GorumsServer
-func NewGorumsServer() *GorumsServer {
-	s := &GorumsServer{
-		srv:        newStrictOrderingServer(),
-		grpcServer: grpc.NewServer(),
-	}
-	RegisterGorumsStrictOrderingServer(s.grpcServer, s.srv)
-	return s
-}
-
-// Serve starts serving on the listener
-func (s *GorumsServer) Serve(listener net.Listener) {
-	s.grpcServer.Serve(listener)
-}
-
-// GracefulStop waits for all RPCs to finish before stopping.
-func (s *GorumsServer) GracefulStop() {
-	s.grpcServer.GracefulStop()
-}
-
-// Stop stops the server immediately
-func (s *GorumsServer) Stop() {
-	s.grpcServer.Stop()
-}
-
-type strictOrderingResult struct {
+type orderingResult struct {
 	nid   uint32
 	reply *anypb.Any
 	err   error
@@ -797,13 +725,13 @@ type strictOrderingResult struct {
 
 type receiveQueue struct {
 	msgID    uint64
-	recvQ    map[uint64]chan *strictOrderingResult
+	recvQ    map[uint64]chan *orderingResult
 	recvQMut sync.RWMutex
 }
 
 func newReceiveQueue() *receiveQueue {
 	return &receiveQueue{
-		recvQ: make(map[uint64]chan *strictOrderingResult),
+		recvQ: make(map[uint64]chan *orderingResult),
 	}
 }
 
@@ -811,7 +739,7 @@ func (m *receiveQueue) nextMsgID() uint64 {
 	return atomic.AddUint64(&m.msgID, 1)
 }
 
-func (m *receiveQueue) putChan(id uint64, c chan *strictOrderingResult) {
+func (m *receiveQueue) putChan(id uint64, c chan *orderingResult) {
 	m.recvQMut.Lock()
 	m.recvQ[id] = c
 	m.recvQMut.Unlock()
@@ -823,7 +751,7 @@ func (m *receiveQueue) deleteChan(id uint64) {
 	m.recvQMut.Unlock()
 }
 
-func (m *receiveQueue) putResult(id uint64, result *strictOrderingResult) {
+func (m *receiveQueue) putResult(id uint64, result *orderingResult) {
 	m.recvQMut.RLock()
 	c, ok := m.recvQ[id]
 	m.recvQMut.RUnlock()
@@ -834,19 +762,19 @@ func (m *receiveQueue) putResult(id uint64, result *strictOrderingResult) {
 
 type orderedNodeStream struct {
 	*receiveQueue
-	sendQ        chan *GorumsMessage
+	sendQ        chan *ordering.Message
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
 	rand         *rand.Rand
-	gorumsClient GorumsStrictOrderingClient
-	gorumsStream GorumsStrictOrdering_NodeStreamClient
+	gorumsClient ordering.GorumsClient
+	gorumsStream ordering.Gorums_NodeStreamClient
 	streamMut    sync.RWMutex
 	streamBroken bool
 }
 
 func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc.ClientConn) error {
 	var err error
-	s.gorumsClient = NewGorumsStrictOrderingClient(conn)
+	s.gorumsClient = ordering.NewGorumsClient(conn)
 	s.gorumsStream, err = s.gorumsClient.NodeStream(ctx)
 	if err != nil {
 		return err
@@ -861,7 +789,7 @@ func (s *orderedNodeStream) sendMsgs() {
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.GetID(), &strictOrderingResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 			continue
 		}
 		// else try to send message
@@ -875,13 +803,13 @@ func (s *orderedNodeStream) sendMsgs() {
 		s.streamMut.RUnlock()
 		s.node.setLastErr(err)
 		// return the error
-		s.putResult(req.GetID(), &strictOrderingResult{nid: s.node.ID(), reply: nil, err: err})
+		s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 	}
 }
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := new(GorumsMessage)
+		resp := new(ordering.Message)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
@@ -892,7 +820,7 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.GetID(), &strictOrderingResult{nid: s.node.ID(), reply: resp.GetData(), err: nil})
+			s.putResult(resp.GetID(), &orderingResult{nid: s.node.ID(), reply: resp.GetData(), err: nil})
 		}
 
 		select {
@@ -932,283 +860,73 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 	}
 }
 
-const (
-	// Verify that this generated code is sufficiently up-to-date.
-	_ = protoimpl.EnforceVersion(19 - protoimpl.MinVersion)
-	// Verify that runtime/protoimpl is sufficiently up-to-date.
-	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 19)
-)
+// requestHandler is used to fetch a response message based on the request.
+// A requestHandler should receive a message from the server, unmarshal it into
+// the proper type for that Method's request type, call a user provided Handler,
+// and return a marshaled result to the server.
+type requestHandler func(*ordering.Message) *ordering.Message
 
-type GorumsMessage struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	ID     uint64   ` + "`" + `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"` + "`" + `
-	Method string   ` + "`" + `protobuf:"bytes,2,opt,name=Method,proto3" json:"Method,omitempty"` + "`" + `
-	Data   *any.Any ` + "`" + `protobuf:"bytes,3,opt,name=Data,proto3" json:"Data,omitempty"` + "`" + `
+type orderingServer struct {
+	handlers map[string]requestHandler
 }
 
-func (x *GorumsMessage) Reset() {
-	*x = GorumsMessage{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_cmd_protoc_gen_gorums_dev_strictordering_proto_msgTypes[0]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
+func newOrderingServer() *orderingServer {
+	return &orderingServer{
+		handlers: make(map[string]requestHandler),
 	}
 }
 
-func (x *GorumsMessage) String() string {
-	return protoimpl.X.MessageStringOf(x)
+func (s *orderingServer) registerHandler(method string, handler requestHandler) {
+	s.handlers[method] = handler
 }
 
-func (*GorumsMessage) ProtoMessage() {}
-
-func (x *GorumsMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_cmd_protoc_gen_gorums_dev_strictordering_proto_msgTypes[0]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
+func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+	for {
+		req, err := srv.Recv()
+		if err != nil {
+			return err
 		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GorumsMessage.ProtoReflect.Descriptor instead.
-func (*GorumsMessage) Descriptor() ([]byte, []int) {
-	return file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *GorumsMessage) GetID() uint64 {
-	if x != nil {
-		return x.ID
-	}
-	return 0
-}
-
-func (x *GorumsMessage) GetMethod() string {
-	if x != nil {
-		return x.Method
-	}
-	return ""
-}
-
-func (x *GorumsMessage) GetData() *any.Any {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-var File_cmd_protoc_gen_gorums_dev_strictordering_proto protoreflect.FileDescriptor
-
-var file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDesc = []byte{
-	0x0a, 0x2e, 0x63, 0x6d, 0x64, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63, 0x2d, 0x67, 0x65, 0x6e,
-	0x2d, 0x67, 0x6f, 0x72, 0x75, 0x6d, 0x73, 0x2f, 0x64, 0x65, 0x76, 0x2f, 0x73, 0x74, 0x72, 0x69,
-	0x63, 0x74, 0x6f, 0x72, 0x64, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x12, 0x06, 0x67, 0x6f, 0x72, 0x75, 0x6d, 0x73, 0x1a, 0x19, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
-	0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x61, 0x6e, 0x79, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x22, 0x61, 0x0a, 0x0d, 0x47, 0x6f, 0x72, 0x75, 0x6d, 0x73, 0x4d, 0x65, 0x73,
-	0x73, 0x61, 0x67, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x04,
-	0x52, 0x02, 0x49, 0x44, 0x12, 0x16, 0x0a, 0x06, 0x4d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x4d, 0x65, 0x74, 0x68, 0x6f, 0x64, 0x12, 0x28, 0x0a, 0x04,
-	0x44, 0x61, 0x74, 0x61, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x67, 0x6f, 0x6f,
-	0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x41, 0x6e, 0x79,
-	0x52, 0x04, 0x44, 0x61, 0x74, 0x61, 0x32, 0x56, 0x0a, 0x14, 0x47, 0x6f, 0x72, 0x75, 0x6d, 0x73,
-	0x53, 0x74, 0x72, 0x69, 0x63, 0x74, 0x4f, 0x72, 0x64, 0x65, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x3e,
-	0x0a, 0x0a, 0x4e, 0x6f, 0x64, 0x65, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x12, 0x15, 0x2e, 0x67,
-	0x6f, 0x72, 0x75, 0x6d, 0x73, 0x2e, 0x47, 0x6f, 0x72, 0x75, 0x6d, 0x73, 0x4d, 0x65, 0x73, 0x73,
-	0x61, 0x67, 0x65, 0x1a, 0x15, 0x2e, 0x67, 0x6f, 0x72, 0x75, 0x6d, 0x73, 0x2e, 0x47, 0x6f, 0x72,
-	0x75, 0x6d, 0x73, 0x4d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x28, 0x01, 0x30, 0x01, 0x42, 0x33,
-	0x5a, 0x31, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x72, 0x65, 0x6c,
-	0x61, 0x62, 0x2f, 0x67, 0x6f, 0x72, 0x75, 0x6d, 0x73, 0x2f, 0x63, 0x6d, 0x64, 0x2f, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x63, 0x2d, 0x67, 0x65, 0x6e, 0x2d, 0x67, 0x6f, 0x72, 0x75, 0x6d, 0x73, 0x2f,
-	0x64, 0x65, 0x76, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
-}
-
-var (
-	file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDescOnce sync.Once
-	file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDescData = file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDesc
-)
-
-func file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDescGZIP() []byte {
-	file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDescOnce.Do(func() {
-		file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDescData = protoimpl.X.CompressGZIP(file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDescData)
-	})
-	return file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDescData
-}
-
-var file_cmd_protoc_gen_gorums_dev_strictordering_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
-
-var file_cmd_protoc_gen_gorums_dev_strictordering_proto_goTypes = []interface{}{
-	(*GorumsMessage)(nil), // 0: gorums.GorumsMessage
-	(*any.Any)(nil),       // 1: google.protobuf.Any
-}
-
-var file_cmd_protoc_gen_gorums_dev_strictordering_proto_depIdxs = []int32{
-	1, // 0: gorums.GorumsMessage.Data:type_name -> google.protobuf.Any
-	0, // 1: gorums.GorumsStrictOrdering.NodeStream:input_type -> gorums.GorumsMessage
-	0, // 2: gorums.GorumsStrictOrdering.NodeStream:output_type -> gorums.GorumsMessage
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
-}
-
-func init() { file_cmd_protoc_gen_gorums_dev_strictordering_proto_init() }
-
-func file_cmd_protoc_gen_gorums_dev_strictordering_proto_init() {
-	if File_cmd_protoc_gen_gorums_dev_strictordering_proto != nil {
-		return
-	}
-	if !protoimpl.UnsafeEnabled {
-		file_cmd_protoc_gen_gorums_dev_strictordering_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GorumsMessage); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
+		// handle the request if a handler is available for this rpc
+		if handler, ok := s.handlers[req.GetMethod()]; ok {
+			resp := handler(req)
+			resp.ID = req.GetID()
+			err = srv.Send(resp)
+			if err != nil {
+				return err
 			}
 		}
 	}
-	type x struct{}
-	out := protoimpl.TypeBuilder{
-		File: protoimpl.DescBuilder{
-			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDesc,
-			NumEnums:      0,
-			NumMessages:   1,
-			NumExtensions: 0,
-			NumServices:   1,
-		},
-		GoTypes:           file_cmd_protoc_gen_gorums_dev_strictordering_proto_goTypes,
-		DependencyIndexes: file_cmd_protoc_gen_gorums_dev_strictordering_proto_depIdxs,
-		MessageInfos:      file_cmd_protoc_gen_gorums_dev_strictordering_proto_msgTypes,
-	}.Build()
-	File_cmd_protoc_gen_gorums_dev_strictordering_proto = out.File
-	file_cmd_protoc_gen_gorums_dev_strictordering_proto_rawDesc = nil
-	file_cmd_protoc_gen_gorums_dev_strictordering_proto_goTypes = nil
-	file_cmd_protoc_gen_gorums_dev_strictordering_proto_depIdxs = nil
 }
 
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-
-var _ grpc.ClientConn
-
-// This is a compile-time assertion to ensure that this generated file
-// is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
-
-// GorumsStrictOrderingClient is the client API for GorumsStrictOrdering service.
-//
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
-type GorumsStrictOrderingClient interface {
-	NodeStream(ctx context.Context, opts ...grpc.CallOption) (GorumsStrictOrdering_NodeStreamClient, error)
+// GorumsServer serves all ordering based RPCs using registered handlers
+type GorumsServer struct {
+	srv        *orderingServer
+	grpcServer *grpc.Server
 }
 
-type gorumsStrictOrderingClient struct {
-	cc *grpc.ClientConn
-}
-
-func NewGorumsStrictOrderingClient(cc *grpc.ClientConn) GorumsStrictOrderingClient {
-	return &gorumsStrictOrderingClient{cc}
-}
-
-func (c *gorumsStrictOrderingClient) NodeStream(ctx context.Context, opts ...grpc.CallOption) (GorumsStrictOrdering_NodeStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_GorumsStrictOrdering_serviceDesc.Streams[0], "/gorums.GorumsStrictOrdering/NodeStream", opts...)
-	if err != nil {
-		return nil, err
+// NewGorumsServer returns a new instance of GorumsServer
+func NewGorumsServer() *GorumsServer {
+	s := &GorumsServer{
+		srv:        newOrderingServer(),
+		grpcServer: grpc.NewServer(),
 	}
-	x := &gorumsStrictOrderingNodeStreamClient{stream}
-	return x, nil
+	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
+	return s
 }
 
-type GorumsStrictOrdering_NodeStreamClient interface {
-	Send(*GorumsMessage) error
-	Recv() (*GorumsMessage, error)
-	grpc.ClientStream
+// Serve starts serving on the listener
+func (s *GorumsServer) Serve(listener net.Listener) {
+	s.grpcServer.Serve(listener)
 }
 
-type gorumsStrictOrderingNodeStreamClient struct {
-	grpc.ClientStream
+// GracefulStop waits for all RPCs to finish before stopping.
+func (s *GorumsServer) GracefulStop() {
+	s.grpcServer.GracefulStop()
 }
 
-func (x *gorumsStrictOrderingNodeStreamClient) Send(m *GorumsMessage) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *gorumsStrictOrderingNodeStreamClient) Recv() (*GorumsMessage, error) {
-	m := new(GorumsMessage)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-// GorumsStrictOrderingServer is the server API for GorumsStrictOrdering service.
-type GorumsStrictOrderingServer interface {
-	NodeStream(GorumsStrictOrdering_NodeStreamServer) error
-}
-
-// UnimplementedGorumsStrictOrderingServer can be embedded to have forward compatible implementations.
-type UnimplementedGorumsStrictOrderingServer struct {
-}
-
-func (*UnimplementedGorumsStrictOrderingServer) NodeStream(GorumsStrictOrdering_NodeStreamServer) error {
-	return status.Errorf(codes.Unimplemented, "method NodeStream not implemented")
-}
-
-func RegisterGorumsStrictOrderingServer(s *grpc.Server, srv GorumsStrictOrderingServer) {
-	s.RegisterService(&_GorumsStrictOrdering_serviceDesc, srv)
-}
-
-func _GorumsStrictOrdering_NodeStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(GorumsStrictOrderingServer).NodeStream(&gorumsStrictOrderingNodeStreamServer{stream})
-}
-
-type GorumsStrictOrdering_NodeStreamServer interface {
-	Send(*GorumsMessage) error
-	Recv() (*GorumsMessage, error)
-	grpc.ServerStream
-}
-
-type gorumsStrictOrderingNodeStreamServer struct {
-	grpc.ServerStream
-}
-
-func (x *gorumsStrictOrderingNodeStreamServer) Send(m *GorumsMessage) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *gorumsStrictOrderingNodeStreamServer) Recv() (*GorumsMessage, error) {
-	m := new(GorumsMessage)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-var _GorumsStrictOrdering_serviceDesc = grpc.ServiceDesc{
-	ServiceName: "gorums.GorumsStrictOrdering",
-	HandlerType: (*GorumsStrictOrderingServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "NodeStream",
-			Handler:       _GorumsStrictOrdering_NodeStream_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
-		},
-	},
-	Metadata: "cmd/protoc-gen-gorums/dev/strictordering.proto",
+// Stop stops the server immediately
+func (s *GorumsServer) Stop() {
+	s.grpcServer.Stop()
 }
 
 type traceInfo struct {

@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package strictordering;
+package ordering;
 
 import "gorums.proto";
 
-option go_package = "github.com/relab/gorums/cmd/protoc-gen-gorums/tests/strictordering";
+option go_package = "github.com/relab/gorums/cmd/protoc-gen-gorums/tests/ordering";
 
 service GorumsTest {
 	rpc QC(Request) returns (Response) {
@@ -24,3 +24,4 @@ message Request {
 message Response {
 	bool InOrder = 1;
 }
+

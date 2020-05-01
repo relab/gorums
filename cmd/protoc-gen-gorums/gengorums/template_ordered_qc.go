@@ -1,32 +1,33 @@
 package gengorums
 
-var strictOrderingVariables = `
+var orderingVariables = `
 {{$marshalAny := use "ptypes.MarshalAny" .GenFile}}
 {{$unmarshalAny := use "ptypes.UnmarshalAny" .GenFile}}
 {{$errorf := use "fmt.Errorf" .GenFile}}
+{{$gorumsMsg := use "ordering.Message" .GenFile}}
 `
 
-var strictOrderingPreamble = `
+var orderingPreamble = `
 	{{- template "trace" .}}
 
 	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 	
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, c.n)
+	replies := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replies)
 	
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 `
 
-var strictOrderingLoop = `
+var orderingLoop = `
 {{if not (hasPerNodeArg .Method) -}}
 	data, err := {{$marshalAny}}(in)
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
-	msg := &GorumsMessage{
+	msg := &{{$gorumsMsg}}{
 		ID: msgID,
 		Method: "{{fullName .Method}}",
 		Data: data,
@@ -46,7 +47,7 @@ var strictOrderingLoop = `
 		if err != nil {
 			return nil, {{$errorf}}("failed to marshal message: %w", err)
 		}
-		msg := &GorumsMessage{
+		msg := &{{$gorumsMsg}}{
 			ID: msgID,
 			Method: "{{fullName .Method}}",
 			Data: data,
@@ -56,7 +57,7 @@ var strictOrderingLoop = `
 	}
 `
 
-var strictOrderingReply = `
+var orderingReply = `
 	var (
 		replyValues = make([]*{{$out}}, 0, expected)
 		errs []GRPCError
@@ -92,7 +93,7 @@ var strictOrderingReply = `
 }
 `
 
-var strictOrderingHandler = `
+var orderingHandler = `
 // {{$method}}Handler is the server API for the {{$method}} rpc.
 type {{$method}}Handler interface {
 	{{$method}}(*{{$in}}) (*{{$out}})
@@ -100,29 +101,29 @@ type {{$method}}Handler interface {
 
 // Register{{$method}}Handler sets the handler for {{$method}}.
 func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
-	s.srv.registerHandler("{{fullName .Method}}", func(in *GorumsMessage) *GorumsMessage {
+	s.srv.registerHandler("{{fullName .Method}}", func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
 		req := new({{$in}})
 		err := {{$unmarshalAny}}(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(GorumsMessage)
+			return new({{$gorumsMsg}})
 		}
 		resp := handler.{{$method}}(req)
 		data, err := {{$marshalAny}}(resp)
 		if err != nil {
-			return new(GorumsMessage)
+			return new({{$gorumsMsg}})
 		}
-		return &GorumsMessage{Data: data, Method: in.GetMethod()}
+		return &{{$gorumsMsg}}{Data: data, Method: in.GetMethod()}
 	})
 }
 `
 
-var strictOrderingQC = commonVariables +
+var orderingQC = commonVariables +
 	quorumCallVariables +
-	strictOrderingVariables +
+	orderingVariables +
 	quorumCallComment +
 	quorumCallSignature +
-	strictOrderingPreamble +
-	strictOrderingLoop +
-	strictOrderingReply +
-	strictOrderingHandler
+	orderingPreamble +
+	orderingLoop +
+	orderingReply +
+	orderingHandler

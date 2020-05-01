@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/strictordering"
+	"github.com/relab/gorums/internal/ordering"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/runtime/protoimpl"
@@ -63,8 +63,8 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 	genGorumsMethods(data, gorumsCallTypes...)
 	g.P()
-	// generate all strict ordering methods
-	genGorumsMethods(data, strictOrderingCallTypes...)
+	// generate all ordering methods
+	genGorumsMethods(data, orderingCallTypes...)
 	g.P()
 }
 
@@ -73,7 +73,7 @@ func genGorumsMethods(data servicesData, methodOptions ...*protoimpl.ExtensionIn
 	for _, service := range data.Services {
 		for _, method := range service.Methods {
 			if hasMethodOption(method, gorums.E_Ordered) {
-				if hasStrictOrderingOption(method, methodOptions...) {
+				if hasOrderingOption(method, methodOptions...) {
 					fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
 					g.P(genGorumsMethod(g, method))
 				}
@@ -120,16 +120,16 @@ func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
 	if methodOption, ok := gorumsTypes[gorumsType]; ok {
 		return checkMethodOptions(services, methodOption)
 	}
-	return hasStrictOrderingType(services, gorumsType)
+	return hasOrderingType(services, gorumsType)
 }
 
-// hasStrictOrderingType returns true if one of the service methods specify
-// the given strict ordering type
-func hasStrictOrderingType(services []*protogen.Service, typeName string) bool {
-	if t, ok := strictOrderingTypes[typeName]; ok {
+// hasOrderingType returns true if one of the service methods specify
+// the given ordering type
+func hasOrderingType(services []*protogen.Service, typeName string) bool {
+	if t, ok := orderingTypes[typeName]; ok {
 		for _, service := range services {
 			for _, method := range service.Methods {
-				if strictOrderingTypeCheckers[t](method) {
+				if orderingTypeCheckers[t](method) {
 					return true
 				}
 			}
@@ -156,7 +156,7 @@ var devTypes = map[string]string{
 
 // compute index to start of option name
 const index = len("gorums.")
-const soIndex = len("strictordering.")
+const soIndex = len("ordering.")
 
 // name to method option mapping
 var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
@@ -167,38 +167,38 @@ var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
 	gorums.E_Multicast.Name[index:]:         gorums.E_Multicast,
 }
 
-// name to strict ordering type mapping
-var strictOrderingTypes = map[string]*protoimpl.ExtensionInfo{
-	strictordering.E_OrderedQc.Name[soIndex:]:  strictordering.E_OrderedQc,
-	strictordering.E_OrderedRpc.Name[soIndex:]: strictordering.E_OrderedRpc,
+// name to ordering type mapping
+var orderingTypes = map[string]*protoimpl.ExtensionInfo{
+	ordering.E_OrderedQc.Name[soIndex:]:  ordering.E_OrderedQc,
+	ordering.E_OrderedRpc.Name[soIndex:]: ordering.E_OrderedRpc,
 }
 
 var gorumsCallTypeTemplates = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Qc:                 quorumCall,
-	gorums.E_QcFuture:           futureCall,
-	gorums.E_Correctable:        correctableCall,
-	gorums.E_CorrectableStream:  correctableStreamCall,
-	gorums.E_Multicast:          multicastCall,
-	strictordering.E_OrderedQc:  strictOrderingQC,
-	strictordering.E_OrderedRpc: strictOrderingRPC,
+	gorums.E_Qc:                quorumCall,
+	gorums.E_QcFuture:          futureCall,
+	gorums.E_Correctable:       correctableCall,
+	gorums.E_CorrectableStream: correctableStreamCall,
+	gorums.E_Multicast:         multicastCall,
+	ordering.E_OrderedQc:       orderingQC,
+	ordering.E_OrderedRpc:      orderingRPC,
 }
 
 var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Qc:                 "quorum",
-	gorums.E_QcFuture:           "asynchronous quorum",
-	gorums.E_Correctable:        "correctable quorum",
-	gorums.E_CorrectableStream:  "correctable stream quorum",
-	gorums.E_Multicast:          "multicast",
-	strictordering.E_OrderedQc:  "ordered quorum",
-	strictordering.E_OrderedRpc: "ordered",
+	gorums.E_Qc:                "quorum",
+	gorums.E_QcFuture:          "asynchronous quorum",
+	gorums.E_Correctable:       "correctable quorum",
+	gorums.E_CorrectableStream: "correctable stream quorum",
+	gorums.E_Multicast:         "multicast",
+	ordering.E_OrderedQc:       "ordered quorum",
+	ordering.E_OrderedRpc:      "ordered",
 }
 
-// mapping from strict ordering type to a checker that will check if a method has that type
-var strictOrderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) bool{
-	strictordering.E_OrderedQc: func(m *protogen.Method) bool {
+// mapping from ordering type to a checker that will check if a method has that type
+var orderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) bool{
+	ordering.E_OrderedQc: func(m *protogen.Method) bool {
 		return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Qc)
 	},
-	strictordering.E_OrderedRpc: func(m *protogen.Method) bool {
+	ordering.E_OrderedRpc: func(m *protogen.Method) bool {
 		return hasMethodOption(m, gorums.E_Ordered) && !hasMethodOption(m, gorumsCallTypes...)
 	},
 }
@@ -231,11 +231,10 @@ var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 	gorums.E_CorrectableStream,
 }
 
-// strictOrderingCallTypes should list all available call types that
-// use strict oridering.
-var strictOrderingCallTypes = []*protoimpl.ExtensionInfo{
-	strictordering.E_OrderedQc,
-	strictordering.E_OrderedRpc,
+// orderingCallTypes should list call types that use ordering.
+var orderingCallTypes = []*protoimpl.ExtensionInfo{
+	ordering.E_OrderedQc,
+	ordering.E_OrderedRpc,
 }
 
 // hasGorumsCallType returns true if the given method has specified
@@ -279,10 +278,10 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 	return true
 }
 
-// hasStrictOrderingOption returns true if the method has one of the given strict ordering method options.
-func hasStrictOrderingOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
+// hasOrderingOption returns true if the method has one of the ordering method options.
+func hasOrderingOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
 	for _, option := range methodOptions {
-		if f, ok := strictOrderingTypeCheckers[option]; ok && f(method) {
+		if f, ok := orderingTypeCheckers[option]; ok && f(method) {
 			return true
 		}
 	}
@@ -305,8 +304,8 @@ func validateMethodExtensions(method *protogen.Method) *protoimpl.ExtensionInfo 
 		}
 	}
 
-	// check if the method matches any strict ordering types
-	for t, f := range strictOrderingTypeCheckers {
+	// check if the method matches any ordering types
+	for t, f := range orderingTypeCheckers {
 		if f(method) {
 			firstOption = t
 		}

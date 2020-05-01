@@ -1,31 +1,31 @@
 package gengorums
 
-var strictOrderingRPCComment = `{{.Method.Comments.Leading}}`
+var orderingRPCComment = `{{.Method.Comments.Leading}}`
 
-var strictOrderingRPCSignature = `func (n *Node) {{$method}}(` +
+var orderingRPCSignature = `func (n *Node) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}, ` +
 	`opts ...{{$opts}})` +
 	`(resp *{{$out}}, err error) {
 `
 
-var strictOrderingRPCPreamble = `
+var orderingRPCPreamble = `
 	// get the ID which will be used to return the correct responses for a request
 	msgID := n.nextMsgID()
 	
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, 1)
+	replies := make(chan *orderingResult, 1)
 	n.putChan(msgID, replies)
 	
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
 `
 
-var strictOrderingRPCBody = `
+var orderingRPCBody = `
 	data, err := {{$marshalAny}}(in)
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
-	msg := &GorumsMessage{
+	msg := &{{$gorumsMsg}}{
 		ID: msgID,
 		Method: "{{fullName .Method}}",
 		Data: data,
@@ -49,11 +49,11 @@ var strictOrderingRPCBody = `
 }
 `
 
-var strictOrderingRPC = commonVariables +
+var orderingRPC = commonVariables +
 	quorumCallVariables +
-	strictOrderingVariables +
-	strictOrderingRPCComment +
-	strictOrderingRPCSignature +
-	strictOrderingRPCPreamble +
-	strictOrderingRPCBody +
-	strictOrderingHandler
+	orderingVariables +
+	orderingRPCComment +
+	orderingRPCSignature +
+	orderingRPCPreamble +
+	orderingRPCBody +
+	orderingHandler
