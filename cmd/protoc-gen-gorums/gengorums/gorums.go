@@ -179,8 +179,8 @@ var gorumsCallTypeTemplates = map[*protoimpl.ExtensionInfo]string{
 	gorums.E_Correctable:       correctableCall,
 	gorums.E_CorrectableStream: correctableStreamCall,
 	gorums.E_Multicast:         multicastCall,
-	ordering.E_OrderedQc:       strictOrderingQC,
-	ordering.E_OrderedRpc:      strictOrderingRPC,
+	ordering.E_OrderedQc:       orderingQC,
+	ordering.E_OrderedRpc:      orderingRPC,
 }
 
 var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{

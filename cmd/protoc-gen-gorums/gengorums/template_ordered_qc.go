@@ -1,13 +1,13 @@
 package gengorums
 
-var strictOrderingVariables = `
+var orderingVariables = `
 {{$marshalAny := use "ptypes.MarshalAny" .GenFile}}
 {{$unmarshalAny := use "ptypes.UnmarshalAny" .GenFile}}
 {{$errorf := use "fmt.Errorf" .GenFile}}
 {{$gorumsMsg := use "ordering.Message" .GenFile}}
 `
 
-var strictOrderingPreamble = `
+var orderingPreamble = `
 	{{- template "trace" .}}
 
 	// get the ID which will be used to return the correct responses for a request
@@ -21,7 +21,7 @@ var strictOrderingPreamble = `
 	defer c.mgr.deleteChan(msgID)
 `
 
-var strictOrderingLoop = `
+var orderingLoop = `
 {{if not (hasPerNodeArg .Method) -}}
 	data, err := {{$marshalAny}}(in)
 	if err != nil {
@@ -57,7 +57,7 @@ var strictOrderingLoop = `
 	}
 `
 
-var strictOrderingReply = `
+var orderingReply = `
 	var (
 		replyValues = make([]*{{$out}}, 0, expected)
 		errs []GRPCError
@@ -93,7 +93,7 @@ var strictOrderingReply = `
 }
 `
 
-var strictOrderingHandler = `
+var orderingHandler = `
 // {{$method}}Handler is the server API for the {{$method}} rpc.
 type {{$method}}Handler interface {
 	{{$method}}(*{{$in}}) (*{{$out}})
@@ -118,12 +118,12 @@ func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
 }
 `
 
-var strictOrderingQC = commonVariables +
+var orderingQC = commonVariables +
 	quorumCallVariables +
-	strictOrderingVariables +
+	orderingVariables +
 	quorumCallComment +
 	quorumCallSignature +
-	strictOrderingPreamble +
-	strictOrderingLoop +
-	strictOrderingReply +
-	strictOrderingHandler
+	orderingPreamble +
+	orderingLoop +
+	orderingReply +
+	orderingHandler
