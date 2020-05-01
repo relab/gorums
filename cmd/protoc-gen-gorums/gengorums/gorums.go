@@ -124,9 +124,9 @@ func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
 }
 
 // hasOrderingType returns true if one of the service methods specify
-// the given strict ordering type
+// the given ordering type
 func hasOrderingType(services []*protogen.Service, typeName string) bool {
-	if t, ok := strictOrderingTypes[typeName]; ok {
+	if t, ok := orderingTypes[typeName]; ok {
 		for _, service := range services {
 			for _, method := range service.Methods {
 				if orderingTypeCheckers[t](method) {
@@ -167,8 +167,8 @@ var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
 	gorums.E_Multicast.Name[index:]:         gorums.E_Multicast,
 }
 
-// name to strict ordering type mapping
-var strictOrderingTypes = map[string]*protoimpl.ExtensionInfo{
+// name to ordering type mapping
+var orderingTypes = map[string]*protoimpl.ExtensionInfo{
 	ordering.E_OrderedQc.Name[soIndex:]:  ordering.E_OrderedQc,
 	ordering.E_OrderedRpc.Name[soIndex:]: ordering.E_OrderedRpc,
 }
@@ -193,7 +193,7 @@ var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{
 	ordering.E_OrderedRpc:      "ordered",
 }
 
-// mapping from strict ordering type to a checker that will check if a method has that type
+// mapping from ordering type to a checker that will check if a method has that type
 var orderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) bool{
 	ordering.E_OrderedQc: func(m *protogen.Method) bool {
 		return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Qc)
@@ -278,7 +278,7 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 	return true
 }
 
-// hasStrictOrderingOption returns true if the method has one of the given strict ordering method options.
+// hasOrderingOption returns true if the method has one of the ordering method options.
 func hasOrderingOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
 	for _, option := range methodOptions {
 		if f, ok := orderingTypeCheckers[option]; ok && f(method) {
@@ -304,7 +304,7 @@ func validateMethodExtensions(method *protogen.Method) *protoimpl.ExtensionInfo 
 		}
 	}
 
-	// check if the method matches any strict ordering types
+	// check if the method matches any ordering types
 	for t, f := range orderingTypeCheckers {
 		if f(method) {
 			firstOption = t
