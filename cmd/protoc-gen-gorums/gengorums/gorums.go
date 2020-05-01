@@ -63,8 +63,8 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 	genGorumsMethods(data, gorumsCallTypes...)
 	g.P()
-	// generate all strict ordering methods
-	genGorumsMethods(data, strictOrderingCallTypes...)
+	// generate all ordering methods
+	genGorumsMethods(data, orderingCallTypes...)
 	g.P()
 }
 
@@ -231,9 +231,8 @@ var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 	gorums.E_CorrectableStream,
 }
 
-// strictOrderingCallTypes should list all available call types that
-// use strict ordering.
-var strictOrderingCallTypes = []*protoimpl.ExtensionInfo{
+// orderingCallTypes should list call types that use ordering.
+var orderingCallTypes = []*protoimpl.ExtensionInfo{
 	ordering.E_OrderedQc,
 	ordering.E_OrderedRpc,
 }
