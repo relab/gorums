@@ -4,7 +4,7 @@ var strictOrderingVariables = `
 {{$marshalAny := use "ptypes.MarshalAny" .GenFile}}
 {{$unmarshalAny := use "ptypes.UnmarshalAny" .GenFile}}
 {{$errorf := use "fmt.Errorf" .GenFile}}
-{{$gorumsMsg := use "strictordering.GorumsMessage" .GenFile}}
+{{$gorumsMsg := use "ordering.Message" .GenFile}}
 `
 
 var strictOrderingPreamble = `

@@ -9,12 +9,12 @@ static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -no
 test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing*")
 failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
 test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
-internal_so				:= internal/strictordering
-public_so				:= strictordering/
+internal_so				:= internal/ordering
+public_so				:= ordering/
 
 .PHONY: dev download install-tools installgorums clean
 
-dev: installgorums $(public_so)/strictordering.pb.go $(public_so)/strictordering_grpc.pb.go
+dev: installgorums $(public_so)/ordering.pb.go $(public_so)/ordering_grpc.pb.go
 	@echo Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder
 	rm -f $(dev_path)/zorums*.pb.go
 	protoc -I$(dev_path):. \
@@ -43,16 +43,16 @@ gorums.pb.go: gorums.proto
 	@protoc --go_out=paths=source_relative:. gorums.proto
 
 $(internal_so)/opts.pb.go: $(internal_so)/opts.proto
-	@echo Generating strictordering proto options
+	@echo Generating ordering proto options
 	@protoc --go_out=paths=source_relative:. $(internal_so)/opts.proto
 
-$(public_so)/strictordering.pb.go: $(public_so)/strictordering.proto
-	@echo Generating strictordering protocol buffers
-	@protoc --go_out=paths=source_relative:. $(public_so)/strictordering.proto
+$(public_so)/ordering.pb.go: $(public_so)/ordering.proto
+	@echo Generating ordering protocol buffers
+	@protoc --go_out=paths=source_relative:. $(public_so)/ordering.proto
 
-$(public_so)/strictordering_grpc.pb.go: $(public_so)/strictordering.proto
-	@echo Generating strictordering gRPC service
-	@protoc --go-grpc_out=paths=source_relative:. $(public_so)/strictordering.proto
+$(public_so)/ordering_grpc.pb.go: $(public_so)/ordering.proto
+	@echo Generating ordering gRPC service
+	@protoc --go-grpc_out=paths=source_relative:. $(public_so)/ordering.proto
 
 installgorums: gorums.pb.go $(internal_so)/opts.pb.go
 	@echo Installing protoc-gen-gorums compiler plugin for protoc

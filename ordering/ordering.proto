@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package ordering;
+
+option go_package = "github.com/relab/gorums/ordering";
+
+import "google/protobuf/any.proto";
+
+service Gorums { rpc NodeStream(stream Message) returns (stream Message); }
+
+message Message {
+  uint64 ID = 1;
+  string Method = 2;
+  google.protobuf.Any Data = 3;
+}

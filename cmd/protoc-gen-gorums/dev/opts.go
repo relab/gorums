@@ -52,7 +52,7 @@ func WithNoConnect() ManagerOption {
 	}
 }
 
-// WithTracing controls whether to trace qourum calls for this Manager instance
+// WithTracing controls whether to trace quorum calls for this Manager instance
 // using the golang.org/x/net/trace package. Tracing is currently only supported
 // for regular quorum calls.
 func WithTracing() ManagerOption {

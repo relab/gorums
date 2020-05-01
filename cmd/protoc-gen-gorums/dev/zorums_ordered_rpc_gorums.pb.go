@@ -6,7 +6,7 @@ import (
 	context "context"
 	fmt "fmt"
 	ptypes "github.com/golang/protobuf/ptypes"
-	strictordering "github.com/relab/gorums/strictordering"
+	ordering "github.com/relab/gorums/ordering"
 	grpc "google.golang.org/grpc"
 )
 
@@ -26,7 +26,7 @@ func (n *Node) StrictOrderingUnaryRPC(ctx context.Context, in *Request, opts ...
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
-	msg := &strictordering.GorumsMessage{
+	msg := &ordering.Message{
 		ID:     msgID,
 		Method: "/dev.ZorumsService/StrictOrderingUnaryRPC",
 		Data:   data,
@@ -56,18 +56,18 @@ type StrictOrderingUnaryRPCHandler interface {
 
 // RegisterStrictOrderingUnaryRPCHandler sets the handler for StrictOrderingUnaryRPC.
 func (s *GorumsServer) RegisterStrictOrderingUnaryRPCHandler(handler StrictOrderingUnaryRPCHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingUnaryRPC", func(in *strictordering.GorumsMessage) *strictordering.GorumsMessage {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingUnaryRPC", func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
-			return new(strictordering.GorumsMessage)
+			return new(ordering.Message)
 		}
 		resp := handler.StrictOrderingUnaryRPC(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
-			return new(strictordering.GorumsMessage)
+			return new(ordering.Message)
 		}
-		return &strictordering.GorumsMessage{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, Method: in.GetMethod()}
 	})
 }

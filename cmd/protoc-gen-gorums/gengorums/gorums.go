@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/strictordering"
+	"github.com/relab/gorums/internal/ordering"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/runtime/protoimpl"
@@ -156,7 +156,7 @@ var devTypes = map[string]string{
 
 // compute index to start of option name
 const index = len("gorums.")
-const soIndex = len("strictordering.")
+const soIndex = len("ordering.")
 
 // name to method option mapping
 var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
@@ -169,36 +169,36 @@ var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
 
 // name to strict ordering type mapping
 var strictOrderingTypes = map[string]*protoimpl.ExtensionInfo{
-	strictordering.E_OrderedQc.Name[soIndex:]:  strictordering.E_OrderedQc,
-	strictordering.E_OrderedRpc.Name[soIndex:]: strictordering.E_OrderedRpc,
+	ordering.E_OrderedQc.Name[soIndex:]:  ordering.E_OrderedQc,
+	ordering.E_OrderedRpc.Name[soIndex:]: ordering.E_OrderedRpc,
 }
 
 var gorumsCallTypeTemplates = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Qc:                 quorumCall,
-	gorums.E_QcFuture:           futureCall,
-	gorums.E_Correctable:        correctableCall,
-	gorums.E_CorrectableStream:  correctableStreamCall,
-	gorums.E_Multicast:          multicastCall,
-	strictordering.E_OrderedQc:  strictOrderingQC,
-	strictordering.E_OrderedRpc: strictOrderingRPC,
+	gorums.E_Qc:                quorumCall,
+	gorums.E_QcFuture:          futureCall,
+	gorums.E_Correctable:       correctableCall,
+	gorums.E_CorrectableStream: correctableStreamCall,
+	gorums.E_Multicast:         multicastCall,
+	ordering.E_OrderedQc:       strictOrderingQC,
+	ordering.E_OrderedRpc:      strictOrderingRPC,
 }
 
 var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Qc:                 "quorum",
-	gorums.E_QcFuture:           "asynchronous quorum",
-	gorums.E_Correctable:        "correctable quorum",
-	gorums.E_CorrectableStream:  "correctable stream quorum",
-	gorums.E_Multicast:          "multicast",
-	strictordering.E_OrderedQc:  "ordered quorum",
-	strictordering.E_OrderedRpc: "ordered",
+	gorums.E_Qc:                "quorum",
+	gorums.E_QcFuture:          "asynchronous quorum",
+	gorums.E_Correctable:       "correctable quorum",
+	gorums.E_CorrectableStream: "correctable stream quorum",
+	gorums.E_Multicast:         "multicast",
+	ordering.E_OrderedQc:       "ordered quorum",
+	ordering.E_OrderedRpc:      "ordered",
 }
 
 // mapping from strict ordering type to a checker that will check if a method has that type
 var strictOrderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) bool{
-	strictordering.E_OrderedQc: func(m *protogen.Method) bool {
+	ordering.E_OrderedQc: func(m *protogen.Method) bool {
 		return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Qc)
 	},
-	strictordering.E_OrderedRpc: func(m *protogen.Method) bool {
+	ordering.E_OrderedRpc: func(m *protogen.Method) bool {
 		return hasMethodOption(m, gorums.E_Ordered) && !hasMethodOption(m, gorumsCallTypes...)
 	},
 }
@@ -232,10 +232,10 @@ var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 }
 
 // strictOrderingCallTypes should list all available call types that
-// use strict oridering.
+// use strict ordering.
 var strictOrderingCallTypes = []*protoimpl.ExtensionInfo{
-	strictordering.E_OrderedQc,
-	strictordering.E_OrderedRpc,
+	ordering.E_OrderedQc,
+	ordering.E_OrderedRpc,
 }
 
 // hasGorumsCallType returns true if the given method has specified

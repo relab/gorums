@@ -1,14 +1,14 @@
 syntax = "proto3";
 
-package strictordering;
+package ordering;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/relab/gorums/internal/strictordering";
+option go_package = "github.com/relab/gorums/internal/ordering";
 
 // These fields are used by the gorums plugin to describe
 // strict ordering types. They are not meant to be used elsewhere.
 extend google.protobuf.MethodOptions {
-	bool ordered_qc = 5200;
-	bool ordered_rpc = 5201;
+  bool ordered_qc = 5200;
+  bool ordered_rpc = 5201;
 }
