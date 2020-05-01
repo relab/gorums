@@ -13,21 +13,21 @@ import (
 // and return a marshaled result to the server.
 type requestHandler func(*ordering.Message) *ordering.Message
 
-type strictOrderingServer struct {
+type orderingServer struct {
 	handlers map[string]requestHandler
 }
 
-func newStrictOrderingServer() *strictOrderingServer {
-	return &strictOrderingServer{
+func newStrictOrderingServer() *orderingServer {
+	return &orderingServer{
 		handlers: make(map[string]requestHandler),
 	}
 }
 
-func (s *strictOrderingServer) registerHandler(method string, handler requestHandler) {
+func (s *orderingServer) registerHandler(method string, handler requestHandler) {
 	s.handlers[method] = handler
 }
 
-func (s *strictOrderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	for {
 		req, err := srv.Recv()
 		if err != nil {
@@ -47,7 +47,7 @@ func (s *strictOrderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) 
 
 // GorumsServer serves all strict ordering based RPCs using registered handlers
 type GorumsServer struct {
-	srv        *strictOrderingServer
+	srv        *orderingServer
 	grpcServer *grpc.Server
 }
 

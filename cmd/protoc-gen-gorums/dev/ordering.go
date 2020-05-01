@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-type strictOrderingResult struct {
+type orderingResult struct {
 	nid   uint32
 	reply *anypb.Any
 	err   error
@@ -24,13 +24,13 @@ type strictOrderingResult struct {
 
 type receiveQueue struct {
 	msgID    uint64
-	recvQ    map[uint64]chan *strictOrderingResult
+	recvQ    map[uint64]chan *orderingResult
 	recvQMut sync.RWMutex
 }
 
 func newReceiveQueue() *receiveQueue {
 	return &receiveQueue{
-		recvQ: make(map[uint64]chan *strictOrderingResult),
+		recvQ: make(map[uint64]chan *orderingResult),
 	}
 }
 
@@ -38,7 +38,7 @@ func (m *receiveQueue) nextMsgID() uint64 {
 	return atomic.AddUint64(&m.msgID, 1)
 }
 
-func (m *receiveQueue) putChan(id uint64, c chan *strictOrderingResult) {
+func (m *receiveQueue) putChan(id uint64, c chan *orderingResult) {
 	m.recvQMut.Lock()
 	m.recvQ[id] = c
 	m.recvQMut.Unlock()
@@ -50,7 +50,7 @@ func (m *receiveQueue) deleteChan(id uint64) {
 	m.recvQMut.Unlock()
 }
 
-func (m *receiveQueue) putResult(id uint64, result *strictOrderingResult) {
+func (m *receiveQueue) putResult(id uint64, result *orderingResult) {
 	m.recvQMut.RLock()
 	c, ok := m.recvQ[id]
 	m.recvQMut.RUnlock()
@@ -88,7 +88,7 @@ func (s *orderedNodeStream) sendMsgs() {
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.GetID(), &strictOrderingResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 			continue
 		}
 		// else try to send message
@@ -102,7 +102,7 @@ func (s *orderedNodeStream) sendMsgs() {
 		s.streamMut.RUnlock()
 		s.node.setLastErr(err)
 		// return the error
-		s.putResult(req.GetID(), &strictOrderingResult{nid: s.node.ID(), reply: nil, err: err})
+		s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 	}
 }
 
@@ -119,7 +119,7 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.GetID(), &strictOrderingResult{nid: s.node.ID(), reply: resp.GetData(), err: nil})
+			s.putResult(resp.GetID(), &orderingResult{nid: s.node.ID(), reply: resp.GetData(), err: nil})
 		}
 
 		select {

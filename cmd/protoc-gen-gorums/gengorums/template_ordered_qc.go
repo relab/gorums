@@ -14,7 +14,7 @@ var strictOrderingPreamble = `
 	msgID := c.mgr.nextMsgID()
 	
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, c.n)
+	replies := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replies)
 	
 	// remove the replies channel when we are done

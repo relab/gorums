@@ -16,7 +16,7 @@ func (n *Node) StrictOrderingUnaryRPC(ctx context.Context, in *Request, opts ...
 	msgID := n.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, 1)
+	replies := make(chan *orderingResult, 1)
 	n.putChan(msgID, replies)
 
 	// remove the replies channel when we are done

@@ -40,7 +40,7 @@ func (c *Configuration) StrictOrderingQC(ctx context.Context, in *Request, opts 
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, c.n)
+	replies := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replies)
 
 	// remove the replies channel when we are done
@@ -152,7 +152,7 @@ func (c *Configuration) StrictOrderingPerNodeArg(ctx context.Context, in *Reques
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, c.n)
+	replies := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replies)
 
 	// remove the replies channel when we are done
@@ -266,7 +266,7 @@ func (c *Configuration) StrictOrderingQFWithReq(ctx context.Context, in *Request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, c.n)
+	replies := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replies)
 
 	// remove the replies channel when we are done
@@ -375,7 +375,7 @@ func (c *Configuration) StrictOrderingCustomReturnType(ctx context.Context, in *
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, c.n)
+	replies := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replies)
 
 	// remove the replies channel when we are done
@@ -487,7 +487,7 @@ func (c *Configuration) StrictOrderingCombi(ctx context.Context, in *Request, f 
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *strictOrderingResult, c.n)
+	replies := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replies)
 
 	// remove the replies channel when we are done
