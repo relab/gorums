@@ -68,12 +68,12 @@ type {{$correctableOut}} struct {
 		level	int
 		ch		chan struct{}
 	}
-	donech chan struct{}
+	done chan struct{}
 }
 
 // Get returns the reply, level and any error associated with the
 // called method. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
 func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
@@ -86,7 +86,7 @@ func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or the call returned an error.
 func (c *{{$correctableOut}}) Done() <-chan struct{} {
-	return c.donech
+	return c.done
 }
 
 // Watch returns a channel that will be closed when a reply or error at or above the
@@ -115,7 +115,7 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 	}
 	c.{{$customOutField}}, c.level, c.err, c.done = reply, level, err, done
 	if done {
-		close(c.donech)
+		close(c.done)
 		for _, watcher := range c.watchers {
 			if watcher != nil {
 				close(watcher.ch)
