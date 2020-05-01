@@ -129,7 +129,7 @@ func hasOrderingType(services []*protogen.Service, typeName string) bool {
 	if t, ok := strictOrderingTypes[typeName]; ok {
 		for _, service := range services {
 			for _, method := range service.Methods {
-				if strictOrderingTypeCheckers[t](method) {
+				if orderingTypeCheckers[t](method) {
 					return true
 				}
 			}
@@ -194,7 +194,7 @@ var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{
 }
 
 // mapping from strict ordering type to a checker that will check if a method has that type
-var strictOrderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) bool{
+var orderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) bool{
 	ordering.E_OrderedQc: func(m *protogen.Method) bool {
 		return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Qc)
 	},
@@ -282,7 +282,7 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 // hasStrictOrderingOption returns true if the method has one of the given strict ordering method options.
 func hasOrderingOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
 	for _, option := range methodOptions {
-		if f, ok := strictOrderingTypeCheckers[option]; ok && f(method) {
+		if f, ok := orderingTypeCheckers[option]; ok && f(method) {
 			return true
 		}
 	}
@@ -306,7 +306,7 @@ func validateMethodExtensions(method *protogen.Method) *protoimpl.ExtensionInfo 
 	}
 
 	// check if the method matches any strict ordering types
-	for t, f := range strictOrderingTypeCheckers {
+	for t, f := range orderingTypeCheckers {
 		if f(method) {
 			firstOption = t
 		}
