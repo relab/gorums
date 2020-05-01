@@ -120,12 +120,12 @@ func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
 	if methodOption, ok := gorumsTypes[gorumsType]; ok {
 		return checkMethodOptions(services, methodOption)
 	}
-	return hasStrictOrderingType(services, gorumsType)
+	return hasOrderingType(services, gorumsType)
 }
 
-// hasStrictOrderingType returns true if one of the service methods specify
+// hasOrderingType returns true if one of the service methods specify
 // the given strict ordering type
-func hasStrictOrderingType(services []*protogen.Service, typeName string) bool {
+func hasOrderingType(services []*protogen.Service, typeName string) bool {
 	if t, ok := strictOrderingTypes[typeName]; ok {
 		for _, service := range services {
 			for _, method := range service.Methods {
