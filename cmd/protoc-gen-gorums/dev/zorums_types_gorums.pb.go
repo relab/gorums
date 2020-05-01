@@ -7,7 +7,7 @@ import (
 	sync "sync"
 )
 
-const hasStrictOrderingMethods = true
+const hasOrderingMethods = true
 
 type internalEmpty struct {
 	nid   uint32
@@ -117,7 +117,7 @@ type CorrectableEmpty struct {
 
 // Get returns the reply, level and any error associated with the
 // called method. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
 func (c *CorrectableEmpty) Get() (*empty.Empty, int, error) {
@@ -193,7 +193,7 @@ type CorrectableMyResponse struct {
 
 // Get returns the reply, level and any error associated with the
 // called method. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
 func (c *CorrectableMyResponse) Get() (*MyResponse, int, error) {
@@ -269,7 +269,7 @@ type CorrectableResponse struct {
 
 // Get returns the reply, level and any error associated with the
 // called method. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
 func (c *CorrectableResponse) Get() (*Response, int, error) {
@@ -345,7 +345,7 @@ type CorrectableStreamEmpty struct {
 
 // Get returns the reply, level and any error associated with the
 // called method. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
 func (c *CorrectableStreamEmpty) Get() (*empty.Empty, int, error) {
@@ -421,7 +421,7 @@ type CorrectableStreamMyResponse struct {
 
 // Get returns the reply, level and any error associated with the
 // called method. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
 func (c *CorrectableStreamMyResponse) Get() (*MyResponse, int, error) {
@@ -497,7 +497,7 @@ type CorrectableStreamResponse struct {
 
 // Get returns the reply, level and any error associated with the
 // called method. The method does not block until a (possibly
-// itermidiate) reply or error is available. Level is set to LevelNotSet if no
+// intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
 func (c *CorrectableStreamResponse) Get() (*Response, int, error) {

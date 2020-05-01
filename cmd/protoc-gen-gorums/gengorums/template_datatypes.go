@@ -1,7 +1,7 @@
 package gengorums
 
 var globals = `
-const hasStrictOrderingMethods = {{hasStrictOrderingMethods .Services}}
+const hasOrderingMethods = {{hasOrderingMethods .Services}}
 `
 
 var internalOutDataType = `
@@ -68,7 +68,7 @@ type {{$correctableOut}} struct {
 		level	int
 		ch		chan struct{}
 	}
-	done chan struct{}
+	donech chan struct{}
 }
 
 // Get returns the reply, level and any error associated with the
@@ -86,7 +86,7 @@ func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
 // quorum call is done. A call is considered done when the quorum function has
 // signaled that a quorum of replies was received or the call returned an error.
 func (c *{{$correctableOut}}) Done() <-chan struct{} {
-	return c.done
+	return c.donech
 }
 
 // Watch returns a channel that will be closed when a reply or error at or above the
@@ -115,7 +115,7 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 	}
 	c.{{$customOutField}}, c.level, c.err, c.done = reply, level, err, done
 	if done {
-		close(c.done)
+		close(c.donech)
 		for _, watcher := range c.watchers {
 			if watcher != nil {
 				close(watcher.ch)

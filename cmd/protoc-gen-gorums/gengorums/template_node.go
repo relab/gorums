@@ -7,7 +7,7 @@ import (
 var nodeServices = `
 type nodeServices struct {
 	{{range .Services}}
-	{{if not (exclusivelyStrictOrdering .)}}
+	{{if not (exclusivelyOrdering .)}}
 	{{.GoName}}Client
 	{{- $serviceName := .GoName}}
 	{{- range streamMethods .Methods}}
@@ -22,13 +22,13 @@ var nodeConnectStream = `
 {{$errorf := use "fmt.Errorf" .GenFile}}
 func (n *Node) connectStream(ctx {{use "context.Context" .GenFile}}) (err error) {
 	{{- range .Services}}
-	{{if not (exclusivelyStrictOrdering .)}}
+	{{if not (exclusivelyOrdering .)}}
 	n.{{.GoName}}Client = New{{.GoName}}Client(n.conn)
 	{{- end -}}
 	{{- end}}
 
 	{{- range .Services -}}
-	{{if not (exclusivelyStrictOrdering .)}}
+	{{if not (exclusivelyOrdering .)}}
 	{{$serviceName := .GoName}}
 	{{- range streamMethods .Methods}}
 	n.{{unexport .GoName}}Client, err = n.{{$serviceName}}Client.{{.GoName}}(ctx)
@@ -45,7 +45,7 @@ func (n *Node) connectStream(ctx {{use "context.Context" .GenFile}}) (err error)
 var nodeCloseStream = `
 func (n *Node) closeStream() (err error) {
 	{{- range .Services -}}
-	{{if not (exclusivelyStrictOrdering .)}}
+	{{if not (exclusivelyOrdering .)}}
 	{{- range streamMethods .Methods}}
 	{{- if not .Desc.IsStreamingServer}}
 	_, err = n.{{unexport .GoName}}Client.CloseAndRecv()

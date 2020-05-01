@@ -64,6 +64,9 @@ $(static_file): $(static_files)
 	cp $(static_file) $(static_file).bak
 	protoc -I$(dev_path):. --gorums_out=bundle=$(static_file):. $(zorums_proto)
 
+bootbundle:
+	protoc -I$(dev_path):. --gorums_out=bundle=$(static_file):. gorums.proto
+
 clean:
 	rm -f $(static_file).bak
 

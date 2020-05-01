@@ -105,25 +105,25 @@ var funcMap = template.FuncMap{
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
 	},
-	"out":                       out,
-	"internalOut":               internalOut,
-	"customOut":                 customOut,
-	"futureOut":                 futureOut,
-	"correctableOut":            correctableOut,
-	"correctableStreamOut":      correctableStreamOut,
-	"mapInternalOutType":        mapInternalOutType,
-	"mapCorrectableOutType":     mapCorrectableOutType,
-	"mapFutureOutType":          mapFutureOutType,
-	"streamMethods":             streamMethods,
-	"callTypeName":              callTypeName,
-	"qspecServices":             qspecServices,
-	"qspecMethods":              qspecMethods,
-	"unexport":                  unexport,
-	"qcresult":                  qcresult,
-	"contains":                  strings.Contains,
-	"field":                     field,
-	"hasStrictOrderingMethods":  hasStrictOrderingMethods,
-	"exclusivelyStrictOrdering": exclusivelyStrictOrdering,
+	"out":                   out,
+	"internalOut":           internalOut,
+	"customOut":             customOut,
+	"futureOut":             futureOut,
+	"correctableOut":        correctableOut,
+	"correctableStreamOut":  correctableStreamOut,
+	"mapInternalOutType":    mapInternalOutType,
+	"mapCorrectableOutType": mapCorrectableOutType,
+	"mapFutureOutType":      mapFutureOutType,
+	"streamMethods":         streamMethods,
+	"callTypeName":          callTypeName,
+	"qspecServices":         qspecServices,
+	"qspecMethods":          qspecMethods,
+	"unexport":              unexport,
+	"qcresult":              qcresult,
+	"contains":              strings.Contains,
+	"field":                 field,
+	"hasOrderingMethods":    hasOrderingMethods,
+	"exclusivelyOrdering":   exclusivelyOrdering,
 }
 
 type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
@@ -234,7 +234,7 @@ func mustExecute(t *template.Template, data interface{}) string {
 	return b.String()
 }
 
-func hasStrictOrderingMethods(services []*protogen.Service) bool {
+func hasOrderingMethods(services []*protogen.Service) bool {
 	for _, service := range services {
 		for _, method := range service.Methods {
 			if hasMethodOption(method, gorums.E_Ordered) {
@@ -245,7 +245,7 @@ func hasStrictOrderingMethods(services []*protogen.Service) bool {
 	return false
 }
 
-func exclusivelyStrictOrdering(service *protogen.Service) bool {
+func exclusivelyOrdering(service *protogen.Service) bool {
 	for _, method := range service.Methods {
 		if !hasMethodOption(method, gorums.E_Ordered) {
 			return false
