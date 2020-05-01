@@ -73,7 +73,7 @@ func genGorumsMethods(data servicesData, methodOptions ...*protoimpl.ExtensionIn
 	for _, service := range data.Services {
 		for _, method := range service.Methods {
 			if hasMethodOption(method, gorums.E_Ordered) {
-				if hasStrictOrderingOption(method, methodOptions...) {
+				if hasOrderingOption(method, methodOptions...) {
 					fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
 					g.P(genGorumsMethod(g, method))
 				}
@@ -280,7 +280,7 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 }
 
 // hasStrictOrderingOption returns true if the method has one of the given strict ordering method options.
-func hasStrictOrderingOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
+func hasOrderingOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
 	for _, option := range methodOptions {
 		if f, ok := strictOrderingTypeCheckers[option]; ok && f(method) {
 			return true
