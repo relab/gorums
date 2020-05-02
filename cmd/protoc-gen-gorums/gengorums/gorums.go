@@ -95,8 +95,8 @@ func genGorumsMethod(g *protogen.GeneratedFile, method *protogen.Method) string 
 
 func callTypeName(method *protogen.Method) string {
 	methodOption := validateMethodExtensions(method)
-	if callTypeName, ok := gorumsCallTypeNames[methodOption]; ok {
-		return callTypeName
+	if callTypeInfo, ok := gorumsCallTypesInfo[methodOption]; ok {
+		return callTypeInfo.docName
 	}
 	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
 }
@@ -183,14 +183,52 @@ var gorumsCallTypeTemplates = map[*protoimpl.ExtensionInfo]string{
 	ordering.E_OrderedRpc:      orderingRPC,
 }
 
-var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Quorumcall:        "quorum",
-	gorums.E_QcFuture:          "asynchronous quorum",
-	gorums.E_Correctable:       "correctable quorum",
-	gorums.E_CorrectableStream: "correctable stream quorum",
-	gorums.E_Multicast:         "multicast",
-	ordering.E_OrderedQc:       "ordered quorum",
-	ordering.E_OrderedRpc:      "ordered",
+type callTypeInfo struct {
+	optionName string
+	docName    string
+	template   string
+	chkFn      func(m *protogen.Method) bool
+}
+
+var gorumsCallTypesInfo = map[*protoimpl.ExtensionInfo]*callTypeInfo{
+	gorums.E_Quorumcall: {
+		optionName: gorums.E_Quorumcall.Name[index:],
+		docName:    "quorum",
+		template:   quorumCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Quorumcall)
+		},
+	},
+	gorums.E_QcFuture: {
+		optionName: gorums.E_QcFuture.Name[index:],
+		docName:    "asynchronous quorum",
+		template:   futureCall,
+	},
+	gorums.E_Correctable: {
+		optionName: gorums.E_Correctable.Name[index:],
+		docName:    "correctable quorum",
+		template:   correctableCall,
+	},
+	gorums.E_CorrectableStream: {
+		optionName: gorums.E_CorrectableStream.Name[index:],
+		docName:    "correctable stream quorum",
+		template:   correctableStreamCall,
+	},
+	gorums.E_Multicast: {
+		optionName: gorums.E_Multicast.Name[index:],
+		docName:    "multicast",
+		template:   multicastCall,
+	},
+	ordering.E_OrderedQc: {
+		optionName: ordering.E_OrderedQc.Name[soIndex:],
+		docName:    "ordered quorum",
+		template:   orderingQC,
+	},
+	ordering.E_OrderedRpc: {
+		optionName: ordering.E_OrderedRpc.Name[soIndex:],
+		docName:    "ordered",
+		template:   orderingRPC,
+	},
 }
 
 // mapping from ordering type to a checker that will check if a method has that type
