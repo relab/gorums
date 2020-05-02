@@ -457,15 +457,15 @@ func (s *GorumsServer) RegisterStrictOrderingCustomReturnTypeHandler(handler Str
 	})
 }
 
-// StrictOrderingCombi is a quorum call invoked on each node in configuration c,
+// StrictOrderingCombo is a quorum call invoked on each node in configuration c,
 // with the argument returned by the provided function f, and returns the combined result.
 // The per node function f receives a copy of the Request request argument and
 // returns a Request manipulated to be passed to the given nodeID.
 // The function f must be thread-safe.
-func (c *Configuration) StrictOrderingCombi(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
+func (c *Configuration) StrictOrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StrictOrderingCombi")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StrictOrderingCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -507,7 +507,7 @@ func (c *Configuration) StrictOrderingCombi(ctx context.Context, in *Request, f 
 		}
 		msg := &ordering.Message{
 			ID:     msgID,
-			Method: "/dev.ZorumsService/StrictOrderingCombi",
+			Method: "/dev.ZorumsService/StrictOrderingCombo",
 			Data:   data,
 		}
 		n.sendQ <- msg
@@ -538,7 +538,7 @@ func (c *Configuration) StrictOrderingCombi(ctx context.Context, in *Request, f 
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.StrictOrderingCombiQF(in, replyValues); quorum {
+			if resp, quorum = c.qspec.StrictOrderingComboQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -551,21 +551,21 @@ func (c *Configuration) StrictOrderingCombi(ctx context.Context, in *Request, f 
 	}
 }
 
-// StrictOrderingCombiHandler is the server API for the StrictOrderingCombi rpc.
-type StrictOrderingCombiHandler interface {
-	StrictOrderingCombi(*Request) *Response
+// StrictOrderingComboHandler is the server API for the StrictOrderingCombo rpc.
+type StrictOrderingComboHandler interface {
+	StrictOrderingCombo(*Request) *Response
 }
 
-// RegisterStrictOrderingCombiHandler sets the handler for StrictOrderingCombi.
-func (s *GorumsServer) RegisterStrictOrderingCombiHandler(handler StrictOrderingCombiHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingCombi", func(in *ordering.Message) *ordering.Message {
+// RegisterStrictOrderingComboHandler sets the handler for StrictOrderingCombo.
+func (s *GorumsServer) RegisterStrictOrderingComboHandler(handler StrictOrderingComboHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingCombo", func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
-		resp := handler.StrictOrderingCombi(req)
+		resp := handler.StrictOrderingCombo(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
 			return new(ordering.Message)

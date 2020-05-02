@@ -141,7 +141,7 @@ type QuorumSpec interface {
 	// ordered quorum call method.
 	StrictOrderingCustomReturnTypeQF(replies []*Response) (*MyResponse, bool)
 
-	// StrictOrderingCombiQF is the quorum function for the StrictOrderingCombi
+	// StrictOrderingComboQF is the quorum function for the StrictOrderingCombo
 	// ordered quorum call method.
-	StrictOrderingCombiQF(in *Request, replies []*Response) (*MyResponse, bool)
+	StrictOrderingComboQF(in *Request, replies []*Response) (*MyResponse, bool)
 }

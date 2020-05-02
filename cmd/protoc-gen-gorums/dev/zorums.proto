@@ -7,15 +7,9 @@ option go_package = "cmd/protoc-gen-gorums/dev";
 import "gorums.proto";
 import "google/protobuf/empty.proto";
 
-message Request { 
-  string Value = 1;
-}
-message Response { 
-  int64 Result = 1;
-}
-message MyResponse {
-  string Value = 1;
-}
+message Request { string Value = 1; }
+message Response { int64 Result = 1; }
+message MyResponse { string Value = 1; }
 
 // ZorumsService is not meant to be implemented. The generated
 // service methods must pass compilation, but no further tests are done.
@@ -243,7 +237,7 @@ service ZorumsService {
     option (gorums.ordered) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
-  rpc StrictOrderingCombi(Request) returns (Response) {
+  rpc StrictOrderingCombo(Request) returns (Response) {
     option (gorums.qc) = true;
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;

@@ -105,7 +105,7 @@ type ZorumsServiceClient interface {
 	StrictOrderingPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	StrictOrderingQFWithReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	StrictOrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	StrictOrderingCombi(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	StrictOrderingCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	StrictOrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 }
 
@@ -754,9 +754,9 @@ func (c *zorumsServiceClient) StrictOrderingCustomReturnType(ctx context.Context
 	return out, nil
 }
 
-func (c *zorumsServiceClient) StrictOrderingCombi(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+func (c *zorumsServiceClient) StrictOrderingCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/StrictOrderingCombi", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/StrictOrderingCombo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -857,7 +857,7 @@ type ZorumsServiceServer interface {
 	StrictOrderingPerNodeArg(context.Context, *Request) (*Response, error)
 	StrictOrderingQFWithReq(context.Context, *Request) (*Response, error)
 	StrictOrderingCustomReturnType(context.Context, *Request) (*Response, error)
-	StrictOrderingCombi(context.Context, *Request) (*Response, error)
+	StrictOrderingCombo(context.Context, *Request) (*Response, error)
 	StrictOrderingUnaryRPC(context.Context, *Request) (*Response, error)
 }
 
@@ -982,8 +982,8 @@ func (*UnimplementedZorumsServiceServer) StrictOrderingQFWithReq(context.Context
 func (*UnimplementedZorumsServiceServer) StrictOrderingCustomReturnType(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingCustomReturnType not implemented")
 }
-func (*UnimplementedZorumsServiceServer) StrictOrderingCombi(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingCombi not implemented")
+func (*UnimplementedZorumsServiceServer) StrictOrderingCombo(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingCombo not implemented")
 }
 func (*UnimplementedZorumsServiceServer) StrictOrderingUnaryRPC(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingUnaryRPC not implemented")
@@ -1756,20 +1756,20 @@ func _ZorumsService_StrictOrderingCustomReturnType_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_StrictOrderingCombi_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ZorumsService_StrictOrderingCombo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ZorumsServiceServer).StrictOrderingCombi(ctx, in)
+		return srv.(ZorumsServiceServer).StrictOrderingCombo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ZorumsService/StrictOrderingCombi",
+		FullMethod: "/dev.ZorumsService/StrictOrderingCombo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).StrictOrderingCombi(ctx, req.(*Request))
+		return srv.(ZorumsServiceServer).StrictOrderingCombo(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1905,8 +1905,8 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ZorumsService_StrictOrderingCustomReturnType_Handler,
 		},
 		{
-			MethodName: "StrictOrderingCombi",
-			Handler:    _ZorumsService_StrictOrderingCombi_Handler,
+			MethodName: "StrictOrderingCombo",
+			Handler:    _ZorumsService_StrictOrderingCombo_Handler,
 		},
 		{
 			MethodName: "StrictOrderingUnaryRPC",
