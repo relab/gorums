@@ -17,7 +17,7 @@ import (
 
 // GenerateFile generates a _gorums.pb.go file containing Gorums service definitions.
 func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
-	if len(file.Services) == 0 || !checkMethodOptions(file.Services, gorumsCallTypes...) {
+	if len(file.Services) == 0 || !checkMethods(file.Services, func(m *protogen.Method) bool { return hasGorumsCallType(m) }) {
 		// there is nothing for this plugin to do
 		return nil
 	}
@@ -117,21 +117,29 @@ func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
 	if devTypes[gorumsType] != "" {
 		return true
 	}
-	if methodOption, ok := gorumsTypes[gorumsType]; ok {
-		return checkMethodOptions(services, methodOption)
-	}
-	return hasOrderingType(services, gorumsType)
+	return checkMethodOptions(services, gorumsType)
 }
 
-// hasOrderingType returns true if one of the service methods specify
-// the given ordering type
-func hasOrderingType(services []*protogen.Service, typeName string) bool {
-	if t, ok := orderingTypes[typeName]; ok {
-		for _, service := range services {
-			for _, method := range service.Methods {
-				if orderingTypeCheckers[t](method) {
-					return true
-				}
+// checkMethodOptions returns true if one of the service methods defines
+// the given gorums option type.
+func checkMethodOptions(services []*protogen.Service, option string) bool {
+	if methodOption, ok := gorumsTypes[option]; ok {
+		if callTypeInfo, ok := gorumsCallTypesInfo[methodOption]; ok {
+			return checkMethods(services, func(m *protogen.Method) bool {
+				return callTypeInfo.chkFn(m)
+			})
+		}
+	}
+	return false
+}
+
+// checkMethods returns true if the function fn evaluates to true
+// for one of the methods in the set of services.
+func checkMethods(services []*protogen.Service, fn func(m *protogen.Method) bool) bool {
+	for _, service := range services {
+		for _, method := range service.Methods {
+			if fn(method) {
+				return true
 			}
 		}
 	}
@@ -165,12 +173,8 @@ var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
 	gorums.E_Correctable.Name[index:]:       gorums.E_Correctable,
 	gorums.E_CorrectableStream.Name[index:]: gorums.E_CorrectableStream,
 	gorums.E_Multicast.Name[index:]:         gorums.E_Multicast,
-}
-
-// name to ordering type mapping
-var orderingTypes = map[string]*protoimpl.ExtensionInfo{
-	ordering.E_OrderedQc.Name[soIndex:]:  ordering.E_OrderedQc,
-	ordering.E_OrderedRpc.Name[soIndex:]: ordering.E_OrderedRpc,
+	ordering.E_OrderedQc.Name[soIndex:]:     ordering.E_OrderedQc,
+	ordering.E_OrderedRpc.Name[soIndex:]:    ordering.E_OrderedRpc,
 }
 
 type callTypeInfo struct {
@@ -193,31 +197,49 @@ var gorumsCallTypesInfo = map[*protoimpl.ExtensionInfo]*callTypeInfo{
 		optionName: gorums.E_QcFuture.Name[index:],
 		docName:    "asynchronous quorum",
 		template:   futureCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_QcFuture)
+		},
 	},
 	gorums.E_Correctable: {
 		optionName: gorums.E_Correctable.Name[index:],
 		docName:    "correctable quorum",
 		template:   correctableCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Correctable)
+		},
 	},
 	gorums.E_CorrectableStream: {
 		optionName: gorums.E_CorrectableStream.Name[index:],
 		docName:    "correctable stream quorum",
 		template:   correctableStreamCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_CorrectableStream)
+		},
 	},
 	gorums.E_Multicast: {
 		optionName: gorums.E_Multicast.Name[index:],
 		docName:    "multicast",
 		template:   multicastCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Multicast)
+		},
 	},
 	ordering.E_OrderedQc: {
 		optionName: ordering.E_OrderedQc.Name[soIndex:],
 		docName:    "ordered quorum",
 		template:   orderingQC,
+		chkFn: func(m *protogen.Method) bool {
+			return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall)
+		},
 	},
 	ordering.E_OrderedRpc: {
 		optionName: ordering.E_OrderedRpc.Name[soIndex:],
 		docName:    "ordered",
 		template:   orderingRPC,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Ordered) && !hasGorumsCallType(m)
+		},
 	},
 }
 
@@ -269,19 +291,6 @@ var orderingCallTypes = []*protoimpl.ExtensionInfo{
 // one of the call types supported by Gorums.
 func hasGorumsCallType(method *protogen.Method) bool {
 	return hasMethodOption(method, gorumsCallTypes...)
-}
-
-// checkMethodOptions returns true if one of the methods provided by
-// the given services has one of the given options.
-func checkMethodOptions(services []*protogen.Service, methodOptions ...*protoimpl.ExtensionInfo) bool {
-	for _, service := range services {
-		for _, method := range service.Methods {
-			if hasMethodOption(method, methodOptions...) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // hasMethodOption returns true if the method has one of the given method options.
