@@ -125,23 +125,23 @@ type QuorumSpec interface {
 	// correctable stream quorum call method.
 	CorrectableStreamEmpty2QF(replies []*Response) (*Response, int, bool)
 
-	// StrictOrderingQCQF is the quorum function for the StrictOrderingQC
+	// OrderingQCQF is the quorum function for the OrderingQC
 	// ordered quorum call method.
-	StrictOrderingQCQF(replies []*Response) (*Response, bool)
+	OrderingQCQF(replies []*Response) (*Response, bool)
 
-	// StrictOrderingPerNodeArgQF is the quorum function for the StrictOrderingPerNodeArg
+	// OrderingPerNodeArgQF is the quorum function for the OrderingPerNodeArg
 	// ordered quorum call method.
-	StrictOrderingPerNodeArgQF(replies []*Response) (*Response, bool)
+	OrderingPerNodeArgQF(replies []*Response) (*Response, bool)
 
-	// StrictOrderingQFWithReqQF is the quorum function for the StrictOrderingQFWithReq
+	// OrderingQFWithReqQF is the quorum function for the OrderingQFWithReq
 	// ordered quorum call method.
-	StrictOrderingQFWithReqQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingQFWithReqQF(in *Request, replies []*Response) (*Response, bool)
 
-	// StrictOrderingCustomReturnTypeQF is the quorum function for the StrictOrderingCustomReturnType
+	// OrderingCustomReturnTypeQF is the quorum function for the OrderingCustomReturnType
 	// ordered quorum call method.
-	StrictOrderingCustomReturnTypeQF(replies []*Response) (*MyResponse, bool)
+	OrderingCustomReturnTypeQF(replies []*Response) (*MyResponse, bool)
 
-	// StrictOrderingComboQF is the quorum function for the StrictOrderingCombo
+	// OrderingComboQF is the quorum function for the OrderingCombo
 	// ordered quorum call method.
-	StrictOrderingComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingComboQF(in *Request, replies []*Response) (*MyResponse, bool)
 }

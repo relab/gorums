@@ -13,12 +13,12 @@ import (
 )
 
 // ---------------------------------------------------------------
-// Strict Ordering RPCs
+// Ordering RPCs
 // ---------------------------------------------------------------
-func (c *Configuration) StrictOrderingQC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (c *Configuration) OrderingQC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StrictOrderingQC")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingQC")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -52,7 +52,7 @@ func (c *Configuration) StrictOrderingQC(ctx context.Context, in *Request, opts 
 	}
 	msg := &ordering.Message{
 		ID:     msgID,
-		Method: "/dev.ZorumsService/StrictOrderingQC",
+		Method: "/dev.ZorumsService/OrderingQC",
 		Data:   data,
 	}
 	// push the message to the nodes
@@ -86,7 +86,7 @@ func (c *Configuration) StrictOrderingQC(ctx context.Context, in *Request, opts 
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.StrictOrderingQCQF(replyValues); quorum {
+			if resp, quorum = c.qspec.OrderingQCQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -99,21 +99,21 @@ func (c *Configuration) StrictOrderingQC(ctx context.Context, in *Request, opts 
 	}
 }
 
-// StrictOrderingQCHandler is the server API for the StrictOrderingQC rpc.
-type StrictOrderingQCHandler interface {
-	StrictOrderingQC(*Request) *Response
+// OrderingQCHandler is the server API for the OrderingQC rpc.
+type OrderingQCHandler interface {
+	OrderingQC(*Request) *Response
 }
 
-// RegisterStrictOrderingQCHandler sets the handler for StrictOrderingQC.
-func (s *GorumsServer) RegisterStrictOrderingQCHandler(handler StrictOrderingQCHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingQC", func(in *ordering.Message) *ordering.Message {
+// RegisterOrderingQCHandler sets the handler for OrderingQC.
+func (s *GorumsServer) RegisterOrderingQCHandler(handler OrderingQCHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/OrderingQC", func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
-		resp := handler.StrictOrderingQC(req)
+		resp := handler.OrderingQC(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
 			return new(ordering.Message)
@@ -122,15 +122,15 @@ func (s *GorumsServer) RegisterStrictOrderingQCHandler(handler StrictOrderingQCH
 	})
 }
 
-// StrictOrderingPerNodeArg is a quorum call invoked on each node in configuration c,
+// OrderingPerNodeArg is a quorum call invoked on each node in configuration c,
 // with the argument returned by the provided function f, and returns the combined result.
 // The per node function f receives a copy of the Request request argument and
 // returns a Request manipulated to be passed to the given nodeID.
 // The function f must be thread-safe.
-func (c *Configuration) StrictOrderingPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StrictOrderingPerNodeArg")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingPerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -172,7 +172,7 @@ func (c *Configuration) StrictOrderingPerNodeArg(ctx context.Context, in *Reques
 		}
 		msg := &ordering.Message{
 			ID:     msgID,
-			Method: "/dev.ZorumsService/StrictOrderingPerNodeArg",
+			Method: "/dev.ZorumsService/OrderingPerNodeArg",
 			Data:   data,
 		}
 		n.sendQ <- msg
@@ -203,7 +203,7 @@ func (c *Configuration) StrictOrderingPerNodeArg(ctx context.Context, in *Reques
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.StrictOrderingPerNodeArgQF(replyValues); quorum {
+			if resp, quorum = c.qspec.OrderingPerNodeArgQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -216,21 +216,21 @@ func (c *Configuration) StrictOrderingPerNodeArg(ctx context.Context, in *Reques
 	}
 }
 
-// StrictOrderingPerNodeArgHandler is the server API for the StrictOrderingPerNodeArg rpc.
-type StrictOrderingPerNodeArgHandler interface {
-	StrictOrderingPerNodeArg(*Request) *Response
+// OrderingPerNodeArgHandler is the server API for the OrderingPerNodeArg rpc.
+type OrderingPerNodeArgHandler interface {
+	OrderingPerNodeArg(*Request) *Response
 }
 
-// RegisterStrictOrderingPerNodeArgHandler sets the handler for StrictOrderingPerNodeArg.
-func (s *GorumsServer) RegisterStrictOrderingPerNodeArgHandler(handler StrictOrderingPerNodeArgHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingPerNodeArg", func(in *ordering.Message) *ordering.Message {
+// RegisterOrderingPerNodeArgHandler sets the handler for OrderingPerNodeArg.
+func (s *GorumsServer) RegisterOrderingPerNodeArgHandler(handler OrderingPerNodeArgHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/OrderingPerNodeArg", func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
-		resp := handler.StrictOrderingPerNodeArg(req)
+		resp := handler.OrderingPerNodeArg(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
 			return new(ordering.Message)
@@ -239,12 +239,12 @@ func (s *GorumsServer) RegisterStrictOrderingPerNodeArgHandler(handler StrictOrd
 	})
 }
 
-// StrictOrderingQFWithReq is a quorum call invoked on all nodes in configuration c,
+// OrderingQFWithReq is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StrictOrderingQFWithReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (c *Configuration) OrderingQFWithReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StrictOrderingQFWithReq")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingQFWithReq")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -278,7 +278,7 @@ func (c *Configuration) StrictOrderingQFWithReq(ctx context.Context, in *Request
 	}
 	msg := &ordering.Message{
 		ID:     msgID,
-		Method: "/dev.ZorumsService/StrictOrderingQFWithReq",
+		Method: "/dev.ZorumsService/OrderingQFWithReq",
 		Data:   data,
 	}
 	// push the message to the nodes
@@ -312,7 +312,7 @@ func (c *Configuration) StrictOrderingQFWithReq(ctx context.Context, in *Request
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.StrictOrderingQFWithReqQF(in, replyValues); quorum {
+			if resp, quorum = c.qspec.OrderingQFWithReqQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -325,21 +325,21 @@ func (c *Configuration) StrictOrderingQFWithReq(ctx context.Context, in *Request
 	}
 }
 
-// StrictOrderingQFWithReqHandler is the server API for the StrictOrderingQFWithReq rpc.
-type StrictOrderingQFWithReqHandler interface {
-	StrictOrderingQFWithReq(*Request) *Response
+// OrderingQFWithReqHandler is the server API for the OrderingQFWithReq rpc.
+type OrderingQFWithReqHandler interface {
+	OrderingQFWithReq(*Request) *Response
 }
 
-// RegisterStrictOrderingQFWithReqHandler sets the handler for StrictOrderingQFWithReq.
-func (s *GorumsServer) RegisterStrictOrderingQFWithReqHandler(handler StrictOrderingQFWithReqHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingQFWithReq", func(in *ordering.Message) *ordering.Message {
+// RegisterOrderingQFWithReqHandler sets the handler for OrderingQFWithReq.
+func (s *GorumsServer) RegisterOrderingQFWithReqHandler(handler OrderingQFWithReqHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/OrderingQFWithReq", func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
-		resp := handler.StrictOrderingQFWithReq(req)
+		resp := handler.OrderingQFWithReq(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
 			return new(ordering.Message)
@@ -348,12 +348,12 @@ func (s *GorumsServer) RegisterStrictOrderingQFWithReqHandler(handler StrictOrde
 	})
 }
 
-// StrictOrderingCustomReturnType is a quorum call invoked on all nodes in configuration c,
+// OrderingCustomReturnType is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StrictOrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
+func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StrictOrderingCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -387,7 +387,7 @@ func (c *Configuration) StrictOrderingCustomReturnType(ctx context.Context, in *
 	}
 	msg := &ordering.Message{
 		ID:     msgID,
-		Method: "/dev.ZorumsService/StrictOrderingCustomReturnType",
+		Method: "/dev.ZorumsService/OrderingCustomReturnType",
 		Data:   data,
 	}
 	// push the message to the nodes
@@ -421,7 +421,7 @@ func (c *Configuration) StrictOrderingCustomReturnType(ctx context.Context, in *
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.StrictOrderingCustomReturnTypeQF(replyValues); quorum {
+			if resp, quorum = c.qspec.OrderingCustomReturnTypeQF(replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -434,21 +434,21 @@ func (c *Configuration) StrictOrderingCustomReturnType(ctx context.Context, in *
 	}
 }
 
-// StrictOrderingCustomReturnTypeHandler is the server API for the StrictOrderingCustomReturnType rpc.
-type StrictOrderingCustomReturnTypeHandler interface {
-	StrictOrderingCustomReturnType(*Request) *Response
+// OrderingCustomReturnTypeHandler is the server API for the OrderingCustomReturnType rpc.
+type OrderingCustomReturnTypeHandler interface {
+	OrderingCustomReturnType(*Request) *Response
 }
 
-// RegisterStrictOrderingCustomReturnTypeHandler sets the handler for StrictOrderingCustomReturnType.
-func (s *GorumsServer) RegisterStrictOrderingCustomReturnTypeHandler(handler StrictOrderingCustomReturnTypeHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingCustomReturnType", func(in *ordering.Message) *ordering.Message {
+// RegisterOrderingCustomReturnTypeHandler sets the handler for OrderingCustomReturnType.
+func (s *GorumsServer) RegisterOrderingCustomReturnTypeHandler(handler OrderingCustomReturnTypeHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/OrderingCustomReturnType", func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
-		resp := handler.StrictOrderingCustomReturnType(req)
+		resp := handler.OrderingCustomReturnType(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
 			return new(ordering.Message)
@@ -457,15 +457,15 @@ func (s *GorumsServer) RegisterStrictOrderingCustomReturnTypeHandler(handler Str
 	})
 }
 
-// StrictOrderingCombo is a quorum call invoked on each node in configuration c,
+// OrderingCombo is a quorum call invoked on each node in configuration c,
 // with the argument returned by the provided function f, and returns the combined result.
 // The per node function f receives a copy of the Request request argument and
 // returns a Request manipulated to be passed to the given nodeID.
 // The function f must be thread-safe.
-func (c *Configuration) StrictOrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
+func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StrictOrderingCombo")
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -507,7 +507,7 @@ func (c *Configuration) StrictOrderingCombo(ctx context.Context, in *Request, f 
 		}
 		msg := &ordering.Message{
 			ID:     msgID,
-			Method: "/dev.ZorumsService/StrictOrderingCombo",
+			Method: "/dev.ZorumsService/OrderingCombo",
 			Data:   data,
 		}
 		n.sendQ <- msg
@@ -538,7 +538,7 @@ func (c *Configuration) StrictOrderingCombo(ctx context.Context, in *Request, f 
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.StrictOrderingComboQF(in, replyValues); quorum {
+			if resp, quorum = c.qspec.OrderingComboQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -551,21 +551,21 @@ func (c *Configuration) StrictOrderingCombo(ctx context.Context, in *Request, f 
 	}
 }
 
-// StrictOrderingComboHandler is the server API for the StrictOrderingCombo rpc.
-type StrictOrderingComboHandler interface {
-	StrictOrderingCombo(*Request) *Response
+// OrderingComboHandler is the server API for the OrderingCombo rpc.
+type OrderingComboHandler interface {
+	OrderingCombo(*Request) *Response
 }
 
-// RegisterStrictOrderingComboHandler sets the handler for StrictOrderingCombo.
-func (s *GorumsServer) RegisterStrictOrderingComboHandler(handler StrictOrderingComboHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingCombo", func(in *ordering.Message) *ordering.Message {
+// RegisterOrderingComboHandler sets the handler for OrderingCombo.
+func (s *GorumsServer) RegisterOrderingComboHandler(handler OrderingComboHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/OrderingCombo", func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
-		resp := handler.StrictOrderingCombo(req)
+		resp := handler.OrderingCombo(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
 			return new(ordering.Message)

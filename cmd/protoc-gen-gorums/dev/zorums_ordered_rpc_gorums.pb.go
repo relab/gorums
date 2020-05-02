@@ -10,7 +10,7 @@ import (
 	grpc "google.golang.org/grpc"
 )
 
-func (n *Node) StrictOrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 
 	// get the ID which will be used to return the correct responses for a request
 	msgID := n.nextMsgID()
@@ -28,7 +28,7 @@ func (n *Node) StrictOrderingUnaryRPC(ctx context.Context, in *Request, opts ...
 	}
 	msg := &ordering.Message{
 		ID:     msgID,
-		Method: "/dev.ZorumsService/StrictOrderingUnaryRPC",
+		Method: "/dev.ZorumsService/OrderingUnaryRPC",
 		Data:   data,
 	}
 	n.sendQ <- msg
@@ -49,21 +49,21 @@ func (n *Node) StrictOrderingUnaryRPC(ctx context.Context, in *Request, opts ...
 	}
 }
 
-// StrictOrderingUnaryRPCHandler is the server API for the StrictOrderingUnaryRPC rpc.
-type StrictOrderingUnaryRPCHandler interface {
-	StrictOrderingUnaryRPC(*Request) *Response
+// OrderingUnaryRPCHandler is the server API for the OrderingUnaryRPC rpc.
+type OrderingUnaryRPCHandler interface {
+	OrderingUnaryRPC(*Request) *Response
 }
 
-// RegisterStrictOrderingUnaryRPCHandler sets the handler for StrictOrderingUnaryRPC.
-func (s *GorumsServer) RegisterStrictOrderingUnaryRPCHandler(handler StrictOrderingUnaryRPCHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingUnaryRPC", func(in *ordering.Message) *ordering.Message {
+// RegisterOrderingUnaryRPCHandler sets the handler for OrderingUnaryRPC.
+func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/OrderingUnaryRPC", func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
-		resp := handler.StrictOrderingUnaryRPC(req)
+		resp := handler.OrderingUnaryRPC(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
 			return new(ordering.Message)
