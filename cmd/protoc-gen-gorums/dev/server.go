@@ -45,13 +45,13 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	}
 }
 
-// GorumsServer serves all ordering based RPCs using registered handlers
+// GorumsServer serves all ordering based RPCs using registered handlers.
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
 }
 
-// NewGorumsServer returns a new instance of GorumsServer
+// NewGorumsServer returns a new instance of GorumsServer.
 func NewGorumsServer() *GorumsServer {
 	s := &GorumsServer{
 		srv:        newOrderingServer(),
@@ -61,7 +61,7 @@ func NewGorumsServer() *GorumsServer {
 	return s
 }
 
-// Serve starts serving on the listener
+// Serve starts serving on the listener.
 func (s *GorumsServer) Serve(listener net.Listener) {
 	s.grpcServer.Serve(listener)
 }
@@ -71,7 +71,7 @@ func (s *GorumsServer) GracefulStop() {
 	s.grpcServer.GracefulStop()
 }
 
-// Stop stops the server immediately
+// Stop stops the server immediately.
 func (s *GorumsServer) Stop() {
 	s.grpcServer.Stop()
 }
