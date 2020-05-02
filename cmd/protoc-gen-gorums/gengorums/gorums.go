@@ -55,9 +55,9 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
 func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
 	data := servicesData{g, file.Services}
-	for gorumsType, templateString := range devTypes {
-		if templateString != "" {
-			g.P(mustExecute(parseTemplate(gorumsType, templateString), data))
+	for gorumsType, callTypeInfo := range gorumsCallTypesInfo {
+		if callTypeInfo.extInfo == nil {
+			g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
 			g.P()
 		}
 	}
@@ -117,7 +117,7 @@ type methodData struct {
 // hasGorumsType returns true if one of the service methods specify
 // the given gorums type.
 func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
-	if devTypes[gorumsType] != "" {
+	if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
 		return true
 	}
 	return checkMethodOptions(services, gorumsType)
@@ -145,22 +145,6 @@ func checkMethods(services []*protogen.Service, fn func(m *protogen.Method) bool
 		}
 	}
 	return false
-}
-
-// devTypes maps from different Gorums type names to template strings for
-// those types. These allow us to generate different dev/zorums_{type}.pb.go
-// files for the different keys.
-var devTypes = map[string]string{
-	"node":               node,
-	"qspec":              qspecInterface,
-	"types":              datatypes,
-	"quorumcall":         "",
-	"qc_future":          "",
-	"correctable":        "",
-	"correctable_stream": "",
-	"multicast":          "",
-	"ordered_qc":         "",
-	"ordered_rpc":        "",
 }
 
 // compute index to start of option name
@@ -196,6 +180,11 @@ type callTypeInfo struct {
 	chkFn      func(m *protogen.Method) bool
 }
 
+// gorumsCallTypesInfo maps Gorums call type names to callTypeInfo.
+// This includes details such as the template, extension info and
+// a chkFn function used to check for the particular call type.
+// The entries in this map is used to generate dev/zorums_{type}.pb.go
+// files for the different keys.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"node":  {template: node},
 	"qspec": {template: qspecInterface},
