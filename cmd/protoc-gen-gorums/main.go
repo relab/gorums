@@ -19,7 +19,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), gengorums.VersionString())
 		os.Exit(1)
 	}
-	if strings.HasPrefix(os.Args[1], "--bundle=") {
+	if len(os.Args) == 2 && strings.HasPrefix(os.Args[1], "--bundle=") {
 		bundle := os.Args[1][bundleLen:]
 		if bundle != "" {
 			fmt.Fprintf(os.Stderr, "Generating bundle file: %s\n", bundle)
