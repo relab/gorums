@@ -125,14 +125,12 @@ func findIdentifiers(fset *token.FileSet, info *loader.PackageInfo) map[string]s
 	return pkgIdent
 }
 
-var ctxt = &build.Default
-
 // bundle returns a slice with the code for the given src package without imports.
 // The returned map contains packages to be imported along with one identifier
 // using the relevant import path.
 // Loosly based on x/tools/cmd/bundle
 func bundle(src string) (map[string]string, []byte) {
-	conf := loader.Config{ParserMode: parser.ParseComments, Build: ctxt}
+	conf := loader.Config{ParserMode: parser.ParseComments, Build: &build.Default}
 	conf.Import(src)
 	lprog, err := conf.Load()
 	if err != nil {
