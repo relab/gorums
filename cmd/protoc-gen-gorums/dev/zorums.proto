@@ -28,36 +28,38 @@ service ZorumsService {
   // ---------------------------------------------------------------
 
   // QuorumCall plain.
-  rpc QuorumCall(Request) returns (Response) { option (gorums.qc) = true; }
+  rpc QuorumCall(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+  }
   // QuorumCall with per_node_arg option.
   rpc QuorumCallPerNodeArg(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.per_node_arg) = true;
   }
   // QuorumCall with qf_with_req option.
   rpc QuorumCallQFWithRequestArg(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.qf_with_req) = true;
   }
   // QuorumCall with custom_return_type option.
   rpc QuorumCallCustomReturnType(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   // QuorumCallCombo with all supported options.
   rpc QuorumCallCombo(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.qf_with_req) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   // QuorumCallEmpty for testing imported message type.
   rpc QuorumCallEmpty(google.protobuf.Empty) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
   }
   // QuorumCallEmpty2 for testing imported message type.
   rpc QuorumCallEmpty2(Request) returns (google.protobuf.Empty) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
   }
 
   // ---------------------------------------------------------------
@@ -219,26 +221,26 @@ service ZorumsService {
   // Ordering RPCs
   // ---------------------------------------------------------------
   rpc OrderingQC(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
   }
   rpc OrderingPerNodeArg(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
   }
   rpc OrderingQFWithReq(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
     option (gorums.qf_with_req) = true;
   }
   rpc OrderingCustomReturnType(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   rpc OrderingCombo(Request) returns (Response) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.qf_with_req) = true;

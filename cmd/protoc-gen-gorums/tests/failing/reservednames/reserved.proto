@@ -13,7 +13,9 @@ import "gorums.proto";
 
 service Reserved {
   rpc ConfTest(Configuration) returns (Manager) {}
-  rpc QuorumCall(Configuration) returns (Manager) { option (gorums.qc) = true; }
+  rpc QuorumCall(Configuration) returns (Manager) {
+    option (gorums.quorumcall) = true;
+  }
 }
 
 message Configuration { string Conf = 1; }

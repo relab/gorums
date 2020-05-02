@@ -7,21 +7,14 @@ import "gorums.proto";
 option go_package = "github.com/relab/gorums/cmd/protoc-gen-gorums/tests/ordering";
 
 service GorumsTest {
-	rpc QC(Request) returns (Response) {
-		option (gorums.qc) = true;
-		option (gorums.ordered) = true;
-	}
+  rpc QC(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
 
-	rpc UnaryRPC(Request) returns (Response) {
-		option (gorums.ordered) = true;
-	}
+  rpc UnaryRPC(Request) returns (Response) { option (gorums.ordered) = true; }
 }
 
-message Request {
-	uint64 Num = 1;
-}
+message Request { uint64 Num = 1; }
 
-message Response {
-	bool InOrder = 1;
-}
-
+message Response { bool InOrder = 1; }

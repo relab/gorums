@@ -218,10 +218,10 @@ for our RPC methods in the proto file, as shown below:
 ```protobuf
 service QCStorage {
 	rpc Read(ReadRequest) returns (State) {
-		option (gorums.qc) = true;
+		option (gorums.quorumcall) = true;
  	}
 	rpc Write(State) returns (WriteResponse) {
-		option (gorums.qc) = true;
+		option (gorums.quorumcall) = true;
  	}
 }
 ```

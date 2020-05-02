@@ -145,7 +145,7 @@ var devTypes = map[string]string{
 	"node":               node,
 	"qspec":              qspecInterface,
 	"types":              datatypes,
-	"qc":                 "",
+	"quorumcall":         "",
 	"qc_future":          "",
 	"correctable":        "",
 	"correctable_stream": "",
@@ -160,7 +160,7 @@ const soIndex = len("ordering.")
 
 // name to method option mapping
 var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
-	gorums.E_Qc.Name[index:]:                gorums.E_Qc,
+	gorums.E_Quorumcall.Name[index:]:        gorums.E_Quorumcall,
 	gorums.E_QcFuture.Name[index:]:          gorums.E_QcFuture,
 	gorums.E_Correctable.Name[index:]:       gorums.E_Correctable,
 	gorums.E_CorrectableStream.Name[index:]: gorums.E_CorrectableStream,
@@ -174,7 +174,7 @@ var orderingTypes = map[string]*protoimpl.ExtensionInfo{
 }
 
 var gorumsCallTypeTemplates = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Qc:                quorumCall,
+	gorums.E_Quorumcall:        quorumCall,
 	gorums.E_QcFuture:          futureCall,
 	gorums.E_Correctable:       correctableCall,
 	gorums.E_CorrectableStream: correctableStreamCall,
@@ -184,7 +184,7 @@ var gorumsCallTypeTemplates = map[*protoimpl.ExtensionInfo]string{
 }
 
 var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Qc:                "quorum",
+	gorums.E_Quorumcall:        "quorum",
 	gorums.E_QcFuture:          "asynchronous quorum",
 	gorums.E_Correctable:       "correctable quorum",
 	gorums.E_CorrectableStream: "correctable stream quorum",
@@ -196,7 +196,7 @@ var gorumsCallTypeNames = map[*protoimpl.ExtensionInfo]string{
 // mapping from ordering type to a checker that will check if a method has that type
 var orderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) bool{
 	ordering.E_OrderedQc: func(m *protogen.Method) bool {
-		return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Qc)
+		return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall)
 	},
 	ordering.E_OrderedRpc: func(m *protogen.Method) bool {
 		return hasMethodOption(m, gorums.E_Ordered) && !hasMethodOption(m, gorumsCallTypes...)
@@ -206,7 +206,7 @@ var orderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) b
 // gorumsCallTypes should list all available call types supported by Gorums.
 // These are considered mutually incompatible.
 var gorumsCallTypes = []*protoimpl.ExtensionInfo{
-	gorums.E_Qc,
+	gorums.E_Quorumcall,
 	gorums.E_QcFuture,
 	gorums.E_Correctable,
 	gorums.E_CorrectableStream,
@@ -217,7 +217,7 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 // has a quorum function and hence need an internal type that wraps
 // the return type with additional information.
 var callTypesWithInternal = []*protoimpl.ExtensionInfo{
-	gorums.E_Qc,
+	gorums.E_Quorumcall,
 	gorums.E_QcFuture,
 	gorums.E_Correctable,
 	gorums.E_CorrectableStream,

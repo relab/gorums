@@ -8,7 +8,7 @@ import "gorums.proto";
 
 service QuorumCallService {
   rpc ReadQuorumCall(ReadRequest) returns (ReadResponse) {
-    option (gorums.qc) = true;
+    option (gorums.quorumcall) = true;
   }
 }
 
