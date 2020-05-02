@@ -199,7 +199,7 @@ var orderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) b
 		return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall)
 	},
 	ordering.E_OrderedRpc: func(m *protogen.Method) bool {
-		return hasMethodOption(m, gorums.E_Ordered) && !hasMethodOption(m, gorumsCallTypes...)
+		return hasMethodOption(m, gorums.E_Ordered) && !hasGorumsCallType(m)
 	},
 }
 
