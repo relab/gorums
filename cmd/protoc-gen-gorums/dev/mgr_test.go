@@ -79,10 +79,10 @@ func TestCreateConfiguration(t *testing.T) {
 		t.Errorf("got error creating configuration, want none (%v)", err)
 	}
 
-	cids := config.NodeIDs()
-	if !equal(cids, ids) {
+	cfgNodeIDs := config.NodeIDs()
+	if !equal(cfgNodeIDs, ids) {
 		t.Errorf("ids from Manager (got %v) and ids from configuration containing all nodes (got %v) should be equal",
-			ids, cids)
+			ids, cfgNodeIDs)
 	}
 
 	_, size := mgr.Size()

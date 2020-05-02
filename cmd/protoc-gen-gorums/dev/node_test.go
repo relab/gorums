@@ -59,10 +59,11 @@ func TestNodeSort(t *testing.T) {
 }
 
 func printNodes(t *testing.T, nodes []*Node) {
+	t.Helper()
 	for i, n := range nodes {
-		nstr := fmt.Sprintf(
+		nodeStr := fmt.Sprintf(
 			"%d: node %d | addr: %s | latency: %v | err: %v",
 			i, n.id, n.addr, n.latency, n.lastErr)
-		t.Logf("%s", nstr)
+		t.Logf("%s", nodeStr)
 	}
 }
