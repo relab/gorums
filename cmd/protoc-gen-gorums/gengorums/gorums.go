@@ -87,8 +87,8 @@ func genGorumsMethods(data servicesData, methodOptions ...*protoimpl.ExtensionIn
 
 func genGorumsMethod(g *protogen.GeneratedFile, method *protogen.Method) string {
 	methodOption := validateMethodExtensions(method)
-	if template, ok := gorumsCallTypeTemplates[methodOption]; ok {
-		return mustExecute(parseTemplate(methodOption.Name, template), methodData{g, method})
+	if callTypeInfo, ok := gorumsCallTypesInfo[methodOption]; ok {
+		return mustExecute(parseTemplate(methodOption.Name, callTypeInfo.template), methodData{g, method})
 	}
 	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
 }
@@ -171,16 +171,6 @@ var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
 var orderingTypes = map[string]*protoimpl.ExtensionInfo{
 	ordering.E_OrderedQc.Name[soIndex:]:  ordering.E_OrderedQc,
 	ordering.E_OrderedRpc.Name[soIndex:]: ordering.E_OrderedRpc,
-}
-
-var gorumsCallTypeTemplates = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Quorumcall:        quorumCall,
-	gorums.E_QcFuture:          futureCall,
-	gorums.E_Correctable:       correctableCall,
-	gorums.E_CorrectableStream: correctableStreamCall,
-	gorums.E_Multicast:         multicastCall,
-	ordering.E_OrderedQc:       orderingQC,
-	ordering.E_OrderedRpc:      orderingRPC,
 }
 
 type callTypeInfo struct {
