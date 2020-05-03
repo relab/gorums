@@ -63,8 +63,7 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 	sort.Strings(sortedTypes)
 	for _, gorumsType := range sortedTypes {
-		callTypeInfo := gorumsCallTypesInfo[gorumsType]
-		if callTypeInfo.extInfo == nil {
+		if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
 			g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
 		} else {
 			genGorumsMethods(data, callTypeInfo.extInfo)
