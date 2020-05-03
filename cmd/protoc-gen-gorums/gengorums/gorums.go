@@ -120,23 +120,18 @@ type methodData struct {
 }
 
 // hasGorumsType returns true if one of the service methods specify
-// the given gorums type.
+// the given gorums type, or if the gorums type specify a template-only
+// type, such as nodes, qspec, or types.
 func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
-	if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
+	callTypeInfo := gorumsCallTypesInfo[gorumsType]
+	if callTypeInfo.extInfo == nil {
+		// these are template-only entires
 		return true
 	}
-	return checkMethodOptions(services, gorumsType)
-}
-
-// checkMethodOptions returns true if one of the service methods defines
-// the given gorums option type.
-func checkMethodOptions(services []*protogen.Service, option string) bool {
-	if callTypeInfo, ok := gorumsCallTypesInfo[option]; ok {
-		return checkMethods(services, func(m *protogen.Method) bool {
-			return callTypeInfo.chkFn(m)
-		})
-	}
-	return false
+	return checkMethods(services, func(m *protogen.Method) bool {
+		// returns true if the method satisfy the calltype's check function
+		return callTypeInfo.chkFn(m)
+	})
 }
 
 // checkMethods returns true if the function fn evaluates to true
