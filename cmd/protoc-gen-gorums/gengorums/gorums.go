@@ -72,16 +72,17 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 }
 
-func genGorumsMethods(data servicesData, methodOptions ...*protoimpl.ExtensionInfo) {
+// genGorumsMethods generates gorums methods that specify the given methodOption.
+func genGorumsMethods(data servicesData, methodOption *protoimpl.ExtensionInfo) {
 	g := data.GenFile
 	for _, service := range data.Services {
 		for _, method := range service.Methods {
 			if hasMethodOption(method, gorums.E_Ordered) {
-				if hasOrderingOption(method, methodOptions...) {
+				if hasOrderingOption(method, methodOption) {
 					fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
 					g.P(genGorumsMethod(g, method))
 				}
-			} else if hasMethodOption(method, methodOptions...) {
+			} else if hasMethodOption(method, methodOption) {
 				fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
 				g.P(genGorumsMethod(g, method))
 			}
@@ -289,12 +290,6 @@ var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 	gorums.E_QcFuture,
 	gorums.E_Correctable,
 	gorums.E_CorrectableStream,
-}
-
-// orderingCallTypes should list call types that use ordering.
-var orderingCallTypes = []*protoimpl.ExtensionInfo{
-	ordering.E_OrderedQc,
-	ordering.E_OrderedRpc,
 }
 
 // hasGorumsCallType returns true if the given method has specified
