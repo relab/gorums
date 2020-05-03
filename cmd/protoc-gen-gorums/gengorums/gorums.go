@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/ordering"
@@ -55,17 +56,21 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
 func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
 	data := servicesData{g, file.Services}
-	for gorumsType, callTypeInfo := range gorumsCallTypesInfo {
+	// sort the gorums types so that output remains stable across rebuilds
+	sortedTypes := make([]string, 0, len(gorumsCallTypesInfo))
+	for gorumsType := range gorumsCallTypesInfo {
+		sortedTypes = append(sortedTypes, gorumsType)
+	}
+	sort.Strings(sortedTypes)
+	for _, gorumsType := range sortedTypes {
+		callTypeInfo := gorumsCallTypesInfo[gorumsType]
 		if callTypeInfo.extInfo == nil {
 			g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
-			g.P()
+		} else {
+			genGorumsMethods(data, callTypeInfo.extInfo)
 		}
+		g.P()
 	}
-	genGorumsMethods(data, gorumsCallTypes...)
-	g.P()
-	// generate all ordering methods
-	genGorumsMethods(data, orderingCallTypes...)
-	g.P()
 }
 
 func genGorumsMethods(data servicesData, methodOptions ...*protoimpl.ExtensionInfo) {
@@ -151,17 +156,7 @@ func checkMethods(services []*protogen.Service, fn func(m *protogen.Method) bool
 const index = len("gorums.")
 const soIndex = len("ordering.")
 
-// name to method option mapping
-var gorumsTypes = map[string]*protoimpl.ExtensionInfo{
-	gorums.E_Quorumcall.Name[index:]:        gorums.E_Quorumcall,
-	gorums.E_QcFuture.Name[index:]:          gorums.E_QcFuture,
-	gorums.E_Correctable.Name[index:]:       gorums.E_Correctable,
-	gorums.E_CorrectableStream.Name[index:]: gorums.E_CorrectableStream,
-	gorums.E_Multicast.Name[index:]:         gorums.E_Multicast,
-	ordering.E_OrderedQc.Name[soIndex:]:     ordering.E_OrderedQc,
-	ordering.E_OrderedRpc.Name[soIndex:]:    ordering.E_OrderedRpc,
-}
-
+// mapping from option type to option name
 var reverseMap = map[*protoimpl.ExtensionInfo]string{
 	gorums.E_Quorumcall:        gorums.E_Quorumcall.Name[index:],
 	gorums.E_QcFuture:          gorums.E_QcFuture.Name[index:],
@@ -172,6 +167,10 @@ var reverseMap = map[*protoimpl.ExtensionInfo]string{
 	ordering.E_OrderedRpc:      ordering.E_OrderedRpc.Name[soIndex:],
 }
 
+// callTypeInfo holds information about the option type, the option type name,
+// documentation string for the option type, the template used to generate
+// a method annotated with the given option, and a chkFn function that returns
+// true if code for the option type should be generated for the given method.
 type callTypeInfo struct {
 	extInfo    *protoimpl.ExtensionInfo
 	optionName string

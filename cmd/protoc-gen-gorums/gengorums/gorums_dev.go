@@ -39,8 +39,8 @@ func generateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.Fil
 	data := servicesData{g, file.Services}
 	if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
 		g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
-	} else if methodOption, ok := gorumsTypes[gorumsType]; ok {
-		genGorumsMethods(data, methodOption)
+	} else {
+		genGorumsMethods(data, callTypeInfo.extInfo)
 	}
 	g.P()
 }

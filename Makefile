@@ -3,12 +3,15 @@ dev_path				:= $(PLUGIN_PATH)/dev
 gen_path				:= $(PLUGIN_PATH)/gengorums
 tests_path				:= $(PLUGIN_PATH)/tests
 zorums_proto			:= $(dev_path)/zorums.proto
+tests_zorums_proto		:= $(tests_path)/zorums/zorums.proto
+tests_zorums_gen		:= $(patsubst %.proto,%_gorums.pb.go,$(tests_zorums_proto))
 gen_files				:= $(shell find $(dev_path) -name "zorums*.pb.go")
 static_file				:= $(gen_path)/template_static.go
 static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
 test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing*")
 failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
 test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
+tmp_dir					:= $(shell mktemp -d -t gorums-XXXXX)
 internal_so				:= internal/ordering
 public_so				:= ordering/
 
@@ -69,7 +72,7 @@ clean:
 
 .PHONY: gentests $(test_files)
 
-gentests: $(test_files) $(failing_test_files)
+gentests: $(test_files) $(failing_test_files) stability
 
 $(test_files): installgorums
 	@echo Running protoc test with source files expected to pass
@@ -86,3 +89,21 @@ $(failing_test_files): installgorums
 		--go-grpc_out=paths=source_relative:. \
 		--gorums_out=paths=source_relative,trace=true:. $@ 2> /dev/null \
 	&& (echo "expected protoc to fail but got exit code: $$?") || (exit 0)
+
+.PHONY: stability
+stability: installgorums
+	@echo "Running protoc test with source files expected to remain stable (no output change between runs)"
+	@protoc -I. \
+		--go_out=paths=source_relative:. \
+		--go-grpc_out=paths=source_relative:. \
+		--gorums_out=paths=source_relative,trace=true:. $(tests_zorums_proto) \
+	|| (echo "unexpected failure with exit code: $$?")
+	@cp $(tests_zorums_gen) $(tmp_dir)/x_gorums.pb.go
+	@protoc -I. \
+		--go_out=paths=source_relative:. \
+		--go-grpc_out=paths=source_relative:. \
+		--gorums_out=paths=source_relative,trace=true:. $(tests_zorums_proto) \
+	|| (echo "unexpected failure with exit code: $$?")
+	@diff $(tests_zorums_gen) $(tmp_dir)/x_gorums.pb.go \
+	|| (echo "unexpected instability, observed changes between protoc runs: $$?")
+	@rm -rf $(tmp_dir)
