@@ -12,11 +12,11 @@ import (
 // and for each call type in the service definition.
 func GenerateDevFiles(gen *protogen.Plugin, file *protogen.File) {
 	for gorumsType := range gorumsCallTypesInfo {
-		generateDevFile(gorumsType, gen, file)
+		generateDevFile(gen, file, gorumsType)
 	}
 }
 
-func generateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.File) {
+func generateDevFile(gen *protogen.Plugin, file *protogen.File, gorumsType string) {
 	if len(file.Services) == 0 || !hasGorumsType(file.Services, gorumsType) {
 		// there is nothing for this plugin to do
 		fmt.Fprintf(os.Stderr, "ignoring %s\n", gorumsType)
@@ -36,6 +36,5 @@ func generateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.Fil
 	g.P()
 	g.P("package ", file.GoPackageName)
 	g.P()
-	data := servicesData{g, file.Services}
-	genGorumsType(data, gorumsType)
+	genGorumsType(g, file.Services, gorumsType)
 }
