@@ -17,7 +17,7 @@ type QuorumSpec interface {
 	{{$out := out $genFile .}}
 	{{$customOut := customOut $genFile .}}
 	// {{$method}}QF is the quorum function for the {{$method}}
-	// {{callTypeName .}} call method.
+	// {{docName .}} call method.
 	{{$method}}QF({{withQFArg . $in}}replies []*{{$out}}) (*{{$customOut}}{{withCorrectable . ", int"}}, bool)
 {{end}}
 }

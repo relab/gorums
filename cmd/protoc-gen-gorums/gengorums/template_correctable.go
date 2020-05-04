@@ -3,11 +3,10 @@ package gengorums
 var correctableCallVariables = `
 {{$context := use "context.Context" .GenFile}}
 {{$opts := use "grpc.CallOption" .GenFile}}
-{{$correctableOut := correctableOut $customOut}}
+{{$correctableOut := outType .Method $customOut}}
 {{$appendFn := printf "append"}}
 {{if correctableStream .Method}}
 {{$appendFn = printf "appendIfNotPresent"}}
-{{$correctableOut = correctableStreamOut $customOut}}
 {{end}}
 `
 

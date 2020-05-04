@@ -105,11 +105,11 @@ func callTypeOptions(method *protogen.Method) []*callTypeInfo {
 	return options
 }
 
-func callTypeName(method *protogen.Method) string {
+func callType(method *protogen.Method) *callTypeInfo {
 	for _, cti := range callTypeOptions(method) {
 		callType := cti.deriveCallType(method)
 		if callType.chkFn(method) {
-			return callType.docName
+			return callType
 		}
 	}
 	panic(fmt.Sprintf("unknown calltype for method %s\n", method.GoName))
@@ -165,6 +165,7 @@ type callTypeInfo struct {
 	optionName     string
 	docName        string
 	template       string
+	outPrefix      string
 	chkFn          func(m *protogen.Method) bool
 	nestedCallType map[string]*callTypeInfo
 }
@@ -203,6 +204,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		optionName: gorums.E_Quorumcall.Name[index:],
 		docName:    "quorum",
 		template:   quorumCall,
+		// outPrefix:  "internal",
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered)
 		},
@@ -212,12 +214,11 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		optionName: gorums.E_QcFuture.Name[index:],
 		docName:    "asynchronous quorum",
 		template:   futureCall,
+		outPrefix:  "Future",
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_QcFuture)
 		},
 	},
-	//TODO add field outPrefix to hold Correctable<$out> or CorrectableStream<$out>
-	//TODO also use outPrefix for Future<$out> and maybe internal<$out>
 	gorums.E_Correctable.Name[index:]: {
 		extInfo:    gorums.E_Correctable,
 		optionName: gorums.E_Correctable.Name[index:],
@@ -230,6 +231,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 				optionName: correctable.E_Correctable.Name[coIndex:],
 				docName:    "correctable quorum",
 				template:   correctableCall,
+				outPrefix:  "Correctable",
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Correctable) && !m.Desc.IsStreamingServer()
 				},
@@ -239,6 +241,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 				optionName: correctable.E_CorrectableStream.Name[coIndex:],
 				docName:    "correctable stream quorum",
 				template:   correctableStreamCall,
+				outPrefix:  "CorrectableStream",
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Correctable) && m.Desc.IsStreamingServer()
 				},
