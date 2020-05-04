@@ -172,7 +172,8 @@ import (
 	}
 }
 
-func protoc(outpath string, args ...string) {
+//TODO(meling) currently not used
+func protoc2(outpath string, args ...string) {
 	// @protoc -I../../..:. \
 	// cmd/protoc-gen-gorums/tests/quorumcall/qc.proto
 	// --go_out=<param1>=<value1>,<param2>=<value2>:<output_directory>
