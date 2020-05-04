@@ -82,9 +82,11 @@ var funcMap = template.FuncMap{
 		return ""
 	},
 	"correctableStream": func(method *protogen.Method) bool {
+		//TODO check for correctable and serverside streaming
 		return hasMethodOption(method, gorums.E_CorrectableStream)
 	},
 	"withCorrectable": func(method *protogen.Method, arg string) string {
+		//TODO only check for correctable
 		if hasMethodOption(method, gorums.E_Correctable, gorums.E_CorrectableStream) {
 			return arg
 		}
@@ -143,41 +145,12 @@ func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 	return g.QualifiedGoIdent(method.Output.GoIdent)
 }
 
-func internal(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-	if hasMethodOption(method, callTypesWithInternal...) {
-		out := out(g, method)
-		intOut := internalOut(out)
-		s[intOut] = out
-	}
-}
-
 func internalOut(out string) string {
 	return fmt.Sprintf("internal%s", field(out))
 }
 
-func future(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-	if hasMethodOption(method, gorums.E_QcFuture) {
-		out := customOut(g, method)
-		futOut := futureOut(out)
-		s[futOut] = out
-	}
-}
-
 func futureOut(customOut string) string {
 	return fmt.Sprintf("Future%s", field(customOut))
-}
-
-func correctable(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-	if hasMethodOption(method, gorums.E_Correctable) {
-		out := customOut(g, method)
-		corrOut := correctableOut(out)
-		s[corrOut] = out
-	}
-	if hasMethodOption(method, gorums.E_CorrectableStream) {
-		out := customOut(g, method)
-		corrOut := correctableStreamOut(out)
-		s[corrOut] = out
-	}
 }
 
 func correctableOut(customOut string) string {
@@ -189,15 +162,39 @@ func correctableStreamOut(customOut string) string {
 }
 
 func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, internal)
+	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
+		if hasMethodOption(method, callTypesWithInternal...) {
+			out := out(g, method)
+			intOut := internalOut(out)
+			s[intOut] = out
+		}
+	})
 }
 
 func mapFutureOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, future)
+	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
+		if hasMethodOption(method, gorums.E_QcFuture) {
+			out := customOut(g, method)
+			futOut := futureOut(out)
+			s[futOut] = out
+		}
+	})
 }
 
 func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, correctable)
+	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
+		if hasMethodOption(method, gorums.E_Correctable, gorums.E_CorrectableStream) {
+			if method.Desc.IsStreamingServer() {
+				out := customOut(g, method)
+				corrOut := correctableStreamOut(out)
+				s[corrOut] = out
+			} else {
+				out := customOut(g, method)
+				corrOut := correctableOut(out)
+				s[corrOut] = out
+			}
+		}
+	})
 }
 
 // customOut returns the output type to be used for the given method.
