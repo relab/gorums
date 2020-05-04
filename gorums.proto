@@ -9,7 +9,6 @@ option go_package = "github.com/relab/gorums";
 extend google.protobuf.MethodOptions {
   bool quorumcall = 50000;
   bool correctable = 50001;
-  bool correctable_stream = 50002;
   bool multicast = 50003;
   bool qc_future = 50004;
   bool qf_with_req = 50005;

@@ -183,38 +183,38 @@ service ZorumsService {
 
   // CorrectableStream plain.
   rpc CorrectableStream(Request) returns (stream Response) {
-    option (gorums.correctable_stream) = true;
+    option (gorums.correctable) = true;
   }
   // CorrectablePerNodeArg with per_node_arg option.
   rpc CorrectableStreamPerNodeArg(Request) returns (stream Response) {
-    option (gorums.correctable_stream) = true;
+    option (gorums.correctable) = true;
     option (gorums.per_node_arg) = true;
   }
   // CorrectableQFWithRequestArg with qf_with_req option.
   rpc CorrectableStreamQFWithRequestArg(Request) returns (stream Response) {
-    option (gorums.correctable_stream) = true;
+    option (gorums.correctable) = true;
     option (gorums.qf_with_req) = true;
   }
   // CorrectableCustomReturnType with custom_return_type option.
   rpc CorrectableStreamCustomReturnType(Request) returns (stream Response) {
-    option (gorums.correctable_stream) = true;
+    option (gorums.correctable) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   // CorrectableCombo with all supported options.
   rpc CorrectableStreamCombo(Request) returns (stream Response) {
-    option (gorums.correctable_stream) = true;
+    option (gorums.correctable) = true;
     option (gorums.qf_with_req) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   // CorrectableEmpty for testing imported message type.
   rpc CorrectableStreamEmpty(Request) returns (stream google.protobuf.Empty) {
-    option (gorums.correctable_stream) = true;
+    option (gorums.correctable) = true;
   }
   // CorrectableEmpty2 for testing imported message type; with same return
   // type as Correctable: Response.
   rpc CorrectableStreamEmpty2(google.protobuf.Empty) returns (stream Response) {
-    option (gorums.correctable_stream) = true;
+    option (gorums.correctable) = true;
   }
 
   // ---------------------------------------------------------------

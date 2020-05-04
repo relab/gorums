@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package correctable;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/relab/gorums/internal/correctable";
+
+// These fields are used by the gorums plugin to describe
+// correctable types. They are not meant to be used elsewhere.
+extend google.protobuf.MethodOptions {
+  bool correctable = 6200;
+  bool correctable_stream = 6201;
+}

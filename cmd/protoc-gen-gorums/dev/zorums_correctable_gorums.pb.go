@@ -9,6 +9,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	io "io"
 	time "time"
 )
 
@@ -679,4 +680,729 @@ func (n *Node) CorrectableEmpty2(ctx context.Context, in *empty.Empty, replyChan
 		n.setLastErr(err)
 	}
 	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// CorrectableStream plain.
+func (c *Configuration) CorrectableStream(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableStreamResponse {
+	corr := &CorrectableStreamResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableStream(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStream")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableStream(ctx, in, replyChan)
+	}
+
+	var (
+		//TODO(meling) don't recall why we need n*2 reply slots?
+		replyValues = make([]*Response, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *Response
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableStream(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	x := NewZorumsServiceClient(n.conn)
+	y, err := x.CorrectableStream(ctx, in)
+	if err != nil {
+		replyChan <- internalResponse{n.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- internalResponse{n.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// CorrectablePerNodeArg with per_node_arg option.
+func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) *CorrectableStreamResponse {
+	corr := &CorrectableStreamResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableStreamPerNodeArg(ctx, in, f, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamPerNodeArg")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.id)
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		go n.CorrectableStreamPerNodeArg(ctx, nodeArg, replyChan)
+	}
+
+	var (
+		//TODO(meling) don't recall why we need n*2 reply slots?
+		replyValues = make([]*Response, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *Response
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamPerNodeArgQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableStreamPerNodeArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	x := NewZorumsServiceClient(n.conn)
+	y, err := x.CorrectableStreamPerNodeArg(ctx, in)
+	if err != nil {
+		replyChan <- internalResponse{n.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- internalResponse{n.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// CorrectableQFWithRequestArg with qf_with_req option.
+func (c *Configuration) CorrectableStreamQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableStreamResponse {
+	corr := &CorrectableStreamResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableStreamQFWithRequestArg(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableStreamQFWithRequestArg(ctx context.Context, in *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamQFWithRequestArg")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableStreamQFWithRequestArg(ctx, in, replyChan)
+	}
+
+	var (
+		//TODO(meling) don't recall why we need n*2 reply slots?
+		replyValues = make([]*Response, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *Response
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamQFWithRequestArgQF(in, replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableStreamQFWithRequestArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	x := NewZorumsServiceClient(n.conn)
+	y, err := x.CorrectableStreamQFWithRequestArg(ctx, in)
+	if err != nil {
+		replyChan <- internalResponse{n.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- internalResponse{n.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// CorrectableCustomReturnType with custom_return_type option.
+func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableStreamMyResponse {
+	corr := &CorrectableStreamMyResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableStreamCustomReturnType(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, in *Request, resp *CorrectableStreamMyResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamCustomReturnType")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableStreamCustomReturnType(ctx, in, replyChan)
+	}
+
+	var (
+		//TODO(meling) don't recall why we need n*2 reply slots?
+		replyValues = make([]*Response, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *MyResponse
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamCustomReturnTypeQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableStreamCustomReturnType(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	x := NewZorumsServiceClient(n.conn)
+	y, err := x.CorrectableStreamCustomReturnType(ctx, in)
+	if err != nil {
+		replyChan <- internalResponse{n.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- internalResponse{n.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// CorrectableCombo with all supported options.
+func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) *CorrectableStreamMyResponse {
+	corr := &CorrectableStreamMyResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableStreamCombo(ctx, in, f, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableStreamMyResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamCombo")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.id)
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		go n.CorrectableStreamCombo(ctx, nodeArg, replyChan)
+	}
+
+	var (
+		//TODO(meling) don't recall why we need n*2 reply slots?
+		replyValues = make([]*Response, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *MyResponse
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamComboQF(in, replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableStreamCombo(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	x := NewZorumsServiceClient(n.conn)
+	y, err := x.CorrectableStreamCombo(ctx, in)
+	if err != nil {
+		replyChan <- internalResponse{n.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- internalResponse{n.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// CorrectableEmpty for testing imported message type.
+func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableStreamEmpty {
+	corr := &CorrectableStreamEmpty{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableStreamEmpty(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request, resp *CorrectableStreamEmpty, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamEmpty")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Empty, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalEmpty, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableStreamEmpty(ctx, in, replyChan)
+	}
+
+	var (
+		//TODO(meling) don't recall why we need n*2 reply slots?
+		replyValues = make([]*empty.Empty, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *empty.Empty
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamEmptyQF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableStreamEmpty(ctx context.Context, in *Request, replyChan chan<- internalEmpty) {
+	x := NewZorumsServiceClient(n.conn)
+	y, err := x.CorrectableStreamEmpty(ctx, in)
+	if err != nil {
+		replyChan <- internalEmpty{n.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- internalEmpty{n.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// CorrectableEmpty2 for testing imported message type; with same return
+// type as Correctable: Response.
+func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) *CorrectableStreamResponse {
+	corr := &CorrectableStreamResponse{
+		level:   LevelNotSet,
+		NodeIDs: make([]uint32, 0, c.n),
+		donech:  make(chan struct{}),
+	}
+	go c.correctableStreamEmpty2(ctx, in, corr, opts...)
+	return corr
+}
+
+func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.Empty, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamEmpty2")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.CorrectableStreamEmpty2(ctx, in, replyChan)
+	}
+
+	var (
+		//TODO(meling) don't recall why we need n*2 reply slots?
+		replyValues = make([]*Response, 0, c.n*2)
+		clevel      = LevelNotSet
+		reply       *Response
+		rlevel      int
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamEmpty2QF(replyValues)
+			if quorum {
+				resp.set(reply, rlevel, nil, true)
+				return
+			}
+			if rlevel > clevel {
+				clevel = rlevel
+				resp.set(reply, rlevel, nil, false)
+			}
+		case <-ctx.Done():
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			return
+		}
+		if len(errs) == expected { // Can't rely on reply count.
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			return
+		}
+	}
+}
+
+func (n *Node) CorrectableStreamEmpty2(ctx context.Context, in *empty.Empty, replyChan chan<- internalResponse) {
+	x := NewZorumsServiceClient(n.conn)
+	y, err := x.CorrectableStreamEmpty2(ctx, in)
+	if err != nil {
+		replyChan <- internalResponse{n.id, nil, err}
+		return
+	}
+
+	for {
+		reply, err := y.Recv()
+		if err == io.EOF {
+			return
+		}
+		replyChan <- internalResponse{n.id, reply, err}
+		if err != nil {
+			return
+		}
+	}
 }
