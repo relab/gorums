@@ -65,26 +65,30 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 	sort.Strings(sortedTypes)
 	for _, gorumsType := range sortedTypes {
-		if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
-			g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
-		} else {
-			genGorumsMethodsDev3(data, callTypeInfo)
-		}
-		g.P()
+		genGorumsType(data, gorumsType)
 	}
+}
+
+func genGorumsType(data servicesData, gorumsType string) {
+	g := data.GenFile
+	if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
+		g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
+	} else {
+		genGorumsMethods(data, callTypeInfo)
+	}
+	g.P()
 }
 
 //TODO(meling) rename to templatePicker or something
 
 // genGorumsMethods generates gorums methods that specify the given methodOption.
-func genGorumsMethodsDev3(data servicesData, callTypeInfo *callTypeInfo) {
+func genGorumsMethods(data servicesData, callTypeInfo *callTypeInfo) {
 	g := data.GenFile
 	for _, service := range data.Services {
 		for _, method := range service.Methods {
 			callType := callTypeInfo.deriveCallType(method)
 			if callType.chkFn(method) {
-				fmt.Fprintf(os.Stderr, "ym=%s, opt=%s\n", method.GoName, callType.optionName)
-				fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
+				fmt.Fprintf(os.Stderr, "generating(%v): %s\n", callType.optionName, method.GoName)
 				g.P(mustExecute(parseTemplate(callType.optionName, callType.template), methodData{g, method}))
 			}
 		}
@@ -101,35 +105,17 @@ func callTypeOptions(method *protogen.Method) []*callTypeInfo {
 			}
 		}
 	}
-	fmt.Fprintf(os.Stderr, "%s: OPTIONS=%v\n", method.GoName, options)
 	return options
 }
 
 func callTypeName(method *protogen.Method) string {
-	options := callTypeOptions(method)
-
-	var callTI *callTypeInfo
-	for _, cti := range options {
-		if cti.chkFn(method) {
-			callTI = cti
-			fmt.Fprintf(os.Stderr, "ym=%s, opt=%s\n", method.GoName, cti.optionName)
-			//TODO(meling) make this a func on callTypeInfo struct:
-			if cti.nestedCallType != nil {
-				fmt.Fprintf(os.Stderr, "zm=%s, opt=%s\n", method.GoName, cti.optionName)
-				for _, nestedCallType := range cti.nestedCallType {
-					fmt.Fprintf(os.Stderr, "am=%s, opt=%s\n", method.GoName, cti.optionName)
-					if nestedCallType.chkFn(method) {
-						fmt.Fprintf(os.Stderr, "bm=%s, opt=%s\n", method.GoName, cti.optionName)
-						return nestedCallType.docName
-					}
-				}
-			}
+	for _, cti := range callTypeOptions(method) {
+		callType := cti.deriveCallType(method)
+		if callType.chkFn(method) {
+			return callType.docName
 		}
 	}
-	if callTI != nil {
-		return callTI.docName
-	}
-	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
+	panic(fmt.Sprintf("unknown calltype for method %s\n", method.GoName))
 }
 
 type servicesData struct {
@@ -182,8 +168,6 @@ var reverseMap = map[*protoimpl.ExtensionInfo]string{
 	gorums.E_CorrectableStream: gorums.E_CorrectableStream.Name[index:],
 	gorums.E_Multicast:         gorums.E_Multicast.Name[index:],
 	gorums.E_Ordered:           gorums.E_Ordered.Name[index:],
-	// ordering.E_OrderedQc:       ordering.E_OrderedQc.Name[soIndex:],
-	// ordering.E_OrderedRpc:      ordering.E_OrderedRpc.Name[soIndex:],
 }
 
 // callTypeInfo holds information about the option type, the option type name,
