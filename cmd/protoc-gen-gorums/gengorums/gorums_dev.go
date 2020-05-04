@@ -12,7 +12,6 @@ import (
 // and for each call type in the service definition.
 func GenerateDevFiles(gen *protogen.Plugin, file *protogen.File) {
 	for gorumsType := range gorumsCallTypesInfo {
-		// for _, gorumsType := range []string{"ordered"} {
 		generateDevFile(gorumsType, gen, file)
 	}
 }
@@ -38,12 +37,5 @@ func generateDevFile(gorumsType string, gen *protogen.Plugin, file *protogen.Fil
 	g.P("package ", file.GoPackageName)
 	g.P()
 	data := servicesData{g, file.Services}
-	if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
-		g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
-	} else {
-		// genGorumsMethodsDev(data, callTypeInfo)
-		// genGorumsMethodsDev2(data, callTypeInfo.extInfo, callTypeInfo)
-		genGorumsMethodsDev3(data, callTypeInfo)
-	}
-	g.P()
+	genGorumsType(data, gorumsType)
 }
