@@ -14,8 +14,6 @@ import (
 	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
-// TODO(meling) replace github.com/relab/gorums with gorums.io as import package
-
 // GenerateFile generates a _gorums.pb.go file containing Gorums service definitions.
 func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
 	if len(file.Services) == 0 || !checkMethods(file.Services, func(m *protogen.Method) bool {
@@ -157,10 +155,6 @@ func checkMethods(services []*protogen.Service, fn func(m *protogen.Method) bool
 	return false
 }
 
-// compute index to start of option name
-const index = len("gorums.")
-const soIndex = len("ordering.")
-
 // callTypeInfo holds information about the option type, the option type name,
 // documentation string for the option type, the template used to generate
 // a method annotated with the given option, and a chkFn function that returns
@@ -188,21 +182,9 @@ func (c *callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
 	return c
 }
 
-func (c callTypeInfo) checkFn(m *protogen.Method) bool {
-	if c.chkFn != nil && c.chkFn(m) {
-		if c.nestedCallType != nil {
-			for _, nestedCallType := range c.nestedCallType {
-				if nestedCallType.chkFn(m) {
-					return true
-				}
-			}
-		}
-		return true
-	}
-	return false
-}
-
-//TODO(meling) consider whether or not we might use a compatibility table for different Gorums types along with error messages.
+// compute index to start of option name
+const index = len("gorums.")
+const soIndex = len("ordering.")
 
 // gorumsCallTypesInfo maps Gorums call type names to callTypeInfo.
 // This includes details such as the template, extension info and
@@ -262,8 +244,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	gorums.E_Ordered.Name[index:]: {
 		extInfo:    gorums.E_Ordered,
 		optionName: gorums.E_Ordered.Name[index:],
-		docName:    "ordered quorum",
-		template:   "", //TODO(meling) figure out better way
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Ordered)
 		},
@@ -287,16 +267,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 				},
 			},
 		},
-	},
-}
-
-// mapping from ordering type to a checker that will check if a method has that type
-var orderingTypeCheckers = map[*protoimpl.ExtensionInfo]func(*protogen.Method) bool{
-	ordering.E_OrderedQc: func(m *protogen.Method) bool {
-		return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall)
-	},
-	ordering.E_OrderedRpc: func(m *protogen.Method) bool {
-		return hasMethodOption(m, gorums.E_Ordered) && !hasGorumsCallType(m)
 	},
 }
 
@@ -334,7 +304,6 @@ func hasGorumsCallType(method *protogen.Method) bool {
 	return hasMethodOption(method, gorumsCallTypes...)
 }
 
-//TODO(meling) rename to hasCallTypeOption
 // hasMethodOption returns true if the method has one of the given method options.
 func hasMethodOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
 	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
@@ -357,16 +326,6 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 	return true
 }
 
-// hasOrderingOption returns true if the method has one of the ordering method options.
-func hasOrderingOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
-	for _, option := range methodOptions {
-		if f, ok := orderingTypeCheckers[option]; ok && f(method) {
-			return true
-		}
-	}
-	return false
-}
-
 // validateMethodExtensions returns the method option for the
 // call type of the given method. If the method specifies multiple
 // call types, validation will fail with a panic.
@@ -382,13 +341,6 @@ func validateMethodExtensions(method *protogen.Method) *protoimpl.ExtensionInfo 
 			firstOption = callType
 		}
 	}
-
-	// check if the method matches any ordering types
-	// for t, f := range orderingTypeCheckers {
-	// 	if f(method) {
-	// 		firstOption = t
-	// 	}
-	// }
 
 	isQuorumCallVariant := hasMethodOption(method, callTypesWithInternal...)
 	switch {
