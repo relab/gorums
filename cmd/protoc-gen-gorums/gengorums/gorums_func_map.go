@@ -96,6 +96,9 @@ var funcMap = template.FuncMap{
 		}
 		return ""
 	},
+	"docName": func(method *protogen.Method) string {
+		return callType(method).docName
+	},
 	"fullName": func(method *protogen.Method) string {
 		return fmt.Sprintf("/%s/%s", method.Parent.Desc.FullName(), method.Desc.Name())
 	},
@@ -106,16 +109,13 @@ var funcMap = template.FuncMap{
 		return g.QualifiedGoIdent(method.Input.GoIdent)
 	},
 	"out":                   out,
+	"outType":               outType,
 	"internalOut":           internalOut,
 	"customOut":             customOut,
-	"futureOut":             futureOut,
-	"correctableOut":        correctableOut,
-	"correctableStreamOut":  correctableStreamOut,
 	"mapInternalOutType":    mapInternalOutType,
 	"mapCorrectableOutType": mapCorrectableOutType,
 	"mapFutureOutType":      mapFutureOutType,
 	"streamMethods":         streamMethods,
-	"callTypeName":          callTypeName,
 	"qspecServices":         qspecServices,
 	"qspecMethods":          qspecMethods,
 	"unexport":              unexport,
@@ -143,20 +143,13 @@ func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 	return g.QualifiedGoIdent(method.Output.GoIdent)
 }
 
+func outType(method *protogen.Method, out string) string {
+	prefix := callType(method).outPrefix
+	return fmt.Sprintf("%s%s", prefix, field(out))
+}
+
 func internalOut(out string) string {
 	return fmt.Sprintf("internal%s", field(out))
-}
-
-func futureOut(customOut string) string {
-	return fmt.Sprintf("Future%s", field(customOut))
-}
-
-func correctableOut(customOut string) string {
-	return fmt.Sprintf("Correctable%s", field(customOut))
-}
-
-func correctableStreamOut(customOut string) string {
-	return fmt.Sprintf("CorrectableStream%s", field(customOut))
 }
 
 func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
@@ -173,7 +166,7 @@ func mapFutureOutType(g *protogen.GeneratedFile, services []*protogen.Service) (
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 		if hasMethodOption(method, gorums.E_QcFuture) {
 			out := customOut(g, method)
-			futOut := futureOut(out)
+			futOut := outType(method, out)
 			s[futOut] = out
 		}
 	})
@@ -182,15 +175,9 @@ func mapFutureOutType(g *protogen.GeneratedFile, services []*protogen.Service) (
 func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 		if hasMethodOption(method, gorums.E_Correctable) {
-			if method.Desc.IsStreamingServer() {
-				out := customOut(g, method)
-				corrOut := correctableStreamOut(out)
-				s[corrOut] = out
-			} else {
-				out := customOut(g, method)
-				corrOut := correctableOut(out)
-				s[corrOut] = out
-			}
+			out := customOut(g, method)
+			corrOut := outType(method, out)
+			s[corrOut] = out
 		}
 	})
 }
