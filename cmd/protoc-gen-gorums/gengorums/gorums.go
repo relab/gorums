@@ -221,8 +221,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	gorums.E_Correctable.Name[index:]: {
 		extInfo:    gorums.E_Correctable,
 		optionName: gorums.E_Correctable.Name[index:],
-		docName:    "correctable quorum",
-		template:   correctableCall,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Correctable)
 		},
