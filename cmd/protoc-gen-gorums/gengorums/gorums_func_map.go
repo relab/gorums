@@ -144,12 +144,25 @@ func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 }
 
 func outType(method *protogen.Method, out string) string {
-	prefix := callType(method).outPrefix
-	return fmt.Sprintf("%s%s", prefix, field(out))
+	return fmt.Sprintf("%s%s", callType(method).outPrefix, field(out))
 }
 
 func internalOut(out string) string {
 	return fmt.Sprintf("internal%s", field(out))
+}
+
+// customOut returns the output type to be used for the given method.
+// This may be the output type specified in the rpc line,
+// or if a custom_return_type option is provided for the method,
+// this provided custom type will be returned.
+func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
+	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
+	customOutType := fmt.Sprintf("%v", proto.GetExtension(ext, gorums.E_CustomReturnType))
+	outType := method.Output.GoIdent
+	if customOutType != "" {
+		outType.GoName = customOutType
+	}
+	return g.QualifiedGoIdent(outType)
 }
 
 func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
@@ -180,20 +193,6 @@ func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Servi
 			s[corrOut] = out
 		}
 	})
-}
-
-// customOut returns the output type to be used for the given method.
-// This may be the output type specified in the rpc line,
-// or if a custom_return_type option is provided for the method,
-// this provided custom type will be returned.
-func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	customOutType := fmt.Sprintf("%v", proto.GetExtension(ext, gorums.E_CustomReturnType))
-	outType := method.Output.GoIdent
-	if customOutType != "" {
-		outType.GoName = customOutType
-	}
-	return g.QualifiedGoIdent(outType)
 }
 
 // field derives an embedded field name from the given typeName.
