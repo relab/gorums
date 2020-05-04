@@ -83,6 +83,10 @@ func genGorumsMethods(data servicesData, callTypeInfo *callTypeInfo) {
 	g := data.GenFile
 	for _, service := range data.Services {
 		for _, method := range service.Methods {
+			err := validateOptions(method)
+			if err != nil {
+				log.Fatal(err)
+			}
 			callType := callTypeInfo.deriveCallType(method)
 			if callType.chkFn(method) {
 				fmt.Fprintf(os.Stderr, "generating(%v): %s\n", callType.optionName, method.GoName)
@@ -204,7 +208,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		optionName: gorums.E_Quorumcall.Name[index:],
 		docName:    "quorum",
 		template:   quorumCall,
-		// outPrefix:  "internal",
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered)
 		},
@@ -339,57 +342,44 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 	return true
 }
 
-// validateMethodExtensions returns the method option for the
-// call type of the given method. If the method specifies multiple
-// call types, validation will fail with a panic.
-func validateMethodExtensions(method *protogen.Method) *protoimpl.ExtensionInfo {
+// validateOptions returns an error if the extension options
+// for the provided method are incompatible.
+func validateOptions(method *protogen.Method) error {
 	methExt := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	var firstOption *protoimpl.ExtensionInfo
-	for _, callType := range gorumsCallTypes {
-		if proto.HasExtension(methExt, callType) {
-			if firstOption != nil {
-				log.Fatalf("%s.%s: cannot combine options: '%s' and '%s'",
-					method.Parent.Desc.Name(), method.Desc.Name(), firstOption.Name, callType.Name)
-			}
-			firstOption = callType
-		}
-	}
-
 	isQuorumCallVariant := hasMethodOption(method, callTypesWithInternal...)
 	switch {
 	case !isQuorumCallVariant && proto.GetExtension(methExt, gorums.E_CustomReturnType) != "":
 		// Only QC variants can define custom return type
 		// (we don't support rewriting the plain gRPC methods.)
-		log.Fatalf(
+		return fmt.Errorf(
 			"%s.%s: cannot combine non-quorum call method with the '%s' option",
 			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CustomReturnType.Name)
 
 	case !isQuorumCallVariant && hasMethodOption(method, gorums.E_QfWithReq):
-		// Only QC variants need to process replies.
-		log.Fatalf(
+		// Multicast does not reply; hence, only QC variants need to process replies.
+		return fmt.Errorf(
 			"%s.%s: cannot combine non-quorum call method with the '%s' option",
 			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_QfWithReq.Name)
 
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
-		log.Fatalf(
-			"%s.%s: client-server streams is only valid with the '%s' option",
+		return fmt.Errorf(
+			"%s.%s: client-server stream is only valid with the '%s' option",
 			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name)
 
 	case hasMethodOption(method, gorums.E_Multicast) && !method.Desc.IsStreamingClient():
-		log.Fatalf(
-			"%s.%s: '%s' option is only valid for client-server streams methods",
+		return fmt.Errorf(
+			"%s.%s: '%s' option is only valid for client-server stream methods",
 			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name)
 
-		// case !hasMethodOption(method, gorums.E_CorrectableStream) && method.Desc.IsStreamingServer():
-		// 	log.Fatalf(
-		// 		"%s.%s: server-client streams is only valid with the '%s' option",
-		// 		method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name)
+	case !hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer():
+		return fmt.Errorf(
+			"%s.%s: server-client stream is only valid with the '%s' option",
+			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Correctable.Name)
 
-		// case hasMethodOption(method, gorums.E_CorrectableStream) && !method.Desc.IsStreamingServer():
-		// 	log.Fatalf(
-		// 		"%s.%s: '%s' option is only valid for server-client streams",
-		// 		method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name)
+	case hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingClient():
+		return fmt.Errorf(
+			"%s.%s: '%s' option is only valid for server-client stream",
+			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Correctable.Name)
 	}
-
-	return firstOption
+	return nil
 }
