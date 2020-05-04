@@ -82,12 +82,10 @@ var funcMap = template.FuncMap{
 		return ""
 	},
 	"correctableStream": func(method *protogen.Method) bool {
-		//TODO check for correctable and serverside streaming
-		return hasMethodOption(method, gorums.E_CorrectableStream)
+		return hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer()
 	},
 	"withCorrectable": func(method *protogen.Method, arg string) string {
-		//TODO only check for correctable
-		if hasMethodOption(method, gorums.E_Correctable, gorums.E_CorrectableStream) {
+		if hasMethodOption(method, gorums.E_Correctable) {
 			return arg
 		}
 		return ""
@@ -183,7 +181,7 @@ func mapFutureOutType(g *protogen.GeneratedFile, services []*protogen.Service) (
 
 func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasMethodOption(method, gorums.E_Correctable, gorums.E_CorrectableStream) {
+		if hasMethodOption(method, gorums.E_Correctable) {
 			if method.Desc.IsStreamingServer() {
 				out := customOut(g, method)
 				corrOut := correctableStreamOut(out)

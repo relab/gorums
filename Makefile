@@ -12,7 +12,8 @@ test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing
 failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
 test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
 tmp_dir					:= $(shell mktemp -d -t gorums-XXXXX)
-internal_so				:= internal/ordering
+internal_ordering		:= internal/ordering
+internal_correctable	:= internal/correctable
 public_so				:= ordering/
 
 .PHONY: dev download install-tools installgorums clean
@@ -45,9 +46,9 @@ gorums.pb.go: gorums.proto
 	@echo Generating gorums proto options
 	@protoc --go_out=paths=source_relative:. gorums.proto
 
-$(internal_so)/opts.pb.go: $(internal_so)/opts.proto
+$(internal_ordering)/opts.pb.go: $(internal_ordering)/opts.proto
 	@echo Generating ordering proto options
-	@protoc --go_out=paths=source_relative:. $(internal_so)/opts.proto
+	@protoc --go_out=paths=source_relative:. $(internal_ordering)/opts.proto
 
 $(public_so)/ordering.pb.go: $(public_so)/ordering.proto
 	@echo Generating ordering protocol buffers
@@ -57,7 +58,11 @@ $(public_so)/ordering_grpc.pb.go: $(public_so)/ordering.proto
 	@echo Generating ordering gRPC service
 	@protoc --go-grpc_out=paths=source_relative:. $(public_so)/ordering.proto
 
-installgorums: gorums.pb.go $(internal_so)/opts.pb.go
+$(internal_correctable)/opts.pb.go: $(internal_correctable)/opts.proto
+	@echo Generating correctable proto options
+	@protoc --go_out=paths=source_relative:. $(internal_correctable)/opts.proto
+
+installgorums: gorums.pb.go $(internal_ordering)/opts.pb.go $(internal_correctable)/opts.pb.go
 	@echo Installing protoc-gen-gorums compiler plugin for protoc
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
 

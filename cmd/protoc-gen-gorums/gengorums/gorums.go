@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/internal/correctable"
 	"github.com/relab/gorums/internal/ordering"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -185,6 +186,7 @@ func (c *callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
 // compute index to start of option name
 const index = len("gorums.")
 const soIndex = len("ordering.")
+const coIndex = len("correctable.")
 
 // gorumsCallTypesInfo maps Gorums call type names to callTypeInfo.
 // This includes details such as the template, extension info and
@@ -214,6 +216,8 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_QcFuture)
 		},
 	},
+	//TODO add field outPrefix to hold Correctable<$out> or CorrectableStream<$out>
+	//TODO also use outPrefix for Future<$out> and maybe internal<$out>
 	gorums.E_Correctable.Name[index:]: {
 		extInfo:    gorums.E_Correctable,
 		optionName: gorums.E_Correctable.Name[index:],
@@ -222,14 +226,25 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Correctable)
 		},
-	},
-	gorums.E_CorrectableStream.Name[index:]: {
-		extInfo:    gorums.E_CorrectableStream,
-		optionName: gorums.E_CorrectableStream.Name[index:],
-		docName:    "correctable stream quorum",
-		template:   correctableStreamCall,
-		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_CorrectableStream)
+		nestedCallType: map[string]*callTypeInfo{
+			correctable.E_Correctable.Name[coIndex:]: {
+				extInfo:    correctable.E_Correctable,
+				optionName: correctable.E_Correctable.Name[coIndex:],
+				docName:    "correctable quorum",
+				template:   correctableCall,
+				chkFn: func(m *protogen.Method) bool {
+					return hasMethodOption(m, gorums.E_Correctable) && !m.Desc.IsStreamingServer()
+				},
+			},
+			correctable.E_CorrectableStream.Name[coIndex:]: {
+				extInfo:    correctable.E_CorrectableStream,
+				optionName: correctable.E_CorrectableStream.Name[coIndex:],
+				docName:    "correctable stream quorum",
+				template:   correctableStreamCall,
+				chkFn: func(m *protogen.Method) bool {
+					return hasMethodOption(m, gorums.E_Correctable) && m.Desc.IsStreamingServer()
+				},
+			},
 		},
 	},
 	gorums.E_Multicast.Name[index:]: {
@@ -276,7 +291,6 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Quorumcall,
 	gorums.E_QcFuture,
 	gorums.E_Correctable,
-	gorums.E_CorrectableStream,
 	gorums.E_Multicast,
 }
 
@@ -287,7 +301,6 @@ var callTypesWithInternal = []*protoimpl.ExtensionInfo{
 	gorums.E_Quorumcall,
 	gorums.E_QcFuture,
 	gorums.E_Correctable,
-	gorums.E_CorrectableStream,
 }
 
 // callTypesWithPromiseObject lists all call types that returns
@@ -295,7 +308,6 @@ var callTypesWithInternal = []*protoimpl.ExtensionInfo{
 var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 	gorums.E_QcFuture,
 	gorums.E_Correctable,
-	gorums.E_CorrectableStream,
 }
 
 // hasGorumsCallType returns true if the given method has specified
@@ -367,15 +379,15 @@ func validateMethodExtensions(method *protogen.Method) *protoimpl.ExtensionInfo 
 			"%s.%s: '%s' option is only valid for client-server streams methods",
 			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name)
 
-	case !hasMethodOption(method, gorums.E_CorrectableStream) && method.Desc.IsStreamingServer():
-		log.Fatalf(
-			"%s.%s: server-client streams is only valid with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name)
+		// case !hasMethodOption(method, gorums.E_CorrectableStream) && method.Desc.IsStreamingServer():
+		// 	log.Fatalf(
+		// 		"%s.%s: server-client streams is only valid with the '%s' option",
+		// 		method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name)
 
-	case hasMethodOption(method, gorums.E_CorrectableStream) && !method.Desc.IsStreamingServer():
-		log.Fatalf(
-			"%s.%s: '%s' option is only valid for server-client streams",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name)
+		// case hasMethodOption(method, gorums.E_CorrectableStream) && !method.Desc.IsStreamingServer():
+		// 	log.Fatalf(
+		// 		"%s.%s: '%s' option is only valid for server-client streams",
+		// 		method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CorrectableStream.Name)
 	}
 
 	return firstOption
