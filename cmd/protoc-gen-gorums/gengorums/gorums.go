@@ -72,6 +72,8 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 }
 
+//TODO(meling) rename to templatePicker or something
+
 // genGorumsMethods generates gorums methods that specify the given methodOption.
 func genGorumsMethods(data servicesData, methodOption *protoimpl.ExtensionInfo) {
 	g := data.GenFile
@@ -90,22 +92,116 @@ func genGorumsMethods(data servicesData, methodOption *protoimpl.ExtensionInfo) 
 	}
 }
 
+// genGorumsMethods generates gorums methods that specify the given methodOption.
+func genGorumsMethodsDev3(data servicesData, callTypeInfo *callTypeInfo) {
+	g := data.GenFile
+	for _, service := range data.Services {
+		for _, method := range service.Methods {
+			chk := callTypeInfo.chkFn(method)
+			fmt.Fprintf(os.Stderr, "%t\t= callTypeInfo.chkFn(%v, %v)\n", chk, callTypeInfo.optionName, method.GoName)
+			if callTypeInfo.chkFn(method) {
+
+				fmt.Fprintf(os.Stderr, "ym=%s, opt=%s\n", method.GoName, callTypeInfo.optionName)
+				if callTypeInfo.nestedCallType != nil {
+					fmt.Fprintf(os.Stderr, "zm=%s, opt=%s\n", method.GoName, callTypeInfo.optionName)
+					for _, nestedCallType := range callTypeInfo.nestedCallType {
+						fmt.Fprintf(os.Stderr, "am=%s, opt=%s\n", method.GoName, callTypeInfo.optionName)
+						if nestedCallType.chkFn(method) {
+							fmt.Fprintf(os.Stderr, "bm=%s, opt=%s\n", method.GoName, callTypeInfo.optionName)
+							callTypeInfo = nestedCallType
+						}
+					}
+				}
+
+				fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
+				g.P(mustExecute(parseTemplate(callTypeInfo.optionName, callTypeInfo.template), methodData{g, method}))
+			}
+		}
+	}
+}
+
 func genGorumsMethod(g *protogen.GeneratedFile, method *protogen.Method) string {
+	fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
 	callTypeInfo := methodCallTypeInfo(method)
 	return mustExecute(parseTemplate(callTypeInfo.optionName, callTypeInfo.template), methodData{g, method})
 }
 
+func callTypeOptions(method *protogen.Method) []*callTypeInfo {
+	methExt := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
+	var options []*callTypeInfo
+	for _, callType := range gorumsCallTypesInfo {
+		if callType.extInfo != nil {
+			if proto.HasExtension(methExt, callType.extInfo) {
+				options = append(options, callType)
+			}
+		}
+	}
+	fmt.Fprintf(os.Stderr, "%s: OPTIONS=%v\n", method.GoName, options)
+	return options
+}
+
 func callTypeName(method *protogen.Method) string {
-	return methodCallTypeInfo(method).docName
+	options := callTypeOptions(method)
+	// fmt.Fprintf(os.Stderr, "%s: OPTIONS=%v\n", method.GoName, options)
+	// if len(options) > 2 {
+	// 	fmt.Fprintf(os.Stderr, "%s: OPTIONS=%v\n", method.GoName, options)
+	// }
+
+	var callTI *callTypeInfo
+	for _, cti := range options {
+		if cti.chkFn(method) {
+			callTI = cti
+			fmt.Fprintf(os.Stderr, "ym=%s, opt=%s\n", method.GoName, cti.optionName)
+			//TODO(meling) make this a func on callTypeInfo struct:
+			if cti.nestedCallType != nil {
+				fmt.Fprintf(os.Stderr, "zm=%s, opt=%s\n", method.GoName, cti.optionName)
+				for _, nestedCallType := range cti.nestedCallType {
+					fmt.Fprintf(os.Stderr, "am=%s, opt=%s\n", method.GoName, cti.optionName)
+					if nestedCallType.chkFn(method) {
+						fmt.Fprintf(os.Stderr, "bm=%s, opt=%s\n", method.GoName, cti.optionName)
+						return nestedCallType.docName
+					}
+				}
+			}
+		}
+	}
+	if callTI != nil {
+		return callTI.docName
+	}
+	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
+}
+
+func callTypeNameOld(method *protogen.Method) string {
+	docName := methodCallTypeInfo(method).docName
+	fmt.Fprintf(os.Stderr, "dm=%s, docName=%s\n", method.GoName, docName)
+	return docName
 }
 
 func methodCallTypeInfo(method *protogen.Method) *callTypeInfo {
 	methodOption := validateMethodExtensions(method)
+	fmt.Fprintf(os.Stderr, "qm=%s, opt=%s\n", method.GoName, methodOption.Name)
+
 	if optionName, ok := reverseMap[methodOption]; ok {
+		fmt.Fprintf(os.Stderr, "xm=%s, opt=%s\n", method.GoName, methodOption.Name)
 		if callTypeInfo, ok := gorumsCallTypesInfo[optionName]; ok {
+			if callTypeInfo.chkFn(method) {
+				fmt.Fprintf(os.Stderr, "ym=%s, opt=%s\n", method.GoName, methodOption.Name)
+				if callTypeInfo.nestedCallType != nil {
+					fmt.Fprintf(os.Stderr, "zm=%s, opt=%s\n", method.GoName, methodOption.Name)
+					for _, nestedCallType := range callTypeInfo.nestedCallType {
+						fmt.Fprintf(os.Stderr, "am=%s, opt=%s\n", method.GoName, methodOption.Name)
+						if nestedCallType.chkFn(method) {
+							fmt.Fprintf(os.Stderr, "bm=%s, opt=%s\n", method.GoName, methodOption.Name)
+							return nestedCallType
+						}
+					}
+				}
+			}
 			return callTypeInfo
 		}
 	}
+	fmt.Fprintf(os.Stderr, "reverseMap %v\n", reverseMap)
+
 	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
 }
 
@@ -158,8 +254,9 @@ var reverseMap = map[*protoimpl.ExtensionInfo]string{
 	gorums.E_Correctable:       gorums.E_Correctable.Name[index:],
 	gorums.E_CorrectableStream: gorums.E_CorrectableStream.Name[index:],
 	gorums.E_Multicast:         gorums.E_Multicast.Name[index:],
-	ordering.E_OrderedQc:       ordering.E_OrderedQc.Name[soIndex:],
-	ordering.E_OrderedRpc:      ordering.E_OrderedRpc.Name[soIndex:],
+	gorums.E_Ordered:           gorums.E_Ordered.Name[index:],
+	// ordering.E_OrderedQc:       ordering.E_OrderedQc.Name[soIndex:],
+	// ordering.E_OrderedRpc:      ordering.E_OrderedRpc.Name[soIndex:],
 }
 
 // callTypeInfo holds information about the option type, the option type name,
@@ -167,12 +264,54 @@ var reverseMap = map[*protoimpl.ExtensionInfo]string{
 // a method annotated with the given option, and a chkFn function that returns
 // true if code for the option type should be generated for the given method.
 type callTypeInfo struct {
-	extInfo    *protoimpl.ExtensionInfo
-	optionName string
-	docName    string
-	template   string
-	chkFn      func(m *protogen.Method) bool
+	extInfo        *protoimpl.ExtensionInfo
+	optionName     string
+	docName        string
+	template       string
+	chkFn          func(m *protogen.Method) bool
+	nestedCallType map[string]*callTypeInfo
 }
+
+// callType returns a callTypeInfo object for the given method option.
+func callType(methodOption *protoimpl.ExtensionInfo) *callTypeInfo {
+	if optionName, ok := reverseMap[methodOption]; ok {
+		if callTypeInfo, ok := gorumsCallTypesInfo[optionName]; ok {
+			return callTypeInfo
+		}
+	}
+	return nil
+}
+
+// deriveCallType resolves the nested calltype if any.
+func (c callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
+	if c.chkFn != nil && c.chkFn(m) {
+		if c.nestedCallType != nil {
+			for _, nestedCallType := range c.nestedCallType {
+				if nestedCallType.chkFn(m) {
+					return nestedCallType
+				}
+			}
+		}
+		return &c
+	}
+	return nil
+}
+
+func (c callTypeInfo) checkFn(m *protogen.Method) bool {
+	if c.chkFn != nil && c.chkFn(m) {
+		if c.nestedCallType != nil {
+			for _, nestedCallType := range c.nestedCallType {
+				if nestedCallType.chkFn(m) {
+					return true
+				}
+			}
+		}
+		return true
+	}
+	return false
+}
+
+//TODO(meling) consider whether or not we might use a compatibility table for different Gorums types along with error messages.
 
 // gorumsCallTypesInfo maps Gorums call type names to callTypeInfo.
 // This includes details such as the template, extension info and
@@ -190,7 +329,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		docName:    "quorum",
 		template:   quorumCall,
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Quorumcall)
+			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered)
 		},
 	},
 	gorums.E_QcFuture.Name[index:]: {
@@ -229,22 +368,33 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Multicast)
 		},
 	},
-	ordering.E_OrderedQc.Name[soIndex:]: {
-		extInfo:    ordering.E_OrderedQc,
-		optionName: ordering.E_OrderedQc.Name[soIndex:],
+	gorums.E_Ordered.Name[index:]: {
+		extInfo:    gorums.E_Ordered,
+		optionName: gorums.E_Ordered.Name[index:],
 		docName:    "ordered quorum",
-		template:   orderingQC,
+		template:   "", //TODO(meling) figure out better way
 		chkFn: func(m *protogen.Method) bool {
-			return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall)
+			return hasMethodOption(m, gorums.E_Ordered)
 		},
-	},
-	ordering.E_OrderedRpc.Name[soIndex:]: {
-		extInfo:    ordering.E_OrderedRpc,
-		optionName: ordering.E_OrderedRpc.Name[soIndex:],
-		docName:    "ordered",
-		template:   orderingRPC,
-		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Ordered) && !hasGorumsCallType(m)
+		nestedCallType: map[string]*callTypeInfo{
+			ordering.E_OrderedQc.Name[soIndex:]: {
+				extInfo:    ordering.E_OrderedQc,
+				optionName: ordering.E_OrderedQc.Name[soIndex:],
+				docName:    "ordered quorum",
+				template:   orderingQC,
+				chkFn: func(m *protogen.Method) bool {
+					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall)
+				},
+			},
+			ordering.E_OrderedRpc.Name[soIndex:]: {
+				extInfo:    ordering.E_OrderedRpc,
+				optionName: ordering.E_OrderedRpc.Name[soIndex:],
+				docName:    "ordered",
+				template:   orderingRPC,
+				chkFn: func(m *protogen.Method) bool {
+					return hasMethodOption(m, gorums.E_Ordered) && !hasGorumsCallType(m)
+				},
+			},
 		},
 	},
 }
@@ -267,6 +417,7 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Correctable,
 	gorums.E_CorrectableStream,
 	gorums.E_Multicast,
+	// gorums.E_Ordered,
 }
 
 // callTypesWithInternal should list all available call types that
@@ -293,6 +444,7 @@ func hasGorumsCallType(method *protogen.Method) bool {
 	return hasMethodOption(method, gorumsCallTypes...)
 }
 
+//TODO(meling) rename to hasCallTypeOption
 // hasMethodOption returns true if the method has one of the given method options.
 func hasMethodOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
 	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
@@ -342,11 +494,11 @@ func validateMethodExtensions(method *protogen.Method) *protoimpl.ExtensionInfo 
 	}
 
 	// check if the method matches any ordering types
-	for t, f := range orderingTypeCheckers {
-		if f(method) {
-			firstOption = t
-		}
-	}
+	// for t, f := range orderingTypeCheckers {
+	// 	if f(method) {
+	// 		firstOption = t
+	// 	}
+	// }
 
 	isQuorumCallVariant := hasMethodOption(method, callTypesWithInternal...)
 	switch {
