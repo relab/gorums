@@ -57,7 +57,6 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
 func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
-	data := servicesData{g, file.Services}
 	// sort the gorums types so that output remains stable across rebuilds
 	sortedTypes := make([]string, 0, len(gorumsCallTypesInfo))
 	for gorumsType := range gorumsCallTypesInfo {
@@ -65,12 +64,13 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 	sort.Strings(sortedTypes)
 	for _, gorumsType := range sortedTypes {
-		genGorumsType(data, gorumsType)
+		genGorumsType(g, file.Services, gorumsType)
 	}
 }
 
-func genGorumsType(data servicesData, gorumsType string) {
-	g := data.GenFile
+// genGorumsType generates Gorums methods and corresponding datastructures for gorumsType.
+func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, gorumsType string) {
+	data := servicesData{g, services}
 	if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
 		g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
 	} else {
@@ -79,9 +79,7 @@ func genGorumsType(data servicesData, gorumsType string) {
 	g.P()
 }
 
-//TODO(meling) rename to templatePicker or something
-
-// genGorumsMethods generates gorums methods that specify the given methodOption.
+// genGorumsMethods generates Gorums methods for the given callType.
 func genGorumsMethods(data servicesData, callTypeInfo *callTypeInfo) {
 	g := data.GenFile
 	for _, service := range data.Services {
@@ -132,7 +130,10 @@ type methodData struct {
 // the given gorums type, or if the gorums type specify a template-only
 // type, such as nodes, qspec, or types.
 func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
-	callTypeInfo := gorumsCallTypesInfo[gorumsType]
+	callTypeInfo, ok := gorumsCallTypesInfo[gorumsType]
+	if !ok {
+		return false
+	}
 	if callTypeInfo.extInfo == nil {
 		// these are template-only entires
 		return true
@@ -160,16 +161,6 @@ func checkMethods(services []*protogen.Service, fn func(m *protogen.Method) bool
 const index = len("gorums.")
 const soIndex = len("ordering.")
 
-// mapping from option type to option name
-var reverseMap = map[*protoimpl.ExtensionInfo]string{
-	gorums.E_Quorumcall:        gorums.E_Quorumcall.Name[index:],
-	gorums.E_QcFuture:          gorums.E_QcFuture.Name[index:],
-	gorums.E_Correctable:       gorums.E_Correctable.Name[index:],
-	gorums.E_CorrectableStream: gorums.E_CorrectableStream.Name[index:],
-	gorums.E_Multicast:         gorums.E_Multicast.Name[index:],
-	gorums.E_Ordered:           gorums.E_Ordered.Name[index:],
-}
-
 // callTypeInfo holds information about the option type, the option type name,
 // documentation string for the option type, the template used to generate
 // a method annotated with the given option, and a chkFn function that returns
@@ -181,16 +172,6 @@ type callTypeInfo struct {
 	template       string
 	chkFn          func(m *protogen.Method) bool
 	nestedCallType map[string]*callTypeInfo
-}
-
-// callType returns a callTypeInfo object for the given method option.
-func callType(methodOption *protoimpl.ExtensionInfo) *callTypeInfo {
-	if optionName, ok := reverseMap[methodOption]; ok {
-		if callTypeInfo, ok := gorumsCallTypesInfo[optionName]; ok {
-			return callTypeInfo
-		}
-	}
-	return nil
 }
 
 // deriveCallType resolves the nested calltype if any.
