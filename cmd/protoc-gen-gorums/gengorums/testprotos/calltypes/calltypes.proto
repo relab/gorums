@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package dev;
+
+option go_package = "cmd/protoc-gen-gorums/testprotos/calltypes";
+
+import "gorums.proto";
+
+message Request { string Value = 1; }
+message Response { int64 Result = 1; }
+message MyResponse { string Value = 1; }
+
+// Calltypes is not meant to be implemented. However, they are
+// used to test various functions used by the Gorums generator.
+service Calltypes {
+
+  // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
+  // they are added to the _grpc.pb.go generated file.
+  rpc GRPCCall(Request) returns (Response) {}
+
+  // QuorumCall plain.
+  rpc QuorumCall(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // Multicast plain. Response type is not needed here.
+  rpc Multicast(stream Request) returns (Response) {
+    option (gorums.multicast) = true;
+  }
+
+  // QuorumCallFuture plain.
+  rpc QuorumCallFuture(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+  }
+}
