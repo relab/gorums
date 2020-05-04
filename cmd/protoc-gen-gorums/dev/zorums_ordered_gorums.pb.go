@@ -573,3 +573,65 @@ func (s *GorumsServer) RegisterOrderingComboHandler(handler OrderingComboHandler
 		return &ordering.Message{Data: data, Method: in.GetMethod()}
 	})
 }
+
+func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+
+	// get the ID which will be used to return the correct responses for a request
+	msgID := n.nextMsgID()
+
+	// set up a channel to collect replies
+	replies := make(chan *orderingResult, 1)
+	n.putChan(msgID, replies)
+
+	// remove the replies channel when we are done
+	defer n.deleteChan(msgID)
+
+	data, err := ptypes.MarshalAny(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:     msgID,
+		Method: "/dev.ZorumsService/OrderingUnaryRPC",
+		Data:   data,
+	}
+	n.sendQ <- msg
+
+	select {
+	case r := <-replies:
+		if r.err != nil {
+			return nil, r.err
+		}
+		reply := new(Response)
+		err := ptypes.UnmarshalAny(r.reply, reply)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal reply: %w", err)
+		}
+		return reply, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// OrderingUnaryRPCHandler is the server API for the OrderingUnaryRPC rpc.
+type OrderingUnaryRPCHandler interface {
+	OrderingUnaryRPC(*Request) *Response
+}
+
+// RegisterOrderingUnaryRPCHandler sets the handler for OrderingUnaryRPC.
+func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCHandler) {
+	s.srv.registerHandler("/dev.ZorumsService/OrderingUnaryRPC", func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := ptypes.UnmarshalAny(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.OrderingUnaryRPC(req)
+		data, err := ptypes.MarshalAny(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, Method: in.GetMethod()}
+	})
+}

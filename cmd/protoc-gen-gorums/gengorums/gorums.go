@@ -18,7 +18,9 @@ import (
 
 // GenerateFile generates a _gorums.pb.go file containing Gorums service definitions.
 func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
-	if len(file.Services) == 0 || !checkMethods(file.Services, func(m *protogen.Method) bool { return hasGorumsCallType(m) }) {
+	if len(file.Services) == 0 || !checkMethods(file.Services, func(m *protogen.Method) bool {
+		return hasMethodOption(m, gorums.E_Ordered) || hasGorumsCallType(m)
+	}) {
 		// there is nothing for this plugin to do
 		return nil
 	}
@@ -66,7 +68,7 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 		if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
 			g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
 		} else {
-			genGorumsMethods(data, callTypeInfo.extInfo)
+			genGorumsMethodsDev3(data, callTypeInfo)
 		}
 		g.P()
 	}
@@ -75,55 +77,18 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 //TODO(meling) rename to templatePicker or something
 
 // genGorumsMethods generates gorums methods that specify the given methodOption.
-func genGorumsMethods(data servicesData, methodOption *protoimpl.ExtensionInfo) {
-	g := data.GenFile
-	for _, service := range data.Services {
-		for _, method := range service.Methods {
-			if hasMethodOption(method, gorums.E_Ordered) {
-				if hasOrderingOption(method, methodOption) {
-					fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
-					g.P(genGorumsMethod(g, method))
-				}
-			} else if hasMethodOption(method, methodOption) {
-				fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
-				g.P(genGorumsMethod(g, method))
-			}
-		}
-	}
-}
-
-// genGorumsMethods generates gorums methods that specify the given methodOption.
 func genGorumsMethodsDev3(data servicesData, callTypeInfo *callTypeInfo) {
 	g := data.GenFile
 	for _, service := range data.Services {
 		for _, method := range service.Methods {
-			chk := callTypeInfo.chkFn(method)
-			fmt.Fprintf(os.Stderr, "%t\t= callTypeInfo.chkFn(%v, %v)\n", chk, callTypeInfo.optionName, method.GoName)
-			if callTypeInfo.chkFn(method) {
-
-				fmt.Fprintf(os.Stderr, "ym=%s, opt=%s\n", method.GoName, callTypeInfo.optionName)
-				if callTypeInfo.nestedCallType != nil {
-					fmt.Fprintf(os.Stderr, "zm=%s, opt=%s\n", method.GoName, callTypeInfo.optionName)
-					for _, nestedCallType := range callTypeInfo.nestedCallType {
-						fmt.Fprintf(os.Stderr, "am=%s, opt=%s\n", method.GoName, callTypeInfo.optionName)
-						if nestedCallType.chkFn(method) {
-							fmt.Fprintf(os.Stderr, "bm=%s, opt=%s\n", method.GoName, callTypeInfo.optionName)
-							callTypeInfo = nestedCallType
-						}
-					}
-				}
-
+			callType := callTypeInfo.deriveCallType(method)
+			if callType.chkFn(method) {
+				fmt.Fprintf(os.Stderr, "ym=%s, opt=%s\n", method.GoName, callType.optionName)
 				fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
-				g.P(mustExecute(parseTemplate(callTypeInfo.optionName, callTypeInfo.template), methodData{g, method}))
+				g.P(mustExecute(parseTemplate(callType.optionName, callType.template), methodData{g, method}))
 			}
 		}
 	}
-}
-
-func genGorumsMethod(g *protogen.GeneratedFile, method *protogen.Method) string {
-	fmt.Fprintf(os.Stderr, "processing %s\n", method.GoName)
-	callTypeInfo := methodCallTypeInfo(method)
-	return mustExecute(parseTemplate(callTypeInfo.optionName, callTypeInfo.template), methodData{g, method})
 }
 
 func callTypeOptions(method *protogen.Method) []*callTypeInfo {
@@ -142,10 +107,6 @@ func callTypeOptions(method *protogen.Method) []*callTypeInfo {
 
 func callTypeName(method *protogen.Method) string {
 	options := callTypeOptions(method)
-	// fmt.Fprintf(os.Stderr, "%s: OPTIONS=%v\n", method.GoName, options)
-	// if len(options) > 2 {
-	// 	fmt.Fprintf(os.Stderr, "%s: OPTIONS=%v\n", method.GoName, options)
-	// }
 
 	var callTI *callTypeInfo
 	for _, cti := range options {
@@ -168,40 +129,6 @@ func callTypeName(method *protogen.Method) string {
 	if callTI != nil {
 		return callTI.docName
 	}
-	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
-}
-
-func callTypeNameOld(method *protogen.Method) string {
-	docName := methodCallTypeInfo(method).docName
-	fmt.Fprintf(os.Stderr, "dm=%s, docName=%s\n", method.GoName, docName)
-	return docName
-}
-
-func methodCallTypeInfo(method *protogen.Method) *callTypeInfo {
-	methodOption := validateMethodExtensions(method)
-	fmt.Fprintf(os.Stderr, "qm=%s, opt=%s\n", method.GoName, methodOption.Name)
-
-	if optionName, ok := reverseMap[methodOption]; ok {
-		fmt.Fprintf(os.Stderr, "xm=%s, opt=%s\n", method.GoName, methodOption.Name)
-		if callTypeInfo, ok := gorumsCallTypesInfo[optionName]; ok {
-			if callTypeInfo.chkFn(method) {
-				fmt.Fprintf(os.Stderr, "ym=%s, opt=%s\n", method.GoName, methodOption.Name)
-				if callTypeInfo.nestedCallType != nil {
-					fmt.Fprintf(os.Stderr, "zm=%s, opt=%s\n", method.GoName, methodOption.Name)
-					for _, nestedCallType := range callTypeInfo.nestedCallType {
-						fmt.Fprintf(os.Stderr, "am=%s, opt=%s\n", method.GoName, methodOption.Name)
-						if nestedCallType.chkFn(method) {
-							fmt.Fprintf(os.Stderr, "bm=%s, opt=%s\n", method.GoName, methodOption.Name)
-							return nestedCallType
-						}
-					}
-				}
-			}
-			return callTypeInfo
-		}
-	}
-	fmt.Fprintf(os.Stderr, "reverseMap %v\n", reverseMap)
-
 	panic(fmt.Sprintf("unknown method type %s\n", method.GoName))
 }
 
@@ -283,8 +210,8 @@ func callType(methodOption *protoimpl.ExtensionInfo) *callTypeInfo {
 }
 
 // deriveCallType resolves the nested calltype if any.
-func (c callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
-	if c.chkFn != nil && c.chkFn(m) {
+func (c *callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
+	if c != nil {
 		if c.nestedCallType != nil {
 			for _, nestedCallType := range c.nestedCallType {
 				if nestedCallType.chkFn(m) {
@@ -292,9 +219,8 @@ func (c callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
 				}
 			}
 		}
-		return &c
 	}
-	return nil
+	return c
 }
 
 func (c callTypeInfo) checkFn(m *protogen.Method) bool {
@@ -417,7 +343,6 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Correctable,
 	gorums.E_CorrectableStream,
 	gorums.E_Multicast,
-	// gorums.E_Ordered,
 }
 
 // callTypesWithInternal should list all available call types that

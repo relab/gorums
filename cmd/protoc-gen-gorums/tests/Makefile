@@ -26,3 +26,4 @@ order:
 clean:
 	@rm -f quorumcall/*.go
 	@rm -f grpc/*.go
+	@rm -f ordering/*.pb.go
