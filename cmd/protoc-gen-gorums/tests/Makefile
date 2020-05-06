@@ -15,6 +15,14 @@ qc:
 		--gorums_out=trace=true,paths=source_relative:. \
 		quorumcall/quorumcall.proto
 
+.PHONY: qf
+qf:
+	@protoc -I../../..:. \
+		--go_out=paths=source_relative:. \
+		--go-grpc_out=paths=source_relative:. \
+		--gorums_out=trace=true,paths=source_relative:. \
+		qf/qf.proto
+
 .PHONY: order
 order:
 	@protoc -I.:../../.. \

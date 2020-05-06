@@ -1,0 +1,24 @@
+// Test that Gorums can generate a single quorum call method.
+
+syntax = "proto3";
+package gorums.tests.qf;
+option go_package = "cmd/protoc-gen-gorums/tests/qf";
+
+import "gorums.proto";
+
+service QuorumFunction {
+  rpc UseReq(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+    option (gorums.qf_with_req) = true;
+  }
+  rpc IgnoreReq(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+    option (gorums.qf_with_req) = true;
+  }
+  rpc WithoutReq(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+  }
+}
+
+message Request { int64 Value = 1; }
+message Response { int64 Result = 1; }
