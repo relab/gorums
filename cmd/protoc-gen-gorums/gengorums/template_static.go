@@ -32,6 +32,24 @@ var pkgIdentMap = map[string]string{
 	"time":        "After",
 }
 
+// reservedKeywords holds the set of Gorums reservered identifiers.
+// These identifiers cannot be used to define message types in a proto file.
+var reservedKeywords = []string{
+	"ConfigNotFoundError",
+	"Configuration",
+	"GRPCError",
+	"GorumsServer",
+	"IllegalConfigError",
+	"Manager",
+	"ManagerCreationError",
+	"ManagerOption",
+	"MultiSorter",
+	"Node",
+	"NodeNotFoundError",
+	"QuorumCallError",
+	"QuorumSpec",
+}
+
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {

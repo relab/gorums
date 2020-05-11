@@ -29,10 +29,9 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 		// These cannot share the same Go package.
 		log.Fatalln("Gorums does not support multiple services in the same proto file.")
 	}
-	// TODO(meling) make this more generic; figure out what are the reserved types from the static files.
 	for _, msg := range file.Messages {
 		msgName := fmt.Sprintf("%v", msg.Desc.Name())
-		for _, reserved := range []string{"Configuration", "Node", "Manager", "ManagerOption"} {
+		for _, reserved := range reservedKeywords {
 			if msgName == reserved {
 				log.Fatalf("%v.proto: contains message %s, which is a reserved Gorums type.\n", file.GeneratedFilenamePrefix, msgName)
 			}

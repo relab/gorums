@@ -7,6 +7,7 @@
 package dev
 
 import (
+	proto "github.com/golang/protobuf/proto"
 	empty "github.com/golang/protobuf/ptypes/empty"
 	_ "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -21,6 +22,10 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 19)
 )
+
+// This is a compile-time assertion that a sufficiently up-to-date version
+// of the legacy proto package is being used.
+const _ = proto.ProtoPackageIsVersion4
 
 type Request struct {
 	state         protoimpl.MessageState
