@@ -66,6 +66,13 @@ func GenerateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	}
 }
 
+// servicesData hold the services to generate and a reference to the file in which
+// the services should be generated. This is data to be used by template generator.
+type servicesData struct {
+	GenFile  *protogen.GeneratedFile
+	Services []*protogen.Service
+}
+
 // genGorumsType generates Gorums methods and corresponding datastructures for gorumsType.
 func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, gorumsType string) {
 	data := servicesData{g, services}
@@ -77,8 +84,12 @@ func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, goru
 	g.P()
 }
 
-// genGorumsMethods generates Gorums methods for the given callType.
+// genGorumsMethods generates Gorums methods for the given call type.
 func genGorumsMethods(data servicesData, callTypeInfo *callTypeInfo) {
+	type methodData struct {
+		GenFile *protogen.GeneratedFile
+		Method  *protogen.Method
+	}
 	g := data.GenFile
 	for _, service := range data.Services {
 		for _, method := range service.Methods {
@@ -95,6 +106,21 @@ func genGorumsMethods(data servicesData, callTypeInfo *callTypeInfo) {
 	}
 }
 
+// callType returns call type information for the given method.
+// If the given method has specified a Gorums method option that
+// correspond to a call type, this call type is returned. Further,
+// if the call type has a sub call type, then this is returned instead.
+func callType(method *protogen.Method) *callTypeInfo {
+	for _, cti := range callTypeOptions(method) {
+		callType := cti.deriveCallType(method)
+		if callType.chkFn(method) {
+			return callType
+		}
+	}
+	panic(fmt.Sprintf("unknown call type for method %s\n", method.GoName))
+}
+
+// callTypeOptions returns all Gorums call types for the given method.
 func callTypeOptions(method *protogen.Method) []*callTypeInfo {
 	methExt := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
 	var options []*callTypeInfo
@@ -108,26 +134,6 @@ func callTypeOptions(method *protogen.Method) []*callTypeInfo {
 	return options
 }
 
-func callType(method *protogen.Method) *callTypeInfo {
-	for _, cti := range callTypeOptions(method) {
-		callType := cti.deriveCallType(method)
-		if callType.chkFn(method) {
-			return callType
-		}
-	}
-	panic(fmt.Sprintf("unknown calltype for method %s\n", method.GoName))
-}
-
-type servicesData struct {
-	GenFile  *protogen.GeneratedFile
-	Services []*protogen.Service
-}
-
-type methodData struct {
-	GenFile *protogen.GeneratedFile
-	Method  *protogen.Method
-}
-
 // hasGorumsType returns true if one of the service methods specify
 // the given gorums type, or if the gorums type specify a template-only
 // type, such as nodes, qspec, or types.
@@ -137,11 +143,11 @@ func hasGorumsType(services []*protogen.Service, gorumsType string) bool {
 		return false
 	}
 	if callTypeInfo.extInfo == nil {
-		// these are template-only entires
+		// these are template-only entries
 		return true
 	}
 	return checkMethods(services, func(m *protogen.Method) bool {
-		// returns true if the method satisfy the calltype's check function
+		// returns true if the method satisfy the call type's check function
 		return callTypeInfo.chkFn(m)
 	})
 }
@@ -173,7 +179,7 @@ type callTypeInfo struct {
 	nestedCallType map[string]*callTypeInfo
 }
 
-// deriveCallType resolves the nested calltype if any.
+// deriveCallType resolves the nested call type if any.
 func (c *callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
 	if c != nil {
 		if c.nestedCallType != nil {
@@ -344,41 +350,22 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 // validateOptions returns an error if the extension options
 // for the provided method are incompatible.
 func validateOptions(method *protogen.Method) error {
-	methExt := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	isQuorumCallVariant := hasMethodOption(method, callTypesWithInternal...)
 	switch {
-	case !isQuorumCallVariant && proto.GetExtension(methExt, gorums.E_CustomReturnType) != "":
-		// Only QC variants can define custom return type
-		// (we don't support rewriting the plain gRPC methods.)
-		return fmt.Errorf(
-			"%s.%s: cannot combine non-quorum call method with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_CustomReturnType.Name)
-
-	case !isQuorumCallVariant && hasMethodOption(method, gorums.E_QfWithReq):
-		// Multicast does not reply; hence, only QC variants need to process replies.
-		return fmt.Errorf(
-			"%s.%s: cannot combine non-quorum call method with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_QfWithReq.Name)
-
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
-		return fmt.Errorf(
-			"%s.%s: client-server stream is only valid with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name)
+		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
 
 	case hasMethodOption(method, gorums.E_Multicast) && !method.Desc.IsStreamingClient():
-		return fmt.Errorf(
-			"%s.%s: '%s' option is only valid for client-server stream methods",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Multicast.Name)
+		return optionErrorf("is only valid for client-server stream methods", method, gorums.E_Multicast)
 
 	case !hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer():
-		return fmt.Errorf(
-			"%s.%s: server-client stream is only valid with the '%s' option",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Correctable.Name)
+		return optionErrorf("is required for server-client stream methods", method, gorums.E_Correctable)
 
 	case hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingClient():
-		return fmt.Errorf(
-			"%s.%s: '%s' option is only valid for server-client stream",
-			method.Parent.Desc.Name(), method.Desc.Name(), gorums.E_Correctable.Name)
+		return optionErrorf("is only valid for server-client stream methods", method, gorums.E_Correctable)
 	}
 	return nil
+}
+
+func optionErrorf(s string, method *protogen.Method, ext *protoimpl.ExtensionInfo) error {
+	return fmt.Errorf("%s.%s: option '%s' "+s, method.Parent.Desc.Name(), method.Desc.Name(), ext.Name)
 }
