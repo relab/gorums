@@ -16,7 +16,7 @@ internal_ordering		:= internal/ordering
 internal_correctable	:= internal/correctable
 public_so				:= ordering/
 
-.PHONY: dev download install-tools installgorums clean
+.PHONY: dev download install-tools installgorums
 
 dev: installgorums $(public_so)/ordering.pb.go $(public_so)/ordering_grpc.pb.go
 	@echo Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder
@@ -72,11 +72,7 @@ $(static_file): $(static_files)
 	cp $(static_file) $(static_file).bak
 	protoc-gen-gorums --bundle=$(static_file)
 
-clean:
-	rm -f $(static_file).bak
-
 .PHONY: gentests $(test_files)
-
 gentests: $(test_files) $(failing_test_files) stability
 
 $(test_files): installgorums
