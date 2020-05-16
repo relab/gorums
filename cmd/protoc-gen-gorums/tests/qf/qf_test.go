@@ -1,14 +1,14 @@
 package qf
 
 import (
-	context "context"
-	fmt "fmt"
-	net "net"
-	sync "sync"
+	"context"
+	"fmt"
+	"net"
+	"sync"
 	"testing"
-	time "time"
+	"time"
 
-	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc"
 )
 
 const requestValue = 0x1001_1001
