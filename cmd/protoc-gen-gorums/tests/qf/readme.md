@@ -1,7 +1,7 @@
 # Benchmarks for quorum functions with and without the request object
 
 The question we want to answer in this document is:
-_Will Gorums be faster if we generate quorum functions without the `request` parameter, when this is not needed by the quorum function?_
+_Will Gorums be faster if we generate quorum functions without the `request` parameter, when the `request` is not needed by the quorum function?_
 
 Below are three runs of the benchmark for three variants of using the quorum function.
 
