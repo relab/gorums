@@ -31,7 +31,7 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) *protogen.Generated
 	}
 	for _, msg := range file.Messages {
 		msgName := fmt.Sprintf("%v", msg.Desc.Name())
-		for _, reserved := range reservedKeywords {
+		for _, reserved := range reservedIdents {
 			if msgName == reserved {
 				log.Fatalf("%v.proto: contains message %s, which is a reserved Gorums type.\n", file.GeneratedFilenamePrefix, msgName)
 			}

@@ -32,9 +32,9 @@ var pkgIdentMap = map[string]string{
 	"time":        "After",
 }
 
-// reservedKeywords holds the set of Gorums reservered identifiers.
+// reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedKeywords = []string{
+var reservedIdents = []string{
 	"ConfigNotFoundError",
 	"Configuration",
 	"GRPCError",

@@ -78,10 +78,10 @@ func generatePkgMap(pkgs map[string]string, reservedIdents []string) string {
 	}
 	buf.WriteString("}\n\n")
 	buf.WriteString(`
-	// reservedKeywords holds the set of Gorums reservered identifiers.
+	// reservedIdents holds the set of Gorums reserved identifiers.
 	// These identifiers cannot be used to define message types in a proto file.
 	`)
-	buf.WriteString("var reservedKeywords = []string{\n")
+	buf.WriteString("var reservedIdents = []string{\n")
 	for _, ident := range reservedIdents {
 		buf.WriteString("\t" + `"`)
 		buf.WriteString(ident)
