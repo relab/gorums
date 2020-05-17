@@ -169,65 +169,44 @@ func setup(b *testing.B, numServers int) ([]*grpc.Server, *Manager, *Configurati
 	return servers, man, c
 }
 
-func BenchmarkUseReq(b *testing.B) {
-	servers, man, c := setup(b, 5)
+func BenchmarkFullStackQF(b *testing.B) {
+	for n := 3; n < 20; n += 2 {
+		servers, man, c := setup(b, n)
 
-	b.ReportAllocs()
-	b.ResetTimer()
+		b.ReportAllocs()
+		b.ResetTimer()
 
-	// begin benchmarking
-	for i := 0; i < b.N; i++ {
-		resp, err := c.UseReq(context.Background(), &Request{Value: int64(requestValue)})
-		if err != nil {
-			b.Fatalf("UseReq error: %v", err)
+		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				resp, err := c.UseReq(context.Background(), &Request{Value: int64(requestValue)})
+				if err != nil {
+					b.Fatalf("UseReq error: %v", err)
+				}
+				_ = resp.GetResult()
+			}
+		})
+		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				resp, err := c.IgnoreReq(context.Background(), &Request{Value: int64(requestValue)})
+				if err != nil {
+					b.Fatalf("IgnoreReq error: %v", err)
+				}
+				_ = resp.GetResult()
+			}
+		})
+		b.Run(fmt.Sprintf("WithoutReq_%d", n), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				resp, err := c.WithoutReq(context.Background(), &Request{Value: int64(requestValue)})
+				if err != nil {
+					b.Fatalf("WithoutReq error: %v", err)
+				}
+				_ = resp.GetResult()
+			}
+		})
+
+		man.Close()
+		for _, srv := range servers {
+			srv.Stop()
 		}
-		_ = resp.GetResult()
-	}
-
-	man.Close()
-	for _, srv := range servers {
-		srv.Stop()
-	}
-}
-
-func BenchmarkIgnoreReq(b *testing.B) {
-	servers, man, c := setup(b, 5)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	// begin benchmarking
-	for i := 0; i < b.N; i++ {
-		resp, err := c.IgnoreReq(context.Background(), &Request{Value: int64(requestValue)})
-		if err != nil {
-			b.Fatalf("IgnoreReq error: %v", err)
-		}
-		_ = resp.GetResult()
-	}
-
-	man.Close()
-	for _, srv := range servers {
-		srv.Stop()
-	}
-}
-
-func BenchmarkWithoutReq(b *testing.B) {
-	servers, man, c := setup(b, 5)
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	// begin benchmarking
-	for i := 0; i < b.N; i++ {
-		resp, err := c.WithoutReq(context.Background(), &Request{Value: int64(requestValue)})
-		if err != nil {
-			b.Fatalf("WithoutReq error: %v", err)
-		}
-		_ = resp.GetResult()
-	}
-
-	man.Close()
-	for _, srv := range servers {
-		srv.Stop()
 	}
 }
