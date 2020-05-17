@@ -57,7 +57,7 @@ type testQSpec struct {
 	quorum int
 }
 
-func (q testQSpec) QCQF(replies []*Response) (*Response, bool) {
+func (q testQSpec) QCQF(in *Request, replies []*Response) (*Response, bool) {
 	if len(replies) < q.quorum {
 		return nil, false
 	}

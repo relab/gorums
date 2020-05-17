@@ -75,12 +75,6 @@ var funcMap = template.FuncMap{
 		}
 		return ""
 	},
-	"withQFArg": func(method *protogen.Method, arg string) string {
-		if hasMethodOption(method, gorums.E_QfWithReq) {
-			return arg
-		}
-		return ""
-	},
 	"correctableStream": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer()
 	},

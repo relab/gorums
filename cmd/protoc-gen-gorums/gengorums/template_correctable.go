@@ -83,7 +83,7 @@ var correctableCallReply = `
 			}
 			{{template "traceLazyLog"}}
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.{{$method}}QF({{withQFArg .Method "in, "}}replyValues)
+			reply, rlevel, quorum = c.qspec.{{$method}}QF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return

@@ -75,7 +75,7 @@ var quorumCallReply = `
 			}
 			{{template "traceLazyLog"}}
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.{{$method}}QF({{withQFArg .Method "in, "}}replyValues); quorum {
+			if resp, quorum = c.qspec.{{$method}}QF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():

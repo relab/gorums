@@ -134,10 +134,6 @@ func (s testSrv) IgnoreReq(_ context.Context, req *Request) (*Response, error) {
 	return &Response{Result: req.GetValue()}, nil
 }
 
-func (s testSrv) WithoutReq(_ context.Context, req *Request) (*Response, error) {
-	return &Response{Result: req.GetValue()}, nil
-}
-
 func setup(b *testing.B, numServers int) ([]*grpc.Server, *Manager, *Configuration) {
 	quorum := numServers / 2
 	servers := make([]*grpc.Server, numServers)
@@ -190,15 +186,6 @@ func BenchmarkFullStackQF(b *testing.B) {
 				resp, err := c.IgnoreReq(context.Background(), &Request{Value: int64(requestValue)})
 				if err != nil {
 					b.Fatalf("IgnoreReq error: %v", err)
-				}
-				_ = resp.GetResult()
-			}
-		})
-		b.Run(fmt.Sprintf("WithoutReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				resp, err := c.WithoutReq(context.Background(), &Request{Value: int64(requestValue)})
-				if err != nil {
-					b.Fatalf("WithoutReq error: %v", err)
 				}
 				_ = resp.GetResult()
 			}

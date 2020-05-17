@@ -7,15 +7,8 @@ option go_package = "cmd/protoc-gen-gorums/tests/qf";
 import "gorums.proto";
 
 service QuorumFunction {
-  rpc UseReq(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.qf_with_req) = true;
-  }
+  rpc UseReq(Request) returns (Response) { option (gorums.quorumcall) = true; }
   rpc IgnoreReq(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.qf_with_req) = true;
-  }
-  rpc WithoutReq(Request) returns (Response) {
     option (gorums.quorumcall) = true;
   }
 }

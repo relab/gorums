@@ -86,7 +86,7 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request, opts ...grp
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.OrderingQCQF(replyValues); quorum {
+			if resp, quorum = c.qspec.OrderingQCQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -203,7 +203,7 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.OrderingPerNodeArgQF(replyValues); quorum {
+			if resp, quorum = c.qspec.OrderingPerNodeArgQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -231,115 +231,6 @@ func (s *GorumsServer) RegisterOrderingPerNodeArgHandler(handler OrderingPerNode
 			return new(ordering.Message)
 		}
 		resp := handler.OrderingPerNodeArg(req)
-		data, err := ptypes.MarshalAny(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
-	})
-}
-
-// OrderingQFWithReq is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-func (c *Configuration) OrderingQFWithReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingQFWithReq")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	// get the ID which will be used to return the correct responses for a request
-	msgID := c.mgr.nextMsgID()
-
-	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
-
-	// remove the replies channel when we are done
-	defer c.mgr.deleteChan(msgID)
-
-	data, err := ptypes.MarshalAny(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
-	}
-	msg := &ordering.Message{
-		ID:     msgID,
-		Method: "/dev.ZorumsService/OrderingQFWithReq",
-		Data:   data,
-	}
-	// push the message to the nodes
-	expected := c.n
-	for _, n := range c.nodes {
-		n.sendQ <- msg
-	}
-
-	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replies:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			reply := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.OrderingQFWithReqQF(in, replyValues); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-		}
-
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
-		}
-	}
-}
-
-// OrderingQFWithReqHandler is the server API for the OrderingQFWithReq rpc.
-type OrderingQFWithReqHandler interface {
-	OrderingQFWithReq(*Request) *Response
-}
-
-// RegisterOrderingQFWithReqHandler sets the handler for OrderingQFWithReq.
-func (s *GorumsServer) RegisterOrderingQFWithReqHandler(handler OrderingQFWithReqHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/OrderingQFWithReq", func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingQFWithReq(req)
 		data, err := ptypes.MarshalAny(resp)
 		if err != nil {
 			return new(ordering.Message)
@@ -421,7 +312,7 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 				break
 			}
 			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.OrderingCustomReturnTypeQF(replyValues); quorum {
+			if resp, quorum = c.qspec.OrderingCustomReturnTypeQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():

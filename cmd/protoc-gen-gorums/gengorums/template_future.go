@@ -71,7 +71,7 @@ var futureCallReply = `
 			}
 			{{template "traceLazyLog"}}
 			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.{{$method}}QF({{withQFArg .Method "in, "}}replyValues); quorum {
+			if reply, quorum = c.qspec.{{$method}}QF(in, replyValues); quorum {
 				resp.{{$customOutField}}, resp.err = reply, nil
 				return
 			}
