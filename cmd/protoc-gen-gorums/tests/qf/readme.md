@@ -33,6 +33,7 @@ To run the benchmarks:
 ```sh
 cd qf
 go test -bench=BenchmarkQF | benchgraph -title "Quorum Function Evaluation"
+go test -bench=BenchmarkFullStackQF | benchgraph -title "Quorum Function Evaluation (full stack)"
 ```
 
 To view plots for three separate runs:
