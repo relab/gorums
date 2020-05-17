@@ -11,7 +11,6 @@ extend google.protobuf.MethodOptions {
   bool correctable = 50001;
   bool multicast = 50003;
   bool qc_future = 50004;
-  bool qf_with_req = 50005;
   bool per_node_arg = 50006;
   bool ordered = 50007;
 

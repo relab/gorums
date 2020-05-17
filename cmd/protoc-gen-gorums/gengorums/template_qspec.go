@@ -13,12 +13,15 @@ type QuorumSpec interface {
 {{range qspecMethods .Methods -}}
 	{{/* Below . is the method object */}}
 	{{$method := .GoName}}
-	{{$in := printf "in *%s," (in $genFile .)}}
+	{{$in := in $genFile .}}
 	{{$out := out $genFile .}}
 	{{$customOut := customOut $genFile .}}
 	// {{$method}}QF is the quorum function for the {{$method}}
-	// {{docName .}} call method.
-	{{$method}}QF({{withQFArg . $in}}replies []*{{$out}}) (*{{$customOut}}{{withCorrectable . ", int"}}, bool)
+	// {{docName .}} call method. The in parameter is the request object
+	// supplied to the {{$method}} method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should declare your quorum function with '_ *{{$in}}'.
+	{{$method}}QF(in *{{$in}}, replies []*{{$out}}) (*{{$customOut}}{{withCorrectable . ", int"}}, bool)
 {{end}}
 }
 {{end}}

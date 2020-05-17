@@ -59,7 +59,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grp
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallQF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -136,7 +136,7 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallPerNodeArgQF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallPerNodeArgQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -152,78 +152,6 @@ func (n *Node) QuorumCallPerNodeArg(ctx context.Context, in *Request, replyChan 
 	reply := new(Response)
 	start := time.Now()
 	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallPerNodeArg", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCall with qf_with_req option.
-func (c *Configuration) QuorumCallQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallQFWithRequestArg")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallQFWithRequestArg(ctx, in, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallQFWithRequestArgQF(in, replyValues); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
-		}
-	}
-}
-
-func (n *Node) QuorumCallQFWithRequestArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallQFWithRequestArg", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
@@ -280,7 +208,7 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallCustomReturnTypeQF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallCustomReturnTypeQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -429,7 +357,7 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, op
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallEmptyQF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallEmptyQF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
@@ -501,7 +429,7 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts 
 			}
 
 			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallEmpty2QF(replyValues); quorum {
+			if resp, quorum = c.qspec.QuorumCallEmpty2QF(in, replyValues); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():

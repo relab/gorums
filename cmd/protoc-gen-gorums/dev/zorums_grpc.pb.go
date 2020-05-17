@@ -29,8 +29,6 @@ type ZorumsServiceClient interface {
 	QuorumCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCall with per_node_arg option.
 	QuorumCallPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	// QuorumCall with qf_with_req option.
-	QuorumCallQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCall with custom_return_type option.
 	QuorumCallCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCallCombo with all supported options.
@@ -55,8 +53,6 @@ type ZorumsServiceClient interface {
 	QuorumCallFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCallFuturePerNodeArg with per_node_arg option.
 	QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	// QuorumCallFutureQFWithRequestArg with qf_with_req option.
-	QuorumCallFutureQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCallFutureCustomReturnType with custom_return_type option.
 	QuorumCallFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCallFutureCombo with all supported options.
@@ -72,8 +68,6 @@ type ZorumsServiceClient interface {
 	Correctable(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// CorrectablePerNodeArg with per_node_arg option.
 	CorrectablePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	// CorrectableQFWithRequestArg with qf_with_req option.
-	CorrectableQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// CorrectableCustomReturnType with custom_return_type option.
 	CorrectableCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// CorrectableCombo with all supported options.
@@ -87,8 +81,6 @@ type ZorumsServiceClient interface {
 	CorrectableStream(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamClient, error)
 	// CorrectablePerNodeArg with per_node_arg option.
 	CorrectableStreamPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamPerNodeArgClient, error)
-	// CorrectableQFWithRequestArg with qf_with_req option.
-	CorrectableStreamQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamQFWithRequestArgClient, error)
 	// CorrectableCustomReturnType with custom_return_type option.
 	CorrectableStreamCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamCustomReturnTypeClient, error)
 	// CorrectableCombo with all supported options.
@@ -103,7 +95,6 @@ type ZorumsServiceClient interface {
 	// ---------------------------------------------------------------
 	OrderingQC(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	OrderingQFWithReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
@@ -138,15 +129,6 @@ func (c *zorumsServiceClient) QuorumCall(ctx context.Context, in *Request, opts 
 func (c *zorumsServiceClient) QuorumCallPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
 	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallPerNodeArg", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zorumsServiceClient) QuorumCallQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallQFWithRequestArg", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -377,15 +359,6 @@ func (c *zorumsServiceClient) QuorumCallFuturePerNodeArg(ctx context.Context, in
 	return out, nil
 }
 
-func (c *zorumsServiceClient) QuorumCallFutureQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFutureQFWithRequestArg", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *zorumsServiceClient) QuorumCallFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
 	err := c.cc.Invoke(ctx, "/dev.ZorumsService/QuorumCallFutureCustomReturnType", in, out, opts...)
@@ -443,15 +416,6 @@ func (c *zorumsServiceClient) Correctable(ctx context.Context, in *Request, opts
 func (c *zorumsServiceClient) CorrectablePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
 	err := c.cc.Invoke(ctx, "/dev.ZorumsService/CorrectablePerNodeArg", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zorumsServiceClient) CorrectableQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/CorrectableQFWithRequestArg", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -558,40 +522,8 @@ func (x *zorumsServiceCorrectableStreamPerNodeArgClient) Recv() (*Response, erro
 	return m, nil
 }
 
-func (c *zorumsServiceClient) CorrectableStreamQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamQFWithRequestArgClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[7], "/dev.ZorumsService/CorrectableStreamQFWithRequestArg", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &zorumsServiceCorrectableStreamQFWithRequestArgClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type ZorumsService_CorrectableStreamQFWithRequestArgClient interface {
-	Recv() (*Response, error)
-	grpc.ClientStream
-}
-
-type zorumsServiceCorrectableStreamQFWithRequestArgClient struct {
-	grpc.ClientStream
-}
-
-func (x *zorumsServiceCorrectableStreamQFWithRequestArgClient) Recv() (*Response, error) {
-	m := new(Response)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 func (c *zorumsServiceClient) CorrectableStreamCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamCustomReturnTypeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[8], "/dev.ZorumsService/CorrectableStreamCustomReturnType", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[7], "/dev.ZorumsService/CorrectableStreamCustomReturnType", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -623,7 +555,7 @@ func (x *zorumsServiceCorrectableStreamCustomReturnTypeClient) Recv() (*Response
 }
 
 func (c *zorumsServiceClient) CorrectableStreamCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamComboClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[9], "/dev.ZorumsService/CorrectableStreamCombo", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[8], "/dev.ZorumsService/CorrectableStreamCombo", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +587,7 @@ func (x *zorumsServiceCorrectableStreamComboClient) Recv() (*Response, error) {
 }
 
 func (c *zorumsServiceClient) CorrectableStreamEmpty(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamEmptyClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[10], "/dev.ZorumsService/CorrectableStreamEmpty", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[9], "/dev.ZorumsService/CorrectableStreamEmpty", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -687,7 +619,7 @@ func (x *zorumsServiceCorrectableStreamEmptyClient) Recv() (*empty.Empty, error)
 }
 
 func (c *zorumsServiceClient) CorrectableStreamEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamEmpty2Client, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[11], "/dev.ZorumsService/CorrectableStreamEmpty2", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[10], "/dev.ZorumsService/CorrectableStreamEmpty2", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -736,15 +668,6 @@ func (c *zorumsServiceClient) OrderingPerNodeArg(ctx context.Context, in *Reques
 	return out, nil
 }
 
-func (c *zorumsServiceClient) OrderingQFWithReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingQFWithReq", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *zorumsServiceClient) OrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
 	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingCustomReturnType", in, out, opts...)
@@ -781,8 +704,6 @@ type ZorumsServiceServer interface {
 	QuorumCall(context.Context, *Request) (*Response, error)
 	// QuorumCall with per_node_arg option.
 	QuorumCallPerNodeArg(context.Context, *Request) (*Response, error)
-	// QuorumCall with qf_with_req option.
-	QuorumCallQFWithRequestArg(context.Context, *Request) (*Response, error)
 	// QuorumCall with custom_return_type option.
 	QuorumCallCustomReturnType(context.Context, *Request) (*Response, error)
 	// QuorumCallCombo with all supported options.
@@ -807,8 +728,6 @@ type ZorumsServiceServer interface {
 	QuorumCallFuture(context.Context, *Request) (*Response, error)
 	// QuorumCallFuturePerNodeArg with per_node_arg option.
 	QuorumCallFuturePerNodeArg(context.Context, *Request) (*Response, error)
-	// QuorumCallFutureQFWithRequestArg with qf_with_req option.
-	QuorumCallFutureQFWithRequestArg(context.Context, *Request) (*Response, error)
 	// QuorumCallFutureCustomReturnType with custom_return_type option.
 	QuorumCallFutureCustomReturnType(context.Context, *Request) (*Response, error)
 	// QuorumCallFutureCombo with all supported options.
@@ -824,8 +743,6 @@ type ZorumsServiceServer interface {
 	Correctable(context.Context, *Request) (*Response, error)
 	// CorrectablePerNodeArg with per_node_arg option.
 	CorrectablePerNodeArg(context.Context, *Request) (*Response, error)
-	// CorrectableQFWithRequestArg with qf_with_req option.
-	CorrectableQFWithRequestArg(context.Context, *Request) (*Response, error)
 	// CorrectableCustomReturnType with custom_return_type option.
 	CorrectableCustomReturnType(context.Context, *Request) (*Response, error)
 	// CorrectableCombo with all supported options.
@@ -839,8 +756,6 @@ type ZorumsServiceServer interface {
 	CorrectableStream(*Request, ZorumsService_CorrectableStreamServer) error
 	// CorrectablePerNodeArg with per_node_arg option.
 	CorrectableStreamPerNodeArg(*Request, ZorumsService_CorrectableStreamPerNodeArgServer) error
-	// CorrectableQFWithRequestArg with qf_with_req option.
-	CorrectableStreamQFWithRequestArg(*Request, ZorumsService_CorrectableStreamQFWithRequestArgServer) error
 	// CorrectableCustomReturnType with custom_return_type option.
 	CorrectableStreamCustomReturnType(*Request, ZorumsService_CorrectableStreamCustomReturnTypeServer) error
 	// CorrectableCombo with all supported options.
@@ -855,7 +770,6 @@ type ZorumsServiceServer interface {
 	// ---------------------------------------------------------------
 	OrderingQC(context.Context, *Request) (*Response, error)
 	OrderingPerNodeArg(context.Context, *Request) (*Response, error)
-	OrderingQFWithReq(context.Context, *Request) (*Response, error)
 	OrderingCustomReturnType(context.Context, *Request) (*Response, error)
 	OrderingCombo(context.Context, *Request) (*Response, error)
 	OrderingUnaryRPC(context.Context, *Request) (*Response, error)
@@ -873,9 +787,6 @@ func (*UnimplementedZorumsServiceServer) QuorumCall(context.Context, *Request) (
 }
 func (*UnimplementedZorumsServiceServer) QuorumCallPerNodeArg(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallPerNodeArg not implemented")
-}
-func (*UnimplementedZorumsServiceServer) QuorumCallQFWithRequestArg(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallQFWithRequestArg not implemented")
 }
 func (*UnimplementedZorumsServiceServer) QuorumCallCustomReturnType(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallCustomReturnType not implemented")
@@ -910,9 +821,6 @@ func (*UnimplementedZorumsServiceServer) QuorumCallFuture(context.Context, *Requ
 func (*UnimplementedZorumsServiceServer) QuorumCallFuturePerNodeArg(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFuturePerNodeArg not implemented")
 }
-func (*UnimplementedZorumsServiceServer) QuorumCallFutureQFWithRequestArg(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFutureQFWithRequestArg not implemented")
-}
 func (*UnimplementedZorumsServiceServer) QuorumCallFutureCustomReturnType(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFutureCustomReturnType not implemented")
 }
@@ -934,9 +842,6 @@ func (*UnimplementedZorumsServiceServer) Correctable(context.Context, *Request) 
 func (*UnimplementedZorumsServiceServer) CorrectablePerNodeArg(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CorrectablePerNodeArg not implemented")
 }
-func (*UnimplementedZorumsServiceServer) CorrectableQFWithRequestArg(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CorrectableQFWithRequestArg not implemented")
-}
 func (*UnimplementedZorumsServiceServer) CorrectableCustomReturnType(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CorrectableCustomReturnType not implemented")
 }
@@ -955,9 +860,6 @@ func (*UnimplementedZorumsServiceServer) CorrectableStream(*Request, ZorumsServi
 func (*UnimplementedZorumsServiceServer) CorrectableStreamPerNodeArg(*Request, ZorumsService_CorrectableStreamPerNodeArgServer) error {
 	return status.Errorf(codes.Unimplemented, "method CorrectableStreamPerNodeArg not implemented")
 }
-func (*UnimplementedZorumsServiceServer) CorrectableStreamQFWithRequestArg(*Request, ZorumsService_CorrectableStreamQFWithRequestArgServer) error {
-	return status.Errorf(codes.Unimplemented, "method CorrectableStreamQFWithRequestArg not implemented")
-}
 func (*UnimplementedZorumsServiceServer) CorrectableStreamCustomReturnType(*Request, ZorumsService_CorrectableStreamCustomReturnTypeServer) error {
 	return status.Errorf(codes.Unimplemented, "method CorrectableStreamCustomReturnType not implemented")
 }
@@ -975,9 +877,6 @@ func (*UnimplementedZorumsServiceServer) OrderingQC(context.Context, *Request) (
 }
 func (*UnimplementedZorumsServiceServer) OrderingPerNodeArg(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingPerNodeArg not implemented")
-}
-func (*UnimplementedZorumsServiceServer) OrderingQFWithReq(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method OrderingQFWithReq not implemented")
 }
 func (*UnimplementedZorumsServiceServer) OrderingCustomReturnType(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingCustomReturnType not implemented")
@@ -1043,24 +942,6 @@ func _ZorumsService_QuorumCallPerNodeArg_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ZorumsServiceServer).QuorumCallPerNodeArg(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ZorumsService_QuorumCallQFWithRequestArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZorumsServiceServer).QuorumCallQFWithRequestArg(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ZorumsService/QuorumCallQFWithRequestArg",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).QuorumCallQFWithRequestArg(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1303,24 +1184,6 @@ func _ZorumsService_QuorumCallFuturePerNodeArg_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_QuorumCallFutureQFWithRequestArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZorumsServiceServer).QuorumCallFutureQFWithRequestArg(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ZorumsService/QuorumCallFutureQFWithRequestArg",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).QuorumCallFutureQFWithRequestArg(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ZorumsService_QuorumCallFutureCustomReturnType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
@@ -1447,24 +1310,6 @@ func _ZorumsService_CorrectablePerNodeArg_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_CorrectableQFWithRequestArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZorumsServiceServer).CorrectableQFWithRequestArg(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ZorumsService/CorrectableQFWithRequestArg",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).CorrectableQFWithRequestArg(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ZorumsService_CorrectableCustomReturnType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
@@ -1576,27 +1421,6 @@ type zorumsServiceCorrectableStreamPerNodeArgServer struct {
 }
 
 func (x *zorumsServiceCorrectableStreamPerNodeArgServer) Send(m *Response) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _ZorumsService_CorrectableStreamQFWithRequestArg_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(Request)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(ZorumsServiceServer).CorrectableStreamQFWithRequestArg(m, &zorumsServiceCorrectableStreamQFWithRequestArgServer{stream})
-}
-
-type ZorumsService_CorrectableStreamQFWithRequestArgServer interface {
-	Send(*Response) error
-	grpc.ServerStream
-}
-
-type zorumsServiceCorrectableStreamQFWithRequestArgServer struct {
-	grpc.ServerStream
-}
-
-func (x *zorumsServiceCorrectableStreamQFWithRequestArgServer) Send(m *Response) error {
 	return x.ServerStream.SendMsg(m)
 }
 
@@ -1720,24 +1544,6 @@ func _ZorumsService_OrderingPerNodeArg_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_OrderingQFWithReq_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZorumsServiceServer).OrderingQFWithReq(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ZorumsService/OrderingQFWithReq",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).OrderingQFWithReq(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ZorumsService_OrderingCustomReturnType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
@@ -1809,10 +1615,6 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ZorumsService_QuorumCallPerNodeArg_Handler,
 		},
 		{
-			MethodName: "QuorumCallQFWithRequestArg",
-			Handler:    _ZorumsService_QuorumCallQFWithRequestArg_Handler,
-		},
-		{
 			MethodName: "QuorumCallCustomReturnType",
 			Handler:    _ZorumsService_QuorumCallCustomReturnType_Handler,
 		},
@@ -1835,10 +1637,6 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QuorumCallFuturePerNodeArg",
 			Handler:    _ZorumsService_QuorumCallFuturePerNodeArg_Handler,
-		},
-		{
-			MethodName: "QuorumCallFutureQFWithRequestArg",
-			Handler:    _ZorumsService_QuorumCallFutureQFWithRequestArg_Handler,
 		},
 		{
 			MethodName: "QuorumCallFutureCustomReturnType",
@@ -1869,10 +1667,6 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ZorumsService_CorrectablePerNodeArg_Handler,
 		},
 		{
-			MethodName: "CorrectableQFWithRequestArg",
-			Handler:    _ZorumsService_CorrectableQFWithRequestArg_Handler,
-		},
-		{
 			MethodName: "CorrectableCustomReturnType",
 			Handler:    _ZorumsService_CorrectableCustomReturnType_Handler,
 		},
@@ -1895,10 +1689,6 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OrderingPerNodeArg",
 			Handler:    _ZorumsService_OrderingPerNodeArg_Handler,
-		},
-		{
-			MethodName: "OrderingQFWithReq",
-			Handler:    _ZorumsService_OrderingQFWithReq_Handler,
 		},
 		{
 			MethodName: "OrderingCustomReturnType",
@@ -1947,11 +1737,6 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "CorrectableStreamPerNodeArg",
 			Handler:       _ZorumsService_CorrectableStreamPerNodeArg_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "CorrectableStreamQFWithRequestArg",
-			Handler:       _ZorumsService_CorrectableStreamQFWithRequestArg_Handler,
 			ServerStreams: true,
 		},
 		{

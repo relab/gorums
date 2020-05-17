@@ -36,11 +36,6 @@ service ZorumsService {
     option (gorums.quorumcall) = true;
     option (gorums.per_node_arg) = true;
   }
-  // QuorumCall with qf_with_req option.
-  rpc QuorumCallQFWithRequestArg(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.qf_with_req) = true;
-  }
   // QuorumCall with custom_return_type option.
   rpc QuorumCallCustomReturnType(Request) returns (Response) {
     option (gorums.quorumcall) = true;
@@ -49,7 +44,6 @@ service ZorumsService {
   // QuorumCallCombo with all supported options.
   rpc QuorumCallCombo(Request) returns (Response) {
     option (gorums.quorumcall) = true;
-    option (gorums.qf_with_req) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
@@ -62,12 +56,12 @@ service ZorumsService {
     option (gorums.quorumcall) = true;
   }
 
-  // ---------------------------------------------------------------
+  // ------------------------------------------------------------------
   // Multicast variants
-  // The multicast call type does not support options 'qf_with_req'
-  // and 'custom_return_type', since multicast is one-way and so it
-  // doesn't make sense to operate on response types.
-  // ---------------------------------------------------------------
+  // The multicast call type does not support the 'custom_return_type'
+  // option since multicast is one-way and so it doesn't make sense to
+  // operate on response types.
+  // ------------------------------------------------------------------
 
   // Multicast plain. Response type is not needed here.
   rpc Multicast(stream Request) returns (Response) {
@@ -106,11 +100,6 @@ service ZorumsService {
     option (gorums.qc_future) = true;
     option (gorums.per_node_arg) = true;
   }
-  // QuorumCallFutureQFWithRequestArg with qf_with_req option.
-  rpc QuorumCallFutureQFWithRequestArg(Request) returns (Response) {
-    option (gorums.qc_future) = true;
-    option (gorums.qf_with_req) = true;
-  }
   // QuorumCallFutureCustomReturnType with custom_return_type option.
   rpc QuorumCallFutureCustomReturnType(Request) returns (Response) {
     option (gorums.qc_future) = true;
@@ -119,7 +108,6 @@ service ZorumsService {
   // QuorumCallFutureCombo with all supported options.
   rpc QuorumCallFutureCombo(Request) returns (Response) {
     option (gorums.qc_future) = true;
-    option (gorums.qf_with_req) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
@@ -150,11 +138,6 @@ service ZorumsService {
     option (gorums.correctable) = true;
     option (gorums.per_node_arg) = true;
   }
-  // CorrectableQFWithRequestArg with qf_with_req option.
-  rpc CorrectableQFWithRequestArg(Request) returns (Response) {
-    option (gorums.correctable) = true;
-    option (gorums.qf_with_req) = true;
-  }
   // CorrectableCustomReturnType with custom_return_type option.
   rpc CorrectableCustomReturnType(Request) returns (Response) {
     option (gorums.correctable) = true;
@@ -163,7 +146,6 @@ service ZorumsService {
   // CorrectableCombo with all supported options.
   rpc CorrectableCombo(Request) returns (Response) {
     option (gorums.correctable) = true;
-    option (gorums.qf_with_req) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
@@ -190,11 +172,6 @@ service ZorumsService {
     option (gorums.correctable) = true;
     option (gorums.per_node_arg) = true;
   }
-  // CorrectableQFWithRequestArg with qf_with_req option.
-  rpc CorrectableStreamQFWithRequestArg(Request) returns (stream Response) {
-    option (gorums.correctable) = true;
-    option (gorums.qf_with_req) = true;
-  }
   // CorrectableCustomReturnType with custom_return_type option.
   rpc CorrectableStreamCustomReturnType(Request) returns (stream Response) {
     option (gorums.correctable) = true;
@@ -203,7 +180,6 @@ service ZorumsService {
   // CorrectableCombo with all supported options.
   rpc CorrectableStreamCombo(Request) returns (stream Response) {
     option (gorums.correctable) = true;
-    option (gorums.qf_with_req) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
@@ -229,11 +205,6 @@ service ZorumsService {
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
   }
-  rpc OrderingQFWithReq(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-    option (gorums.qf_with_req) = true;
-  }
   rpc OrderingCustomReturnType(Request) returns (Response) {
     option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
@@ -243,7 +214,6 @@ service ZorumsService {
     option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
-    option (gorums.qf_with_req) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   rpc OrderingUnaryRPC(Request) returns (Response) {

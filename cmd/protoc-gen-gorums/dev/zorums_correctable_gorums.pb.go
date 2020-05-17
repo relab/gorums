@@ -74,7 +74,7 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableQF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -173,7 +173,7 @@ func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, 
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectablePerNodeArgQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectablePerNodeArgQF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -197,100 +197,6 @@ func (n *Node) CorrectablePerNodeArg(ctx context.Context, in *Request, replyChan
 	reply := new(Response)
 	start := time.Now()
 	err := n.conn.Invoke(ctx, "/dev.ZorumsService/CorrectablePerNodeArg", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// CorrectableQFWithRequestArg with qf_with_req option.
-func (c *Configuration) CorrectableQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableResponse {
-	corr := &CorrectableResponse{
-		level:   LevelNotSet,
-		NodeIDs: make([]uint32, 0, c.n),
-		donech:  make(chan struct{}),
-	}
-	go c.correctableQFWithRequestArg(ctx, in, corr, opts...)
-	return corr
-}
-
-func (c *Configuration) correctableQFWithRequestArg(ctx context.Context, in *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableQFWithRequestArg")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.CorrectableQFWithRequestArg(ctx, in, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableQFWithRequestArgQF(in, replyValues)
-			if quorum {
-				resp.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				resp.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
-			return
-		}
-	}
-}
-
-func (n *Node) CorrectableQFWithRequestArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/CorrectableQFWithRequestArg", in, reply)
 	s, ok := status.FromError(err)
 	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
 		n.setLatency(time.Since(start))
@@ -361,7 +267,7 @@ func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Req
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableCustomReturnTypeQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableCustomReturnTypeQF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -554,7 +460,7 @@ func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp 
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableEmptyQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableEmptyQF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -649,7 +555,7 @@ func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, 
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableEmpty2QF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableEmpty2QF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -744,7 +650,7 @@ func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamQF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -851,7 +757,7 @@ func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Req
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamPerNodeArgQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamPerNodeArgQF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -874,108 +780,6 @@ func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Req
 func (n *Node) CorrectableStreamPerNodeArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
 	x := NewZorumsServiceClient(n.conn)
 	y, err := x.CorrectableStreamPerNodeArg(ctx, in)
-	if err != nil {
-		replyChan <- internalResponse{n.id, nil, err}
-		return
-	}
-
-	for {
-		reply, err := y.Recv()
-		if err == io.EOF {
-			return
-		}
-		replyChan <- internalResponse{n.id, reply, err}
-		if err != nil {
-			return
-		}
-	}
-}
-
-// CorrectableQFWithRequestArg with qf_with_req option.
-func (c *Configuration) CorrectableStreamQFWithRequestArg(ctx context.Context, in *Request, opts ...grpc.CallOption) *CorrectableStreamResponse {
-	corr := &CorrectableStreamResponse{
-		level:   LevelNotSet,
-		NodeIDs: make([]uint32, 0, c.n),
-		donech:  make(chan struct{}),
-	}
-	go c.correctableStreamQFWithRequestArg(ctx, in, corr, opts...)
-	return corr
-}
-
-func (c *Configuration) correctableStreamQFWithRequestArg(ctx context.Context, in *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamQFWithRequestArg")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.CorrectableStreamQFWithRequestArg(ctx, in, replyChan)
-	}
-
-	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = appendIfNotPresent(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamQFWithRequestArgQF(in, replyValues)
-			if quorum {
-				resp.set(reply, rlevel, nil, true)
-				return
-			}
-			if rlevel > clevel {
-				clevel = rlevel
-				resp.set(reply, rlevel, nil, false)
-			}
-		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
-			return
-		}
-		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
-			return
-		}
-	}
-}
-
-func (n *Node) CorrectableStreamQFWithRequestArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	x := NewZorumsServiceClient(n.conn)
-	y, err := x.CorrectableStreamQFWithRequestArg(ctx, in)
 	if err != nil {
 		replyChan <- internalResponse{n.id, nil, err}
 		return
@@ -1055,7 +859,7 @@ func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, i
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamCustomReturnTypeQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamCustomReturnTypeQF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -1264,7 +1068,7 @@ func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request,
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamEmptyQF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamEmptyQF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -1367,7 +1171,7 @@ func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.E
 			}
 
 			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamEmpty2QF(replyValues)
+			reply, rlevel, quorum = c.qspec.CorrectableStreamEmpty2QF(in, replyValues)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
