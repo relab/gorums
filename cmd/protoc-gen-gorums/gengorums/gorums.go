@@ -86,13 +86,13 @@ func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, goru
 	if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
 		g.P(mustExecute(parseTemplate(gorumsType, callTypeInfo.template), data))
 	} else {
-		genGorumsMethods(data, callTypeInfo)
+		genGorumsMethods(gorumsType, data, callTypeInfo)
 	}
 	g.P()
 }
 
 // genGorumsMethods generates Gorums methods for the given call type.
-func genGorumsMethods(data servicesData, callTypeInfo *callTypeInfo) {
+func genGorumsMethods(gorumsType string, data servicesData, callTypeInfo *callTypeInfo) {
 	type methodData struct {
 		GenFile *protogen.GeneratedFile
 		Method  *protogen.Method
@@ -106,8 +106,8 @@ func genGorumsMethods(data servicesData, callTypeInfo *callTypeInfo) {
 			}
 			callType := callTypeInfo.deriveCallType(method)
 			if callType.check(method) {
-				fmt.Fprintf(os.Stderr, "generating(%v): %s\n", callType.optionName, method.GoName)
-				g.P(mustExecute(parseTemplate(callType.optionName, callType.template), methodData{g, method}))
+				fmt.Fprintf(os.Stderr, "generating(%v): %s\n", gorumsType, method.GoName)
+				g.P(mustExecute(parseTemplate(gorumsType, callType.template), methodData{g, method}))
 			}
 		}
 	}
@@ -163,7 +163,6 @@ func hasGorumsMethods(services []*protogen.Service) bool {
 // true if code for the option type should be generated for the given method.
 type callTypeInfo struct {
 	extInfo        *protoimpl.ExtensionInfo
-	optionName     string
 	docName        string
 	template       string
 	outPrefix      string
@@ -209,47 +208,42 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"types": {template: datatypes},
 
 	gorums.E_Quorumcall.Name[index:]: {
-		extInfo:    gorums.E_Quorumcall,
-		optionName: gorums.E_Quorumcall.Name[index:],
-		docName:    "quorum",
-		template:   quorumCall,
+		extInfo:  gorums.E_Quorumcall,
+		docName:  "quorum",
+		template: quorumCall,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered)
 		},
 	},
 	gorums.E_QcFuture.Name[index:]: {
-		extInfo:    gorums.E_QcFuture,
-		optionName: gorums.E_QcFuture.Name[index:],
-		docName:    "asynchronous quorum",
-		template:   futureCall,
-		outPrefix:  "Future",
+		extInfo:   gorums.E_QcFuture,
+		docName:   "asynchronous quorum",
+		template:  futureCall,
+		outPrefix: "Future",
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_QcFuture)
 		},
 	},
 	gorums.E_Correctable.Name[index:]: {
-		extInfo:    gorums.E_Correctable,
-		optionName: gorums.E_Correctable.Name[index:],
+		extInfo: gorums.E_Correctable,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Correctable)
 		},
 		nestedCallType: map[string]*callTypeInfo{
 			correctable.E_Correctable.Name[coIndex:]: {
-				extInfo:    correctable.E_Correctable,
-				optionName: correctable.E_Correctable.Name[coIndex:],
-				docName:    "correctable quorum",
-				template:   correctableCall,
-				outPrefix:  "Correctable",
+				extInfo:   correctable.E_Correctable,
+				docName:   "correctable quorum",
+				template:  correctableCall,
+				outPrefix: "Correctable",
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Correctable) && !m.Desc.IsStreamingServer()
 				},
 			},
 			correctable.E_CorrectableStream.Name[coIndex:]: {
-				extInfo:    correctable.E_CorrectableStream,
-				optionName: correctable.E_CorrectableStream.Name[coIndex:],
-				docName:    "correctable stream quorum",
-				template:   correctableStreamCall,
-				outPrefix:  "CorrectableStream",
+				extInfo:   correctable.E_CorrectableStream,
+				docName:   "correctable stream quorum",
+				template:  correctableStreamCall,
+				outPrefix: "CorrectableStream",
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Correctable) && m.Desc.IsStreamingServer()
 				},
@@ -257,35 +251,31 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		},
 	},
 	gorums.E_Multicast.Name[index:]: {
-		extInfo:    gorums.E_Multicast,
-		optionName: gorums.E_Multicast.Name[index:],
-		docName:    "multicast",
-		template:   multicastCall,
+		extInfo:  gorums.E_Multicast,
+		docName:  "multicast",
+		template: multicastCall,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Multicast)
 		},
 	},
 	gorums.E_Ordered.Name[index:]: {
-		extInfo:    gorums.E_Ordered,
-		optionName: gorums.E_Ordered.Name[index:],
+		extInfo: gorums.E_Ordered,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Ordered)
 		},
 		nestedCallType: map[string]*callTypeInfo{
 			ordering.E_OrderedQc.Name[soIndex:]: {
-				extInfo:    ordering.E_OrderedQc,
-				optionName: ordering.E_OrderedQc.Name[soIndex:],
-				docName:    "ordered quorum",
-				template:   orderingQC,
+				extInfo:  ordering.E_OrderedQc,
+				docName:  "ordered quorum",
+				template: orderingQC,
 				chkFn: func(m *protogen.Method) bool {
 					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall)
 				},
 			},
 			ordering.E_OrderedRpc.Name[soIndex:]: {
-				extInfo:    ordering.E_OrderedRpc,
-				optionName: ordering.E_OrderedRpc.Name[soIndex:],
-				docName:    "ordered",
-				template:   orderingRPC,
+				extInfo:  ordering.E_OrderedRpc,
+				docName:  "ordered",
+				template: orderingRPC,
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Ordered) && !hasGorumsCallType(m)
 				},
