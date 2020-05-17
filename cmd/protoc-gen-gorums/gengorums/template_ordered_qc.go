@@ -52,7 +52,7 @@ var orderingLoop = `
 			Method: "{{fullName .Method}}",
 			Data: data,
 		}
-		{{- end}}
+{{- end}}
 		n.sendQ <- msg
 	}
 `
