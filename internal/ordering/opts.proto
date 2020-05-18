@@ -1,10 +1,9 @@
 syntax = "proto3";
 
 package ordering;
+option go_package = "github.com/relab/gorums/internal/ordering";
 
 import "google/protobuf/descriptor.proto";
-
-option go_package = "github.com/relab/gorums/internal/ordering";
 
 // These fields are used by the gorums plugin to describe
 // ordering types. They are not meant to be used elsewhere.
