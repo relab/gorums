@@ -20,7 +20,7 @@ type QuorumSpec interface {
 	// {{docName .}} call method. The in parameter is the request object
 	// supplied to the {{$method}} method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
-	// you should declare your quorum function with '_ *{{$in}}'.
+	// you should implement your quorum function with '_ *{{$in}}'.
 	{{$method}}QF(in *{{$in}}, replies []*{{$out}}) (*{{$customOut}}{{withCorrectable . ", int"}}, bool)
 {{end}}
 }
