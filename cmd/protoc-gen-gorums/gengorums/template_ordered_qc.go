@@ -1,8 +1,8 @@
 package gengorums
 
 var orderingVariables = `
-{{$marshalAny := use "ptypes.MarshalAny" .GenFile}}
-{{$unmarshalAny := use "ptypes.UnmarshalAny" .GenFile}}
+{{$marshalOptions := use "proto.MarshalOptions" .GenFile}}
+{{$unmarshalOptions := use "proto.UnmarshalOptions" .GenFile}}
 {{$errorf := use "fmt.Errorf" .GenFile}}
 {{$gorumsMsg := use "ordering.Message" .GenFile}}
 `
@@ -23,7 +23,7 @@ var orderingPreamble = `
 
 var orderingLoop = `
 {{if not (hasPerNodeArg .Method) -}}
-	data, err := {{$marshalAny}}(in)
+	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
@@ -43,7 +43,7 @@ var orderingLoop = `
 			expected--
 			continue
 		}
-		data, err := {{$marshalAny}}(nodeArg)
+		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			return nil, {{$errorf}}("failed to marshal message: %w", err)
 		}
@@ -73,7 +73,7 @@ var orderingReply = `
 			}
 			{{template "traceLazyLog"}}
 			reply := new({{$out}})
-			err := {{$unmarshalAny}}(r.reply, reply)
+			err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, {{$errorf}}("failed to unmarshal reply: %w", err)})
 				break
@@ -103,13 +103,13 @@ type {{$method}}Handler interface {
 func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
 	s.srv.registerHandler({{$method}}MethodID, func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
 		req := new({{$in}})
-		err := {{$unmarshalAny}}(in.GetData(), req)
+		err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new({{$gorumsMsg}})
 		}
 		resp := handler.{{$method}}(req)
-		data, err := {{$marshalAny}}(resp)
+		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new({{$gorumsMsg}})
 		}
