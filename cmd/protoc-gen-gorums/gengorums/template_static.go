@@ -735,6 +735,13 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 	}
 }
 
+var numOrderedMethods int32 = 0
+
+func getOrderedMethodID() int32 {
+	numOrderedMethods++
+	return numOrderedMethods
+}
+
 type orderingResult struct {
 	nid   uint32
 	reply *anypb.Any
@@ -885,17 +892,17 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 type requestHandler func(*ordering.Message) *ordering.Message
 
 type orderingServer struct {
-	handlers map[string]requestHandler
+	handlers map[int32]requestHandler
 }
 
 func newOrderingServer() *orderingServer {
 	return &orderingServer{
-		handlers: make(map[string]requestHandler),
+		handlers: make(map[int32]requestHandler),
 	}
 }
 
-func (s *orderingServer) registerHandler(method string, handler requestHandler) {
-	s.handlers[method] = handler
+func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
+	s.handlers[methodID] = handler
 }
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
@@ -905,7 +912,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			return err
 		}
 		// handle the request if a handler is available for this rpc
-		if handler, ok := s.handlers[req.GetMethod()]; ok {
+		if handler, ok := s.handlers[req.GetMethodID()]; ok {
 			resp := handler(req)
 			resp.ID = req.GetID()
 			err = srv.Send(resp)
