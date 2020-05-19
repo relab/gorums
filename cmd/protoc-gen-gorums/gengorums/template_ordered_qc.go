@@ -5,6 +5,7 @@ var orderingVariables = `
 {{$unmarshalOptions := use "proto.UnmarshalOptions" .GenFile}}
 {{$errorf := use "fmt.Errorf" .GenFile}}
 {{$gorumsMsg := use "ordering.Message" .GenFile}}
+{{$unexportMethod := unexport .Method.GoName}}
 `
 
 var orderingPreamble = `
@@ -29,7 +30,7 @@ var orderingLoop = `
 	}
 	msg := &{{$gorumsMsg}}{
 		ID: msgID,
-		MethodID: {{$method}}MethodID,
+		MethodID: {{$unexportMethod}}MethodID,
 		Data: data,
 	}
 {{end -}}
@@ -49,7 +50,7 @@ var orderingLoop = `
 		}
 		msg := &{{$gorumsMsg}}{
 			ID: msgID,
-			MethodID: {{$method}}MethodID,
+			MethodID: {{$unexportMethod}}MethodID,
 			Data: data,
 		}
 {{- end}}
@@ -101,7 +102,7 @@ type {{$method}}Handler interface {
 
 // Register{{$method}}Handler sets the handler for {{$method}}.
 func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
-	s.srv.registerHandler({{$method}}MethodID, func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
+	s.srv.registerHandler({{$unexportMethod}}MethodID, func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
 		req := new({{$in}})
 		err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -113,7 +114,7 @@ func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
 		if err != nil {
 			return new({{$gorumsMsg}})
 		}
-		return &{{$gorumsMsg}}{Data: data, MethodID: {{$method}}MethodID}
+		return &{{$gorumsMsg}}{Data: data, MethodID: {{$unexportMethod}}MethodID}
 	})
 }
 `

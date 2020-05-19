@@ -9,29 +9,16 @@ import (
 
 const hasOrderingMethods = true
 
-var OrderingQCMethodID int32
-var OrderingPerNodeArgMethodID int32
-var OrderingCustomReturnTypeMethodID int32
-var OrderingComboMethodID int32
-var OrderingUnaryRPCMethodID int32
-var StrictOrderingFutureMethodID int32
-var StrictOrderingFuturePerNodeArgMethodID int32
-var StrictOrderingFutureQFWithReqMethodID int32
-var StrictOrderingFutureCustomReturnTypeMethodID int32
-var StrictOrderingFutureCombiMethodID int32
-
-func init() {
-	OrderingQCMethodID = getOrderedMethodID()
-	OrderingPerNodeArgMethodID = getOrderedMethodID()
-	OrderingCustomReturnTypeMethodID = getOrderedMethodID()
-	OrderingComboMethodID = getOrderedMethodID()
-	OrderingUnaryRPCMethodID = getOrderedMethodID()
-	StrictOrderingFutureMethodID = getOrderedMethodID()
-	StrictOrderingFuturePerNodeArgMethodID = getOrderedMethodID()
-	StrictOrderingFutureQFWithReqMethodID = getOrderedMethodID()
-	StrictOrderingFutureCustomReturnTypeMethodID = getOrderedMethodID()
-	StrictOrderingFutureCombiMethodID = getOrderedMethodID()
-}
+const orderingQCMethodID int32 = 0
+const orderingPerNodeArgMethodID int32 = 1
+const orderingCustomReturnTypeMethodID int32 = 2
+const orderingComboMethodID int32 = 3
+const orderingUnaryRPCMethodID int32 = 4
+const strictOrderingFutureMethodID int32 = 5
+const strictOrderingFuturePerNodeArgMethodID int32 = 6
+const strictOrderingFutureQFWithReqMethodID int32 = 7
+const strictOrderingFutureCustomReturnTypeMethodID int32 = 8
+const strictOrderingFutureCombiMethodID int32 = 9
 
 type internalEmpty struct {
 	nid   uint32

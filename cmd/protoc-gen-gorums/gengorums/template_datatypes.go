@@ -9,20 +9,10 @@ var globals = `
 const hasOrderingMethods = {{hasOrderingMethods .Services}}
 `
 
-var orderingInit = `
-{{- range .Services }}
-{{- range orderedMethods .Methods }}
-var {{.GoName}}MethodID int32
+var orderingIDs = `
+{{range $index, $method := orderedMethods .Services}}
+const {{unexport $method.GoName}}MethodID int32 = {{$index}}
 {{- end}}
-{{- end}}
-
-func init() {
-{{- range .Services }}
-{{- range orderedMethods .Methods }}
-	{{.GoName}}MethodID = getOrderedMethodID()
-{{- end}}
-{{- end}}
-}
 `
 
 var internalOutDataType = `
@@ -155,16 +145,18 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 `
 
 var datatypes = globals +
-	orderingInit +
+	orderingIDs +
 	internalOutDataType +
 	futureDataType +
 	correctableDataType
 
 // orderedMethods returns all Gorums methods that use ordering.
-func orderedMethods(methods []*protogen.Method) (s []*protogen.Method) {
-	for _, method := range methods {
-		if hasMethodOption(method, gorums.E_Ordered) {
-			s = append(s, method)
+func orderedMethods(services []*protogen.Service) (s []*protogen.Method) {
+	for _, service := range services {
+		for _, method := range service.Methods {
+			if hasMethodOption(method, gorums.E_Ordered) {
+				s = append(s, method)
+			}
 		}
 	}
 	return s
