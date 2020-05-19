@@ -108,7 +108,7 @@ var orderedFutureRecvBody = `
 			}
 			{{/*template "traceLazyLog"*/}}
 			data := new({{$out}})
-			err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, {{$errorf}}("failed to unmarshal reply: %w", err)})
 				break
