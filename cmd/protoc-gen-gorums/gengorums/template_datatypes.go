@@ -1,7 +1,28 @@
 package gengorums
 
+import (
+	"github.com/relab/gorums"
+	"google.golang.org/protobuf/compiler/protogen"
+)
+
 var globals = `
 const hasOrderingMethods = {{hasOrderingMethods .Services}}
+`
+
+var orderingInit = `
+{{- range .Services }}
+{{- range orderedMethods .Methods }}
+var {{.GoName}}MethodID int32
+{{- end}}
+{{- end}}
+
+func init() {
+{{- range .Services }}
+{{- range orderedMethods .Methods }}
+	{{.GoName}}MethodID = getOrderedMethodID()
+{{- end}}
+{{- end}}
+}
 `
 
 var internalOutDataType = `
@@ -134,6 +155,17 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 `
 
 var datatypes = globals +
+	orderingInit +
 	internalOutDataType +
 	futureDataType +
 	correctableDataType
+
+// orderedMethods returns all Gorums methods that use ordering.
+func orderedMethods(methods []*protogen.Method) (s []*protogen.Method) {
+	for _, method := range methods {
+		if hasMethodOption(method, gorums.E_Ordered) {
+			s = append(s, method)
+		}
+	}
+	return s
+}
