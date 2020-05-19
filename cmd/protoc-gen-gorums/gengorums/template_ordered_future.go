@@ -3,7 +3,6 @@ package gengorums
 var orderedFutureVariables = `
 {{$context := use "context.Context" .GenFile}}
 {{$futureOut := outType .Method $customOut}}
-{{$unexportMethod := unexport .Method.GoName}}
 `
 
 var orderedFutureSignature = `func (c *Configuration) {{$method}}(` +
@@ -53,7 +52,7 @@ var orderedFutureSendLoop = `
 	}
 	msg := &{{$gorumsMsg}}{
 		ID: msgID,
-		MethodID: {{$method}}MethodID,
+		MethodID: {{$unexportMethod}}MethodID,
 		Data: data,
 	}
 {{end -}}
@@ -73,7 +72,7 @@ var orderedFutureSendLoop = `
 		}
 		msg := &{{$gorumsMsg}}{
 			ID: msgID,
-			MethodID: {{$method}}MethodID,
+			MethodID: {{$unexportMethod}}MethodID,
 			Data: data,
 		}
 		{{- end}}

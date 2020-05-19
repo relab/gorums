@@ -30,7 +30,6 @@ var importMap = map[string]protogen.GoImportPath{
 	"rand":     protogen.GoImportPath("math/rand"),
 	"backoff":  protogen.GoImportPath("google.golang.org/grpc/backoff"),
 	"math":     protogen.GoImportPath("math"),
-	"ptypes":   protogen.GoImportPath("github.com/golang/protobuf/ptypes"),
 	"ordering": protogen.GoImportPath("github.com/relab/gorums/ordering"),
 	"proto":    protogen.GoImportPath("google.golang.org/protobuf/proto"),
 }
