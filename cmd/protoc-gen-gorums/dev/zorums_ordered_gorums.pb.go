@@ -5,10 +5,10 @@ package dev
 import (
 	context "context"
 	fmt "fmt"
-	ptypes "github.com/golang/protobuf/ptypes"
 	ordering "github.com/relab/gorums/ordering"
 	trace "golang.org/x/net/trace"
 	grpc "google.golang.org/grpc"
+	proto "google.golang.org/protobuf/proto"
 	time "time"
 )
 
@@ -46,7 +46,7 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request, opts ...grp
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := ptypes.MarshalAny(in)
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -80,7 +80,7 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request, opts ...grp
 			}
 
 			reply := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, reply)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -108,13 +108,13 @@ type OrderingQCHandler interface {
 func (s *GorumsServer) RegisterOrderingQCHandler(handler OrderingQCHandler) {
 	s.srv.registerHandler(OrderingQCMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.OrderingQC(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -166,7 +166,7 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 			expected--
 			continue
 		}
-		data, err := ptypes.MarshalAny(nodeArg)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
@@ -197,7 +197,7 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 			}
 
 			reply := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, reply)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -225,13 +225,13 @@ type OrderingPerNodeArgHandler interface {
 func (s *GorumsServer) RegisterOrderingPerNodeArgHandler(handler OrderingPerNodeArgHandler) {
 	s.srv.registerHandler(OrderingPerNodeArgMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.OrderingPerNodeArg(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -272,7 +272,7 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := ptypes.MarshalAny(in)
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -306,7 +306,7 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 			}
 
 			reply := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, reply)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -334,13 +334,13 @@ type OrderingCustomReturnTypeHandler interface {
 func (s *GorumsServer) RegisterOrderingCustomReturnTypeHandler(handler OrderingCustomReturnTypeHandler) {
 	s.srv.registerHandler(OrderingCustomReturnTypeMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.OrderingCustomReturnType(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -392,7 +392,7 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 			expected--
 			continue
 		}
-		data, err := ptypes.MarshalAny(nodeArg)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
@@ -423,7 +423,7 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 			}
 
 			reply := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, reply)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -451,13 +451,13 @@ type OrderingComboHandler interface {
 func (s *GorumsServer) RegisterOrderingComboHandler(handler OrderingComboHandler) {
 	s.srv.registerHandler(OrderingComboMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.OrderingCombo(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -477,7 +477,7 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
 
-	data, err := ptypes.MarshalAny(in)
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -494,7 +494,7 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 			return nil, r.err
 		}
 		reply := new(Response)
-		err := ptypes.UnmarshalAny(r.reply, reply)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal reply: %w", err)
 		}
@@ -513,13 +513,13 @@ type OrderingUnaryRPCHandler interface {
 func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCHandler) {
 	s.srv.registerHandler(OrderingUnaryRPCMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.OrderingUnaryRPC(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -553,7 +553,7 @@ func (c *Configuration) strictOrderingFutureSend(ctx context.Context, in *Reques
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
-	data, err := ptypes.MarshalAny(in)
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -591,7 +591,7 @@ func (c *Configuration) strictOrderingFutureRecv(ctx context.Context, in *Reques
 			}
 
 			data := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, data)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -621,13 +621,13 @@ type StrictOrderingFutureHandler interface {
 func (s *GorumsServer) RegisterStrictOrderingFutureHandler(handler StrictOrderingFutureHandler) {
 	s.srv.registerHandler(StrictOrderingFutureMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.StrictOrderingFuture(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -673,7 +673,7 @@ func (c *Configuration) strictOrderingFuturePerNodeArgSend(ctx context.Context, 
 			expected--
 			continue
 		}
-		data, err := ptypes.MarshalAny(nodeArg)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
@@ -708,7 +708,7 @@ func (c *Configuration) strictOrderingFuturePerNodeArgRecv(ctx context.Context, 
 			}
 
 			data := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, data)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -738,13 +738,13 @@ type StrictOrderingFuturePerNodeArgHandler interface {
 func (s *GorumsServer) RegisterStrictOrderingFuturePerNodeArgHandler(handler StrictOrderingFuturePerNodeArgHandler) {
 	s.srv.registerHandler(StrictOrderingFuturePerNodeArgMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.StrictOrderingFuturePerNodeArg(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -778,7 +778,7 @@ func (c *Configuration) strictOrderingFutureQFWithReqSend(ctx context.Context, i
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
-	data, err := ptypes.MarshalAny(in)
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -816,7 +816,7 @@ func (c *Configuration) strictOrderingFutureQFWithReqRecv(ctx context.Context, i
 			}
 
 			data := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, data)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -846,13 +846,13 @@ type StrictOrderingFutureQFWithReqHandler interface {
 func (s *GorumsServer) RegisterStrictOrderingFutureQFWithReqHandler(handler StrictOrderingFutureQFWithReqHandler) {
 	s.srv.registerHandler(StrictOrderingFutureQFWithReqMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.StrictOrderingFutureQFWithReq(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -886,7 +886,7 @@ func (c *Configuration) strictOrderingFutureCustomReturnTypeSend(ctx context.Con
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
-	data, err := ptypes.MarshalAny(in)
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -924,7 +924,7 @@ func (c *Configuration) strictOrderingFutureCustomReturnTypeRecv(ctx context.Con
 			}
 
 			data := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, data)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -954,13 +954,13 @@ type StrictOrderingFutureCustomReturnTypeHandler interface {
 func (s *GorumsServer) RegisterStrictOrderingFutureCustomReturnTypeHandler(handler StrictOrderingFutureCustomReturnTypeHandler) {
 	s.srv.registerHandler(StrictOrderingFutureCustomReturnTypeMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.StrictOrderingFutureCustomReturnType(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -1006,7 +1006,7 @@ func (c *Configuration) strictOrderingFutureCombiSend(ctx context.Context, in *R
 			expected--
 			continue
 		}
-		data, err := ptypes.MarshalAny(nodeArg)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
@@ -1041,7 +1041,7 @@ func (c *Configuration) strictOrderingFutureCombiRecv(ctx context.Context, in *R
 			}
 
 			data := new(Response)
-			err := ptypes.UnmarshalAny(r.reply, data)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1071,13 +1071,13 @@ type StrictOrderingFutureCombiHandler interface {
 func (s *GorumsServer) RegisterStrictOrderingFutureCombiHandler(handler StrictOrderingFutureCombiHandler) {
 	s.srv.registerHandler(StrictOrderingFutureCombiMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := ptypes.UnmarshalAny(in.GetData(), req)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return new(ordering.Message)
 		}
 		resp := handler.StrictOrderingFutureCombi(req)
-		data, err := ptypes.MarshalAny(resp)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}

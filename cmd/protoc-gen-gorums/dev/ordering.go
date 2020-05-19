@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var numOrderedMethods int32 = 0
@@ -25,7 +24,7 @@ func getOrderedMethodID() int32 {
 
 type orderingResult struct {
 	nid   uint32
-	reply *anypb.Any
+	reply []byte
 	err   error
 }
 

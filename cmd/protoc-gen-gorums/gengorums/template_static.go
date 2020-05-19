@@ -17,19 +17,18 @@ var pkgIdentMap = map[string]string{
 	"google.golang.org/grpc/backoff":   "Config",
 	"google.golang.org/grpc/codes":     "Unavailable",
 	"google.golang.org/grpc/status":    "Errorf",
-	"google.golang.org/protobuf/types/known/anypb": "Any",
-	"hash/fnv":    "New32a",
-	"io":          "WriteString",
-	"log":         "Logger",
-	"math":        "Min",
-	"math/rand":   "Float64",
-	"net":         "Listener",
-	"sort":        "Sort",
-	"strconv":     "Atoi",
-	"strings":     "Join",
-	"sync":        "Mutex",
-	"sync/atomic": "AddUint64",
-	"time":        "After",
+	"hash/fnv":                         "New32a",
+	"io":                               "WriteString",
+	"log":                              "Logger",
+	"math":                             "Min",
+	"math/rand":                        "Float64",
+	"net":                              "Listener",
+	"sort":                             "Sort",
+	"strconv":                          "Atoi",
+	"strings":                          "Join",
+	"sync":                             "Mutex",
+	"sync/atomic":                      "AddUint64",
+	"time":                             "After",
 }
 
 // reservedIdents holds the set of Gorums reserved identifiers.
@@ -744,7 +743,7 @@ func getOrderedMethodID() int32 {
 
 type orderingResult struct {
 	nid   uint32
-	reply *anypb.Any
+	reply []byte
 	err   error
 }
 
