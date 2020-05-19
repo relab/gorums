@@ -47,7 +47,7 @@ var orderedFutureSendPreamble = `
 
 var orderedFutureSendLoop = `
 {{if not (hasPerNodeArg .Method) -}}
-	data, err := {{$marshalAny}}(in)
+	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		return 0, 0, nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
@@ -67,7 +67,7 @@ var orderedFutureSendLoop = `
 			expected--
 			continue
 		}
-		data, err := {{$marshalAny}}(nodeArg)
+		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			return 0, 0, nil, {{$errorf}}("failed to marshal message: %w", err)
 		}
@@ -109,7 +109,7 @@ var orderedFutureRecvBody = `
 			}
 			{{/*template "traceLazyLog"*/}}
 			data := new({{$out}})
-			err := {{$unmarshalAny}}(r.reply, data)
+			err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, {{$errorf}}("failed to unmarshal reply: %w", err)})
 				break
