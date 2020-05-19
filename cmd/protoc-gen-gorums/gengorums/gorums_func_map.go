@@ -112,6 +112,7 @@ var funcMap = template.FuncMap{
 	"streamMethods":         streamMethods,
 	"qspecServices":         qspecServices,
 	"qspecMethods":          qspecMethods,
+	"orderedMethods":        orderedMethods,
 	"unexport":              unexport,
 	"qcresult":              qcresult,
 	"contains":              strings.Contains,

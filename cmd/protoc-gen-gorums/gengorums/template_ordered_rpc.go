@@ -27,7 +27,7 @@ var orderingRPCBody = `
 	}
 	msg := &{{$gorumsMsg}}{
 		ID: msgID,
-		Method: "{{fullName .Method}}",
+		MethodID: {{$method}}MethodID,
 		Data: data,
 	}
 	n.sendQ <- msg

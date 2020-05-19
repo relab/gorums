@@ -51,9 +51,9 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request, opts ...grp
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
 	msg := &ordering.Message{
-		ID:     msgID,
-		Method: "/dev.ZorumsService/OrderingQC",
-		Data:   data,
+		ID:       msgID,
+		MethodID: OrderingQCMethodID,
+		Data:     data,
 	}
 	// push the message to the nodes
 	expected := c.n
@@ -106,7 +106,7 @@ type OrderingQCHandler interface {
 
 // RegisterOrderingQCHandler sets the handler for OrderingQC.
 func (s *GorumsServer) RegisterOrderingQCHandler(handler OrderingQCHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/OrderingQC", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(OrderingQCMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -118,7 +118,7 @@ func (s *GorumsServer) RegisterOrderingQCHandler(handler OrderingQCHandler) {
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: OrderingQCMethodID}
 	})
 }
 
@@ -171,9 +171,9 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 			return nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
 		msg := &ordering.Message{
-			ID:     msgID,
-			Method: "/dev.ZorumsService/OrderingPerNodeArg",
-			Data:   data,
+			ID:       msgID,
+			MethodID: OrderingPerNodeArgMethodID,
+			Data:     data,
 		}
 		n.sendQ <- msg
 	}
@@ -223,7 +223,7 @@ type OrderingPerNodeArgHandler interface {
 
 // RegisterOrderingPerNodeArgHandler sets the handler for OrderingPerNodeArg.
 func (s *GorumsServer) RegisterOrderingPerNodeArgHandler(handler OrderingPerNodeArgHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/OrderingPerNodeArg", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(OrderingPerNodeArgMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -235,7 +235,7 @@ func (s *GorumsServer) RegisterOrderingPerNodeArgHandler(handler OrderingPerNode
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: OrderingPerNodeArgMethodID}
 	})
 }
 
@@ -277,9 +277,9 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
 	msg := &ordering.Message{
-		ID:     msgID,
-		Method: "/dev.ZorumsService/OrderingCustomReturnType",
-		Data:   data,
+		ID:       msgID,
+		MethodID: OrderingCustomReturnTypeMethodID,
+		Data:     data,
 	}
 	// push the message to the nodes
 	expected := c.n
@@ -332,7 +332,7 @@ type OrderingCustomReturnTypeHandler interface {
 
 // RegisterOrderingCustomReturnTypeHandler sets the handler for OrderingCustomReturnType.
 func (s *GorumsServer) RegisterOrderingCustomReturnTypeHandler(handler OrderingCustomReturnTypeHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/OrderingCustomReturnType", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(OrderingCustomReturnTypeMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -344,7 +344,7 @@ func (s *GorumsServer) RegisterOrderingCustomReturnTypeHandler(handler OrderingC
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: OrderingCustomReturnTypeMethodID}
 	})
 }
 
@@ -397,9 +397,9 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 			return nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
 		msg := &ordering.Message{
-			ID:     msgID,
-			Method: "/dev.ZorumsService/OrderingCombo",
-			Data:   data,
+			ID:       msgID,
+			MethodID: OrderingComboMethodID,
+			Data:     data,
 		}
 		n.sendQ <- msg
 	}
@@ -449,7 +449,7 @@ type OrderingComboHandler interface {
 
 // RegisterOrderingComboHandler sets the handler for OrderingCombo.
 func (s *GorumsServer) RegisterOrderingComboHandler(handler OrderingComboHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/OrderingCombo", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(OrderingComboMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -461,7 +461,7 @@ func (s *GorumsServer) RegisterOrderingComboHandler(handler OrderingComboHandler
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: OrderingComboMethodID}
 	})
 }
 
@@ -482,9 +482,9 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
 	msg := &ordering.Message{
-		ID:     msgID,
-		Method: "/dev.ZorumsService/OrderingUnaryRPC",
-		Data:   data,
+		ID:       msgID,
+		MethodID: OrderingUnaryRPCMethodID,
+		Data:     data,
 	}
 	n.sendQ <- msg
 
@@ -511,7 +511,7 @@ type OrderingUnaryRPCHandler interface {
 
 // RegisterOrderingUnaryRPCHandler sets the handler for OrderingUnaryRPC.
 func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/OrderingUnaryRPC", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(OrderingUnaryRPCMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -523,7 +523,7 @@ func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCH
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: OrderingUnaryRPCMethodID}
 	})
 }
 
@@ -558,9 +558,9 @@ func (c *Configuration) strictOrderingFutureSend(ctx context.Context, in *Reques
 		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
 	msg := &ordering.Message{
-		ID:     msgID,
-		Method: "/dev.ZorumsService/StrictOrderingFuture",
-		Data:   data,
+		ID:       msgID,
+		MethodID: StrictOrderingFutureMethodID,
+		Data:     data,
 	}
 	// push the message to the nodes
 	expected := c.n
@@ -619,7 +619,7 @@ type StrictOrderingFutureHandler interface {
 
 // RegisterStrictOrderingFutureHandler sets the handler for StrictOrderingFuture.
 func (s *GorumsServer) RegisterStrictOrderingFutureHandler(handler StrictOrderingFutureHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFuture", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(StrictOrderingFutureMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -631,7 +631,7 @@ func (s *GorumsServer) RegisterStrictOrderingFutureHandler(handler StrictOrderin
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: StrictOrderingFutureMethodID}
 	})
 }
 
@@ -678,9 +678,9 @@ func (c *Configuration) strictOrderingFuturePerNodeArgSend(ctx context.Context, 
 			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
 		msg := &ordering.Message{
-			ID:     msgID,
-			Method: "/dev.ZorumsService/StrictOrderingFuturePerNodeArg",
-			Data:   data,
+			ID:       msgID,
+			MethodID: StrictOrderingFuturePerNodeArgMethodID,
+			Data:     data,
 		}
 		n.sendQ <- msg
 	}
@@ -736,7 +736,7 @@ type StrictOrderingFuturePerNodeArgHandler interface {
 
 // RegisterStrictOrderingFuturePerNodeArgHandler sets the handler for StrictOrderingFuturePerNodeArg.
 func (s *GorumsServer) RegisterStrictOrderingFuturePerNodeArgHandler(handler StrictOrderingFuturePerNodeArgHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFuturePerNodeArg", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(StrictOrderingFuturePerNodeArgMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -748,7 +748,7 @@ func (s *GorumsServer) RegisterStrictOrderingFuturePerNodeArgHandler(handler Str
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: StrictOrderingFuturePerNodeArgMethodID}
 	})
 }
 
@@ -783,9 +783,9 @@ func (c *Configuration) strictOrderingFutureQFWithReqSend(ctx context.Context, i
 		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
 	msg := &ordering.Message{
-		ID:     msgID,
-		Method: "/dev.ZorumsService/StrictOrderingFutureQFWithReq",
-		Data:   data,
+		ID:       msgID,
+		MethodID: StrictOrderingFutureQFWithReqMethodID,
+		Data:     data,
 	}
 	// push the message to the nodes
 	expected := c.n
@@ -844,7 +844,7 @@ type StrictOrderingFutureQFWithReqHandler interface {
 
 // RegisterStrictOrderingFutureQFWithReqHandler sets the handler for StrictOrderingFutureQFWithReq.
 func (s *GorumsServer) RegisterStrictOrderingFutureQFWithReqHandler(handler StrictOrderingFutureQFWithReqHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFutureQFWithReq", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(StrictOrderingFutureQFWithReqMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -856,7 +856,7 @@ func (s *GorumsServer) RegisterStrictOrderingFutureQFWithReqHandler(handler Stri
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: StrictOrderingFutureQFWithReqMethodID}
 	})
 }
 
@@ -891,9 +891,9 @@ func (c *Configuration) strictOrderingFutureCustomReturnTypeSend(ctx context.Con
 		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
 	msg := &ordering.Message{
-		ID:     msgID,
-		Method: "/dev.ZorumsService/StrictOrderingFutureCustomReturnType",
-		Data:   data,
+		ID:       msgID,
+		MethodID: StrictOrderingFutureCustomReturnTypeMethodID,
+		Data:     data,
 	}
 	// push the message to the nodes
 	expected := c.n
@@ -952,7 +952,7 @@ type StrictOrderingFutureCustomReturnTypeHandler interface {
 
 // RegisterStrictOrderingFutureCustomReturnTypeHandler sets the handler for StrictOrderingFutureCustomReturnType.
 func (s *GorumsServer) RegisterStrictOrderingFutureCustomReturnTypeHandler(handler StrictOrderingFutureCustomReturnTypeHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFutureCustomReturnType", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(StrictOrderingFutureCustomReturnTypeMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -964,7 +964,7 @@ func (s *GorumsServer) RegisterStrictOrderingFutureCustomReturnTypeHandler(handl
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: StrictOrderingFutureCustomReturnTypeMethodID}
 	})
 }
 
@@ -1011,9 +1011,9 @@ func (c *Configuration) strictOrderingFutureCombiSend(ctx context.Context, in *R
 			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
 		}
 		msg := &ordering.Message{
-			ID:     msgID,
-			Method: "/dev.ZorumsService/StrictOrderingFutureCombi",
-			Data:   data,
+			ID:       msgID,
+			MethodID: StrictOrderingFutureCombiMethodID,
+			Data:     data,
 		}
 		n.sendQ <- msg
 	}
@@ -1069,7 +1069,7 @@ type StrictOrderingFutureCombiHandler interface {
 
 // RegisterStrictOrderingFutureCombiHandler sets the handler for StrictOrderingFutureCombi.
 func (s *GorumsServer) RegisterStrictOrderingFutureCombiHandler(handler StrictOrderingFutureCombiHandler) {
-	s.srv.registerHandler("/dev.ZorumsService/StrictOrderingFutureCombi", func(in *ordering.Message) *ordering.Message {
+	s.srv.registerHandler(StrictOrderingFutureCombiMethodID, func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := ptypes.UnmarshalAny(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -1081,6 +1081,6 @@ func (s *GorumsServer) RegisterStrictOrderingFutureCombiHandler(handler StrictOr
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, Method: in.GetMethod()}
+		return &ordering.Message{Data: data, MethodID: StrictOrderingFutureCombiMethodID}
 	})
 }

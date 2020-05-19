@@ -9,6 +9,6 @@ service Gorums { rpc NodeStream(stream Message) returns (stream Message); }
 
 message Message {
   uint64 ID = 1;
-  string Method = 2;
+  int32 MethodID = 2;
   google.protobuf.Any Data = 3;
 }

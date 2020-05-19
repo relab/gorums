@@ -9,6 +9,30 @@ import (
 
 const hasOrderingMethods = true
 
+var OrderingQCMethodID int32
+var OrderingPerNodeArgMethodID int32
+var OrderingCustomReturnTypeMethodID int32
+var OrderingComboMethodID int32
+var OrderingUnaryRPCMethodID int32
+var StrictOrderingFutureMethodID int32
+var StrictOrderingFuturePerNodeArgMethodID int32
+var StrictOrderingFutureQFWithReqMethodID int32
+var StrictOrderingFutureCustomReturnTypeMethodID int32
+var StrictOrderingFutureCombiMethodID int32
+
+func init() {
+	OrderingQCMethodID = getOrderedMethodID()
+	OrderingPerNodeArgMethodID = getOrderedMethodID()
+	OrderingCustomReturnTypeMethodID = getOrderedMethodID()
+	OrderingComboMethodID = getOrderedMethodID()
+	OrderingUnaryRPCMethodID = getOrderedMethodID()
+	StrictOrderingFutureMethodID = getOrderedMethodID()
+	StrictOrderingFuturePerNodeArgMethodID = getOrderedMethodID()
+	StrictOrderingFutureQFWithReqMethodID = getOrderedMethodID()
+	StrictOrderingFutureCustomReturnTypeMethodID = getOrderedMethodID()
+	StrictOrderingFutureCombiMethodID = getOrderedMethodID()
+}
+
 type internalEmpty struct {
 	nid   uint32
 	reply *empty.Empty

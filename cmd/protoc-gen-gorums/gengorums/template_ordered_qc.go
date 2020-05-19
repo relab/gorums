@@ -29,7 +29,7 @@ var orderingLoop = `
 	}
 	msg := &{{$gorumsMsg}}{
 		ID: msgID,
-		Method: "{{fullName .Method}}",
+		MethodID: {{$method}}MethodID,
 		Data: data,
 	}
 {{end -}}
@@ -49,7 +49,7 @@ var orderingLoop = `
 		}
 		msg := &{{$gorumsMsg}}{
 			ID: msgID,
-			Method: "{{fullName .Method}}",
+			MethodID: {{$method}}MethodID,
 			Data: data,
 		}
 {{- end}}
@@ -101,7 +101,7 @@ type {{$method}}Handler interface {
 
 // Register{{$method}}Handler sets the handler for {{$method}}.
 func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
-	s.srv.registerHandler("{{fullName .Method}}", func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
+	s.srv.registerHandler({{$method}}MethodID, func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
 		req := new({{$in}})
 		err := {{$unmarshalAny}}(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
@@ -113,7 +113,7 @@ func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
 		if err != nil {
 			return new({{$gorumsMsg}})
 		}
-		return &{{$gorumsMsg}}{Data: data, Method: in.GetMethod()}
+		return &{{$gorumsMsg}}{Data: data, MethodID: {{$method}}MethodID}
 	})
 }
 `

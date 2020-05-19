@@ -53,7 +53,7 @@ var orderedFutureSendLoop = `
 	}
 	msg := &{{$gorumsMsg}}{
 		ID: msgID,
-		Method: "{{fullName .Method}}",
+		MethodID: {{$method}}MethodID,
 		Data: data,
 	}
 {{end -}}
@@ -73,7 +73,7 @@ var orderedFutureSendLoop = `
 		}
 		msg := &{{$gorumsMsg}}{
 			ID: msgID,
-			Method: "{{fullName .Method}}",
+			MethodID: {{$method}}MethodID,
 			Data: data,
 		}
 		{{- end}}
