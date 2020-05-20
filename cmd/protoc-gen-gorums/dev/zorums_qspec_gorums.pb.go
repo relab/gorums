@@ -212,38 +212,31 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Request'.
 	OrderingComboQF(in *Request, replies []*Response) (*MyResponse, bool)
 
-	// StrictOrderingFutureQF is the quorum function for the StrictOrderingFuture
+	// OrderingFutureQF is the quorum function for the OrderingFuture
 	// asynchronous ordered quorum call method. The in parameter is the request object
-	// supplied to the StrictOrderingFuture method at call time, and may or may not
+	// supplied to the OrderingFuture method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	StrictOrderingFutureQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingFutureQF(in *Request, replies []*Response) (*Response, bool)
 
-	// StrictOrderingFuturePerNodeArgQF is the quorum function for the StrictOrderingFuturePerNodeArg
+	// OrderingFuturePerNodeArgQF is the quorum function for the OrderingFuturePerNodeArg
 	// asynchronous ordered quorum call method. The in parameter is the request object
-	// supplied to the StrictOrderingFuturePerNodeArg method at call time, and may or may not
+	// supplied to the OrderingFuturePerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	StrictOrderingFuturePerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingFuturePerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
 
-	// StrictOrderingFutureQFWithReqQF is the quorum function for the StrictOrderingFutureQFWithReq
+	// OrderingFutureCustomReturnTypeQF is the quorum function for the OrderingFutureCustomReturnType
 	// asynchronous ordered quorum call method. The in parameter is the request object
-	// supplied to the StrictOrderingFutureQFWithReq method at call time, and may or may not
+	// supplied to the OrderingFutureCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	StrictOrderingFutureQFWithReqQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingFutureCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
 
-	// StrictOrderingFutureCustomReturnTypeQF is the quorum function for the StrictOrderingFutureCustomReturnType
+	// OrderingFutureComboQF is the quorum function for the OrderingFutureCombo
 	// asynchronous ordered quorum call method. The in parameter is the request object
-	// supplied to the StrictOrderingFutureCustomReturnType method at call time, and may or may not
+	// supplied to the OrderingFutureCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	StrictOrderingFutureCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
-
-	// StrictOrderingFutureCombiQF is the quorum function for the StrictOrderingFutureCombi
-	// asynchronous ordered quorum call method. The in parameter is the request object
-	// supplied to the StrictOrderingFutureCombi method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Request'.
-	StrictOrderingFutureCombiQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingFutureComboQF(in *Request, replies []*Response) (*MyResponse, bool)
 }

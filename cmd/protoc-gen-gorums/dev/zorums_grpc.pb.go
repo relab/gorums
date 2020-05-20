@@ -90,19 +90,15 @@ type ZorumsServiceClient interface {
 	// CorrectableEmpty2 for testing imported message type; with same return
 	// type as Correctable: Response.
 	CorrectableStreamEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamEmpty2Client, error)
-	// ---------------------------------------------------------------
-	// Ordering RPCs
-	// ---------------------------------------------------------------
 	OrderingQC(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	StrictOrderingFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	StrictOrderingFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	StrictOrderingFutureQFWithReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	StrictOrderingFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
-	StrictOrderingFutureCombi(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	OrderingFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	OrderingFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	OrderingFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	OrderingFutureCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 }
 
 type zorumsServiceClient struct {
@@ -700,45 +696,36 @@ func (c *zorumsServiceClient) OrderingUnaryRPC(ctx context.Context, in *Request,
 	return out, nil
 }
 
-func (c *zorumsServiceClient) StrictOrderingFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+func (c *zorumsServiceClient) OrderingFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/StrictOrderingFuture", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingFuture", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *zorumsServiceClient) StrictOrderingFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+func (c *zorumsServiceClient) OrderingFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/StrictOrderingFuturePerNodeArg", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingFuturePerNodeArg", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *zorumsServiceClient) StrictOrderingFutureQFWithReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+func (c *zorumsServiceClient) OrderingFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/StrictOrderingFutureQFWithReq", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingFutureCustomReturnType", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *zorumsServiceClient) StrictOrderingFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+func (c *zorumsServiceClient) OrderingFutureCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/StrictOrderingFutureCustomReturnType", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *zorumsServiceClient) StrictOrderingFutureCombi(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
-	out := new(Response)
-	err := c.cc.Invoke(ctx, "/dev.ZorumsService/StrictOrderingFutureCombi", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingFutureCombo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -815,19 +802,15 @@ type ZorumsServiceServer interface {
 	// CorrectableEmpty2 for testing imported message type; with same return
 	// type as Correctable: Response.
 	CorrectableStreamEmpty2(*empty.Empty, ZorumsService_CorrectableStreamEmpty2Server) error
-	// ---------------------------------------------------------------
-	// Ordering RPCs
-	// ---------------------------------------------------------------
 	OrderingQC(context.Context, *Request) (*Response, error)
 	OrderingPerNodeArg(context.Context, *Request) (*Response, error)
 	OrderingCustomReturnType(context.Context, *Request) (*Response, error)
 	OrderingCombo(context.Context, *Request) (*Response, error)
 	OrderingUnaryRPC(context.Context, *Request) (*Response, error)
-	StrictOrderingFuture(context.Context, *Request) (*Response, error)
-	StrictOrderingFuturePerNodeArg(context.Context, *Request) (*Response, error)
-	StrictOrderingFutureQFWithReq(context.Context, *Request) (*Response, error)
-	StrictOrderingFutureCustomReturnType(context.Context, *Request) (*Response, error)
-	StrictOrderingFutureCombi(context.Context, *Request) (*Response, error)
+	OrderingFuture(context.Context, *Request) (*Response, error)
+	OrderingFuturePerNodeArg(context.Context, *Request) (*Response, error)
+	OrderingFutureCustomReturnType(context.Context, *Request) (*Response, error)
+	OrderingFutureCombo(context.Context, *Request) (*Response, error)
 }
 
 // UnimplementedZorumsServiceServer can be embedded to have forward compatible implementations.
@@ -942,20 +925,17 @@ func (*UnimplementedZorumsServiceServer) OrderingCombo(context.Context, *Request
 func (*UnimplementedZorumsServiceServer) OrderingUnaryRPC(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingUnaryRPC not implemented")
 }
-func (*UnimplementedZorumsServiceServer) StrictOrderingFuture(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingFuture not implemented")
+func (*UnimplementedZorumsServiceServer) OrderingFuture(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderingFuture not implemented")
 }
-func (*UnimplementedZorumsServiceServer) StrictOrderingFuturePerNodeArg(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingFuturePerNodeArg not implemented")
+func (*UnimplementedZorumsServiceServer) OrderingFuturePerNodeArg(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderingFuturePerNodeArg not implemented")
 }
-func (*UnimplementedZorumsServiceServer) StrictOrderingFutureQFWithReq(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingFutureQFWithReq not implemented")
+func (*UnimplementedZorumsServiceServer) OrderingFutureCustomReturnType(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderingFutureCustomReturnType not implemented")
 }
-func (*UnimplementedZorumsServiceServer) StrictOrderingFutureCustomReturnType(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingFutureCustomReturnType not implemented")
-}
-func (*UnimplementedZorumsServiceServer) StrictOrderingFutureCombi(context.Context, *Request) (*Response, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StrictOrderingFutureCombi not implemented")
+func (*UnimplementedZorumsServiceServer) OrderingFutureCombo(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderingFutureCombo not implemented")
 }
 
 func RegisterZorumsServiceServer(s *grpc.Server, srv ZorumsServiceServer) {
@@ -1668,92 +1648,74 @@ func _ZorumsService_OrderingUnaryRPC_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_StrictOrderingFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ZorumsService_OrderingFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ZorumsServiceServer).StrictOrderingFuture(ctx, in)
+		return srv.(ZorumsServiceServer).OrderingFuture(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ZorumsService/StrictOrderingFuture",
+		FullMethod: "/dev.ZorumsService/OrderingFuture",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).StrictOrderingFuture(ctx, req.(*Request))
+		return srv.(ZorumsServiceServer).OrderingFuture(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_StrictOrderingFuturePerNodeArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ZorumsService_OrderingFuturePerNodeArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ZorumsServiceServer).StrictOrderingFuturePerNodeArg(ctx, in)
+		return srv.(ZorumsServiceServer).OrderingFuturePerNodeArg(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ZorumsService/StrictOrderingFuturePerNodeArg",
+		FullMethod: "/dev.ZorumsService/OrderingFuturePerNodeArg",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).StrictOrderingFuturePerNodeArg(ctx, req.(*Request))
+		return srv.(ZorumsServiceServer).OrderingFuturePerNodeArg(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_StrictOrderingFutureQFWithReq_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ZorumsService_OrderingFutureCustomReturnType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ZorumsServiceServer).StrictOrderingFutureQFWithReq(ctx, in)
+		return srv.(ZorumsServiceServer).OrderingFutureCustomReturnType(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ZorumsService/StrictOrderingFutureQFWithReq",
+		FullMethod: "/dev.ZorumsService/OrderingFutureCustomReturnType",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).StrictOrderingFutureQFWithReq(ctx, req.(*Request))
+		return srv.(ZorumsServiceServer).OrderingFutureCustomReturnType(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_StrictOrderingFutureCustomReturnType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ZorumsService_OrderingFutureCombo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ZorumsServiceServer).StrictOrderingFutureCustomReturnType(ctx, in)
+		return srv.(ZorumsServiceServer).OrderingFutureCombo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/dev.ZorumsService/StrictOrderingFutureCustomReturnType",
+		FullMethod: "/dev.ZorumsService/OrderingFutureCombo",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).StrictOrderingFutureCustomReturnType(ctx, req.(*Request))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ZorumsService_StrictOrderingFutureCombi_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Request)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ZorumsServiceServer).StrictOrderingFutureCombi(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/dev.ZorumsService/StrictOrderingFutureCombi",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ZorumsServiceServer).StrictOrderingFutureCombi(ctx, req.(*Request))
+		return srv.(ZorumsServiceServer).OrderingFutureCombo(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1863,24 +1825,20 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ZorumsService_OrderingUnaryRPC_Handler,
 		},
 		{
-			MethodName: "StrictOrderingFuture",
-			Handler:    _ZorumsService_StrictOrderingFuture_Handler,
+			MethodName: "OrderingFuture",
+			Handler:    _ZorumsService_OrderingFuture_Handler,
 		},
 		{
-			MethodName: "StrictOrderingFuturePerNodeArg",
-			Handler:    _ZorumsService_StrictOrderingFuturePerNodeArg_Handler,
+			MethodName: "OrderingFuturePerNodeArg",
+			Handler:    _ZorumsService_OrderingFuturePerNodeArg_Handler,
 		},
 		{
-			MethodName: "StrictOrderingFutureQFWithReq",
-			Handler:    _ZorumsService_StrictOrderingFutureQFWithReq_Handler,
+			MethodName: "OrderingFutureCustomReturnType",
+			Handler:    _ZorumsService_OrderingFutureCustomReturnType_Handler,
 		},
 		{
-			MethodName: "StrictOrderingFutureCustomReturnType",
-			Handler:    _ZorumsService_StrictOrderingFutureCustomReturnType_Handler,
-		},
-		{
-			MethodName: "StrictOrderingFutureCombi",
-			Handler:    _ZorumsService_StrictOrderingFutureCombi_Handler,
+			MethodName: "OrderingFutureCombo",
+			Handler:    _ZorumsService_OrderingFutureCombo_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
