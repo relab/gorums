@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package ordering;
 
-import "gorums.proto";
-
 option go_package = "github.com/relab/gorums/cmd/protoc-gen-gorums/tests/ordering";
+
+import "gorums.proto";
 
 service GorumsTest {
   rpc QC(Request) returns (Response) {
