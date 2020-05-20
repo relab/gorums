@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/internal/leakcheck"
 	"google.golang.org/grpc"
 )
 
@@ -42,6 +43,12 @@ func (s *testSrv) isInOrder(num uint64) bool {
 }
 
 func (s *testSrv) QC(req *Request) *Response {
+	return &Response{
+		InOrder: s.isInOrder(req.GetNum()),
+	}
+}
+
+func (s *testSrv) QCFuture(req *Request) *Response {
 	return &Response{
 		InOrder: s.isInOrder(req.GetNum()),
 	}
@@ -82,6 +89,7 @@ func getListener() (net.Listener, error) {
 }
 
 func TestUnaryRPCOrdering(t *testing.T) {
+	defer leakcheck.Check(t)
 	// server setup
 	tSrv := &testSrv{}
 	srv := NewGorumsServer()
@@ -122,6 +130,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 }
 
 func TestQCOrdering(t *testing.T) {
+	defer leakcheck.Check(t)
 	// servers setup
 	numServers := 4
 	srvs := make([]*GorumsServer, numServers)
@@ -170,13 +179,14 @@ func TestQCOrdering(t *testing.T) {
 }
 
 func TestQCFutureOrdering(t *testing.T) {
+	defer leakcheck.Check(t)
 	// servers setup
 	numServers := 4
 	srvs := make([]*GorumsServer, numServers)
 	addrs := make([]string, numServers)
 	for i := 0; i < numServers; i++ {
 		srv := NewGorumsServer()
-		srv.RegisterQCHandler(&testSrv{})
+		srv.RegisterQCFutureHandler(&testSrv{})
 		lis, err := getListener()
 		if err != nil {
 			t.Fatalf("Failed to listen on port: %v", err)
@@ -199,16 +209,26 @@ func TestQCFutureOrdering(t *testing.T) {
 		t.Fatalf("Failed to create configuration: %v", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// begin test
+	var wg sync.WaitGroup
 	numRuns := 1 << 16
 	for i := 1; i < numRuns; i++ {
-		promise, err := c.QCFuture(context.Background(), &Request{Num: uint64(i)})
+		promise, err := c.QCFuture(ctx, &Request{Num: uint64(i)})
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
 		}
+		wg.Add(1)
 		go func(promise *FutureResponse) {
+			defer wg.Done()
 			resp, err := promise.Get()
 			if err != nil {
+				if qcError, ok := err.(QuorumCallError); ok {
+					if qcError.Reason == context.Canceled.Error() {
+						return
+					}
+				}
 				t.Errorf("QC error: %v", err)
 			}
 			if !resp.GetInOrder() {
@@ -216,7 +236,8 @@ func TestQCFutureOrdering(t *testing.T) {
 			}
 		}(promise)
 	}
-
+	wg.Wait()
+	cancel()
 	man.Close()
 	for _, srv := range srvs {
 		srv.Stop()
@@ -224,6 +245,7 @@ func TestQCFutureOrdering(t *testing.T) {
 }
 
 func TestMixedOrdering(t *testing.T) {
+	defer leakcheck.Check(t)
 	// servers setup
 	numServers := 4
 	srvs := make([]*GorumsServer, numServers)
