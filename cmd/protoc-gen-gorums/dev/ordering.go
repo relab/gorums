@@ -77,13 +77,19 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 	if err != nil {
 		return err
 	}
-	go s.sendMsgs()
+	go s.sendMsgs(ctx)
 	go s.recvMsgs(ctx)
 	return nil
 }
 
-func (s *orderedNodeStream) sendMsgs() {
-	for req := range s.sendQ {
+func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
+	var req *ordering.Message
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case req = <-s.sendQ:
+		}
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
