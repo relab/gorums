@@ -2,8 +2,8 @@
 // reserved Gorums types are used as a message type.
 
 syntax = "proto3";
-package gorums.tests.failing.reservednames;
-option go_package = "cmd/protoc-gen-gorums/tests/failing/reservednames";
+package gorums.testprotos.failing.reservednames;
+option go_package = "github.com/relab/gorums/internal/testprotos/failing/reservednames";
 
 import "gorums.proto";
 

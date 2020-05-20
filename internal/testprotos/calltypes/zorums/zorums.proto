@@ -1,8 +1,8 @@
+// Copy of dev/zorums.proto
+
 syntax = "proto3";
-
-package gorums.tests.zorums;
-
-option go_package = "cmd/protoc-gen-gorums/tests/zorums";
+package gorums.testprotos.calltypes.zorums;
+option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/zorums";
 
 import "gorums.proto";
 import "google/protobuf/empty.proto";
@@ -11,8 +11,10 @@ message Request { string Value = 1; }
 message Response { int64 Result = 1; }
 message MyResponse { string Value = 1; }
 
-// ZorumsService is not meant to be implemented. The generated
-// service methods must pass compilation, but no further tests are done.
+// ZorumsService is not meant to be implemented.
+// The zorums generated code is placed alongside Gorums static code files
+// (without the zorums prefix) because they depend on the generated code.
+// The generated code must pass compilation, but no further tests are performed.
 // Other tests are provided to test the actual generated code.
 // The RPCs in this service aims to test various uses of Gorums's
 // options and call types, including imported message types and
@@ -194,8 +196,9 @@ service ZorumsService {
   }
 
   // ---------------------------------------------------------------
-  // Ordering RPCs
+  // Ordered QuorumCall variants
   // ---------------------------------------------------------------
+
   rpc OrderingQC(Request) returns (Response) {
     option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
@@ -218,5 +221,30 @@ service ZorumsService {
   }
   rpc OrderingUnaryRPC(Request) returns (Response) {
     option (gorums.ordered) = true;
+  }
+
+  // ---------------------------------------------------------------
+  // Ordered Future variants
+  // ---------------------------------------------------------------
+
+  rpc OrderingFuture(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+  }
+  rpc OrderingFuturePerNodeArg(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+    option (gorums.per_node_arg) = true;
+  }
+  rpc OrderingFutureCustomReturnType(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  rpc OrderingFutureCombo(Request) returns (Response) {
+    option (gorums.qc_future) = true;
+    option (gorums.ordered) = true;
+    option (gorums.per_node_arg) = true;
+    option (gorums.custom_return_type) = "MyResponse";
   }
 }

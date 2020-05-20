@@ -1,8 +1,8 @@
 // Test to ensure that Gorums can pass through non-Gorums methods.
 
 syntax = "proto3";
-package gorums.tests.grpc;
-option go_package = "cmd/protoc-gen-gorums/tests/grpc";
+package gorums.testprotos.calltypes.grpc;
+option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/grpc";
 
 service Storage {
   rpc Read(ReadRequest) returns (ReadResponse) {}
