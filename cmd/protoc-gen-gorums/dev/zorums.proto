@@ -196,8 +196,9 @@ service ZorumsService {
   }
 
   // ---------------------------------------------------------------
-  // Ordering RPCs
+  // Ordered QuorumCall variants
   // ---------------------------------------------------------------
+
   rpc OrderingQC(Request) returns (Response) {
     option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
@@ -221,25 +222,26 @@ service ZorumsService {
   rpc OrderingUnaryRPC(Request) returns (Response) {
     option (gorums.ordered) = true;
   }
-  rpc StrictOrderingFuture(Request) returns (Response) {
+
+  // ---------------------------------------------------------------
+  // Ordered Future variants
+  // ---------------------------------------------------------------
+
+  rpc OrderingFuture(Request) returns (Response) {
     option (gorums.qc_future) = true;
     option (gorums.ordered) = true;
   }
-  rpc StrictOrderingFuturePerNodeArg(Request) returns (Response) {
+  rpc OrderingFuturePerNodeArg(Request) returns (Response) {
     option (gorums.qc_future) = true;
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
   }
-  rpc StrictOrderingFutureQFWithReq(Request) returns (Response) {
-    option (gorums.qc_future) = true;
-    option (gorums.ordered) = true;
-  }
-  rpc StrictOrderingFutureCustomReturnType(Request) returns (Response) {
+  rpc OrderingFutureCustomReturnType(Request) returns (Response) {
     option (gorums.qc_future) = true;
     option (gorums.ordered) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
-  rpc StrictOrderingFutureCombi(Request) returns (Response) {
+  rpc OrderingFutureCombo(Request) returns (Response) {
     option (gorums.qc_future) = true;
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;

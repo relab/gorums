@@ -14,11 +14,10 @@ const orderingPerNodeArgMethodID int32 = 1
 const orderingCustomReturnTypeMethodID int32 = 2
 const orderingComboMethodID int32 = 3
 const orderingUnaryRPCMethodID int32 = 4
-const strictOrderingFutureMethodID int32 = 5
-const strictOrderingFuturePerNodeArgMethodID int32 = 6
-const strictOrderingFutureQFWithReqMethodID int32 = 7
-const strictOrderingFutureCustomReturnTypeMethodID int32 = 8
-const strictOrderingFutureCombiMethodID int32 = 9
+const orderingFutureMethodID int32 = 5
+const orderingFuturePerNodeArgMethodID int32 = 6
+const orderingFutureCustomReturnTypeMethodID int32 = 7
+const orderingFutureComboMethodID int32 = 8
 
 type internalEmpty struct {
 	nid   uint32
