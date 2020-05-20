@@ -1,9 +1,9 @@
 PLUGIN_PATH				:= cmd/protoc-gen-gorums
 dev_path				:= $(PLUGIN_PATH)/dev
 gen_path				:= $(PLUGIN_PATH)/gengorums
-tests_path				:= $(PLUGIN_PATH)/tests
+tests_path				:= internal/testprotos
 zorums_proto			:= $(dev_path)/zorums.proto
-tests_zorums_proto		:= $(tests_path)/zorums/zorums.proto
+tests_zorums_proto		:= $(tests_path)/calltypes/zorums/zorums.proto
 tests_zorums_gen		:= $(patsubst %.proto,%_gorums.pb.go,$(tests_zorums_proto))
 gen_files				:= $(shell find $(dev_path) -name "zorums*.pb.go")
 static_file				:= $(gen_path)/template_static.go
