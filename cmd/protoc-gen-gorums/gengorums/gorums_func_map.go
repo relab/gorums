@@ -172,7 +172,7 @@ func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service)
 
 func mapFutureOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasMethodOption(method, gorums.E_QcFuture) {
+		if hasMethodOption(method, gorums.E_Async) {
 			out := customOut(g, method)
 			futOut := outType(method, out)
 			s[futOut] = out

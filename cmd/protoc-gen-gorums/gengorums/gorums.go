@@ -215,13 +215,13 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered)
 		},
 	},
-	gorums.E_QcFuture.Name[index:]: {
-		extInfo:   gorums.E_QcFuture,
+	gorums.E_Async.Name[index:]: {
+		extInfo:   gorums.E_Async,
 		docName:   "asynchronous quorum",
 		template:  futureCall,
 		outPrefix: "Future",
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_QcFuture) && !hasMethodOption(m, gorums.E_Ordered)
+			return hasMethodOption(m, gorums.E_Async) && !hasMethodOption(m, gorums.E_Ordered)
 		},
 	},
 	gorums.E_Correctable.Name[index:]: {
@@ -279,7 +279,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 				template:  orderedFutureCall,
 				outPrefix: "Future",
 				chkFn: func(m *protogen.Method) bool {
-					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_QcFuture)
+					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Async)
 				},
 			},
 			ordering.E_OrderedRpc.Name[soIndex:]: {
@@ -298,7 +298,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 // These are considered mutually incompatible.
 var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Quorumcall,
-	gorums.E_QcFuture,
+	gorums.E_Async,
 	gorums.E_Correctable,
 	gorums.E_Multicast,
 }
@@ -308,14 +308,14 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 // the return type with additional information.
 var callTypesWithInternal = []*protoimpl.ExtensionInfo{
 	gorums.E_Quorumcall,
-	gorums.E_QcFuture,
+	gorums.E_Async,
 	gorums.E_Correctable,
 }
 
 // callTypesWithPromiseObject lists all call types that returns
 // a promise (future or correctable) object.
 var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
-	gorums.E_QcFuture,
+	gorums.E_Async,
 	gorums.E_Correctable,
 }
 
