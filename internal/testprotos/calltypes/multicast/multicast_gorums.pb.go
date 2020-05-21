@@ -1055,4 +1055,8 @@ func (n *Node) closeStream() (err error) {
 	return err
 }
 
+// QuorumSpec is the interface of quorum functions for Multicast.
+type QuorumSpec interface {
+}
+
 const hasOrderingMethods = false
