@@ -43,9 +43,11 @@ func qspecMethods(methods []*protogen.Method) (s []*protogen.Method) {
 // qspecServices returns all services that have Gorums methods.
 func qspecServices(services []*protogen.Service) (s []*protogen.Service) {
 	for _, service := range services {
-		if len(qspecMethods(service.Methods)) < 1 {
-			// ignore services without Gorums methods
-			continue
+		for _, method := range service.Methods {
+			if !hasGorumsCallType(method) {
+				// ignore services without Gorums methods
+				continue
+			}
 		}
 		s = append(s, service)
 	}
