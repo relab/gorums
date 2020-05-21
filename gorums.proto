@@ -7,11 +7,11 @@ import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.MethodOptions {
   bool quorumcall = 50000;
-  bool correctable = 50001;
+  bool async = 50001;
+  bool ordered = 50002;
   bool multicast = 50003;
-  bool qc_future = 50004;
-  bool per_node_arg = 50006;
-  bool ordered = 50007;
+  bool correctable = 50004;
+  bool per_node_arg = 50010;
 
   string custom_return_type = 51000;
 }
