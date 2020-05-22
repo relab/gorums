@@ -39,7 +39,7 @@ func main() {
 		}
 	)
 
-	protogen.Run(opts, func(gen *protogen.Plugin) error {
+	opts.Run(func(gen *protogen.Plugin) error {
 		if *trace {
 			gengorums.SetTrace(*trace)
 			fmt.Fprintf(os.Stderr, "Generating code with tracing enabled\n")
