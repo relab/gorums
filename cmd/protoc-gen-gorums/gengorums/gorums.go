@@ -212,7 +212,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		docName:  "quorum",
 		template: quorumCall,
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered)
+			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered, gorums.E_Async)
 		},
 	},
 	gorums.E_Async.Name[index:]: {
@@ -221,7 +221,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		template:  futureCall,
 		outPrefix: "Future",
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Async) && !hasMethodOption(m, gorums.E_Ordered)
+			return hasAllMethodOption(m, gorums.E_Quorumcall, gorums.E_Async) && !hasMethodOption(m, gorums.E_Ordered)
 		},
 	},
 	gorums.E_Correctable.Name[index:]: {
@@ -270,7 +270,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 				template: orderingQC,
 				chkFn: func(m *protogen.Method) bool {
 					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall) &&
-						!hasMethodOption(m, ordering.E_OrderedFuture)
+						!hasMethodOption(m, gorums.E_Async)
 				},
 			},
 			ordering.E_OrderedFuture.Name[soIndex:]: {
@@ -279,7 +279,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 				template:  orderedFutureCall,
 				outPrefix: "Future",
 				chkFn: func(m *protogen.Method) bool {
-					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Async)
+					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall, gorums.E_Async)
 				},
 			},
 			ordering.E_OrderedRpc.Name[soIndex:]: {
@@ -351,6 +351,9 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 // for the provided method are incompatible.
 func validateOptions(method *protogen.Method) error {
 	switch {
+	case hasMethodOption(method, gorums.E_Async) && !hasMethodOption(method, gorums.E_Quorumcall):
+		return optionErrorf("is required for async methods", method, gorums.E_Quorumcall)
+
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
 		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
 

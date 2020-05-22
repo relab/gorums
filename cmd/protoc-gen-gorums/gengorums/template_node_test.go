@@ -34,8 +34,8 @@ func DISABLEDTestNodeImports(t *testing.T) {
 		},
 		FileToGenerate: []string{filename},
 	}
-
-	gen, err := protogen.New(req, nil)
+	opts := &protogen.Options{}
+	gen, err := opts.New(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,8 @@ service test_service {
 		FileToGenerate: []string{filename},
 	}
 
-	gen, err := protogen.New(req, nil)
+	opts := &protogen.Options{}
+	gen, err := opts.New(req)
 	if err != nil {
 		t.Fatal(err)
 	}
