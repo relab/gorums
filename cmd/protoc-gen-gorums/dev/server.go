@@ -33,8 +33,17 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
+
 		// handle the request if a handler is available for this rpc
 		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+			info, ok := orderingMethods[req.MethodID]
+			if !ok {
+				continue
+			}
+			if info.oneway {
+				handler(req)
+				continue
+			}
 			resp := handler(req)
 			resp.ID = req.GetID()
 			err = srv.Send(resp)

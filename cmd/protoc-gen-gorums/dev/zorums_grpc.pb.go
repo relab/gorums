@@ -34,17 +34,17 @@ type ZorumsServiceClient interface {
 	// QuorumCallEmpty2 for testing imported message type.
 	QuorumCallEmpty2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error)
 	// Multicast plain. Response type is not needed here.
-	Multicast(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_MulticastClient, error)
+	Multicast(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// MulticastPerNodeArg with per_node_arg option.
 	// TODO(meling) currently this is not supported, but compiles as if
 	// per_node_arg wasn't specified. Need to implement support.
-	MulticastPerNodeArg(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_MulticastPerNodeArgClient, error)
+	MulticastPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// Multicast2 is testing whether multiple streams work.
-	Multicast2(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast2Client, error)
+	Multicast2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// Multicast3 is testing imported message type.
-	Multicast3(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast3Client, error)
+	Multicast3(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error)
 	// Multicast4 is testing imported message type.
-	Multicast4(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast4Client, error)
+	Multicast4(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
 	// QuorumCallFuture plain.
 	QuorumCallFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCallFuturePerNodeArg with per_node_arg option.
@@ -168,174 +168,49 @@ func (c *zorumsServiceClient) QuorumCallEmpty2(ctx context.Context, in *Request,
 	return out, nil
 }
 
-func (c *zorumsServiceClient) Multicast(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_MulticastClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[0], "/dev.ZorumsService/Multicast", opts...)
+func (c *zorumsServiceClient) Multicast(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Multicast", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &zorumsServiceMulticastClient{stream}
-	return x, nil
+	return out, nil
 }
 
-type ZorumsService_MulticastClient interface {
-	Send(*Request) error
-	CloseAndRecv() (*Response, error)
-	grpc.ClientStream
-}
-
-type zorumsServiceMulticastClient struct {
-	grpc.ClientStream
-}
-
-func (x *zorumsServiceMulticastClient) Send(m *Request) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticastClient) CloseAndRecv() (*Response, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(Response)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *zorumsServiceClient) MulticastPerNodeArg(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_MulticastPerNodeArgClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[1], "/dev.ZorumsService/MulticastPerNodeArg", opts...)
+func (c *zorumsServiceClient) MulticastPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/MulticastPerNodeArg", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &zorumsServiceMulticastPerNodeArgClient{stream}
-	return x, nil
+	return out, nil
 }
 
-type ZorumsService_MulticastPerNodeArgClient interface {
-	Send(*Request) error
-	CloseAndRecv() (*Response, error)
-	grpc.ClientStream
-}
-
-type zorumsServiceMulticastPerNodeArgClient struct {
-	grpc.ClientStream
-}
-
-func (x *zorumsServiceMulticastPerNodeArgClient) Send(m *Request) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticastPerNodeArgClient) CloseAndRecv() (*Response, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(Response)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *zorumsServiceClient) Multicast2(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast2Client, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[2], "/dev.ZorumsService/Multicast2", opts...)
+func (c *zorumsServiceClient) Multicast2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Multicast2", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &zorumsServiceMulticast2Client{stream}
-	return x, nil
+	return out, nil
 }
 
-type ZorumsService_Multicast2Client interface {
-	Send(*Request) error
-	CloseAndRecv() (*Response, error)
-	grpc.ClientStream
-}
-
-type zorumsServiceMulticast2Client struct {
-	grpc.ClientStream
-}
-
-func (x *zorumsServiceMulticast2Client) Send(m *Request) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticast2Client) CloseAndRecv() (*Response, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(Response)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *zorumsServiceClient) Multicast3(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast3Client, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[3], "/dev.ZorumsService/Multicast3", opts...)
+func (c *zorumsServiceClient) Multicast3(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Multicast3", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &zorumsServiceMulticast3Client{stream}
-	return x, nil
+	return out, nil
 }
 
-type ZorumsService_Multicast3Client interface {
-	Send(*Request) error
-	CloseAndRecv() (*empty.Empty, error)
-	grpc.ClientStream
-}
-
-type zorumsServiceMulticast3Client struct {
-	grpc.ClientStream
-}
-
-func (x *zorumsServiceMulticast3Client) Send(m *Request) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticast3Client) CloseAndRecv() (*empty.Empty, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(empty.Empty)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *zorumsServiceClient) Multicast4(ctx context.Context, opts ...grpc.CallOption) (ZorumsService_Multicast4Client, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[4], "/dev.ZorumsService/Multicast4", opts...)
+func (c *zorumsServiceClient) Multicast4(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Multicast4", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &zorumsServiceMulticast4Client{stream}
-	return x, nil
-}
-
-type ZorumsService_Multicast4Client interface {
-	Send(*empty.Empty) error
-	CloseAndRecv() (*empty.Empty, error)
-	grpc.ClientStream
-}
-
-type zorumsServiceMulticast4Client struct {
-	grpc.ClientStream
-}
-
-func (x *zorumsServiceMulticast4Client) Send(m *empty.Empty) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticast4Client) CloseAndRecv() (*empty.Empty, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(empty.Empty)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+	return out, nil
 }
 
 func (c *zorumsServiceClient) QuorumCallFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
@@ -456,7 +331,7 @@ func (c *zorumsServiceClient) CorrectableEmpty2(ctx context.Context, in *empty.E
 }
 
 func (c *zorumsServiceClient) CorrectableStream(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[5], "/dev.ZorumsService/CorrectableStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[0], "/dev.ZorumsService/CorrectableStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +363,7 @@ func (x *zorumsServiceCorrectableStreamClient) Recv() (*Response, error) {
 }
 
 func (c *zorumsServiceClient) CorrectableStreamPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamPerNodeArgClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[6], "/dev.ZorumsService/CorrectableStreamPerNodeArg", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[1], "/dev.ZorumsService/CorrectableStreamPerNodeArg", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +395,7 @@ func (x *zorumsServiceCorrectableStreamPerNodeArgClient) Recv() (*Response, erro
 }
 
 func (c *zorumsServiceClient) CorrectableStreamCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamCustomReturnTypeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[7], "/dev.ZorumsService/CorrectableStreamCustomReturnType", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[2], "/dev.ZorumsService/CorrectableStreamCustomReturnType", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -552,7 +427,7 @@ func (x *zorumsServiceCorrectableStreamCustomReturnTypeClient) Recv() (*Response
 }
 
 func (c *zorumsServiceClient) CorrectableStreamCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamComboClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[8], "/dev.ZorumsService/CorrectableStreamCombo", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[3], "/dev.ZorumsService/CorrectableStreamCombo", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -584,7 +459,7 @@ func (x *zorumsServiceCorrectableStreamComboClient) Recv() (*Response, error) {
 }
 
 func (c *zorumsServiceClient) CorrectableStreamEmpty(ctx context.Context, in *Request, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamEmptyClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[9], "/dev.ZorumsService/CorrectableStreamEmpty", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[4], "/dev.ZorumsService/CorrectableStreamEmpty", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -616,7 +491,7 @@ func (x *zorumsServiceCorrectableStreamEmptyClient) Recv() (*empty.Empty, error)
 }
 
 func (c *zorumsServiceClient) CorrectableStreamEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (ZorumsService_CorrectableStreamEmpty2Client, error) {
-	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[10], "/dev.ZorumsService/CorrectableStreamEmpty2", opts...)
+	stream, err := c.cc.NewStream(ctx, &_ZorumsService_serviceDesc.Streams[5], "/dev.ZorumsService/CorrectableStreamEmpty2", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -746,17 +621,17 @@ type ZorumsServiceServer interface {
 	// QuorumCallEmpty2 for testing imported message type.
 	QuorumCallEmpty2(context.Context, *Request) (*empty.Empty, error)
 	// Multicast plain. Response type is not needed here.
-	Multicast(ZorumsService_MulticastServer) error
+	Multicast(context.Context, *Request) (*Response, error)
 	// MulticastPerNodeArg with per_node_arg option.
 	// TODO(meling) currently this is not supported, but compiles as if
 	// per_node_arg wasn't specified. Need to implement support.
-	MulticastPerNodeArg(ZorumsService_MulticastPerNodeArgServer) error
+	MulticastPerNodeArg(context.Context, *Request) (*Response, error)
 	// Multicast2 is testing whether multiple streams work.
-	Multicast2(ZorumsService_Multicast2Server) error
+	Multicast2(context.Context, *Request) (*Response, error)
 	// Multicast3 is testing imported message type.
-	Multicast3(ZorumsService_Multicast3Server) error
+	Multicast3(context.Context, *Request) (*empty.Empty, error)
 	// Multicast4 is testing imported message type.
-	Multicast4(ZorumsService_Multicast4Server) error
+	Multicast4(context.Context, *empty.Empty) (*empty.Empty, error)
 	// QuorumCallFuture plain.
 	QuorumCallFuture(context.Context, *Request) (*Response, error)
 	// QuorumCallFuturePerNodeArg with per_node_arg option.
@@ -834,20 +709,20 @@ func (*UnimplementedZorumsServiceServer) QuorumCallEmpty(context.Context, *empty
 func (*UnimplementedZorumsServiceServer) QuorumCallEmpty2(context.Context, *Request) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallEmpty2 not implemented")
 }
-func (*UnimplementedZorumsServiceServer) Multicast(ZorumsService_MulticastServer) error {
-	return status.Errorf(codes.Unimplemented, "method Multicast not implemented")
+func (*UnimplementedZorumsServiceServer) Multicast(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Multicast not implemented")
 }
-func (*UnimplementedZorumsServiceServer) MulticastPerNodeArg(ZorumsService_MulticastPerNodeArgServer) error {
-	return status.Errorf(codes.Unimplemented, "method MulticastPerNodeArg not implemented")
+func (*UnimplementedZorumsServiceServer) MulticastPerNodeArg(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MulticastPerNodeArg not implemented")
 }
-func (*UnimplementedZorumsServiceServer) Multicast2(ZorumsService_Multicast2Server) error {
-	return status.Errorf(codes.Unimplemented, "method Multicast2 not implemented")
+func (*UnimplementedZorumsServiceServer) Multicast2(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Multicast2 not implemented")
 }
-func (*UnimplementedZorumsServiceServer) Multicast3(ZorumsService_Multicast3Server) error {
-	return status.Errorf(codes.Unimplemented, "method Multicast3 not implemented")
+func (*UnimplementedZorumsServiceServer) Multicast3(context.Context, *Request) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Multicast3 not implemented")
 }
-func (*UnimplementedZorumsServiceServer) Multicast4(ZorumsService_Multicast4Server) error {
-	return status.Errorf(codes.Unimplemented, "method Multicast4 not implemented")
+func (*UnimplementedZorumsServiceServer) Multicast4(context.Context, *empty.Empty) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Multicast4 not implemented")
 }
 func (*UnimplementedZorumsServiceServer) QuorumCallFuture(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFuture not implemented")
@@ -1064,134 +939,94 @@ func _ZorumsService_QuorumCallEmpty2_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_Multicast_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ZorumsServiceServer).Multicast(&zorumsServiceMulticastServer{stream})
-}
-
-type ZorumsService_MulticastServer interface {
-	SendAndClose(*Response) error
-	Recv() (*Request, error)
-	grpc.ServerStream
-}
-
-type zorumsServiceMulticastServer struct {
-	grpc.ServerStream
-}
-
-func (x *zorumsServiceMulticastServer) SendAndClose(m *Response) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticastServer) Recv() (*Request, error) {
-	m := new(Request)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _ZorumsService_Multicast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).Multicast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/Multicast",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).Multicast(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_MulticastPerNodeArg_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ZorumsServiceServer).MulticastPerNodeArg(&zorumsServiceMulticastPerNodeArgServer{stream})
-}
-
-type ZorumsService_MulticastPerNodeArgServer interface {
-	SendAndClose(*Response) error
-	Recv() (*Request, error)
-	grpc.ServerStream
-}
-
-type zorumsServiceMulticastPerNodeArgServer struct {
-	grpc.ServerStream
-}
-
-func (x *zorumsServiceMulticastPerNodeArgServer) SendAndClose(m *Response) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticastPerNodeArgServer) Recv() (*Request, error) {
-	m := new(Request)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _ZorumsService_MulticastPerNodeArg_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).MulticastPerNodeArg(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/MulticastPerNodeArg",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).MulticastPerNodeArg(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_Multicast2_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ZorumsServiceServer).Multicast2(&zorumsServiceMulticast2Server{stream})
-}
-
-type ZorumsService_Multicast2Server interface {
-	SendAndClose(*Response) error
-	Recv() (*Request, error)
-	grpc.ServerStream
-}
-
-type zorumsServiceMulticast2Server struct {
-	grpc.ServerStream
-}
-
-func (x *zorumsServiceMulticast2Server) SendAndClose(m *Response) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticast2Server) Recv() (*Request, error) {
-	m := new(Request)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _ZorumsService_Multicast2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).Multicast2(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/Multicast2",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).Multicast2(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_Multicast3_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ZorumsServiceServer).Multicast3(&zorumsServiceMulticast3Server{stream})
-}
-
-type ZorumsService_Multicast3Server interface {
-	SendAndClose(*empty.Empty) error
-	Recv() (*Request, error)
-	grpc.ServerStream
-}
-
-type zorumsServiceMulticast3Server struct {
-	grpc.ServerStream
-}
-
-func (x *zorumsServiceMulticast3Server) SendAndClose(m *empty.Empty) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticast3Server) Recv() (*Request, error) {
-	m := new(Request)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _ZorumsService_Multicast3_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).Multicast3(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/Multicast3",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).Multicast3(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
-func _ZorumsService_Multicast4_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(ZorumsServiceServer).Multicast4(&zorumsServiceMulticast4Server{stream})
-}
-
-type ZorumsService_Multicast4Server interface {
-	SendAndClose(*empty.Empty) error
-	Recv() (*empty.Empty, error)
-	grpc.ServerStream
-}
-
-type zorumsServiceMulticast4Server struct {
-	grpc.ServerStream
-}
-
-func (x *zorumsServiceMulticast4Server) SendAndClose(m *empty.Empty) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *zorumsServiceMulticast4Server) Recv() (*empty.Empty, error) {
-	m := new(empty.Empty)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _ZorumsService_Multicast4_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(empty.Empty)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).Multicast4(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/Multicast4",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).Multicast4(ctx, req.(*empty.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ZorumsService_QuorumCallFuture_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1749,6 +1584,26 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ZorumsService_QuorumCallEmpty2_Handler,
 		},
 		{
+			MethodName: "Multicast",
+			Handler:    _ZorumsService_Multicast_Handler,
+		},
+		{
+			MethodName: "MulticastPerNodeArg",
+			Handler:    _ZorumsService_MulticastPerNodeArg_Handler,
+		},
+		{
+			MethodName: "Multicast2",
+			Handler:    _ZorumsService_Multicast2_Handler,
+		},
+		{
+			MethodName: "Multicast3",
+			Handler:    _ZorumsService_Multicast3_Handler,
+		},
+		{
+			MethodName: "Multicast4",
+			Handler:    _ZorumsService_Multicast4_Handler,
+		},
+		{
 			MethodName: "QuorumCallFuture",
 			Handler:    _ZorumsService_QuorumCallFuture_Handler,
 		},
@@ -1838,31 +1693,6 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "Multicast",
-			Handler:       _ZorumsService_Multicast_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "MulticastPerNodeArg",
-			Handler:       _ZorumsService_MulticastPerNodeArg_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "Multicast2",
-			Handler:       _ZorumsService_Multicast2_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "Multicast3",
-			Handler:       _ZorumsService_Multicast3_Handler,
-			ClientStreams: true,
-		},
-		{
-			StreamName:    "Multicast4",
-			Handler:       _ZorumsService_Multicast4_Handler,
-			ClientStreams: true,
-		},
 		{
 			StreamName:    "CorrectableStream",
 			Handler:       _ZorumsService_CorrectableStream_Handler,
