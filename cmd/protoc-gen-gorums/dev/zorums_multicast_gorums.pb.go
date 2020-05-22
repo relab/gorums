@@ -3,57 +3,127 @@
 package dev
 
 import (
+	fmt "fmt"
 	empty "github.com/golang/protobuf/ptypes/empty"
+	ordering "github.com/relab/gorums/ordering"
+	proto "google.golang.org/protobuf/proto"
 )
 
 // Multicast plain. Response type is not needed here.
 func (c *Configuration) Multicast(in *Request) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.multicastClient.Send(in)
-			if err == nil {
-				return
-			}
-			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: Multicast stream send error: %v", n.id, err)
-			}
-		}(node)
+	msgID := c.mgr.nextMsgID()
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: multicastMethodID,
+		Data:     data,
+	}
+	for _, n := range c.nodes {
+		n.sendQ <- msg
 	}
 	return nil
+}
+
+// MulticastHandler is the server API for the Multicast rpc.
+type MulticastHandler interface {
+	Multicast(*Request)
+}
+
+// RegisterMulticastHandler sets the handler for Multicast.
+func (s *GorumsServer) RegisterMulticastHandler(handler MulticastHandler) {
+	s.srv.registerHandler(multicastMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		handler.Multicast(req)
+		return nil
+	})
 }
 
 // MulticastPerNodeArg with per_node_arg option.
 // TODO(meling) currently this is not supported, but compiles as if
 // per_node_arg wasn't specified. Need to implement support.
-func (c *Configuration) MulticastPerNodeArg(in *Request) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.multicastPerNodeArgClient.Send(in)
-			if err == nil {
-				return
-			}
-			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: MulticastPerNodeArg stream send error: %v", n.id, err)
-			}
-		}(node)
+func (c *Configuration) MulticastPerNodeArg(in *Request, f func(*Request, uint32) *Request) error {
+	msgID := c.mgr.nextMsgID()
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.ID())
+		if nodeArg == nil {
+			continue
+		}
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
+		if err != nil {
+			return fmt.Errorf("failed to marshal message: %w", err)
+		}
+		msg := &ordering.Message{
+			ID:       msgID,
+			MethodID: multicastPerNodeArgMethodID,
+			Data:     data,
+		}
+		n.sendQ <- msg
 	}
 	return nil
 }
 
+// MulticastPerNodeArgHandler is the server API for the MulticastPerNodeArg rpc.
+type MulticastPerNodeArgHandler interface {
+	MulticastPerNodeArg(*Request)
+}
+
+// RegisterMulticastPerNodeArgHandler sets the handler for MulticastPerNodeArg.
+func (s *GorumsServer) RegisterMulticastPerNodeArgHandler(handler MulticastPerNodeArgHandler) {
+	s.srv.registerHandler(multicastPerNodeArgMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		handler.MulticastPerNodeArg(req)
+		return nil
+	})
+}
+
 // Multicast2 is testing whether multiple streams work.
 func (c *Configuration) Multicast2(in *Request) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.multicast2Client.Send(in)
-			if err == nil {
-				return
-			}
-			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: Multicast2 stream send error: %v", n.id, err)
-			}
-		}(node)
+	msgID := c.mgr.nextMsgID()
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: multicast2MethodID,
+		Data:     data,
+	}
+	for _, n := range c.nodes {
+		n.sendQ <- msg
 	}
 	return nil
+}
+
+// Multicast2Handler is the server API for the Multicast2 rpc.
+type Multicast2Handler interface {
+	Multicast2(*Request)
+}
+
+// RegisterMulticast2Handler sets the handler for Multicast2.
+func (s *GorumsServer) RegisterMulticast2Handler(handler Multicast2Handler) {
+	s.srv.registerHandler(multicast2MethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		handler.Multicast2(req)
+		return nil
+	})
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -61,18 +131,39 @@ var _ empty.Empty
 
 // Multicast3 is testing imported message type.
 func (c *Configuration) Multicast3(in *Request) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.multicast3Client.Send(in)
-			if err == nil {
-				return
-			}
-			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: Multicast3 stream send error: %v", n.id, err)
-			}
-		}(node)
+	msgID := c.mgr.nextMsgID()
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: multicast3MethodID,
+		Data:     data,
+	}
+	for _, n := range c.nodes {
+		n.sendQ <- msg
 	}
 	return nil
+}
+
+// Multicast3Handler is the server API for the Multicast3 rpc.
+type Multicast3Handler interface {
+	Multicast3(*Request)
+}
+
+// RegisterMulticast3Handler sets the handler for Multicast3.
+func (s *GorumsServer) RegisterMulticast3Handler(handler Multicast3Handler) {
+	s.srv.registerHandler(multicast3MethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		handler.Multicast3(req)
+		return nil
+	})
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -80,16 +171,37 @@ var _ empty.Empty
 
 // Multicast4 is testing imported message type.
 func (c *Configuration) Multicast4(in *empty.Empty) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.multicast4Client.Send(in)
-			if err == nil {
-				return
-			}
-			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: Multicast4 stream send error: %v", n.id, err)
-			}
-		}(node)
+	msgID := c.mgr.nextMsgID()
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: multicast4MethodID,
+		Data:     data,
+	}
+	for _, n := range c.nodes {
+		n.sendQ <- msg
 	}
 	return nil
+}
+
+// Multicast4Handler is the server API for the Multicast4 rpc.
+type Multicast4Handler interface {
+	Multicast4(*empty.Empty)
+}
+
+// RegisterMulticast4Handler sets the handler for Multicast4.
+func (s *GorumsServer) RegisterMulticast4Handler(handler Multicast4Handler) {
+	s.srv.registerHandler(multicast4MethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(empty.Empty)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		handler.Multicast4(req)
+		return nil
+	})
 }

@@ -102,6 +102,9 @@ var funcMap = template.FuncMap{
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
 	},
+	"isMulticast": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Multicast)
+	},
 	"out":                   out,
 	"outType":               outType,
 	"internalOut":           internalOut,
@@ -213,7 +216,7 @@ func mustExecute(t *template.Template, data interface{}) string {
 func hasOrderingMethods(services []*protogen.Service) bool {
 	for _, service := range services {
 		for _, method := range service.Methods {
-			if hasMethodOption(method, gorums.E_Ordered) {
+			if hasMethodOption(method, gorums.E_Ordered, gorums.E_Multicast) {
 				return true
 			}
 		}
@@ -223,7 +226,7 @@ func hasOrderingMethods(services []*protogen.Service) bool {
 
 func exclusivelyOrdering(service *protogen.Service) bool {
 	for _, method := range service.Methods {
-		if !hasMethodOption(method, gorums.E_Ordered) {
+		if !hasMethodOption(method, gorums.E_Ordered, gorums.E_Multicast) {
 			return false
 		}
 	}

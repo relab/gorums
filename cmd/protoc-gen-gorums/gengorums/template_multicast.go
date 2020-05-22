@@ -18,20 +18,60 @@ var multicastMethod = `
 // {{$method}} is a one-way multicast call on all nodes in configuration c,
 // with the same in argument. The call is asynchronous and has no return value.
 {{end -}}
-func (c *Configuration) {{$method}}(in *{{$in}}) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.{{unexport $method}}Client.Send(in)
-			if err == nil {
-				return
-			}
-			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: {{$method}} stream send error: %v", n.id, err)
-			}
-		}(node)
+func (c *Configuration) {{$method}}(in *{{$in}}{{perNodeFnType .GenFile .Method ", f"}}) error {
+	msgID := c.mgr.nextMsgID()
+{{if not (hasPerNodeArg .Method) -}}
+	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return {{$errorf}}("failed to marshal message: %w", err)
+	}
+	msg := &{{$gorumsMsg}}{
+		ID: msgID,
+		MethodID: {{$unexportMethod}}MethodID,
+		Data: data,
+	}
+{{end -}}
+	for _, n := range c.nodes {
+{{- if hasPerNodeArg .Method}}
+		nodeArg := f(in, n.ID())
+		if nodeArg == nil {
+			continue
+		}
+		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
+		if err != nil {
+			return {{$errorf}}("failed to marshal message: %w", err)
+		}
+		msg := &{{$gorumsMsg}}{
+			ID: msgID,
+			MethodID: {{$unexportMethod}}MethodID,
+			Data: data,
+		}
+{{- end}}
+		n.sendQ <- msg
 	}
 	return nil
 }
 `
 
-var multicastCall = commonVariables + multicastRefImports + multicastMethod
+var multicastHandler = `
+// {{$method}}Handler is the server API for the {{$method}} rpc.
+type {{$method}}Handler interface {
+	{{$method}}(*{{$in}})
+}
+
+// Register{{$method}}Handler sets the handler for {{$method}}.
+func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
+	s.srv.registerHandler({{$unexportMethod}}MethodID, func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
+		req := new({{$in}})
+		err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new({{$gorumsMsg}})
+		}
+		handler.{{$method}}(req)
+		return nil
+	})
+}
+`
+
+var multicastCall = commonVariables + orderingVariables + multicastRefImports + multicastMethod + multicastHandler

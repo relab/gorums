@@ -15,6 +15,14 @@ const {{unexport $method.GoName}}MethodID int32 = {{$index}}
 {{- end}}
 `
 
+var orderingMethods = `
+var orderingMethods = map[int32]methodInfo{
+	{{- range $index, $method := orderedMethods .Services}}
+		{{$index}}: { oneway: {{isMulticast $method}} },
+	{{- end}}
+}
+`
+
 var internalOutDataType = `
 {{range $intOut, $out := mapInternalOutType .GenFile .Services}}
 type {{$intOut}} struct {
@@ -146,6 +154,7 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 
 var datatypes = globals +
 	orderingIDs +
+	orderingMethods +
 	internalOutDataType +
 	futureDataType +
 	correctableDataType
@@ -154,7 +163,7 @@ var datatypes = globals +
 func orderedMethods(services []*protogen.Service) (s []*protogen.Method) {
 	for _, service := range services {
 		for _, method := range service.Methods {
-			if hasMethodOption(method, gorums.E_Ordered) {
+			if hasMethodOption(method, gorums.E_Ordered, gorums.E_Multicast) {
 				s = append(s, method)
 			}
 		}

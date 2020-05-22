@@ -15,6 +15,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type methodInfo struct {
+	oneway bool
+}
+
 type orderingResult struct {
 	nid   uint32
 	reply []byte
