@@ -9,15 +9,37 @@ import (
 
 const hasOrderingMethods = true
 
-const orderingQCMethodID int32 = 0
-const orderingPerNodeArgMethodID int32 = 1
-const orderingCustomReturnTypeMethodID int32 = 2
-const orderingComboMethodID int32 = 3
-const orderingUnaryRPCMethodID int32 = 4
-const orderingFutureMethodID int32 = 5
-const orderingFuturePerNodeArgMethodID int32 = 6
-const orderingFutureCustomReturnTypeMethodID int32 = 7
-const orderingFutureComboMethodID int32 = 8
+const multicastMethodID int32 = 0
+const multicastPerNodeArgMethodID int32 = 1
+const multicast2MethodID int32 = 2
+const multicast3MethodID int32 = 3
+const multicast4MethodID int32 = 4
+const orderingQCMethodID int32 = 5
+const orderingPerNodeArgMethodID int32 = 6
+const orderingCustomReturnTypeMethodID int32 = 7
+const orderingComboMethodID int32 = 8
+const orderingUnaryRPCMethodID int32 = 9
+const orderingFutureMethodID int32 = 10
+const orderingFuturePerNodeArgMethodID int32 = 11
+const orderingFutureCustomReturnTypeMethodID int32 = 12
+const orderingFutureComboMethodID int32 = 13
+
+var orderingMethods = map[int32]methodInfo{
+	0:  {oneway: true},
+	1:  {oneway: true},
+	2:  {oneway: true},
+	3:  {oneway: true},
+	4:  {oneway: true},
+	5:  {oneway: false},
+	6:  {oneway: false},
+	7:  {oneway: false},
+	8:  {oneway: false},
+	9:  {oneway: false},
+	10: {oneway: false},
+	11: {oneway: false},
+	12: {oneway: false},
+	13: {oneway: false},
+}
 
 type internalEmpty struct {
 	nid   uint32

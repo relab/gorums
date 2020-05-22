@@ -4,50 +4,19 @@ package dev
 
 import (
 	context "context"
-	fmt "fmt"
 )
 
 type nodeServices struct {
 	ZorumsServiceClient
-	multicastClient           ZorumsService_MulticastClient
-	multicastPerNodeArgClient ZorumsService_MulticastPerNodeArgClient
-	multicast2Client          ZorumsService_Multicast2Client
-	multicast3Client          ZorumsService_Multicast3Client
-	multicast4Client          ZorumsService_Multicast4Client
 }
 
 func (n *Node) connectStream(ctx context.Context) (err error) {
 
 	n.ZorumsServiceClient = NewZorumsServiceClient(n.conn)
 
-	n.multicastClient, err = n.ZorumsServiceClient.Multicast(ctx)
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
-	n.multicastPerNodeArgClient, err = n.ZorumsServiceClient.MulticastPerNodeArg(ctx)
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
-	n.multicast2Client, err = n.ZorumsServiceClient.Multicast2(ctx)
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
-	n.multicast3Client, err = n.ZorumsServiceClient.Multicast3(ctx)
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
-	n.multicast4Client, err = n.ZorumsServiceClient.Multicast4(ctx)
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
 	return nil
 }
 
 func (n *Node) closeStream() (err error) {
-	_, err = n.multicastClient.CloseAndRecv()
-	_, err = n.multicastPerNodeArgClient.CloseAndRecv()
-	_, err = n.multicast2Client.CloseAndRecv()
-	_, err = n.multicast3Client.CloseAndRecv()
-	_, err = n.multicast4Client.CloseAndRecv()
 	return err
 }

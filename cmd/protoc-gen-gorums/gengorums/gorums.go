@@ -357,9 +357,6 @@ func validateOptions(method *protogen.Method) error {
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
 		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
 
-	case hasMethodOption(method, gorums.E_Multicast) && !method.Desc.IsStreamingClient():
-		return optionErrorf("is only valid for client-server stream methods", method, gorums.E_Multicast)
-
 	case !hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer():
 		return optionErrorf("is required for server-client stream methods", method, gorums.E_Correctable)
 
