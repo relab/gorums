@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package benchmark;
+
+option go_package = "github.com/relab/gorums/benchmark";
+
+import "gorums.proto";
+
+message Echo { bytes payload = 1; }
+
+service Benchmark {
+  rpc UnorderedQC(Echo) returns (Echo) { option (gorums.quorumcall) = true; }
+  rpc OrderedQC(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
+}
