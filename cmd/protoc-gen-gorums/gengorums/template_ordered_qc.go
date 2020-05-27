@@ -8,6 +8,12 @@ var orderingVariables = `
 {{$unexportMethod := unexport .Method.GoName}}
 `
 
+var orderedQCSignature = `func (c *Configuration) {{$method}}(` +
+	`ctx {{$context}}, in *{{$in}}` +
+	`{{perNodeFnType .GenFile .Method ", f"}})` +
+	`(resp *{{$customOut}}, err error) {
+`
+
 var orderingPreamble = `
 	{{- template "trace" .}}
 
@@ -123,7 +129,7 @@ var orderingQC = commonVariables +
 	quorumCallVariables +
 	orderingVariables +
 	quorumCallComment +
-	quorumCallSignature +
+	orderedQCSignature +
 	orderingPreamble +
 	orderingLoop +
 	orderingReply +
