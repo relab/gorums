@@ -1006,7 +1006,7 @@ func (n *Node) closeStream() (err error) {
 
 // QC is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) QC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (c *Configuration) QC(ctx context.Context, in *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QC")
@@ -1116,48 +1116,51 @@ func (s *GorumsServer) RegisterQCHandler(handler QCHandler) {
 // QCFuture asynchronously invokes a quorum call on configuration c
 // and returns a FutureResponse, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) QCFuture(ctx context.Context, in *Request) (*FutureResponse, error) {
+func (c *Configuration) QCFuture(ctx context.Context, in *Request) *FutureResponse {
 	fut := &FutureResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.qCFutureSend(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.qCFutureRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) qCFutureSend(ctx context.Context, in *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
+	expected := c.n
+
+	var msg *ordering.Message
 	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+		// In case of a marshalling error, we should skip sending any messages
+		fut.err = fmt.Errorf("failed to marshal message: %w", err)
+		goto End
 	}
-	msg := &ordering.Message{
+	msg = &ordering.Message{
 		ID:       msgID,
 		MethodID: qCFutureMethodID,
 		Data:     data,
 	}
+
 	// push the message to the nodes
-	expected := c.n
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+End:
+	go c.qCFutureRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) qCFutureRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureResponse) {
+func (c *Configuration) qCFutureRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -1170,12 +1173,11 @@ func (c *Configuration) qCFutureRecv(ctx context.Context, in *Request, msgID uin
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -1184,15 +1186,15 @@ func (c *Configuration) qCFutureRecv(ctx context.Context, in *Request, msgID uin
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.QCFutureQF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
+				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
