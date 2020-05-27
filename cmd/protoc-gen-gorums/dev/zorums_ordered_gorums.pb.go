@@ -14,7 +14,7 @@ import (
 
 // OrderingQC is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) OrderingQC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingQC")
@@ -126,7 +126,7 @@ func (s *GorumsServer) RegisterOrderingQCHandler(handler OrderingQCHandler) {
 // The per node function f receives a copy of the Request request argument and
 // returns a Request manipulated to be passed to the given nodeID.
 // The function f must be thread-safe.
-func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingPerNodeArg")
@@ -240,7 +240,7 @@ func (s *GorumsServer) RegisterOrderingPerNodeArgHandler(handler OrderingPerNode
 
 // OrderingCustomReturnType is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
+func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCustomReturnType")
@@ -352,7 +352,7 @@ func (s *GorumsServer) RegisterOrderingCustomReturnTypeHandler(handler OrderingC
 // The per node function f receives a copy of the Request request argument and
 // returns a Request manipulated to be passed to the given nodeID.
 // The function f must be thread-safe.
-func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
+func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCombo")
