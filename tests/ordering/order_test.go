@@ -215,10 +215,7 @@ func TestQCFutureOrdering(t *testing.T) {
 	var wg sync.WaitGroup
 	numRuns := 1 << 16
 	for i := 1; i < numRuns; i++ {
-		promise, err := c.QCFuture(ctx, &Request{Num: uint64(i)})
-		if err != nil {
-			t.Fatalf("QC error: %v", err)
-		}
+		promise := c.QCFuture(ctx, &Request{Num: uint64(i)})
 		wg.Add(1)
 		go func(promise *FutureResponse) {
 			defer wg.Done()
