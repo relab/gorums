@@ -529,48 +529,51 @@ func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCH
 // OrderingFuture asynchronously invokes a quorum call on configuration c
 // and returns a FutureResponse, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) OrderingFuture(ctx context.Context, in *Request) (*FutureResponse, error) {
+func (c *Configuration) OrderingFuture(ctx context.Context, in *Request) *FutureResponse {
 	fut := &FutureResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.orderingFutureSend(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.orderingFutureRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) orderingFutureSend(ctx context.Context, in *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
+	expected := c.n
+
+	var msg *ordering.Message
 	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+		// In case of a marshalling error, we should skip sending any messages
+		fut.err = fmt.Errorf("failed to marshal message: %w", err)
+		goto End
 	}
-	msg := &ordering.Message{
+	msg = &ordering.Message{
 		ID:       msgID,
 		MethodID: orderingFutureMethodID,
 		Data:     data,
 	}
+
 	// push the message to the nodes
-	expected := c.n
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+End:
+	go c.orderingFutureRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureResponse) {
+func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -583,12 +586,11 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -597,15 +599,15 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureQF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
+				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -641,31 +643,21 @@ func (s *GorumsServer) RegisterOrderingFutureHandler(handler OrderingFutureHandl
 // The provide per node function f takes the provided Request argument
 // and returns an Response object to be passed to the given nodeID.
 // The per node function f should be thread-safe.
-func (c *Configuration) OrderingFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (*FutureResponse, error) {
+func (c *Configuration) OrderingFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *FutureResponse {
 	fut := &FutureResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.orderingFuturePerNodeArgSend(ctx, in, f)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.orderingFuturePerNodeArgRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) orderingFuturePerNodeArgSend(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
-	// push the message to the nodes
 	expected := c.n
+
+	// push the message to the nodes
 	for _, n := range c.nodes {
 		nodeArg := f(in, n.ID())
 		if nodeArg == nil {
@@ -674,7 +666,8 @@ func (c *Configuration) orderingFuturePerNodeArgSend(ctx context.Context, in *Re
 		}
 		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+			fut.err = fmt.Errorf("failed to marshal message: %w", err)
+			break
 		}
 		msg := &ordering.Message{
 			ID:       msgID,
@@ -684,10 +677,18 @@ func (c *Configuration) orderingFuturePerNodeArgSend(ctx context.Context, in *Re
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+	go c.orderingFuturePerNodeArgRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureResponse) {
+func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -700,12 +701,11 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -714,15 +714,15 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFuturePerNodeArgQF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
+				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -754,48 +754,51 @@ func (s *GorumsServer) RegisterOrderingFuturePerNodeArgHandler(handler OrderingF
 // OrderingFutureCustomReturnType asynchronously invokes a quorum call on configuration c
 // and returns a FutureMyResponse, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) OrderingFutureCustomReturnType(ctx context.Context, in *Request) (*FutureMyResponse, error) {
+func (c *Configuration) OrderingFutureCustomReturnType(ctx context.Context, in *Request) *FutureMyResponse {
 	fut := &FutureMyResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.orderingFutureCustomReturnTypeSend(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.orderingFutureCustomReturnTypeRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) orderingFutureCustomReturnTypeSend(ctx context.Context, in *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
+	expected := c.n
+
+	var msg *ordering.Message
 	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+		// In case of a marshalling error, we should skip sending any messages
+		fut.err = fmt.Errorf("failed to marshal message: %w", err)
+		goto End
 	}
-	msg := &ordering.Message{
+	msg = &ordering.Message{
 		ID:       msgID,
 		MethodID: orderingFutureCustomReturnTypeMethodID,
 		Data:     data,
 	}
+
 	// push the message to the nodes
-	expected := c.n
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+End:
+	go c.orderingFutureCustomReturnTypeRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureMyResponse) {
+func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureMyResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -808,12 +811,11 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -822,15 +824,15 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureCustomReturnTypeQF(in, replyValues); quorum {
-				resp.MyResponse, resp.err = reply, nil
+				fut.MyResponse, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -866,31 +868,21 @@ func (s *GorumsServer) RegisterOrderingFutureCustomReturnTypeHandler(handler Ord
 // The provide per node function f takes the provided Request argument
 // and returns an Response object to be passed to the given nodeID.
 // The per node function f should be thread-safe.
-func (c *Configuration) OrderingFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (*FutureMyResponse, error) {
+func (c *Configuration) OrderingFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *FutureMyResponse {
 	fut := &FutureMyResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.orderingFutureComboSend(ctx, in, f)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.orderingFutureComboRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) orderingFutureComboSend(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
-	// push the message to the nodes
 	expected := c.n
+
+	// push the message to the nodes
 	for _, n := range c.nodes {
 		nodeArg := f(in, n.ID())
 		if nodeArg == nil {
@@ -899,7 +891,8 @@ func (c *Configuration) orderingFutureComboSend(ctx context.Context, in *Request
 		}
 		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+			fut.err = fmt.Errorf("failed to marshal message: %w", err)
+			break
 		}
 		msg := &ordering.Message{
 			ID:       msgID,
@@ -909,10 +902,18 @@ func (c *Configuration) orderingFutureComboSend(ctx context.Context, in *Request
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+	go c.orderingFutureComboRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureMyResponse) {
+func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureMyResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -925,12 +926,11 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -939,15 +939,15 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureComboQF(in, replyValues); quorum {
-				resp.MyResponse, resp.err = reply, nil
+				fut.MyResponse, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
