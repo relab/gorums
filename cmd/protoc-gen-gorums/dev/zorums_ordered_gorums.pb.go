@@ -548,7 +548,8 @@ func (c *Configuration) OrderingFuture(ctx context.Context, in *Request) *Future
 	if err != nil {
 		// In case of a marshalling error, we should skip sending any messages
 		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		goto End
+		close(fut.c)
+		return fut
 	}
 	msg = &ordering.Message{
 		ID:       msgID,
@@ -561,7 +562,6 @@ func (c *Configuration) OrderingFuture(ctx context.Context, in *Request) *Future
 		n.sendQ <- msg
 	}
 
-End:
 	go c.orderingFutureRecv(ctx, in, msgID, expected, replyChan, fut)
 
 	return fut
@@ -667,7 +667,8 @@ func (c *Configuration) OrderingFuturePerNodeArg(ctx context.Context, in *Reques
 		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			fut.err = fmt.Errorf("failed to marshal message: %w", err)
-			break
+			close(fut.c)
+			return fut
 		}
 		msg := &ordering.Message{
 			ID:       msgID,
@@ -773,7 +774,8 @@ func (c *Configuration) OrderingFutureCustomReturnType(ctx context.Context, in *
 	if err != nil {
 		// In case of a marshalling error, we should skip sending any messages
 		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		goto End
+		close(fut.c)
+		return fut
 	}
 	msg = &ordering.Message{
 		ID:       msgID,
@@ -786,7 +788,6 @@ func (c *Configuration) OrderingFutureCustomReturnType(ctx context.Context, in *
 		n.sendQ <- msg
 	}
 
-End:
 	go c.orderingFutureCustomReturnTypeRecv(ctx, in, msgID, expected, replyChan, fut)
 
 	return fut
@@ -892,7 +893,8 @@ func (c *Configuration) OrderingFutureCombo(ctx context.Context, in *Request, f 
 		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			fut.err = fmt.Errorf("failed to marshal message: %w", err)
-			break
+			close(fut.c)
+			return fut
 		}
 		msg := &ordering.Message{
 			ID:       msgID,
