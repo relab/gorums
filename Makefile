@@ -105,3 +105,8 @@ stability: installgorums
 	@diff $(tests_zorums_gen) $(tmp_dir)/x_gorums.pb.go \
 	|| (echo "unexpected instability, observed changes between protoc runs: $$?")
 	@rm -rf $(tmp_dir)
+
+benchmarks:
+	@$(MAKE) -C benchmark
+	@go build -o cmd/benchclient/benchclient ./cmd/benchclient
+	@go build -o cmd/benchserver/benchserver ./cmd/benchserver
