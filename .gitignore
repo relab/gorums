@@ -35,6 +35,7 @@ Session.vim
 
 # binary files
 cmd/benchclient/benchclient
+cmd/benchserver/benchserver
 
 cmd/storageserver/storageserver
 
