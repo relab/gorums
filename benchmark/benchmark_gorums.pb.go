@@ -713,10 +713,6 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 	}
 }
 
-type methodInfo struct {
-	oneway bool
-}
-
 type orderingResult struct {
 	nid   uint32
 	reply []byte
@@ -892,17 +888,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
-
 		// handle the request if a handler is available for this rpc
 		if handler, ok := s.handlers[req.GetMethodID()]; ok {
-			info, ok := orderingMethods[req.MethodID]
-			if !ok {
-				continue
-			}
-			if info.oneway {
-				handler(req)
-				continue
-			}
 			resp := handler(req)
 			resp.ID = req.GetID()
 			err = srv.Send(resp)
@@ -1005,6 +992,97 @@ func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	return append(set, x)
 }
 
+// UnorderedAsync asynchronously invokes a quorum call on configuration c
+// and returns a FutureEcho, which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) UnorderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) *FutureEcho {
+	fut := &FutureEcho{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(fut.c)
+		c.unorderedAsync(ctx, in, fut, opts...)
+	}()
+	return fut
+}
+
+func (c *Configuration) unorderedAsync(ctx context.Context, in *Echo, resp *FutureEcho, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "UnorderedAsync")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Echo, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalEcho, expected)
+	for _, n := range c.nodes {
+		go n.UnorderedAsync(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Echo, 0, c.n)
+		reply       *Echo
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.UnorderedAsyncQF(in, replyValues); quorum {
+				resp.Echo, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Echo, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Echo, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+func (n *Node) UnorderedAsync(ctx context.Context, in *Echo, replyChan chan<- internalEcho) {
+	reply := new(Echo)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/benchmark.Benchmark/UnorderedAsync", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalEcho{n.id, reply, err}
+}
+
 type nodeServices struct {
 	BenchmarkClient
 }
@@ -1022,7 +1100,7 @@ func (n *Node) closeStream() (err error) {
 
 // OrderedQC is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) OrderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (resp *Echo, err error) {
+func (c *Configuration) OrderedQC(ctx context.Context, in *Echo) (resp *Echo, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderedQC")
@@ -1129,6 +1207,116 @@ func (s *GorumsServer) RegisterOrderedQCHandler(handler OrderedQCHandler) {
 	})
 }
 
+// OrderedAsync asynchronously invokes a quorum call on configuration c
+// and returns a FutureEcho, which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) OrderedAsync(ctx context.Context, in *Echo) *FutureEcho {
+	fut := &FutureEcho{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	// get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
+
+	expected := c.n
+
+	var msg *ordering.Message
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		// In case of a marshalling error, we should skip sending any messages
+		fut.err = fmt.Errorf("failed to marshal message: %w", err)
+		close(fut.c)
+		return fut
+	}
+	msg = &ordering.Message{
+		ID:       msgID,
+		MethodID: orderedAsyncMethodID,
+		Data:     data,
+	}
+
+	// push the message to the nodes
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	go c.orderedAsyncRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
+}
+
+func (c *Configuration) orderedAsyncRecv(ctx context.Context, in *Echo, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureEcho) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
+	defer c.mgr.deleteChan(msgID)
+
+	var (
+		replyValues = make([]*Echo, 0, c.n)
+		reply       *Echo
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+			data := new(Echo)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, data)
+			if reply, quorum = c.qspec.OrderedAsyncQF(in, replyValues); quorum {
+				fut.Echo, fut.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			fut.Echo, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			fut.Echo, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+// OrderedAsyncHandler is the server API for the OrderedAsync rpc.
+type OrderedAsyncHandler interface {
+	OrderedAsync(*Echo) *Echo
+}
+
+// RegisterOrderedAsyncHandler sets the handler for OrderedAsync.
+func (s *GorumsServer) RegisterOrderedAsyncHandler(handler OrderedAsyncHandler) {
+	s.srv.registerHandler(orderedAsyncMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.OrderedAsync(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderedAsyncMethodID}
+	})
+}
+
 // QuorumSpec is the interface of quorum functions for Benchmark.
 type QuorumSpec interface {
 
@@ -1145,6 +1333,20 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Echo'.
 	OrderedQCQF(in *Echo, replies []*Echo) (*Echo, bool)
+
+	// UnorderedAsyncQF is the quorum function for the UnorderedAsync
+	// asynchronous quorum call method. The in parameter is the request object
+	// supplied to the UnorderedAsync method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Echo'.
+	UnorderedAsyncQF(in *Echo, replies []*Echo) (*Echo, bool)
+
+	// OrderedAsyncQF is the quorum function for the OrderedAsync
+	// asynchronous ordered quorum call method. The in parameter is the request object
+	// supplied to the OrderedAsync method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Echo'.
+	OrderedAsyncQF(in *Echo, replies []*Echo) (*Echo, bool)
 }
 
 // UnorderedQC is a quorum call invoked on all nodes in configuration c,
@@ -1223,13 +1425,36 @@ func (n *Node) UnorderedQC(ctx context.Context, in *Echo, replyChan chan<- inter
 const hasOrderingMethods = true
 
 const orderedQCMethodID int32 = 0
-
-var orderingMethods = map[int32]methodInfo{
-	0: {oneway: false},
-}
+const orderedAsyncMethodID int32 = 1
 
 type internalEcho struct {
 	nid   uint32
 	reply *Echo
 	err   error
+}
+
+// FutureEcho is a future object for processing replies.
+type FutureEcho struct {
+	// the actual reply
+	*Echo
+	NodeIDs []uint32
+	err     error
+	c       chan struct{}
+}
+
+// Get returns the reply and any error associated with the called method.
+// The method blocks until a reply or error is available.
+func (f *FutureEcho) Get() (*Echo, error) {
+	<-f.c
+	return f.Echo, f.err
+}
+
+// Done reports if a reply and/or error is available for the called method.
+func (f *FutureEcho) Done() bool {
+	select {
+	case <-f.c:
+		return true
+	default:
+		return false
+	}
 }

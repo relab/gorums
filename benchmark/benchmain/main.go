@@ -5,8 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
+	"regexp"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
@@ -18,128 +18,19 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	traceFile  = flag.String("trace", "", "File to write trace to.")
-	cpuprofile = flag.String("cpuprofile", "", "File to write cpu profile to.")
-	memprofile = flag.String("memprofile", "", "File to write memory profile to.")
-	remotes    = flag.String("remotes", "", "List of remote servers to connect to.")
-	benchmarks = flag.String("benchmarks", "", "List of benchmarks to run.")
-	warmup     = flag.Int("warmup", 100, "Number of requests to send as warmup.")
-	benchTime  = flag.String("time", "10s", "How long to run each benchmark")
-	payload    = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
-)
-
-type benchFunc func(context.Context, *benchmark.Echo, ...grpc.CallOption) (*benchmark.Echo, error)
-
-var allBenchmarks map[string]benchFunc
-
-func buildBenchmarksMap(cfg *benchmark.Configuration) {
-	allBenchmarks = make(map[string]benchFunc)
-	allBenchmarks["OrderedQC"] = cfg.OrderedQC
-	allBenchmarks["UnorderedQC"] = cfg.UnorderedQC
-}
-
-func runAllBenchmarks() {
-	duration, err := time.ParseDuration(*benchTime)
-	if err != nil {
-		log.Fatalf("Failed to parse 'time': %v\n", err)
-	}
-
-	var mgrOpts = []benchmark.ManagerOption{
-		benchmark.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
-		benchmark.WithDialTimeout(10 * time.Second),
-	}
-
-	if trace.IsEnabled() {
-		mgrOpts = append(mgrOpts, benchmark.WithTracing())
-	}
-
-	if len(*remotes) < 1 {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		startLocalServers(ctx, 4)
-	}
-
-	mgr, err := benchmark.NewManager(strings.Split(*remotes, ","), mgrOpts...)
-	if err != nil {
-		log.Fatalf("Failed to create manager: %v\n", err)
-	}
-	defer mgr.Close()
-
-	numNodes, _ := mgr.Size()
-	cfg, err := mgr.NewConfiguration(mgr.NodeIDs(), &benchmark.QSpec{QSize: numNodes / 2})
-
-	buildBenchmarksMap(cfg)
-
-	msg := &benchmark.Echo{Payload: make([]byte, *payload)}
-
-	resultWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-	fmt.Fprintln(resultWriter, "Benchmark\tThrougput\tLatency\tStd.dev\tMemory Usage\t Memory Allocs\t")
-
-	for _, b := range strings.Split(*benchmarks, ",") {
-		if f, ok := allBenchmarks[b]; ok {
-			fmt.Fprintf(resultWriter, "%s-%d\t", b, runtime.NumCPU())
-			result := runBenchmark(f, msg, duration).GetResult()
-			fmt.Fprintf(resultWriter, "%s\n", result)
-		}
-	}
-	resultWriter.Flush()
-}
-
-func runBenchmark(f benchFunc, msg *benchmark.Echo, duration time.Duration) *benchmark.Stats {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	s := &benchmark.Stats{}
-
-	for i := 0; i < *warmup; i++ {
-		_, err := f(ctx, msg)
-		if err != nil {
-			log.Fatalf("An error occurred during benchmarking: %v\n", err)
-		}
-	}
-
-	endTime := time.Now().Add(duration)
-	s.Start()
-	for !time.Now().After(endTime) {
-		start := time.Now()
-		_, err := f(ctx, msg)
-		if err != nil {
-			log.Fatalf("An error occurred during benchmarking: %v\n", err)
-		}
-		end := time.Now()
-		s.AddLatency(end.Sub(start))
-	}
-	s.End()
-
-	return s
-}
-
-func startLocalServers(ctx context.Context, n int) {
-	var ports []string
-	basePort := 40000
-	var servers []*benchmark.Server
-	for p := basePort; p < basePort+n; p++ {
-		port := fmt.Sprintf(":%d", p)
-		ports = append(ports, port)
-		lis, err := net.Listen("tcp", port)
-		if err != nil {
-			log.Fatalf("Failed to start local server: %v\n", err)
-		}
-		srv := benchmark.NewServer()
-		servers = append(servers, srv)
-		go srv.Serve(lis)
-	}
-	*remotes = strings.Join(ports, ",")
-	go func() {
-		<-ctx.Done()
-		for _, srv := range servers {
-			srv.Stop()
-		}
-	}()
-}
-
 func main() {
+	var (
+		traceFile  = flag.String("trace", "", "File to write trace to.")
+		cpuprofile = flag.String("cpuprofile", "", "File to write cpu profile to.")
+		memprofile = flag.String("memprofile", "", "File to write memory profile to.")
+		remotes    = flag.String("remotes", "", "List of remote servers to connect to.")
+		benchmarks = flag.String("benchmarks", ".*", "List of benchmarks to run.")
+		warmup     = flag.String("warmup", "100ms", "How long a warmup should last.")
+		benchTime  = flag.String("time", "1s", "How long to run each benchmark")
+		payload    = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
+		concurrent = flag.Int("concurrent", 1, "Number of goroutines that can make calls concurrently.")
+		maxAsync   = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
+	)
 	flag.Parse()
 
 	// set up profiling and tracing
@@ -183,5 +74,57 @@ func main() {
 		}
 	}()
 
-	runAllBenchmarks()
+	if len(*remotes) < 1 {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ports := benchmark.StartLocalServers(ctx, 4)
+		*remotes = strings.Join(ports, ",")
+	}
+
+	var mgrOpts = []benchmark.ManagerOption{
+		benchmark.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+		benchmark.WithDialTimeout(10 * time.Second),
+	}
+
+	if trace.IsEnabled() {
+		mgrOpts = append(mgrOpts, benchmark.WithTracing())
+	}
+
+	mgr, err := benchmark.NewManager(strings.Split(*remotes, ","), mgrOpts...)
+	if err != nil {
+		log.Fatalf("Failed to create manager: %v\n", err)
+	}
+	defer mgr.Close()
+
+	var options benchmark.Options
+	options.Concurrent = *concurrent
+	options.MaxAsync = *maxAsync
+	options.NumNodes, _ = mgr.Size()
+	options.QuorumSize = options.NumNodes / 2
+	options.Payload = *payload
+	options.Warmup, err = time.ParseDuration(*warmup)
+	if err != nil {
+		log.Fatalf("Failed to parse 'warmup': %v\n", err)
+	}
+	options.Duration, err = time.ParseDuration(*benchTime)
+	if err != nil {
+		log.Fatalf("Failed to parse 'time': %v\n", err)
+	}
+
+	benchReg, err := regexp.Compile(*benchmarks)
+	if err != nil {
+		log.Fatalf("Could not parse regular expression: %v\n", err)
+	}
+
+	results, err := benchmark.RunBenchmarks(benchReg, options, mgr)
+	if err != nil {
+		log.Fatalf("Error running benchmarks: %v\n", err)
+	}
+
+	resultWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
+	fmt.Fprintln(resultWriter, "Benchmark\tThrougput\tLatency\tStd.dev\tMemory Usage\tMemory Allocs\t")
+	for _, r := range results {
+		fmt.Fprintln(resultWriter, r)
+	}
+	resultWriter.Flush()
 }
