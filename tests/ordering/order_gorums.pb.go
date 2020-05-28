@@ -1135,7 +1135,8 @@ func (c *Configuration) QCFuture(ctx context.Context, in *Request) *FutureRespon
 	if err != nil {
 		// In case of a marshalling error, we should skip sending any messages
 		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		goto End
+		close(fut.c)
+		return fut
 	}
 	msg = &ordering.Message{
 		ID:       msgID,
@@ -1148,7 +1149,6 @@ func (c *Configuration) QCFuture(ctx context.Context, in *Request) *FutureRespon
 		n.sendQ <- msg
 	}
 
-End:
 	go c.qCFutureRecv(ctx, in, msgID, expected, replyChan, fut)
 
 	return fut

@@ -25,14 +25,14 @@ var orderedFutureBody = `
 	c.mgr.putChan(msgID, replyChan)
 
 	expected := c.n
-
 {{if not (hasPerNodeArg .Method)}}
 	var msg *{{$gorumsMsg}}
 	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
 		// In case of a marshalling error, we should skip sending any messages
 		fut.err = {{$errorf}}("failed to marshal message: %w", err)
-		goto End
+		close(fut.c)
+		return fut
 	}
 	msg = &{{$gorumsMsg}}{
 		ID: msgID,
@@ -52,7 +52,8 @@ var orderedFutureBody = `
 		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
 			fut.err = {{$errorf}}("failed to marshal message: %w", err)
-			break
+			close(fut.c)
+			return fut
 		}
 		msg := &{{$gorumsMsg}}{
 			ID: msgID,
@@ -63,9 +64,6 @@ var orderedFutureBody = `
 		n.sendQ <- msg
 	}
 
-{{if not (hasPerNodeArg .Method) -}}
-End:
-{{end -}}
 	go c.{{$unexportMethod}}Recv(ctx, in, msgID, expected, replyChan, fut)
 
 	return fut
