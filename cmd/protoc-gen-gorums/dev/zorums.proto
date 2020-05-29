@@ -258,4 +258,16 @@ service ZorumsService {
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
+
+  // ---------------------------------------------------------------
+  // Unicast
+  // ---------------------------------------------------------------
+
+  rpc Unicast(Request) returns (Response) {
+    option (gorums.unicast) = true;
+  }
+
+  rpc Unicast2(Request) returns (google.protobuf.Empty) {
+    option (gorums.unicast) = true;
+  }
 }
