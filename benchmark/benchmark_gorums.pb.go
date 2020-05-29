@@ -1317,6 +1317,115 @@ func (s *GorumsServer) RegisterOrderedAsyncHandler(handler OrderedAsyncHandler) 
 	})
 }
 
+// OrderedSlowServer is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) OrderedSlowServer(ctx context.Context, in *Echo) (resp *Echo, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderedSlowServer")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	// get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replies := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replies)
+
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
+
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: orderedSlowServerMethodID,
+		Data:     data,
+	}
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	var (
+		replyValues = make([]*Echo, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replies:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			reply := new(Echo)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, reply)
+			if resp, quorum = c.qspec.OrderedSlowServerQF(in, replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+// OrderedSlowServerHandler is the server API for the OrderedSlowServer rpc.
+type OrderedSlowServerHandler interface {
+	OrderedSlowServer(*Echo) *Echo
+}
+
+// RegisterOrderedSlowServerHandler sets the handler for OrderedSlowServer.
+func (s *GorumsServer) RegisterOrderedSlowServerHandler(handler OrderedSlowServerHandler) {
+	s.srv.registerHandler(orderedSlowServerMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.OrderedSlowServer(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderedSlowServerMethodID}
+	})
+}
+
 // QuorumSpec is the interface of quorum functions for Benchmark.
 type QuorumSpec interface {
 
@@ -1347,6 +1456,20 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Echo'.
 	OrderedAsyncQF(in *Echo, replies []*Echo) (*Echo, bool)
+
+	// UnorderedSlowServerQF is the quorum function for the UnorderedSlowServer
+	// quorum call method. The in parameter is the request object
+	// supplied to the UnorderedSlowServer method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Echo'.
+	UnorderedSlowServerQF(in *Echo, replies []*Echo) (*Echo, bool)
+
+	// OrderedSlowServerQF is the quorum function for the OrderedSlowServer
+	// ordered quorum call method. The in parameter is the request object
+	// supplied to the OrderedSlowServer method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Echo'.
+	OrderedSlowServerQF(in *Echo, replies []*Echo) (*Echo, bool)
 }
 
 // UnorderedQC is a quorum call invoked on all nodes in configuration c,
@@ -1422,10 +1545,84 @@ func (n *Node) UnorderedQC(ctx context.Context, in *Echo, replyChan chan<- inter
 	replyChan <- internalEcho{n.id, reply, err}
 }
 
+// UnorderedSlowServer is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) UnorderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (resp *Echo, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "UnorderedSlowServer")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalEcho, expected)
+	for _, n := range c.nodes {
+		go n.UnorderedSlowServer(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Echo, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if resp, quorum = c.qspec.UnorderedSlowServerQF(in, replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+func (n *Node) UnorderedSlowServer(ctx context.Context, in *Echo, replyChan chan<- internalEcho) {
+	reply := new(Echo)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/benchmark.Benchmark/UnorderedSlowServer", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalEcho{n.id, reply, err}
+}
+
 const hasOrderingMethods = true
 
 const orderedQCMethodID int32 = 0
 const orderedAsyncMethodID int32 = 1
+const orderedSlowServerMethodID int32 = 2
 
 type internalEcho struct {
 	nid   uint32
