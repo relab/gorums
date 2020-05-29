@@ -21,6 +21,8 @@ type BenchmarkClient interface {
 	OrderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	UnorderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
+	UnorderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
+	OrderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 }
 
 type benchmarkClient struct {
@@ -67,12 +69,32 @@ func (c *benchmarkClient) OrderedAsync(ctx context.Context, in *Echo, opts ...gr
 	return out, nil
 }
 
+func (c *benchmarkClient) UnorderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error) {
+	out := new(Echo)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/UnorderedSlowServer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *benchmarkClient) OrderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error) {
+	out := new(Echo)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/OrderedSlowServer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BenchmarkServer is the server API for Benchmark service.
 type BenchmarkServer interface {
 	UnorderedQC(context.Context, *Echo) (*Echo, error)
 	OrderedQC(context.Context, *Echo) (*Echo, error)
 	UnorderedAsync(context.Context, *Echo) (*Echo, error)
 	OrderedAsync(context.Context, *Echo) (*Echo, error)
+	UnorderedSlowServer(context.Context, *Echo) (*Echo, error)
+	OrderedSlowServer(context.Context, *Echo) (*Echo, error)
 }
 
 // UnimplementedBenchmarkServer can be embedded to have forward compatible implementations.
@@ -90,6 +112,12 @@ func (*UnimplementedBenchmarkServer) UnorderedAsync(context.Context, *Echo) (*Ec
 }
 func (*UnimplementedBenchmarkServer) OrderedAsync(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderedAsync not implemented")
+}
+func (*UnimplementedBenchmarkServer) UnorderedSlowServer(context.Context, *Echo) (*Echo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnorderedSlowServer not implemented")
+}
+func (*UnimplementedBenchmarkServer) OrderedSlowServer(context.Context, *Echo) (*Echo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderedSlowServer not implemented")
 }
 
 func RegisterBenchmarkServer(s *grpc.Server, srv BenchmarkServer) {
@@ -168,6 +196,42 @@ func _Benchmark_OrderedAsync_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Benchmark_UnorderedSlowServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Echo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).UnorderedSlowServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/UnorderedSlowServer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).UnorderedSlowServer(ctx, req.(*Echo))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Benchmark_OrderedSlowServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Echo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).OrderedSlowServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/OrderedSlowServer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).OrderedSlowServer(ctx, req.(*Echo))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _Benchmark_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "benchmark.Benchmark",
 	HandlerType: (*BenchmarkServer)(nil),
@@ -187,6 +251,14 @@ var _Benchmark_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OrderedAsync",
 			Handler:    _Benchmark_OrderedAsync_Handler,
+		},
+		{
+			MethodName: "UnorderedSlowServer",
+			Handler:    _Benchmark_UnorderedSlowServer_Handler,
+		},
+		{
+			MethodName: "OrderedSlowServer",
+			Handler:    _Benchmark_OrderedSlowServer_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -5,6 +5,7 @@ import (
 	fmt "fmt"
 	log "log"
 	net "net"
+	"time"
 )
 
 type unorderedServer struct{}
@@ -27,6 +28,16 @@ func (srv *unorderedServer) OrderedAsync(_ context.Context, in *Echo) (out *Echo
 	panic("Not implemented")
 }
 
+func (srv *unorderedServer) UnorderedSlowServer(_ context.Context, in *Echo) (out *Echo, _ error) {
+	time.Sleep(10 * time.Millisecond)
+	out = in
+	return
+}
+
+func (srv *unorderedServer) OrderedSlowServer(_ context.Context, in *Echo) (out *Echo, _ error) {
+	panic("Not implemented")
+}
+
 type orderedServer struct{}
 
 func (srv *orderedServer) OrderedQC(in *Echo) *Echo {
@@ -34,6 +45,11 @@ func (srv *orderedServer) OrderedQC(in *Echo) *Echo {
 }
 
 func (srv *orderedServer) OrderedAsync(in *Echo) *Echo {
+	return in
+}
+
+func (srv *orderedServer) OrderedSlowServer(in *Echo) *Echo {
+	time.Sleep(10 * time.Millisecond)
 	return in
 }
 
@@ -50,6 +66,7 @@ func NewServer() *Server {
 	srv.GorumsServer = NewGorumsServer()
 	srv.RegisterOrderedQCHandler(&srv.orderedSrv)
 	srv.RegisterOrderedAsyncHandler(&srv.orderedSrv)
+	srv.RegisterOrderedSlowServerHandler(&srv.orderedSrv)
 	RegisterBenchmarkServer(srv.GorumsServer.grpcServer, &srv.unorderedSrv)
 	return srv
 }

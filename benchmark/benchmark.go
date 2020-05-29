@@ -151,13 +151,24 @@ func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
 				return cfg.UnorderedQC(ctx, msg)
 			})
 		},
+
 		"OrderedQC": func(opts Options) (*Stats, error) { return runQCBenchmark(opts, cfg.OrderedQC) },
+
 		"UnorderedAsync": func(opts Options) (*Stats, error) {
 			return runAsyncQCBenchmark(opts, func(ctx context.Context, msg *Echo) *FutureEcho {
 				return cfg.UnorderedAsync(ctx, msg)
 			})
 		},
+
 		"OrderedAsync": func(opts Options) (*Stats, error) { return runAsyncQCBenchmark(opts, cfg.OrderedAsync) },
+
+		"UnorderedSlowServer": func(opts Options) (*Stats, error) {
+			return runQCBenchmark(opts, func(ctx context.Context, msg *Echo) (*Echo, error) {
+				return cfg.UnorderedSlowServer(ctx, msg)
+			})
+		},
+
+		"OrderedSlowServer": func(opts Options) (*Stats, error) { return runQCBenchmark(opts, cfg.OrderedSlowServer) },
 	}
 	return m
 }
