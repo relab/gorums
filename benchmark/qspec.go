@@ -31,3 +31,13 @@ func (qspec *QSpec) UnorderedAsyncQF(_ *Echo, replies []*Echo) (*Echo, bool) {
 func (qspec *QSpec) OrderedAsyncQF(_ *Echo, replies []*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }
+
+// UnorderedSlowServerQF is the quorum function for the UnorderedSlowServer quorumcall
+func (qspec *QSpec) UnorderedSlowServerQF(_ *Echo, replies []*Echo) (*Echo, bool) {
+	return qspec.qf(replies)
+}
+
+// OrderedSlowServerQF is the quorum function for the OrderedSlowServer quorumcall
+func (qspec *QSpec) OrderedSlowServerQF(_ *Echo, replies []*Echo) (*Echo, bool) {
+	return qspec.qf(replies)
+}
