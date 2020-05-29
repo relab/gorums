@@ -11,6 +11,7 @@ extend google.protobuf.MethodOptions {
   bool ordered = 50002;
   bool multicast = 50003;
   bool correctable = 50004;
+  bool unicast = 50005;
   bool per_node_arg = 50010;
 
   string custom_return_type = 51000;

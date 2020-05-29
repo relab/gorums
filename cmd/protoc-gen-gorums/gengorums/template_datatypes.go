@@ -1,7 +1,6 @@
 package gengorums
 
 import (
-	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
@@ -18,7 +17,7 @@ const {{unexport $method.GoName}}MethodID int32 = {{$index}}
 var orderingMethods = `
 var orderingMethods = map[int32]methodInfo{
 	{{- range $index, $method := orderedMethods .Services}}
-		{{$index}}: { oneway: {{isMulticast $method}} },
+		{{$index}}: { oneway: {{isOneway $method}} },
 	{{- end}}
 }
 `
@@ -163,7 +162,7 @@ var datatypes = globals +
 func orderedMethods(services []*protogen.Service) (s []*protogen.Method) {
 	for _, service := range services {
 		for _, method := range service.Methods {
-			if hasMethodOption(method, gorums.E_Ordered, gorums.E_Multicast) {
+			if hasMethodOption(method, nodeStreamCallTypes...) {
 				s = append(s, method)
 			}
 		}

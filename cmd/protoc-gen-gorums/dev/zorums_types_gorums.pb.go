@@ -23,6 +23,8 @@ const orderingFutureMethodID int32 = 10
 const orderingFuturePerNodeArgMethodID int32 = 11
 const orderingFutureCustomReturnTypeMethodID int32 = 12
 const orderingFutureComboMethodID int32 = 13
+const unicastMethodID int32 = 14
+const unicast2MethodID int32 = 15
 
 var orderingMethods = map[int32]methodInfo{
 	0:  {oneway: true},
@@ -39,6 +41,8 @@ var orderingMethods = map[int32]methodInfo{
 	11: {oneway: false},
 	12: {oneway: false},
 	13: {oneway: false},
+	14: {oneway: true},
+	15: {oneway: true},
 }
 
 type internalEmpty struct {

@@ -102,8 +102,8 @@ var funcMap = template.FuncMap{
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
 	},
-	"isMulticast": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Multicast)
+	"isOneway": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
 	"out":                   out,
 	"outType":               outType,
@@ -216,7 +216,7 @@ func mustExecute(t *template.Template, data interface{}) string {
 func hasOrderingMethods(services []*protogen.Service) bool {
 	for _, service := range services {
 		for _, method := range service.Methods {
-			if hasMethodOption(method, gorums.E_Ordered, gorums.E_Multicast) {
+			if hasMethodOption(method, nodeStreamCallTypes...) {
 				return true
 			}
 		}
@@ -226,7 +226,7 @@ func hasOrderingMethods(services []*protogen.Service) bool {
 
 func exclusivelyOrdering(service *protogen.Service) bool {
 	for _, method := range service.Methods {
-		if !hasMethodOption(method, gorums.E_Ordered, gorums.E_Multicast) {
+		if !hasMethodOption(method, nodeStreamCallTypes...) {
 			return false
 		}
 	}
