@@ -1,3 +1,4 @@
+protoc-gen-gorums-bin	:= $(shell command -v protoc-gen-gorums)
 PLUGIN_PATH				:= cmd/protoc-gen-gorums
 dev_path				:= $(PLUGIN_PATH)/dev
 gen_path				:= $(PLUGIN_PATH)/gengorums
@@ -16,10 +17,10 @@ internal_ordering		:= internal/ordering
 internal_correctable	:= internal/correctable
 public_so				:= ordering/
 
-.PHONY: dev download install-tools installgorums
+.PHONY: dev download tools
 
 dev: installgorums $(public_so)/ordering.pb.go $(public_so)/ordering_grpc.pb.go
-	@echo Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder
+	@echo "Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder"
 	rm -f $(dev_path)/zorums*.pb.go
 	protoc -I$(dev_path):. \
 		--go_out=:. \
@@ -27,56 +28,57 @@ dev: installgorums $(public_so)/ordering.pb.go $(public_so)/ordering_grpc.pb.go
 		--gorums_out=dev=true,trace=true:. \
 		$(zorums_proto)
 
-# TODO(meling) remove this when v2 released; for now, it is necessary for compiling gorums.proto
-.PHONY: getv1
-getv1:
-	@echo getting v1 pre-release proto package based on v2 impl
-	@go mod tidy
-	@go get -u github.com/golang/protobuf/proto@api-v1
-
 download:
-	@echo Download go.mod dependencies
+	@echo "Download go.mod dependencies"
 	@go mod download
 
-install-tools: download
-	@echo Installing tools from tools.go
+tools: download
+	@echo "Installing tools from tools.go"
 	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % go install %
 
 gorums.pb.go: gorums.proto
-	@echo Generating gorums proto options
+	@echo "Generating gorums proto options"
 	@protoc --go_out=paths=source_relative:. gorums.proto
 
-$(internal_ordering)/opts.pb.go: $(internal_ordering)/opts.proto
-	@echo Generating ordering proto options
-	@protoc --go_out=paths=source_relative:. $(internal_ordering)/opts.proto
-
 $(public_so)/ordering.pb.go: $(public_so)/ordering.proto
-	@echo Generating ordering protocol buffers
+	@echo "Generating ordering protocol buffers"
 	@protoc --go_out=paths=source_relative:. $(public_so)/ordering.proto
 
 $(public_so)/ordering_grpc.pb.go: $(public_so)/ordering.proto
-	@echo Generating ordering gRPC service
+	@echo "Generating ordering gRPC service"
 	@protoc --go-grpc_out=paths=source_relative:. $(public_so)/ordering.proto
 
+$(internal_ordering)/opts.pb.go: $(internal_ordering)/opts.proto
+	@echo "Generating ordering proto options"
+	@protoc --go_out=paths=source_relative:. $(internal_ordering)/opts.proto
+
 $(internal_correctable)/opts.pb.go: $(internal_correctable)/opts.proto
-	@echo Generating correctable proto options
+	@echo "Generating correctable proto options"
 	@protoc --go_out=paths=source_relative:. $(internal_correctable)/opts.proto
 
-installgorums: gorums.pb.go $(internal_ordering)/opts.pb.go $(internal_correctable)/opts.pb.go
-	@echo Installing protoc-gen-gorums compiler plugin for protoc
+installgorums: bootstrapgorums $(protoc-gen-gorums-bin)
+
+$(protoc-gen-gorums-bin): gorums.pb.go $(internal_ordering)/opts.pb.go $(internal_correctable)/opts.pb.go $(static_file)
+	@echo "Installing plugin at $(protoc-gen-gorums-bin)"
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
 
-bundle: installgorums $(static_file)
-
 $(static_file): $(static_files)
-	cp $(static_file) $(static_file).bak
-	protoc-gen-gorums --bundle=$(static_file)
+	@cp $(static_file) $(static_file).bak
+	@protoc-gen-gorums --bundle=$(static_file)
+
+.PHONY: bootstrapgorums
+bootstrapgorums:
+ifeq (, $(shell which protoc-gen-gorums))
+	@echo "Bootstrapping gorums plugin"
+	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
+	@echo "You may need to rerun 'make installgorums'"
+endif
 
 .PHONY: gentests $(test_files)
 gentests: $(test_files) $(failing_test_files) stability
 
 $(test_files): installgorums
-	@echo Running protoc test with source files expected to pass
+	@echo "Running protoc test with source files expected to pass"
 	@protoc -I. \
 		--go_out=paths=source_relative:. \
 		--go-grpc_out=paths=source_relative:. \
