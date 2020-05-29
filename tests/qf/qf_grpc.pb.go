@@ -9,27 +9,23 @@ import (
 	status "google.golang.org/grpc/status"
 )
 
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
-
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion6
 
 // QuorumFunctionClient is the client API for QuorumFunction service.
 //
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type QuorumFunctionClient interface {
 	UseReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	IgnoreReq(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 }
 
 type quorumFunctionClient struct {
-	cc *grpc.ClientConn
+	cc grpc.ClientConnInterface
 }
 
-func NewQuorumFunctionClient(cc *grpc.ClientConn) QuorumFunctionClient {
+func NewQuorumFunctionClient(cc grpc.ClientConnInterface) QuorumFunctionClient {
 	return &quorumFunctionClient{cc}
 }
 
