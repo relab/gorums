@@ -8,7 +8,8 @@ import "gorums.proto";
 
 service AsyncQuorumCall {
   rpc AsyncQuorumCall(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
   }
 }
 

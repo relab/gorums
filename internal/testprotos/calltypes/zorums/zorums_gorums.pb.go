@@ -40,6 +40,21 @@ type Configuration struct {
 	errs  chan GRPCError
 }
 
+// NewConfig returns a configuration for the given node addresses and quorum spec.
+// The returned func() must be called to close the underlying connections.
+// This is experimental API.
+func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+	man, err := NewManager(addrs, opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
+	}
+	c, err := man.NewConfiguration(man.NodeIDs(), qspec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create configuration: %v", err)
+	}
+	return c, func() { man.Close() }, nil
+}
+
 // ID reports the identifier for the configuration.
 func (c *Configuration) ID() uint32 {
 	return c.id
@@ -991,6 +1006,640 @@ func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 		}
 	}
 	return append(set, x)
+}
+
+// QuorumCallFuture plain.
+func (c *Configuration) QuorumCallFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureResponse {
+	fut := &FutureResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(fut.c)
+		c.quorumCallFuture(ctx, in, fut, opts...)
+	}()
+	return fut
+}
+
+func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuture")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.QuorumCallFuture(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *Response
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.QuorumCallFutureQF(in, replyValues); quorum {
+				resp.Response, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+func (n *Node) QuorumCallFuture(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFuture", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// QuorumCallFuturePerNodeArg with per_node_arg option.
+func (c *Configuration) QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) *FutureResponse {
+	fut := &FutureResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(fut.c)
+		c.quorumCallFuturePerNodeArg(ctx, in, f, fut, opts...)
+	}()
+	return fut
+}
+
+func (c *Configuration) quorumCallFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *FutureResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuturePerNodeArg")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.id)
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		go n.QuorumCallFuturePerNodeArg(ctx, nodeArg, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *Response
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.QuorumCallFuturePerNodeArgQF(in, replyValues); quorum {
+				resp.Response, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+func (n *Node) QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFuturePerNodeArg", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// QuorumCallFutureCustomReturnType with custom_return_type option.
+func (c *Configuration) QuorumCallFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureMyResponse {
+	fut := &FutureMyResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(fut.c)
+		c.quorumCallFutureCustomReturnType(ctx, in, fut, opts...)
+	}()
+	return fut
+}
+
+func (c *Configuration) quorumCallFutureCustomReturnType(ctx context.Context, in *Request, resp *FutureMyResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureCustomReturnType")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.QuorumCallFutureCustomReturnType(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *MyResponse
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.QuorumCallFutureCustomReturnTypeQF(in, replyValues); quorum {
+				resp.MyResponse, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+func (n *Node) QuorumCallFutureCustomReturnType(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFutureCustomReturnType", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// QuorumCallFutureCombo with all supported options.
+func (c *Configuration) QuorumCallFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) *FutureMyResponse {
+	fut := &FutureMyResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(fut.c)
+		c.quorumCallFutureCombo(ctx, in, f, fut, opts...)
+	}()
+	return fut
+}
+
+func (c *Configuration) quorumCallFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *FutureMyResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureCombo")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		nodeArg := f(in, n.id)
+		if nodeArg == nil {
+			expected--
+			continue
+		}
+		go n.QuorumCallFutureCombo(ctx, nodeArg, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *MyResponse
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.QuorumCallFutureComboQF(in, replyValues); quorum {
+				resp.MyResponse, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+func (n *Node) QuorumCallFutureCombo(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFutureCombo", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// QuorumCallFuture2 plain; with same return type: Response.
+func (c *Configuration) QuorumCallFuture2(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureResponse {
+	fut := &FutureResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(fut.c)
+		c.quorumCallFuture2(ctx, in, fut, opts...)
+	}()
+	return fut
+}
+
+func (c *Configuration) quorumCallFuture2(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuture2")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.QuorumCallFuture2(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *Response
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.QuorumCallFuture2QF(in, replyValues); quorum {
+				resp.Response, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+func (n *Node) QuorumCallFuture2(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFuture2", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
+}
+
+// QuorumCallFutureEmpty for testing imported message type.
+func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureEmpty {
+	fut := &FutureEmpty{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(fut.c)
+		c.quorumCallFutureEmpty(ctx, in, fut, opts...)
+	}()
+	return fut
+}
+
+func (c *Configuration) quorumCallFutureEmpty(ctx context.Context, in *Request, resp *FutureEmpty, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureEmpty")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Empty, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalEmpty, expected)
+	for _, n := range c.nodes {
+		go n.QuorumCallFutureEmpty(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*empty.Empty, 0, c.n)
+		reply       *empty.Empty
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.QuorumCallFutureEmptyQF(in, replyValues); quorum {
+				resp.Empty, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Empty, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Empty, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+func (n *Node) QuorumCallFutureEmpty(ctx context.Context, in *Request, replyChan chan<- internalEmpty) {
+	reply := new(empty.Empty)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFutureEmpty", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalEmpty{n.id, reply, err}
+}
+
+// QuorumCallFutureEmpty2 for testing imported message type; with same return
+// type as QuorumCallFuture: Response.
+func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) *FutureResponse {
+	fut := &FutureResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	go func() {
+		defer close(fut.c)
+		c.quorumCallFutureEmpty2(ctx, in, fut, opts...)
+	}()
+	return fut
+}
+
+func (c *Configuration) quorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, resp *FutureResponse, opts ...grpc.CallOption) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureEmpty2")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
+			if resp.err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	expected := c.n
+	replyChan := make(chan internalResponse, expected)
+	for _, n := range c.nodes {
+		go n.QuorumCallFutureEmpty2(ctx, in, replyChan)
+	}
+
+	var (
+		replyValues = make([]*Response, 0, c.n)
+		reply       *Response
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			replyValues = append(replyValues, r.reply)
+			if reply, quorum = c.qspec.QuorumCallFutureEmpty2QF(in, replyValues); quorum {
+				resp.Response, resp.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+func (n *Node) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, replyChan chan<- internalResponse) {
+	reply := new(Response)
+	start := time.Now()
+	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFutureEmpty2", in, reply)
+	s, ok := status.FromError(err)
+	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
+		n.setLatency(time.Since(start))
+	} else {
+		n.setLastErr(err)
+	}
+	replyChan <- internalResponse{n.id, reply, err}
 }
 
 // Correctable plain.
@@ -2326,7 +2975,7 @@ func (n *Node) closeStream() (err error) {
 
 // OrderingQC is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) OrderingQC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingQC")
@@ -2438,7 +3087,7 @@ func (s *GorumsServer) RegisterOrderingQCHandler(handler OrderingQCHandler) {
 // The per node function f receives a copy of the Request request argument and
 // returns a Request manipulated to be passed to the given nodeID.
 // The function f must be thread-safe.
-func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingPerNodeArg")
@@ -2552,7 +3201,7 @@ func (s *GorumsServer) RegisterOrderingPerNodeArgHandler(handler OrderingPerNode
 
 // OrderingCustomReturnType is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
+func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCustomReturnType")
@@ -2664,7 +3313,7 @@ func (s *GorumsServer) RegisterOrderingCustomReturnTypeHandler(handler OrderingC
 // The per node function f receives a copy of the Request request argument and
 // returns a Request manipulated to be passed to the given nodeID.
 // The function f must be thread-safe.
-func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
+func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCombo")
@@ -2841,48 +3490,51 @@ func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCH
 // OrderingFuture asynchronously invokes a quorum call on configuration c
 // and returns a FutureResponse, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) OrderingFuture(ctx context.Context, in *Request) (*FutureResponse, error) {
+func (c *Configuration) OrderingFuture(ctx context.Context, in *Request) *FutureResponse {
 	fut := &FutureResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.orderingFutureSend(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.orderingFutureRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) orderingFutureSend(ctx context.Context, in *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
+	expected := c.n
+
+	var msg *ordering.Message
 	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+		// In case of a marshalling error, we should skip sending any messages
+		fut.err = fmt.Errorf("failed to marshal message: %w", err)
+		close(fut.c)
+		return fut
 	}
-	msg := &ordering.Message{
+	msg = &ordering.Message{
 		ID:       msgID,
 		MethodID: orderingFutureMethodID,
 		Data:     data,
 	}
+
 	// push the message to the nodes
-	expected := c.n
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+	go c.orderingFutureRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureResponse) {
+func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -2895,12 +3547,11 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -2909,15 +3560,15 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureQF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
+				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -2953,31 +3604,21 @@ func (s *GorumsServer) RegisterOrderingFutureHandler(handler OrderingFutureHandl
 // The provide per node function f takes the provided Request argument
 // and returns an Response object to be passed to the given nodeID.
 // The per node function f should be thread-safe.
-func (c *Configuration) OrderingFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (*FutureResponse, error) {
+func (c *Configuration) OrderingFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *FutureResponse {
 	fut := &FutureResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.orderingFuturePerNodeArgSend(ctx, in, f)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.orderingFuturePerNodeArgRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) orderingFuturePerNodeArgSend(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
-	// push the message to the nodes
 	expected := c.n
+
+	// push the message to the nodes
 	for _, n := range c.nodes {
 		nodeArg := f(in, n.ID())
 		if nodeArg == nil {
@@ -2986,7 +3627,9 @@ func (c *Configuration) orderingFuturePerNodeArgSend(ctx context.Context, in *Re
 		}
 		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+			fut.err = fmt.Errorf("failed to marshal message: %w", err)
+			close(fut.c)
+			return fut
 		}
 		msg := &ordering.Message{
 			ID:       msgID,
@@ -2996,10 +3639,18 @@ func (c *Configuration) orderingFuturePerNodeArgSend(ctx context.Context, in *Re
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+	go c.orderingFuturePerNodeArgRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureResponse) {
+func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -3012,12 +3663,11 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -3026,15 +3676,15 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFuturePerNodeArgQF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
+				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -3066,48 +3716,51 @@ func (s *GorumsServer) RegisterOrderingFuturePerNodeArgHandler(handler OrderingF
 // OrderingFutureCustomReturnType asynchronously invokes a quorum call on configuration c
 // and returns a FutureMyResponse, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) OrderingFutureCustomReturnType(ctx context.Context, in *Request) (*FutureMyResponse, error) {
+func (c *Configuration) OrderingFutureCustomReturnType(ctx context.Context, in *Request) *FutureMyResponse {
 	fut := &FutureMyResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.orderingFutureCustomReturnTypeSend(ctx, in)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.orderingFutureCustomReturnTypeRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) orderingFutureCustomReturnTypeSend(ctx context.Context, in *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
+	expected := c.n
+
+	var msg *ordering.Message
 	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+		// In case of a marshalling error, we should skip sending any messages
+		fut.err = fmt.Errorf("failed to marshal message: %w", err)
+		close(fut.c)
+		return fut
 	}
-	msg := &ordering.Message{
+	msg = &ordering.Message{
 		ID:       msgID,
 		MethodID: orderingFutureCustomReturnTypeMethodID,
 		Data:     data,
 	}
+
 	// push the message to the nodes
-	expected := c.n
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+	go c.orderingFutureCustomReturnTypeRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureMyResponse) {
+func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureMyResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -3120,12 +3773,11 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -3134,15 +3786,15 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureCustomReturnTypeQF(in, replyValues); quorum {
-				resp.MyResponse, resp.err = reply, nil
+				fut.MyResponse, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -3178,31 +3830,21 @@ func (s *GorumsServer) RegisterOrderingFutureCustomReturnTypeHandler(handler Ord
 // The provide per node function f takes the provided Request argument
 // and returns an Response object to be passed to the given nodeID.
 // The per node function f should be thread-safe.
-func (c *Configuration) OrderingFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (*FutureMyResponse, error) {
+func (c *Configuration) OrderingFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *FutureMyResponse {
 	fut := &FutureMyResponse{
 		NodeIDs: make([]uint32, 0, c.n),
 		c:       make(chan struct{}, 1),
 	}
-	id, expected, replyChan, err := c.orderingFutureComboSend(ctx, in, f)
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		defer close(fut.c)
-		c.orderingFutureComboRecv(ctx, in, id, expected, replyChan, fut)
-	}()
-	return fut, nil
-}
-
-func (c *Configuration) orderingFutureComboSend(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (uint64, int, chan *orderingResult, error) { // get the ID which will be used to return the correct responses for a request
+	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
 	replyChan := make(chan *orderingResult, c.n)
 	c.mgr.putChan(msgID, replyChan)
 
-	// push the message to the nodes
 	expected := c.n
+
+	// push the message to the nodes
 	for _, n := range c.nodes {
 		nodeArg := f(in, n.ID())
 		if nodeArg == nil {
@@ -3211,7 +3853,9 @@ func (c *Configuration) orderingFutureComboSend(ctx context.Context, in *Request
 		}
 		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("failed to marshal message: %w", err)
+			fut.err = fmt.Errorf("failed to marshal message: %w", err)
+			close(fut.c)
+			return fut
 		}
 		msg := &ordering.Message{
 			ID:       msgID,
@@ -3221,10 +3865,18 @@ func (c *Configuration) orderingFutureComboSend(ctx context.Context, in *Request
 		n.sendQ <- msg
 	}
 
-	return msgID, expected, replyChan, nil
+	go c.orderingFutureComboRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
 }
 
-func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, resp *FutureMyResponse) {
+func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureMyResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
 	defer c.mgr.deleteChan(msgID)
 
 	var (
@@ -3237,12 +3889,11 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 	for {
 		select {
 		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
 			data := new(Response)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
 			if err != nil {
@@ -3251,15 +3902,15 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 			}
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureComboQF(in, replyValues); quorum {
-				resp.MyResponse, resp.err = reply, nil
+				fut.MyResponse, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
 			return
 		}
 		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
 			return
 		}
 	}
@@ -3286,640 +3937,6 @@ func (s *GorumsServer) RegisterOrderingFutureComboHandler(handler OrderingFuture
 		}
 		return &ordering.Message{Data: data, MethodID: orderingFutureComboMethodID}
 	})
-}
-
-// QuorumCallFuture plain.
-func (c *Configuration) QuorumCallFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureResponse {
-	fut := &FutureResponse{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	go func() {
-		defer close(fut.c)
-		c.quorumCallFuture(ctx, in, fut, opts...)
-	}()
-	return fut
-}
-
-func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuture")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallFuture(ctx, in, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureQF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
-			return
-		}
-	}
-}
-
-func (n *Node) QuorumCallFuture(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFuture", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCallFuturePerNodeArg with per_node_arg option.
-func (c *Configuration) QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) *FutureResponse {
-	fut := &FutureResponse{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	go func() {
-		defer close(fut.c)
-		c.quorumCallFuturePerNodeArg(ctx, in, f, fut, opts...)
-	}()
-	return fut
-}
-
-func (c *Configuration) quorumCallFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *FutureResponse, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuturePerNodeArg")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		nodeArg := f(in, n.id)
-		if nodeArg == nil {
-			expected--
-			continue
-		}
-		go n.QuorumCallFuturePerNodeArg(ctx, nodeArg, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFuturePerNodeArgQF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
-			return
-		}
-	}
-}
-
-func (n *Node) QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFuturePerNodeArg", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCallFutureCustomReturnType with custom_return_type option.
-func (c *Configuration) QuorumCallFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureMyResponse {
-	fut := &FutureMyResponse{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	go func() {
-		defer close(fut.c)
-		c.quorumCallFutureCustomReturnType(ctx, in, fut, opts...)
-	}()
-	return fut
-}
-
-func (c *Configuration) quorumCallFutureCustomReturnType(ctx context.Context, in *Request, resp *FutureMyResponse, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureCustomReturnType")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallFutureCustomReturnType(ctx, in, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *MyResponse
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureCustomReturnTypeQF(in, replyValues); quorum {
-				resp.MyResponse, resp.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
-			return
-		}
-	}
-}
-
-func (n *Node) QuorumCallFutureCustomReturnType(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFutureCustomReturnType", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCallFutureCombo with all supported options.
-func (c *Configuration) QuorumCallFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) *FutureMyResponse {
-	fut := &FutureMyResponse{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	go func() {
-		defer close(fut.c)
-		c.quorumCallFutureCombo(ctx, in, f, fut, opts...)
-	}()
-	return fut
-}
-
-func (c *Configuration) quorumCallFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *FutureMyResponse, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureCombo")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.MyResponse, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		nodeArg := f(in, n.id)
-		if nodeArg == nil {
-			expected--
-			continue
-		}
-		go n.QuorumCallFutureCombo(ctx, nodeArg, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *MyResponse
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureComboQF(in, replyValues); quorum {
-				resp.MyResponse, resp.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
-			return
-		}
-	}
-}
-
-func (n *Node) QuorumCallFutureCombo(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFutureCombo", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCallFuture2 plain; with same return type: Response.
-func (c *Configuration) QuorumCallFuture2(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureResponse {
-	fut := &FutureResponse{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	go func() {
-		defer close(fut.c)
-		c.quorumCallFuture2(ctx, in, fut, opts...)
-	}()
-	return fut
-}
-
-func (c *Configuration) quorumCallFuture2(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuture2")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallFuture2(ctx, in, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFuture2QF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
-			return
-		}
-	}
-}
-
-func (n *Node) QuorumCallFuture2(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFuture2", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCallFutureEmpty for testing imported message type.
-func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request, opts ...grpc.CallOption) *FutureEmpty {
-	fut := &FutureEmpty{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	go func() {
-		defer close(fut.c)
-		c.quorumCallFutureEmpty(ctx, in, fut, opts...)
-	}()
-	return fut
-}
-
-func (c *Configuration) quorumCallFutureEmpty(ctx context.Context, in *Request, resp *FutureEmpty, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureEmpty")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Empty, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalEmpty, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallFutureEmpty(ctx, in, replyChan)
-	}
-
-	var (
-		replyValues = make([]*empty.Empty, 0, c.n)
-		reply       *empty.Empty
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureEmptyQF(in, replyValues); quorum {
-				resp.Empty, resp.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			resp.Empty, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Empty, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
-			return
-		}
-	}
-}
-
-func (n *Node) QuorumCallFutureEmpty(ctx context.Context, in *Request, replyChan chan<- internalEmpty) {
-	reply := new(empty.Empty)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFutureEmpty", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalEmpty{n.id, reply, err}
-}
-
-// QuorumCallFutureEmpty2 for testing imported message type; with same return
-// type as QuorumCallFuture: Response.
-func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) *FutureResponse {
-	fut := &FutureResponse{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	go func() {
-		defer close(fut.c)
-		c.quorumCallFutureEmpty2(ctx, in, fut, opts...)
-	}()
-	return fut
-}
-
-func (c *Configuration) quorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, resp *FutureResponse, opts ...grpc.CallOption) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureEmpty2")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{ids: resp.NodeIDs, reply: resp.Response, err: resp.err}, false)
-			if resp.err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallFutureEmpty2(ctx, in, replyChan)
-	}
-
-	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureEmpty2QF(in, replyValues); quorum {
-				resp.Response, resp.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
-			return
-		}
-	}
-}
-
-func (n *Node) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/gorums.testprotos.calltypes.zorums.ZorumsService/QuorumCallFutureEmpty2", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
 }
 
 // QuorumSpec is the interface of quorum functions for ZorumsService.

@@ -95,36 +95,43 @@ service ZorumsService {
 
   // QuorumCallFuture plain.
   rpc QuorumCallFuture(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
   }
   // QuorumCallFuturePerNodeArg with per_node_arg option.
   rpc QuorumCallFuturePerNodeArg(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
     option (gorums.per_node_arg) = true;
   }
   // QuorumCallFutureCustomReturnType with custom_return_type option.
   rpc QuorumCallFutureCustomReturnType(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   // QuorumCallFutureCombo with all supported options.
   rpc QuorumCallFutureCombo(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   // QuorumCallFuture2 plain; with same return type: Response.
   rpc QuorumCallFuture2(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
   }
   // QuorumCallFutureEmpty for testing imported message type.
   rpc QuorumCallFutureEmpty(Request) returns (google.protobuf.Empty) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
   }
   // QuorumCallFutureEmpty2 for testing imported message type; with same return
   // type as QuorumCallFuture: Response.
   rpc QuorumCallFutureEmpty2(google.protobuf.Empty) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
   }
 
   // ---------------------------------------------------------------
@@ -228,21 +235,25 @@ service ZorumsService {
   // ---------------------------------------------------------------
 
   rpc OrderingFuture(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
     option (gorums.ordered) = true;
   }
   rpc OrderingFuturePerNodeArg(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
   }
   rpc OrderingFutureCustomReturnType(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
     option (gorums.ordered) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
   rpc OrderingFutureCombo(Request) returns (Response) {
-    option (gorums.qc_future) = true;
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
     option (gorums.ordered) = true;
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
