@@ -258,6 +258,14 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Multicast)
 		},
 	},
+	gorums.E_Unicast.Name[index:]: {
+		extInfo:  gorums.E_Unicast,
+		docName:  "unicast",
+		template: unicastCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Unicast)
+		},
+	},
 	gorums.E_Ordered.Name[index:]: {
 		extInfo: gorums.E_Ordered,
 		chkFn: func(m *protogen.Method) bool {
@@ -317,6 +325,13 @@ var callTypesWithInternal = []*protoimpl.ExtensionInfo{
 var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 	gorums.E_Async,
 	gorums.E_Correctable,
+}
+
+// nodeStreamCallTypes lists all call types that make use of the NodeStream
+var nodeStreamCallTypes = []*protoimpl.ExtensionInfo{
+	gorums.E_Ordered,
+	gorums.E_Multicast,
+	gorums.E_Unicast,
 }
 
 // hasGorumsCallType returns true if the given method has specified

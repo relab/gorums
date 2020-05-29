@@ -95,6 +95,8 @@ type ZorumsServiceClient interface {
 	OrderingFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingFutureCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	Unicast(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	Unicast2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type zorumsServiceClient struct {
@@ -603,6 +605,24 @@ func (c *zorumsServiceClient) OrderingFutureCombo(ctx context.Context, in *Reque
 	return out, nil
 }
 
+func (c *zorumsServiceClient) Unicast(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Unicast", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *zorumsServiceClient) Unicast2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Unicast2", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ZorumsServiceServer is the server API for ZorumsService service.
 type ZorumsServiceServer interface {
 	// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
@@ -682,6 +702,8 @@ type ZorumsServiceServer interface {
 	OrderingFuturePerNodeArg(context.Context, *Request) (*Response, error)
 	OrderingFutureCustomReturnType(context.Context, *Request) (*Response, error)
 	OrderingFutureCombo(context.Context, *Request) (*Response, error)
+	Unicast(context.Context, *Request) (*Response, error)
+	Unicast2(context.Context, *Request) (*empty.Empty, error)
 }
 
 // UnimplementedZorumsServiceServer can be embedded to have forward compatible implementations.
@@ -807,6 +829,12 @@ func (*UnimplementedZorumsServiceServer) OrderingFutureCustomReturnType(context.
 }
 func (*UnimplementedZorumsServiceServer) OrderingFutureCombo(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingFutureCombo not implemented")
+}
+func (*UnimplementedZorumsServiceServer) Unicast(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Unicast not implemented")
+}
+func (*UnimplementedZorumsServiceServer) Unicast2(context.Context, *Request) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Unicast2 not implemented")
 }
 
 func RegisterZorumsServiceServer(s *grpc.Server, srv ZorumsServiceServer) {
@@ -1551,6 +1579,42 @@ func _ZorumsService_OrderingFutureCombo_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ZorumsService_Unicast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).Unicast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/Unicast",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).Unicast(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_Unicast2_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).Unicast2(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/Unicast2",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).Unicast2(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "dev.ZorumsService",
 	HandlerType: (*ZorumsServiceServer)(nil),
@@ -1690,6 +1754,14 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "OrderingFutureCombo",
 			Handler:    _ZorumsService_OrderingFutureCombo_Handler,
+		},
+		{
+			MethodName: "Unicast",
+			Handler:    _ZorumsService_Unicast_Handler,
+		},
+		{
+			MethodName: "Unicast2",
+			Handler:    _ZorumsService_Unicast2_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
