@@ -19,6 +19,8 @@ var importMap = map[string]protogen.GoImportPath{
 	"time":     protogen.GoImportPath("time"),
 	"fmt":      protogen.GoImportPath("fmt"),
 	"log":      protogen.GoImportPath("log"),
+	"math":     protogen.GoImportPath("math"),
+	"rand":     protogen.GoImportPath("math/rand"),
 	"sync":     protogen.GoImportPath("sync"),
 	"atomic":   protogen.GoImportPath("sync/atomic"),
 	"context":  protogen.GoImportPath("context"),
@@ -26,12 +28,10 @@ var importMap = map[string]protogen.GoImportPath{
 	"grpc":     protogen.GoImportPath("google.golang.org/grpc"),
 	"codes":    protogen.GoImportPath("google.golang.org/grpc/codes"),
 	"status":   protogen.GoImportPath("google.golang.org/grpc/status"),
-	"gorums":   protogen.GoImportPath("github.com/relab/gorums"),
-	"rand":     protogen.GoImportPath("math/rand"),
 	"backoff":  protogen.GoImportPath("google.golang.org/grpc/backoff"),
-	"math":     protogen.GoImportPath("math"),
-	"ordering": protogen.GoImportPath("github.com/relab/gorums/ordering"),
 	"proto":    protogen.GoImportPath("google.golang.org/protobuf/proto"),
+	"gorums":   protogen.GoImportPath("github.com/relab/gorums"),
+	"ordering": protogen.GoImportPath("github.com/relab/gorums/ordering"),
 }
 
 func addImport(path, ident string, g *protogen.GeneratedFile) string {
