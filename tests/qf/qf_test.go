@@ -3,11 +3,10 @@ package qf
 import (
 	"context"
 	"fmt"
-	"net"
-	"sync"
 	"testing"
 	"time"
 
+	"github.com/relab/gorums"
 	"google.golang.org/grpc"
 )
 
@@ -101,27 +100,6 @@ func BenchmarkQF(b *testing.B) {
 	}
 }
 
-// TODO(meling) consider making these things generally available, at least for testing, perhaps putting some of these things in an internal package.
-
-type portSupplier struct {
-	p int
-	sync.Mutex
-}
-
-func (p *portSupplier) get() int {
-	p.Lock()
-	_p := p.p
-	p.p++
-	p.Unlock()
-	return _p
-}
-
-var supplier = portSupplier{p: 22332}
-
-func getListener() (net.Listener, error) {
-	return net.Listen("tcp", fmt.Sprintf(":%d", supplier.get()))
-}
-
 type testSrv struct {
 	dummy int64
 }
@@ -134,40 +112,18 @@ func (s testSrv) IgnoreReq(_ context.Context, req *Request) (*Response, error) {
 	return &Response{Result: req.GetValue()}, nil
 }
 
-func setup(b *testing.B, numServers int) ([]*grpc.Server, *Manager, *Configuration) {
-	quorum := numServers / 2
-	servers := make([]*grpc.Server, numServers)
-	addrs := make([]string, numServers)
-	for i := 0; i < numServers; i++ {
-		srv := grpc.NewServer()
-		RegisterQuorumFunctionServer(srv, &testSrv{})
-		lis, err := getListener()
-		if err != nil {
-			b.Fatalf("Failed to listen on port: %v", err)
-		}
-		addrs[i] = lis.Addr().String()
-		servers[i] = srv
-		go srv.Serve(lis)
-	}
-
-	// client setup
-	man, err := NewManager(addrs,
-		WithGrpcDialOptions(grpc.WithInsecure()),
-		WithDialTimeout(10*time.Second),
-	)
-	if err != nil {
-		b.Fatalf("Failed to create manager: %v", err)
-	}
-	c, err := man.NewConfiguration(man.NodeIDs(), &testQSpec{quorum: quorum})
-	if err != nil {
-		b.Fatalf("Failed to create configuration: %v", err)
-	}
-	return servers, man, c
-}
-
 func BenchmarkFullStackQF(b *testing.B) {
 	for n := 3; n < 20; n += 2 {
-		servers, man, c := setup(b, n)
+		srvAdrs, stop := gorums.TestSetup(b, n, func(srv *grpc.Server) {
+			RegisterQuorumFunctionServer(srv, &testSrv{})
+		})
+		c, closeFn, err := NewConfig(srvAdrs, &testQSpec{quorum: n / 2},
+			WithGrpcDialOptions(grpc.WithInsecure()),
+			WithDialTimeout(10*time.Second),
+		)
+		if err != nil {
+			b.Fatal(err)
+		}
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -190,10 +146,9 @@ func BenchmarkFullStackQF(b *testing.B) {
 				_ = resp.GetResult()
 			}
 		})
-
-		man.Close()
-		for _, srv := range servers {
-			srv.Stop()
-		}
+		// close manager and stop gRPC servers;
+		// must be done for each iteration
+		closeFn()
+		stop()
 	}
 }

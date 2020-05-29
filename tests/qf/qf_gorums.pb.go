@@ -38,6 +38,20 @@ type Configuration struct {
 	errs  chan GRPCError
 }
 
+// NewConfig returns a configuration for the given set of node addresses.
+// This is experimental API.
+func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+	man, err := NewManager(addrs, opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
+	}
+	c, err := man.NewConfiguration(man.NodeIDs(), qspec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create configuration: %v", err)
+	}
+	return c, func() { man.Close() }, nil
+}
+
 // ID reports the identifier for the configuration.
 func (c *Configuration) ID() uint32 {
 	return c.id
