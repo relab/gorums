@@ -59,8 +59,7 @@ func runQCBenchmark(opts Options, f qcFunc) (*Stats, error) {
 				if err != nil {
 					return err
 				}
-				end := time.Now()
-				s.AddLatency(end.Sub(start))
+				s.AddLatency(time.Since(start))
 			}
 			return nil
 		})
@@ -121,9 +120,8 @@ func runAsyncQCBenchmark(opts Options, f asyncQCFunc) (*Stats, error) {
 				if err != nil {
 					return err
 				}
-				end := time.Now()
+				s.AddLatency(time.Since(start))
 				atomic.AddUint64(&async, ^uint64(0))
-				s.AddLatency(end.Sub(start))
 				benchmarkFunc()
 				return nil
 			})
