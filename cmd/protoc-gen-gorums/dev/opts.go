@@ -16,6 +16,8 @@ type managerOptions struct {
 	trace           bool
 	backoff         backoff.Config
 	sendBuffer      uint
+	IDMapping       map[string]uint32
+	addrsList       []string
 }
 
 func newManagerOptions() managerOptions {
@@ -82,5 +84,19 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 func WithSendBufferSize(size uint) ManagerOption {
 	return func(o *managerOptions) {
 		o.sendBuffer = size
+	}
+}
+
+// WithSpesifiedNodeID allows users to manualy create an ID shceam for the nodes. idMap maps an address to an id.
+func WithSpesifiedNodeID(idMap map[string]uint32) ManagerOption {
+	return func(o *managerOptions) {
+		o.IDMapping = idMap
+	}
+}
+
+// WithoutSpesifedNodeID automaticaly creates a node shceam for the nodes. There still has to be given a list of addresses that is to be used.
+func WithoutSpesifedNodeID(addrsList []string) ManagerOption {
+	return func(o *managerOptions) {
+		o.addrsList = addrsList
 	}
 }

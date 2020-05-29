@@ -11,11 +11,11 @@ func TestEqualGlobalConfigurationIDsDifferentOrder(t *testing.T) {
 	addrsOne := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
 	addrsTwo := []string{"localhost:8081", "localhost:8082", "localhost:8080"}
 
-	mgrOne, err := qc.NewManager(addrsOne, qc.WithNoConnect())
+	mgrOne, err := qc.NewManager(qc.WithNoConnect(), qc.WithoutSpesifedNodeID(addrsOne))
 	if err != nil {
 		t.Fatal(err)
 	}
-	mgrTwo, err := qc.NewManager(addrsTwo, qc.WithNoConnect())
+	mgrTwo, err := qc.NewManager(qc.WithNoConnect(), qc.WithoutSpesifedNodeID(addrsTwo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestEqualGlobalConfigurationIDsDifferentOrder(t *testing.T) {
 
 func TestEqualGlobalConfigurationIDsDuplicateID(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
-	mgr, err := qc.NewManager(addrs, qc.WithNoConnect())
+	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithoutSpesifedNodeID(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestEqualGlobalConfigurationIDsDuplicateID(t *testing.T) {
 
 func TestCreateConfiguration(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
-	mgr, err := qc.NewManager(addrs, qc.WithNoConnect())
+	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithoutSpesifedNodeID(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

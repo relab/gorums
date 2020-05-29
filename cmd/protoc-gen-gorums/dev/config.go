@@ -19,7 +19,8 @@ type Configuration struct {
 // The returned func() must be called to close the underlying connections.
 // This is experimental API.
 func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
-	man, err := NewManager(addrs, opts...)
+	opts = append(opts, WithoutSpesifedNodeID(addrs))
+	man, err := NewManager(opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
 	}

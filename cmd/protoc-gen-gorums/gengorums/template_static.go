@@ -22,7 +22,6 @@ var pkgIdentMap = map[string]string{
 	"google.golang.org/protobuf/proto":                "MarshalOptions",
 	"google.golang.org/protobuf/reflect/protoreflect": "Message",
 	"hash/fnv":    "New32a",
-	"io":          "WriteString",
 	"log":         "Logger",
 	"math":        "Min",
 	"math/rand":   "Float64",
@@ -53,6 +52,7 @@ var reservedIdents = []string{
 	"QuorumCallError",
 	"QuorumSpec",
 	"ServerOption",
+	"WithoutSpesifedNodeID",
 }
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
@@ -70,7 +70,8 @@ type Configuration struct {
 // The returned func() must be called to close the underlying connections.
 // This is experimental API.
 func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
-	man, err := NewManager(addrs, opts...)
+	opts = append(opts, WithoutSpesifedNodeID(addrs))
+	man, err := NewManager(opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
 	}
@@ -308,10 +309,7 @@ type Manager struct {
 
 // NewManager attempts to connect to the given set of node addresses and if
 // successful returns a new Manager containing connections to those nodes.
-func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
-	if len(nodeAddrs) == 0 {
-		return nil, fmt.Errorf("could not create manager: no nodes provided")
-	}
+func NewManager(opts ...ManagerOption) (*Manager, error) {
 
 	m := &Manager{
 		lookup:       make(map[uint32]*Node),
@@ -329,19 +327,45 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		grpc.ForceCodec(newGorumsCodec()),
 	))
 
+	if len(m.opts.addrsList) == 0 && len(m.opts.IDMapping) == 0 {
+		return nil, fmt.Errorf("could not create manager: no nodes provided")
+	}
+
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},
 		))
 	}
 
-	for _, naddr := range nodeAddrs {
-		node, err2 := m.createNode(naddr)
-		if err2 != nil {
-			return nil, ManagerCreationError(err2)
+	var nodeAddrs []string
+	if m.opts.IDMapping != nil {
+		for naddr, id := range m.opts.IDMapping {
+
+			nodeAddrs = append(nodeAddrs, naddr)
+			node, err2 := m.createNode(naddr, id)
+
+			if err2 != nil {
+				return nil, ManagerCreationError(err2)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
 		}
-		m.lookup[node.id] = node
-		m.nodes = append(m.nodes, node)
+
+	} else if m.opts.addrsList != nil {
+
+		nodeAddrs = m.opts.addrsList
+
+		for _, naddr := range m.opts.addrsList {
+
+			node, err2 := m.createNode(naddr, 0)
+
+			if err2 != nil {
+				return nil, ManagerCreationError(err2)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
+		}
+
 	}
 
 	if m.opts.trace {
@@ -365,7 +389,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) createNode(addr string) (*Node, error) {
+func (m *Manager) createNode(addr string, id uint32) (*Node, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -374,9 +398,11 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		return nil, fmt.Errorf("create node %s error: %v", addr, err)
 	}
 
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(tcpAddr.String()))
-	id := h.Sum32()
+	if id == 0 {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(tcpAddr.String()))
+		id = h.Sum32()
+	}
 
 	if _, found := m.lookup[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)
@@ -541,7 +567,7 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	h := fnv.New32a()
 	for _, id := range uniqueIDs {
-		binary.Write(h, binary.LittleEndian, id)
+		_ = binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
@@ -803,6 +829,8 @@ type managerOptions struct {
 	trace           bool
 	backoff         backoff.Config
 	sendBuffer      uint
+	IDMapping       map[string]uint32
+	addrsList       []string
 }
 
 func newManagerOptions() managerOptions {
@@ -869,6 +897,20 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 func WithSendBufferSize(size uint) ManagerOption {
 	return func(o *managerOptions) {
 		o.sendBuffer = size
+	}
+}
+
+// WithSpesifiedNodeID allows users to manualy create an ID shceam for the nodes. idMap maps an address to an id.
+func WithSpesifiedNodeID(idMap map[string]uint32) ManagerOption {
+	return func(o *managerOptions) {
+		o.IDMapping = idMap
+	}
+}
+
+// WithoutSpesifedNodeID automaticaly creates a node shceam for the nodes. There still has to be given a list of addresses that is to be used.
+func WithoutSpesifedNodeID(addrsList []string) ManagerOption {
+	return func(o *managerOptions) {
+		o.addrsList = addrsList
 	}
 }
 
@@ -1180,16 +1222,11 @@ type firstLine struct {
 	cid      uint32
 }
 
-func (f *firstLine) String() string {
-	var line bytes.Buffer
-	io.WriteString(&line, "QC: to config")
-	fmt.Fprintf(&line, "%v deadline:", f.cid)
+func (f firstLine) String() string {
 	if f.deadline != 0 {
-		fmt.Fprint(&line, f.deadline)
-	} else {
-		io.WriteString(&line, "none")
+		return fmt.Sprintf("QC: to config%d deadline: %d", f.cid, f.deadline)
 	}
-	return line.String()
+	return fmt.Sprintf("QC: to config%d deadline: none", f.cid)
 }
 
 type payload struct {
@@ -1212,14 +1249,10 @@ type qcresult struct {
 }
 
 func (q qcresult) String() string {
-	var out bytes.Buffer
-	io.WriteString(&out, "recv QC reply: ")
-	fmt.Fprintf(&out, "ids: %v, ", q.ids)
-	fmt.Fprintf(&out, "reply: %v ", q.reply)
-	if q.err != nil {
-		fmt.Fprintf(&out, ", error: %v", q.err)
+	if q.err == nil {
+		return fmt.Sprintf("recv QC reply: ids: %v, reply: %v", q.ids, q.reply)
 	}
-	return out.String()
+	return fmt.Sprintf("recv QC reply: ids: %v, reply: %v, error: %v", q.ids, q.reply, q.err)
 }
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
