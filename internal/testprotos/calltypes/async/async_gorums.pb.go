@@ -38,6 +38,21 @@ type Configuration struct {
 	errs  chan GRPCError
 }
 
+// NewConfig returns a configuration for the given node addresses and quorum spec.
+// The returned func() must be called to close the underlying connections.
+// This is experimental API.
+func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+	man, err := NewManager(addrs, opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
+	}
+	c, err := man.NewConfiguration(man.NodeIDs(), qspec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create configuration: %v", err)
+	}
+	return c, func() { man.Close() }, nil
+}
+
 // ID reports the identifier for the configuration.
 func (c *Configuration) ID() uint32 {
 	return c.id
@@ -991,21 +1006,6 @@ func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	return append(set, x)
 }
 
-type nodeServices struct {
-	AsyncQuorumCallClient
-}
-
-func (n *Node) connectStream(ctx context.Context) (err error) {
-
-	n.AsyncQuorumCallClient = NewAsyncQuorumCallClient(n.conn)
-
-	return nil
-}
-
-func (n *Node) closeStream() (err error) {
-	return err
-}
-
 // AsyncQuorumCall asynchronously invokes a quorum call on configuration c
 // and returns a FutureResponse, which can be used to inspect the quorum call
 // reply and error when available.
@@ -1095,6 +1095,21 @@ func (n *Node) AsyncQuorumCall(ctx context.Context, in *Request, replyChan chan<
 		n.setLastErr(err)
 	}
 	replyChan <- internalResponse{n.id, reply, err}
+}
+
+type nodeServices struct {
+	AsyncQuorumCallClient
+}
+
+func (n *Node) connectStream(ctx context.Context) (err error) {
+
+	n.AsyncQuorumCallClient = NewAsyncQuorumCallClient(n.conn)
+
+	return nil
+}
+
+func (n *Node) closeStream() (err error) {
+	return err
 }
 
 // QuorumSpec is the interface of quorum functions for AsyncQuorumCall.
