@@ -14,7 +14,7 @@ type Result struct {
 	Name        string
 	TotalOps    uint64        // total number of operations
 	TotalTime   time.Duration // The total time taken
-	Throughput  float64       // throughput measured in Kops/sec
+	Throughput  float64       // throughput measured in ops/sec
 	LatencyAvg  float64       // average latency measured in ms
 	LatencyVar  float64       // latency variance
 	AllocsPerOp uint64        // average number of memory allocations per operation
@@ -24,7 +24,7 @@ type Result struct {
 func (r Result) String() string {
 	b := new(strings.Builder)
 	fmt.Fprintf(b, "%s\t", r.Name)
-	fmt.Fprintf(b, "%.2f Kops/sec\t", r.Throughput)
+	fmt.Fprintf(b, "%.2f ops/sec\t", r.Throughput)
 	fmt.Fprintf(b, "%.2f ms\t", r.LatencyAvg)
 	fmt.Fprintf(b, "%.2f ms\t", math.Sqrt(r.LatencyVar))
 	fmt.Fprintf(b, "%d B/op\t", r.MemPerOp)
