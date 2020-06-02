@@ -5,12 +5,15 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"os/signal"
 	"regexp"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -30,6 +33,7 @@ func main() {
 		payload    = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
 		concurrent = flag.Int("concurrent", 1, "Number of goroutines that can make calls concurrently.")
 		maxAsync   = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
+		server     = flag.String("server", "", "Run a benchmark server on given address.")
 	)
 	flag.Parse()
 
@@ -73,6 +77,25 @@ func main() {
 			}
 		}
 	}()
+
+	if *server != "" {
+		signals := make(chan os.Signal)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+		lis, err := net.Listen("tcp", *server)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to listen on '%s': %v\n", *server, err)
+			os.Exit(1)
+		}
+		srv := benchmark.NewServer()
+		go srv.Serve(lis)
+
+		fmt.Printf("Running benchmark server on '%s'\n", *server)
+
+		<-signals
+		srv.Stop()
+		return
+	}
 
 	if len(*remotes) < 1 {
 		ctx, cancel := context.WithCancel(context.Background())
