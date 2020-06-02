@@ -1,16 +1,8 @@
 ---
-- hosts: client
+- hosts: client:servers
   tasks:
     - name: Upload benchmark client binary
       copy: 
-        src: ../cmd/benchclient/benchclient
-        dest: $HOME/benchclient
-        mode: 0755
-
-- hosts: servers
-  tasks:
-    - name: Upload benchmark server binary
-      copy:
-        src: ../cmd/benchserver/benchserver
-        dest: $HOME/benchserver
+        src: ../cmd/benchmark/benchmark
+        dest: $HOME/benchmark
         mode: 0755
