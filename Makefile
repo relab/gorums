@@ -16,7 +16,7 @@ internal_ordering		:= internal/ordering
 internal_correctable	:= internal/correctable
 public_so				:= ordering/
 
-.PHONY: dev download tools bootstrapgorums installgorums
+.PHONY: dev download tools bootstrapgorums installgorums benchmark
 
 dev: installgorums $(public_so)/ordering.pb.go $(public_so)/ordering_grpc.pb.go
 	@echo "Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder"
@@ -106,7 +106,6 @@ stability: installgorums
 	|| (echo "unexpected instability, observed changes between protoc runs: $$?")
 	@rm -rf $(tmp_dir)
 
-benchmarks:
+benchmark:
 	@$(MAKE) -C benchmark
-	@go build -o cmd/benchclient/benchclient ./cmd/benchclient
-	@go build -o cmd/benchserver/benchserver ./cmd/benchserver
+	@go build -o cmd/benchmark/benchmark ./cmd/benchmark
