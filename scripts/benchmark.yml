@@ -4,7 +4,7 @@
     srv_port: ":22332"
   tasks:
     - name: Start servers
-      shell: $HOME/benchserver "{{ srv_port }}" &> /dev/null
+      shell: $HOME/benchmark --server "{{ srv_port }}" &> /dev/null
 
 - hosts: client
   vars:
@@ -14,7 +14,7 @@
     - name: Get IP Addresses
       set_fact: nodelist={%for host in groups['servers']%}"{{hostvars[host].ansible_eth0.ipv4.address + srv_port }}"{% if not loop.last %},{% endif %}{% endfor %}
     - name: Run benchmark
-      command: $HOME/benchclient --remotes "{{ nodelist }}" {{ bench_args }}
+      command: $HOME/benchmark --remotes "{{ nodelist }}" {{ bench_args }}
       register: output
     - name: Print results
       debug: msg={{ output.stdout_lines | join('\n') }}
