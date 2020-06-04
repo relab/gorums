@@ -62,10 +62,11 @@ var correctableCallReply = `
 	var (
 		{{- if correctableStream .Method}}
 		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues	= make([]*{{$out}}, 0, c.n*2)
+		//replyValues	= make([]*{{$out}}, 0, c.n*2)
 		{{else}}
-		replyValues	= make([]*{{$out}}, 0, c.n)
+		//replyValues	= make([]*{{$out}}, 0, c.n)
 		{{end -}}
+		replys = make(map[uint32]*{{$out}})
 		clevel		= LevelNotSet
 		reply		*{{$customOut}}
 		rlevel		int
@@ -82,8 +83,9 @@ var correctableCallReply = `
 				break
 			}
 			{{template "traceLazyLog"}}
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.{{$method}}QF(in, replyValues)
+			replys[r.nid] = r.reply
+			//replyValues = append(replyValues, r.reply)
+			reply, rlevel, quorum = c.qspec.{{$method}}QF(in, replys)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -93,15 +95,15 @@ var correctableCallReply = `
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replys), errs}, true)
 			return
 		}
 		{{- if correctableStream .Method}}
 		if len(errs) == expected { // Can't rely on reply count.
 		{{else}}
-		if len(errs)+len(replyValues) == expected {
+		if len(errs)+len(replys) == expected {
 		{{end -}}
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replys), errs}, true)
 			return
 		}
 	}

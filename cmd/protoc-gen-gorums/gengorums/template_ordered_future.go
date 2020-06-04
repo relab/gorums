@@ -72,10 +72,10 @@ var orderedFutureRecvBody = `
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		replyValues	= make([]*{{$out}}, 0, c.n)
 		reply		*{{$customOut}}
 		errs		[]GRPCError
 		quorum		bool
+		replys = make(map[uint32]*{{$out}})
 	)
 
 	for {
@@ -88,17 +88,17 @@ var orderedFutureRecvBody = `
 			}
 			{{- /*template "traceLazyLog"*/}}
 			data := r.reply.(*{{$out}})
-			replyValues = append(replyValues, data)
-			if reply, quorum = c.qspec.{{$method}}QF(in, replyValues); quorum {
+			replys[r.nid] = data
+			if reply, quorum = c.qspec.{{$method}}QF(in, replys); quorum {
 				fut.{{$customOutField}}, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.{{$customOutField}}, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.{{$customOutField}}, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replys), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			fut.{{$customOutField}}, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replys) == expected {
+			fut.{{$customOutField}}, fut.err = reply, QuorumCallError{"incomplete call", len(replys), errs}
 			return
 		}
 	}
