@@ -17,12 +17,16 @@ const _ = grpc.SupportPackageIsVersion6
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BenchmarkClient interface {
+	StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
+	StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error)
+	// benchmarks
 	UnorderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	UnorderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	UnorderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
+	Multicast(ctx context.Context, opts ...grpc.CallOption) (Benchmark_MulticastClient, error)
 }
 
 type benchmarkClient struct {
@@ -31,6 +35,24 @@ type benchmarkClient struct {
 
 func NewBenchmarkClient(cc grpc.ClientConnInterface) BenchmarkClient {
 	return &benchmarkClient{cc}
+}
+
+func (c *benchmarkClient) StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error) {
+	out := new(StartResponse)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/StartServerBenchmark", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *benchmarkClient) StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error) {
+	out := new(StopResponse)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/StopServerBenchmark", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *benchmarkClient) UnorderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error) {
@@ -87,20 +109,64 @@ func (c *benchmarkClient) OrderedSlowServer(ctx context.Context, in *Echo, opts 
 	return out, nil
 }
 
+func (c *benchmarkClient) Multicast(ctx context.Context, opts ...grpc.CallOption) (Benchmark_MulticastClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_Benchmark_serviceDesc.Streams[0], "/benchmark.Benchmark/Multicast", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &benchmarkMulticastClient{stream}
+	return x, nil
+}
+
+type Benchmark_MulticastClient interface {
+	Send(*Echo) error
+	CloseAndRecv() (*Echo, error)
+	grpc.ClientStream
+}
+
+type benchmarkMulticastClient struct {
+	grpc.ClientStream
+}
+
+func (x *benchmarkMulticastClient) Send(m *Echo) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *benchmarkMulticastClient) CloseAndRecv() (*Echo, error) {
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	m := new(Echo)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // BenchmarkServer is the server API for Benchmark service.
 type BenchmarkServer interface {
+	StartServerBenchmark(context.Context, *StartRequest) (*StartResponse, error)
+	StopServerBenchmark(context.Context, *StopRequest) (*StopResponse, error)
+	// benchmarks
 	UnorderedQC(context.Context, *Echo) (*Echo, error)
 	OrderedQC(context.Context, *Echo) (*Echo, error)
 	UnorderedAsync(context.Context, *Echo) (*Echo, error)
 	OrderedAsync(context.Context, *Echo) (*Echo, error)
 	UnorderedSlowServer(context.Context, *Echo) (*Echo, error)
 	OrderedSlowServer(context.Context, *Echo) (*Echo, error)
+	Multicast(Benchmark_MulticastServer) error
 }
 
 // UnimplementedBenchmarkServer can be embedded to have forward compatible implementations.
 type UnimplementedBenchmarkServer struct {
 }
 
+func (*UnimplementedBenchmarkServer) StartServerBenchmark(context.Context, *StartRequest) (*StartResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartServerBenchmark not implemented")
+}
+func (*UnimplementedBenchmarkServer) StopServerBenchmark(context.Context, *StopRequest) (*StopResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopServerBenchmark not implemented")
+}
 func (*UnimplementedBenchmarkServer) UnorderedQC(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnorderedQC not implemented")
 }
@@ -119,9 +185,48 @@ func (*UnimplementedBenchmarkServer) UnorderedSlowServer(context.Context, *Echo)
 func (*UnimplementedBenchmarkServer) OrderedSlowServer(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderedSlowServer not implemented")
 }
+func (*UnimplementedBenchmarkServer) Multicast(Benchmark_MulticastServer) error {
+	return status.Errorf(codes.Unimplemented, "method Multicast not implemented")
+}
 
 func RegisterBenchmarkServer(s *grpc.Server, srv BenchmarkServer) {
 	s.RegisterService(&_Benchmark_serviceDesc, srv)
+}
+
+func _Benchmark_StartServerBenchmark_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).StartServerBenchmark(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/StartServerBenchmark",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).StartServerBenchmark(ctx, req.(*StartRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Benchmark_StopServerBenchmark_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).StopServerBenchmark(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/StopServerBenchmark",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).StopServerBenchmark(ctx, req.(*StopRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Benchmark_UnorderedQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -232,10 +337,44 @@ func _Benchmark_OrderedSlowServer_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Benchmark_Multicast_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(BenchmarkServer).Multicast(&benchmarkMulticastServer{stream})
+}
+
+type Benchmark_MulticastServer interface {
+	SendAndClose(*Echo) error
+	Recv() (*Echo, error)
+	grpc.ServerStream
+}
+
+type benchmarkMulticastServer struct {
+	grpc.ServerStream
+}
+
+func (x *benchmarkMulticastServer) SendAndClose(m *Echo) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *benchmarkMulticastServer) Recv() (*Echo, error) {
+	m := new(Echo)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 var _Benchmark_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "benchmark.Benchmark",
 	HandlerType: (*BenchmarkServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "StartServerBenchmark",
+			Handler:    _Benchmark_StartServerBenchmark_Handler,
+		},
+		{
+			MethodName: "StopServerBenchmark",
+			Handler:    _Benchmark_StopServerBenchmark_Handler,
+		},
 		{
 			MethodName: "UnorderedQC",
 			Handler:    _Benchmark_UnorderedQC_Handler,
@@ -261,6 +400,12 @@ var _Benchmark_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Benchmark_OrderedSlowServer_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Multicast",
+			Handler:       _Benchmark_Multicast_Handler,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "benchmark.proto",
 }

@@ -1,8 +1,11 @@
 package benchmark
 
+import math "math"
+
 // QSpec is the quroum specification object for the benchmark
 type QSpec struct {
-	QSize int
+	CfgSize int
+	QSize   int
 }
 
 func (qspec *QSpec) qf(replies []*Echo) (*Echo, bool) {
@@ -10,6 +13,43 @@ func (qspec *QSpec) qf(replies []*Echo) (*Echo, bool) {
 		return nil, false
 	}
 	return replies[0], true
+}
+
+// StartServerBenchmarkQF is the quorum function for the StartServerBenchmark quorumcall.
+// It requires a response from all nodes.
+func (qspec *QSpec) StartServerBenchmarkQF(_ *StartRequest, replies []*StartResponse) (*StartResponse, bool) {
+	if len(replies) < qspec.CfgSize {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+// StopServerBenchmarkQF is the quorumc function for the StopServerBenchmark quorumcall.
+// It requires a response from all nodes.
+func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*StopResponse) (*StopResponse, bool) {
+	if len(replies) < qspec.CfgSize {
+		return nil, false
+	}
+	// combine results, calculating averages and pooled variance
+	resp := &StopResponse{Name: replies[0].Name}
+	for _, reply := range replies {
+		resp.TotalOps += reply.TotalOps
+		resp.TotalTime += reply.TotalTime
+		resp.Throughput += reply.Throughput
+		resp.LatencyAvg += reply.LatencyAvg * float64(reply.TotalOps)
+		resp.AllocsPerOp += reply.AllocsPerOp
+		resp.MemPerOp += reply.MemPerOp
+	}
+	resp.LatencyAvg /= float64(resp.TotalOps)
+	for _, reply := range replies {
+		resp.LatencyVar += float64(reply.TotalOps-1) * (math.Pow(reply.LatencyVar, 2) + (reply.LatencyAvg - resp.LatencyAvg))
+	}
+	resp.LatencyVar /= float64(resp.TotalOps) - float64(len(replies))
+	resp.TotalTime /= int64(len(replies))
+	resp.Throughput /= float64(len(replies))
+	resp.AllocsPerOp /= uint64(len(replies))
+	resp.MemPerOp /= uint64(len(replies))
+	return resp, true
 }
 
 // UnorderedQCQF is the quorum function for the UnorderedQC quorumcall
