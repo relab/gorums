@@ -73,24 +73,34 @@ func (s *Stats) GetResult() Result {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	totalOps := uint64(len(s.latencies))
-
 	r := Result{}
-
-	r.Throughput = float64(totalOps) / s.endTime.Sub(s.startTime).Seconds()
+	r.TotalOps = uint64(len(s.latencies))
+	r.TotalTime = s.endTime.Sub(s.startTime)
+	r.Throughput = float64(r.TotalOps) / float64(r.TotalTime.Seconds())
 
 	var latencySum time.Duration
 	for _, l := range s.latencies {
 		latencySum += l
 	}
-	r.LatencyAvg = float64(latencySum.Milliseconds()) / float64(totalOps)
+	r.LatencyAvg = float64(latencySum.Milliseconds()) / float64(r.TotalOps)
 
 	for _, l := range s.latencies {
 		r.LatencyVar += math.Pow(float64(l.Milliseconds())-r.LatencyAvg, 2)
 	}
-	r.LatencyVar /= float64(totalOps - 1)
+	r.LatencyVar /= float64(r.TotalOps - 1)
 
-	r.AllocsPerOp = (s.endMs.Mallocs - s.startMs.Mallocs) / totalOps
-	r.MemPerOp = (s.endMs.TotalAlloc - s.startMs.TotalAlloc) / totalOps
+	r.AllocsPerOp = (s.endMs.Mallocs - s.startMs.Mallocs) / r.TotalOps
+	r.MemPerOp = (s.endMs.TotalAlloc - s.startMs.TotalAlloc) / r.TotalOps
 	return r
+}
+
+// Clear zeroes out the stats
+func (s *Stats) Clear() {
+	s.mut.Lock()
+	s.latencies = nil
+	s.startTime = time.Time{}
+	s.endTime = time.Time{}
+	s.startMs = runtime.MemStats{}
+	s.endMs = runtime.MemStats{}
+	s.mut.Unlock()
 }
