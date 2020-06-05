@@ -1,5 +1,4 @@
-protoc-gen-gorums-bin	:= $(shell command -v protoc-gen-gorums)
-PLUGIN_PATH				:= cmd/protoc-gen-gorums
+PLUGIN_PATH				:= ./cmd/protoc-gen-gorums
 dev_path				:= $(PLUGIN_PATH)/dev
 gen_path				:= $(PLUGIN_PATH)/gengorums
 tests_path				:= internal/testprotos
@@ -17,7 +16,7 @@ internal_ordering		:= internal/ordering
 internal_correctable	:= internal/correctable
 public_so				:= ordering/
 
-.PHONY: dev download tools
+.PHONY: dev download tools bootstrapgorums installgorums
 
 dev: installgorums $(public_so)/ordering.pb.go $(public_so)/ordering_grpc.pb.go
 	@echo "Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder"
@@ -56,19 +55,15 @@ $(internal_correctable)/opts.pb.go: $(internal_correctable)/opts.proto
 	@echo "Generating correctable proto options"
 	@protoc --go_out=paths=source_relative:. $(internal_correctable)/opts.proto
 
-installgorums: bootstrapgorums $(protoc-gen-gorums-bin)
-
-$(protoc-gen-gorums-bin): gorums.pb.go $(internal_ordering)/opts.pb.go $(internal_correctable)/opts.pb.go $(static_file)
-	@echo "Installing plugin at $(protoc-gen-gorums-bin)"
-	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
+installgorums: bootstrapgorums gorums.pb.go $(internal_ordering)/opts.pb.go $(internal_correctable)/opts.pb.go $(static_file)
+	@go install $(PLUGIN_PATH)
 
 $(static_file): $(static_files)
 	@cp $(static_file) $(static_file).bak
 	@protoc-gen-gorums --bundle=$(static_file)
 
-.PHONY: bootstrapgorums
-bootstrapgorums:
 ifeq (, $(shell which protoc-gen-gorums))
+bootstrapgorums: tools
 	@echo "Bootstrapping gorums plugin"
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
 	@echo "You may need to rerun 'make installgorums'"
