@@ -10,12 +10,20 @@ import (
 
 type unorderedServer struct{}
 
+func (srv *unorderedServer) StartServerBenchmark(_ context.Context, _ *StartRequest) (_ *StartResponse, _ error) {
+	panic("Not implemented")
+}
+
+func (srv *unorderedServer) StopServerBenchmark(_ context.Context, _ *StopRequest) (_ *StopResponse, _ error) {
+	panic("Not implemented")
+}
+
 func (srv *unorderedServer) UnorderedQC(_ context.Context, in *Echo) (out *Echo, _ error) {
 	out = in
 	return
 }
 
-func (srv *unorderedServer) OrderedQC(_ context.Context, in *Echo) (out *Echo, _ error) {
+func (srv *unorderedServer) OrderedQC(_ context.Context, _ *Echo) (_ *Echo, _ error) {
 	panic("Not implemented")
 }
 
@@ -24,7 +32,7 @@ func (srv *unorderedServer) UnorderedAsync(_ context.Context, in *Echo) (out *Ec
 	return
 }
 
-func (srv *unorderedServer) OrderedAsync(_ context.Context, in *Echo) (out *Echo, _ error) {
+func (srv *unorderedServer) OrderedAsync(_ context.Context, _ *Echo) (_ *Echo, _ error) {
 	panic("Not implemented")
 }
 
@@ -34,11 +42,28 @@ func (srv *unorderedServer) UnorderedSlowServer(_ context.Context, in *Echo) (ou
 	return
 }
 
-func (srv *unorderedServer) OrderedSlowServer(_ context.Context, in *Echo) (out *Echo, _ error) {
+func (srv *unorderedServer) OrderedSlowServer(_ context.Context, _ *Echo) (_ *Echo, _ error) {
 	panic("Not implemented")
 }
 
+func (srv *unorderedServer) Multicast(stream Benchmark_MulticastServer) error {
+	for {
+		_, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+	}
+}
+
 type orderedServer struct{}
+
+func (srv *orderedServer) StartServerBenchmark(in *StartRequest) *StartResponse {
+	return &StartResponse{}
+}
+
+func (srv *orderedServer) StopServerBenchmark(in *StopRequest) *StopResponse {
+	return &StopResponse{}
+}
 
 func (srv *orderedServer) OrderedQC(in *Echo) *Echo {
 	return in
@@ -64,6 +89,8 @@ type Server struct {
 func NewServer() *Server {
 	srv := &Server{}
 	srv.GorumsServer = NewGorumsServer()
+	srv.RegisterStartServerBenchmarkHandler(&srv.orderedSrv)
+	srv.RegisterStopServerBenchmarkHandler(&srv.orderedSrv)
 	srv.RegisterOrderedQCHandler(&srv.orderedSrv)
 	srv.RegisterOrderedAsyncHandler(&srv.orderedSrv)
 	srv.RegisterOrderedSlowServerHandler(&srv.orderedSrv)
