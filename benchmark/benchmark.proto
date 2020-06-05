@@ -4,19 +4,22 @@ package benchmark;
 
 option go_package = "github.com/relab/gorums/benchmark";
 
+import "google/protobuf/empty.proto";
+
 import "gorums.proto";
 
 message Echo { bytes payload = 1; }
 
-message StartRequest {
-  string Name = 1;
+message TimedMsg {
+  int64 SendTime = 1;
+  bytes payload = 2;
 }
+
+message StartRequest {}
 
 message StartResponse {}
 
-message StopRequest {
-  string Name = 1;
-}
+message StopRequest {}
 
 message StopResponse {
   string Name = 1;
@@ -68,7 +71,7 @@ service Benchmark {
     option (gorums.ordered) = true;
   }
 
-  rpc Multicast(stream Echo) returns (Echo) {
+  rpc Multicast(stream TimedMsg) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;
   }
 }

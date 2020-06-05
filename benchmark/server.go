@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-type unorderedServer struct{}
+type unorderedServer struct {
+	stats *Stats
+}
 
 func (srv *unorderedServer) StartServerBenchmark(_ context.Context, _ *StartRequest) (_ *StartResponse, _ error) {
 	panic("Not implemented")
@@ -48,21 +50,17 @@ func (srv *unorderedServer) OrderedSlowServer(_ context.Context, _ *Echo) (_ *Ec
 
 func (srv *unorderedServer) Multicast(stream Benchmark_MulticastServer) error {
 	for {
-		_, err := stream.Recv()
+		msg, err := stream.Recv()
 		if err != nil {
 			return err
 		}
+		latency := time.Now().UnixNano() - msg.SendTime
+		srv.stats.AddLatency(time.Duration(latency))
 	}
 }
 
-type orderedServer struct{}
-
-func (srv *orderedServer) StartServerBenchmark(in *StartRequest) *StartResponse {
-	return &StartResponse{}
-}
-
-func (srv *orderedServer) StopServerBenchmark(in *StopRequest) *StopResponse {
-	return &StopResponse{}
+type orderedServer struct {
+	stats *Stats
 }
 
 func (srv *orderedServer) OrderedQC(in *Echo) *Echo {
@@ -83,19 +81,43 @@ type Server struct {
 	*GorumsServer
 	orderedSrv   orderedServer
 	unorderedSrv unorderedServer
+	stats        Stats
 }
 
 // NewServer returns a new Server
 func NewServer() *Server {
 	srv := &Server{}
+	srv.orderedSrv.stats = &srv.stats
+	srv.unorderedSrv.stats = &srv.stats
+
 	srv.GorumsServer = NewGorumsServer()
-	srv.RegisterStartServerBenchmarkHandler(&srv.orderedSrv)
-	srv.RegisterStopServerBenchmarkHandler(&srv.orderedSrv)
+	srv.RegisterStartServerBenchmarkHandler(srv)
+	srv.RegisterStopServerBenchmarkHandler(srv)
 	srv.RegisterOrderedQCHandler(&srv.orderedSrv)
 	srv.RegisterOrderedAsyncHandler(&srv.orderedSrv)
 	srv.RegisterOrderedSlowServerHandler(&srv.orderedSrv)
 	RegisterBenchmarkServer(srv.GorumsServer.grpcServer, &srv.unorderedSrv)
 	return srv
+}
+
+func (srv *Server) StartServerBenchmark(in *StartRequest) *StartResponse {
+	srv.stats.Clear()
+	srv.stats.Start()
+	return &StartResponse{}
+}
+
+func (srv *Server) StopServerBenchmark(in *StopRequest) *StopResponse {
+	srv.stats.End()
+	results := srv.stats.GetResult()
+	return &StopResponse{
+		TotalOps:    results.TotalOps,
+		TotalTime:   int64(results.TotalTime),
+		Throughput:  results.Throughput,
+		LatencyAvg:  results.LatencyAvg,
+		LatencyVar:  results.LatencyVar,
+		AllocsPerOp: results.AllocsPerOp,
+		MemPerOp:    results.MemPerOp,
+	}
 }
 
 // StartLocalServers starts benchmark servers locally
