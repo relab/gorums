@@ -7,6 +7,7 @@ import (
 	context "context"
 	binary "encoding/binary"
 	fmt "fmt"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	ordering "github.com/relab/gorums/ordering"
 	trace "golang.org/x/net/trace"
 	grpc "google.golang.org/grpc"
@@ -1098,9 +1099,12 @@ func (n *Node) UnorderedAsync(ctx context.Context, in *Echo, replyChan chan<- in
 	replyChan <- internalEcho{n.id, reply, err}
 }
 
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
+
 // Multicast is a one-way multicast call on all nodes in configuration c,
 // with the same in argument. The call is asynchronous and has no return value.
-func (c *Configuration) Multicast(in *Echo) error {
+func (c *Configuration) Multicast(in *TimedMsg) error {
 	for _, node := range c.nodes {
 		go func(n *Node) {
 			err := n.multicastClient.Send(in)

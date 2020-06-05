@@ -4,6 +4,7 @@ package benchmark
 
 import (
 	context "context"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -119,8 +120,8 @@ func (c *benchmarkClient) Multicast(ctx context.Context, opts ...grpc.CallOption
 }
 
 type Benchmark_MulticastClient interface {
-	Send(*Echo) error
-	CloseAndRecv() (*Echo, error)
+	Send(*TimedMsg) error
+	CloseAndRecv() (*empty.Empty, error)
 	grpc.ClientStream
 }
 
@@ -128,15 +129,15 @@ type benchmarkMulticastClient struct {
 	grpc.ClientStream
 }
 
-func (x *benchmarkMulticastClient) Send(m *Echo) error {
+func (x *benchmarkMulticastClient) Send(m *TimedMsg) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *benchmarkMulticastClient) CloseAndRecv() (*Echo, error) {
+func (x *benchmarkMulticastClient) CloseAndRecv() (*empty.Empty, error) {
 	if err := x.ClientStream.CloseSend(); err != nil {
 		return nil, err
 	}
-	m := new(Echo)
+	m := new(empty.Empty)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -342,8 +343,8 @@ func _Benchmark_Multicast_Handler(srv interface{}, stream grpc.ServerStream) err
 }
 
 type Benchmark_MulticastServer interface {
-	SendAndClose(*Echo) error
-	Recv() (*Echo, error)
+	SendAndClose(*empty.Empty) error
+	Recv() (*TimedMsg, error)
 	grpc.ServerStream
 }
 
@@ -351,12 +352,12 @@ type benchmarkMulticastServer struct {
 	grpc.ServerStream
 }
 
-func (x *benchmarkMulticastServer) SendAndClose(m *Echo) error {
+func (x *benchmarkMulticastServer) SendAndClose(m *empty.Empty) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *benchmarkMulticastServer) Recv() (*Echo, error) {
-	m := new(Echo)
+func (x *benchmarkMulticastServer) Recv() (*TimedMsg, error) {
+	m := new(TimedMsg)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}

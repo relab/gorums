@@ -1,7 +1,5 @@
 package benchmark
 
-import math "math"
-
 // QSpec is the quroum specification object for the benchmark
 type QSpec struct {
 	CfgSize int
@@ -42,9 +40,10 @@ func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*StopRespons
 	}
 	resp.LatencyAvg /= float64(resp.TotalOps)
 	for _, reply := range replies {
-		resp.LatencyVar += float64(reply.TotalOps-1) * (math.Pow(reply.LatencyVar, 2) + (reply.LatencyAvg - resp.LatencyAvg))
+		resp.LatencyVar += float64(reply.TotalOps-1) * reply.LatencyVar
 	}
 	resp.LatencyVar /= float64(resp.TotalOps) - float64(len(replies))
+	resp.TotalOps /= uint64(len(replies))
 	resp.TotalTime /= int64(len(replies))
 	resp.Throughput /= float64(len(replies))
 	resp.AllocsPerOp /= uint64(len(replies))

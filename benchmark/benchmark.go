@@ -20,11 +20,12 @@ type Options struct {
 	Warmup     time.Duration // Warmup time
 }
 
-type benchFunc func(Options) (*Stats, error)
+type benchFunc func(Options) (Result, error)
 type qcFunc func(context.Context, *Echo) (*Echo, error)
 type asyncQCFunc func(context.Context, *Echo) *FutureEcho
+type serverFunc func(*TimedMsg) error
 
-func runQCBenchmark(opts Options, f qcFunc) (*Stats, error) {
+func runQCBenchmark(opts Options, f qcFunc) (Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	msg := &Echo{Payload: make([]byte, opts.Payload)}
@@ -46,7 +47,7 @@ func runQCBenchmark(opts Options, f qcFunc) (*Stats, error) {
 
 	err := g.Wait()
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
 	s.Start()
@@ -69,12 +70,12 @@ func runQCBenchmark(opts Options, f qcFunc) (*Stats, error) {
 	s.End()
 
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
-	return s, nil
+	return s.GetResult(), nil
 }
 
-func runAsyncQCBenchmark(opts Options, f asyncQCFunc) (*Stats, error) {
+func runAsyncQCBenchmark(opts Options, f asyncQCFunc) (Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	msg := &Echo{Payload: make([]byte, opts.Payload)}
@@ -106,7 +107,7 @@ func runAsyncQCBenchmark(opts Options, f asyncQCFunc) (*Stats, error) {
 	}
 	err := g.Wait()
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
 	endTime := time.Now().Add(opts.Duration)
@@ -137,36 +138,88 @@ func runAsyncQCBenchmark(opts Options, f asyncQCFunc) (*Stats, error) {
 	s.End()
 
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
-	return s, nil
+	return s.GetResult(), nil
+}
+
+func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (Result, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	payload := make([]byte, opts.Payload)
+	var g errgroup.Group
+
+	benchmarkFunc := func(stopTime time.Time) error {
+		for !time.Now().After(stopTime) {
+			msg := &TimedMsg{SendTime: time.Now().UnixNano(), Payload: payload}
+			err := f(msg)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	warmupEnd := time.Now().Add(opts.Warmup)
+	for n := 0; n < opts.Concurrent; n++ {
+		g.Go(func() error { return benchmarkFunc(warmupEnd) })
+	}
+	g.Wait()
+
+	_, err := cfg.StartServerBenchmark(ctx, &StartRequest{})
+	if err != nil {
+		return Result{}, err
+	}
+
+	endTime := time.Now().Add(opts.Duration)
+	for n := 0; n < opts.Concurrent; n++ {
+		g.Go(func() error { return benchmarkFunc(endTime) })
+	}
+	g.Wait()
+
+	resp, err := cfg.StopServerBenchmark(ctx, &StopRequest{})
+	if err != nil {
+		return Result{}, err
+	}
+
+	return Result{
+		TotalOps:    resp.TotalOps,
+		TotalTime:   time.Duration(resp.TotalTime),
+		Throughput:  resp.Throughput,
+		LatencyAvg:  resp.LatencyAvg,
+		LatencyVar:  resp.LatencyVar,
+		AllocsPerOp: resp.AllocsPerOp,
+		MemPerOp:    resp.MemPerOp,
+	}, nil
 }
 
 func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
 	m := map[string]benchFunc{
-		"UnorderedQC": func(opts Options) (*Stats, error) {
+		"UnorderedQC": func(opts Options) (Result, error) {
 			return runQCBenchmark(opts, func(ctx context.Context, msg *Echo) (*Echo, error) {
 				return cfg.UnorderedQC(ctx, msg)
 			})
 		},
 
-		"OrderedQC": func(opts Options) (*Stats, error) { return runQCBenchmark(opts, cfg.OrderedQC) },
+		"OrderedQC": func(opts Options) (Result, error) { return runQCBenchmark(opts, cfg.OrderedQC) },
 
-		"UnorderedAsync": func(opts Options) (*Stats, error) {
+		"UnorderedAsync": func(opts Options) (Result, error) {
 			return runAsyncQCBenchmark(opts, func(ctx context.Context, msg *Echo) *FutureEcho {
 				return cfg.UnorderedAsync(ctx, msg)
 			})
 		},
 
-		"OrderedAsync": func(opts Options) (*Stats, error) { return runAsyncQCBenchmark(opts, cfg.OrderedAsync) },
+		"OrderedAsync": func(opts Options) (Result, error) { return runAsyncQCBenchmark(opts, cfg.OrderedAsync) },
 
-		"UnorderedSlowServer": func(opts Options) (*Stats, error) {
+		"UnorderedSlowServer": func(opts Options) (Result, error) {
 			return runQCBenchmark(opts, func(ctx context.Context, msg *Echo) (*Echo, error) {
 				return cfg.UnorderedSlowServer(ctx, msg)
 			})
 		},
 
-		"OrderedSlowServer": func(opts Options) (*Stats, error) { return runQCBenchmark(opts, cfg.OrderedSlowServer) },
+		"OrderedSlowServer": func(opts Options) (Result, error) { return runQCBenchmark(opts, cfg.OrderedSlowServer) },
+
+		"Multicast": func(opts Options) (Result, error) { return runServerBenchmark(opts, cfg, cfg.Multicast) },
 	}
 	return m
 }
@@ -174,7 +227,7 @@ func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
 // RunBenchmarks runs all the benchmarks that match the given regex with the given options
 func RunBenchmarks(benchRegex *regexp.Regexp, options Options, manager *Manager) ([]Result, error) {
 	nodeIDs := manager.NodeIDs()
-	cfg, err := manager.NewConfiguration(nodeIDs[:options.NumNodes], &QSpec{QSize: options.QuorumSize})
+	cfg, err := manager.NewConfiguration(nodeIDs[:options.NumNodes], &QSpec{QSize: options.QuorumSize, CfgSize: len(nodeIDs)})
 	if err != nil {
 		return nil, err
 	}
@@ -182,11 +235,10 @@ func RunBenchmarks(benchRegex *regexp.Regexp, options Options, manager *Manager)
 	var results []Result
 	for b, f := range benchmarks {
 		if benchRegex.MatchString(b) {
-			stats, err := f(options)
+			result, err := f(options)
 			if err != nil {
 				return nil, err
 			}
-			result := stats.GetResult()
 			result.Name = b
 			results = append(results, result)
 		}
