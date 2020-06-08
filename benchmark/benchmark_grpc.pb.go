@@ -27,7 +27,7 @@ type BenchmarkClient interface {
 	OrderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	UnorderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
-	Multicast(ctx context.Context, opts ...grpc.CallOption) (Benchmark_MulticastClient, error)
+	Multicast(ctx context.Context, in *TimedMsg, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type benchmarkClient struct {
@@ -110,38 +110,13 @@ func (c *benchmarkClient) OrderedSlowServer(ctx context.Context, in *Echo, opts 
 	return out, nil
 }
 
-func (c *benchmarkClient) Multicast(ctx context.Context, opts ...grpc.CallOption) (Benchmark_MulticastClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Benchmark_serviceDesc.Streams[0], "/benchmark.Benchmark/Multicast", opts...)
+func (c *benchmarkClient) Multicast(ctx context.Context, in *TimedMsg, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/Multicast", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &benchmarkMulticastClient{stream}
-	return x, nil
-}
-
-type Benchmark_MulticastClient interface {
-	Send(*TimedMsg) error
-	CloseAndRecv() (*empty.Empty, error)
-	grpc.ClientStream
-}
-
-type benchmarkMulticastClient struct {
-	grpc.ClientStream
-}
-
-func (x *benchmarkMulticastClient) Send(m *TimedMsg) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *benchmarkMulticastClient) CloseAndRecv() (*empty.Empty, error) {
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	m := new(empty.Empty)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
+	return out, nil
 }
 
 // BenchmarkServer is the server API for Benchmark service.
@@ -155,7 +130,7 @@ type BenchmarkServer interface {
 	OrderedAsync(context.Context, *Echo) (*Echo, error)
 	UnorderedSlowServer(context.Context, *Echo) (*Echo, error)
 	OrderedSlowServer(context.Context, *Echo) (*Echo, error)
-	Multicast(Benchmark_MulticastServer) error
+	Multicast(context.Context, *TimedMsg) (*empty.Empty, error)
 }
 
 // UnimplementedBenchmarkServer can be embedded to have forward compatible implementations.
@@ -186,8 +161,8 @@ func (*UnimplementedBenchmarkServer) UnorderedSlowServer(context.Context, *Echo)
 func (*UnimplementedBenchmarkServer) OrderedSlowServer(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderedSlowServer not implemented")
 }
-func (*UnimplementedBenchmarkServer) Multicast(Benchmark_MulticastServer) error {
-	return status.Errorf(codes.Unimplemented, "method Multicast not implemented")
+func (*UnimplementedBenchmarkServer) Multicast(context.Context, *TimedMsg) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Multicast not implemented")
 }
 
 func RegisterBenchmarkServer(s *grpc.Server, srv BenchmarkServer) {
@@ -338,30 +313,22 @@ func _Benchmark_OrderedSlowServer_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Benchmark_Multicast_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(BenchmarkServer).Multicast(&benchmarkMulticastServer{stream})
-}
-
-type Benchmark_MulticastServer interface {
-	SendAndClose(*empty.Empty) error
-	Recv() (*TimedMsg, error)
-	grpc.ServerStream
-}
-
-type benchmarkMulticastServer struct {
-	grpc.ServerStream
-}
-
-func (x *benchmarkMulticastServer) SendAndClose(m *empty.Empty) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *benchmarkMulticastServer) Recv() (*TimedMsg, error) {
-	m := new(TimedMsg)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _Benchmark_Multicast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TimedMsg)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(BenchmarkServer).Multicast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/Multicast",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).Multicast(ctx, req.(*TimedMsg))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 var _Benchmark_serviceDesc = grpc.ServiceDesc{
@@ -400,13 +367,11 @@ var _Benchmark_serviceDesc = grpc.ServiceDesc{
 			MethodName: "OrderedSlowServer",
 			Handler:    _Benchmark_OrderedSlowServer_Handler,
 		},
-	},
-	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "Multicast",
-			Handler:       _Benchmark_Multicast_Handler,
-			ClientStreams: true,
+			MethodName: "Multicast",
+			Handler:    _Benchmark_Multicast_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "benchmark.proto",
 }

@@ -6,6 +6,8 @@ import (
 	log "log"
 	net "net"
 	"time"
+
+	empty "github.com/golang/protobuf/ptypes/empty"
 )
 
 type unorderedServer struct {
@@ -48,15 +50,8 @@ func (srv *unorderedServer) OrderedSlowServer(_ context.Context, _ *Echo) (_ *Ec
 	panic("Not implemented")
 }
 
-func (srv *unorderedServer) Multicast(stream Benchmark_MulticastServer) error {
-	for {
-		msg, err := stream.Recv()
-		if err != nil {
-			return err
-		}
-		latency := time.Now().UnixNano() - msg.SendTime
-		srv.stats.AddLatency(time.Duration(latency))
-	}
+func (srv *unorderedServer) Multicast(_ context.Context, _ *TimedMsg) (_ *empty.Empty, _ error) {
+	panic("Not implemented")
 }
 
 type orderedServer struct {
@@ -74,6 +69,11 @@ func (srv *orderedServer) OrderedAsync(in *Echo) *Echo {
 func (srv *orderedServer) OrderedSlowServer(in *Echo) *Echo {
 	time.Sleep(10 * time.Millisecond)
 	return in
+}
+
+func (srv *orderedServer) Multicast(msg *TimedMsg) {
+	latency := time.Now().UnixNano() - msg.SendTime
+	srv.stats.AddLatency(time.Duration(latency))
 }
 
 // Server is a unified server for both ordered and unordered methods
@@ -96,6 +96,7 @@ func NewServer() *Server {
 	srv.RegisterOrderedQCHandler(&srv.orderedSrv)
 	srv.RegisterOrderedAsyncHandler(&srv.orderedSrv)
 	srv.RegisterOrderedSlowServerHandler(&srv.orderedSrv)
+	srv.RegisterMulticastHandler(&srv.orderedSrv)
 	RegisterBenchmarkServer(srv.GorumsServer.grpcServer, &srv.unorderedSrv)
 	return srv
 }
