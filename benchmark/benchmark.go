@@ -3,6 +3,7 @@ package benchmark
 import (
 	context "context"
 	"regexp"
+	"runtime"
 	"sync/atomic"
 	"time"
 
@@ -148,6 +149,8 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (Result,
 	defer cancel()
 	payload := make([]byte, opts.Payload)
 	var g errgroup.Group
+	var start runtime.MemStats
+	var end runtime.MemStats
 
 	benchmarkFunc := func(stopTime time.Time) error {
 		for !time.Now().After(stopTime) {
@@ -171,16 +174,21 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (Result,
 		return Result{}, err
 	}
 
+	runtime.ReadMemStats(&start)
 	endTime := time.Now().Add(opts.Duration)
 	for n := 0; n < opts.Concurrent; n++ {
 		g.Go(func() error { return benchmarkFunc(endTime) })
 	}
 	g.Wait()
+	runtime.ReadMemStats(&end)
 
 	resp, err := cfg.StopServerBenchmark(ctx, &StopRequest{})
 	if err != nil {
 		return Result{}, err
 	}
+
+	clientAllocs := (end.Mallocs - start.Mallocs) / resp.TotalOps
+	clientMem := (end.TotalAlloc - start.TotalAlloc) / resp.TotalOps
 
 	return Result{
 		TotalOps:    resp.TotalOps,
@@ -188,8 +196,8 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (Result,
 		Throughput:  resp.Throughput,
 		LatencyAvg:  resp.LatencyAvg,
 		LatencyVar:  resp.LatencyVar,
-		AllocsPerOp: resp.AllocsPerOp,
-		MemPerOp:    resp.MemPerOp,
+		AllocsPerOp: resp.AllocsPerOp + clientAllocs,
+		MemPerOp:    resp.MemPerOp + clientMem,
 	}, nil
 }
 
