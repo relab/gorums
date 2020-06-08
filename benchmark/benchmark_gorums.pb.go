@@ -729,6 +729,10 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 	}
 }
 
+type methodInfo struct {
+	oneway bool
+}
+
 type orderingResult struct {
 	nid   uint32
 	reply []byte
@@ -904,8 +908,17 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
+
 		// handle the request if a handler is available for this rpc
 		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+			info, ok := orderingMethods[req.MethodID]
+			if !ok {
+				continue
+			}
+			if info.oneway {
+				handler(req)
+				continue
+			}
 			resp := handler(req)
 			resp.ID = req.GetID()
 			err = srv.Send(resp)
@@ -1105,38 +1118,53 @@ var _ empty.Empty
 // Multicast is a one-way multicast call on all nodes in configuration c,
 // with the same in argument. The call is asynchronous and has no return value.
 func (c *Configuration) Multicast(in *TimedMsg) error {
-	for _, node := range c.nodes {
-		go func(n *Node) {
-			err := n.multicastClient.Send(in)
-			if err == nil {
-				return
-			}
-			if c.mgr.logger != nil {
-				c.mgr.logger.Printf("%d: Multicast stream send error: %v", n.id, err)
-			}
-		}(node)
+	msgID := c.mgr.nextMsgID()
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: multicastMethodID,
+		Data:     data,
+	}
+	for _, n := range c.nodes {
+		n.sendQ <- msg
 	}
 	return nil
 }
 
+// MulticastHandler is the server API for the Multicast rpc.
+type MulticastHandler interface {
+	Multicast(*TimedMsg)
+}
+
+// RegisterMulticastHandler sets the handler for Multicast.
+func (s *GorumsServer) RegisterMulticastHandler(handler MulticastHandler) {
+	s.srv.registerHandler(multicastMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(TimedMsg)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		handler.Multicast(req)
+		return nil
+	})
+}
+
 type nodeServices struct {
 	BenchmarkClient
-	multicastClient Benchmark_MulticastClient
 }
 
 func (n *Node) connectStream(ctx context.Context) (err error) {
 
 	n.BenchmarkClient = NewBenchmarkClient(n.conn)
 
-	n.multicastClient, err = n.BenchmarkClient.Multicast(ctx)
-	if err != nil {
-		return fmt.Errorf("stream creation failed: %v", err)
-	}
 	return nil
 }
 
 func (n *Node) closeStream() (err error) {
-	_, err = n.multicastClient.CloseAndRecv()
 	return err
 }
 
@@ -1898,6 +1926,16 @@ const stopServerBenchmarkMethodID int32 = 1
 const orderedQCMethodID int32 = 2
 const orderedAsyncMethodID int32 = 3
 const orderedSlowServerMethodID int32 = 4
+const multicastMethodID int32 = 5
+
+var orderingMethods = map[int32]methodInfo{
+	0: {oneway: false},
+	1: {oneway: false},
+	2: {oneway: false},
+	3: {oneway: false},
+	4: {oneway: false},
+	5: {oneway: true},
+}
 
 type internalEcho struct {
 	nid   uint32
