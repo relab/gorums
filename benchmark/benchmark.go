@@ -4,6 +4,7 @@ import (
 	context "context"
 	"regexp"
 	"runtime"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -283,7 +284,12 @@ func RunBenchmarks(benchRegex *regexp.Regexp, options Options, manager *Manager)
 				return nil, err
 			}
 			result.Name = b
-			results = append(results, result)
+			i := sort.Search(len(results), func(i int) bool {
+				return results[i].Name >= result.Name
+			})
+			results = append(results, Result{})
+			copy(results[i+1:], results[i:])
+			results[i] = result
 		}
 	}
 	return results, nil
