@@ -1,0 +1,7 @@
+---
+- hosts: client:servers
+  gather_facts: no
+  tasks:
+    - name: Kill benchmark
+      shell: killall -9 benchmark
+      ignore_errors: yes
