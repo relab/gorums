@@ -9,19 +9,7 @@ import (
 	"time"
 )
 
-// Result contains information about a benchmark run
-type Result struct {
-	Name        string
-	TotalOps    uint64        // total number of operations
-	TotalTime   time.Duration // The total time taken
-	Throughput  float64       // throughput measured in ops/sec
-	LatencyAvg  float64       // average latency measured in ms
-	LatencyVar  float64       // latency variance
-	AllocsPerOp uint64        // average number of memory allocations per operation
-	MemPerOp    uint64        // average amount of bytes allocated per operation
-}
-
-func (r Result) String() string {
+func (r Result) Format() string {
 	b := new(strings.Builder)
 	fmt.Fprintf(b, "%s\t", r.Name)
 	fmt.Fprintf(b, "%.2f ops/sec\t", r.Throughput)
@@ -69,14 +57,14 @@ func (s *Stats) AddLatency(l time.Duration) {
 }
 
 // GetResult computes and returns the result of the benchmark
-func (s *Stats) GetResult() Result {
+func (s *Stats) GetResult() *Result {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	r := Result{}
+	r := &Result{}
 	r.TotalOps = uint64(len(s.latencies))
-	r.TotalTime = s.endTime.Sub(s.startTime)
-	r.Throughput = float64(r.TotalOps) / float64(r.TotalTime.Seconds())
+	r.TotalTime = int64(s.endTime.Sub(s.startTime))
+	r.Throughput = float64(r.TotalOps) / float64(time.Duration(r.TotalTime).Seconds())
 
 	var latencySum time.Duration
 	for _, l := range s.latencies {

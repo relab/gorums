@@ -23,17 +23,18 @@ import (
 
 func main() {
 	var (
-		traceFile  = flag.String("trace", "", "File to write trace to.")
-		cpuprofile = flag.String("cpuprofile", "", "File to write cpu profile to.")
-		memprofile = flag.String("memprofile", "", "File to write memory profile to.")
-		remotes    = flag.String("remotes", "", "List of remote servers to connect to.")
-		benchmarks = flag.String("benchmarks", ".*", "List of benchmarks to run.")
-		warmup     = flag.String("warmup", "100ms", "How long a warmup should last.")
-		benchTime  = flag.String("time", "1s", "How long to run each benchmark")
-		payload    = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
-		concurrent = flag.Int("concurrent", 1, "Number of goroutines that can make calls concurrently.")
-		maxAsync   = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
-		server     = flag.String("server", "", "Run a benchmark server on given address.")
+		traceFile   = flag.String("trace", "", "File to write trace to.")
+		cpuprofile  = flag.String("cpuprofile", "", "File to write cpu profile to.")
+		memprofile  = flag.String("memprofile", "", "File to write memory profile to.")
+		remotes     = flag.String("remotes", "", "List of remote servers to connect to.")
+		benchmarks  = flag.String("benchmarks", ".*", "List of benchmarks to run.")
+		warmup      = flag.String("warmup", "100ms", "How long a warmup should last.")
+		benchTime   = flag.String("time", "1s", "How long to run each benchmark")
+		payload     = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
+		concurrent  = flag.Int("concurrent", 1, "Number of goroutines that can make calls concurrently.")
+		maxAsync    = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
+		server      = flag.String("server", "", "Run a benchmark server on given address.")
+		serverStats = flag.Bool("server-stats", false, "Show server statistics separately")
 	)
 	flag.Parse()
 
@@ -149,9 +150,30 @@ func main() {
 	}
 
 	resultWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-	fmt.Fprintln(resultWriter, "Benchmark\tThrougput\tLatency\tStd.dev\tMemory Usage\tMemory Allocs\t")
+	fmt.Fprint(resultWriter, "Benchmark\tThrougput\tLatency\tStd.dev\tClient")
+	if !*serverStats || !remote {
+		fmt.Fprint(resultWriter, "+Servers\t\t")
+	} else if *serverStats {
+		fmt.Fprint(resultWriter, "\t\t")
+		for i := 1; i <= len(strings.Split(*remotes, ",")); i++ {
+			fmt.Fprintf(resultWriter, "Server %d\t\t", i)
+		}
+	}
+	fmt.Fprintln(resultWriter)
 	for _, r := range results {
-		fmt.Fprintln(resultWriter, r)
+		if !*serverStats || !remote {
+			for _, s := range r.ServerStats {
+				r.MemPerOp += s.Memory / r.TotalOps
+				r.AllocsPerOp += s.Allocs / r.TotalOps
+			}
+		}
+		fmt.Fprint(resultWriter, r.Format())
+		if *serverStats && remote {
+			for _, s := range r.ServerStats {
+				fmt.Fprintf(resultWriter, "%d B/op\t%d allocs/op\t", s.Memory/r.TotalOps, s.Allocs/r.TotalOps)
+			}
+		}
+		fmt.Fprintln(resultWriter)
 	}
 	resultWriter.Flush()
 }
