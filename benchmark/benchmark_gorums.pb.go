@@ -1279,7 +1279,7 @@ func (s *GorumsServer) RegisterStartServerBenchmarkHandler(handler StartServerBe
 
 // StopServerBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *StopResponse, err error) {
+func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *ServerBenchmark, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StopServerBenchmark")
@@ -1326,7 +1326,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 	}
 
 	var (
-		replyValues = make([]*StopResponse, 0, expected)
+		replyValues = make([]*ServerBenchmark, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -1343,7 +1343,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(StopResponse)
+			reply := new(ServerBenchmark)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
@@ -1365,7 +1365,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 
 // StopServerBenchmarkHandler is the server API for the StopServerBenchmark rpc.
 type StopServerBenchmarkHandler interface {
-	StopServerBenchmark(*StopRequest) *StopResponse
+	StopServerBenchmark(*StopRequest) *ServerBenchmark
 }
 
 // RegisterStopServerBenchmarkHandler sets the handler for StopServerBenchmark.
@@ -1383,6 +1383,224 @@ func (s *GorumsServer) RegisterStopServerBenchmarkHandler(handler StopServerBenc
 			return new(ordering.Message)
 		}
 		return &ordering.Message{Data: data, MethodID: stopServerBenchmarkMethodID}
+	})
+}
+
+// StartBenchmark is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StartBenchmark")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	// get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replies := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replies)
+
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
+
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: startBenchmarkMethodID,
+		Data:     data,
+	}
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	var (
+		replyValues = make([]*StartResponse, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replies:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			reply := new(StartResponse)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, reply)
+			if resp, quorum = c.qspec.StartBenchmarkQF(in, replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+// StartBenchmarkHandler is the server API for the StartBenchmark rpc.
+type StartBenchmarkHandler interface {
+	StartBenchmark(*StartRequest) *StartResponse
+}
+
+// RegisterStartBenchmarkHandler sets the handler for StartBenchmark.
+func (s *GorumsServer) RegisterStartBenchmarkHandler(handler StartBenchmarkHandler) {
+	s.srv.registerHandler(startBenchmarkMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(StartRequest)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.StartBenchmark(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: startBenchmarkMethodID}
+	})
+}
+
+// StopBenchmark is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (resp *MemoryStats, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StopBenchmark")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	// get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replies := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replies)
+
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
+
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: stopBenchmarkMethodID,
+		Data:     data,
+	}
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	var (
+		replyValues = make([]*MemoryStats, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replies:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			reply := new(MemoryStats)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, reply)
+			if resp, quorum = c.qspec.StopBenchmarkQF(in, replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+// StopBenchmarkHandler is the server API for the StopBenchmark rpc.
+type StopBenchmarkHandler interface {
+	StopBenchmark(*StopRequest) *MemoryStats
+}
+
+// RegisterStopBenchmarkHandler sets the handler for StopBenchmark.
+func (s *GorumsServer) RegisterStopBenchmarkHandler(handler StopBenchmarkHandler) {
+	s.srv.registerHandler(stopBenchmarkMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(StopRequest)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.StopBenchmark(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: stopBenchmarkMethodID}
 	})
 }
 
@@ -1729,7 +1947,21 @@ type QuorumSpec interface {
 	// supplied to the StopServerBenchmark method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *StopRequest'.
-	StopServerBenchmarkQF(in *StopRequest, replies []*StopResponse) (*StopResponse, bool)
+	StopServerBenchmarkQF(in *StopRequest, replies []*ServerBenchmark) (*ServerBenchmark, bool)
+
+	// StartBenchmarkQF is the quorum function for the StartBenchmark
+	// ordered quorum call method. The in parameter is the request object
+	// supplied to the StartBenchmark method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *StartRequest'.
+	StartBenchmarkQF(in *StartRequest, replies []*StartResponse) (*StartResponse, bool)
+
+	// StopBenchmarkQF is the quorum function for the StopBenchmark
+	// ordered quorum call method. The in parameter is the request object
+	// supplied to the StopBenchmark method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *StopRequest'.
+	StopBenchmarkQF(in *StopRequest, replies []*MemoryStats) (*MemoryStats, bool)
 
 	// UnorderedQCQF is the quorum function for the UnorderedQC
 	// quorum call method. The in parameter is the request object
@@ -1923,10 +2155,12 @@ const hasOrderingMethods = true
 
 const startServerBenchmarkMethodID int32 = 0
 const stopServerBenchmarkMethodID int32 = 1
-const orderedQCMethodID int32 = 2
-const orderedAsyncMethodID int32 = 3
-const orderedSlowServerMethodID int32 = 4
-const multicastMethodID int32 = 5
+const startBenchmarkMethodID int32 = 2
+const stopBenchmarkMethodID int32 = 3
+const orderedQCMethodID int32 = 4
+const orderedAsyncMethodID int32 = 5
+const orderedSlowServerMethodID int32 = 6
+const multicastMethodID int32 = 7
 
 var orderingMethods = map[int32]methodInfo{
 	0: {oneway: false},
@@ -1934,7 +2168,9 @@ var orderingMethods = map[int32]methodInfo{
 	2: {oneway: false},
 	3: {oneway: false},
 	4: {oneway: false},
-	5: {oneway: true},
+	5: {oneway: false},
+	6: {oneway: false},
+	7: {oneway: true},
 }
 
 type internalEcho struct {
@@ -1943,15 +2179,21 @@ type internalEcho struct {
 	err   error
 }
 
-type internalStartResponse struct {
+type internalMemoryStats struct {
 	nid   uint32
-	reply *StartResponse
+	reply *MemoryStats
 	err   error
 }
 
-type internalStopResponse struct {
+type internalServerBenchmark struct {
 	nid   uint32
-	reply *StopResponse
+	reply *ServerBenchmark
+	err   error
+}
+
+type internalStartResponse struct {
+	nid   uint32
+	reply *StartResponse
 	err   error
 }
 
