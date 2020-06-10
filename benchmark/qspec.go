@@ -22,14 +22,14 @@ func (qspec *QSpec) StartServerBenchmarkQF(_ *StartRequest, replies []*StartResp
 	return replies[0], true
 }
 
-// StopServerBenchmarkQF is the quorumc function for the StopServerBenchmark quorumcall.
+// StopServerBenchmarkQF is the quorum function for the StopServerBenchmark quorumcall.
 // It requires a response from all nodes.
-func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*StopResponse) (*StopResponse, bool) {
+func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*ServerBenchmark) (*ServerBenchmark, bool) {
 	if len(replies) < qspec.CfgSize {
 		return nil, false
 	}
 	// combine results, calculating averages and pooled variance
-	resp := &StopResponse{Name: replies[0].Name}
+	resp := &ServerBenchmark{Name: replies[0].Name}
 	for _, reply := range replies {
 		resp.TotalOps += reply.TotalOps
 		resp.TotalTime += reply.TotalTime
@@ -49,6 +49,29 @@ func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*StopRespons
 	resp.AllocsPerOp /= uint64(len(replies))
 	resp.MemPerOp /= uint64(len(replies))
 	return resp, true
+}
+
+// StartBenchmarkQF is the quorum function for the StartBenchmark quorumcall.
+// It requires a response from all nodes.
+func (qspec *QSpec) StartBenchmarkQF(_ *StartRequest, replies []*StartResponse) (*StartResponse, bool) {
+	if len(replies) < qspec.CfgSize {
+		return nil, false
+	}
+	return replies[0], true
+}
+
+// StopBenchmarkQF is the quorum function for the StopBenchmark quorumcall.
+// It requires a response from all nodes.
+func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies []*MemoryStats) (*MemoryStats, bool) {
+	if len(replies) < qspec.CfgSize {
+		return nil, false
+	}
+	result := &MemoryStats{}
+	for _, reply := range replies {
+		result.Allocs += reply.Allocs
+		result.Memory += reply.Memory
+	}
+	return result, true
 }
 
 // UnorderedQCQF is the quorum function for the UnorderedQC quorumcall

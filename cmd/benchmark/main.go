@@ -97,7 +97,9 @@ func main() {
 		return
 	}
 
+	remote := true
 	if len(*remotes) < 1 {
+		remote = false
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		ports := benchmark.StartLocalServers(ctx, 4)
@@ -126,6 +128,8 @@ func main() {
 	options.QuorumSize = options.NumNodes / 2
 	options.Payload = *payload
 	options.Warmup, err = time.ParseDuration(*warmup)
+	options.Remote = remote
+
 	if err != nil {
 		log.Fatalf("Failed to parse 'warmup': %v\n", err)
 	}
