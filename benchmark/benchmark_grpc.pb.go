@@ -19,9 +19,9 @@ const _ = grpc.SupportPackageIsVersion6
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BenchmarkClient interface {
 	StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
-	StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*ServerBenchmark, error)
+	StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*Result, error)
 	StartBenchmark(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
-	StopBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*MemoryStats, error)
+	StopBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*MemoryStat, error)
 	// benchmarks
 	UnorderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
@@ -49,8 +49,8 @@ func (c *benchmarkClient) StartServerBenchmark(ctx context.Context, in *StartReq
 	return out, nil
 }
 
-func (c *benchmarkClient) StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*ServerBenchmark, error) {
-	out := new(ServerBenchmark)
+func (c *benchmarkClient) StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*Result, error) {
+	out := new(Result)
 	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/StopServerBenchmark", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -67,8 +67,8 @@ func (c *benchmarkClient) StartBenchmark(ctx context.Context, in *StartRequest, 
 	return out, nil
 }
 
-func (c *benchmarkClient) StopBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*MemoryStats, error) {
-	out := new(MemoryStats)
+func (c *benchmarkClient) StopBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*MemoryStat, error) {
+	out := new(MemoryStat)
 	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/StopBenchmark", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -142,9 +142,9 @@ func (c *benchmarkClient) Multicast(ctx context.Context, in *TimedMsg, opts ...g
 // BenchmarkServer is the server API for Benchmark service.
 type BenchmarkServer interface {
 	StartServerBenchmark(context.Context, *StartRequest) (*StartResponse, error)
-	StopServerBenchmark(context.Context, *StopRequest) (*ServerBenchmark, error)
+	StopServerBenchmark(context.Context, *StopRequest) (*Result, error)
 	StartBenchmark(context.Context, *StartRequest) (*StartResponse, error)
-	StopBenchmark(context.Context, *StopRequest) (*MemoryStats, error)
+	StopBenchmark(context.Context, *StopRequest) (*MemoryStat, error)
 	// benchmarks
 	UnorderedQC(context.Context, *Echo) (*Echo, error)
 	OrderedQC(context.Context, *Echo) (*Echo, error)
@@ -162,13 +162,13 @@ type UnimplementedBenchmarkServer struct {
 func (*UnimplementedBenchmarkServer) StartServerBenchmark(context.Context, *StartRequest) (*StartResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartServerBenchmark not implemented")
 }
-func (*UnimplementedBenchmarkServer) StopServerBenchmark(context.Context, *StopRequest) (*ServerBenchmark, error) {
+func (*UnimplementedBenchmarkServer) StopServerBenchmark(context.Context, *StopRequest) (*Result, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopServerBenchmark not implemented")
 }
 func (*UnimplementedBenchmarkServer) StartBenchmark(context.Context, *StartRequest) (*StartResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartBenchmark not implemented")
 }
-func (*UnimplementedBenchmarkServer) StopBenchmark(context.Context, *StopRequest) (*MemoryStats, error) {
+func (*UnimplementedBenchmarkServer) StopBenchmark(context.Context, *StopRequest) (*MemoryStat, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopBenchmark not implemented")
 }
 func (*UnimplementedBenchmarkServer) UnorderedQC(context.Context, *Echo) (*Echo, error) {

@@ -24,19 +24,21 @@ func (qspec *QSpec) StartServerBenchmarkQF(_ *StartRequest, replies []*StartResp
 
 // StopServerBenchmarkQF is the quorum function for the StopServerBenchmark quorumcall.
 // It requires a response from all nodes.
-func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*ServerBenchmark) (*ServerBenchmark, bool) {
+func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*Result) (*Result, bool) {
 	if len(replies) < qspec.CfgSize {
 		return nil, false
 	}
 	// combine results, calculating averages and pooled variance
-	resp := &ServerBenchmark{Name: replies[0].Name}
+	resp := &Result{Name: replies[0].Name}
 	for _, reply := range replies {
 		resp.TotalOps += reply.TotalOps
 		resp.TotalTime += reply.TotalTime
 		resp.Throughput += reply.Throughput
 		resp.LatencyAvg += reply.LatencyAvg * float64(reply.TotalOps)
-		resp.AllocsPerOp += reply.AllocsPerOp
-		resp.MemPerOp += reply.MemPerOp
+		resp.ServerStats = append(resp.ServerStats, &MemoryStat{
+			Allocs: reply.AllocsPerOp,
+			Memory: reply.MemPerOp,
+		})
 	}
 	resp.LatencyAvg /= float64(resp.TotalOps)
 	for _, reply := range replies {
@@ -46,8 +48,6 @@ func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*ServerBench
 	resp.TotalOps /= uint64(len(replies))
 	resp.TotalTime /= int64(len(replies))
 	resp.Throughput /= float64(len(replies))
-	resp.AllocsPerOp /= uint64(len(replies))
-	resp.MemPerOp /= uint64(len(replies))
 	return resp, true
 }
 
@@ -62,16 +62,11 @@ func (qspec *QSpec) StartBenchmarkQF(_ *StartRequest, replies []*StartResponse) 
 
 // StopBenchmarkQF is the quorum function for the StopBenchmark quorumcall.
 // It requires a response from all nodes.
-func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies []*MemoryStats) (*MemoryStats, bool) {
+func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies []*MemoryStat) (*MemoryStatList, bool) {
 	if len(replies) < qspec.CfgSize {
 		return nil, false
 	}
-	result := &MemoryStats{}
-	for _, reply := range replies {
-		result.Allocs += reply.Allocs
-		result.Memory += reply.Memory
-	}
-	return result, true
+	return &MemoryStatList{MemoryStats: replies}, true
 }
 
 // UnorderedQCQF is the quorum function for the UnorderedQC quorumcall

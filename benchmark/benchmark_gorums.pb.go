@@ -1279,7 +1279,7 @@ func (s *GorumsServer) RegisterStartServerBenchmarkHandler(handler StartServerBe
 
 // StopServerBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *ServerBenchmark, err error) {
+func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *Result, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StopServerBenchmark")
@@ -1326,7 +1326,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 	}
 
 	var (
-		replyValues = make([]*ServerBenchmark, 0, expected)
+		replyValues = make([]*Result, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -1343,7 +1343,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(ServerBenchmark)
+			reply := new(Result)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
@@ -1365,7 +1365,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 
 // StopServerBenchmarkHandler is the server API for the StopServerBenchmark rpc.
 type StopServerBenchmarkHandler interface {
-	StopServerBenchmark(*StopRequest) *ServerBenchmark
+	StopServerBenchmark(*StopRequest) *Result
 }
 
 // RegisterStopServerBenchmarkHandler sets the handler for StopServerBenchmark.
@@ -1497,7 +1497,7 @@ func (s *GorumsServer) RegisterStartBenchmarkHandler(handler StartBenchmarkHandl
 
 // StopBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (resp *MemoryStats, err error) {
+func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (resp *MemoryStatList, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
 		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "StopBenchmark")
@@ -1544,7 +1544,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 	}
 
 	var (
-		replyValues = make([]*MemoryStats, 0, expected)
+		replyValues = make([]*MemoryStat, 0, expected)
 		errs        []GRPCError
 		quorum      bool
 	)
@@ -1561,7 +1561,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(MemoryStats)
+			reply := new(MemoryStat)
 			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
@@ -1583,7 +1583,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 
 // StopBenchmarkHandler is the server API for the StopBenchmark rpc.
 type StopBenchmarkHandler interface {
-	StopBenchmark(*StopRequest) *MemoryStats
+	StopBenchmark(*StopRequest) *MemoryStat
 }
 
 // RegisterStopBenchmarkHandler sets the handler for StopBenchmark.
@@ -1947,7 +1947,7 @@ type QuorumSpec interface {
 	// supplied to the StopServerBenchmark method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *StopRequest'.
-	StopServerBenchmarkQF(in *StopRequest, replies []*ServerBenchmark) (*ServerBenchmark, bool)
+	StopServerBenchmarkQF(in *StopRequest, replies []*Result) (*Result, bool)
 
 	// StartBenchmarkQF is the quorum function for the StartBenchmark
 	// ordered quorum call method. The in parameter is the request object
@@ -1961,7 +1961,7 @@ type QuorumSpec interface {
 	// supplied to the StopBenchmark method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *StopRequest'.
-	StopBenchmarkQF(in *StopRequest, replies []*MemoryStats) (*MemoryStats, bool)
+	StopBenchmarkQF(in *StopRequest, replies []*MemoryStat) (*MemoryStatList, bool)
 
 	// UnorderedQCQF is the quorum function for the UnorderedQC
 	// quorum call method. The in parameter is the request object
@@ -2179,15 +2179,15 @@ type internalEcho struct {
 	err   error
 }
 
-type internalMemoryStats struct {
+type internalMemoryStat struct {
 	nid   uint32
-	reply *MemoryStats
+	reply *MemoryStat
 	err   error
 }
 
-type internalServerBenchmark struct {
+type internalResult struct {
 	nid   uint32
-	reply *ServerBenchmark
+	reply *Result
 	err   error
 }
 
