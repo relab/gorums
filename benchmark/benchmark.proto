@@ -21,7 +21,7 @@ message StartResponse {}
 
 message StopRequest {}
 
-message StopResponse {
+message ServerBenchmark {
   string Name = 1;
   uint64 TotalOps = 2;
   int64 TotalTime = 3;
@@ -32,13 +32,28 @@ message StopResponse {
   uint64 MemPerOp = 8;
 }
 
+message MemoryStats {
+  uint64 Allocs = 1;
+  uint64 Memory = 2;
+}
+
 service Benchmark {
   rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
     option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
   }
 
-  rpc StopServerBenchmark(StopRequest) returns (StopResponse) {
+  rpc StopServerBenchmark(StopRequest) returns (ServerBenchmark) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
+
+  rpc StartBenchmark(StartRequest) returns (StartResponse) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
+
+  rpc StopBenchmark(StopRequest) returns (MemoryStats) {
     option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
   }

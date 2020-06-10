@@ -19,7 +19,9 @@ const _ = grpc.SupportPackageIsVersion6
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BenchmarkClient interface {
 	StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
-	StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error)
+	StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*ServerBenchmark, error)
+	StartBenchmark(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error)
+	StopBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*MemoryStats, error)
 	// benchmarks
 	UnorderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
@@ -47,9 +49,27 @@ func (c *benchmarkClient) StartServerBenchmark(ctx context.Context, in *StartReq
 	return out, nil
 }
 
-func (c *benchmarkClient) StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*StopResponse, error) {
-	out := new(StopResponse)
+func (c *benchmarkClient) StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*ServerBenchmark, error) {
+	out := new(ServerBenchmark)
 	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/StopServerBenchmark", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *benchmarkClient) StartBenchmark(ctx context.Context, in *StartRequest, opts ...grpc.CallOption) (*StartResponse, error) {
+	out := new(StartResponse)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/StartBenchmark", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *benchmarkClient) StopBenchmark(ctx context.Context, in *StopRequest, opts ...grpc.CallOption) (*MemoryStats, error) {
+	out := new(MemoryStats)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/StopBenchmark", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +142,9 @@ func (c *benchmarkClient) Multicast(ctx context.Context, in *TimedMsg, opts ...g
 // BenchmarkServer is the server API for Benchmark service.
 type BenchmarkServer interface {
 	StartServerBenchmark(context.Context, *StartRequest) (*StartResponse, error)
-	StopServerBenchmark(context.Context, *StopRequest) (*StopResponse, error)
+	StopServerBenchmark(context.Context, *StopRequest) (*ServerBenchmark, error)
+	StartBenchmark(context.Context, *StartRequest) (*StartResponse, error)
+	StopBenchmark(context.Context, *StopRequest) (*MemoryStats, error)
 	// benchmarks
 	UnorderedQC(context.Context, *Echo) (*Echo, error)
 	OrderedQC(context.Context, *Echo) (*Echo, error)
@@ -140,8 +162,14 @@ type UnimplementedBenchmarkServer struct {
 func (*UnimplementedBenchmarkServer) StartServerBenchmark(context.Context, *StartRequest) (*StartResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartServerBenchmark not implemented")
 }
-func (*UnimplementedBenchmarkServer) StopServerBenchmark(context.Context, *StopRequest) (*StopResponse, error) {
+func (*UnimplementedBenchmarkServer) StopServerBenchmark(context.Context, *StopRequest) (*ServerBenchmark, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopServerBenchmark not implemented")
+}
+func (*UnimplementedBenchmarkServer) StartBenchmark(context.Context, *StartRequest) (*StartResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartBenchmark not implemented")
+}
+func (*UnimplementedBenchmarkServer) StopBenchmark(context.Context, *StopRequest) (*MemoryStats, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopBenchmark not implemented")
 }
 func (*UnimplementedBenchmarkServer) UnorderedQC(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnorderedQC not implemented")
@@ -201,6 +229,42 @@ func _Benchmark_StopServerBenchmark_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BenchmarkServer).StopServerBenchmark(ctx, req.(*StopRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Benchmark_StartBenchmark_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).StartBenchmark(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/StartBenchmark",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).StartBenchmark(ctx, req.(*StartRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Benchmark_StopBenchmark_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).StopBenchmark(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/StopBenchmark",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).StopBenchmark(ctx, req.(*StopRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -342,6 +406,14 @@ var _Benchmark_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopServerBenchmark",
 			Handler:    _Benchmark_StopServerBenchmark_Handler,
+		},
+		{
+			MethodName: "StartBenchmark",
+			Handler:    _Benchmark_StartBenchmark_Handler,
+		},
+		{
+			MethodName: "StopBenchmark",
+			Handler:    _Benchmark_StopBenchmark_Handler,
 		},
 		{
 			MethodName: "UnorderedQC",

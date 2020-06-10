@@ -18,7 +18,15 @@ func (srv *unorderedServer) StartServerBenchmark(_ context.Context, _ *StartRequ
 	panic("Not implemented")
 }
 
-func (srv *unorderedServer) StopServerBenchmark(_ context.Context, _ *StopRequest) (_ *StopResponse, _ error) {
+func (srv *unorderedServer) StopServerBenchmark(_ context.Context, _ *StopRequest) (_ *ServerBenchmark, _ error) {
+	panic("Not implemented")
+}
+
+func (srv *unorderedServer) StartBenchmark(_ context.Context, _ *StartRequest) (_ *StartResponse, _ error) {
+	panic("Not implemented")
+}
+
+func (srv *unorderedServer) StopBenchmark(_ context.Context, _ *StopRequest) (_ *MemoryStats, _ error) {
 	panic("Not implemented")
 }
 
@@ -93,6 +101,8 @@ func NewServer() *Server {
 	srv.GorumsServer = NewGorumsServer()
 	srv.RegisterStartServerBenchmarkHandler(srv)
 	srv.RegisterStopServerBenchmarkHandler(srv)
+	srv.RegisterStartBenchmarkHandler(srv)
+	srv.RegisterStopBenchmarkHandler(srv)
 	srv.RegisterOrderedQCHandler(&srv.orderedSrv)
 	srv.RegisterOrderedAsyncHandler(&srv.orderedSrv)
 	srv.RegisterOrderedSlowServerHandler(&srv.orderedSrv)
@@ -101,16 +111,16 @@ func NewServer() *Server {
 	return srv
 }
 
-func (srv *Server) StartServerBenchmark(in *StartRequest) *StartResponse {
+func (srv *Server) StartServerBenchmark(_ *StartRequest) *StartResponse {
 	srv.stats.Clear()
 	srv.stats.Start()
 	return &StartResponse{}
 }
 
-func (srv *Server) StopServerBenchmark(in *StopRequest) *StopResponse {
+func (srv *Server) StopServerBenchmark(_ *StopRequest) *ServerBenchmark {
 	srv.stats.End()
 	results := srv.stats.GetResult()
-	return &StopResponse{
+	return &ServerBenchmark{
 		TotalOps:    results.TotalOps,
 		TotalTime:   int64(results.TotalTime),
 		Throughput:  results.Throughput,
@@ -118,6 +128,20 @@ func (srv *Server) StopServerBenchmark(in *StopRequest) *StopResponse {
 		LatencyVar:  results.LatencyVar,
 		AllocsPerOp: results.AllocsPerOp,
 		MemPerOp:    results.MemPerOp,
+	}
+}
+
+func (srv *Server) StartBenchmark(_ *StartRequest) *StartResponse {
+	srv.stats.Clear()
+	srv.stats.Start()
+	return &StartResponse{}
+}
+
+func (srv *Server) StopBenchmark(_ *StopRequest) *MemoryStats {
+	srv.stats.End()
+	return &MemoryStats{
+		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,
+		Memory: srv.stats.endMs.TotalAlloc - srv.stats.startMs.TotalAlloc,
 	}
 }
 

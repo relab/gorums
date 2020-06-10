@@ -19,6 +19,7 @@ type Options struct {
 	Payload    int           // Size of message payload
 	QuorumSize int           // Number of messages to wait for
 	Warmup     time.Duration // Warmup time
+	Remote     bool          // Whether the servers are remote (true) or local (false)
 }
 
 type benchFunc func(Options) (Result, error)
@@ -26,7 +27,7 @@ type qcFunc func(context.Context, *Echo) (*Echo, error)
 type asyncQCFunc func(context.Context, *Echo) *FutureEcho
 type serverFunc func(*TimedMsg) error
 
-func runQCBenchmark(opts Options, f qcFunc) (Result, error) {
+func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	msg := &Echo{Payload: make([]byte, opts.Payload)}
@@ -51,6 +52,13 @@ func runQCBenchmark(opts Options, f qcFunc) (Result, error) {
 		return Result{}, err
 	}
 
+	if opts.Remote {
+		_, err := cfg.StartBenchmark(ctx, &StartRequest{})
+		if err != nil {
+			return Result{}, err
+		}
+	}
+
 	s.Start()
 	for n := 0; n < opts.Concurrent; n++ {
 		g.Go(func() error {
@@ -69,14 +77,24 @@ func runQCBenchmark(opts Options, f qcFunc) (Result, error) {
 
 	err = g.Wait()
 	s.End()
-
 	if err != nil {
 		return Result{}, err
 	}
-	return s.GetResult(), nil
+
+	result := s.GetResult()
+	if opts.Remote {
+		memStats, err := cfg.StopBenchmark(ctx, &StopRequest{})
+		if err != nil {
+			return Result{}, err
+		}
+		result.AllocsPerOp += memStats.Allocs / result.TotalOps
+		result.MemPerOp += memStats.Memory / result.TotalOps
+	}
+
+	return result, nil
 }
 
-func runAsyncQCBenchmark(opts Options, f asyncQCFunc) (Result, error) {
+func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	msg := &Echo{Payload: make([]byte, opts.Payload)}
@@ -111,6 +129,13 @@ func runAsyncQCBenchmark(opts Options, f asyncQCFunc) (Result, error) {
 		return Result{}, err
 	}
 
+	if opts.Remote {
+		_, err := cfg.StartBenchmark(ctx, &StartRequest{})
+		if err != nil {
+			return Result{}, err
+		}
+	}
+
 	endTime := time.Now().Add(opts.Duration)
 	var benchmarkFunc func() error
 	benchmarkFunc = func() error {
@@ -137,11 +162,21 @@ func runAsyncQCBenchmark(opts Options, f asyncQCFunc) (Result, error) {
 	}
 	err = g.Wait()
 	s.End()
-
 	if err != nil {
 		return Result{}, err
 	}
-	return s.GetResult(), nil
+
+	result := s.GetResult()
+	if opts.Remote {
+		memStats, err := cfg.StopBenchmark(ctx, &StopRequest{})
+		if err != nil {
+			return Result{}, err
+		}
+		result.AllocsPerOp += memStats.Allocs / result.TotalOps
+		result.MemPerOp += memStats.Memory / result.TotalOps
+	}
+
+	return result, nil
 }
 
 func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (Result, error) {
@@ -204,28 +239,28 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (Result,
 func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
 	m := map[string]benchFunc{
 		"UnorderedQC": func(opts Options) (Result, error) {
-			return runQCBenchmark(opts, func(ctx context.Context, msg *Echo) (*Echo, error) {
+			return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
 				return cfg.UnorderedQC(ctx, msg)
 			})
 		},
 
-		"OrderedQC": func(opts Options) (Result, error) { return runQCBenchmark(opts, cfg.OrderedQC) },
+		"OrderedQC": func(opts Options) (Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedQC) },
 
 		"UnorderedAsync": func(opts Options) (Result, error) {
-			return runAsyncQCBenchmark(opts, func(ctx context.Context, msg *Echo) *FutureEcho {
+			return runAsyncQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) *FutureEcho {
 				return cfg.UnorderedAsync(ctx, msg)
 			})
 		},
 
-		"OrderedAsync": func(opts Options) (Result, error) { return runAsyncQCBenchmark(opts, cfg.OrderedAsync) },
+		"OrderedAsync": func(opts Options) (Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.OrderedAsync) },
 
 		"UnorderedSlowServer": func(opts Options) (Result, error) {
-			return runQCBenchmark(opts, func(ctx context.Context, msg *Echo) (*Echo, error) {
+			return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
 				return cfg.UnorderedSlowServer(ctx, msg)
 			})
 		},
 
-		"OrderedSlowServer": func(opts Options) (Result, error) { return runQCBenchmark(opts, cfg.OrderedSlowServer) },
+		"OrderedSlowServer": func(opts Options) (Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedSlowServer) },
 
 		"Multicast": func(opts Options) (Result, error) { return runServerBenchmark(opts, cfg, cfg.Multicast) },
 	}
