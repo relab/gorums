@@ -21,7 +21,7 @@ message StartResponse {}
 
 message StopRequest {}
 
-message ServerBenchmark {
+message Result {
   string Name = 1;
   uint64 TotalOps = 2;
   int64 TotalTime = 3;
@@ -30,12 +30,15 @@ message ServerBenchmark {
   double LatencyVar = 6;
   uint64 AllocsPerOp = 7;
   uint64 MemPerOp = 8;
+  repeated MemoryStat ServerStats = 9;
 }
 
-message MemoryStats {
+message MemoryStat {
   uint64 Allocs = 1;
   uint64 Memory = 2;
 }
+
+message MemoryStatList { repeated MemoryStat MemoryStats = 1; }
 
 service Benchmark {
   rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
@@ -43,7 +46,7 @@ service Benchmark {
     option (gorums.ordered) = true;
   }
 
-  rpc StopServerBenchmark(StopRequest) returns (ServerBenchmark) {
+  rpc StopServerBenchmark(StopRequest) returns (Result) {
     option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
   }
@@ -53,9 +56,10 @@ service Benchmark {
     option (gorums.ordered) = true;
   }
 
-  rpc StopBenchmark(StopRequest) returns (MemoryStats) {
+  rpc StopBenchmark(StopRequest) returns (MemoryStat) {
     option (gorums.quorumcall) = true;
     option (gorums.ordered) = true;
+    option (gorums.custom_return_type) = "MemoryStatList";
   }
 
   // benchmarks

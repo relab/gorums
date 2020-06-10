@@ -18,7 +18,7 @@ func (srv *unorderedServer) StartServerBenchmark(_ context.Context, _ *StartRequ
 	panic("Not implemented")
 }
 
-func (srv *unorderedServer) StopServerBenchmark(_ context.Context, _ *StopRequest) (_ *ServerBenchmark, _ error) {
+func (srv *unorderedServer) StopServerBenchmark(_ context.Context, _ *StopRequest) (_ *Result, _ error) {
 	panic("Not implemented")
 }
 
@@ -26,7 +26,7 @@ func (srv *unorderedServer) StartBenchmark(_ context.Context, _ *StartRequest) (
 	panic("Not implemented")
 }
 
-func (srv *unorderedServer) StopBenchmark(_ context.Context, _ *StopRequest) (_ *MemoryStats, _ error) {
+func (srv *unorderedServer) StopBenchmark(_ context.Context, _ *StopRequest) (_ *MemoryStat, _ error) {
 	panic("Not implemented")
 }
 
@@ -117,18 +117,9 @@ func (srv *Server) StartServerBenchmark(_ *StartRequest) *StartResponse {
 	return &StartResponse{}
 }
 
-func (srv *Server) StopServerBenchmark(_ *StopRequest) *ServerBenchmark {
+func (srv *Server) StopServerBenchmark(_ *StopRequest) *Result {
 	srv.stats.End()
-	results := srv.stats.GetResult()
-	return &ServerBenchmark{
-		TotalOps:    results.TotalOps,
-		TotalTime:   int64(results.TotalTime),
-		Throughput:  results.Throughput,
-		LatencyAvg:  results.LatencyAvg,
-		LatencyVar:  results.LatencyVar,
-		AllocsPerOp: results.AllocsPerOp,
-		MemPerOp:    results.MemPerOp,
-	}
+	return srv.stats.GetResult()
 }
 
 func (srv *Server) StartBenchmark(_ *StartRequest) *StartResponse {
@@ -137,9 +128,9 @@ func (srv *Server) StartBenchmark(_ *StartRequest) *StartResponse {
 	return &StartResponse{}
 }
 
-func (srv *Server) StopBenchmark(_ *StopRequest) *MemoryStats {
+func (srv *Server) StopBenchmark(_ *StopRequest) *MemoryStat {
 	srv.stats.End()
-	return &MemoryStats{
+	return &MemoryStat{
 		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,
 		Memory: srv.stats.endMs.TotalAlloc - srv.stats.startMs.TotalAlloc,
 	}
