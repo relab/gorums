@@ -161,7 +161,7 @@ func main() {
 	}
 	fmt.Fprintln(resultWriter)
 	for _, r := range results {
-		if !*serverStats || !remote {
+		if !*serverStats && remote {
 			for _, s := range r.ServerStats {
 				r.MemPerOp += s.Memory / r.TotalOps
 				r.AllocsPerOp += s.Allocs / r.TotalOps
