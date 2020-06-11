@@ -12,7 +12,6 @@ import (
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/backoff"
 )
 
 const nilAngleString = "<nil>"
@@ -35,12 +34,12 @@ type Node struct {
 	nodeServices
 }
 
-func (n *Node) createOrderedStream(rq *receiveQueue, backoff backoff.Config) {
+func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *ordering.Message),
+		sendQ:        make(chan *ordering.Message, opts.sendBuffer),
 		node:         n,
-		backoff:      backoff,
+		backoff:      opts.backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }

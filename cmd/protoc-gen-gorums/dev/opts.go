@@ -15,6 +15,14 @@ type managerOptions struct {
 	noConnect       bool
 	trace           bool
 	backoff         backoff.Config
+	sendBuffer      uint
+}
+
+func newManagerOptions() managerOptions {
+	return managerOptions{
+		backoff:    backoff.DefaultConfig,
+		sendBuffer: 0,
+	}
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
@@ -65,5 +73,14 @@ func WithTracing() ManagerOption {
 func WithBackoff(backoff backoff.Config) ManagerOption {
 	return func(o *managerOptions) {
 		o.backoff = backoff
+	}
+}
+
+// WithSendBufferSize allows for changing the size of the send buffer used by Gorums.
+// A larger buffer might achieve higher throughput for asynchronous calltypes, but at
+// the cost of latency.
+func WithSendBufferSize(size uint) ManagerOption {
+	return func(o *managerOptions) {
+		o.sendBuffer = size
 	}
 }
