@@ -35,6 +35,8 @@ func main() {
 		maxAsync    = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
 		server      = flag.String("server", "", "Run a benchmark server on given address.")
 		serverStats = flag.Bool("server-stats", false, "Show server statistics separately")
+		cfgSize     = flag.Int("config-size", 0, "Size of the configuration to use. If < 1, all nodes will be used.")
+		qSize       = flag.Int("quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
 	)
 	flag.Parse()
 
@@ -125,11 +127,26 @@ func main() {
 	var options benchmark.Options
 	options.Concurrent = *concurrent
 	options.MaxAsync = *maxAsync
-	options.NumNodes, _ = mgr.Size()
-	options.QuorumSize = options.NumNodes / 2
 	options.Payload = *payload
 	options.Warmup, err = time.ParseDuration(*warmup)
 	options.Remote = remote
+
+	numNodes, _ := mgr.Size()
+	if *cfgSize < 1 || *cfgSize > numNodes {
+		options.NumNodes = numNodes
+	} else {
+		options.NumNodes = *cfgSize
+	}
+
+	if options.NumNodes == 1 {
+		options.QuorumSize = 1
+	} else if *qSize < 1 {
+		options.QuorumSize = options.NumNodes / 2
+	} else if *qSize > options.NumNodes {
+		options.QuorumSize = options.NumNodes
+	} else {
+		options.QuorumSize = *qSize
+	}
 
 	if err != nil {
 		log.Fatalf("Failed to parse 'warmup': %v\n", err)
@@ -155,7 +172,7 @@ func main() {
 		fmt.Fprint(resultWriter, "+Servers\t\t")
 	} else if *serverStats {
 		fmt.Fprint(resultWriter, "\t\t")
-		for i := 1; i <= len(strings.Split(*remotes, ",")); i++ {
+		for i := 1; i <= options.NumNodes; i++ {
 			fmt.Fprintf(resultWriter, "Server %d\t\t", i)
 		}
 	}
