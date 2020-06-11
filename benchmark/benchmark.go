@@ -263,7 +263,7 @@ func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
 // RunBenchmarks runs all the benchmarks that match the given regex with the given options
 func RunBenchmarks(benchRegex *regexp.Regexp, options Options, manager *Manager) ([]*Result, error) {
 	nodeIDs := manager.NodeIDs()
-	cfg, err := manager.NewConfiguration(nodeIDs[:options.NumNodes], &QSpec{QSize: options.QuorumSize, CfgSize: len(nodeIDs)})
+	cfg, err := manager.NewConfiguration(nodeIDs[:options.NumNodes], &QSpec{QSize: options.QuorumSize, CfgSize: options.NumNodes})
 	if err != nil {
 		return nil, err
 	}
