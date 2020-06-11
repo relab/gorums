@@ -43,9 +43,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		lookup:       make(map[uint32]*Node),
 		configs:      make(map[uint32]*Configuration),
 		receiveQueue: newReceiveQueue(),
-		opts: managerOptions{
-			backoff: backoff.DefaultConfig,
-		},
+		opts:         newManagerOptions(),
 	}
 
 	for _, opt := range opts {
@@ -110,7 +108,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		addr:    tcpAddr.String(),
 		latency: -1 * time.Second,
 	}
-	node.createOrderedStream(m.receiveQueue, m.opts.backoff)
+	node.createOrderedStream(m.receiveQueue, m.opts)
 
 	return node, nil
 }
