@@ -36,8 +36,8 @@ func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies []*Result) (*R
 		resp.Throughput += reply.Throughput
 		resp.LatencyAvg += reply.LatencyAvg * float64(reply.TotalOps)
 		resp.ServerStats = append(resp.ServerStats, &MemoryStat{
-			Allocs: reply.AllocsPerOp,
-			Memory: reply.MemPerOp,
+			Allocs: reply.AllocsPerOp * resp.TotalOps,
+			Memory: reply.MemPerOp * resp.TotalOps,
 		})
 	}
 	resp.LatencyAvg /= float64(resp.TotalOps)
