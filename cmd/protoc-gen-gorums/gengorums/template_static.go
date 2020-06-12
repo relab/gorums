@@ -49,6 +49,7 @@ var reservedIdents = []string{
 	"NodeNotFoundError",
 	"QuorumCallError",
 	"QuorumSpec",
+	"ServerOption",
 }
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
@@ -767,7 +768,8 @@ func WithSendBufferSize(size uint) ManagerOption {
 }
 
 type methodInfo struct {
-	oneway bool
+	oneway     bool
+	concurrent bool
 }
 
 type orderingResult struct {
@@ -927,16 +929,21 @@ type requestHandler func(*ordering.Message) *ordering.Message
 
 type orderingServer struct {
 	handlers    map[int32]requestHandler
+	opts        serverOptions
 	marshaler   proto.MarshalOptions
 	unmarshaler proto.UnmarshalOptions
 }
 
-func newOrderingServer() *orderingServer {
-	return &orderingServer{
+func newOrderingServer(opts []ServerOption) *orderingServer {
+	s := &orderingServer{
 		handlers:    make(map[int32]requestHandler),
 		marshaler:   proto.MarshalOptions{AllowPartial: true, Deterministic: true},
 		unmarshaler: proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true},
 	}
+	for _, opt := range opts {
+		opt(&s.opts)
+	}
+	return s
 }
 
 func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
@@ -944,29 +951,80 @@ func (s *orderingServer) registerHandler(methodID int32, handler requestHandler)
 }
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+	finished := make(chan *ordering.Message, s.opts.buffer)
+	ordered := make(chan struct {
+		msg  *ordering.Message
+		info methodInfo
+	}, s.opts.buffer)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handleMsg := func(req *ordering.Message, info methodInfo) {
+		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+			if info.oneway {
+				handler(req)
+			} else {
+				finished <- handler(req)
+			}
+		}
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg := <-finished:
+				err := srv.Send(msg)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req := <-ordered:
+				handleMsg(req.msg, req.info)
+			}
+		}
+	}()
+
 	for {
 		req, err := srv.Recv()
 		if err != nil {
 			return err
 		}
 
-		// handle the request if a handler is available for this rpc
-		if handler, ok := s.handlers[req.GetMethodID()]; ok {
-			info, ok := orderingMethods[req.MethodID]
-			if !ok {
-				continue
-			}
-			if info.oneway {
-				handler(req)
-				continue
-			}
-			resp := handler(req)
-			resp.ID = req.GetID()
-			err = srv.Send(resp)
-			if err != nil {
-				return err
+		if info, ok := orderingMethods[req.MethodID]; ok {
+			if info.concurrent {
+				go handleMsg(req, info)
+			} else {
+				ordered <- struct {
+					msg  *ordering.Message
+					info methodInfo
+				}{req, info}
 			}
 		}
+	}
+}
+
+type serverOptions struct {
+	buffer uint
+}
+
+// ServerOption is used to change settings for the GorumsServer
+type ServerOption func(*serverOptions)
+
+// WithServerBufferSize sets the buffer size for the server.
+// A larger buffer may result in higher throughput at the cost of higher latency.
+func WithServerBufferSize(size uint) ServerOption {
+	return func(o *serverOptions) {
+		o.buffer = size
 	}
 }
 
@@ -977,9 +1035,9 @@ type GorumsServer struct {
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
-func NewGorumsServer() *GorumsServer {
+func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 	s := &GorumsServer{
-		srv:        newOrderingServer(),
+		srv:        newOrderingServer(opts),
 		grpcServer: grpc.NewServer(),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)

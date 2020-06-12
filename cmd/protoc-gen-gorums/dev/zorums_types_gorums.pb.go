@@ -29,22 +29,22 @@ const unicast2MethodID int32 = 15
 
 var orderingMethods = map[int32]methodInfo{
 
-	0:  {oneway: true},
-	1:  {oneway: true},
-	2:  {oneway: true},
-	3:  {oneway: true},
-	4:  {oneway: true},
-	5:  {oneway: false},
-	6:  {oneway: false},
-	7:  {oneway: false},
-	8:  {oneway: false},
-	9:  {oneway: false},
-	10: {oneway: false},
-	11: {oneway: false},
-	12: {oneway: false},
-	13: {oneway: false},
-	14: {oneway: true},
-	15: {oneway: true},
+	0:  {oneway: true, concurrent: false},
+	1:  {oneway: true, concurrent: false},
+	2:  {oneway: true, concurrent: false},
+	3:  {oneway: true, concurrent: false},
+	4:  {oneway: true, concurrent: false},
+	5:  {oneway: false, concurrent: false},
+	6:  {oneway: false, concurrent: false},
+	7:  {oneway: false, concurrent: false},
+	8:  {oneway: false, concurrent: false},
+	9:  {oneway: false, concurrent: false},
+	10: {oneway: false, concurrent: false},
+	11: {oneway: false, concurrent: false},
+	12: {oneway: false, concurrent: false},
+	13: {oneway: false, concurrent: false},
+	14: {oneway: true, concurrent: false},
+	15: {oneway: true, concurrent: false},
 }
 
 type internalEmpty struct {
