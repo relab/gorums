@@ -39,6 +39,21 @@ type Configuration struct {
 	errs  chan GRPCError
 }
 
+// NewConfig returns a configuration for the given node addresses and quorum spec.
+// The returned func() must be called to close the underlying connections.
+// This is experimental API.
+func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+	man, err := NewManager(addrs, opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
+	}
+	c, err := man.NewConfiguration(man.NodeIDs(), qspec)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create configuration: %v", err)
+	}
+	return c, func() { man.Close() }, nil
+}
+
 // ID reports the identifier for the configuration.
 func (c *Configuration) ID() uint32 {
 	return c.id
@@ -178,9 +193,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		lookup:       make(map[uint32]*Node),
 		configs:      make(map[uint32]*Configuration),
 		receiveQueue: newReceiveQueue(),
-		opts: managerOptions{
-			backoff: backoff.DefaultConfig,
-		},
+		opts:         newManagerOptions(),
 	}
 
 	for _, opt := range opts {
@@ -245,7 +258,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		addr:    tcpAddr.String(),
 		latency: -1 * time.Second,
 	}
-	node.createOrderedStream(m.receiveQueue, m.opts.backoff)
+	node.createOrderedStream(m.receiveQueue, m.opts)
 
 	return node, nil
 }
@@ -448,12 +461,12 @@ type Node struct {
 	nodeServices
 }
 
-func (n *Node) createOrderedStream(rq *receiveQueue, backoff backoff.Config) {
+func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *ordering.Message),
+		sendQ:        make(chan *ordering.Message, opts.sendBuffer),
 		node:         n,
-		backoff:      backoff,
+		backoff:      opts.backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
@@ -660,6 +673,14 @@ type managerOptions struct {
 	noConnect       bool
 	trace           bool
 	backoff         backoff.Config
+	sendBuffer      uint
+}
+
+func newManagerOptions() managerOptions {
+	return managerOptions{
+		backoff:    backoff.DefaultConfig,
+		sendBuffer: 0,
+	}
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
@@ -711,6 +732,20 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 	return func(o *managerOptions) {
 		o.backoff = backoff
 	}
+}
+
+// WithSendBufferSize allows for changing the size of the send buffer used by Gorums.
+// A larger buffer might achieve higher throughput for asynchronous calltypes, but at
+// the cost of latency.
+func WithSendBufferSize(size uint) ManagerOption {
+	return func(o *managerOptions) {
+		o.sendBuffer = size
+	}
+}
+
+type methodInfo struct {
+	oneway     bool
+	concurrent bool
 }
 
 type orderingResult struct {
@@ -870,12 +905,17 @@ type requestHandler func(*ordering.Message) *ordering.Message
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
+	opts     serverOptions
 }
 
-func newOrderingServer() *orderingServer {
-	return &orderingServer{
+func newOrderingServer(opts []ServerOption) *orderingServer {
+	s := &orderingServer{
 		handlers: make(map[int32]requestHandler),
 	}
+	for _, opt := range opts {
+		opt(&s.opts)
+	}
+	return s
 }
 
 func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
@@ -883,20 +923,80 @@ func (s *orderingServer) registerHandler(methodID int32, handler requestHandler)
 }
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+	finished := make(chan *ordering.Message, s.opts.buffer)
+	ordered := make(chan struct {
+		msg  *ordering.Message
+		info methodInfo
+	}, s.opts.buffer)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handleMsg := func(req *ordering.Message, info methodInfo) {
+		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+			if info.oneway {
+				handler(req)
+			} else {
+				finished <- handler(req)
+			}
+		}
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg := <-finished:
+				err := srv.Send(msg)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req := <-ordered:
+				handleMsg(req.msg, req.info)
+			}
+		}
+	}()
+
 	for {
 		req, err := srv.Recv()
 		if err != nil {
 			return err
 		}
-		// handle the request if a handler is available for this rpc
-		if handler, ok := s.handlers[req.GetMethodID()]; ok {
-			resp := handler(req)
-			resp.ID = req.GetID()
-			err = srv.Send(resp)
-			if err != nil {
-				return err
+
+		if info, ok := orderingMethods[req.MethodID]; ok {
+			if info.concurrent {
+				go handleMsg(req, info)
+			} else {
+				ordered <- struct {
+					msg  *ordering.Message
+					info methodInfo
+				}{req, info}
 			}
 		}
+	}
+}
+
+type serverOptions struct {
+	buffer uint
+}
+
+// ServerOption is used to change settings for the GorumsServer
+type ServerOption func(*serverOptions)
+
+// WithServerBufferSize sets the buffer size for the server.
+// A larger buffer may result in higher throughput at the cost of higher latency.
+func WithServerBufferSize(size uint) ServerOption {
+	return func(o *serverOptions) {
+		o.buffer = size
 	}
 }
 
@@ -907,9 +1007,9 @@ type GorumsServer struct {
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
-func NewGorumsServer() *GorumsServer {
+func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 	s := &GorumsServer{
-		srv:        newOrderingServer(),
+		srv:        newOrderingServer(opts),
 		grpcServer: grpc.NewServer(),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
@@ -1308,6 +1408,12 @@ const hasOrderingMethods = true
 const qCMethodID int32 = 0
 const qCFutureMethodID int32 = 1
 const unaryRPCMethodID int32 = 2
+
+var orderingMethods = map[int32]methodInfo{
+	0: {oneway: false, concurrent: false},
+	1: {oneway: false, concurrent: false},
+	2: {oneway: false, concurrent: false},
+}
 
 type internalResponse struct {
 	nid   uint32

@@ -16,7 +16,8 @@ import (
 )
 
 type methodInfo struct {
-	oneway bool
+	oneway     bool
+	concurrent bool
 }
 
 type orderingResult struct {
