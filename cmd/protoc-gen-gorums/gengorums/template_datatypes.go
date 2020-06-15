@@ -160,7 +160,43 @@ var serverInterface = `
 // {{$service}} is the server-side API for the {{$service}} Service
 type {{$service}} interface {
 	{{- range nodeStreamMethods .Methods}}
-	{{.GoName}}({{in $genFile .}}) {{out $genFile .}}
+	{{.GoName}}(*{{in $genFile .}}) *{{out $genFile .}}
+	{{- end}}
+}
+{{- end}}
+`
+
+var registerInterface = `
+{{$genFile := .GenFile}}
+{{$marshalOptions := use "proto.MarshalOptions" .GenFile}}
+{{$unmarshalOptions := use "proto.UnmarshalOptions" .GenFile}}
+{{$gorumsMsg := use "ordering.Message" .GenFile}}
+{{range .Services -}}
+{{$service := .GoName}}
+func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
+	{{- range nodeStreamMethods .Methods}}
+	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
+		req := new({{in $genFile .}})
+		err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		{{- if isOneway .}}
+		if err != nil {
+			return nil
+		}
+		srv.{{.GoName}}(req)
+		return nil
+		{{- else}}
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &{{$gorumsMsg}}{MethodID: {{unexport .GoName}}MethodID, ID: in.ID}
+		}
+		resp := srv.{{.GoName}}(req)
+		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new({{$gorumsMsg}})
+		}
+		return &{{$gorumsMsg}}{Data: data, MethodID: {{unexport .GoName}}MethodID, ID: in.ID}
+		{{- end}}
+	}
 	{{- end}}
 }
 {{- end}}
@@ -172,7 +208,8 @@ var datatypes = globals +
 	internalOutDataType +
 	futureDataType +
 	correctableDataType +
-	serverInterface
+	serverInterface +
+	registerInterface
 
 // nodeStreamMethods returns all Gorums methods that use ordering.
 func nodeStreamMethods(methods []*protogen.Method) (s []*protogen.Method) {

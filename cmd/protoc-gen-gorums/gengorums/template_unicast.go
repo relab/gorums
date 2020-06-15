@@ -20,5 +20,4 @@ func (n *Node) {{$method}}(in *{{$in}}) error {
 var unicastCall = commonVariables +
 	orderingVariables +
 	multicastRefImports +
-	unicastMethod +
-	multicastHandler
+	unicastMethod
