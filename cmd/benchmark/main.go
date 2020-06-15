@@ -107,7 +107,7 @@ func main() {
 		remote = false
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		ports := benchmark.StartLocalServers(ctx, 4, benchmark.WithServerBufferSize(*serverBuffer))
+		ports := benchmark.StartLocalServers(ctx, *cfgSize, benchmark.WithServerBufferSize(*serverBuffer))
 		*remotes = strings.Join(ports, ",")
 	}
 
