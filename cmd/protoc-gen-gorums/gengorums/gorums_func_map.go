@@ -105,6 +105,12 @@ var funcMap = template.FuncMap{
 	"isOneway": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
+	"methods": func(services []*protogen.Service) (methods []*protogen.Method) {
+		for _, s := range services {
+			methods = append(methods, s.Methods...)
+		}
+		return
+	},
 	"out":                   out,
 	"outType":               outType,
 	"internalOut":           internalOut,
@@ -115,7 +121,7 @@ var funcMap = template.FuncMap{
 	"streamMethods":         streamMethods,
 	"qspecServices":         qspecServices,
 	"qspecMethods":          qspecMethods,
-	"orderedMethods":        orderedMethods,
+	"nodeStreamMethods":     nodeStreamMethods,
 	"unexport":              unexport,
 	"qcresult":              qcresult,
 	"contains":              strings.Contains,

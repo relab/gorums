@@ -27,6 +27,7 @@ const unicastMethodID int32 = 14
 const unicast2MethodID int32 = 15
 
 var orderingMethods = map[int32]methodInfo{
+
 	0:  {oneway: true},
 	1:  {oneway: true},
 	2:  {oneway: true},
@@ -589,4 +590,24 @@ func (c *CorrectableStreamResponse) set(reply *Response, level int, err error, d
 			c.watchers[i] = nil
 		}
 	}
+}
+
+// ZorumsService is the server-side API for the ZorumsService Service
+type ZorumsService interface {
+	Multicast(Request) Response
+	MulticastPerNodeArg(Request) Response
+	Multicast2(Request) Response
+	Multicast3(Request) empty.Empty
+	Multicast4(empty.Empty) empty.Empty
+	OrderingQC(Request) Response
+	OrderingPerNodeArg(Request) Response
+	OrderingCustomReturnType(Request) Response
+	OrderingCombo(Request) Response
+	OrderingUnaryRPC(Request) Response
+	OrderingFuture(Request) Response
+	OrderingFuturePerNodeArg(Request) Response
+	OrderingFutureCustomReturnType(Request) Response
+	OrderingFutureCombo(Request) Response
+	Unicast(Request) Response
+	Unicast2(Request) empty.Empty
 }
