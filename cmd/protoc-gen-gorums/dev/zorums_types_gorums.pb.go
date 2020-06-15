@@ -596,11 +596,11 @@ func (c *CorrectableStreamResponse) set(reply *Response, level int, err error, d
 
 // ZorumsService is the server-side API for the ZorumsService Service
 type ZorumsService interface {
-	Multicast(*Request) *Response
-	MulticastPerNodeArg(*Request) *Response
-	Multicast2(*Request) *Response
-	Multicast3(*Request) *empty.Empty
-	Multicast4(*empty.Empty) *empty.Empty
+	Multicast(*Request)
+	MulticastPerNodeArg(*Request)
+	Multicast2(*Request)
+	Multicast3(*Request)
+	Multicast4(*empty.Empty)
 	OrderingQC(*Request) *Response
 	OrderingPerNodeArg(*Request) *Response
 	OrderingCustomReturnType(*Request) *Response
@@ -610,8 +610,8 @@ type ZorumsService interface {
 	OrderingFuturePerNodeArg(*Request) *Response
 	OrderingFutureCustomReturnType(*Request) *Response
 	OrderingFutureCombo(*Request) *Response
-	Unicast(*Request) *Response
-	Unicast2(*Request) *empty.Empty
+	Unicast(*Request)
+	Unicast2(*Request)
 }
 
 func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
