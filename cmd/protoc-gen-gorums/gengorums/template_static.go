@@ -17,6 +17,7 @@ var pkgIdentMap = map[string]string{
 	"google.golang.org/grpc/backoff":   "Config",
 	"google.golang.org/grpc/codes":     "Unavailable",
 	"google.golang.org/grpc/status":    "Errorf",
+	"google.golang.org/protobuf/proto": "MarshalOptions",
 	"hash/fnv":                         "New32a",
 	"io":                               "WriteString",
 	"log":                              "Logger",
@@ -925,12 +926,16 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 type requestHandler func(*ordering.Message) *ordering.Message
 
 type orderingServer struct {
-	handlers map[int32]requestHandler
+	handlers    map[int32]requestHandler
+	marshaler   proto.MarshalOptions
+	unmarshaler proto.UnmarshalOptions
 }
 
 func newOrderingServer() *orderingServer {
 	return &orderingServer{
-		handlers: make(map[int32]requestHandler),
+		handlers:    make(map[int32]requestHandler),
+		marshaler:   proto.MarshalOptions{AllowPartial: true, Deterministic: true},
+		unmarshaler: proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true},
 	}
 }
 
