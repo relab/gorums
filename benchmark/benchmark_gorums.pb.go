@@ -745,7 +745,8 @@ func WithSendBufferSize(size uint) ManagerOption {
 }
 
 type methodInfo struct {
-	oneway bool
+	oneway     bool
+	concurrent bool
 }
 
 type orderingResult struct {
@@ -905,12 +906,17 @@ type requestHandler func(*ordering.Message) *ordering.Message
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
+	opts     serverOptions
 }
 
-func newOrderingServer() *orderingServer {
-	return &orderingServer{
+func newOrderingServer(opts []ServerOption) *orderingServer {
+	s := &orderingServer{
 		handlers: make(map[int32]requestHandler),
 	}
+	for _, opt := range opts {
+		opt(&s.opts)
+	}
+	return s
 }
 
 func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
@@ -918,29 +924,80 @@ func (s *orderingServer) registerHandler(methodID int32, handler requestHandler)
 }
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+	finished := make(chan *ordering.Message, s.opts.buffer)
+	ordered := make(chan struct {
+		msg  *ordering.Message
+		info methodInfo
+	}, s.opts.buffer)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handleMsg := func(req *ordering.Message, info methodInfo) {
+		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+			if info.oneway {
+				handler(req)
+			} else {
+				finished <- handler(req)
+			}
+		}
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg := <-finished:
+				err := srv.Send(msg)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req := <-ordered:
+				handleMsg(req.msg, req.info)
+			}
+		}
+	}()
+
 	for {
 		req, err := srv.Recv()
 		if err != nil {
 			return err
 		}
 
-		// handle the request if a handler is available for this rpc
-		if handler, ok := s.handlers[req.GetMethodID()]; ok {
-			info, ok := orderingMethods[req.MethodID]
-			if !ok {
-				continue
-			}
-			if info.oneway {
-				handler(req)
-				continue
-			}
-			resp := handler(req)
-			resp.ID = req.GetID()
-			err = srv.Send(resp)
-			if err != nil {
-				return err
+		if info, ok := orderingMethods[req.MethodID]; ok {
+			if info.concurrent {
+				go handleMsg(req, info)
+			} else {
+				ordered <- struct {
+					msg  *ordering.Message
+					info methodInfo
+				}{req, info}
 			}
 		}
+	}
+}
+
+type serverOptions struct {
+	buffer uint
+}
+
+// ServerOption is used to change settings for the GorumsServer
+type ServerOption func(*serverOptions)
+
+// WithServerBufferSize sets the buffer size for the server.
+// A larger buffer may result in higher throughput at the cost of higher latency.
+func WithServerBufferSize(size uint) ServerOption {
+	return func(o *serverOptions) {
+		o.buffer = size
 	}
 }
 
@@ -951,9 +1008,9 @@ type GorumsServer struct {
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
-func NewGorumsServer() *GorumsServer {
+func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 	s := &GorumsServer{
-		srv:        newOrderingServer(),
+		srv:        newOrderingServer(opts),
 		grpcServer: grpc.NewServer(),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
@@ -1168,6 +1225,47 @@ func (s *GorumsServer) RegisterMulticastHandler(handler MulticastHandler) {
 	})
 }
 
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
+
+// ConcurrentMulticast is a one-way multicast call on all nodes in configuration c,
+// with the same in argument. The call is asynchronous and has no return value.
+func (c *Configuration) ConcurrentMulticast(in *TimedMsg) error {
+	msgID := c.mgr.nextMsgID()
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: concurrentMulticastMethodID,
+		Data:     data,
+	}
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+	return nil
+}
+
+// ConcurrentMulticastHandler is the server API for the ConcurrentMulticast rpc.
+type ConcurrentMulticastHandler interface {
+	ConcurrentMulticast(*TimedMsg)
+}
+
+// RegisterConcurrentMulticastHandler sets the handler for ConcurrentMulticast.
+func (s *GorumsServer) RegisterConcurrentMulticastHandler(handler ConcurrentMulticastHandler) {
+	s.srv.registerHandler(concurrentMulticastMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(TimedMsg)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		handler.ConcurrentMulticast(req)
+		return nil
+	})
+}
+
 type nodeServices struct {
 	BenchmarkClient
 }
@@ -1288,7 +1386,7 @@ func (s *GorumsServer) RegisterStartServerBenchmarkHandler(handler StartServerBe
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: startServerBenchmarkMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: startServerBenchmarkMethodID}
 	})
 }
 
@@ -1397,7 +1495,7 @@ func (s *GorumsServer) RegisterStopServerBenchmarkHandler(handler StopServerBenc
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: stopServerBenchmarkMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: stopServerBenchmarkMethodID}
 	})
 }
 
@@ -1506,7 +1604,7 @@ func (s *GorumsServer) RegisterStartBenchmarkHandler(handler StartBenchmarkHandl
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: startBenchmarkMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: startBenchmarkMethodID}
 	})
 }
 
@@ -1615,7 +1713,7 @@ func (s *GorumsServer) RegisterStopBenchmarkHandler(handler StopBenchmarkHandler
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: stopBenchmarkMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: stopBenchmarkMethodID}
 	})
 }
 
@@ -1724,7 +1822,116 @@ func (s *GorumsServer) RegisterOrderedQCHandler(handler OrderedQCHandler) {
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: orderedQCMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: orderedQCMethodID}
+	})
+}
+
+// ConcurrentQC is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) ConcurrentQC(ctx context.Context, in *Echo) (resp *Echo, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ConcurrentQC")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	// get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replies := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replies)
+
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
+
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: concurrentQCMethodID,
+		Data:     data,
+	}
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	var (
+		replyValues = make([]*Echo, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replies:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			reply := new(Echo)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, reply)
+			if resp, quorum = c.qspec.ConcurrentQCQF(in, replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+// ConcurrentQCHandler is the server API for the ConcurrentQC rpc.
+type ConcurrentQCHandler interface {
+	ConcurrentQC(*Echo) *Echo
+}
+
+// RegisterConcurrentQCHandler sets the handler for ConcurrentQC.
+func (s *GorumsServer) RegisterConcurrentQCHandler(handler ConcurrentQCHandler) {
+	s.srv.registerHandler(concurrentQCMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.ConcurrentQC(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: concurrentQCMethodID}
 	})
 }
 
@@ -1834,7 +2041,117 @@ func (s *GorumsServer) RegisterOrderedAsyncHandler(handler OrderedAsyncHandler) 
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: orderedAsyncMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: orderedAsyncMethodID}
+	})
+}
+
+// ConcurrentAsync asynchronously invokes a quorum call on configuration c
+// and returns a FutureEcho, which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) ConcurrentAsync(ctx context.Context, in *Echo) *FutureEcho {
+	fut := &FutureEcho{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
+	}
+	// get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
+
+	expected := c.n
+
+	var msg *ordering.Message
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		// In case of a marshalling error, we should skip sending any messages
+		fut.err = fmt.Errorf("failed to marshal message: %w", err)
+		close(fut.c)
+		return fut
+	}
+	msg = &ordering.Message{
+		ID:       msgID,
+		MethodID: concurrentAsyncMethodID,
+		Data:     data,
+	}
+
+	// push the message to the nodes
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	go c.concurrentAsyncRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
+}
+
+func (c *Configuration) concurrentAsyncRecv(ctx context.Context, in *Echo, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureEcho) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
+	defer c.mgr.deleteChan(msgID)
+
+	var (
+		replyValues = make([]*Echo, 0, c.n)
+		reply       *Echo
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replyChan:
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+			data := new(Echo)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, data)
+			if reply, quorum = c.qspec.ConcurrentAsyncQF(in, replyValues); quorum {
+				fut.Echo, fut.err = reply, nil
+				return
+			}
+		case <-ctx.Done():
+			fut.Echo, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
+		}
+		if len(errs)+len(replyValues) == expected {
+			fut.Echo, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
+		}
+	}
+}
+
+// ConcurrentAsyncHandler is the server API for the ConcurrentAsync rpc.
+type ConcurrentAsyncHandler interface {
+	ConcurrentAsync(*Echo) *Echo
+}
+
+// RegisterConcurrentAsyncHandler sets the handler for ConcurrentAsync.
+func (s *GorumsServer) RegisterConcurrentAsyncHandler(handler ConcurrentAsyncHandler) {
+	s.srv.registerHandler(concurrentAsyncMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.ConcurrentAsync(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: concurrentAsyncMethodID}
 	})
 }
 
@@ -1943,7 +2260,116 @@ func (s *GorumsServer) RegisterOrderedSlowServerHandler(handler OrderedSlowServe
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: orderedSlowServerMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: orderedSlowServerMethodID}
+	})
+}
+
+// ConcurrentSlowServer is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) ConcurrentSlowServer(ctx context.Context, in *Echo) (resp *Echo, err error) {
+	var ti traceInfo
+	if c.mgr.opts.trace {
+		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ConcurrentSlowServer")
+		defer ti.Finish()
+
+		ti.firstLine.cid = c.id
+		if deadline, ok := ctx.Deadline(); ok {
+			ti.firstLine.deadline = time.Until(deadline)
+		}
+		ti.LazyLog(&ti.firstLine, false)
+		ti.LazyLog(&payload{sent: true, msg: in}, false)
+
+		defer func() {
+			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
+			if err != nil {
+				ti.SetError()
+			}
+		}()
+	}
+
+	// get the ID which will be used to return the correct responses for a request
+	msgID := c.mgr.nextMsgID()
+
+	// set up a channel to collect replies
+	replies := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replies)
+
+	// remove the replies channel when we are done
+	defer c.mgr.deleteChan(msgID)
+
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: concurrentSlowServerMethodID,
+		Data:     data,
+	}
+	// push the message to the nodes
+	expected := c.n
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+
+	var (
+		replyValues = make([]*Echo, 0, expected)
+		errs        []GRPCError
+		quorum      bool
+	)
+
+	for {
+		select {
+		case r := <-replies:
+			if r.err != nil {
+				errs = append(errs, GRPCError{r.nid, r.err})
+				break
+			}
+
+			if c.mgr.opts.trace {
+				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
+			}
+
+			reply := new(Echo)
+			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			if err != nil {
+				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
+				break
+			}
+			replyValues = append(replyValues, reply)
+			if resp, quorum = c.qspec.ConcurrentSlowServerQF(in, replyValues); quorum {
+				return resp, nil
+			}
+		case <-ctx.Done():
+			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+		}
+
+		if len(errs)+len(replyValues) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		}
+	}
+}
+
+// ConcurrentSlowServerHandler is the server API for the ConcurrentSlowServer rpc.
+type ConcurrentSlowServerHandler interface {
+	ConcurrentSlowServer(*Echo) *Echo
+}
+
+// RegisterConcurrentSlowServerHandler sets the handler for ConcurrentSlowServer.
+func (s *GorumsServer) RegisterConcurrentSlowServerHandler(handler ConcurrentSlowServerHandler) {
+	s.srv.registerHandler(concurrentSlowServerMethodID, func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return new(ordering.Message)
+		}
+		resp := handler.ConcurrentSlowServer(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: concurrentSlowServerMethodID}
 	})
 }
 
@@ -1992,6 +2418,13 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Echo'.
 	OrderedQCQF(in *Echo, replies []*Echo) (*Echo, bool)
 
+	// ConcurrentQCQF is the quorum function for the ConcurrentQC
+	// ordered quorum call method. The in parameter is the request object
+	// supplied to the ConcurrentQC method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Echo'.
+	ConcurrentQCQF(in *Echo, replies []*Echo) (*Echo, bool)
+
 	// UnorderedAsyncQF is the quorum function for the UnorderedAsync
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the UnorderedAsync method at call time, and may or may not
@@ -2006,6 +2439,13 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Echo'.
 	OrderedAsyncQF(in *Echo, replies []*Echo) (*Echo, bool)
 
+	// ConcurrentAsyncQF is the quorum function for the ConcurrentAsync
+	// asynchronous ordered quorum call method. The in parameter is the request object
+	// supplied to the ConcurrentAsync method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Echo'.
+	ConcurrentAsyncQF(in *Echo, replies []*Echo) (*Echo, bool)
+
 	// UnorderedSlowServerQF is the quorum function for the UnorderedSlowServer
 	// quorum call method. The in parameter is the request object
 	// supplied to the UnorderedSlowServer method at call time, and may or may not
@@ -2019,6 +2459,13 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Echo'.
 	OrderedSlowServerQF(in *Echo, replies []*Echo) (*Echo, bool)
+
+	// ConcurrentSlowServerQF is the quorum function for the ConcurrentSlowServer
+	// ordered quorum call method. The in parameter is the request object
+	// supplied to the ConcurrentSlowServer method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Echo'.
+	ConcurrentSlowServerQF(in *Echo, replies []*Echo) (*Echo, bool)
 }
 
 // benchmarks
@@ -2173,19 +2620,27 @@ const stopServerBenchmarkMethodID int32 = 1
 const startBenchmarkMethodID int32 = 2
 const stopBenchmarkMethodID int32 = 3
 const orderedQCMethodID int32 = 4
-const orderedAsyncMethodID int32 = 5
-const orderedSlowServerMethodID int32 = 6
-const multicastMethodID int32 = 7
+const concurrentQCMethodID int32 = 5
+const orderedAsyncMethodID int32 = 6
+const concurrentAsyncMethodID int32 = 7
+const orderedSlowServerMethodID int32 = 8
+const concurrentSlowServerMethodID int32 = 9
+const multicastMethodID int32 = 10
+const concurrentMulticastMethodID int32 = 11
 
 var orderingMethods = map[int32]methodInfo{
-	0: {oneway: false},
-	1: {oneway: false},
-	2: {oneway: false},
-	3: {oneway: false},
-	4: {oneway: false},
-	5: {oneway: false},
-	6: {oneway: false},
-	7: {oneway: true},
+	0:  {oneway: false, concurrent: false},
+	1:  {oneway: false, concurrent: false},
+	2:  {oneway: false, concurrent: false},
+	3:  {oneway: false, concurrent: false},
+	4:  {oneway: false, concurrent: false},
+	5:  {oneway: false, concurrent: true},
+	6:  {oneway: false, concurrent: false},
+	7:  {oneway: false, concurrent: true},
+	8:  {oneway: false, concurrent: false},
+	9:  {oneway: false, concurrent: true},
+	10: {oneway: true, concurrent: false},
+	11: {oneway: true, concurrent: true},
 }
 
 type internalEcho struct {
