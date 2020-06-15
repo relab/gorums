@@ -160,7 +160,11 @@ var serverInterface = `
 // {{$service}} is the server-side API for the {{$service}} Service
 type {{$service}} interface {
 	{{- range nodeStreamMethods .Methods}}
+	{{- if isOneway .}}
+	{{.GoName}}(*{{in $genFile .}})
+	{{- else}}
 	{{.GoName}}(*{{in $genFile .}}) *{{out $genFile .}}
+	{{- end}}
 	{{- end}}
 }
 {{- end}}
