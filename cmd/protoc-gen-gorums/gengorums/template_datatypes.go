@@ -172,8 +172,6 @@ type {{$service}} interface {
 
 var registerInterface = `
 {{$genFile := .GenFile}}
-{{$marshalOptions := use "proto.MarshalOptions" .GenFile}}
-{{$unmarshalOptions := use "proto.UnmarshalOptions" .GenFile}}
 {{$gorumsMsg := use "ordering.Message" .GenFile}}
 {{range .Services -}}
 {{$service := .GoName}}
@@ -181,7 +179,7 @@ func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 	{{- range nodeStreamMethods .Methods}}
 	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
 		req := new({{in $genFile .}})
-		err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
 		{{- if isOneway .}}
 		if err != nil {
 			return nil
@@ -194,7 +192,7 @@ func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 			return &{{$gorumsMsg}}{MethodID: {{unexport .GoName}}MethodID, ID: in.ID}
 		}
 		resp := srv.{{.GoName}}(req)
-		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		data, err := s.srv.marshaler.Marshal(resp)
 		if err != nil {
 			return new({{$gorumsMsg}})
 		}
