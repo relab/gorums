@@ -15,17 +15,22 @@ const multicastPerNodeArgMethodID int32 = 1
 const multicast2MethodID int32 = 2
 const multicast3MethodID int32 = 3
 const multicast4MethodID int32 = 4
-const orderingQCMethodID int32 = 5
-const orderingPerNodeArgMethodID int32 = 6
-const orderingCustomReturnTypeMethodID int32 = 7
-const orderingComboMethodID int32 = 8
-const orderingUnaryRPCMethodID int32 = 9
-const orderingFutureMethodID int32 = 10
-const orderingFuturePerNodeArgMethodID int32 = 11
-const orderingFutureCustomReturnTypeMethodID int32 = 12
-const orderingFutureComboMethodID int32 = 13
-const unicastMethodID int32 = 14
-const unicast2MethodID int32 = 15
+const multicastConcurrentMethodID int32 = 5
+const orderingQCMethodID int32 = 6
+const orderingPerNodeArgMethodID int32 = 7
+const orderingCustomReturnTypeMethodID int32 = 8
+const orderingComboMethodID int32 = 9
+const orderingConcurrentMethodID int32 = 10
+const orderingUnaryRPCMethodID int32 = 11
+const orderingUnaryRPCConcurrentMethodID int32 = 12
+const orderingFutureMethodID int32 = 13
+const orderingFuturePerNodeArgMethodID int32 = 14
+const orderingFutureCustomReturnTypeMethodID int32 = 15
+const orderingFutureConcurrentMethodID int32 = 16
+const orderingFutureComboMethodID int32 = 17
+const unicastMethodID int32 = 18
+const unicast2MethodID int32 = 19
+const unicastConcurrentMethodID int32 = 20
 
 var orderingMethods = map[int32]methodInfo{
 
@@ -34,17 +39,22 @@ var orderingMethods = map[int32]methodInfo{
 	2:  {oneway: true, concurrent: false},
 	3:  {oneway: true, concurrent: false},
 	4:  {oneway: true, concurrent: false},
-	5:  {oneway: false, concurrent: false},
+	5:  {oneway: true, concurrent: true},
 	6:  {oneway: false, concurrent: false},
 	7:  {oneway: false, concurrent: false},
 	8:  {oneway: false, concurrent: false},
 	9:  {oneway: false, concurrent: false},
-	10: {oneway: false, concurrent: false},
+	10: {oneway: false, concurrent: true},
 	11: {oneway: false, concurrent: false},
-	12: {oneway: false, concurrent: false},
+	12: {oneway: false, concurrent: true},
 	13: {oneway: false, concurrent: false},
-	14: {oneway: true, concurrent: false},
-	15: {oneway: true, concurrent: false},
+	14: {oneway: false, concurrent: false},
+	15: {oneway: false, concurrent: false},
+	16: {oneway: false, concurrent: true},
+	17: {oneway: false, concurrent: false},
+	18: {oneway: true, concurrent: false},
+	19: {oneway: true, concurrent: false},
+	20: {oneway: true, concurrent: true},
 }
 
 type internalEmpty struct {
@@ -600,17 +610,22 @@ type ZorumsService interface {
 	Multicast2(*Request)
 	Multicast3(*Request)
 	Multicast4(*empty.Empty)
+	MulticastConcurrent(*Request)
 	OrderingQC(*Request) *Response
 	OrderingPerNodeArg(*Request) *Response
 	OrderingCustomReturnType(*Request) *Response
 	OrderingCombo(*Request) *Response
+	OrderingConcurrent(*Request) *Response
 	OrderingUnaryRPC(*Request) *Response
+	OrderingUnaryRPCConcurrent(*Request) *Response
 	OrderingFuture(*Request) *Response
 	OrderingFuturePerNodeArg(*Request) *Response
 	OrderingFutureCustomReturnType(*Request) *Response
+	OrderingFutureConcurrent(*Request) *Response
 	OrderingFutureCombo(*Request) *Response
 	Unicast(*Request)
 	Unicast2(*Request)
+	UnicastConcurrent(*Request)
 }
 
 func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
@@ -657,6 +672,15 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 			return nil
 		}
 		srv.Multicast4(req)
+		return nil
+	}
+	s.srv.handlers[multicastConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.MulticastConcurrent(req)
 		return nil
 	}
 	s.srv.handlers[orderingQCMethodID] = func(in *ordering.Message) *ordering.Message {
@@ -715,6 +739,20 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 		}
 		return &ordering.Message{Data: data, MethodID: orderingComboMethodID, ID: in.ID}
 	}
+	s.srv.handlers[orderingConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingConcurrentMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingConcurrent(req)
+		data, err := s.srv.marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingConcurrentMethodID, ID: in.ID}
+	}
 	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
@@ -728,6 +766,20 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 			return new(ordering.Message)
 		}
 		return &ordering.Message{Data: data, MethodID: orderingUnaryRPCMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingUnaryRPCConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingUnaryRPCConcurrentMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingUnaryRPCConcurrent(req)
+		data, err := s.srv.marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingUnaryRPCConcurrentMethodID, ID: in.ID}
 	}
 	s.srv.handlers[orderingFutureMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
@@ -771,6 +823,20 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 		}
 		return &ordering.Message{Data: data, MethodID: orderingFutureCustomReturnTypeMethodID, ID: in.ID}
 	}
+	s.srv.handlers[orderingFutureConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingFutureConcurrentMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingFutureConcurrent(req)
+		data, err := s.srv.marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingFutureConcurrentMethodID, ID: in.ID}
+	}
 	s.srv.handlers[orderingFutureComboMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
 		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
@@ -801,6 +867,15 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 			return nil
 		}
 		srv.Unicast2(req)
+		return nil
+	}
+	s.srv.handlers[unicastConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.UnicastConcurrent(req)
 		return nil
 	}
 }

@@ -45,6 +45,8 @@ type ZorumsServiceClient interface {
 	Multicast3(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error)
 	// Multicast4 is testing imported message type.
 	Multicast4(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
+	// MutlicastConcurrent uses a concurrent server-side handler
+	MulticastConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCallFuture plain.
 	QuorumCallFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// QuorumCallFuturePerNodeArg with per_node_arg option.
@@ -90,13 +92,20 @@ type ZorumsServiceClient interface {
 	OrderingPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	OrderingConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// OrderingUnaryRPC is testing that we can create ordered Unary RPCs
 	OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	// OrderingUnaryRPC is testing that we can create ordered Unary RPCs with
+	// concurrent handlers
+	OrderingUnaryRPCConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingFuture(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingFuturePerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingFutureCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
+	OrderingFutureConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	OrderingFutureCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	Unicast(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	Unicast2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error)
+	UnicastConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type zorumsServiceClient struct {
@@ -209,6 +218,15 @@ func (c *zorumsServiceClient) Multicast3(ctx context.Context, in *Request, opts 
 func (c *zorumsServiceClient) Multicast4(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Multicast4", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *zorumsServiceClient) MulticastConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/MulticastConcurrent", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -560,9 +578,27 @@ func (c *zorumsServiceClient) OrderingCombo(ctx context.Context, in *Request, op
 	return out, nil
 }
 
+func (c *zorumsServiceClient) OrderingConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingConcurrent", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *zorumsServiceClient) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
 	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingUnaryRPC", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *zorumsServiceClient) OrderingUnaryRPCConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingUnaryRPCConcurrent", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -596,6 +632,15 @@ func (c *zorumsServiceClient) OrderingFutureCustomReturnType(ctx context.Context
 	return out, nil
 }
 
+func (c *zorumsServiceClient) OrderingFutureConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingFutureConcurrent", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *zorumsServiceClient) OrderingFutureCombo(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error) {
 	out := new(Response)
 	err := c.cc.Invoke(ctx, "/dev.ZorumsService/OrderingFutureCombo", in, out, opts...)
@@ -617,6 +662,15 @@ func (c *zorumsServiceClient) Unicast(ctx context.Context, in *Request, opts ...
 func (c *zorumsServiceClient) Unicast2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/dev.ZorumsService/Unicast2", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *zorumsServiceClient) UnicastConcurrent(ctx context.Context, in *Request, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/dev.ZorumsService/UnicastConcurrent", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -652,6 +706,8 @@ type ZorumsServiceServer interface {
 	Multicast3(context.Context, *Request) (*empty.Empty, error)
 	// Multicast4 is testing imported message type.
 	Multicast4(context.Context, *empty.Empty) (*empty.Empty, error)
+	// MutlicastConcurrent uses a concurrent server-side handler
+	MulticastConcurrent(context.Context, *Request) (*Response, error)
 	// QuorumCallFuture plain.
 	QuorumCallFuture(context.Context, *Request) (*Response, error)
 	// QuorumCallFuturePerNodeArg with per_node_arg option.
@@ -697,13 +753,20 @@ type ZorumsServiceServer interface {
 	OrderingPerNodeArg(context.Context, *Request) (*Response, error)
 	OrderingCustomReturnType(context.Context, *Request) (*Response, error)
 	OrderingCombo(context.Context, *Request) (*Response, error)
+	OrderingConcurrent(context.Context, *Request) (*Response, error)
+	// OrderingUnaryRPC is testing that we can create ordered Unary RPCs
 	OrderingUnaryRPC(context.Context, *Request) (*Response, error)
+	// OrderingUnaryRPC is testing that we can create ordered Unary RPCs with
+	// concurrent handlers
+	OrderingUnaryRPCConcurrent(context.Context, *Request) (*Response, error)
 	OrderingFuture(context.Context, *Request) (*Response, error)
 	OrderingFuturePerNodeArg(context.Context, *Request) (*Response, error)
 	OrderingFutureCustomReturnType(context.Context, *Request) (*Response, error)
+	OrderingFutureConcurrent(context.Context, *Request) (*Response, error)
 	OrderingFutureCombo(context.Context, *Request) (*Response, error)
 	Unicast(context.Context, *Request) (*Response, error)
 	Unicast2(context.Context, *Request) (*empty.Empty, error)
+	UnicastConcurrent(context.Context, *Request) (*empty.Empty, error)
 }
 
 // UnimplementedZorumsServiceServer can be embedded to have forward compatible implementations.
@@ -745,6 +808,9 @@ func (*UnimplementedZorumsServiceServer) Multicast3(context.Context, *Request) (
 }
 func (*UnimplementedZorumsServiceServer) Multicast4(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Multicast4 not implemented")
+}
+func (*UnimplementedZorumsServiceServer) MulticastConcurrent(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MulticastConcurrent not implemented")
 }
 func (*UnimplementedZorumsServiceServer) QuorumCallFuture(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuorumCallFuture not implemented")
@@ -815,8 +881,14 @@ func (*UnimplementedZorumsServiceServer) OrderingCustomReturnType(context.Contex
 func (*UnimplementedZorumsServiceServer) OrderingCombo(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingCombo not implemented")
 }
+func (*UnimplementedZorumsServiceServer) OrderingConcurrent(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderingConcurrent not implemented")
+}
 func (*UnimplementedZorumsServiceServer) OrderingUnaryRPC(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingUnaryRPC not implemented")
+}
+func (*UnimplementedZorumsServiceServer) OrderingUnaryRPCConcurrent(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderingUnaryRPCConcurrent not implemented")
 }
 func (*UnimplementedZorumsServiceServer) OrderingFuture(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingFuture not implemented")
@@ -827,6 +899,9 @@ func (*UnimplementedZorumsServiceServer) OrderingFuturePerNodeArg(context.Contex
 func (*UnimplementedZorumsServiceServer) OrderingFutureCustomReturnType(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingFutureCustomReturnType not implemented")
 }
+func (*UnimplementedZorumsServiceServer) OrderingFutureConcurrent(context.Context, *Request) (*Response, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method OrderingFutureConcurrent not implemented")
+}
 func (*UnimplementedZorumsServiceServer) OrderingFutureCombo(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingFutureCombo not implemented")
 }
@@ -835,6 +910,9 @@ func (*UnimplementedZorumsServiceServer) Unicast(context.Context, *Request) (*Re
 }
 func (*UnimplementedZorumsServiceServer) Unicast2(context.Context, *Request) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Unicast2 not implemented")
+}
+func (*UnimplementedZorumsServiceServer) UnicastConcurrent(context.Context, *Request) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnicastConcurrent not implemented")
 }
 
 func RegisterZorumsServiceServer(s *grpc.Server, srv ZorumsServiceServer) {
@@ -1053,6 +1131,24 @@ func _ZorumsService_Multicast4_Handler(srv interface{}, ctx context.Context, dec
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ZorumsServiceServer).Multicast4(ctx, req.(*empty.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_MulticastConcurrent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).MulticastConcurrent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/MulticastConcurrent",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).MulticastConcurrent(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1489,6 +1585,24 @@ func _ZorumsService_OrderingCombo_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ZorumsService_OrderingConcurrent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).OrderingConcurrent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/OrderingConcurrent",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).OrderingConcurrent(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ZorumsService_OrderingUnaryRPC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
@@ -1503,6 +1617,24 @@ func _ZorumsService_OrderingUnaryRPC_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ZorumsServiceServer).OrderingUnaryRPC(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_OrderingUnaryRPCConcurrent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).OrderingUnaryRPCConcurrent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/OrderingUnaryRPCConcurrent",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).OrderingUnaryRPCConcurrent(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1561,6 +1693,24 @@ func _ZorumsService_OrderingFutureCustomReturnType_Handler(srv interface{}, ctx 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ZorumsService_OrderingFutureConcurrent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).OrderingFutureConcurrent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/OrderingFutureConcurrent",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).OrderingFutureConcurrent(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ZorumsService_OrderingFutureCombo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Request)
 	if err := dec(in); err != nil {
@@ -1611,6 +1761,24 @@ func _ZorumsService_Unicast2_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ZorumsServiceServer).Unicast2(ctx, req.(*Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ZorumsService_UnicastConcurrent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ZorumsServiceServer).UnicastConcurrent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/dev.ZorumsService/UnicastConcurrent",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ZorumsServiceServer).UnicastConcurrent(ctx, req.(*Request))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1666,6 +1834,10 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Multicast4",
 			Handler:    _ZorumsService_Multicast4_Handler,
+		},
+		{
+			MethodName: "MulticastConcurrent",
+			Handler:    _ZorumsService_MulticastConcurrent_Handler,
 		},
 		{
 			MethodName: "QuorumCallFuture",
@@ -1736,8 +1908,16 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ZorumsService_OrderingCombo_Handler,
 		},
 		{
+			MethodName: "OrderingConcurrent",
+			Handler:    _ZorumsService_OrderingConcurrent_Handler,
+		},
+		{
 			MethodName: "OrderingUnaryRPC",
 			Handler:    _ZorumsService_OrderingUnaryRPC_Handler,
+		},
+		{
+			MethodName: "OrderingUnaryRPCConcurrent",
+			Handler:    _ZorumsService_OrderingUnaryRPCConcurrent_Handler,
 		},
 		{
 			MethodName: "OrderingFuture",
@@ -1752,6 +1932,10 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ZorumsService_OrderingFutureCustomReturnType_Handler,
 		},
 		{
+			MethodName: "OrderingFutureConcurrent",
+			Handler:    _ZorumsService_OrderingFutureConcurrent_Handler,
+		},
+		{
 			MethodName: "OrderingFutureCombo",
 			Handler:    _ZorumsService_OrderingFutureCombo_Handler,
 		},
@@ -1762,6 +1946,10 @@ var _ZorumsService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Unicast2",
 			Handler:    _ZorumsService_Unicast2_Handler,
+		},
+		{
+			MethodName: "UnicastConcurrent",
+			Handler:    _ZorumsService_UnicastConcurrent_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

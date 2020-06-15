@@ -110,3 +110,21 @@ func (c *Configuration) Multicast4(in *empty.Empty) error {
 	}
 	return nil
 }
+
+// MutlicastConcurrent uses a concurrent server-side handler
+func (c *Configuration) MulticastConcurrent(in *Request) error {
+	msgID := c.mgr.nextMsgID()
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: multicastConcurrentMethodID,
+		Data:     data,
+	}
+	for _, n := range c.nodes {
+		n.sendQ <- msg
+	}
+	return nil
+}
