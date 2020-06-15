@@ -41,3 +41,21 @@ func (n *Node) Unicast2(in *Request) error {
 	n.sendQ <- msg
 	return nil
 }
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
+
+func (n *Node) UnicastConcurrent(in *Request) error {
+	msgID := n.nextMsgID()
+	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	if err != nil {
+		return fmt.Errorf("failed to marshal message: %w", err)
+	}
+	msg := &ordering.Message{
+		ID:       msgID,
+		MethodID: unicastConcurrentMethodID,
+		Data:     data,
+	}
+	n.sendQ <- msg
+	return nil
+}
