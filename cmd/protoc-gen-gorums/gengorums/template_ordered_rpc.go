@@ -55,5 +55,4 @@ var orderingRPC = commonVariables +
 	orderingRPCComment +
 	orderingRPCSignature +
 	orderingRPCPreamble +
-	orderingRPCBody +
-	orderingHandler
+	orderingRPCBody

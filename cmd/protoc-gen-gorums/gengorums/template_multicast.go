@@ -53,25 +53,4 @@ func (c *Configuration) {{$method}}(in *{{$in}}{{perNodeFnType .GenFile .Method 
 }
 `
 
-var multicastHandler = `
-// {{$method}}Handler is the server API for the {{$method}} rpc.
-type {{$method}}Handler interface {
-	{{$method}}(*{{$in}})
-}
-
-// Register{{$method}}Handler sets the handler for {{$method}}.
-func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
-	s.srv.registerHandler({{$unexportMethod}}MethodID, func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
-		req := new({{$in}})
-		err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new({{$gorumsMsg}})
-		}
-		handler.{{$method}}(req)
-		return nil
-	})
-}
-`
-
-var multicastCall = commonVariables + orderingVariables + multicastRefImports + multicastMethod + multicastHandler
+var multicastCall = commonVariables + orderingVariables + multicastRefImports + multicastMethod

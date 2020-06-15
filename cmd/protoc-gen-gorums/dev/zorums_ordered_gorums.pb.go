@@ -98,29 +98,6 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 	}
 }
 
-// OrderingQCHandler is the server API for the OrderingQC rpc.
-type OrderingQCHandler interface {
-	OrderingQC(*Request) *Response
-}
-
-// RegisterOrderingQCHandler sets the handler for OrderingQC.
-func (s *GorumsServer) RegisterOrderingQCHandler(handler OrderingQCHandler) {
-	s.srv.registerHandler(orderingQCMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingQC(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingQCMethodID}
-	})
-}
-
 // OrderingPerNodeArg is a quorum call invoked on each node in configuration c,
 // with the argument returned by the provided function f, and returns the combined result.
 // The per node function f receives a copy of the Request request argument and
@@ -215,29 +192,6 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 	}
 }
 
-// OrderingPerNodeArgHandler is the server API for the OrderingPerNodeArg rpc.
-type OrderingPerNodeArgHandler interface {
-	OrderingPerNodeArg(*Request) *Response
-}
-
-// RegisterOrderingPerNodeArgHandler sets the handler for OrderingPerNodeArg.
-func (s *GorumsServer) RegisterOrderingPerNodeArgHandler(handler OrderingPerNodeArgHandler) {
-	s.srv.registerHandler(orderingPerNodeArgMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingPerNodeArg(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingPerNodeArgMethodID}
-	})
-}
-
 // OrderingCustomReturnType is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error) {
@@ -322,29 +276,6 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// OrderingCustomReturnTypeHandler is the server API for the OrderingCustomReturnType rpc.
-type OrderingCustomReturnTypeHandler interface {
-	OrderingCustomReturnType(*Request) *Response
-}
-
-// RegisterOrderingCustomReturnTypeHandler sets the handler for OrderingCustomReturnType.
-func (s *GorumsServer) RegisterOrderingCustomReturnTypeHandler(handler OrderingCustomReturnTypeHandler) {
-	s.srv.registerHandler(orderingCustomReturnTypeMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingCustomReturnType(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingCustomReturnTypeMethodID}
-	})
 }
 
 // OrderingCombo is a quorum call invoked on each node in configuration c,
@@ -441,29 +372,6 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 	}
 }
 
-// OrderingComboHandler is the server API for the OrderingCombo rpc.
-type OrderingComboHandler interface {
-	OrderingCombo(*Request) *Response
-}
-
-// RegisterOrderingComboHandler sets the handler for OrderingCombo.
-func (s *GorumsServer) RegisterOrderingComboHandler(handler OrderingComboHandler) {
-	s.srv.registerHandler(orderingComboMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingCombo(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingComboMethodID}
-	})
-}
-
 func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 
 	// get the ID which will be used to return the correct responses for a request
@@ -501,29 +409,6 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-}
-
-// OrderingUnaryRPCHandler is the server API for the OrderingUnaryRPC rpc.
-type OrderingUnaryRPCHandler interface {
-	OrderingUnaryRPC(*Request) *Response
-}
-
-// RegisterOrderingUnaryRPCHandler sets the handler for OrderingUnaryRPC.
-func (s *GorumsServer) RegisterOrderingUnaryRPCHandler(handler OrderingUnaryRPCHandler) {
-	s.srv.registerHandler(orderingUnaryRPCMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingUnaryRPC(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingUnaryRPCMethodID}
-	})
 }
 
 // OrderingFuture asynchronously invokes a quorum call on configuration c
@@ -611,29 +496,6 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 			return
 		}
 	}
-}
-
-// OrderingFutureHandler is the server API for the OrderingFuture rpc.
-type OrderingFutureHandler interface {
-	OrderingFuture(*Request) *Response
-}
-
-// RegisterOrderingFutureHandler sets the handler for OrderingFuture.
-func (s *GorumsServer) RegisterOrderingFutureHandler(handler OrderingFutureHandler) {
-	s.srv.registerHandler(orderingFutureMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingFuture(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFutureMethodID}
-	})
 }
 
 // OrderingFuturePerNodeArg asynchronously invokes a quorum call on each node in
@@ -729,29 +591,6 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 	}
 }
 
-// OrderingFuturePerNodeArgHandler is the server API for the OrderingFuturePerNodeArg rpc.
-type OrderingFuturePerNodeArgHandler interface {
-	OrderingFuturePerNodeArg(*Request) *Response
-}
-
-// RegisterOrderingFuturePerNodeArgHandler sets the handler for OrderingFuturePerNodeArg.
-func (s *GorumsServer) RegisterOrderingFuturePerNodeArgHandler(handler OrderingFuturePerNodeArgHandler) {
-	s.srv.registerHandler(orderingFuturePerNodeArgMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingFuturePerNodeArg(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFuturePerNodeArgMethodID}
-	})
-}
-
 // OrderingFutureCustomReturnType asynchronously invokes a quorum call on configuration c
 // and returns a FutureMyResponse, which can be used to inspect the quorum call
 // reply and error when available.
@@ -837,29 +676,6 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 			return
 		}
 	}
-}
-
-// OrderingFutureCustomReturnTypeHandler is the server API for the OrderingFutureCustomReturnType rpc.
-type OrderingFutureCustomReturnTypeHandler interface {
-	OrderingFutureCustomReturnType(*Request) *Response
-}
-
-// RegisterOrderingFutureCustomReturnTypeHandler sets the handler for OrderingFutureCustomReturnType.
-func (s *GorumsServer) RegisterOrderingFutureCustomReturnTypeHandler(handler OrderingFutureCustomReturnTypeHandler) {
-	s.srv.registerHandler(orderingFutureCustomReturnTypeMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingFutureCustomReturnType(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFutureCustomReturnTypeMethodID}
-	})
 }
 
 // OrderingFutureCombo asynchronously invokes a quorum call on each node in
@@ -953,27 +769,4 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 			return
 		}
 	}
-}
-
-// OrderingFutureComboHandler is the server API for the OrderingFutureCombo rpc.
-type OrderingFutureComboHandler interface {
-	OrderingFutureCombo(*Request) *Response
-}
-
-// RegisterOrderingFutureComboHandler sets the handler for OrderingFutureCombo.
-func (s *GorumsServer) RegisterOrderingFutureComboHandler(handler OrderingFutureComboHandler) {
-	s.srv.registerHandler(orderingFutureComboMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderingFutureCombo(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFutureComboMethodID}
-	})
 }
