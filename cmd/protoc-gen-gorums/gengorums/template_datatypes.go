@@ -9,14 +9,16 @@ const hasOrderingMethods = {{hasOrderingMethods .Services}}
 `
 
 var orderingIDs = `
-{{range $index, $method := orderedMethods .Services}}
+{{$methods := methods .Services}}
+{{range $index, $method := nodeStreamMethods $methods}}
 const {{unexport $method.GoName}}MethodID int32 = {{$index}}
 {{- end}}
 `
 
 var orderingMethods = `
 var orderingMethods = map[int32]methodInfo{
-	{{- range $index, $method := orderedMethods .Services}}
+	{{$methods := methods .Services}}
+	{{range $index, $method := nodeStreamMethods $methods}}
 		{{$index}}: { oneway: {{isOneway $method}} },
 	{{- end}}
 }
@@ -151,21 +153,33 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 {{end}}
 `
 
+var serverInterface = `
+{{$genFile := .GenFile}}
+{{range .Services -}}
+{{$service := .GoName}}
+// {{$service}} is the server-side API for the {{$service}} Service
+type {{$service}} interface {
+	{{- range nodeStreamMethods .Methods}}
+	{{.GoName}}({{in $genFile .}}) {{out $genFile .}}
+	{{- end}}
+}
+{{- end}}
+`
+
 var datatypes = globals +
 	orderingIDs +
 	orderingMethods +
 	internalOutDataType +
 	futureDataType +
-	correctableDataType
+	correctableDataType +
+	serverInterface
 
-// orderedMethods returns all Gorums methods that use ordering.
-func orderedMethods(services []*protogen.Service) (s []*protogen.Method) {
-	for _, service := range services {
-		for _, method := range service.Methods {
-			if hasMethodOption(method, nodeStreamCallTypes...) {
-				s = append(s, method)
-			}
+// nodeStreamMethods returns all Gorums methods that use ordering.
+func nodeStreamMethods(methods []*protogen.Method) (s []*protogen.Method) {
+	for _, method := range methods {
+		if hasMethodOption(method, nodeStreamCallTypes...) {
+			s = append(s, method)
 		}
 	}
-	return s
+	return
 }
