@@ -79,6 +79,11 @@ func (qspec *QSpec) OrderedQCQF(_ *Echo, replies []*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }
 
+// ConcurrentQCQF is the quorum function for the ConcurrentQC quorumcall
+func (qspec *QSpec) ConcurrentQCQF(_ *Echo, replies []*Echo) (*Echo, bool) {
+	return qspec.qf(replies)
+}
+
 // UnorderedAsyncQF is the quorum function for the UnorderedAsync quorumcall
 func (qspec *QSpec) UnorderedAsyncQF(_ *Echo, replies []*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
@@ -89,6 +94,11 @@ func (qspec *QSpec) OrderedAsyncQF(_ *Echo, replies []*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }
 
+// ConcurrentAsyncQF is the quorum function for the ConcurrentAsync quorumcall
+func (qspec *QSpec) ConcurrentAsyncQF(_ *Echo, replies []*Echo) (*Echo, bool) {
+	return qspec.qf(replies)
+}
+
 // UnorderedSlowServerQF is the quorum function for the UnorderedSlowServer quorumcall
 func (qspec *QSpec) UnorderedSlowServerQF(_ *Echo, replies []*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
@@ -96,5 +106,10 @@ func (qspec *QSpec) UnorderedSlowServerQF(_ *Echo, replies []*Echo) (*Echo, bool
 
 // OrderedSlowServerQF is the quorum function for the OrderedSlowServer quorumcall
 func (qspec *QSpec) OrderedSlowServerQF(_ *Echo, replies []*Echo) (*Echo, bool) {
+	return qspec.qf(replies)
+}
+
+// ConcurrentSlowServerQF is the quorum function for the ConcurrentSlowServer quorumcall
+func (qspec *QSpec) ConcurrentSlowServerQF(_ *Echo, replies []*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }

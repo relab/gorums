@@ -239,6 +239,8 @@ func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
 
 		"OrderedQC": func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedQC) },
 
+		"ConcurrentQC": func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.ConcurrentQC) },
+
 		"UnorderedAsync": func(opts Options) (*Result, error) {
 			return runAsyncQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) *FutureEcho {
 				return cfg.UnorderedAsync(ctx, msg)
@@ -246,6 +248,8 @@ func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
 		},
 
 		"OrderedAsync": func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.OrderedAsync) },
+
+		"ConcurrentAsync": func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.ConcurrentAsync) },
 
 		"UnorderedSlowServer": func(opts Options) (*Result, error) {
 			return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
@@ -255,7 +259,11 @@ func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
 
 		"OrderedSlowServer": func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedSlowServer) },
 
+		"ConcurrentSlowServer": func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.ConcurrentSlowServer) },
+
 		"Multicast": func(opts Options) (*Result, error) { return runServerBenchmark(opts, cfg, cfg.Multicast) },
+
+		"ConcurrentMulticast": func(opts Options) (*Result, error) { return runServerBenchmark(opts, cfg, cfg.ConcurrentMulticast) },
 	}
 	return m
 }
