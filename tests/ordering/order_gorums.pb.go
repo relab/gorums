@@ -1209,7 +1209,7 @@ func (s *GorumsServer) RegisterQCHandler(handler QCHandler) {
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: qCMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: qCMethodID}
 	})
 }
 
@@ -1319,7 +1319,7 @@ func (s *GorumsServer) RegisterQCFutureHandler(handler QCFutureHandler) {
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: qCFutureMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: qCFutureMethodID}
 	})
 }
 
@@ -1381,7 +1381,7 @@ func (s *GorumsServer) RegisterUnaryRPCHandler(handler UnaryRPCHandler) {
 		if err != nil {
 			return new(ordering.Message)
 		}
-		return &ordering.Message{Data: data, MethodID: unaryRPCMethodID}
+		return &ordering.Message{ID: in.ID, Data: data, MethodID: unaryRPCMethodID}
 	})
 }
 
