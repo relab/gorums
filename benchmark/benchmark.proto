@@ -70,6 +70,12 @@ service Benchmark {
     option (gorums.ordered) = true;
   }
 
+  rpc ConcurrentQC(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+    option (gorums.concurrent) = true;
+  }
+
   rpc UnorderedAsync(Echo) returns (Echo) {
     option (gorums.quorumcall) = true;
     option (gorums.async) = true;
@@ -81,6 +87,13 @@ service Benchmark {
     option (gorums.async) = true;
   }
 
+  rpc ConcurrentAsync(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+    option (gorums.async) = true;
+    option (gorums.concurrent) = true;
+  }
+
   rpc UnorderedSlowServer(Echo) returns (Echo) {
     option (gorums.quorumcall) = true;
   }
@@ -90,7 +103,18 @@ service Benchmark {
     option (gorums.ordered) = true;
   }
 
+  rpc ConcurrentSlowServer(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+    option (gorums.concurrent) = true;
+  }
+
   rpc Multicast(TimedMsg) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;
+  }
+
+  rpc ConcurrentMulticast(TimedMsg) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+    option (gorums.concurrent) = true;
   }
 }

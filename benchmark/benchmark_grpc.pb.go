@@ -25,11 +25,15 @@ type BenchmarkClient interface {
 	// benchmarks
 	UnorderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
+	ConcurrentQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	UnorderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
+	ConcurrentAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	UnorderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	OrderedSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
+	ConcurrentSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error)
 	Multicast(ctx context.Context, in *TimedMsg, opts ...grpc.CallOption) (*empty.Empty, error)
+	ConcurrentMulticast(ctx context.Context, in *TimedMsg, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type benchmarkClient struct {
@@ -94,6 +98,15 @@ func (c *benchmarkClient) OrderedQC(ctx context.Context, in *Echo, opts ...grpc.
 	return out, nil
 }
 
+func (c *benchmarkClient) ConcurrentQC(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error) {
+	out := new(Echo)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/ConcurrentQC", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *benchmarkClient) UnorderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error) {
 	out := new(Echo)
 	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/UnorderedAsync", in, out, opts...)
@@ -106,6 +119,15 @@ func (c *benchmarkClient) UnorderedAsync(ctx context.Context, in *Echo, opts ...
 func (c *benchmarkClient) OrderedAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error) {
 	out := new(Echo)
 	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/OrderedAsync", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *benchmarkClient) ConcurrentAsync(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error) {
+	out := new(Echo)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/ConcurrentAsync", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -130,9 +152,27 @@ func (c *benchmarkClient) OrderedSlowServer(ctx context.Context, in *Echo, opts 
 	return out, nil
 }
 
+func (c *benchmarkClient) ConcurrentSlowServer(ctx context.Context, in *Echo, opts ...grpc.CallOption) (*Echo, error) {
+	out := new(Echo)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/ConcurrentSlowServer", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *benchmarkClient) Multicast(ctx context.Context, in *TimedMsg, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/Multicast", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *benchmarkClient) ConcurrentMulticast(ctx context.Context, in *TimedMsg, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/benchmark.Benchmark/ConcurrentMulticast", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -148,11 +188,15 @@ type BenchmarkServer interface {
 	// benchmarks
 	UnorderedQC(context.Context, *Echo) (*Echo, error)
 	OrderedQC(context.Context, *Echo) (*Echo, error)
+	ConcurrentQC(context.Context, *Echo) (*Echo, error)
 	UnorderedAsync(context.Context, *Echo) (*Echo, error)
 	OrderedAsync(context.Context, *Echo) (*Echo, error)
+	ConcurrentAsync(context.Context, *Echo) (*Echo, error)
 	UnorderedSlowServer(context.Context, *Echo) (*Echo, error)
 	OrderedSlowServer(context.Context, *Echo) (*Echo, error)
+	ConcurrentSlowServer(context.Context, *Echo) (*Echo, error)
 	Multicast(context.Context, *TimedMsg) (*empty.Empty, error)
+	ConcurrentMulticast(context.Context, *TimedMsg) (*empty.Empty, error)
 }
 
 // UnimplementedBenchmarkServer can be embedded to have forward compatible implementations.
@@ -177,11 +221,17 @@ func (*UnimplementedBenchmarkServer) UnorderedQC(context.Context, *Echo) (*Echo,
 func (*UnimplementedBenchmarkServer) OrderedQC(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderedQC not implemented")
 }
+func (*UnimplementedBenchmarkServer) ConcurrentQC(context.Context, *Echo) (*Echo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConcurrentQC not implemented")
+}
 func (*UnimplementedBenchmarkServer) UnorderedAsync(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnorderedAsync not implemented")
 }
 func (*UnimplementedBenchmarkServer) OrderedAsync(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderedAsync not implemented")
+}
+func (*UnimplementedBenchmarkServer) ConcurrentAsync(context.Context, *Echo) (*Echo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConcurrentAsync not implemented")
 }
 func (*UnimplementedBenchmarkServer) UnorderedSlowServer(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnorderedSlowServer not implemented")
@@ -189,8 +239,14 @@ func (*UnimplementedBenchmarkServer) UnorderedSlowServer(context.Context, *Echo)
 func (*UnimplementedBenchmarkServer) OrderedSlowServer(context.Context, *Echo) (*Echo, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderedSlowServer not implemented")
 }
+func (*UnimplementedBenchmarkServer) ConcurrentSlowServer(context.Context, *Echo) (*Echo, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConcurrentSlowServer not implemented")
+}
 func (*UnimplementedBenchmarkServer) Multicast(context.Context, *TimedMsg) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Multicast not implemented")
+}
+func (*UnimplementedBenchmarkServer) ConcurrentMulticast(context.Context, *TimedMsg) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConcurrentMulticast not implemented")
 }
 
 func RegisterBenchmarkServer(s *grpc.Server, srv BenchmarkServer) {
@@ -305,6 +361,24 @@ func _Benchmark_OrderedQC_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Benchmark_ConcurrentQC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Echo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).ConcurrentQC(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/ConcurrentQC",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).ConcurrentQC(ctx, req.(*Echo))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Benchmark_UnorderedAsync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Echo)
 	if err := dec(in); err != nil {
@@ -337,6 +411,24 @@ func _Benchmark_OrderedAsync_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BenchmarkServer).OrderedAsync(ctx, req.(*Echo))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Benchmark_ConcurrentAsync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Echo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).ConcurrentAsync(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/ConcurrentAsync",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).ConcurrentAsync(ctx, req.(*Echo))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -377,6 +469,24 @@ func _Benchmark_OrderedSlowServer_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Benchmark_ConcurrentSlowServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Echo)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).ConcurrentSlowServer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/ConcurrentSlowServer",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).ConcurrentSlowServer(ctx, req.(*Echo))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Benchmark_Multicast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TimedMsg)
 	if err := dec(in); err != nil {
@@ -391,6 +501,24 @@ func _Benchmark_Multicast_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BenchmarkServer).Multicast(ctx, req.(*TimedMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Benchmark_ConcurrentMulticast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TimedMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BenchmarkServer).ConcurrentMulticast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/benchmark.Benchmark/ConcurrentMulticast",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BenchmarkServer).ConcurrentMulticast(ctx, req.(*TimedMsg))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -424,12 +552,20 @@ var _Benchmark_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Benchmark_OrderedQC_Handler,
 		},
 		{
+			MethodName: "ConcurrentQC",
+			Handler:    _Benchmark_ConcurrentQC_Handler,
+		},
+		{
 			MethodName: "UnorderedAsync",
 			Handler:    _Benchmark_UnorderedAsync_Handler,
 		},
 		{
 			MethodName: "OrderedAsync",
 			Handler:    _Benchmark_OrderedAsync_Handler,
+		},
+		{
+			MethodName: "ConcurrentAsync",
+			Handler:    _Benchmark_ConcurrentAsync_Handler,
 		},
 		{
 			MethodName: "UnorderedSlowServer",
@@ -440,8 +576,16 @@ var _Benchmark_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Benchmark_OrderedSlowServer_Handler,
 		},
 		{
+			MethodName: "ConcurrentSlowServer",
+			Handler:    _Benchmark_ConcurrentSlowServer_Handler,
+		},
+		{
 			MethodName: "Multicast",
 			Handler:    _Benchmark_Multicast_Handler,
+		},
+		{
+			MethodName: "ConcurrentMulticast",
+			Handler:    _Benchmark_ConcurrentMulticast_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

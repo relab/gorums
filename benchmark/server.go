@@ -39,12 +39,20 @@ func (srv *unorderedServer) OrderedQC(_ context.Context, _ *Echo) (_ *Echo, _ er
 	panic("Not implemented")
 }
 
+func (srv *unorderedServer) ConcurrentQC(_ context.Context, _ *Echo) (_ *Echo, _ error) {
+	panic("Not implemented")
+}
+
 func (srv *unorderedServer) UnorderedAsync(_ context.Context, in *Echo) (out *Echo, _ error) {
 	out = in
 	return
 }
 
 func (srv *unorderedServer) OrderedAsync(_ context.Context, _ *Echo) (_ *Echo, _ error) {
+	panic("Not implemented")
+}
+
+func (srv *unorderedServer) ConcurrentAsync(_ context.Context, _ *Echo) (_ *Echo, _ error) {
 	panic("Not implemented")
 }
 
@@ -58,7 +66,15 @@ func (srv *unorderedServer) OrderedSlowServer(_ context.Context, _ *Echo) (_ *Ec
 	panic("Not implemented")
 }
 
+func (srv *unorderedServer) ConcurrentSlowServer(_ context.Context, _ *Echo) (_ *Echo, _ error) {
+	panic("Not implemented")
+}
+
 func (srv *unorderedServer) Multicast(_ context.Context, _ *TimedMsg) (_ *empty.Empty, _ error) {
+	panic("Not implemented")
+}
+
+func (srv *unorderedServer) ConcurrentMulticast(_ context.Context, _ *TimedMsg) (_ *empty.Empty, _ error) {
 	panic("Not implemented")
 }
 
@@ -70,7 +86,15 @@ func (srv *orderedServer) OrderedQC(in *Echo) *Echo {
 	return in
 }
 
+func (srv *orderedServer) ConcurrentQC(in *Echo) *Echo {
+	return in
+}
+
 func (srv *orderedServer) OrderedAsync(in *Echo) *Echo {
+	return in
+}
+
+func (srv *orderedServer) ConcurrentAsync(in *Echo) *Echo {
 	return in
 }
 
@@ -79,7 +103,17 @@ func (srv *orderedServer) OrderedSlowServer(in *Echo) *Echo {
 	return in
 }
 
+func (srv *orderedServer) ConcurrentSlowServer(in *Echo) *Echo {
+	time.Sleep(10 * time.Millisecond)
+	return in
+}
+
 func (srv *orderedServer) Multicast(msg *TimedMsg) {
+	latency := time.Now().UnixNano() - msg.SendTime
+	srv.stats.AddLatency(time.Duration(latency))
+}
+
+func (srv *orderedServer) ConcurrentMulticast(msg *TimedMsg) {
 	latency := time.Now().UnixNano() - msg.SendTime
 	srv.stats.AddLatency(time.Duration(latency))
 }
