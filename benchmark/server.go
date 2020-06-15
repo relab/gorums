@@ -127,12 +127,12 @@ type Server struct {
 }
 
 // NewServer returns a new Server
-func NewServer() *Server {
+func NewServer(opts ...ServerOption) *Server {
 	srv := &Server{}
 	srv.orderedSrv.stats = &srv.stats
 	srv.unorderedSrv.stats = &srv.stats
 
-	srv.GorumsServer = NewGorumsServer()
+	srv.GorumsServer = NewGorumsServer(opts...)
 	srv.RegisterStartServerBenchmarkHandler(srv)
 	srv.RegisterStopServerBenchmarkHandler(srv)
 	srv.RegisterStartBenchmarkHandler(srv)
@@ -171,7 +171,7 @@ func (srv *Server) StopBenchmark(_ *StopRequest) *MemoryStat {
 }
 
 // StartLocalServers starts benchmark servers locally
-func StartLocalServers(ctx context.Context, n int) []string {
+func StartLocalServers(ctx context.Context, n int, opts ...ServerOption) []string {
 	var ports []string
 	basePort := 40000
 	var servers []*Server
@@ -182,7 +182,7 @@ func StartLocalServers(ctx context.Context, n int) []string {
 		if err != nil {
 			log.Fatalf("Failed to start local server: %v\n", err)
 		}
-		srv := NewServer()
+		srv := NewServer(opts...)
 		servers = append(servers, srv)
 		go srv.Serve(lis)
 	}
