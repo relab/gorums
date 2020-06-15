@@ -131,5 +131,4 @@ var orderedFutureCall = commonVariables +
 	orderedFutureSignature +
 	orderedFutureBody +
 	orderedFutureRecvSignature +
-	orderedFutureRecvBody +
-	orderingHandler
+	orderedFutureRecvBody

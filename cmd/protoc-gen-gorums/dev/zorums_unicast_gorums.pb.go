@@ -24,25 +24,6 @@ func (n *Node) Unicast(in *Request) error {
 	return nil
 }
 
-// UnicastHandler is the server API for the Unicast rpc.
-type UnicastHandler interface {
-	Unicast(*Request)
-}
-
-// RegisterUnicastHandler sets the handler for Unicast.
-func (s *GorumsServer) RegisterUnicastHandler(handler UnicastHandler) {
-	s.srv.registerHandler(unicastMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		handler.Unicast(req)
-		return nil
-	})
-}
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ empty.Empty
 
@@ -59,23 +40,4 @@ func (n *Node) Unicast2(in *Request) error {
 	}
 	n.sendQ <- msg
 	return nil
-}
-
-// Unicast2Handler is the server API for the Unicast2 rpc.
-type Unicast2Handler interface {
-	Unicast2(*Request)
-}
-
-// RegisterUnicast2Handler sets the handler for Unicast2.
-func (s *GorumsServer) RegisterUnicast2Handler(handler Unicast2Handler) {
-	s.srv.registerHandler(unicast2MethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		handler.Unicast2(req)
-		return nil
-	})
 }

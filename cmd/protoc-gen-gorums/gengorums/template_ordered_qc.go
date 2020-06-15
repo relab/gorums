@@ -100,31 +100,6 @@ var orderingReply = `
 }
 `
 
-var orderingHandler = `
-// {{$method}}Handler is the server API for the {{$method}} rpc.
-type {{$method}}Handler interface {
-	{{$method}}(*{{$in}}) (*{{$out}})
-}
-
-// Register{{$method}}Handler sets the handler for {{$method}}.
-func (s *GorumsServer) Register{{$method}}Handler(handler {{$method}}Handler) {
-	s.srv.registerHandler({{$unexportMethod}}MethodID, func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
-		req := new({{$in}})
-		err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new({{$gorumsMsg}})
-		}
-		resp := handler.{{$method}}(req)
-		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new({{$gorumsMsg}})
-		}
-		return &{{$gorumsMsg}}{Data: data, MethodID: {{$unexportMethod}}MethodID}
-	})
-}
-`
-
 var orderingQC = commonVariables +
 	quorumCallVariables +
 	orderingVariables +
@@ -132,5 +107,4 @@ var orderingQC = commonVariables +
 	orderedQCSignature +
 	orderingPreamble +
 	orderingLoop +
-	orderingReply +
-	orderingHandler
+	orderingReply

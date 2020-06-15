@@ -4,6 +4,8 @@ package dev
 
 import (
 	empty "github.com/golang/protobuf/ptypes/empty"
+	ordering "github.com/relab/gorums/ordering"
+	proto "google.golang.org/protobuf/proto"
 	sync "sync"
 )
 
@@ -594,20 +596,212 @@ func (c *CorrectableStreamResponse) set(reply *Response, level int, err error, d
 
 // ZorumsService is the server-side API for the ZorumsService Service
 type ZorumsService interface {
-	Multicast(Request) Response
-	MulticastPerNodeArg(Request) Response
-	Multicast2(Request) Response
-	Multicast3(Request) empty.Empty
-	Multicast4(empty.Empty) empty.Empty
-	OrderingQC(Request) Response
-	OrderingPerNodeArg(Request) Response
-	OrderingCustomReturnType(Request) Response
-	OrderingCombo(Request) Response
-	OrderingUnaryRPC(Request) Response
-	OrderingFuture(Request) Response
-	OrderingFuturePerNodeArg(Request) Response
-	OrderingFutureCustomReturnType(Request) Response
-	OrderingFutureCombo(Request) Response
-	Unicast(Request) Response
-	Unicast2(Request) empty.Empty
+	Multicast(*Request) *Response
+	MulticastPerNodeArg(*Request) *Response
+	Multicast2(*Request) *Response
+	Multicast3(*Request) *empty.Empty
+	Multicast4(*empty.Empty) *empty.Empty
+	OrderingQC(*Request) *Response
+	OrderingPerNodeArg(*Request) *Response
+	OrderingCustomReturnType(*Request) *Response
+	OrderingCombo(*Request) *Response
+	OrderingUnaryRPC(*Request) *Response
+	OrderingFuture(*Request) *Response
+	OrderingFuturePerNodeArg(*Request) *Response
+	OrderingFutureCustomReturnType(*Request) *Response
+	OrderingFutureCombo(*Request) *Response
+	Unicast(*Request) *Response
+	Unicast2(*Request) *empty.Empty
+}
+
+func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
+	s.srv.handlers[multicastMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.Multicast(req)
+		return nil
+	}
+	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.MulticastPerNodeArg(req)
+		return nil
+	}
+	s.srv.handlers[multicast2MethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.Multicast2(req)
+		return nil
+	}
+	s.srv.handlers[multicast3MethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.Multicast3(req)
+		return nil
+	}
+	s.srv.handlers[multicast4MethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(empty.Empty)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.Multicast4(req)
+		return nil
+	}
+	s.srv.handlers[orderingQCMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingQCMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingQC(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingQCMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingPerNodeArgMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingPerNodeArg(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingPerNodeArgMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingCustomReturnTypeMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingCustomReturnType(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingCustomReturnTypeMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingComboMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingComboMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingCombo(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingComboMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingUnaryRPCMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingUnaryRPC(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingUnaryRPCMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingFutureMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingFutureMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingFuture(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingFutureMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingFuturePerNodeArgMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingFuturePerNodeArg(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingFuturePerNodeArgMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingFutureCustomReturnTypeMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingFutureCustomReturnType(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingFutureCustomReturnTypeMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderingFutureComboMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderingFutureComboMethodID, ID: in.ID}
+		}
+		resp := srv.OrderingFutureCombo(req)
+		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderingFutureComboMethodID, ID: in.ID}
+	}
+	s.srv.handlers[unicastMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.Unicast(req)
+		return nil
+	}
+	s.srv.handlers[unicast2MethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.Unicast2(req)
+		return nil
+	}
 }
