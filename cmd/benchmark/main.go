@@ -23,21 +23,22 @@ import (
 
 func main() {
 	var (
-		traceFile   = flag.String("trace", "", "File to write trace to.")
-		cpuprofile  = flag.String("cpuprofile", "", "File to write cpu profile to.")
-		memprofile  = flag.String("memprofile", "", "File to write memory profile to.")
-		remotes     = flag.String("remotes", "", "List of remote servers to connect to.")
-		benchmarks  = flag.String("benchmarks", ".*", "List of benchmarks to run.")
-		warmup      = flag.String("warmup", "100ms", "How long a warmup should last.")
-		benchTime   = flag.String("time", "1s", "How long to run each benchmark")
-		payload     = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
-		concurrent  = flag.Int("concurrent", 1, "Number of goroutines that can make calls concurrently.")
-		maxAsync    = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
-		server      = flag.String("server", "", "Run a benchmark server on given address.")
-		serverStats = flag.Bool("server-stats", false, "Show server statistics separately")
-		cfgSize     = flag.Int("config-size", 0, "Size of the configuration to use. If < 1, all nodes will be used.")
-		qSize       = flag.Int("quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
-		sendBuffer  = flag.Uint("send-buffer", 0, "The size of the send buffer.")
+		traceFile    = flag.String("trace", "", "File to write trace to.")
+		cpuprofile   = flag.String("cpuprofile", "", "File to write cpu profile to.")
+		memprofile   = flag.String("memprofile", "", "File to write memory profile to.")
+		remotes      = flag.String("remotes", "", "List of remote servers to connect to.")
+		benchmarks   = flag.String("benchmarks", ".*", "List of benchmarks to run.")
+		warmup       = flag.String("warmup", "100ms", "How long a warmup should last.")
+		benchTime    = flag.String("time", "1s", "How long to run each benchmark")
+		payload      = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
+		concurrent   = flag.Int("concurrent", 1, "Number of goroutines that can make calls concurrently.")
+		maxAsync     = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
+		server       = flag.String("server", "", "Run a benchmark server on given address.")
+		serverStats  = flag.Bool("server-stats", false, "Show server statistics separately")
+		cfgSize      = flag.Int("config-size", 0, "Size of the configuration to use. If < 1, all nodes will be used.")
+		qSize        = flag.Int("quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
+		sendBuffer   = flag.Uint("send-buffer", 0, "The size of the send buffer.")
+		serverBuffer = flag.Uint("server-buffer", 0, "The size of the server buffers.")
 	)
 	flag.Parse()
 
@@ -91,7 +92,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Failed to listen on '%s': %v\n", *server, err)
 			os.Exit(1)
 		}
-		srv := benchmark.NewServer()
+		srv := benchmark.NewServer(benchmark.WithServerBufferSize(*serverBuffer))
 		go srv.Serve(lis)
 
 		fmt.Printf("Running benchmark server on '%s'\n", *server)
@@ -106,7 +107,7 @@ func main() {
 		remote = false
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		ports := benchmark.StartLocalServers(ctx, 4)
+		ports := benchmark.StartLocalServers(ctx, 4, benchmark.WithServerBufferSize(*serverBuffer))
 		*remotes = strings.Join(ports, ",")
 	}
 
