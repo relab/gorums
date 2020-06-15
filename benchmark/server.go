@@ -138,9 +138,13 @@ func NewServer(opts ...ServerOption) *Server {
 	srv.RegisterStartBenchmarkHandler(srv)
 	srv.RegisterStopBenchmarkHandler(srv)
 	srv.RegisterOrderedQCHandler(&srv.orderedSrv)
+	srv.RegisterConcurrentQCHandler(&srv.orderedSrv)
 	srv.RegisterOrderedAsyncHandler(&srv.orderedSrv)
+	srv.RegisterConcurrentAsyncHandler(&srv.orderedSrv)
 	srv.RegisterOrderedSlowServerHandler(&srv.orderedSrv)
+	srv.RegisterConcurrentSlowServerHandler(&srv.orderedSrv)
 	srv.RegisterMulticastHandler(&srv.orderedSrv)
+	srv.RegisterConcurrentMulticastHandler(&srv.orderedSrv)
 	RegisterBenchmarkServer(srv.GorumsServer.grpcServer, &srv.unorderedSrv)
 	return srv
 }
