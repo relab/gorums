@@ -9,7 +9,8 @@ import (
 	"time"
 )
 
-func (r Result) Format() string {
+// Format returns a tab formatted string representation of the result
+func (r *Result) Format() string {
 	b := new(strings.Builder)
 	fmt.Fprintf(b, "%s\t", r.Name)
 	fmt.Fprintf(b, "%.2f ops/sec\t", r.Throughput)
