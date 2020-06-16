@@ -35,7 +35,7 @@ func main() {
 		maxAsync     = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
 		server       = flag.String("server", "", "Run a benchmark server on given address.")
 		serverStats  = flag.Bool("server-stats", false, "Show server statistics separately")
-		cfgSize      = flag.Int("config-size", 0, "Size of the configuration to use. If < 1, all nodes will be used.")
+		cfgSize      = flag.Int("config-size", 4, "Size of the configuration to use. If < 1, all nodes will be used.")
 		qSize        = flag.Int("quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
 		sendBuffer   = flag.Uint("send-buffer", 0, "The size of the send buffer.")
 		serverBuffer = flag.Uint("server-buffer", 0, "The size of the server buffers.")

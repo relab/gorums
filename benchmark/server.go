@@ -118,6 +118,31 @@ func (srv *orderedServer) ConcurrentMulticast(msg *TimedMsg) {
 	srv.stats.AddLatency(time.Duration(latency))
 }
 
+func (srv *orderedServer) StartServerBenchmark(_ *StartRequest) *StartResponse {
+	srv.stats.Clear()
+	srv.stats.Start()
+	return &StartResponse{}
+}
+
+func (srv *orderedServer) StopServerBenchmark(_ *StopRequest) *Result {
+	srv.stats.End()
+	return srv.stats.GetResult()
+}
+
+func (srv *orderedServer) StartBenchmark(_ *StartRequest) *StartResponse {
+	srv.stats.Clear()
+	srv.stats.Start()
+	return &StartResponse{}
+}
+
+func (srv *orderedServer) StopBenchmark(_ *StopRequest) *MemoryStat {
+	srv.stats.End()
+	return &MemoryStat{
+		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,
+		Memory: srv.stats.endMs.TotalAlloc - srv.stats.startMs.TotalAlloc,
+	}
+}
+
 // Server is a unified server for both ordered and unordered methods
 type Server struct {
 	*GorumsServer
@@ -133,45 +158,9 @@ func NewServer(opts ...ServerOption) *Server {
 	srv.unorderedSrv.stats = &srv.stats
 
 	srv.GorumsServer = NewGorumsServer(opts...)
-	srv.RegisterStartServerBenchmarkHandler(srv)
-	srv.RegisterStopServerBenchmarkHandler(srv)
-	srv.RegisterStartBenchmarkHandler(srv)
-	srv.RegisterStopBenchmarkHandler(srv)
-	srv.RegisterOrderedQCHandler(&srv.orderedSrv)
-	srv.RegisterConcurrentQCHandler(&srv.orderedSrv)
-	srv.RegisterOrderedAsyncHandler(&srv.orderedSrv)
-	srv.RegisterConcurrentAsyncHandler(&srv.orderedSrv)
-	srv.RegisterOrderedSlowServerHandler(&srv.orderedSrv)
-	srv.RegisterConcurrentSlowServerHandler(&srv.orderedSrv)
-	srv.RegisterMulticastHandler(&srv.orderedSrv)
-	srv.RegisterConcurrentMulticastHandler(&srv.orderedSrv)
+	srv.GorumsServer.RegisterBenchmarkServer(&srv.orderedSrv)
 	RegisterBenchmarkServer(srv.GorumsServer.grpcServer, &srv.unorderedSrv)
 	return srv
-}
-
-func (srv *Server) StartServerBenchmark(_ *StartRequest) *StartResponse {
-	srv.stats.Clear()
-	srv.stats.Start()
-	return &StartResponse{}
-}
-
-func (srv *Server) StopServerBenchmark(_ *StopRequest) *Result {
-	srv.stats.End()
-	return srv.stats.GetResult()
-}
-
-func (srv *Server) StartBenchmark(_ *StartRequest) *StartResponse {
-	srv.stats.Clear()
-	srv.stats.Start()
-	return &StartResponse{}
-}
-
-func (srv *Server) StopBenchmark(_ *StopRequest) *MemoryStat {
-	srv.stats.End()
-	return &MemoryStat{
-		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,
-		Memory: srv.stats.endMs.TotalAlloc - srv.stats.startMs.TotalAlloc,
-	}
 }
 
 // StartLocalServers starts benchmark servers locally
