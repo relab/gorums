@@ -1084,6 +1084,17 @@ func (q qcresult) String() string {
 	return out.String()
 }
 
+var (
+	marshaler = proto.MarshalOptions{
+		AllowPartial:  true,
+		Deterministic: true,
+	}
+	unmarshaler = proto.UnmarshalOptions{
+		AllowPartial:   true,
+		DiscardUnknown: true,
+	}
+)
+
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	for _, y := range set {
 		if y == x {
@@ -1191,7 +1202,7 @@ var _ empty.Empty
 // with the same in argument. The call is asynchronous and has no return value.
 func (c *Configuration) Multicast(in *TimedMsg) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1206,25 +1217,6 @@ func (c *Configuration) Multicast(in *TimedMsg) error {
 	return nil
 }
 
-// MulticastHandler is the server API for the Multicast rpc.
-type MulticastHandler interface {
-	Multicast(*TimedMsg)
-}
-
-// RegisterMulticastHandler sets the handler for Multicast.
-func (s *GorumsServer) RegisterMulticastHandler(handler MulticastHandler) {
-	s.srv.registerHandler(multicastMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(TimedMsg)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		handler.Multicast(req)
-		return nil
-	})
-}
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ empty.Empty
 
@@ -1232,7 +1224,7 @@ var _ empty.Empty
 // with the same in argument. The call is asynchronous and has no return value.
 func (c *Configuration) ConcurrentMulticast(in *TimedMsg) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1245,25 +1237,6 @@ func (c *Configuration) ConcurrentMulticast(in *TimedMsg) error {
 		n.sendQ <- msg
 	}
 	return nil
-}
-
-// ConcurrentMulticastHandler is the server API for the ConcurrentMulticast rpc.
-type ConcurrentMulticastHandler interface {
-	ConcurrentMulticast(*TimedMsg)
-}
-
-// RegisterConcurrentMulticastHandler sets the handler for ConcurrentMulticast.
-func (s *GorumsServer) RegisterConcurrentMulticastHandler(handler ConcurrentMulticastHandler) {
-	s.srv.registerHandler(concurrentMulticastMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(TimedMsg)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		handler.ConcurrentMulticast(req)
-		return nil
-	})
 }
 
 type nodeServices struct {
@@ -1314,7 +1287,7 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1348,7 +1321,7 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 			}
 
 			reply := new(StartResponse)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1365,29 +1338,6 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// StartServerBenchmarkHandler is the server API for the StartServerBenchmark rpc.
-type StartServerBenchmarkHandler interface {
-	StartServerBenchmark(*StartRequest) *StartResponse
-}
-
-// RegisterStartServerBenchmarkHandler sets the handler for StartServerBenchmark.
-func (s *GorumsServer) RegisterStartServerBenchmarkHandler(handler StartServerBenchmarkHandler) {
-	s.srv.registerHandler(startServerBenchmarkMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(StartRequest)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.StartServerBenchmark(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: startServerBenchmarkMethodID}
-	})
 }
 
 // StopServerBenchmark is a quorum call invoked on all nodes in configuration c,
@@ -1423,7 +1373,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1457,7 +1407,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 			}
 
 			reply := new(Result)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1474,29 +1424,6 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// StopServerBenchmarkHandler is the server API for the StopServerBenchmark rpc.
-type StopServerBenchmarkHandler interface {
-	StopServerBenchmark(*StopRequest) *Result
-}
-
-// RegisterStopServerBenchmarkHandler sets the handler for StopServerBenchmark.
-func (s *GorumsServer) RegisterStopServerBenchmarkHandler(handler StopServerBenchmarkHandler) {
-	s.srv.registerHandler(stopServerBenchmarkMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(StopRequest)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.StopServerBenchmark(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: stopServerBenchmarkMethodID}
-	})
 }
 
 // StartBenchmark is a quorum call invoked on all nodes in configuration c,
@@ -1532,7 +1459,7 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1566,7 +1493,7 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 			}
 
 			reply := new(StartResponse)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1583,29 +1510,6 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// StartBenchmarkHandler is the server API for the StartBenchmark rpc.
-type StartBenchmarkHandler interface {
-	StartBenchmark(*StartRequest) *StartResponse
-}
-
-// RegisterStartBenchmarkHandler sets the handler for StartBenchmark.
-func (s *GorumsServer) RegisterStartBenchmarkHandler(handler StartBenchmarkHandler) {
-	s.srv.registerHandler(startBenchmarkMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(StartRequest)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.StartBenchmark(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: startBenchmarkMethodID}
-	})
 }
 
 // StopBenchmark is a quorum call invoked on all nodes in configuration c,
@@ -1641,7 +1545,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1675,7 +1579,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 			}
 
 			reply := new(MemoryStat)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1692,29 +1596,6 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// StopBenchmarkHandler is the server API for the StopBenchmark rpc.
-type StopBenchmarkHandler interface {
-	StopBenchmark(*StopRequest) *MemoryStat
-}
-
-// RegisterStopBenchmarkHandler sets the handler for StopBenchmark.
-func (s *GorumsServer) RegisterStopBenchmarkHandler(handler StopBenchmarkHandler) {
-	s.srv.registerHandler(stopBenchmarkMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(StopRequest)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.StopBenchmark(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: stopBenchmarkMethodID}
-	})
 }
 
 // OrderedQC is a quorum call invoked on all nodes in configuration c,
@@ -1750,7 +1631,7 @@ func (c *Configuration) OrderedQC(ctx context.Context, in *Echo) (resp *Echo, er
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1784,7 +1665,7 @@ func (c *Configuration) OrderedQC(ctx context.Context, in *Echo) (resp *Echo, er
 			}
 
 			reply := new(Echo)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1801,29 +1682,6 @@ func (c *Configuration) OrderedQC(ctx context.Context, in *Echo) (resp *Echo, er
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// OrderedQCHandler is the server API for the OrderedQC rpc.
-type OrderedQCHandler interface {
-	OrderedQC(*Echo) *Echo
-}
-
-// RegisterOrderedQCHandler sets the handler for OrderedQC.
-func (s *GorumsServer) RegisterOrderedQCHandler(handler OrderedQCHandler) {
-	s.srv.registerHandler(orderedQCMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderedQC(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: orderedQCMethodID}
-	})
 }
 
 // ConcurrentQC is a quorum call invoked on all nodes in configuration c,
@@ -1859,7 +1717,7 @@ func (c *Configuration) ConcurrentQC(ctx context.Context, in *Echo) (resp *Echo,
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1893,7 +1751,7 @@ func (c *Configuration) ConcurrentQC(ctx context.Context, in *Echo) (resp *Echo,
 			}
 
 			reply := new(Echo)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1910,29 +1768,6 @@ func (c *Configuration) ConcurrentQC(ctx context.Context, in *Echo) (resp *Echo,
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// ConcurrentQCHandler is the server API for the ConcurrentQC rpc.
-type ConcurrentQCHandler interface {
-	ConcurrentQC(*Echo) *Echo
-}
-
-// RegisterConcurrentQCHandler sets the handler for ConcurrentQC.
-func (s *GorumsServer) RegisterConcurrentQCHandler(handler ConcurrentQCHandler) {
-	s.srv.registerHandler(concurrentQCMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.ConcurrentQC(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: concurrentQCMethodID}
-	})
 }
 
 // OrderedAsync asynchronously invokes a quorum call on configuration c
@@ -1953,7 +1788,7 @@ func (c *Configuration) OrderedAsync(ctx context.Context, in *Echo) *FutureEcho 
 	expected := c.n
 
 	var msg *ordering.Message
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		// In case of a marshalling error, we should skip sending any messages
 		fut.err = fmt.Errorf("failed to marshal message: %w", err)
@@ -2001,7 +1836,7 @@ func (c *Configuration) orderedAsyncRecv(ctx context.Context, in *Echo, msgID ui
 				break
 			}
 			data := new(Echo)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
+			err := unmarshaler.Unmarshal(r.reply, data)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -2022,29 +1857,6 @@ func (c *Configuration) orderedAsyncRecv(ctx context.Context, in *Echo, msgID ui
 	}
 }
 
-// OrderedAsyncHandler is the server API for the OrderedAsync rpc.
-type OrderedAsyncHandler interface {
-	OrderedAsync(*Echo) *Echo
-}
-
-// RegisterOrderedAsyncHandler sets the handler for OrderedAsync.
-func (s *GorumsServer) RegisterOrderedAsyncHandler(handler OrderedAsyncHandler) {
-	s.srv.registerHandler(orderedAsyncMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderedAsync(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: orderedAsyncMethodID}
-	})
-}
-
 // ConcurrentAsync asynchronously invokes a quorum call on configuration c
 // and returns a FutureEcho, which can be used to inspect the quorum call
 // reply and error when available.
@@ -2063,7 +1875,7 @@ func (c *Configuration) ConcurrentAsync(ctx context.Context, in *Echo) *FutureEc
 	expected := c.n
 
 	var msg *ordering.Message
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		// In case of a marshalling error, we should skip sending any messages
 		fut.err = fmt.Errorf("failed to marshal message: %w", err)
@@ -2111,7 +1923,7 @@ func (c *Configuration) concurrentAsyncRecv(ctx context.Context, in *Echo, msgID
 				break
 			}
 			data := new(Echo)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
+			err := unmarshaler.Unmarshal(r.reply, data)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -2130,29 +1942,6 @@ func (c *Configuration) concurrentAsyncRecv(ctx context.Context, in *Echo, msgID
 			return
 		}
 	}
-}
-
-// ConcurrentAsyncHandler is the server API for the ConcurrentAsync rpc.
-type ConcurrentAsyncHandler interface {
-	ConcurrentAsync(*Echo) *Echo
-}
-
-// RegisterConcurrentAsyncHandler sets the handler for ConcurrentAsync.
-func (s *GorumsServer) RegisterConcurrentAsyncHandler(handler ConcurrentAsyncHandler) {
-	s.srv.registerHandler(concurrentAsyncMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.ConcurrentAsync(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: concurrentAsyncMethodID}
-	})
 }
 
 // OrderedSlowServer is a quorum call invoked on all nodes in configuration c,
@@ -2188,7 +1977,7 @@ func (c *Configuration) OrderedSlowServer(ctx context.Context, in *Echo) (resp *
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -2222,7 +2011,7 @@ func (c *Configuration) OrderedSlowServer(ctx context.Context, in *Echo) (resp *
 			}
 
 			reply := new(Echo)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -2239,29 +2028,6 @@ func (c *Configuration) OrderedSlowServer(ctx context.Context, in *Echo) (resp *
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// OrderedSlowServerHandler is the server API for the OrderedSlowServer rpc.
-type OrderedSlowServerHandler interface {
-	OrderedSlowServer(*Echo) *Echo
-}
-
-// RegisterOrderedSlowServerHandler sets the handler for OrderedSlowServer.
-func (s *GorumsServer) RegisterOrderedSlowServerHandler(handler OrderedSlowServerHandler) {
-	s.srv.registerHandler(orderedSlowServerMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.OrderedSlowServer(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: orderedSlowServerMethodID}
-	})
 }
 
 // ConcurrentSlowServer is a quorum call invoked on all nodes in configuration c,
@@ -2297,7 +2063,7 @@ func (c *Configuration) ConcurrentSlowServer(ctx context.Context, in *Echo) (res
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -2331,7 +2097,7 @@ func (c *Configuration) ConcurrentSlowServer(ctx context.Context, in *Echo) (res
 			}
 
 			reply := new(Echo)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -2348,29 +2114,6 @@ func (c *Configuration) ConcurrentSlowServer(ctx context.Context, in *Echo) (res
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// ConcurrentSlowServerHandler is the server API for the ConcurrentSlowServer rpc.
-type ConcurrentSlowServerHandler interface {
-	ConcurrentSlowServer(*Echo) *Echo
-}
-
-// RegisterConcurrentSlowServerHandler sets the handler for ConcurrentSlowServer.
-func (s *GorumsServer) RegisterConcurrentSlowServerHandler(handler ConcurrentSlowServerHandler) {
-	s.srv.registerHandler(concurrentSlowServerMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.ConcurrentSlowServer(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: concurrentSlowServerMethodID}
-	})
 }
 
 // QuorumSpec is the interface of quorum functions for Benchmark.
@@ -2629,6 +2372,7 @@ const multicastMethodID int32 = 10
 const concurrentMulticastMethodID int32 = 11
 
 var orderingMethods = map[int32]methodInfo{
+
 	0:  {oneway: false, concurrent: false},
 	1:  {oneway: false, concurrent: false},
 	2:  {oneway: false, concurrent: false},
@@ -2690,5 +2434,182 @@ func (f *FutureEcho) Done() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// Benchmark is the server-side API for the Benchmark Service
+type Benchmark interface {
+	StartServerBenchmark(*StartRequest) *StartResponse
+	StopServerBenchmark(*StopRequest) *Result
+	StartBenchmark(*StartRequest) *StartResponse
+	StopBenchmark(*StopRequest) *MemoryStat
+	OrderedQC(*Echo) *Echo
+	ConcurrentQC(*Echo) *Echo
+	OrderedAsync(*Echo) *Echo
+	ConcurrentAsync(*Echo) *Echo
+	OrderedSlowServer(*Echo) *Echo
+	ConcurrentSlowServer(*Echo) *Echo
+	Multicast(*TimedMsg)
+	ConcurrentMulticast(*TimedMsg)
+}
+
+func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
+	s.srv.handlers[startServerBenchmarkMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(StartRequest)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: startServerBenchmarkMethodID, ID: in.ID}
+		}
+		resp := srv.StartServerBenchmark(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: startServerBenchmarkMethodID, ID: in.ID}
+	}
+	s.srv.handlers[stopServerBenchmarkMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(StopRequest)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: stopServerBenchmarkMethodID, ID: in.ID}
+		}
+		resp := srv.StopServerBenchmark(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: stopServerBenchmarkMethodID, ID: in.ID}
+	}
+	s.srv.handlers[startBenchmarkMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(StartRequest)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: startBenchmarkMethodID, ID: in.ID}
+		}
+		resp := srv.StartBenchmark(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: startBenchmarkMethodID, ID: in.ID}
+	}
+	s.srv.handlers[stopBenchmarkMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(StopRequest)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: stopBenchmarkMethodID, ID: in.ID}
+		}
+		resp := srv.StopBenchmark(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: stopBenchmarkMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderedQCMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderedQCMethodID, ID: in.ID}
+		}
+		resp := srv.OrderedQC(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderedQCMethodID, ID: in.ID}
+	}
+	s.srv.handlers[concurrentQCMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: concurrentQCMethodID, ID: in.ID}
+		}
+		resp := srv.ConcurrentQC(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: concurrentQCMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderedAsyncMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderedAsyncMethodID, ID: in.ID}
+		}
+		resp := srv.OrderedAsync(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderedAsyncMethodID, ID: in.ID}
+	}
+	s.srv.handlers[concurrentAsyncMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: concurrentAsyncMethodID, ID: in.ID}
+		}
+		resp := srv.ConcurrentAsync(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: concurrentAsyncMethodID, ID: in.ID}
+	}
+	s.srv.handlers[orderedSlowServerMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: orderedSlowServerMethodID, ID: in.ID}
+		}
+		resp := srv.OrderedSlowServer(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: orderedSlowServerMethodID, ID: in.ID}
+	}
+	s.srv.handlers[concurrentSlowServerMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Echo)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: concurrentSlowServerMethodID, ID: in.ID}
+		}
+		resp := srv.ConcurrentSlowServer(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: concurrentSlowServerMethodID, ID: in.ID}
+	}
+	s.srv.handlers[multicastMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(TimedMsg)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.Multicast(req)
+		return nil
+	}
+	s.srv.handlers[concurrentMulticastMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(TimedMsg)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		if err != nil {
+			return nil
+		}
+		srv.ConcurrentMulticast(req)
+		return nil
 	}
 }
