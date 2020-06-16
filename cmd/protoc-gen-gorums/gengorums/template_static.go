@@ -928,17 +928,13 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 type requestHandler func(*ordering.Message) *ordering.Message
 
 type orderingServer struct {
-	handlers    map[int32]requestHandler
-	opts        serverOptions
-	marshaler   proto.MarshalOptions
-	unmarshaler proto.UnmarshalOptions
+	handlers map[int32]requestHandler
+	opts     serverOptions
 }
 
 func newOrderingServer(opts []ServerOption) *orderingServer {
 	s := &orderingServer{
-		handlers:    make(map[int32]requestHandler),
-		marshaler:   proto.MarshalOptions{AllowPartial: true, Deterministic: true},
-		unmarshaler: proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true},
+		handlers: make(map[int32]requestHandler),
 	}
 	for _, opt := range opts {
 		opt(&s.opts)
@@ -1110,6 +1106,17 @@ func (q qcresult) String() string {
 	}
 	return out.String()
 }
+
+var (
+	marshaler = proto.MarshalOptions{
+		AllowPartial:  true,
+		Deterministic: true,
+	}
+	unmarshaler = proto.UnmarshalOptions{
+		AllowPartial:   true,
+		DiscardUnknown: true,
+	}
+)
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	for _, y := range set {

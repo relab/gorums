@@ -3,7 +3,7 @@ package gengorums
 var unicastMethod = `
 func (n *Node) {{$method}}(in *{{$in}}) error {
 	msgID := n.nextMsgID()
-	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return {{$errorf}}("failed to marshal message: %w", err)
 	}

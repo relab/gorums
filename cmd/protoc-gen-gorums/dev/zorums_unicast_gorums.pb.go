@@ -6,12 +6,11 @@ import (
 	fmt "fmt"
 	empty "github.com/golang/protobuf/ptypes/empty"
 	ordering "github.com/relab/gorums/ordering"
-	proto "google.golang.org/protobuf/proto"
 )
 
 func (n *Node) Unicast(in *Request) error {
 	msgID := n.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -29,7 +28,7 @@ var _ empty.Empty
 
 func (n *Node) Unicast2(in *Request) error {
 	msgID := n.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -47,7 +46,7 @@ var _ empty.Empty
 
 func (n *Node) UnicastConcurrent(in *Request) error {
 	msgID := n.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}

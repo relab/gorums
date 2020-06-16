@@ -27,7 +27,7 @@ var orderedFutureBody = `
 	expected := c.n
 {{if not (hasPerNodeArg .Method)}}
 	var msg *{{$gorumsMsg}}
-	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		// In case of a marshalling error, we should skip sending any messages
 		fut.err = {{$errorf}}("failed to marshal message: %w", err)
@@ -49,7 +49,7 @@ var orderedFutureBody = `
 			expected--
 			continue
 		}
-		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
+		data, err := marshaler.Marshal(nodeArg)
 		if err != nil {
 			fut.err = {{$errorf}}("failed to marshal message: %w", err)
 			close(fut.c)
@@ -102,7 +102,7 @@ var orderedFutureRecvBody = `
 			}
 			{{- /*template "traceLazyLog"*/}}
 			data := new({{$out}})
-			err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
+			err := unmarshaler.Unmarshal(r.reply, data)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, {{$errorf}}("failed to unmarshal reply: %w", err)})
 				break

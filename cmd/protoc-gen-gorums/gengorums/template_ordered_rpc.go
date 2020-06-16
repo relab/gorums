@@ -21,7 +21,7 @@ var orderingRPCPreamble = `
 `
 
 var orderingRPCBody = `
-	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
@@ -38,7 +38,7 @@ var orderingRPCBody = `
 			return nil, r.err
 		}
 		reply := new({{$out}})
-		err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+		err := unmarshaler.Unmarshal(r.reply, reply)
 		if err != nil {
 			return nil, {{$errorf}}("failed to unmarshal reply: %w", err)
 		}
