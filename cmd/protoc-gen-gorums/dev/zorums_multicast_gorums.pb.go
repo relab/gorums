@@ -6,13 +6,12 @@ import (
 	fmt "fmt"
 	empty "github.com/golang/protobuf/ptypes/empty"
 	ordering "github.com/relab/gorums/ordering"
-	proto "google.golang.org/protobuf/proto"
 )
 
 // Multicast plain. Response type is not needed here.
 func (c *Configuration) Multicast(in *Request) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -37,7 +36,7 @@ func (c *Configuration) MulticastPerNodeArg(in *Request, f func(*Request, uint32
 		if nodeArg == nil {
 			continue
 		}
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
+		data, err := marshaler.Marshal(nodeArg)
 		if err != nil {
 			return fmt.Errorf("failed to marshal message: %w", err)
 		}
@@ -54,7 +53,7 @@ func (c *Configuration) MulticastPerNodeArg(in *Request, f func(*Request, uint32
 // Multicast2 is testing whether multiple streams work.
 func (c *Configuration) Multicast2(in *Request) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -75,7 +74,7 @@ var _ empty.Empty
 // Multicast3 is testing imported message type.
 func (c *Configuration) Multicast3(in *Request) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -96,7 +95,7 @@ var _ empty.Empty
 // Multicast4 is testing imported message type.
 func (c *Configuration) Multicast4(in *empty.Empty) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -114,7 +113,7 @@ func (c *Configuration) Multicast4(in *empty.Empty) error {
 // MutlicastConcurrent uses a concurrent server-side handler
 func (c *Configuration) MulticastConcurrent(in *Request) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}

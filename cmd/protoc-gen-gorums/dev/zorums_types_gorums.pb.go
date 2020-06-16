@@ -631,7 +631,7 @@ type ZorumsService interface {
 func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[multicastMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}
@@ -640,7 +640,7 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}
@@ -649,7 +649,7 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[multicast2MethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}
@@ -658,7 +658,7 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[multicast3MethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}
@@ -667,7 +667,7 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[multicast4MethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(empty.Empty)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}
@@ -676,7 +676,7 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[multicastConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}
@@ -685,13 +685,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingQCMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingQCMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingQC(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -699,13 +699,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingPerNodeArgMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingPerNodeArg(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -713,13 +713,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingCustomReturnTypeMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingCustomReturnType(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -727,13 +727,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingComboMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingComboMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingCombo(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -741,13 +741,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingConcurrentMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingConcurrent(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -755,13 +755,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingUnaryRPCMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingUnaryRPC(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -769,13 +769,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingUnaryRPCConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingUnaryRPCConcurrentMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingUnaryRPCConcurrent(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -783,13 +783,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingFutureMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingFutureMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingFuture(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -797,13 +797,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingFuturePerNodeArgMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingFuturePerNodeArg(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -811,13 +811,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingFutureCustomReturnTypeMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingFutureCustomReturnType(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -825,13 +825,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingFutureConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingFutureConcurrentMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingFutureConcurrent(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -839,13 +839,13 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingFutureComboMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		// TODO: how to handle marshaling errors here
 		if err != nil {
 			return &ordering.Message{MethodID: orderingFutureComboMethodID, ID: in.ID}
 		}
 		resp := srv.OrderingFutureCombo(req)
-		data, err := s.srv.marshaler.Marshal(resp)
+		data, err := marshaler.Marshal(resp)
 		if err != nil {
 			return new(ordering.Message)
 		}
@@ -853,7 +853,7 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[unicastMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}
@@ -862,7 +862,7 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[unicast2MethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}
@@ -871,7 +871,7 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[unicastConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
 		req := new(Request)
-		err := s.srv.unmarshaler.Unmarshal(in.GetData(), req)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
 		if err != nil {
 			return nil
 		}

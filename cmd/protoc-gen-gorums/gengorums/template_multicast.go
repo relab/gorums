@@ -21,7 +21,7 @@ var multicastMethod = `
 func (c *Configuration) {{$method}}(in *{{$in}}{{perNodeFnType .GenFile .Method ", f"}}) error {
 	msgID := c.mgr.nextMsgID()
 {{if not (hasPerNodeArg .Method) -}}
-	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return {{$errorf}}("failed to marshal message: %w", err)
 	}
@@ -37,7 +37,7 @@ func (c *Configuration) {{$method}}(in *{{$in}}{{perNodeFnType .GenFile .Method 
 		if nodeArg == nil {
 			continue
 		}
-		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
+		data, err := marshaler.Marshal(nodeArg)
 		if err != nil {
 			return {{$errorf}}("failed to marshal message: %w", err)
 		}

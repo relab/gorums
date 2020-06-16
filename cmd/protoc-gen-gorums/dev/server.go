@@ -6,7 +6,6 @@ import (
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	proto "google.golang.org/protobuf/proto"
 )
 
 // requestHandler is used to fetch a response message based on the request.
@@ -16,17 +15,13 @@ import (
 type requestHandler func(*ordering.Message) *ordering.Message
 
 type orderingServer struct {
-	handlers    map[int32]requestHandler
-	opts        serverOptions
-	marshaler   proto.MarshalOptions
-	unmarshaler proto.UnmarshalOptions
+	handlers map[int32]requestHandler
+	opts     serverOptions
 }
 
 func newOrderingServer(opts []ServerOption) *orderingServer {
 	s := &orderingServer{
-		handlers:    make(map[int32]requestHandler),
-		marshaler:   proto.MarshalOptions{AllowPartial: true, Deterministic: true},
-		unmarshaler: proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true},
+		handlers: make(map[int32]requestHandler),
 	}
 	for _, opt := range opts {
 		opt(&s.opts)
