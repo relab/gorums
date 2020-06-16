@@ -1,8 +1,6 @@
 package gengorums
 
 var orderingVariables = `
-{{$marshalOptions := use "proto.MarshalOptions" .GenFile}}
-{{$unmarshalOptions := use "proto.UnmarshalOptions" .GenFile}}
 {{$errorf := use "fmt.Errorf" .GenFile}}
 {{$gorumsMsg := use "ordering.Message" .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
@@ -30,7 +28,7 @@ var orderingPreamble = `
 
 var orderingLoop = `
 {{if not (hasPerNodeArg .Method) -}}
-	data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, {{$errorf}}("failed to marshal message: %w", err)
 	}
@@ -50,7 +48,7 @@ var orderingLoop = `
 			expected--
 			continue
 		}
-		data, err := {{$marshalOptions}}{AllowPartial: true, Deterministic: true}.Marshal(nodeArg)
+		data, err := marshaler.Marshal(nodeArg)
 		if err != nil {
 			return nil, {{$errorf}}("failed to marshal message: %w", err)
 		}
@@ -80,7 +78,7 @@ var orderingReply = `
 			}
 			{{template "traceLazyLog"}}
 			reply := new({{$out}})
-			err := {{$unmarshalOptions}}{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, {{$errorf}}("failed to unmarshal reply: %w", err)})
 				break
