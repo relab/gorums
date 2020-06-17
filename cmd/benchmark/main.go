@@ -21,26 +21,89 @@ import (
 	"google.golang.org/grpc"
 )
 
+type regexpFlag struct {
+	val *regexp.Regexp
+}
+
+func (f *regexpFlag) String() string {
+	if f.val == nil {
+		return ""
+	}
+	return fmt.Sprintf("'%s'", f.val.String())
+}
+
+func (f *regexpFlag) Set(v string) (err error) {
+	f.val, err = regexp.Compile(v)
+	return
+}
+
+func (f *regexpFlag) Get() *regexp.Regexp {
+	return f.val
+}
+
+type listFlag struct {
+	val []string
+}
+
+func (f *listFlag) String() string {
+	return strings.Join(f.val, ",")
+}
+
+func (f *listFlag) Set(v string) error {
+	f.val = strings.Split(v, ",")
+	return nil
+}
+
+func (f *listFlag) Get() []string {
+	return f.val
+}
+
+type durationFlag struct {
+	val time.Duration
+}
+
+func (f *durationFlag) String() string {
+	return f.val.String()
+}
+
+func (f *durationFlag) Set(v string) (err error) {
+	f.val, err = time.ParseDuration(v)
+	return err
+}
+
+func (f *durationFlag) Get() time.Duration {
+	return f.val
+}
+
 func main() {
 	var (
-		traceFile    = flag.String("trace", "", "File to write trace to.")
-		cpuprofile   = flag.String("cpuprofile", "", "File to write cpu profile to.")
-		memprofile   = flag.String("memprofile", "", "File to write memory profile to.")
-		remotes      = flag.String("remotes", "", "List of remote servers to connect to.")
-		benchmarks   = flag.String("benchmarks", ".*", "List of benchmarks to run.")
-		warmup       = flag.String("warmup", "100ms", "How long a warmup should last.")
-		benchTime    = flag.String("time", "1s", "How long to run each benchmark")
-		payload      = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
-		concurrent   = flag.Int("concurrent", 1, "Number of goroutines that can make calls concurrently.")
-		maxAsync     = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
-		server       = flag.String("server", "", "Run a benchmark server on given address.")
-		serverStats  = flag.Bool("server-stats", false, "Show server statistics separately")
-		cfgSize      = flag.Int("config-size", 4, "Size of the configuration to use. If < 1, all nodes will be used.")
-		qSize        = flag.Int("quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
-		sendBuffer   = flag.Uint("send-buffer", 0, "The size of the send buffer.")
-		serverBuffer = flag.Uint("server-buffer", 0, "The size of the server buffers.")
+		benchmarksFlag = regexpFlag{val: regexp.MustCompile(".*")}
+		remotesFlag    = listFlag{}
+		warmupFlag     = durationFlag{val: 100 * time.Millisecond}
+		benchTimeFlag  = durationFlag{val: 1 * time.Second}
+		traceFile      = flag.String("trace", "", "A `file` to write trace to.")
+		cpuprofile     = flag.String("cpuprofile", "", "A `file` to write cpu profile to.")
+		memprofile     = flag.String("memprofile", "", "A `file` to write memory profile to.")
+		payload        = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
+		concurrent     = flag.Int("concurrent", 1, "Number of goroutines that can make calls concurrently.")
+		maxAsync       = flag.Int("max-async", 1000, "Maximum number of async calls that can be in flight at once.")
+		server         = flag.String("server", "", "Run a benchmark server on given `address`.")
+		serverStats    = flag.Bool("server-stats", false, "Show server statistics separately")
+		cfgSize        = flag.Int("config-size", 4, "Size of the configuration to use. If < 1, all nodes will be used.")
+		qSize          = flag.Int("quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
+		sendBuffer     = flag.Uint("send-buffer", 0, "The size of the send buffer.")
+		serverBuffer   = flag.Uint("server-buffer", 0, "The size of the server buffers.")
 	)
+	flag.Var(&benchmarksFlag, "benchmarks", "A `regexp` matching the benchmarks to run.")
+	flag.Var(&remotesFlag, "remotes", "A comma separated `list` of remote addresses to connect to.")
+	flag.Var(&warmupFlag, "warmup", "Warmup `duration`.")
+	flag.Var(&benchTimeFlag, "time", "The `duration` of each benchmark.")
 	flag.Parse()
+
+	benchReg := benchmarksFlag.Get()
+	remotes := remotesFlag.Get()
+	warmup := warmupFlag.Get()
+	benchTime := benchTimeFlag.Get()
 
 	// set up profiling and tracing
 	if *cpuprofile != "" {
@@ -84,7 +147,7 @@ func main() {
 	}()
 
 	if *server != "" {
-		signals := make(chan os.Signal)
+		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 		lis, err := net.Listen("tcp", *server)
@@ -103,12 +166,11 @@ func main() {
 	}
 
 	remote := true
-	if len(*remotes) < 1 {
+	if len(remotes) < 1 {
 		remote = false
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		ports := benchmark.StartLocalServers(ctx, *cfgSize, benchmark.WithServerBufferSize(*serverBuffer))
-		*remotes = strings.Join(ports, ",")
+		remotes = benchmark.StartLocalServers(ctx, *cfgSize, benchmark.WithServerBufferSize(*serverBuffer))
 	}
 
 	var mgrOpts = []benchmark.ManagerOption{
@@ -121,7 +183,7 @@ func main() {
 		mgrOpts = append(mgrOpts, benchmark.WithTracing())
 	}
 
-	mgr, err := benchmark.NewManager(strings.Split(*remotes, ","), mgrOpts...)
+	mgr, err := benchmark.NewManager(remotes, mgrOpts...)
 	if err != nil {
 		log.Fatalf("Failed to create manager: %v\n", err)
 	}
@@ -131,7 +193,8 @@ func main() {
 	options.Concurrent = *concurrent
 	options.MaxAsync = *maxAsync
 	options.Payload = *payload
-	options.Warmup, err = time.ParseDuration(*warmup)
+	options.Warmup = warmup
+	options.Duration = benchTime
 	options.Remote = remote
 
 	numNodes, _ := mgr.Size()
@@ -149,19 +212,6 @@ func main() {
 		options.QuorumSize = options.NumNodes
 	} else {
 		options.QuorumSize = *qSize
-	}
-
-	if err != nil {
-		log.Fatalf("Failed to parse 'warmup': %v\n", err)
-	}
-	options.Duration, err = time.ParseDuration(*benchTime)
-	if err != nil {
-		log.Fatalf("Failed to parse 'time': %v\n", err)
-	}
-
-	benchReg, err := regexp.Compile(*benchmarks)
-	if err != nil {
-		log.Fatalf("Could not parse regular expression: %v\n", err)
 	}
 
 	results, err := benchmark.RunBenchmarks(benchReg, options, mgr)
