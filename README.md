@@ -3,7 +3,7 @@
 [![license](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/relab/gorums/raw/master/LICENSE)
 [![GoDoc](https://godoc.org/github.com/relab/gorums?status.svg)](https://godoc.org/github.com/relab/gorums)
 [![Travis Build Status](https://travis-ci.org/relab/gorums.svg?branch=master)](https://travis-ci.org/relab/gorums)
-![golangci-lint](https://github.com/relab/gorums/workflows/golangci-lint/badge.svg)
+[![golangci-lint](https://github.com/relab/gorums/workflows/golangci-lint/badge.svg)](https://github.com/relab/gorums/actions)
 
 Gorums [1] is a novel framework for building fault tolerant distributed systems.
 Gorums offers a flexible and simple quorum call abstraction, used to communicate
