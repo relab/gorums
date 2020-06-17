@@ -1,6 +1,6 @@
 package benchmark
 
-// QSpec is the quroum specification object for the benchmark
+// QSpec is the quorum specification object for the benchmark
 type QSpec struct {
 	CfgSize int
 	QSize   int
