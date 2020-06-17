@@ -1,186 +1,92 @@
-CMD_PKG 			:= cmd
-PLUGINS_PKG 			:= plugins
-BUNDLE_PKG			:= bundle
-DEV_PKG				:= dev
-PLUGIN_PKG 			:= gorums
+PLUGIN_PATH				:= ./cmd/protoc-gen-gorums
+dev_path				:= $(PLUGIN_PATH)/dev
+gen_path				:= $(PLUGIN_PATH)/gengorums
+tests_path				:= internal/testprotos
+zorums_proto			:= $(dev_path)/zorums.proto
+tests_zorums_proto		:= $(tests_path)/calltypes/zorums/zorums.proto
+tests_zorums_gen		:= $(patsubst %.proto,%_gorums.pb.go,$(tests_zorums_proto))
+gen_files				:= $(shell find $(dev_path) -name "zorums*.pb.go")
+static_file				:= $(gen_path)/template_static.go
+static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
+test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing*")
+failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
+test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
+tmp_dir					:= $(shell mktemp -d -t gorums-XXXXX)
 
-GORUMS_PKGS 			:= $(shell go list ./... | grep -v /vendor/)
-GORUMS_FILES			:= $(shell find . -name '*.go' -not -path "*vendor*")
-GORUMS_DIRS 			:= $(shell find . -type d -not -path "*vendor*" -not -path "./.git*" -not -path "*testdata*")
-GORUMS_PKG_PATH	 		:= github.com/relab/gorums
-GORUMS_PROTO_NAME		:= gorums.proto
-GORUMS_DEV_PKG_PATH		:= $(GORUMS_PKG_PATH)/$(DEV_PKG)
-GORUMS_ENV_GENDEV		:= GORUMSGENDEV=1
+plugin_deps				:= gorums.pb.go internal/ordering/opts.pb.go internal/correctable/opts.pb.go $(static_file)
+benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_grpc.pb.go benchmark/benchmark_gorums.pb.go
 
-GORUMS_STATIC_GO		:= $(PLUGINS_PKG)/$(PLUGIN_PKG)/static.go
-BUNDLE_MAIN_GO 			:= $(CMD_PKG)/$(BUNDLE_PKG)/main.go
-GENTEMPLATES_MAIN_GO 		:= $(CMD_PKG)/gentemplates/main.go
+.PHONY: dev tools bootstrapgorums installgorums benchmark
 
-PROTOC_PLUGIN_PKG		:= protoc-gen-gorums
-PROTOC_PLUGIN_PKG_PATH 		:= $(GORUMS_PKG_PATH)/$(CMD_PKG)/$(PROTOC_PLUGIN_PKG)
-PROTOC_PLUGIN_NAME 		:= gorums_out
-PROTOC_I_FLAG			:= ../../../:.
+dev: installgorums ordering/ordering.pb.go ordering/ordering_grpc.pb.go
+	@rm -f $(dev_path)/zorums*.pb.go
+	@protoc -I$(dev_path):. \
+		--go_out=:. \
+		--go-grpc_out=:. \
+		--gorums_out=dev=true,trace=true:. \
+		$(zorums_proto)
 
-TMP_DEVGEN_DIR 			:= tmpdevgen 
+benchmark: installgorums $(benchmark_deps)
+	@go build -o cmd/benchmark/benchmark ./cmd/benchmark
 
-REG_PROTO_NAME			:= storage.proto
-REG_PBGO_NAME			:= storage.pb.go
-REG_PROTO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PROTO_NAME)
-REG_PBGO_DEV_RPATH		:= $(DEV_PKG)/$(REG_PBGO_NAME)
+$(static_file): $(static_files)
+	@cp $(static_file) $(static_file).bak
+	@protoc-gen-gorums --bundle=$(static_file)
 
-GOGOPROTO_ALIAS 		:= google/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor
+%.pb.go : %.proto
+	@protoc --go_out=paths=source_relative:. $^
 
-BENCHMARK			:= BenchmarkRead1KQ2N3Local
+%_grpc.pb.go : %.proto
+	@protoc --go-grpc_out=paths=source_relative:. $^
 
-CHECKTOOLS			:= 	golang.org/x/tools/cmd/goimports \
-					golang.org/x/lint \
-					github.com/jgautheron/goconst/cmd/goconst \
-					github.com/kisielk/errcheck \
-					github.com/gordonklaus/ineffassign \
-					github.com/mdempsky/unconvert \
-					honnef.co/go/tools/staticcheck \
-					mvdan.cc/interfacer \
-					github.com/client9/misspell/cmd/misspell
+%_gorums.pb.go : %.proto
+	@protoc --gorums_out=paths=source_relative,trace=true:. $^
 
-.PHONY: all
-all: build test
+tools:
+	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % sh -c 'command -v $$(basename %) >/dev/null || go install %'
 
-.PHONY: build
-build:
-	@echo go build:
-	@go build -v -i $(GORUMS_PKGS)
+installgorums: bootstrapgorums $(plugin_deps)
+	@go install $(PLUGIN_PATH)
 
-.PHONY: test
-test: reinstallprotoc
-	@echo go test:
-	@go test -v $(GORUMS_PKGS)
+ifeq (, $(shell which protoc-gen-gorums))
+bootstrapgorums: tools
+	@echo "Bootstrapping gorums plugin"
+	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
+endif
 
-.PHONY: testrace
-testrace: reinstallprotoc
-	@echo go test -race:
-	@go test -v -race -cpu=1,2,4 $(GORUMS_PKGS)
+.PHONY: gentests $(test_files)
+gentests: $(test_files) $(failing_test_files) stability
 
-.PHONY: stresstestdev
-stresstestdev:
-	go get -u golang.org/x/tools/cmd/stress
-	cd dev; go test -c
-	cd dev; stress -p=1 ./dev.test
+$(test_files): installgorums
+	@echo "Running protoc test with source files expected to pass"
+	@protoc -I. \
+		--go_out=paths=source_relative:. \
+		--go-grpc_out=paths=source_relative:. \
+		--gorums_out=paths=source_relative,trace=true:. $@ \
+	|| (echo "unexpected failure with exit code: $$?")
 
-.PHONY: benchlocal
-benchlocal:
-	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Local$$ -benchtime=5s
+$(failing_test_files): installgorums
+	@echo "Running protoc test with source files expected to fail (output is suppressed)"
+	@protoc -I. \
+		--go_out=paths=source_relative:. \
+		--go-grpc_out=paths=source_relative:. \
+		--gorums_out=paths=source_relative,trace=true:. $@ 2> /dev/null \
+	&& (echo "expected protoc to fail but got exit code: $$?") || (exit 0)
 
-.PHONY: benchremotewithlocalhost
-benchremotewithlocalhost:
-	cd cmd/storageserver; go build
-	cmd/storageserver/storageserver -port=8080 &
-	cmd/storageserver/storageserver -port=8081 &
-	cmd/storageserver/storageserver -port=8082 &
-	@echo starting storage servers in background... press enter to start benchmark.
-	@read
-	go test -v $(GORUMS_DEV_PKG_PATH) -run=^$$ -bench=Remote$$ -benchtime=5s -remotehosts=localhost:8080,localhost:8081,localhost:8082
-	@echo done running benchmark... killing storage servers
-	killall storageserver
-
-.PHONY: clean
-clean:
-	go clean -i $(GORUMS_PKG_PATH)/...
-	find . -name '*.test' -type f -exec rm -f {} \;
-	find . -name '*.prof' -type f -exec rm -f {} \;
-
-.PHONY: reinstallprotoc
-reinstallprotoc:
-	@echo installing protoc-gen-gorums with gorums plugin linked
-	@go install $(PROTOC_PLUGIN_PKG_PATH)
-
-.PHONY: devproto
-devproto: reinstallprotoc
-	@echo generating gorumsdev storage proto
-	protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc:. $(REG_PROTO_DEV_RPATH)
-
-.PHONY: gorumsprotoopts
-gorumsprotoopts:
-	@echo generating gorums proto options
-	protoc --$(PROTOC_PLUGIN_NAME)=M$(GOGOPROTO_ALIAS):../../../ $(GORUMS_PROTO_NAME)
-
-.PHONY: static
-static:
-	@echo creating static gorums plugin code bundle
-	go run $(BUNDLE_MAIN_GO) $(GORUMS_DEV_PKG_PATH) > $(GORUMS_STATIC_GO)
-
-.PHONY: templates
-templates:
-	@echo creating templates for gorums plugin code bundle
-	@go run $(GENTEMPLATES_MAIN_GO)
-
-.PHONY: dev
-dev: static templates reinstallprotoc
-	@echo generating _gen.go files for dev
-	mkdir -p $(TMP_DEVGEN_DIR)
-	$(GORUMS_ENV_GENDEV) protoc -I=$(PROTOC_I_FLAG) --$(PROTOC_PLUGIN_NAME)=plugins=grpc+gorums:$(TMP_DEVGEN_DIR) $(REG_PROTO_DEV_RPATH)
-	rm -r $(TMP_DEVGEN_DIR)
-
-.PHONY: profcpu
-profcpu:
-	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=$(BENCHMARK) -cpuprofile cpu.prof
-	go tool pprof $(DEV_PKG).test cpu.prof
-
-.PHONY: profmem
-profmem:
-	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=$(BENCHMARK) -memprofile allocmem.prof
-	go tool pprof -alloc_space $(DEV_PKG).test allocmem.prof
-
-.PHONY: profobj
-profobj:
-	go test $(GORUMS_DEV_PKG_PATH) -run=NONE -bench=$(BENCHMARK) -memprofile allocobj.prof
-	go tool pprof -alloc_objects $(DEV_PKG).test allocobj.prof
-
-.PHONY: getchecktools
-getchecktools:
-	go get -u $(CHECKTOOLS)
-
-.PHONY: getdevtools
-getdevtools: getchecktools
-
-.PHONY: check
-check: getchecktools
-	@echo static analysis tools:
-	@echo "gofmt (simplify)"
-	@! gofmt -s -l $(GORUMS_FILES) | grep -vF 'No Exceptions'
-	@echo "goimports"
-	@! goimports -l $(GORUMS_FILES) | grep -vF 'No Exceptions'
-	@echo "vet"
-	@! go tool vet $(GORUMS_DIRS) 2>&1 | \
-		grep -vF 'vendor/' | \
-		grep -vE '^dev/config_qc_test.go:.+: constant [0-9]+ not a string in call to Errorf'
-	@echo "vet --shadow"
-	@! go tool vet --shadow $(GORUMS_DIRS) 2>&1 | grep -vF 'vendor/'
-	@echo "golint"
-	@for pkg in $(GORUMS_PKGS); do \
-		! golint $$pkg | \
-		grep -vE '(\.pb\.go)' | \
-		grep -vE 'gorums/plugins/gorums/templates.go' ; \
-	done
-	@echo "goconst"
-	@for dir in $(GORUMS_DIRS); do \
-		! goconst $$dir | \
-		grep -vE '("_"|.pb.go)' ; \
-	done
-	@echo "errcheck"
-	@errcheck -ignore 'fmt:Fprint*,bytes:WriteString,encoding/binary:Write,io:WriteString,os:Close|Remove*,net:Close,github.com/relab/gorums/dev:Close' $(GORUMS_PKGS)
-	@echo "ineffassign"
-	@for dir in $(GORUMS_DIRS); do \
-		ineffassign -n $$dir ; \
-	done
-	@echo "unconvert"
-	@! unconvert $(GORUMS_PKGS) | grep -vF '.pb.go'
-	@echo "megacheck"
-	@megacheck $(GORUMS_PKGS)
-	@echo "interfacer"
-	@interfacer $(GORUMS_PKGS)
-	@echo "missspell"
-	@! misspell ./**/* | grep -vF 'vendor'
-
-.PHONY: updatedeps
-updatedeps:
-	go mod tidy
+.PHONY: stability
+stability: installgorums
+	@echo "Running protoc test with source files expected to remain stable (no output change between runs)"
+	@protoc -I. \
+		--go_out=paths=source_relative:. \
+		--go-grpc_out=paths=source_relative:. \
+		--gorums_out=paths=source_relative,trace=true:. $(tests_zorums_proto) \
+	|| (echo "unexpected failure with exit code: $$?")
+	@cp $(tests_zorums_gen) $(tmp_dir)/x_gorums.pb.go
+	@protoc -I. \
+		--go_out=paths=source_relative:. \
+		--go-grpc_out=paths=source_relative:. \
+		--gorums_out=paths=source_relative,trace=true:. $(tests_zorums_proto) \
+	|| (echo "unexpected failure with exit code: $$?")
+	@diff $(tests_zorums_gen) $(tmp_dir)/x_gorums.pb.go \
+	|| (echo "unexpected instability, observed changes between protoc runs: $$?")
+	@rm -rf $(tmp_dir)

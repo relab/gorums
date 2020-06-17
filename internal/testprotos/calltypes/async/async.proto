@@ -1,0 +1,17 @@
+// Test that Gorums can generate a single asynchronous quorum call method.
+
+syntax = "proto3";
+package gorums.testprotos.calltypes.async;
+option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/async";
+
+import "gorums.proto";
+
+service AsyncQuorumCall {
+  rpc AsyncQuorumCall(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
+  }
+}
+
+message Request { string Value = 1; }
+message Response { int64 Result = 1; }

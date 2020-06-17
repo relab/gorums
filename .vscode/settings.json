@@ -1,0 +1,18 @@
+{
+    "protoc": {
+        "path": "/usr/local/bin/protoc",
+        "compile_on_save": false,
+        "options": [
+            "--proto_path=${workspaceRoot}",
+            "--proto_path=${workspaceRoot}/cmd/protoc-gen-gorums/dev",
+        ]
+    },
+    "cSpell.words": [
+        "Ansible",
+        "Mallocs",
+        "QCQF",
+        "calltypes",
+        "cpuprofile",
+        "memprofile"
+    ]
+}

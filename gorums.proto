@@ -1,19 +1,19 @@
 syntax = "proto3";
 
 package gorums;
+option go_package = "github.com/relab/gorums";
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/relab/gorums";
-
 extend google.protobuf.MethodOptions {
-  bool qc = 50000;
-  bool correctable = 50001;
-  bool correctable_stream = 50002;
+  bool quorumcall = 50000;
+  bool async = 50001;
+  bool ordered = 50002;
   bool multicast = 50003;
-  bool qc_future = 50004;
-  bool qf_with_req = 50005;
-  bool per_node_arg = 50006;
+  bool correctable = 50004;
+  bool unicast = 50005;
+  bool concurrent = 50006;
+  bool per_node_arg = 50010;
 
   string custom_return_type = 51000;
 }

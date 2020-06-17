@@ -1,0 +1,18 @@
+// Test that Gorums will stop code generation if one of the
+// reserved Gorums types are used as a message type.
+
+syntax = "proto3";
+package gorums.testprotos.failing.reservednames;
+option go_package = "github.com/relab/gorums/internal/testprotos/failing/reservednames";
+
+import "gorums.proto";
+
+service Reserved {
+  rpc ConfTest(Configuration) returns (Manager) {}
+  rpc QuorumCall(Configuration) returns (Manager) {
+    option (gorums.quorumcall) = true;
+  }
+}
+
+message Configuration { string Conf = 1; }
+message Manager { string Mgr = 1; }

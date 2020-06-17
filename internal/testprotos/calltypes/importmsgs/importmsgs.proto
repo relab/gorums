@@ -1,0 +1,14 @@
+// Test that Gorums can generate a single quorum call method.
+
+syntax = "proto3";
+package gorums.testprotos.calltypes.quorumcall;
+option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/quorumcall";
+
+import "gorums.proto";
+import "internal/testprotos/msgs/msgs.proto";
+
+service QuorumCall {
+  rpc QuorumCall(msgs.Request) returns (msgs.Response) {
+    option (gorums.quorumcall) = true;
+  }
+}

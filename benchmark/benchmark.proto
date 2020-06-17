@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package benchmark;
+
+option go_package = "github.com/relab/gorums/benchmark";
+
+import "google/protobuf/empty.proto";
+
+import "gorums.proto";
+
+message Echo { bytes payload = 1; }
+
+message TimedMsg {
+  int64 SendTime = 1;
+  bytes payload = 2;
+}
+
+message StartRequest {}
+
+message StartResponse {}
+
+message StopRequest {}
+
+message Result {
+  string Name = 1;
+  uint64 TotalOps = 2;
+  int64 TotalTime = 3;
+  double Throughput = 4;
+  double LatencyAvg = 5;
+  double LatencyVar = 6;
+  uint64 AllocsPerOp = 7;
+  uint64 MemPerOp = 8;
+  repeated MemoryStat ServerStats = 9;
+}
+
+message MemoryStat {
+  uint64 Allocs = 1;
+  uint64 Memory = 2;
+}
+
+message MemoryStatList { repeated MemoryStat MemoryStats = 1; }
+
+service Benchmark {
+  rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
+
+  rpc StopServerBenchmark(StopRequest) returns (Result) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
+
+  rpc StartBenchmark(StartRequest) returns (StartResponse) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
+
+  rpc StopBenchmark(StopRequest) returns (MemoryStat) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+    option (gorums.custom_return_type) = "MemoryStatList";
+  }
+
+  // benchmarks
+  rpc UnorderedQC(Echo) returns (Echo) { option (gorums.quorumcall) = true; }
+
+  rpc OrderedQC(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
+
+  rpc ConcurrentQC(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+    option (gorums.concurrent) = true;
+  }
+
+  rpc UnorderedAsync(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.async) = true;
+  }
+
+  rpc OrderedAsync(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+    option (gorums.async) = true;
+  }
+
+  rpc ConcurrentAsync(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+    option (gorums.async) = true;
+    option (gorums.concurrent) = true;
+  }
+
+  rpc UnorderedSlowServer(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+  }
+
+  rpc OrderedSlowServer(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+  }
+
+  rpc ConcurrentSlowServer(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
+    option (gorums.concurrent) = true;
+  }
+
+  rpc Multicast(TimedMsg) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
+
+  rpc ConcurrentMulticast(TimedMsg) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+    option (gorums.concurrent) = true;
+  }
+}

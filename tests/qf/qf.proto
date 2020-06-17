@@ -1,0 +1,17 @@
+// Test to benchmark quorum functions with and without the request parameter.
+
+syntax = "proto3";
+package gorums.tests.qf;
+option go_package = "tests/qf";
+
+import "gorums.proto";
+
+service QuorumFunction {
+  rpc UseReq(Request) returns (Response) { option (gorums.quorumcall) = true; }
+  rpc IgnoreReq(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+  }
+}
+
+message Request { int64 Value = 1; }
+message Response { int64 Result = 1; }

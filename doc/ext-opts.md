@@ -1,11 +1,11 @@
-### Available options and their meaning
+# Available options and their meaning
 
-Below is shown an example service definition from a proto file. Gorums currently supports the following call types 
+Below is shown an example service definition from a proto file. Gorums currently supports the following call types
 
 | Call type     | Gorums option      | Description                                 |
 |---------------|--------------------|---------------------------------------------|
 | Regular gRPC  | no option          | If no option is specified no Gorums functionality is applied to the RPC method. |
-| Quorum Call   | `gorums.qc`        | This option will generate a call function that returns once a quorum of replies have been collected by the Gorums runtime. This is determined by a quorum function explained elsewhere. |
+| Quorum Call   | `gorums.quorumcall`        | This option will generate a call function that returns once a quorum of replies have been collected by the Gorums runtime. This is determined by a quorum function explained elsewhere. |
 | Future        | `gorums.qc_future` | Asynchronously call the function. |
 | Correctable   | `gorums.correctable` | TBD - TODO Rename this call type? |
 | Correctable Prelim  | `gorums.correctable_pr` | TBD - TODO Rename this call type? |
@@ -20,7 +20,6 @@ Each call type may in addition specify some advanced options:
 
 P.S. Multicast and some other call types may not support the advanced options yet. The compiler should complain if an unsupported combination is specified.
 
-
 ```proto
 service Storage {
 	// ReadNoQC is a plain gRPC call.
@@ -28,10 +27,10 @@ service Storage {
 
 	// Read is a synchronous quorum call.
 	rpc Read(ReadRequest) returns (State) {
-		option (gorums.qc) = true;
+		option (gorums.quorumcall) = true;
 	}
 
-	// ReadFuture is an asynchronous quorum call that 
+	// ReadFuture is an asynchronous quorum call that
 	// returns a future object for retrieving results.
 	rpc ReadFuture(ReadRequest) returns (State) {
 		option (gorums.qc_future) = true;
@@ -39,17 +38,17 @@ service Storage {
 
 	// ReadCustomReturn is a synchronous quorum call with a custom return type
 	rpc ReadCustomReturn(ReadRequest) returns (State) {
-		option (gorums.qc) 			= true;
+		option (gorums.quorumcall) 			= true;
 		option (gorums.custom_return_type) 	= "MyState";
 	}
 
-	// ReadCorrectable is an asynchronous correctable quorum call that 
+	// ReadCorrectable is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
 	rpc ReadCorrectable(ReadRequest) returns (State) {
 		option (gorums.correctable) = true;
 	}
 
-	// ReadPrelim is an asynchronous correctable quorum call that 
+	// ReadPrelim is an asynchronous correctable quorum call that
 	// returns a correctable object for retrieving results.
 	rpc ReadPrelim(ReadRequest) returns (stream State) {
 		option (gorums.correctable_pr) = true;
@@ -59,11 +58,11 @@ service Storage {
 	// The request argument (State) is passed to the associated
 	// quorum function, WriteQF, for this method.
 	rpc Write(State) returns (WriteResponse) {
-		option (gorums.qc)		= true;
+		option (gorums.quorumcall)		= true;
 		option (gorums.qf_with_req)	= true;
 	}
 
-	// WriteFuture is an asynchronous quorum call that 
+	// WriteFuture is an asynchronous quorum call that
 	// returns a future object for retrieving results.
 	// The request argument (State) is passed to the associated
 	// quorum function, WriteFutureQF, for this method.
@@ -82,20 +81,22 @@ service Storage {
 	// for each node, a provided function is called to determine
 	// the argument to be sent to that node.
 	rpc WritePerNode(State) returns (WriteResponse) {
-		option (gorums.qc)		= true;
+		option (gorums.quorumcall)		= true;
 		option (gorums.per_node_arg) 	= true;
 	}
 }
 ```
 
-### Adding a new extension option
+## Adding a new extension option
+
+TODO(meling) these instructions are outdated
 
 1. Add your extension option to `gorums.proto`. We currently only have method options.
 2. Run `make gorumsprotoopts` to regenerate the `gorums.pb.go` file. (TODO we could probably avoid using a make file for this and instead do `go generate`)
 3. Add a check function, such as `hasPerNodeArgExtension()`, for your option in `plugins/gorums/ext.go`.
-4. Update the `plugins/gorums/gorums.go` as follows 
+4. Update the `plugins/gorums/gorums.go` as follows
    a. add the option `PerNodeArg` bool to the `serviceMethod` struct.
-   b. add the option to initialize of the `serivceMethod` struct in the `verifyExtensionsAndCreate` function, like this: `PerNodeArg:        hasPerNodeArgExtension(method),`
+   b. add the option to initialize of the `serviceMethod` struct in the `verifyExtensionsAndCreate` function, like this: `PerNodeArg:        hasPerNodeArgExtension(method),`
    c. update the logic in the `isQuorumCallVariant` function if necessary.
    d. update the error handling logic in `verifyExtensionsAndCreate`.
 5. Update the template files (`.tmpl` in `dev` folder) related to your option. This is were your on your own.

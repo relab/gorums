@@ -1,0 +1,8 @@
+---
+- hosts: client:servers
+  tasks:
+    - name: Upload benchmark client binary
+      copy: 
+        src: ../cmd/benchmark/benchmark
+        dest: $HOME/benchmark
+        mode: 0755

@@ -17,7 +17,15 @@ invoke quorum calls. Gorums is a wrapper around the [gRPC](http://www.grpc.io/)
 library. Services are defined using the protocol buffers interface definition
 language.
 
-### Examples
+## System Requirements
+
+To build and deploy Gorums, you need the following software installed:
+
+* Protobuf compiler (protoc)
+* Make
+* Ansible (used by benchmark script)
+
+## Examples
 
 The original EPaxos implementation modified to use Gorums can be found
 [here](https://github.com/relab/epaxos).
@@ -26,14 +34,12 @@ A collection of different algorithms for reconfigurable atomic storage
 implemented using Gorums can be found
 [here](https://github.com/relab/smartmerge).
 
-### Documentation
+## Documentation
 
-* [Student/user guide](doc/userguide.md)
+* [User guide](doc/userguide.md)
 * [Developer guide](doc/devguide.md)
-* [Adding extension options](doc/ext-opts.md)
-* [Managing vendoring](doc/vendoring.md)
 
-### References
+## References
 
 [1] Tormod Erevik Lea, Leander Jehl, and Hein Meling.
     _Towards New Abstractions for Implementing Quorum-based Systems._
