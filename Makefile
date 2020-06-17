@@ -12,61 +12,46 @@ test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing
 failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
 test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
 tmp_dir					:= $(shell mktemp -d -t gorums-XXXXX)
-internal_ordering		:= internal/ordering
-internal_correctable	:= internal/correctable
-public_so				:= ordering/
 
-.PHONY: dev download tools bootstrapgorums installgorums benchmark
+plugin_deps				:= gorums.pb.go internal/ordering/opts.pb.go internal/correctable/opts.pb.go $(static_file)
+benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_grpc.pb.go benchmark/benchmark_gorums.pb.go
 
-dev: installgorums $(public_so)/ordering.pb.go $(public_so)/ordering_grpc.pb.go
-	@echo "Generating Gorums code for zorums.proto as a multiple _gorums.pb.go files in dev folder"
-	rm -f $(dev_path)/zorums*.pb.go
-	protoc -I$(dev_path):. \
+.PHONY: dev tools bootstrapgorums installgorums benchmark
+
+dev: installgorums ordering/ordering.pb.go ordering/ordering_grpc.pb.go
+	@rm -f $(dev_path)/zorums*.pb.go
+	@protoc -I$(dev_path):. \
 		--go_out=:. \
 		--go-grpc_out=:. \
 		--gorums_out=dev=true,trace=true:. \
 		$(zorums_proto)
 
-download:
-	@echo "Download go.mod dependencies"
-	@go mod download
-
-tools: download
-	@echo "Installing tools from tools.go"
-	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % go install %
-
-gorums.pb.go: gorums.proto
-	@echo "Generating gorums proto options"
-	@protoc --go_out=paths=source_relative:. gorums.proto
-
-$(public_so)/ordering.pb.go: $(public_so)/ordering.proto
-	@echo "Generating ordering protocol buffers"
-	@protoc --go_out=paths=source_relative:. $(public_so)/ordering.proto
-
-$(public_so)/ordering_grpc.pb.go: $(public_so)/ordering.proto
-	@echo "Generating ordering gRPC service"
-	@protoc --go-grpc_out=paths=source_relative:. $(public_so)/ordering.proto
-
-$(internal_ordering)/opts.pb.go: $(internal_ordering)/opts.proto
-	@echo "Generating ordering proto options"
-	@protoc --go_out=paths=source_relative:. $(internal_ordering)/opts.proto
-
-$(internal_correctable)/opts.pb.go: $(internal_correctable)/opts.proto
-	@echo "Generating correctable proto options"
-	@protoc --go_out=paths=source_relative:. $(internal_correctable)/opts.proto
-
-installgorums: bootstrapgorums gorums.pb.go $(internal_ordering)/opts.pb.go $(internal_correctable)/opts.pb.go $(static_file)
-	@go install $(PLUGIN_PATH)
+benchmark: installgorums $(benchmark_deps)
+	@go build -o cmd/benchmark/benchmark ./cmd/benchmark
 
 $(static_file): $(static_files)
 	@cp $(static_file) $(static_file).bak
 	@protoc-gen-gorums --bundle=$(static_file)
 
+%.pb.go : %.proto
+	@protoc --go_out=paths=source_relative:. $^
+
+%_grpc.pb.go : %.proto
+	@protoc --go-grpc_out=paths=source_relative:. $^
+
+%_gorums.pb.go : %.proto
+	@protoc --gorums_out=paths=source_relative,trace=true:. $^
+
+tools:
+	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % sh -c 'command -v $$(basename %) >/dev/null || go install %'
+
+installgorums: bootstrapgorums $(plugin_deps)
+	@go install $(PLUGIN_PATH)
+
 ifeq (, $(shell which protoc-gen-gorums))
 bootstrapgorums: tools
 	@echo "Bootstrapping gorums plugin"
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
-	@echo "You may need to rerun 'make installgorums'"
 endif
 
 .PHONY: gentests $(test_files)
@@ -105,7 +90,3 @@ stability: installgorums
 	@diff $(tests_zorums_gen) $(tmp_dir)/x_gorums.pb.go \
 	|| (echo "unexpected instability, observed changes between protoc runs: $$?")
 	@rm -rf $(tmp_dir)
-
-benchmark:
-	@$(MAKE) -C benchmark
-	@go build -o cmd/benchmark/benchmark ./cmd/benchmark
