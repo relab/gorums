@@ -9,10 +9,16 @@
     },
     "cSpell.words": [
         "Ansible",
+        "Erevik",
+        "ICDCS",
+        "Jehl",
         "Mallocs",
+        "Paxos",
         "QCQF",
+        "Tormod",
         "calltypes",
         "cpuprofile",
+        "golangci",
         "memprofile"
     ]
 }
