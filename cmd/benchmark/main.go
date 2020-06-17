@@ -93,6 +93,7 @@ func main() {
 		qSize          = flag.Int("quorum-size", 0, "Number of replies to wait for before completing a quorum call.")
 		sendBuffer     = flag.Uint("send-buffer", 0, "The size of the send buffer.")
 		serverBuffer   = flag.Uint("server-buffer", 0, "The size of the server buffers.")
+		list           = flag.Bool("list", false, "List all available benchmarks")
 	)
 	flag.Var(&benchmarksFlag, "benchmarks", "A `regexp` matching the benchmarks to run.")
 	flag.Var(&remotesFlag, "remotes", "A comma separated `list` of remote addresses to connect to.")
@@ -104,6 +105,16 @@ func main() {
 	remotes := remotesFlag.Get()
 	warmup := warmupFlag.Get()
 	benchTime := benchTimeFlag.Get()
+
+	if *list {
+		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
+		benchmarks := benchmark.GetBenchmarks(nil)
+		for _, b := range benchmarks {
+			fmt.Fprintf(tw, "%s:\t%s\n", b.Name, b.Description)
+		}
+		tw.Flush()
+		return
+	}
 
 	// set up profiling and tracing
 	if *cpuprofile != "" {
