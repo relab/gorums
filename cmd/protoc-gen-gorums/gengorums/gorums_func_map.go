@@ -97,7 +97,7 @@ var funcMap = template.FuncMap{
 		return fmt.Sprintf("/%s/%s", method.Parent.Desc.FullName(), method.Desc.Name())
 	},
 	"serviceName": func(method *protogen.Method) string {
-		return fmt.Sprintf("%s", method.Parent.Desc.Name())
+		return string(method.Parent.Desc.Name())
 	},
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
