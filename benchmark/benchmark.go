@@ -13,7 +13,7 @@ import (
 
 // Options controls different options for the benchmarks
 type Options struct {
-	Concurrent int           // Number of cbenchmarks.gooncurrent calls
+	Concurrent int           // Number of concurrent calls
 	Duration   time.Duration // Duration of benchmark
 	MaxAsync   int           // Max async calls at once
 	NumNodes   int           // Number of nodes to include in configuration
@@ -296,7 +296,7 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 		},
 		{
 			Name:        "Multicast",
-			Description: "NodeStream based multicast implmentation (servers measure latency and throughput)",
+			Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
 			runBench:    func(opts Options) (*Result, error) { return runServerBenchmark(opts, cfg, cfg.Multicast) },
 		},
 		{
