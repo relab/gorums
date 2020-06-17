@@ -589,5 +589,5 @@ var _Benchmark_serviceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "benchmark.proto",
+	Metadata: "benchmark/benchmark.proto",
 }
