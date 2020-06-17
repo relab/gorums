@@ -48,4 +48,27 @@ Usage of cmd/benchmark/benchmark:
 ```
 
 By default, the `cmd/benchmark` program starts internal servers to perform benchmarks locally.
-To run the benchmarks with remote servers, the `--remotes` flag must be specified.
+To run the benchmarks with remote servers, the `--remotes` flag must be used.
+
+### Remote benchmarks with ansible
+
+In the `scripts/` folder we provide some simple ansible scripts that can be used to run benchmarks on remote servers.
+To use the scripts, an [inventory](https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html) file must be created.
+The ansible script expects two groups, "client" and "servers".
+Below is an example inventory file:
+
+```ini
+[client]
+client.example.com
+
+[servers]
+server1.example.com
+server2.example.com
+server3.example.com
+```
+
+To copy the benchmark binary to the remote servers, run the `deploy.yml` ansible script, i.e. `ansible-playbook -i [your inventory file] deploy.yml` (and rememeber to build it using `make benchmark` first).
+
+There is a simple script `benchmark.sh` that runs the appropriate ansible-playbook command, and parses the output.
+To use this, you must first `cd` into the `scripts/` directory, and then run `./benchmark.sh [your inventory file] [arguments to benchmark]`.
+For example: `./benchmark.sh ./hosts --benchmarks 'QC'`.
