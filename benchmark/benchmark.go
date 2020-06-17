@@ -13,7 +13,7 @@ import (
 
 // Options controls different options for the benchmarks
 type Options struct {
-	Concurrent int           // Number of concurrent calls
+	Concurrent int           // Number of cbenchmarks.gooncurrent calls
 	Duration   time.Duration // Duration of benchmark
 	MaxAsync   int           // Max async calls at once
 	NumNodes   int           // Number of nodes to include in configuration
@@ -21,6 +21,12 @@ type Options struct {
 	QuorumSize int           // Number of messages to wait for
 	Warmup     time.Duration // Warmup time
 	Remote     bool          // Whether the servers are remote (true) or local (false)
+}
+
+type Bench struct {
+	Name        string
+	Description string
+	runBench    benchFunc
 }
 
 type benchFunc func(Options) (*Result, error)
@@ -229,41 +235,77 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	return resp, nil
 }
 
-func mapBenchmarks(cfg *Configuration) map[string]benchFunc {
-	m := map[string]benchFunc{
-		"UnorderedQC": func(opts Options) (*Result, error) {
-			return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
-				return cfg.UnorderedQC(ctx, msg)
-			})
+func GetBenchmarks(cfg *Configuration) []Bench {
+	m := []Bench{
+		{
+			Name:        "UnorderedQC",
+			Description: "Unary RPC based quorum call implementation without FIFO ordering",
+			runBench: func(opts Options) (*Result, error) {
+				return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
+					return cfg.UnorderedQC(ctx, msg)
+				})
+			},
 		},
-
-		"OrderedQC": func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedQC) },
-
-		"ConcurrentQC": func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.ConcurrentQC) },
-
-		"UnorderedAsync": func(opts Options) (*Result, error) {
-			return runAsyncQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) *FutureEcho {
-				return cfg.UnorderedAsync(ctx, msg)
-			})
+		{
+			Name:        "OrderedQC",
+			Description: "NodeStream based quorum call implementation with FIFO ordering",
+			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedQC) },
 		},
-
-		"OrderedAsync": func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.OrderedAsync) },
-
-		"ConcurrentAsync": func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.ConcurrentAsync) },
-
-		"UnorderedSlowServer": func(opts Options) (*Result, error) {
-			return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
-				return cfg.UnorderedSlowServer(ctx, msg)
-			})
+		{
+			Name:        "ConcurrentQC",
+			Description: "NodeStream based quorum call implementation with concurrent handlers and no FIFO ordering",
+			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.ConcurrentQC) },
 		},
-
-		"OrderedSlowServer": func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedSlowServer) },
-
-		"ConcurrentSlowServer": func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.ConcurrentSlowServer) },
-
-		"Multicast": func(opts Options) (*Result, error) { return runServerBenchmark(opts, cfg, cfg.Multicast) },
-
-		"ConcurrentMulticast": func(opts Options) (*Result, error) { return runServerBenchmark(opts, cfg, cfg.ConcurrentMulticast) },
+		{
+			Name:        "UnorderedAsync",
+			Description: "Unary RPC based async quorum call implementation without FIFO ordering",
+			runBench: func(opts Options) (*Result, error) {
+				return runAsyncQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) *FutureEcho {
+					return cfg.UnorderedAsync(ctx, msg)
+				})
+			},
+		},
+		{
+			Name:        "OrderedAsync",
+			Description: "NodeStream based async quorum call implementation with FIFO ordering",
+			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.OrderedAsync) },
+		},
+		{
+			Name:        "ConcurrentAsync",
+			Description: "NodeStream based async quorum call implementation with concurrent handlers and no FIFO ordering",
+			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.ConcurrentAsync) },
+		},
+		{
+			Name:        "UnorderedSlowServer",
+			Description: "UnorderedQC with a 10ms processing time on the server",
+			runBench: func(opts Options) (*Result, error) {
+				return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
+					return cfg.UnorderedSlowServer(ctx, msg)
+				})
+			},
+		},
+		{
+			Name:        "OrderedSlowServer",
+			Description: "OrderedQC with a 10s processing time on the server",
+			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedSlowServer) },
+		},
+		{
+			Name:        "ConcurrentSlowServer",
+			Description: "ConcurrentQC with a 10s processing time on the server",
+			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.ConcurrentSlowServer) },
+		},
+		{
+			Name:        "Multicast",
+			Description: "NodeStream based multicast implmentation (servers measure latency and throughput)",
+			runBench:    func(opts Options) (*Result, error) { return runServerBenchmark(opts, cfg, cfg.Multicast) },
+		},
+		{
+			Name:        "ConcurrentMulticast",
+			Description: "NodeStream based multicast implementation with concurrent handlers (servers measuer latency and throughput)",
+			runBench: func(opts Options) (*Result, error) {
+				return runServerBenchmark(opts, cfg, cfg.ConcurrentMulticast)
+			},
+		},
 	}
 	return m
 }
@@ -275,15 +317,15 @@ func RunBenchmarks(benchRegex *regexp.Regexp, options Options, manager *Manager)
 	if err != nil {
 		return nil, err
 	}
-	benchmarks := mapBenchmarks(cfg)
+	benchmarks := GetBenchmarks(cfg)
 	var results []*Result
-	for b, f := range benchmarks {
-		if benchRegex.MatchString(b) {
-			result, err := f(options)
+	for _, b := range benchmarks {
+		if benchRegex.MatchString(b.Name) {
+			result, err := b.runBench(options)
 			if err != nil {
 				return nil, err
 			}
-			result.Name = b
+			result.Name = b.Name
 			i := sort.Search(len(results), func(i int) bool {
 				return results[i].Name >= result.Name
 			})
