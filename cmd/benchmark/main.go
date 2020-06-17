@@ -147,12 +147,12 @@ func main() {
 		if *memprofile != "" {
 			f, err := os.Create(*memprofile)
 			if err != nil {
-				log.Fatal("could not create memory profile: ", err)
+				log.Fatal("Could not create memory profile: ", err)
 			}
 			defer f.Close()
 			runtime.GC()
 			if err := pprof.WriteHeapProfile(f); err != nil {
-				log.Fatal("could not write memory profile: ", err)
+				log.Fatal("Could not write memory profile: ", err)
 			}
 		}
 	}()
@@ -231,7 +231,7 @@ func main() {
 	}
 
 	resultWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-	fmt.Fprint(resultWriter, "Benchmark\tThrougput\tLatency\tStd.dev\tClient")
+	fmt.Fprint(resultWriter, "Benchmark\tThroughput\tLatency\tStd.dev\tClient")
 	if !*serverStats || !remote {
 		fmt.Fprint(resultWriter, "+Servers\t\t")
 	} else if *serverStats {

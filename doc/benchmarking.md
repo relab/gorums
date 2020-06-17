@@ -1,6 +1,6 @@
 # Benchmarking Gorums
 
-The repostiory includes a program that can be used to benchmark different calltypes and options.
+The repository includes a program that can be used to benchmark different calltypes and options.
 The program is compiled from `cmd/benchmark`, and uses the `benchmark` package.
 Using this program, it is possible to run benchmarks on both local and remote servers.
 
@@ -67,8 +67,23 @@ server2.example.com
 server3.example.com
 ```
 
-To copy the benchmark binary to the remote servers, run the `deploy.yml` ansible script, i.e. `ansible-playbook -i [your inventory file] deploy.yml` (and rememeber to build it using `make benchmark` first).
+To copy the benchmark binary to the remote servers, run the `deploy.yml` ansible script as follows
+
+```sh
+ansible-playbook -i [your inventory file] deploy.yml
+```
+
+(remember to build it using `make benchmark` first).
 
 There is a simple script `benchmark.sh` that runs the appropriate ansible-playbook command, and parses the output.
-To use this, you must first `cd` into the `scripts/` directory, and then run `./benchmark.sh [your inventory file] [arguments to benchmark]`.
-For example: `./benchmark.sh ./hosts --benchmarks 'QC'`.
+To use this, you must first `cd` into the `scripts/` directory, and then run
+
+```sh
+./benchmark.sh [your inventory file] [arguments to benchmark]
+```
+
+For example:
+
+```sh
+./benchmark.sh ./hosts --benchmarks 'QC'
+```
