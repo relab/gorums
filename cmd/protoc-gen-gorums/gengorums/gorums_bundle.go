@@ -225,10 +225,8 @@ func ignore(file string) bool {
 		}
 	}
 	base := path.Base(file)
-	if strings.HasPrefix(base, "zorums") {
-		return true
-	}
-	return false
+	// ignore zorums* files
+	return strings.HasPrefix(base, "zorums")
 }
 
 // sourceRange returns the [beg, end) interval of source code
