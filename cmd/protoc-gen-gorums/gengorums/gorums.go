@@ -388,5 +388,5 @@ func validateOptions(method *protogen.Method) error {
 }
 
 func optionErrorf(s string, method *protogen.Method, ext *protoimpl.ExtensionInfo) error {
-	return fmt.Errorf("%s.%s: option '%s' "+s, method.Parent.Desc.Name(), method.Desc.Name(), ext.Name)
+	return fmt.Errorf("%s.%s: option '%s' "+s, method.Parent.Desc.Name(), method.Desc.Name(), ext.TypeDescriptor().FullName())
 }
