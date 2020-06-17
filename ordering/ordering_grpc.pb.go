@@ -9,26 +9,22 @@ import (
 	status "google.golang.org/grpc/status"
 )
 
-// Reference imports to suppress errors if they are not otherwise used.
-var _ context.Context
-var _ grpc.ClientConn
-
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion4
+const _ = grpc.SupportPackageIsVersion6
 
 // GorumsClient is the client API for Gorums service.
 //
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GorumsClient interface {
 	NodeStream(ctx context.Context, opts ...grpc.CallOption) (Gorums_NodeStreamClient, error)
 }
 
 type gorumsClient struct {
-	cc *grpc.ClientConn
+	cc grpc.ClientConnInterface
 }
 
-func NewGorumsClient(cc *grpc.ClientConn) GorumsClient {
+func NewGorumsClient(cc grpc.ClientConnInterface) GorumsClient {
 	return &gorumsClient{cc}
 }
 
