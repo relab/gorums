@@ -1,28 +1,57 @@
 # User Guide
 
-_*Note:*_ Some sections of this guide may be out of date, but will be updated
-soon.
+***Note:*** this guide describes how to use the new *ordered* option in Gorums.
+This option will likely become the default at some point in the future.
 
-It is highly recommend to read the gRPC "Getting Started" documentation found
+It may be relevant to read the gRPC "Getting Started" documentation found
 [here](http://www.grpc.io/docs/) before continuing.
+Gorums uses gRPC under the hood, and exposes some of its configuration.
+In addition, the implementation of a Gorums server is similar to implementing a gRPC server.
+
+## Prerequisites
 
 This guide describes how to use Gorums as a user. The guide requires a working
-Go installation and that ```$GOPATH/bin``` is in your ```$PATH```. At least Go
-version 1.6 is required due to use of vendoring.
+Go installation and that `$GOPATH/bin` is in your `$PATH`. At least Go
+version 1.13 is required.
+
+There are a few tools that need to be installed first:
+
+First, we need version 3 of ```protoc```, the
+Protocol Buffers Compiler. Installation of this tool is
+OS/distribution specific. See
+https://github.com/google/protobuf/releases and
+https://developers.google.com/protocol-buffers.
+
+Second, we need to install the [Go plugin](https://github.com/protocolbuffers/protobuf-go) for `protoc`.
+It can be installed with the following commmand:
+
+```shell
+go get google.golang.org/protobuf/cmd/protoc-gen-go
+```
+
+Finally, we can install the Gorums plugin:
+
+```shell
+go get github.com/relab/gorums/cmd/protoc-gen-gorums
+```
+
+## Creating and compiling a Protobuf service description into Gorums code
 
 We will in this example create a very simple storage service.  The storage
-can store a single ```{string,timestamp}``` tuple and has two methods:
+can store a single `{string,timestamp}` tuple and has two methods:
 
 * Read() State
 * Write(State) Response
 
 The first thing we should do is to define our storage as a gRPC service by
 using the protocol buffers interface definition language. Let's create a file,
-```storage.proto```, in a new Go package called ```gorumsexample```. The
+`storage.proto`, in a new Go package called `gorumsexample`. The
 package file path may for example be
-```
+
+```text
 $GOPATH/src/github.com/yourusername/gorumsexample
 ```
+
 The file ```storage.proto``` should have the following content:
 
 ```protobuf
@@ -30,20 +59,26 @@ syntax = "proto3";
 
 package gorumsexample;
 
+option go_package = "github.com/<your user name>/gorumsexample";
+
 import "github.com/relab/gorums/gorums.proto";
 
 service Storage {
-	rpc Read(ReadRequest) returns (State) {}
-	rpc Write(State) returns (WriteResponse) {}
+  rpc Read(ReadRequest) returns (State) {
+    option (gorums.ordered) = true;
+  }
+  rpc Write(State) returns (WriteResponse) {
+    option (gorums.ordered) = true;
+  }
 }
 
 message State {
-	string Value = 1;
-	int64 Timestamp = 2;
+  string Value = 1;
+  int64 Timestamp = 2;
 }
 
 message WriteResponse {
-	bool New = 1;
+  bool New = 1;
 }
 
 message ReadRequest {}
@@ -56,55 +91,26 @@ Every protobuf RPC method must take and return a single protobuf message. The
 We should next compile our service definition into Go code which includes:
 
 1. Go code to access and manage the defined protobuf messages.
-2. A gRPC client API and server interface for the storage.
-3. A Gorums client API for the storage.
-
-To do so we need all dependencies installed. Version 3 of ```protoc```, the
-Protocol Buffers Compiler is needed. Installation of this tool is
-OS/distribution specific. See
-[releases](https://github.com/google/protobuf/releases) and
-[documentation](https://developers.google.com/protocol-buffers/). The other
-dependencies are:
-
-* [Go support](https://github.com/gogo/protobuf) for protocol buffers.
-* [gRPC-Go:](https://github.com/grpc/grpc-go) The Go implementation of gRPC.
-
-Installing the above dependencies is automated by using a provided Makefile.
-You should fist download this repository if you have already done so. It can be
-done in two ways:
-
-```shell
-	$ go get github.com/relab/gorums
-	# TODO: This only works if the repository is public.
-```
-
-```shell
-	$ mkdir -p $GOPATH/src/github.com/relab
-	$ cd $GOPATH/src/github.com/relab
-	$ git clone git@github.com:relab/gorums.git
-```
-
-The dependencies listed above can now be downloaded and installed by invoking
-the ```deps``` target in the Makefile found in the repository:
-
-```shell
-	$ make deps
-```
+2. A Gorums client API and server interface for the storage.
 
 We can now invoke ```protoc``` to compile our protobuf definition:
 
 ```shell
-	$ cd GOPATH/src/github.com/yourusername/gorumsexample
-	$ protoc -I=$GOPATH/src:. --gorums_out=plugins=grpc+gorums:. storage.proto
+cd GOPATH/src/github.com/yourusername/gorumsexample
+protoc -I=$GOPATH/src:. \
+  --go_out=paths=source_relative:. \
+  --gorums_out=paths=source_relative:. \
+  storage.proto
 ```
 
-You should now have a file named ```storage.pb.go``` in your package
-directory. This file contains the generated Gorums client API. Our two RPC
-methods have the following signatures:
+You should now two files named `storage.pb.go` and `storage_gorums.pb.go` in your package directory.
+The former contains the Protobuf definitions of our messages.
+The latter contains the generated Gorums client API and server interface.
+Our two RPC methods have the following signatures:
 
 ```go
-func (c *storageClient) Read(ctx context.Context, in *ReadRequest) (*State, error)
-func (c *storageClient) Write(ctx context.Context, in *State) (*WriteResponse, error)
+func (n *Node) Read(ctx context.Context, in *ReadRequest) (*State, error)
+func (n *Node) Write(ctx context.Context, in *State) (*WriteResponse, error)
 ```
 
 **Note:** You should for a real use case keep the `proto` and generated `pb.go`
@@ -112,24 +118,62 @@ files in a separate directory and import the generate Gorums API as a sub
 package into to your main application. We skip this step in this example for
 the sake of simplicity.
 
-Our server side storage interface is generated by the gRPC plugin:
+Our server side storage interface:
 
 ```go
-type StorageServer interface {
-	Read(context.Context, *ReadRequest) (*State, error)
-	Write(context.Context, *State) (*WriteResponse, error)
+type Storage interface {
+  Read(*ReadRequest) *State
+  Write(*State) *WriteResponse
 }
 ```
 
-The implementation of this interface and running the servers is not described
-here. See
-[storage_server_udef.go](https://github.com/relab/gorums/blob/master/dev/storage_server_udef.go)
-for an example implementation and
-[config_qc_test.go](https://github.com/relab/gorums/blob/master/dev/config_qc_test.go).
-for how to run at set of servers.
+## Simple Client/Server setup
 
-We will now describe how to use the generated Gorums API. The first thing we
-need to do is to create an instance of the Manager type. The Manager maintains
+We will now describe how to use the generated Gorums API.
+We begin by implementing the server interface from above:
+
+```go
+type storageSrv struct {
+  mut   sync.Mutex
+  state *State
+}
+
+func (srv *storageSrv) Read(req *ReadRequest) *State {
+  srv.mut.Lock()
+  defer srv.mut.Unlock()
+  fmt.Println("Got Read()")
+  return srv.state
+}
+
+func (srv *storageSrv) Write(req *State) *WriteResponse {
+  srv.mut.Lock()
+  defer srv.mut.Unlock()
+  if srv.state.Timestamp < req.Timestamp {
+    srv.state = req
+    fmt.Println("Got Write(", req.Value, ")")
+    return &WriteResponse{New: true}
+  }
+  return &WriteResponse{New: false}
+}
+```
+
+To start the server, we need to create a *listener* and a *GorumsServer*, and then register our server implementation with the GorumsServer:
+
+```go
+func ExampleStorageServer(port int) {
+  lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+  if err != nil {
+    log.Fatal(err)
+  }
+  gorumsSrv := NewGorumsServer()
+  srv := storageSrv{state: &State{}}
+  gorumsSrv.RegisterStorageServer(&srv)
+  gorumsSrv.Serve(lis)
+}
+```
+
+Now we will write client code to call RPCs on our servers.
+The first thing we need to do is to create an instance of the Manager type. The Manager maintains
 a connection to all the provided nodes and also keep track of every
 configuration of nodes. It takes as arguments a list of node addresses and a
 set of optional manager options.
@@ -142,28 +186,28 @@ specified in the example below.
 package gorumsexample
 
 import (
-	"log"
-	"time"
+  "log"
+  "time"
 
-	"google.golang.org/grpc"
+  "google.golang.org/grpc"
 )
 
 func ExampleStorageClient() {
-	addrs := []string{
-		"127.0.0.1:8080",
-		"127.0.0.1:8081",
-		"127.0.0.1:8082",
-	}
+  addrs := []string{
+    "127.0.0.1:8080",
+    "127.0.0.1:8081",
+    "127.0.0.1:8082",
+  }
 
-	mgr, err := NewManager(addrs, WithGrpcDialOptions(
-		grpc.WithBlock(),
-		grpc.WithTimeout(50*time.Millisecond),
-		grpc.WithInsecure(),
-		)
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
+  mgr, err := NewManager(addrs, WithGrpcDialOptions(
+    grpc.WithBlock(),
+    grpc.WithInsecure(),
+  ),
+    WithDialTimeout(500*time.Millisecond),
+  )
+  if err != nil {
+    log.Fatal(err)
+  }
 ```
 
 A configuration is a set of nodes on which our
@@ -177,7 +221,7 @@ ids := mgr.NodeIDs()
 // Create a configuration including all nodes
 allNodesConfig, err := mgr.NewConfiguration(ids, nil)
 if err != nil {
-	log.Fatalln("error creating read config:", err)
+  log.Fatalln("error creating read config:", err)
 }
 ```
 
@@ -187,22 +231,23 @@ methods. Se godoc or source code for details.
 We can now invoke the write rpc on each of the `Nodes` in the configuration:
 
 ```go
-	// Test state
-	state := &State{
-		Value:     "42",
-		Timestamp: time.Now().Unix(),
-	}
+  // Test state
+  state := &State{
+    Value:     "42",
+    Timestamp: time.Now().Unix(),
+  }
 
-	// Invoke write RPC on all nodes in config
-	for _, node := range allNodesConfig.Nodes() {
-		respons, err := node.StorageClient.Write(context.Background(), state)
-		if err != nil {
-			log.Fatalln("read rpc returned error:", err)
-		} else if !respons.New {
-			log.Println("state was not new.")
-		}
-	}
+  // Invoke write RPC on all nodes in config
+  for _, node := range allNodesConfig.Nodes() {
+    respons, err := node.StorageClient.Write(context.Background(), state)
+    if err != nil {
+      log.Fatalln("read rpc returned error:", err)
+    } else if !respons.New {
+      log.Println("state was not new.")
+    }
+  }
 ```
+
 While Gorums allows to call RPCs on single nodes, Gorums provides Quorum Calls
 to invoke a RPC on all nodes in a configuration:
 
@@ -213,38 +258,37 @@ allows users to invoke the RPC as Quorum Call on the configuration.
 If a RPC is invoked as Quorum Call, Gorums will invoke the RPC on all nodes in
 in the configuration in parallel, collect and process replies.
 
-For the Gorums plugin to generate quorum calls we have to specify the QC option
+For the Gorums plugin to generate quorum calls we have to specify the quorumcall option
 for our RPC methods in the proto file, as shown below:
+
 ```protobuf
 service QCStorage {
-	rpc Read(ReadRequest) returns (State) {
-		option (gorums.quorumcall) = true;
- 	}
-	rpc Write(State) returns (WriteResponse) {
-		option (gorums.quorumcall) = true;
- 	}
+  rpc Read(ReadRequest) returns (State) {
+    option (gorums.ordered) = true;
+    option (gorums.quorumcall) = true;
+   }
+  rpc Write(State) returns (WriteResponse) {
+    option (gorums.ordered) = true;
+    option (gorums.quorumcall) = true;
+   }
 }
 ```
-The generated methods have the following interface
-```go
-func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*ReadReply, error)
-func (c *Configuration) Write(ctx context.Context, args *State) (*WriteReply, error)
-```
-The ```ReadReply```, returned by the `Read`quorum call contains a single instance
-RPCs return type, i.e. ```*State``` and a list of ```NodeIDs```, listing the
-servers, whose replies have been processed.
 
-To compute the reply returned by a quorum fu
+The generated methods have the following interface
+
+```go
+func (c *Configuration) Read(ctx context.Context, args *ReadRequest) (*State, error)
+func (c *Configuration) Write(ctx context.Context, args *State) (*WriteResponse, error)
+```
 
 Gorums uses a *Quorum function* to compute the reply returned by a quorum function,
 from the replies of individual servers. A Gorums quorum function has two
 responsibilities:
 
 1. Report when a set of replies form a quorum.
-
 2. Pick a single reply from a set of replies that form a quorum.
 
-Behind the scenes a the RPCs invoked as part of a Quorum Call return multiple
+Behind the scenes, the RPCs invoked as part of a Quorum Call return multiple
 replies. Only one of these replies should be returned to the
 end user. However, how such a single reply should be chosen is application
 specific, and not something Gorums can generically provide a policy for. It would
@@ -253,17 +297,19 @@ return to the user and often several replies have to be combined into a new one.
 Gorums therefore generates a `QuorumSpec` interface, that contains a quorum
 function for every quorum call. The `QuorumSpec` for generated for our example
 is as follows:
+
 ```go
 type QuorumSpec interface {
-	// ReadQF is the quorum function for the Read
-	// quorum call method.
-	ReadQF(replies []*State) (*State, bool)
+  // ReadQF is the quorum function for the Read
+  // quorum call method.
+  ReadQF(replies []*State) (*State, bool)
 
-	// WriteQF is the quorum function for the Write
-	// quorum call method.
-	WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
+  // WriteQF is the quorum function for the Write
+  // quorum call method.
+  WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
 }
 ```
+
 An implementation of the ```QuorumSpec``` has to be provided by when a new
 configuration is created. The example below shows an implementation of
 the ```QuorumSpec```.
@@ -279,23 +325,23 @@ package gorumsexample
 import "sort"
 
 type QSpec struct {
-	quorumSize int
+  quorumSize int
 }
 
 // Define a quorum function for the Read RPC method.
 func (qs *QSpec) ReadQF(replies []*State) (*State, bool) {
-	if len(replies) < qs.quorumSize {
-		return nil, false
-	}
-	sort.Sort(ByTimestamp(replies))
-	return replies[len(replies)-1], true
+  if len(replies) < qs.quorumSize {
+    return nil, false
+  }
+  sort.Sort(ByTimestamp(replies))
+  return replies[len(replies)-1], true
 }
 
 func (qs *QSpec) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
-	if len(replies) < qs.quorumSize {
-		return nil, false
-	}
-	return replies[0], true
+  if len(replies) < qs.quorumSize {
+    return nil, false
+  }
+  return replies[0], true
 }
 
 type ByTimestamp []*State
@@ -310,40 +356,39 @@ defined above and invoke a quorum call.
 The quorum call will return after receiving replies from 2 servers.
 The remaining, outstanding RPCs are cancelled.
 
-
 ```go
 func ExampleStorageClient() {
-	addrs := []string{
-		"127.0.0.1:8080",
-		"127.0.0.1:8081",
-		"127.0.0.1:8082",
-	}
+  addrs := []string{
+    "127.0.0.1:8080",
+    "127.0.0.1:8081",
+    "127.0.0.1:8082",
+  }
 
-	mgr, err := NewManager(addrs, WithGrpcDialOptions(
-		grpc.WithBlock(),
-		grpc.WithTimeout(50*time.Millisecond),
-		grpc.WithInsecure(),
-	),
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
+  mgr, err := NewManager(addrs, WithGrpcDialOptions(
+    grpc.WithBlock(),
+    grpc.WithTimeout(50*time.Millisecond),
+    grpc.WithInsecure(),
+  ),
+  )
+  if err != nil {
+    log.Fatal(err)
+  }
 
-	// Get all all available node ids, 3 nodes
-	ids := mgr.NodeIDs()
+  // Get all all available node ids, 3 nodes
+  ids := mgr.NodeIDs()
 
-	// Create a configuration including all nodes
-	allNodesConfig, err := mgr.NewConfiguration(ids, &QSpec{2})
-	if err != nil {
-		log.Fatalln("error creating read config:", err)
-	}
+  // Create a configuration including all nodes
+  allNodesConfig, err := mgr.NewConfiguration(ids, &QSpec{2})
+  if err != nil {
+    log.Fatalln("error creating read config:", err)
+  }
 
-	// Invoke read quorum call:
-	ctx, cancel := context.WithCancel(context.Background())
-	reply, err := allNodesConfig.Read(ctx, &ReadRequest{})
-	if err != nil {
-		log.Fatalln("read rpc returned error:", err)
-	}
-	cancel()
+  // Invoke read quorum call:
+  ctx, cancel := context.WithCancel(context.Background())
+  reply, err := allNodesConfig.Read(ctx, &ReadRequest{})
+  if err != nil {
+    log.Fatalln("read rpc returned error:", err)
+  }
+  cancel()
 }
 ```
