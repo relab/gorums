@@ -19,11 +19,11 @@ There are a few tools that need to be installed first:
 First, we need version 3 of ```protoc```, the
 Protocol Buffers Compiler. Installation of this tool is
 OS/distribution specific. See
-https://github.com/google/protobuf/releases and
-https://developers.google.com/protocol-buffers.
+<https://github.com/google/protobuf/releases> and
+<https://developers.google.com/protocol-buffers>.
 
 Second, we need to install the [Go plugin](https://github.com/protocolbuffers/protobuf-go) for `protoc`.
-It can be installed with the following commmand:
+It can be installed with the following command:
 
 ```shell
 go get google.golang.org/protobuf/cmd/protoc-gen-go
