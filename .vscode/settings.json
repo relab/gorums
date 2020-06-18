@@ -20,5 +20,10 @@
         "cpuprofile",
         "golangci",
         "memprofile"
+    ],
+    "go.lintTool": "golangci-lint",
+    "go.lintFlags": [
+        "--fast",
+        "--exclude-use-defaults EXC0001"
     ]
 }
