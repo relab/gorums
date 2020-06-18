@@ -11,7 +11,7 @@ The repository contains two main components located in `cmd/protoc-gen-gorums`:
 
 1. Changes should be made to the development code in `dev`:
    * Changes to "dynamic" code, i.e. code that is dependent on protobuf
-     definitions, should by done by editing the respective `.tmpl` files.
+     definitions, should by done be editing the respective `.tmpl` files.
    * Changes to "static" code, i.e. code that is **not** dependent on
      protobuf definitions, should be done by editing the respective `.go`
      files.
