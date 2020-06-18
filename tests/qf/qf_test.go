@@ -100,9 +100,7 @@ func BenchmarkQF(b *testing.B) {
 	}
 }
 
-type testSrv struct {
-	dummy int64
-}
+type testSrv struct{}
 
 func (s testSrv) UseReq(_ context.Context, req *Request) (*Response, error) {
 	return &Response{Result: req.GetValue()}, nil
