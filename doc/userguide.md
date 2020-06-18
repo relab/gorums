@@ -16,7 +16,7 @@ version 1.13 is required.
 
 There are a few tools that need to be installed first:
 
-First, we need version 3 of ```protoc```, the
+First, we need version 3 of `protoc`, the
 Protocol Buffers Compiler. Installation of this tool is
 OS/distribution specific. See
 <https://github.com/google/protobuf/releases> and
@@ -52,7 +52,7 @@ package file path may for example be
 $GOPATH/src/github.com/yourusername/gorumsexample
 ```
 
-The file ```storage.proto``` should have the following content:
+The file `storage.proto` should have the following content:
 
 ```protobuf
 syntax = "proto3";
@@ -85,15 +85,15 @@ message ReadRequest {}
 ```
 
 Every protobuf RPC method must take and return a single protobuf message. The
-```Read``` method must in this example therefore take an empty "dummy"
-```ReadRequest``` as input.
+`Read` method must in this example therefore take an empty "dummy"
+`ReadRequest` as input.
 
 We should next compile our service definition into Go code which includes:
 
 1. Go code to access and manage the defined protobuf messages.
 2. A Gorums client API and server interface for the storage.
 
-We can now invoke ```protoc``` to compile our protobuf definition:
+We can now invoke `protoc` to compile our protobuf definition:
 
 ```shell
 cd GOPATH/src/github.com/yourusername/gorumsexample
@@ -225,7 +225,7 @@ if err != nil {
 }
 ```
 
-The ```Manager``` and ```Configuration``` type also have other available
+The `Manager` and `Configuration` type also have other available
 methods. Se godoc or source code for details.
 
 We can now invoke the write rpc on each of the `Nodes` in the configuration:
@@ -310,9 +310,9 @@ type QuorumSpec interface {
 }
 ```
 
-An implementation of the ```QuorumSpec``` has to be provided by when a new
+An implementation of the `QuorumSpec` has to be provided by when a new
 configuration is created. The example below shows an implementation of
-the ```QuorumSpec```.
+the `QuorumSpec`.
 If not sufficiently many replies have been received yet, both quorum functions
 return `false`, signaling that the quorum call should wait for further replies.
 Once sufficiently many replies have been received, the `ReadQF` returns the
