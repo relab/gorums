@@ -17,7 +17,7 @@ import (
 
 func TestQSpecMethods(t *testing.T) {
 	protoc("testprotos/calltypes/calltypes.proto")
-
+	_ = modulePath()
 }
 
 func protoc(args ...string) {

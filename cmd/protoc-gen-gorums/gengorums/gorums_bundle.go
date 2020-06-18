@@ -208,7 +208,10 @@ func printFiles(out *bytes.Buffer, fset *token.FileSet, info *loader.PackageInfo
 			printComments(out, f.Comments, last, beg)
 
 			buf.Reset()
-			format.Node(&buf, fset, &printer.CommentedNode{Node: decl, Comments: f.Comments})
+			err := format.Node(&buf, fset, &printer.CommentedNode{Node: decl, Comments: f.Comments})
+			if err != nil {
+				log.Fatalf("failed to format source AST node: %v", err)
+			}
 			out.Write(buf.Bytes())
 			last = printSameLineComment(out, f.Comments, fset, end)
 			out.WriteString("\n\n")
@@ -260,19 +263,6 @@ func sourceRange(decl ast.Decl) (beg, end token.Pos) {
 	}
 
 	return beg, end
-}
-
-func printPackageComments(out *bytes.Buffer, files []*ast.File) {
-	// Concatenate package comments from all files...
-	for _, f := range files {
-		if doc := f.Doc.Text(); strings.TrimSpace(doc) != "" {
-			for _, line := range strings.Split(doc, "\n") {
-				fmt.Fprintf(out, "// %s\n", line)
-			}
-		}
-	}
-	// ...but don't let them become the actual package comment.
-	fmt.Fprintln(out)
 }
 
 func printComments(out *bytes.Buffer, comments []*ast.CommentGroup, pos, end token.Pos) {
