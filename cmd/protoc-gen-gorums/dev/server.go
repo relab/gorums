@@ -29,10 +29,6 @@ func newOrderingServer(opts []ServerOption) *orderingServer {
 	return s
 }
 
-func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
-	s.handlers[methodID] = handler
-}
-
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *ordering.Message, s.opts.buffer)
 	ordered := make(chan struct {
