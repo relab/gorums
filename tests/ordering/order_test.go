@@ -93,7 +93,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	// server setup
 	tSrv := &testSrv{}
 	srv := NewGorumsServer()
-	srv.RegisterUnaryRPCHandler(tSrv)
+	srv.RegisterGorumsTestServer(tSrv)
 	lis, err := getListener()
 	if err != nil {
 		t.Fatalf("Failed to listen on port: %v", err)
@@ -137,7 +137,7 @@ func TestQCOrdering(t *testing.T) {
 	addrs := make([]string, numServers)
 	for i := 0; i < numServers; i++ {
 		srv := NewGorumsServer()
-		srv.RegisterQCHandler(&testSrv{})
+		srv.RegisterGorumsTestServer(&testSrv{})
 		lis, err := getListener()
 		if err != nil {
 			t.Fatalf("Failed to listen on port: %v", err)
@@ -186,7 +186,7 @@ func TestQCFutureOrdering(t *testing.T) {
 	addrs := make([]string, numServers)
 	for i := 0; i < numServers; i++ {
 		srv := NewGorumsServer()
-		srv.RegisterQCFutureHandler(&testSrv{})
+		srv.RegisterGorumsTestServer(&testSrv{})
 		lis, err := getListener()
 		if err != nil {
 			t.Fatalf("Failed to listen on port: %v", err)
@@ -249,8 +249,7 @@ func TestMixedOrdering(t *testing.T) {
 	addrs := make([]string, numServers)
 	for i := 0; i < numServers; i++ {
 		srv := NewGorumsServer()
-		srv.RegisterQCHandler(&testSrv{})
-		srv.RegisterUnaryRPCHandler(&testSrv{})
+		srv.RegisterGorumsTestServer(&testSrv{})
 		lis, err := getListener()
 		if err != nil {
 			t.Fatalf("Failed to listen on port: %v", err)
