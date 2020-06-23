@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/correctable"
@@ -192,16 +193,11 @@ func (c *callTypeInfo) deriveCallType(m *protogen.Method) *callTypeInfo {
 	return c
 }
 
-// callTypeName returns the name of the call type option with the prefix removed
-func callTypeName(ext *protoimpl.ExtensionInfo, prefixLen int) string {
+// callTypeName returns the name of the call type option with the prefix removed.
+func callTypeName(ext *protoimpl.ExtensionInfo) string {
 	s := string(ext.TypeDescriptor().FullName())
-	return s[prefixLen:]
+	return s[strings.LastIndex(s, ".")+1:]
 }
-
-// compute index to start of option name
-const index = len("gorums.")
-const soIndex = len("ordering.")
-const coIndex = len("correctable.")
 
 // gorumsCallTypesInfo maps Gorums call type names to callTypeInfo.
 // This includes details such as the template, extension info and
@@ -213,7 +209,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"qspec": {template: qspecInterface},
 	"types": {template: datatypes},
 
-	callTypeName(gorums.E_Quorumcall, index): {
+	callTypeName(gorums.E_Quorumcall): {
 		extInfo:  gorums.E_Quorumcall,
 		docName:  "quorum",
 		template: quorumCall,
@@ -221,7 +217,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered, gorums.E_Async)
 		},
 	},
-	callTypeName(gorums.E_Async, index): {
+	callTypeName(gorums.E_Async): {
 		extInfo:   gorums.E_Async,
 		docName:   "asynchronous quorum",
 		template:  futureCall,
@@ -230,13 +226,13 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasAllMethodOption(m, gorums.E_Quorumcall, gorums.E_Async) && !hasMethodOption(m, gorums.E_Ordered)
 		},
 	},
-	callTypeName(gorums.E_Correctable, index): {
+	callTypeName(gorums.E_Correctable): {
 		extInfo: gorums.E_Correctable,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Correctable)
 		},
 		nestedCallType: map[string]*callTypeInfo{
-			callTypeName(correctable.E_Correctable, coIndex): {
+			callTypeName(correctable.E_Correctable): {
 				extInfo:   correctable.E_Correctable,
 				docName:   "correctable quorum",
 				template:  correctableCall,
@@ -245,7 +241,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 					return hasMethodOption(m, gorums.E_Correctable) && !m.Desc.IsStreamingServer()
 				},
 			},
-			callTypeName(correctable.E_CorrectableStream, coIndex): {
+			callTypeName(correctable.E_CorrectableStream): {
 				extInfo:   correctable.E_CorrectableStream,
 				docName:   "correctable stream quorum",
 				template:  correctableStreamCall,
@@ -256,7 +252,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			},
 		},
 	},
-	callTypeName(gorums.E_Multicast, index): {
+	callTypeName(gorums.E_Multicast): {
 		extInfo:  gorums.E_Multicast,
 		docName:  "multicast",
 		template: multicastCall,
@@ -264,7 +260,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Multicast)
 		},
 	},
-	callTypeName(gorums.E_Unicast, index): {
+	callTypeName(gorums.E_Unicast): {
 		extInfo:  gorums.E_Unicast,
 		docName:  "unicast",
 		template: unicastCall,
@@ -272,13 +268,13 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Unicast)
 		},
 	},
-	callTypeName(gorums.E_Ordered, index): {
+	callTypeName(gorums.E_Ordered): {
 		extInfo: gorums.E_Ordered,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Ordered)
 		},
 		nestedCallType: map[string]*callTypeInfo{
-			callTypeName(ordering.E_OrderedQc, soIndex): {
+			callTypeName(ordering.E_OrderedQc): {
 				extInfo:  ordering.E_OrderedQc,
 				docName:  "ordered quorum",
 				template: orderingQC,
@@ -287,7 +283,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 						!hasMethodOption(m, gorums.E_Async)
 				},
 			},
-			callTypeName(ordering.E_OrderedFuture, soIndex): {
+			callTypeName(ordering.E_OrderedFuture): {
 				extInfo:   ordering.E_OrderedFuture,
 				docName:   "asynchronous ordered quorum",
 				template:  orderedFutureCall,
@@ -296,7 +292,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall, gorums.E_Async)
 				},
 			},
-			callTypeName(ordering.E_OrderedRpc, soIndex): {
+			callTypeName(ordering.E_OrderedRpc): {
 				extInfo:  ordering.E_OrderedRpc,
 				docName:  "ordered",
 				template: orderingRPC,
