@@ -43,7 +43,8 @@ $(static_file): $(static_files)
 	@protoc --gorums_out=paths=source_relative,trace=true:. $^
 
 tools:
-	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % sh -c 'command -v $$(basename %) >/dev/null || go install %'
+	@go mod download
+	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % go install %
 
 installgorums: bootstrapgorums $(plugin_deps)
 	@go install $(PLUGIN_PATH)
