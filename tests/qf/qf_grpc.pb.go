@@ -48,12 +48,15 @@ func (c *quorumFunctionClient) IgnoreReq(ctx context.Context, in *Request, opts 
 }
 
 // QuorumFunctionServer is the server API for QuorumFunction service.
+// All implementations must embed UnimplementedQuorumFunctionServer
+// for forward compatibility
 type QuorumFunctionServer interface {
 	UseReq(context.Context, *Request) (*Response, error)
 	IgnoreReq(context.Context, *Request) (*Response, error)
+	mustEmbedUnimplementedQuorumFunctionServer()
 }
 
-// UnimplementedQuorumFunctionServer can be embedded to have forward compatible implementations.
+// UnimplementedQuorumFunctionServer must be embedded to have forward compatible implementations.
 type UnimplementedQuorumFunctionServer struct {
 }
 
@@ -63,6 +66,7 @@ func (*UnimplementedQuorumFunctionServer) UseReq(context.Context, *Request) (*Re
 func (*UnimplementedQuorumFunctionServer) IgnoreReq(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IgnoreReq not implemented")
 }
+func (*UnimplementedQuorumFunctionServer) mustEmbedUnimplementedQuorumFunctionServer() {}
 
 func RegisterQuorumFunctionServer(s *grpc.Server, srv QuorumFunctionServer) {
 	s.RegisterService(&_QuorumFunction_serviceDesc, srv)

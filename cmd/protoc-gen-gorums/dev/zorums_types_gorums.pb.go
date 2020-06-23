@@ -4,7 +4,6 @@ package dev
 
 import (
 	empty "github.com/golang/protobuf/ptypes/empty"
-	ordering "github.com/relab/gorums/ordering"
 	sync "sync"
 )
 
@@ -34,27 +33,27 @@ const unicastConcurrentMethodID int32 = 20
 
 var orderingMethods = map[int32]methodInfo{
 
-	0:  {oneway: true, concurrent: false},
-	1:  {oneway: true, concurrent: false},
-	2:  {oneway: true, concurrent: false},
-	3:  {oneway: true, concurrent: false},
-	4:  {oneway: true, concurrent: false},
-	5:  {oneway: true, concurrent: true},
-	6:  {oneway: false, concurrent: false},
-	7:  {oneway: false, concurrent: false},
-	8:  {oneway: false, concurrent: false},
-	9:  {oneway: false, concurrent: false},
-	10: {oneway: false, concurrent: true},
-	11: {oneway: false, concurrent: false},
-	12: {oneway: false, concurrent: true},
-	13: {oneway: false, concurrent: false},
-	14: {oneway: false, concurrent: false},
-	15: {oneway: false, concurrent: false},
-	16: {oneway: false, concurrent: true},
-	17: {oneway: false, concurrent: false},
-	18: {oneway: true, concurrent: false},
-	19: {oneway: true, concurrent: false},
-	20: {oneway: true, concurrent: true},
+	0:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	1:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	2:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	3:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	4:  {oneway: true, concurrent: false, requestType: new(empty.Empty).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	5:  {oneway: true, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	6:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	7:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	8:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	9:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	10: {oneway: false, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	11: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	12: {oneway: false, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	13: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	14: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	15: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	16: {oneway: false, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	17: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	18: {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	19: {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	20: {oneway: true, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalEmpty struct {
@@ -629,252 +628,120 @@ type ZorumsService interface {
 }
 
 func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
-	s.srv.handlers[multicastMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		srv.Multicast(req)
 		return nil
 	}
-	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		srv.MulticastPerNodeArg(req)
 		return nil
 	}
-	s.srv.handlers[multicast2MethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[multicast2MethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		srv.Multicast2(req)
 		return nil
 	}
-	s.srv.handlers[multicast3MethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[multicast3MethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		srv.Multicast3(req)
 		return nil
 	}
-	s.srv.handlers[multicast4MethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(empty.Empty)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[multicast4MethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*empty.Empty)
 		srv.Multicast4(req)
 		return nil
 	}
-	s.srv.handlers[multicastConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[multicastConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		srv.MulticastConcurrent(req)
 		return nil
 	}
-	s.srv.handlers[orderingQCMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingQCMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingQC(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingQCMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingPerNodeArgMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingPerNodeArg(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingPerNodeArgMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingCustomReturnTypeMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingCustomReturnType(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingCustomReturnTypeMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingComboMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingComboMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingComboMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingCombo(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingComboMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingConcurrentMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingConcurrent(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingConcurrentMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingUnaryRPCMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingUnaryRPC(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingUnaryRPCMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingUnaryRPCConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingUnaryRPCConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingUnaryRPCConcurrentMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingUnaryRPCConcurrent(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingUnaryRPCConcurrentMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFutureMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingFutureMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingFutureMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingFuture(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFutureMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingFuturePerNodeArgMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingFuturePerNodeArg(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFuturePerNodeArgMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingFutureCustomReturnTypeMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingFutureCustomReturnType(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFutureCustomReturnTypeMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFutureConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingFutureConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingFutureConcurrentMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingFutureConcurrent(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFutureConcurrentMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFutureComboMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderingFutureComboMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderingFutureComboMethodID, ID: in.ID}
-		}
 		resp := srv.OrderingFutureCombo(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderingFutureComboMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[unicastMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[unicastMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		srv.Unicast(req)
 		return nil
 	}
-	s.srv.handlers[unicast2MethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[unicast2MethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		srv.Unicast2(req)
 		return nil
 	}
-	s.srv.handlers[unicastConcurrentMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[unicastConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		srv.UnicastConcurrent(req)
 		return nil
 	}

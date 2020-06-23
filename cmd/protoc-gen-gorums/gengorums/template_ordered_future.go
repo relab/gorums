@@ -26,19 +26,11 @@ var orderedFutureBody = `
 
 	expected := c.n
 {{if not (hasPerNodeArg .Method)}}
-	var msg *{{$gorumsMsg}}
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		// In case of a marshalling error, we should skip sending any messages
-		fut.err = {{$errorf}}("failed to marshal message: %w", err)
-		close(fut.c)
-		return fut
-	}
-	msg = &{{$gorumsMsg}}{
-		ID: msgID,
+	metadata := &{{$gorumsMD}}{
+		MessageID: msgID,
 		MethodID: {{$unexportMethod}}MethodID,
-		Data: data,
 	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 {{- end}}
 
 	// push the message to the nodes
@@ -49,17 +41,11 @@ var orderedFutureBody = `
 			expected--
 			continue
 		}
-		data, err := marshaler.Marshal(nodeArg)
-		if err != nil {
-			fut.err = {{$errorf}}("failed to marshal message: %w", err)
-			close(fut.c)
-			return fut
-		}
-		msg := &{{$gorumsMsg}}{
-			ID: msgID,
+		metadata := &{{$gorumsMD}}{
+			MessageID: msgID,
 			MethodID: {{$unexportMethod}}MethodID,
-			Data: data,
 		}
+		msg := &gorumsMessage{metadata: metadata, message: nodeArg}
 {{- end}}
 		n.sendQ <- msg
 	}
@@ -101,12 +87,7 @@ var orderedFutureRecvBody = `
 				break
 			}
 			{{- /*template "traceLazyLog"*/}}
-			data := new({{$out}})
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, {{$errorf}}("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*{{$out}})
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.{{$method}}QF(in, replyValues); quorum {
 				fut.{{$customOutField}}, fut.err = reply, nil

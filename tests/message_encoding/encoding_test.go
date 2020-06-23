@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	ordering "github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
@@ -276,6 +277,53 @@ func BenchmarkMessageAsField(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					md := new(Metadata)
 					err := proto.Unmarshal(buf, md)
+					if err != nil {
+						b.Error(err)
+					}
+				}
+			})
+		}
+	})
+}
+
+func BenchmarkGorumsCodec(b *testing.B) {
+	codec := newGorumsCodec()
+	b.Run("Marshal", func(b *testing.B) {
+		for _, bm := range benchmarks {
+			b.Run(fmt.Sprintf("%d", bm), func(b *testing.B) {
+				b.StopTimer()
+				payload := make([]byte, bm)
+				b.StartTimer()
+				for i := 0; i < b.N; i++ {
+					msg := &Message{Data: "Hello world", Payload: payload}
+					md := &ordering.Metadata{MessageID: 1, MethodID: testMethodID}
+					_, err := codec.gorumsMarshal(&gorumsMessage{metadata: md, message: msg})
+					if err != nil {
+						b.Error(err)
+					}
+				}
+			})
+		}
+	})
+	b.Run("Unmarshal", func(b *testing.B) {
+		for _, bm := range benchmarks {
+			b.Run(fmt.Sprintf("%d", bm), func(b *testing.B) {
+				var buf []byte
+				{
+					b.StopTimer()
+					var err error
+					payload := make([]byte, bm)
+					msg := &Message{Data: "Hello world", Payload: payload}
+					md := &ordering.Metadata{MessageID: 1, MethodID: testMethodID}
+					buf, err = codec.gorumsMarshal(&gorumsMessage{metadata: md, message: msg})
+					if err != nil {
+						b.Error(err)
+					}
+					b.StartTimer()
+				}
+				for i := 0; i < b.N; i++ {
+					msg := newGorumsMessage(false)
+					err := codec.gorumsUnmarshal(buf, msg)
 					if err != nil {
 						b.Error(err)
 					}

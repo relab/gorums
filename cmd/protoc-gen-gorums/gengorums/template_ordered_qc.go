@@ -1,8 +1,7 @@
 package gengorums
 
 var orderingVariables = `
-{{$errorf := use "fmt.Errorf" .GenFile}}
-{{$gorumsMsg := use "ordering.Message" .GenFile}}
+{{$gorumsMD := use "ordering.Metadata" .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
 `
 
@@ -28,15 +27,11 @@ var orderingPreamble = `
 
 var orderingLoop = `
 {{if not (hasPerNodeArg .Method) -}}
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, {{$errorf}}("failed to marshal message: %w", err)
-	}
-	msg := &{{$gorumsMsg}}{
-		ID: msgID,
+	metadata := &{{$gorumsMD}}{
+		MessageID: msgID,
 		MethodID: {{$unexportMethod}}MethodID,
-		Data: data,
 	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 {{end -}}
 
 	// push the message to the nodes
@@ -48,15 +43,11 @@ var orderingLoop = `
 			expected--
 			continue
 		}
-		data, err := marshaler.Marshal(nodeArg)
-		if err != nil {
-			return nil, {{$errorf}}("failed to marshal message: %w", err)
-		}
-		msg := &{{$gorumsMsg}}{
-			ID: msgID,
+		metadata := &{{$gorumsMD}}{
+			MessageID: msgID,
 			MethodID: {{$unexportMethod}}MethodID,
-			Data: data,
 		}
+		msg := &gorumsMessage{metadata: metadata, message: nodeArg}
 {{- end}}
 		n.sendQ <- msg
 	}
@@ -77,12 +68,7 @@ var orderingReply = `
 				break
 			}
 			{{template "traceLazyLog"}}
-			reply := new({{$out}})
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, {{$errorf}}("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*{{$out}})
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.{{$method}}QF(in, replyValues); quorum {
 				return resp, nil

@@ -12,11 +12,12 @@ import (
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*ordering.Message) *ordering.Message
+type requestHandler func(*gorumsMessage) *gorumsMessage
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
 	opts     serverOptions
+	ordering.UnimplementedGorumsServer
 }
 
 func newOrderingServer(opts []ServerOption) *orderingServer {
@@ -30,16 +31,16 @@ func newOrderingServer(opts []ServerOption) *orderingServer {
 }
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
-	finished := make(chan *ordering.Message, s.opts.buffer)
+	finished := make(chan *gorumsMessage, s.opts.buffer)
 	ordered := make(chan struct {
-		msg  *ordering.Message
+		msg  *gorumsMessage
 		info methodInfo
 	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	handleMsg := func(req *ordering.Message, info methodInfo) {
-		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+	handleMsg := func(req *gorumsMessage, info methodInfo) {
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
 			if info.oneway {
 				handler(req)
 			} else {
@@ -54,7 +55,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			case <-ctx.Done():
 				return
 			case msg := <-finished:
-				err := srv.Send(msg)
+				err := srv.SendMsg(msg)
 				if err != nil {
 					return
 				}
@@ -74,17 +75,18 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	}()
 
 	for {
-		req, err := srv.Recv()
+		req := newGorumsMessage(false)
+		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
 
-		if info, ok := orderingMethods[req.MethodID]; ok {
+		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
 			if info.concurrent {
 				go handleMsg(req, info)
 			} else {
 				ordered <- struct {
-					msg  *ordering.Message
+					msg  *gorumsMessage
 					info methodInfo
 				}{req, info}
 			}

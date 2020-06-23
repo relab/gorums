@@ -13,7 +13,9 @@ import (
 	backoff "google.golang.org/grpc/backoff"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	protowire "google.golang.org/protobuf/encoding/protowire"
 	proto "google.golang.org/protobuf/proto"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	fnv "hash/fnv"
 	io "io"
 	log "log"
@@ -97,6 +99,84 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 // only a single listener is supported.
 func (c *Configuration) SubError() <-chan GRPCError {
 	return c.errs
+}
+
+type gorumsMessage struct {
+	metadata *ordering.Metadata
+	message  protoreflect.ProtoMessage
+	reply    bool
+}
+
+func newGorumsMessage(reply bool) *gorumsMessage {
+	return &gorumsMessage{metadata: &ordering.Metadata{}, reply: reply}
+}
+
+type gorumsCodec struct {
+	marshaler   proto.MarshalOptions
+	unmarshaler proto.UnmarshalOptions
+}
+
+func newGorumsCodec() *gorumsCodec {
+	return &gorumsCodec{
+		marshaler:   proto.MarshalOptions{AllowPartial: true},
+		unmarshaler: proto.UnmarshalOptions{AllowPartial: true},
+	}
+}
+
+func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
+	switch msg := m.(type) {
+	case *gorumsMessage:
+		return c.gorumsMarshal(msg)
+	case protoreflect.ProtoMessage:
+		return c.marshaler.Marshal(msg)
+	default:
+		return nil, fmt.Errorf("gorumsEncoder: don't know how to marshal message of type '%T'", m)
+	}
+}
+
+func (c gorumsCodec) gorumsMarshal(msg *gorumsMessage) (b []byte, err error) {
+	md, err := c.marshaler.Marshal(msg.metadata)
+	if err != nil {
+		return nil, err
+	}
+	b = protowire.AppendBytes(b, md)
+	data, err := c.marshaler.Marshal(msg.message)
+	if err != nil {
+		return nil, err
+	}
+	b = protowire.AppendBytes(b, data)
+	return b, nil
+}
+
+func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
+	switch msg := m.(type) {
+	case *gorumsMessage:
+		return c.gorumsUnmarshal(b, msg)
+	case protoreflect.ProtoMessage:
+		return c.unmarshaler.Unmarshal(b, msg)
+	default:
+		return fmt.Errorf("gorumsEncoder: don't know how to unmarshal message of type '%T'", m)
+	}
+}
+
+func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
+	mdBuf, mdLen := protowire.ConsumeBytes(b)
+	err = c.unmarshaler.Unmarshal(mdBuf, msg.metadata)
+	if err != nil {
+		return err
+	}
+	info := orderingMethods[msg.metadata.MethodID]
+	if msg.reply {
+		msg.message = info.responseType.New().Interface()
+	} else {
+		msg.message = info.requestType.New().Interface()
+	}
+	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
+	err = c.unmarshaler.Unmarshal(msgBuf, msg.message)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // A NodeNotFoundError reports that a specified node could not be found.
@@ -464,7 +544,7 @@ type Node struct {
 func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *ordering.Message, opts.sendBuffer),
+		sendQ:        make(chan *gorumsMessage, opts.sendBuffer),
 		node:         n,
 		backoff:      opts.backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -744,13 +824,15 @@ func WithSendBufferSize(size uint) ManagerOption {
 }
 
 type methodInfo struct {
-	oneway     bool
-	concurrent bool
+	oneway       bool
+	concurrent   bool
+	requestType  protoreflect.Message
+	responseType protoreflect.Message
 }
 
 type orderingResult struct {
 	nid   uint32
-	reply []byte
+	reply protoreflect.ProtoMessage
 	err   error
 }
 
@@ -793,7 +875,7 @@ func (m *receiveQueue) putResult(id uint64, result *orderingResult) {
 
 type orderedNodeStream struct {
 	*receiveQueue
-	sendQ        chan *ordering.Message
+	sendQ        chan *gorumsMessage
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
 	rand         *rand.Rand
@@ -816,7 +898,7 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 }
 
 func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
-	var req *ordering.Message
+	var req *gorumsMessage
 	for {
 		select {
 		case <-ctx.Done():
@@ -826,7 +908,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 			continue
 		}
 		// else try to send message
@@ -840,13 +922,13 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		s.streamMut.RUnlock()
 		s.node.setLastErr(err)
 		// return the error
-		s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+		s.putResult(req.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 	}
 }
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := new(ordering.Message)
+		resp := newGorumsMessage(true)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
@@ -857,7 +939,7 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.GetID(), &orderingResult{nid: s.node.ID(), reply: resp.GetData(), err: nil})
+			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: nil})
 		}
 
 		select {
@@ -901,11 +983,12 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*ordering.Message) *ordering.Message
+type requestHandler func(*gorumsMessage) *gorumsMessage
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
 	opts     serverOptions
+	ordering.UnimplementedGorumsServer
 }
 
 func newOrderingServer(opts []ServerOption) *orderingServer {
@@ -918,21 +1001,17 @@ func newOrderingServer(opts []ServerOption) *orderingServer {
 	return s
 }
 
-func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
-	s.handlers[methodID] = handler
-}
-
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
-	finished := make(chan *ordering.Message, s.opts.buffer)
+	finished := make(chan *gorumsMessage, s.opts.buffer)
 	ordered := make(chan struct {
-		msg  *ordering.Message
+		msg  *gorumsMessage
 		info methodInfo
 	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	handleMsg := func(req *ordering.Message, info methodInfo) {
-		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+	handleMsg := func(req *gorumsMessage, info methodInfo) {
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
 			if info.oneway {
 				handler(req)
 			} else {
@@ -947,7 +1026,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			case <-ctx.Done():
 				return
 			case msg := <-finished:
-				err := srv.Send(msg)
+				err := srv.SendMsg(msg)
 				if err != nil {
 					return
 				}
@@ -967,17 +1046,18 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	}()
 
 	for {
-		req, err := srv.Recv()
+		req := newGorumsMessage(false)
+		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
 
-		if info, ok := orderingMethods[req.MethodID]; ok {
+		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
 			if info.concurrent {
 				go handleMsg(req, info)
 			} else {
 				ordered <- struct {
-					msg  *ordering.Message
+					msg  *gorumsMessage
 					info methodInfo
 				}{req, info}
 			}
@@ -1017,8 +1097,8 @@ func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 }
 
 // Serve starts serving on the listener.
-func (s *GorumsServer) Serve(listener net.Listener) {
-	s.grpcServer.Serve(listener)
+func (s *GorumsServer) Serve(listener net.Listener) error {
+	return s.grpcServer.Serve(listener)
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
@@ -1083,17 +1163,6 @@ func (q qcresult) String() string {
 	return out.String()
 }
 
-var (
-	marshaler = proto.MarshalOptions{
-		AllowPartial:  true,
-		Deterministic: true,
-	}
-	unmarshaler = proto.UnmarshalOptions{
-		AllowPartial:   true,
-		DiscardUnknown: true,
-	}
-)
-
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	for _, y := range set {
 		if y == x {
@@ -1148,15 +1217,11 @@ func (c *Configuration) QC(ctx context.Context, in *Request) (resp *Response, er
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  qCMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: qCMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -1181,12 +1246,7 @@ func (c *Configuration) QC(ctx context.Context, in *Request) (resp *Response, er
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Response)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.QCQF(in, replyValues); quorum {
 				return resp, nil
@@ -1218,19 +1278,11 @@ func (c *Configuration) QCFuture(ctx context.Context, in *Request) *FutureRespon
 
 	expected := c.n
 
-	var msg *ordering.Message
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		// In case of a marshalling error, we should skip sending any messages
-		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		close(fut.c)
-		return fut
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  qCFutureMethodID,
 	}
-	msg = &ordering.Message{
-		ID:       msgID,
-		MethodID: qCFutureMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 
 	// push the message to the nodes
 	for _, n := range c.nodes {
@@ -1266,12 +1318,7 @@ func (c *Configuration) qCFutureRecv(ctx context.Context, in *Request, msgID uin
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-			data := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*Response)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.QCFutureQF(in, replyValues); quorum {
 				fut.Response, fut.err = reply, nil
@@ -1300,15 +1347,11 @@ func (n *Node) UnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOptio
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  unaryRPCMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: unaryRPCMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	n.sendQ <- msg
 
 	select {
@@ -1316,11 +1359,7 @@ func (n *Node) UnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOptio
 		if r.err != nil {
 			return nil, r.err
 		}
-		reply := new(Response)
-		err := unmarshaler.Unmarshal(r.reply, reply)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal reply: %w", err)
-		}
+		reply := r.reply.(*Response)
 		return reply, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -1353,9 +1392,9 @@ const unaryRPCMethodID int32 = 2
 
 var orderingMethods = map[int32]methodInfo{
 
-	0: {oneway: false, concurrent: false},
-	1: {oneway: false, concurrent: false},
-	2: {oneway: false, concurrent: false},
+	0: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	1: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	2: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
 }
 
 type internalResponse struct {
@@ -1398,46 +1437,22 @@ type GorumsTest interface {
 }
 
 func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
-	s.srv.handlers[qCMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[qCMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: qCMethodID, ID: in.ID}
-		}
 		resp := srv.QC(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: qCMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[qCFutureMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[qCFutureMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: qCFutureMethodID, ID: in.ID}
-		}
 		resp := srv.QCFuture(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: qCFutureMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[unaryRPCMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[unaryRPCMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Request)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: unaryRPCMethodID, ID: in.ID}
-		}
 		resp := srv.UnaryRPC(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: unaryRPCMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 }
