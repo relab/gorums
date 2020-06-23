@@ -1083,6 +1083,17 @@ func (q qcresult) String() string {
 	return out.String()
 }
 
+var (
+	marshaler = proto.MarshalOptions{
+		AllowPartial:  true,
+		Deterministic: true,
+	}
+	unmarshaler = proto.UnmarshalOptions{
+		AllowPartial:   true,
+		DiscardUnknown: true,
+	}
+)
+
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	for _, y := range set {
 		if y == x {
@@ -1137,7 +1148,7 @@ func (c *Configuration) QC(ctx context.Context, in *Request) (resp *Response, er
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1171,7 +1182,7 @@ func (c *Configuration) QC(ctx context.Context, in *Request) (resp *Response, er
 			}
 
 			reply := new(Response)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+			err := unmarshaler.Unmarshal(r.reply, reply)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1188,29 +1199,6 @@ func (c *Configuration) QC(ctx context.Context, in *Request) (resp *Response, er
 			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
 		}
 	}
-}
-
-// QCHandler is the server API for the QC rpc.
-type QCHandler interface {
-	QC(*Request) *Response
-}
-
-// RegisterQCHandler sets the handler for QC.
-func (s *GorumsServer) RegisterQCHandler(handler QCHandler) {
-	s.srv.registerHandler(qCMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.QC(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: qCMethodID}
-	})
 }
 
 // QCFuture asynchronously invokes a quorum call on configuration c
@@ -1231,7 +1219,7 @@ func (c *Configuration) QCFuture(ctx context.Context, in *Request) *FutureRespon
 	expected := c.n
 
 	var msg *ordering.Message
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		// In case of a marshalling error, we should skip sending any messages
 		fut.err = fmt.Errorf("failed to marshal message: %w", err)
@@ -1279,7 +1267,7 @@ func (c *Configuration) qCFutureRecv(ctx context.Context, in *Request, msgID uin
 				break
 			}
 			data := new(Response)
-			err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, data)
+			err := unmarshaler.Unmarshal(r.reply, data)
 			if err != nil {
 				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
 				break
@@ -1300,29 +1288,6 @@ func (c *Configuration) qCFutureRecv(ctx context.Context, in *Request, msgID uin
 	}
 }
 
-// QCFutureHandler is the server API for the QCFuture rpc.
-type QCFutureHandler interface {
-	QCFuture(*Request) *Response
-}
-
-// RegisterQCFutureHandler sets the handler for QCFuture.
-func (s *GorumsServer) RegisterQCFutureHandler(handler QCFutureHandler) {
-	s.srv.registerHandler(qCFutureMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.QCFuture(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: qCFutureMethodID}
-	})
-}
-
 func (n *Node) UnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 
 	// get the ID which will be used to return the correct responses for a request
@@ -1335,7 +1300,7 @@ func (n *Node) UnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOptio
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
 
-	data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(in)
+	data, err := marshaler.Marshal(in)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal message: %w", err)
 	}
@@ -1352,7 +1317,7 @@ func (n *Node) UnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOptio
 			return nil, r.err
 		}
 		reply := new(Response)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(r.reply, reply)
+		err := unmarshaler.Unmarshal(r.reply, reply)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal reply: %w", err)
 		}
@@ -1360,29 +1325,6 @@ func (n *Node) UnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOptio
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-}
-
-// UnaryRPCHandler is the server API for the UnaryRPC rpc.
-type UnaryRPCHandler interface {
-	UnaryRPC(*Request) *Response
-}
-
-// RegisterUnaryRPCHandler sets the handler for UnaryRPC.
-func (s *GorumsServer) RegisterUnaryRPCHandler(handler UnaryRPCHandler) {
-	s.srv.registerHandler(unaryRPCMethodID, func(in *ordering.Message) *ordering.Message {
-		req := new(Request)
-		err := proto.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}.Unmarshal(in.GetData(), req)
-		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return new(ordering.Message)
-		}
-		resp := handler.UnaryRPC(req)
-		data, err := proto.MarshalOptions{AllowPartial: true, Deterministic: true}.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{ID: in.ID, Data: data, MethodID: unaryRPCMethodID}
-	})
 }
 
 // QuorumSpec is the interface of quorum functions for GorumsTest.
@@ -1410,6 +1352,7 @@ const qCFutureMethodID int32 = 1
 const unaryRPCMethodID int32 = 2
 
 var orderingMethods = map[int32]methodInfo{
+
 	0: {oneway: false, concurrent: false},
 	1: {oneway: false, concurrent: false},
 	2: {oneway: false, concurrent: false},
@@ -1444,5 +1387,57 @@ func (f *FutureResponse) Done() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+// GorumsTest is the server-side API for the GorumsTest Service
+type GorumsTest interface {
+	QC(*Request) *Response
+	QCFuture(*Request) *Response
+	UnaryRPC(*Request) *Response
+}
+
+func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
+	s.srv.handlers[qCMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: qCMethodID, ID: in.ID}
+		}
+		resp := srv.QC(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: qCMethodID, ID: in.ID}
+	}
+	s.srv.handlers[qCFutureMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: qCFutureMethodID, ID: in.ID}
+		}
+		resp := srv.QCFuture(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: qCFutureMethodID, ID: in.ID}
+	}
+	s.srv.handlers[unaryRPCMethodID] = func(in *ordering.Message) *ordering.Message {
+		req := new(Request)
+		err := unmarshaler.Unmarshal(in.GetData(), req)
+		// TODO: how to handle marshaling errors here
+		if err != nil {
+			return &ordering.Message{MethodID: unaryRPCMethodID, ID: in.ID}
+		}
+		resp := srv.UnaryRPC(req)
+		data, err := marshaler.Marshal(resp)
+		if err != nil {
+			return new(ordering.Message)
+		}
+		return &ordering.Message{Data: data, MethodID: unaryRPCMethodID, ID: in.ID}
 	}
 }
