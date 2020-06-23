@@ -729,6 +729,8 @@ func (c *zorumsServiceClient) OrderingFutureCombo(ctx context.Context, in *Reque
 }
 
 // ZorumsServiceServer is the server API for ZorumsService service.
+// All implementations must embed UnimplementedZorumsServiceServer
+// for forward compatibility
 type ZorumsServiceServer interface {
 	// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
 	// they are added to the _grpc.pb.go generated file.
@@ -807,9 +809,10 @@ type ZorumsServiceServer interface {
 	OrderingFuturePerNodeArg(context.Context, *Request) (*Response, error)
 	OrderingFutureCustomReturnType(context.Context, *Request) (*Response, error)
 	OrderingFutureCombo(context.Context, *Request) (*Response, error)
+	mustEmbedUnimplementedZorumsServiceServer()
 }
 
-// UnimplementedZorumsServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedZorumsServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedZorumsServiceServer struct {
 }
 
@@ -933,6 +936,7 @@ func (*UnimplementedZorumsServiceServer) OrderingFutureCustomReturnType(context.
 func (*UnimplementedZorumsServiceServer) OrderingFutureCombo(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OrderingFutureCombo not implemented")
 }
+func (*UnimplementedZorumsServiceServer) mustEmbedUnimplementedZorumsServiceServer() {}
 
 func RegisterZorumsServiceServer(s *grpc.Server, srv ZorumsServiceServer) {
 	s.RegisterService(&_ZorumsService_serviceDesc, srv)

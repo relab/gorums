@@ -38,17 +38,21 @@ func (c *storageClient) Read(ctx context.Context, in *ReadRequest, opts ...grpc.
 }
 
 // StorageServer is the server API for Storage service.
+// All implementations must embed UnimplementedStorageServer
+// for forward compatibility
 type StorageServer interface {
 	Read(context.Context, *ReadRequest) (*ReadResponse, error)
+	mustEmbedUnimplementedStorageServer()
 }
 
-// UnimplementedStorageServer can be embedded to have forward compatible implementations.
+// UnimplementedStorageServer must be embedded to have forward compatible implementations.
 type UnimplementedStorageServer struct {
 }
 
 func (*UnimplementedStorageServer) Read(context.Context, *ReadRequest) (*ReadResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Read not implemented")
 }
+func (*UnimplementedStorageServer) mustEmbedUnimplementedStorageServer() {}
 
 func RegisterStorageServer(s *grpc.Server, srv StorageServer) {
 	s.RegisterService(&_Storage_serviceDesc, srv)

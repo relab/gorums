@@ -38,17 +38,21 @@ func (c *asyncQuorumCallClient) AsyncQuorumCall(ctx context.Context, in *Request
 }
 
 // AsyncQuorumCallServer is the server API for AsyncQuorumCall service.
+// All implementations must embed UnimplementedAsyncQuorumCallServer
+// for forward compatibility
 type AsyncQuorumCallServer interface {
 	AsyncQuorumCall(context.Context, *Request) (*Response, error)
+	mustEmbedUnimplementedAsyncQuorumCallServer()
 }
 
-// UnimplementedAsyncQuorumCallServer can be embedded to have forward compatible implementations.
+// UnimplementedAsyncQuorumCallServer must be embedded to have forward compatible implementations.
 type UnimplementedAsyncQuorumCallServer struct {
 }
 
 func (*UnimplementedAsyncQuorumCallServer) AsyncQuorumCall(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AsyncQuorumCall not implemented")
 }
+func (*UnimplementedAsyncQuorumCallServer) mustEmbedUnimplementedAsyncQuorumCallServer() {}
 
 func RegisterAsyncQuorumCallServer(s *grpc.Server, srv AsyncQuorumCallServer) {
 	s.RegisterService(&_AsyncQuorumCall_serviceDesc, srv)

@@ -14,6 +14,7 @@ import (
 	backoff "google.golang.org/grpc/backoff"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	proto "google.golang.org/protobuf/proto"
 	fnv "hash/fnv"
 	io "io"
 	log "log"
@@ -193,9 +194,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		lookup:       make(map[uint32]*Node),
 		configs:      make(map[uint32]*Configuration),
 		receiveQueue: newReceiveQueue(),
-		opts: managerOptions{
-			backoff: backoff.DefaultConfig,
-		},
+		opts:         newManagerOptions(),
 	}
 
 	for _, opt := range opts {
@@ -260,7 +259,7 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		addr:    tcpAddr.String(),
 		latency: -1 * time.Second,
 	}
-	node.createOrderedStream(m.receiveQueue, m.opts.backoff)
+	node.createOrderedStream(m.receiveQueue, m.opts)
 
 	return node, nil
 }
@@ -463,12 +462,12 @@ type Node struct {
 	nodeServices
 }
 
-func (n *Node) createOrderedStream(rq *receiveQueue, backoff backoff.Config) {
+func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *ordering.Message),
+		sendQ:        make(chan *ordering.Message, opts.sendBuffer),
 		node:         n,
-		backoff:      backoff,
+		backoff:      opts.backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
@@ -675,6 +674,14 @@ type managerOptions struct {
 	noConnect       bool
 	trace           bool
 	backoff         backoff.Config
+	sendBuffer      uint
+}
+
+func newManagerOptions() managerOptions {
+	return managerOptions{
+		backoff:    backoff.DefaultConfig,
+		sendBuffer: 0,
+	}
 }
 
 // ManagerOption provides a way to set different options on a new Manager.
@@ -726,6 +733,20 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 	return func(o *managerOptions) {
 		o.backoff = backoff
 	}
+}
+
+// WithSendBufferSize allows for changing the size of the send buffer used by Gorums.
+// A larger buffer might achieve higher throughput for asynchronous calltypes, but at
+// the cost of latency.
+func WithSendBufferSize(size uint) ManagerOption {
+	return func(o *managerOptions) {
+		o.sendBuffer = size
+	}
+}
+
+type methodInfo struct {
+	oneway     bool
+	concurrent bool
 }
 
 type orderingResult struct {
@@ -885,33 +906,94 @@ type requestHandler func(*ordering.Message) *ordering.Message
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
+	opts     serverOptions
 }
 
-func newOrderingServer() *orderingServer {
-	return &orderingServer{
+func newOrderingServer(opts []ServerOption) *orderingServer {
+	s := &orderingServer{
 		handlers: make(map[int32]requestHandler),
 	}
-}
-
-func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
-	s.handlers[methodID] = handler
+	for _, opt := range opts {
+		opt(&s.opts)
+	}
+	return s
 }
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+	finished := make(chan *ordering.Message, s.opts.buffer)
+	ordered := make(chan struct {
+		msg  *ordering.Message
+		info methodInfo
+	}, s.opts.buffer)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handleMsg := func(req *ordering.Message, info methodInfo) {
+		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+			if info.oneway {
+				handler(req)
+			} else {
+				finished <- handler(req)
+			}
+		}
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg := <-finished:
+				err := srv.Send(msg)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case req := <-ordered:
+				handleMsg(req.msg, req.info)
+			}
+		}
+	}()
+
 	for {
 		req, err := srv.Recv()
 		if err != nil {
 			return err
 		}
-		// handle the request if a handler is available for this rpc
-		if handler, ok := s.handlers[req.GetMethodID()]; ok {
-			resp := handler(req)
-			resp.ID = req.GetID()
-			err = srv.Send(resp)
-			if err != nil {
-				return err
+
+		if info, ok := orderingMethods[req.MethodID]; ok {
+			if info.concurrent {
+				go handleMsg(req, info)
+			} else {
+				ordered <- struct {
+					msg  *ordering.Message
+					info methodInfo
+				}{req, info}
 			}
 		}
+	}
+}
+
+type serverOptions struct {
+	buffer uint
+}
+
+// ServerOption is used to change settings for the GorumsServer
+type ServerOption func(*serverOptions)
+
+// WithServerBufferSize sets the buffer size for the server.
+// A larger buffer may result in higher throughput at the cost of higher latency.
+func WithServerBufferSize(size uint) ServerOption {
+	return func(o *serverOptions) {
+		o.buffer = size
 	}
 }
 
@@ -922,9 +1004,9 @@ type GorumsServer struct {
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
-func NewGorumsServer() *GorumsServer {
+func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 	s := &GorumsServer{
-		srv:        newOrderingServer(),
+		srv:        newOrderingServer(opts),
 		grpcServer: grpc.NewServer(),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
@@ -932,8 +1014,8 @@ func NewGorumsServer() *GorumsServer {
 }
 
 // Serve starts serving on the listener.
-func (s *GorumsServer) Serve(listener net.Listener) {
-	s.grpcServer.Serve(listener)
+func (s *GorumsServer) Serve(listener net.Listener) error {
+	return s.grpcServer.Serve(listener)
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
@@ -997,6 +1079,17 @@ func (q qcresult) String() string {
 	}
 	return out.String()
 }
+
+var (
+	marshaler = proto.MarshalOptions{
+		AllowPartial:  true,
+		Deterministic: true,
+	}
+	unmarshaler = proto.UnmarshalOptions{
+		AllowPartial:   true,
+		DiscardUnknown: true,
+	}
+)
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	for _, y := range set {
@@ -1108,8 +1201,17 @@ func (n *Node) QuorumCall(ctx context.Context, in *msgs.Request, replyChan chan<
 
 const hasOrderingMethods = false
 
+var orderingMethods = map[int32]methodInfo{}
+
 type internalResponse struct {
 	nid   uint32
 	reply *msgs.Response
 	err   error
+}
+
+// QuorumCall is the server-side API for the QuorumCall Service
+type QuorumCall interface {
+}
+
+func (s *GorumsServer) RegisterQuorumCallServer(srv QuorumCall) {
 }

@@ -100,13 +100,16 @@ func (x *multicastMulticastEmptyClient) CloseAndRecv() (*empty.Empty, error) {
 }
 
 // MulticastServer is the server API for Multicast service.
+// All implementations must embed UnimplementedMulticastServer
+// for forward compatibility
 type MulticastServer interface {
 	Multicast(Multicast_MulticastServer) error
 	// MulticastEmpty is testing imported message type.
 	MulticastEmpty(Multicast_MulticastEmptyServer) error
+	mustEmbedUnimplementedMulticastServer()
 }
 
-// UnimplementedMulticastServer can be embedded to have forward compatible implementations.
+// UnimplementedMulticastServer must be embedded to have forward compatible implementations.
 type UnimplementedMulticastServer struct {
 }
 
@@ -116,6 +119,7 @@ func (*UnimplementedMulticastServer) Multicast(Multicast_MulticastServer) error 
 func (*UnimplementedMulticastServer) MulticastEmpty(Multicast_MulticastEmptyServer) error {
 	return status.Errorf(codes.Unimplemented, "method MulticastEmpty not implemented")
 }
+func (*UnimplementedMulticastServer) mustEmbedUnimplementedMulticastServer() {}
 
 func RegisterMulticastServer(s *grpc.Server, srv MulticastServer) {
 	s.RegisterService(&_Multicast_serviceDesc, srv)

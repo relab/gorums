@@ -38,17 +38,21 @@ func (c *quorumCallClient) QuorumCall(ctx context.Context, in *Request, opts ...
 }
 
 // QuorumCallServer is the server API for QuorumCall service.
+// All implementations must embed UnimplementedQuorumCallServer
+// for forward compatibility
 type QuorumCallServer interface {
 	QuorumCall(context.Context, *Request) (*Response, error)
+	mustEmbedUnimplementedQuorumCallServer()
 }
 
-// UnimplementedQuorumCallServer can be embedded to have forward compatible implementations.
+// UnimplementedQuorumCallServer must be embedded to have forward compatible implementations.
 type UnimplementedQuorumCallServer struct {
 }
 
 func (*UnimplementedQuorumCallServer) QuorumCall(context.Context, *Request) (*Response, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QuorumCall not implemented")
 }
+func (*UnimplementedQuorumCallServer) mustEmbedUnimplementedQuorumCallServer() {}
 
 func RegisterQuorumCallServer(s *grpc.Server, srv QuorumCallServer) {
 	s.RegisterService(&_QuorumCall_serviceDesc, srv)
