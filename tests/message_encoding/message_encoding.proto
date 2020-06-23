@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package message_encoding;
+
+option go_package = "github.com/relab/gorums/tests/message_encoding";
+
+message Metadata {
+  uint64 ID = 1;
+  oneof Embed {
+    bytes Data = 2;
+    Message Message = 3;
+  }
+}
+
+message Message {
+  string Data = 1;
+  bytes payload = 2;
+}
