@@ -678,6 +678,8 @@ func (c *zorumsServiceClient) UnicastConcurrent(ctx context.Context, in *Request
 }
 
 // ZorumsServiceServer is the server API for ZorumsService service.
+// All implementations must embed UnimplementedZorumsServiceServer
+// for forward compatibility
 type ZorumsServiceServer interface {
 	// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
 	// they are added to the _grpc.pb.go generated file.
@@ -767,9 +769,10 @@ type ZorumsServiceServer interface {
 	Unicast(context.Context, *Request) (*Response, error)
 	Unicast2(context.Context, *Request) (*empty.Empty, error)
 	UnicastConcurrent(context.Context, *Request) (*empty.Empty, error)
+	mustEmbedUnimplementedZorumsServiceServer()
 }
 
-// UnimplementedZorumsServiceServer can be embedded to have forward compatible implementations.
+// UnimplementedZorumsServiceServer must be embedded to have forward compatible implementations.
 type UnimplementedZorumsServiceServer struct {
 }
 
@@ -914,6 +917,7 @@ func (*UnimplementedZorumsServiceServer) Unicast2(context.Context, *Request) (*e
 func (*UnimplementedZorumsServiceServer) UnicastConcurrent(context.Context, *Request) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UnicastConcurrent not implemented")
 }
+func (*UnimplementedZorumsServiceServer) mustEmbedUnimplementedZorumsServiceServer() {}
 
 func RegisterZorumsServiceServer(s *grpc.Server, srv ZorumsServiceServer) {
 	s.RegisterService(&_ZorumsService_serviceDesc, srv)
