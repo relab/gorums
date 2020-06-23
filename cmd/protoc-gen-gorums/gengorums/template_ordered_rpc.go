@@ -21,15 +21,11 @@ var orderingRPCPreamble = `
 `
 
 var orderingRPCBody = `
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, {{$errorf}}("failed to marshal message: %w", err)
-	}
-	msg := &{{$gorumsMsg}}{
-		ID: msgID,
+	metadata := &{{$gorumsMD}}{
+		MessageID: msgID,
 		MethodID: {{$unexportMethod}}MethodID,
-		Data: data,
 	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	n.sendQ <- msg
 
 	select {
@@ -37,11 +33,7 @@ var orderingRPCBody = `
 		if r.err != nil {
 			return nil, r.err
 		}
-		reply := new({{$out}})
-		err := unmarshaler.Unmarshal(r.reply, reply)
-		if err != nil {
-			return nil, {{$errorf}}("failed to unmarshal reply: %w", err)
-		}
+		reply := r.reply.(*{{$out}})
 		return reply, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()

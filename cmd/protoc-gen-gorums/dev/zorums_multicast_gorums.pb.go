@@ -3,7 +3,6 @@
 package dev
 
 import (
-	fmt "fmt"
 	empty "github.com/golang/protobuf/ptypes/empty"
 	ordering "github.com/relab/gorums/ordering"
 )
@@ -11,15 +10,11 @@ import (
 // Multicast plain. Response type is not needed here.
 func (c *Configuration) Multicast(in *Request) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  multicastMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: multicastMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
@@ -36,15 +31,11 @@ func (c *Configuration) MulticastPerNodeArg(in *Request, f func(*Request, uint32
 		if nodeArg == nil {
 			continue
 		}
-		data, err := marshaler.Marshal(nodeArg)
-		if err != nil {
-			return fmt.Errorf("failed to marshal message: %w", err)
+		metadata := &ordering.Metadata{
+			MessageID: msgID,
+			MethodID:  multicastPerNodeArgMethodID,
 		}
-		msg := &ordering.Message{
-			ID:       msgID,
-			MethodID: multicastPerNodeArgMethodID,
-			Data:     data,
-		}
+		msg := &gorumsMessage{metadata: metadata, message: nodeArg}
 		n.sendQ <- msg
 	}
 	return nil
@@ -53,15 +44,11 @@ func (c *Configuration) MulticastPerNodeArg(in *Request, f func(*Request, uint32
 // Multicast2 is testing whether multiple streams work.
 func (c *Configuration) Multicast2(in *Request) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  multicast2MethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: multicast2MethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
@@ -74,15 +61,11 @@ var _ empty.Empty
 // Multicast3 is testing imported message type.
 func (c *Configuration) Multicast3(in *Request) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  multicast3MethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: multicast3MethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
@@ -95,15 +78,11 @@ var _ empty.Empty
 // Multicast4 is testing imported message type.
 func (c *Configuration) Multicast4(in *empty.Empty) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  multicast4MethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: multicast4MethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
@@ -113,15 +92,11 @@ func (c *Configuration) Multicast4(in *empty.Empty) error {
 // MutlicastConcurrent uses a concurrent server-side handler
 func (c *Configuration) MulticastConcurrent(in *Request) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  multicastConcurrentMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: multicastConcurrentMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}

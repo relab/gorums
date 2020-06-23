@@ -3,15 +3,11 @@ package gengorums
 var unicastMethod = `
 func (n *Node) {{$method}}(in *{{$in}}) error {
 	msgID := n.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return {{$errorf}}("failed to marshal message: %w", err)
-	}
-	msg := &{{$gorumsMsg}}{
-		ID: msgID,
+	metadata := &{{$gorumsMD}}{
+		MessageID: msgID,
 		MethodID: {{$unexportMethod}}MethodID,
-		Data: data,
 	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	n.sendQ <- msg
 	return nil
 }

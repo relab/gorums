@@ -17,9 +17,10 @@ const {{unexport $method.GoName}}MethodID int32 = {{$index}}
 
 var orderingMethods = `
 var orderingMethods = map[int32]methodInfo{
+	{{$genFile := .GenFile}}
 	{{$methods := methods .Services}}
 	{{range $index, $method := nodeStreamMethods $methods}}
-		{{$index}}: { oneway: {{isOneway $method}}, concurrent: {{ isConcurrent $method }} },
+		{{$index}}: { oneway: {{isOneway $method}}, concurrent: {{isConcurrent $method}}, requestType: new({{in $genFile $method}}).ProtoReflect(), responseType: new({{out $genFile $method}}).ProtoReflect() },
 	{{- end}}
 }
 `
@@ -172,31 +173,19 @@ type {{$service}} interface {
 
 var registerInterface = `
 {{$genFile := .GenFile}}
-{{$gorumsMsg := use "ordering.Message" .GenFile}}
 {{range .Services -}}
 {{$service := .GoName}}
 func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 	{{- range nodeStreamMethods .Methods}}
-	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *{{$gorumsMsg}}) *{{$gorumsMsg}} {
-		req := new({{in $genFile .}})
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*{{in $genFile .}})
 		{{- if isOneway .}}
-		if err != nil {
-			return nil
-		}
 		srv.{{.GoName}}(req)
 		return nil
 		{{- else}}
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &{{$gorumsMsg}}{MethodID: {{unexport .GoName}}MethodID, ID: in.ID}
-		}
 		resp := srv.{{.GoName}}(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new({{$gorumsMsg}})
-		}
-		return &{{$gorumsMsg}}{Data: data, MethodID: {{unexport .GoName}}MethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 		{{- end}}
 	}
 	{{- end}}

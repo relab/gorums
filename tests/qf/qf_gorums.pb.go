@@ -13,6 +13,9 @@ import (
 	backoff "google.golang.org/grpc/backoff"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	protowire "google.golang.org/protobuf/encoding/protowire"
+	proto "google.golang.org/protobuf/proto"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	fnv "hash/fnv"
 	io "io"
 	log "log"
@@ -96,6 +99,84 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 // only a single listener is supported.
 func (c *Configuration) SubError() <-chan GRPCError {
 	return c.errs
+}
+
+type gorumsMessage struct {
+	metadata *ordering.Metadata
+	message  protoreflect.ProtoMessage
+	reply    bool
+}
+
+func newGorumsMessage(reply bool) *gorumsMessage {
+	return &gorumsMessage{metadata: &ordering.Metadata{}, reply: reply}
+}
+
+type gorumsCodec struct {
+	marshaler   proto.MarshalOptions
+	unmarshaler proto.UnmarshalOptions
+}
+
+func newGorumsCodec() *gorumsCodec {
+	return &gorumsCodec{
+		marshaler:   proto.MarshalOptions{AllowPartial: true},
+		unmarshaler: proto.UnmarshalOptions{AllowPartial: true},
+	}
+}
+
+func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
+	switch msg := m.(type) {
+	case *gorumsMessage:
+		return c.gorumsMarshal(msg)
+	case protoreflect.ProtoMessage:
+		return c.marshaler.Marshal(msg)
+	default:
+		return nil, fmt.Errorf("gorumsEncoder: don't know how to marshal message of type '%T'", m)
+	}
+}
+
+func (c gorumsCodec) gorumsMarshal(msg *gorumsMessage) (b []byte, err error) {
+	md, err := c.marshaler.Marshal(msg.metadata)
+	if err != nil {
+		return nil, err
+	}
+	b = protowire.AppendBytes(b, md)
+	data, err := c.marshaler.Marshal(msg.message)
+	if err != nil {
+		return nil, err
+	}
+	b = protowire.AppendBytes(b, data)
+	return b, nil
+}
+
+func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
+	switch msg := m.(type) {
+	case *gorumsMessage:
+		return c.gorumsUnmarshal(b, msg)
+	case protoreflect.ProtoMessage:
+		return c.unmarshaler.Unmarshal(b, msg)
+	default:
+		return fmt.Errorf("gorumsEncoder: don't know how to unmarshal message of type '%T'", m)
+	}
+}
+
+func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
+	mdBuf, mdLen := protowire.ConsumeBytes(b)
+	err = c.unmarshaler.Unmarshal(mdBuf, msg.metadata)
+	if err != nil {
+		return err
+	}
+	info := orderingMethods[msg.metadata.MethodID]
+	if msg.reply {
+		msg.message = info.responseType.New().Interface()
+	} else {
+		msg.message = info.requestType.New().Interface()
+	}
+	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
+	err = c.unmarshaler.Unmarshal(msgBuf, msg.message)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // A NodeNotFoundError reports that a specified node could not be found.
@@ -463,7 +544,7 @@ type Node struct {
 func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *ordering.Message, opts.sendBuffer),
+		sendQ:        make(chan *gorumsMessage, opts.sendBuffer),
 		node:         n,
 		backoff:      opts.backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -743,13 +824,15 @@ func WithSendBufferSize(size uint) ManagerOption {
 }
 
 type methodInfo struct {
-	oneway     bool
-	concurrent bool
+	oneway       bool
+	concurrent   bool
+	requestType  protoreflect.Message
+	responseType protoreflect.Message
 }
 
 type orderingResult struct {
 	nid   uint32
-	reply []byte
+	reply protoreflect.ProtoMessage
 	err   error
 }
 
@@ -792,7 +875,7 @@ func (m *receiveQueue) putResult(id uint64, result *orderingResult) {
 
 type orderedNodeStream struct {
 	*receiveQueue
-	sendQ        chan *ordering.Message
+	sendQ        chan *gorumsMessage
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
 	rand         *rand.Rand
@@ -815,7 +898,7 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 }
 
 func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
-	var req *ordering.Message
+	var req *gorumsMessage
 	for {
 		select {
 		case <-ctx.Done():
@@ -825,7 +908,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 			continue
 		}
 		// else try to send message
@@ -839,13 +922,13 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		s.streamMut.RUnlock()
 		s.node.setLastErr(err)
 		// return the error
-		s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+		s.putResult(req.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 	}
 }
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := new(ordering.Message)
+		resp := newGorumsMessage(true)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
@@ -856,7 +939,7 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.GetID(), &orderingResult{nid: s.node.ID(), reply: resp.GetData(), err: nil})
+			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: nil})
 		}
 
 		select {
@@ -900,11 +983,12 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*ordering.Message) *ordering.Message
+type requestHandler func(*gorumsMessage) *gorumsMessage
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
 	opts     serverOptions
+	ordering.UnimplementedGorumsServer
 }
 
 func newOrderingServer(opts []ServerOption) *orderingServer {
@@ -917,21 +1001,17 @@ func newOrderingServer(opts []ServerOption) *orderingServer {
 	return s
 }
 
-func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
-	s.handlers[methodID] = handler
-}
-
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
-	finished := make(chan *ordering.Message, s.opts.buffer)
+	finished := make(chan *gorumsMessage, s.opts.buffer)
 	ordered := make(chan struct {
-		msg  *ordering.Message
+		msg  *gorumsMessage
 		info methodInfo
 	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	handleMsg := func(req *ordering.Message, info methodInfo) {
-		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+	handleMsg := func(req *gorumsMessage, info methodInfo) {
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
 			if info.oneway {
 				handler(req)
 			} else {
@@ -946,7 +1026,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			case <-ctx.Done():
 				return
 			case msg := <-finished:
-				err := srv.Send(msg)
+				err := srv.SendMsg(msg)
 				if err != nil {
 					return
 				}
@@ -966,17 +1046,18 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	}()
 
 	for {
-		req, err := srv.Recv()
+		req := newGorumsMessage(false)
+		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
 
-		if info, ok := orderingMethods[req.MethodID]; ok {
+		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
 			if info.concurrent {
 				go handleMsg(req, info)
 			} else {
 				ordered <- struct {
-					msg  *ordering.Message
+					msg  *gorumsMessage
 					info methodInfo
 				}{req, info}
 			}
@@ -1016,8 +1097,8 @@ func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 }
 
 // Serve starts serving on the listener.
-func (s *GorumsServer) Serve(listener net.Listener) {
-	s.grpcServer.Serve(listener)
+func (s *GorumsServer) Serve(listener net.Listener) error {
+	return s.grpcServer.Serve(listener)
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
@@ -1278,4 +1359,11 @@ type internalResponse struct {
 	nid   uint32
 	reply *Response
 	err   error
+}
+
+// QuorumFunction is the server-side API for the QuorumFunction Service
+type QuorumFunction interface {
+}
+
+func (s *GorumsServer) RegisterQuorumFunctionServer(srv QuorumFunction) {
 }

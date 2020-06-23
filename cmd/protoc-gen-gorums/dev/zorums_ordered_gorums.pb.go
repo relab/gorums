@@ -4,7 +4,6 @@ package dev
 
 import (
 	context "context"
-	fmt "fmt"
 	ordering "github.com/relab/gorums/ordering"
 	trace "golang.org/x/net/trace"
 	grpc "google.golang.org/grpc"
@@ -44,15 +43,11 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderingQCMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: orderingQCMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -77,12 +72,7 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Response)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.OrderingQCQF(in, replyValues); quorum {
 				return resp, nil
@@ -141,15 +131,11 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 			expected--
 			continue
 		}
-		data, err := marshaler.Marshal(nodeArg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal message: %w", err)
+		metadata := &ordering.Metadata{
+			MessageID: msgID,
+			MethodID:  orderingPerNodeArgMethodID,
 		}
-		msg := &ordering.Message{
-			ID:       msgID,
-			MethodID: orderingPerNodeArgMethodID,
-			Data:     data,
-		}
+		msg := &gorumsMessage{metadata: metadata, message: nodeArg}
 		n.sendQ <- msg
 	}
 
@@ -171,12 +157,7 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Response)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.OrderingPerNodeArgQF(in, replyValues); quorum {
 				return resp, nil
@@ -224,15 +205,11 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderingCustomReturnTypeMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: orderingCustomReturnTypeMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -257,12 +234,7 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Response)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.OrderingCustomReturnTypeQF(in, replyValues); quorum {
 				return resp, nil
@@ -321,15 +293,11 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 			expected--
 			continue
 		}
-		data, err := marshaler.Marshal(nodeArg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal message: %w", err)
+		metadata := &ordering.Metadata{
+			MessageID: msgID,
+			MethodID:  orderingComboMethodID,
 		}
-		msg := &ordering.Message{
-			ID:       msgID,
-			MethodID: orderingComboMethodID,
-			Data:     data,
-		}
+		msg := &gorumsMessage{metadata: metadata, message: nodeArg}
 		n.sendQ <- msg
 	}
 
@@ -351,12 +319,7 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Response)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.OrderingComboQF(in, replyValues); quorum {
 				return resp, nil
@@ -404,15 +367,11 @@ func (c *Configuration) OrderingConcurrent(ctx context.Context, in *Request) (re
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderingConcurrentMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: orderingConcurrentMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -437,12 +396,7 @@ func (c *Configuration) OrderingConcurrent(ctx context.Context, in *Request) (re
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Response)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.OrderingConcurrentQF(in, replyValues); quorum {
 				return resp, nil
@@ -470,15 +424,11 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderingUnaryRPCMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: orderingUnaryRPCMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	n.sendQ <- msg
 
 	select {
@@ -486,11 +436,7 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 		if r.err != nil {
 			return nil, r.err
 		}
-		reply := new(Response)
-		err := unmarshaler.Unmarshal(r.reply, reply)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal reply: %w", err)
-		}
+		reply := r.reply.(*Response)
 		return reply, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -511,15 +457,11 @@ func (n *Node) OrderingUnaryRPCConcurrent(ctx context.Context, in *Request, opts
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderingUnaryRPCConcurrentMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: orderingUnaryRPCConcurrentMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	n.sendQ <- msg
 
 	select {
@@ -527,11 +469,7 @@ func (n *Node) OrderingUnaryRPCConcurrent(ctx context.Context, in *Request, opts
 		if r.err != nil {
 			return nil, r.err
 		}
-		reply := new(Response)
-		err := unmarshaler.Unmarshal(r.reply, reply)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal reply: %w", err)
-		}
+		reply := r.reply.(*Response)
 		return reply, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -555,19 +493,11 @@ func (c *Configuration) OrderingFuture(ctx context.Context, in *Request) *Future
 
 	expected := c.n
 
-	var msg *ordering.Message
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		// In case of a marshalling error, we should skip sending any messages
-		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		close(fut.c)
-		return fut
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderingFutureMethodID,
 	}
-	msg = &ordering.Message{
-		ID:       msgID,
-		MethodID: orderingFutureMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 
 	// push the message to the nodes
 	for _, n := range c.nodes {
@@ -603,12 +533,7 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-			data := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*Response)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureQF(in, replyValues); quorum {
 				fut.Response, fut.err = reply, nil
@@ -653,17 +578,11 @@ func (c *Configuration) OrderingFuturePerNodeArg(ctx context.Context, in *Reques
 			expected--
 			continue
 		}
-		data, err := marshaler.Marshal(nodeArg)
-		if err != nil {
-			fut.err = fmt.Errorf("failed to marshal message: %w", err)
-			close(fut.c)
-			return fut
+		metadata := &ordering.Metadata{
+			MessageID: msgID,
+			MethodID:  orderingFuturePerNodeArgMethodID,
 		}
-		msg := &ordering.Message{
-			ID:       msgID,
-			MethodID: orderingFuturePerNodeArgMethodID,
-			Data:     data,
-		}
+		msg := &gorumsMessage{metadata: metadata, message: nodeArg}
 		n.sendQ <- msg
 	}
 
@@ -696,12 +615,7 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-			data := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*Response)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFuturePerNodeArgQF(in, replyValues); quorum {
 				fut.Response, fut.err = reply, nil
@@ -735,19 +649,11 @@ func (c *Configuration) OrderingFutureCustomReturnType(ctx context.Context, in *
 
 	expected := c.n
 
-	var msg *ordering.Message
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		// In case of a marshalling error, we should skip sending any messages
-		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		close(fut.c)
-		return fut
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderingFutureCustomReturnTypeMethodID,
 	}
-	msg = &ordering.Message{
-		ID:       msgID,
-		MethodID: orderingFutureCustomReturnTypeMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 
 	// push the message to the nodes
 	for _, n := range c.nodes {
@@ -783,12 +689,7 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-			data := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*Response)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureCustomReturnTypeQF(in, replyValues); quorum {
 				fut.MyResponse, fut.err = reply, nil
@@ -822,19 +723,11 @@ func (c *Configuration) OrderingFutureConcurrent(ctx context.Context, in *Reques
 
 	expected := c.n
 
-	var msg *ordering.Message
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		// In case of a marshalling error, we should skip sending any messages
-		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		close(fut.c)
-		return fut
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderingFutureConcurrentMethodID,
 	}
-	msg = &ordering.Message{
-		ID:       msgID,
-		MethodID: orderingFutureConcurrentMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 
 	// push the message to the nodes
 	for _, n := range c.nodes {
@@ -870,12 +763,7 @@ func (c *Configuration) orderingFutureConcurrentRecv(ctx context.Context, in *Re
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-			data := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*Response)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureConcurrentQF(in, replyValues); quorum {
 				fut.Response, fut.err = reply, nil
@@ -920,17 +808,11 @@ func (c *Configuration) OrderingFutureCombo(ctx context.Context, in *Request, f 
 			expected--
 			continue
 		}
-		data, err := marshaler.Marshal(nodeArg)
-		if err != nil {
-			fut.err = fmt.Errorf("failed to marshal message: %w", err)
-			close(fut.c)
-			return fut
+		metadata := &ordering.Metadata{
+			MessageID: msgID,
+			MethodID:  orderingFutureComboMethodID,
 		}
-		msg := &ordering.Message{
-			ID:       msgID,
-			MethodID: orderingFutureComboMethodID,
-			Data:     data,
-		}
+		msg := &gorumsMessage{metadata: metadata, message: nodeArg}
 		n.sendQ <- msg
 	}
 
@@ -963,12 +845,7 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-			data := new(Response)
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*Response)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderingFutureComboQF(in, replyValues); quorum {
 				fut.MyResponse, fut.err = reply, nil

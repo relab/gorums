@@ -3,22 +3,17 @@
 package dev
 
 import (
-	fmt "fmt"
 	empty "github.com/golang/protobuf/ptypes/empty"
 	ordering "github.com/relab/gorums/ordering"
 )
 
 func (n *Node) Unicast(in *Request) error {
 	msgID := n.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  unicastMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: unicastMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	n.sendQ <- msg
 	return nil
 }
@@ -28,15 +23,11 @@ var _ empty.Empty
 
 func (n *Node) Unicast2(in *Request) error {
 	msgID := n.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  unicast2MethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: unicast2MethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	n.sendQ <- msg
 	return nil
 }
@@ -46,15 +37,11 @@ var _ empty.Empty
 
 func (n *Node) UnicastConcurrent(in *Request) error {
 	msgID := n.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  unicastConcurrentMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: unicastConcurrentMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	n.sendQ <- msg
 	return nil
 }

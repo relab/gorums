@@ -60,17 +60,21 @@ func (x *gorumsNodeStreamClient) Recv() (*Message, error) {
 }
 
 // GorumsServer is the server API for Gorums service.
+// All implementations must embed UnimplementedGorumsServer
+// for forward compatibility
 type GorumsServer interface {
 	NodeStream(Gorums_NodeStreamServer) error
+	mustEmbedUnimplementedGorumsServer()
 }
 
-// UnimplementedGorumsServer can be embedded to have forward compatible implementations.
+// UnimplementedGorumsServer must be embedded to have forward compatible implementations.
 type UnimplementedGorumsServer struct {
 }
 
 func (*UnimplementedGorumsServer) NodeStream(Gorums_NodeStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method NodeStream not implemented")
 }
+func (*UnimplementedGorumsServer) mustEmbedUnimplementedGorumsServer() {}
 
 func RegisterGorumsServer(s *grpc.Server, srv GorumsServer) {
 	s.RegisterService(&_Gorums_serviceDesc, srv)

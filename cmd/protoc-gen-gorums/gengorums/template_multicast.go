@@ -21,15 +21,11 @@ var multicastMethod = `
 func (c *Configuration) {{$method}}(in *{{$in}}{{perNodeFnType .GenFile .Method ", f"}}) error {
 	msgID := c.mgr.nextMsgID()
 {{if not (hasPerNodeArg .Method) -}}
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return {{$errorf}}("failed to marshal message: %w", err)
-	}
-	msg := &{{$gorumsMsg}}{
-		ID: msgID,
+	metadata := &{{$gorumsMD}}{
+		MessageID: msgID,
 		MethodID: {{$unexportMethod}}MethodID,
-		Data: data,
 	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 {{end -}}
 	for _, n := range c.nodes {
 {{- if hasPerNodeArg .Method}}
@@ -37,15 +33,11 @@ func (c *Configuration) {{$method}}(in *{{$in}}{{perNodeFnType .GenFile .Method 
 		if nodeArg == nil {
 			continue
 		}
-		data, err := marshaler.Marshal(nodeArg)
-		if err != nil {
-			return {{$errorf}}("failed to marshal message: %w", err)
-		}
-		msg := &{{$gorumsMsg}}{
-			ID: msgID,
+		metadata := &{{$gorumsMD}}{
+			MessageID: msgID,
 			MethodID: {{$unexportMethod}}MethodID,
-			Data: data,
 		}
+		msg := &gorumsMessage{metadata: metadata, message: nodeArg}
 {{- end}}
 		n.sendQ <- msg
 	}

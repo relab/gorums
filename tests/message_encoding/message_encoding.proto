@@ -4,6 +4,8 @@ package message_encoding;
 
 option go_package = "github.com/relab/gorums/tests/message_encoding";
 
+import "gorums.proto";
+
 message Metadata {
   uint64 ID = 1;
   oneof Embed {
@@ -15,4 +17,9 @@ message Metadata {
 message Message {
   string Data = 1;
   bytes payload = 2;
+}
+
+service EncodingTest {
+  // need to generate gorums code to benchmark gorumsCodec
+  rpc Test(Message) returns (Message) { option (gorums.multicast) = true; }
 }
