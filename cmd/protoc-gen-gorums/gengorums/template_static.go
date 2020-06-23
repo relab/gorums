@@ -942,10 +942,6 @@ func newOrderingServer(opts []ServerOption) *orderingServer {
 	return s
 }
 
-func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
-	s.handlers[methodID] = handler
-}
-
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *ordering.Message, s.opts.buffer)
 	ordered := make(chan struct {
@@ -1041,8 +1037,8 @@ func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 }
 
 // Serve starts serving on the listener.
-func (s *GorumsServer) Serve(listener net.Listener) {
-	s.grpcServer.Serve(listener)
+func (s *GorumsServer) Serve(listener net.Listener) error {
+	return s.grpcServer.Serve(listener)
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
