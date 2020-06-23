@@ -1,22 +1,18 @@
-all: qf order
+.PHONY: all qf order message_encoding
 
-.PHONY: qf
-qf:
-	@protoc -I../:. \
-		--go_out=paths=source_relative:. \
-		--go-grpc_out=paths=source_relative:. \
-		--gorums_out=trace=true,paths=source_relative:. \
-		qf/qf.proto
+all: qf order message_encoding
 
-.PHONY: order
-order:
-	@protoc -I../:. \
-		--go_out=paths=source_relative:. \
-		--gorums_out=trace=true,paths=source_relative:. \
-		ordering/order.proto
+qf: qf/qf.pb.go qf/qf_grpc.pb.go qf/qf_gorums.pb.go
 
-.PHONY: clean
-clean:
-	@rm -f quorumcall/*.go
-	@rm -f grpc/*.go
-	@rm -f ordering/*.pb.go
+order: ordering/order.pb.go ordering/order_gorums.pb.go
+
+message_encoding: message_encoding/message_encoding.pb.go
+
+%.pb.go : %.proto
+	@protoc -I=..:. --go_out=paths=source_relative:. $<
+
+%_grpc.pb.go : %.proto
+	@protoc -I=..:. --go-grpc_out=paths=source_relative:. $<
+
+%_gorums.pb.go : %.proto
+	@protoc -I=..:. --gorums_out=paths=source_relative,trace=true:. $<
