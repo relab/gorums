@@ -100,7 +100,9 @@ func BenchmarkQF(b *testing.B) {
 	}
 }
 
-type testSrv struct{}
+type testSrv struct {
+	UnimplementedQuorumFunctionServer
+}
 
 func (s testSrv) UseReq(_ context.Context, req *Request) (*Response, error) {
 	return &Response{Result: req.GetValue()}, nil
