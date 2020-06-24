@@ -33,27 +33,27 @@ const unicastConcurrentMethodID int32 = 20
 
 var orderingMethods = map[int32]methodInfo{
 
-	0:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	1:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	2:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	3:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	4:  {oneway: true, concurrent: false, requestType: new(empty.Empty).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	5:  {oneway: true, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	6:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	7:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	8:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	9:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	10: {oneway: false, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	11: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	12: {oneway: false, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	13: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	14: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	15: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	16: {oneway: false, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	17: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	18: {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	19: {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	20: {oneway: true, concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	0:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	1:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	2:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	3:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	4:  {concurrent: false, requestType: new(empty.Empty).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	5:  {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	6:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	7:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	8:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	9:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	10: {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	11: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	12: {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	13: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	14: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	15: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	16: {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	17: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	18: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	19: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	20: {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalEmpty struct {
@@ -628,109 +628,100 @@ type ZorumsService interface {
 }
 
 func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
-	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.Multicast(req)
-		return nil
 	}
-	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.MulticastPerNodeArg(req)
-		return nil
 	}
-	s.srv.handlers[multicast2MethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[multicast2MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.Multicast2(req)
-		return nil
 	}
-	s.srv.handlers[multicast3MethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[multicast3MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.Multicast3(req)
-		return nil
 	}
-	s.srv.handlers[multicast4MethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[multicast4MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*empty.Empty)
 		srv.Multicast4(req)
-		return nil
 	}
-	s.srv.handlers[multicastConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[multicastConcurrentMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.MulticastConcurrent(req)
-		return nil
 	}
-	s.srv.handlers[orderingQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingQCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingQC(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingPerNodeArg(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingCustomReturnType(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingComboMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingComboMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingCombo(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingConcurrentMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingConcurrent(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingUnaryRPC(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingUnaryRPCConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingUnaryRPCConcurrentMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingUnaryRPCConcurrent(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFutureMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingFutureMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingFuture(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingFuturePerNodeArg(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingFutureCustomReturnType(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFutureConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingFutureConcurrentMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingFutureConcurrent(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderingFutureComboMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[orderingFutureComboMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		resp := srv.OrderingFutureCombo(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[unicastMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[unicastMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.Unicast(req)
-		return nil
 	}
-	s.srv.handlers[unicast2MethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[unicast2MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.Unicast2(req)
-		return nil
 	}
-	s.srv.handlers[unicastConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[unicastConcurrentMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.UnicastConcurrent(req)
-		return nil
 	}
 }
