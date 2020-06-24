@@ -183,7 +183,6 @@ func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 		srv.{{.GoName}}(req)
 		return nil
 		{{- else}}
-		// TODO: how to handle marshaling errors here
 		resp := srv.{{.GoName}}(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 		{{- end}}

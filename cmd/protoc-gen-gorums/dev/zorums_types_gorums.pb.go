@@ -660,73 +660,61 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	}
 	s.srv.handlers[orderingQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingQC(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingPerNodeArg(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingCustomReturnType(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingComboMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingCombo(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingConcurrent(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingUnaryRPC(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingUnaryRPCConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingUnaryRPCConcurrent(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingFutureMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingFuture(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingFuturePerNodeArg(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingFutureCustomReturnType(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingFutureConcurrentMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingFutureConcurrent(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderingFutureComboMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderingFutureCombo(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
