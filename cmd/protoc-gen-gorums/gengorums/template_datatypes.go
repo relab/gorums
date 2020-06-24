@@ -20,7 +20,7 @@ var orderingMethods = map[int32]methodInfo{
 	{{$genFile := .GenFile}}
 	{{$methods := methods .Services}}
 	{{range $index, $method := nodeStreamMethods $methods}}
-		{{$index}}: { oneway: {{isOneway $method}}, concurrent: {{isConcurrent $method}}, requestType: new({{in $genFile $method}}).ProtoReflect(), responseType: new({{out $genFile $method}}).ProtoReflect() },
+		{{$index}}: { concurrent: {{isConcurrent $method}}, requestType: new({{in $genFile $method}}).ProtoReflect(), responseType: new({{out $genFile $method}}).ProtoReflect() },
 	{{- end}}
 }
 `
@@ -163,7 +163,9 @@ type {{$service}} interface {
 	{{- range nodeStreamMethods .Methods}}
 	{{- if isOneway .}}
 	{{.GoName}}(*{{in $genFile .}})
-	{{- else}}
+	{{- else if hasAsyncHandler .}}
+	{{.GoName}}(*{{in $genFile .}}, chan<- *{{out $genFile .}})
+	{{- else }}
 	{{.GoName}}(*{{in $genFile .}}) *{{out $genFile .}}
 	{{- end}}
 	{{- end}}
@@ -177,14 +179,22 @@ var registerInterface = `
 {{$service := .GoName}}
 func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 	{{- range nodeStreamMethods .Methods}}
-	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *gorumsMessage ,{{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *gorumsMessage) {
 		req := in.message.(*{{in $genFile .}})
+		{{- if hasAsyncHandler .}}
+		c := make(chan *{{out $genFile .}})
+		srv.{{.GoName}}(req, c)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		{{- else }}
 		{{- if isOneway .}}
 		srv.{{.GoName}}(req)
-		return nil
 		{{- else}}
 		resp := srv.{{.GoName}}(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		{{- end}}
 		{{- end}}
 	}
 	{{- end}}

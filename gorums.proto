@@ -13,6 +13,7 @@ extend google.protobuf.MethodOptions {
   bool correctable = 50004;
   bool unicast = 50005;
   bool concurrent = 50006;
+  bool async_handler = 50007;
   bool per_node_arg = 50010;
 
   string custom_return_type = 51000;
