@@ -40,7 +40,7 @@ func WithDialTimeout(timeout time.Duration) ManagerOption {
 // the Manager should use when initially connecting to each node in its pool.
 func WithGrpcDialOptions(opts ...grpc.DialOption) ManagerOption {
 	return func(o *managerOptions) {
-		o.grpcDialOpts = opts
+		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
 	}
 }
 

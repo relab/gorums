@@ -158,6 +158,10 @@ func (c gorumsCodec) Name() string {
 	return gorumsContentType
 }
 
+func (c gorumsCodec) String() string {
+	return gorumsContentType
+}
+
 func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *gorumsMessage:
@@ -320,10 +324,15 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		opt(&m.opts)
 	}
 
+	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
+		grpc.CallContentSubtype(gorumsContentType),
+		grpc.ForceCodec(newGorumsCodec()),
+	))
+
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},
-		), grpc.WithDefaultCallOptions(grpc.CallContentSubtype(gorumsContentType)))
+		))
 	}
 
 	for _, naddr := range nodeAddrs {
@@ -818,7 +827,7 @@ func WithDialTimeout(timeout time.Duration) ManagerOption {
 // the Manager should use when initially connecting to each node in its pool.
 func WithGrpcDialOptions(opts ...grpc.DialOption) ManagerOption {
 	return func(o *managerOptions) {
-		o.grpcDialOpts = opts
+		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
 	}
 }
 
@@ -1138,6 +1147,7 @@ func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
+	serverOpts.grpcOpts = append(serverOpts.grpcOpts, grpc.CustomCodec(newGorumsCodec()))
 	s := &GorumsServer{
 		srv:        newOrderingServer(&serverOpts),
 		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),

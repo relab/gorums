@@ -42,6 +42,10 @@ func (c gorumsCodec) Name() string {
 	return gorumsContentType
 }
 
+func (c gorumsCodec) String() string {
+	return gorumsContentType
+}
+
 func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *gorumsMessage:
