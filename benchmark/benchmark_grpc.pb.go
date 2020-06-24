@@ -180,6 +180,8 @@ func (c *benchmarkClient) ConcurrentMulticast(ctx context.Context, in *TimedMsg,
 }
 
 // BenchmarkServer is the server API for Benchmark service.
+// All implementations must embed UnimplementedBenchmarkServer
+// for forward compatibility
 type BenchmarkServer interface {
 	StartServerBenchmark(context.Context, *StartRequest) (*StartResponse, error)
 	StopServerBenchmark(context.Context, *StopRequest) (*Result, error)
@@ -197,9 +199,10 @@ type BenchmarkServer interface {
 	ConcurrentSlowServer(context.Context, *Echo) (*Echo, error)
 	Multicast(context.Context, *TimedMsg) (*empty.Empty, error)
 	ConcurrentMulticast(context.Context, *TimedMsg) (*empty.Empty, error)
+	mustEmbedUnimplementedBenchmarkServer()
 }
 
-// UnimplementedBenchmarkServer can be embedded to have forward compatible implementations.
+// UnimplementedBenchmarkServer must be embedded to have forward compatible implementations.
 type UnimplementedBenchmarkServer struct {
 }
 
@@ -248,6 +251,7 @@ func (*UnimplementedBenchmarkServer) Multicast(context.Context, *TimedMsg) (*emp
 func (*UnimplementedBenchmarkServer) ConcurrentMulticast(context.Context, *TimedMsg) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConcurrentMulticast not implemented")
 }
+func (*UnimplementedBenchmarkServer) mustEmbedUnimplementedBenchmarkServer() {}
 
 func RegisterBenchmarkServer(s *grpc.Server, srv BenchmarkServer) {
 	s.RegisterService(&_Benchmark_serviceDesc, srv)
