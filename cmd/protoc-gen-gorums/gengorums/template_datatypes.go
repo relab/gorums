@@ -1,9 +1,5 @@
 package gengorums
 
-import (
-	"google.golang.org/protobuf/compiler/protogen"
-)
-
 var globals = `
 const hasOrderingMethods = {{hasOrderingMethods .Services}}
 `
@@ -154,69 +150,9 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 {{end}}
 `
 
-var serverInterface = `
-{{$genFile := .GenFile}}
-{{range .Services -}}
-{{$service := .GoName}}
-// {{$service}} is the server-side API for the {{$service}} Service
-type {{$service}} interface {
-	{{- range nodeStreamMethods .Methods}}
-	{{- if isOneway .}}
-	{{.GoName}}(*{{in $genFile .}})
-	{{- else if hasAsyncHandler .}}
-	{{.GoName}}(*{{in $genFile .}}, chan<- *{{out $genFile .}})
-	{{- else }}
-	{{.GoName}}(*{{in $genFile .}}) *{{out $genFile .}}
-	{{- end}}
-	{{- end}}
-}
-{{- end}}
-`
-
-var registerInterface = `
-{{$genFile := .GenFile}}
-{{range .Services -}}
-{{$service := .GoName}}
-func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
-	{{- range nodeStreamMethods .Methods}}
-	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *gorumsMessage ,{{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *gorumsMessage) {
-		req := in.message.(*{{in $genFile .}})
-		{{- if hasAsyncHandler .}}
-		c := make(chan *{{out $genFile .}})
-		srv.{{.GoName}}(req, c)
-		go func() {
-			resp := <-c
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		}()
-		{{- else }}
-		{{- if isOneway .}}
-		srv.{{.GoName}}(req)
-		{{- else}}
-		resp := srv.{{.GoName}}(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		{{- end}}
-		{{- end}}
-	}
-	{{- end}}
-}
-{{- end}}
-`
-
 var datatypes = globals +
 	orderingIDs +
 	orderingMethods +
 	internalOutDataType +
 	futureDataType +
-	correctableDataType +
-	serverInterface +
-	registerInterface
-
-// nodeStreamMethods returns all Gorums methods that use ordering.
-func nodeStreamMethods(methods []*protogen.Method) (s []*protogen.Method) {
-	for _, method := range methods {
-		if hasMethodOption(method, nodeStreamCallTypes...) {
-			s = append(s, method)
-		}
-	}
-	return
-}
+	correctableDataType
