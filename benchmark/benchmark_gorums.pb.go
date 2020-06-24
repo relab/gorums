@@ -13,8 +13,11 @@ import (
 	grpc "google.golang.org/grpc"
 	backoff "google.golang.org/grpc/backoff"
 	codes "google.golang.org/grpc/codes"
+	encoding "google.golang.org/grpc/encoding"
 	status "google.golang.org/grpc/status"
+	protowire "google.golang.org/protobuf/encoding/protowire"
 	proto "google.golang.org/protobuf/proto"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	fnv "hash/fnv"
 	io "io"
 	log "log"
@@ -98,6 +101,103 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 // only a single listener is supported.
 func (c *Configuration) SubError() <-chan GRPCError {
 	return c.errs
+}
+
+const gorumsContentType = "gorums"
+
+func init() {
+	encoding.RegisterCodec(newGorumsCodec())
+}
+
+type gorumsMessage struct {
+	metadata *ordering.Metadata
+	message  protoreflect.ProtoMessage
+	reply    bool
+}
+
+func newGorumsMessage(reply bool) *gorumsMessage {
+	return &gorumsMessage{metadata: &ordering.Metadata{}, reply: reply}
+}
+
+type gorumsCodec struct {
+	marshaler   proto.MarshalOptions
+	unmarshaler proto.UnmarshalOptions
+}
+
+func newGorumsCodec() *gorumsCodec {
+	return &gorumsCodec{
+		marshaler:   proto.MarshalOptions{AllowPartial: true},
+		unmarshaler: proto.UnmarshalOptions{AllowPartial: true},
+	}
+}
+
+func (c gorumsCodec) Name() string {
+	return gorumsContentType
+}
+
+func (c gorumsCodec) String() string {
+	return gorumsContentType
+}
+
+func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
+	switch msg := m.(type) {
+	case *gorumsMessage:
+		return c.gorumsMarshal(msg)
+	case protoreflect.ProtoMessage:
+		return c.marshaler.Marshal(msg)
+	default:
+		return nil, fmt.Errorf("gorumsEncoder: don't know how to marshal message of type '%T'", m)
+	}
+}
+
+// gorumsMarshal marshals a metadata and a data message into a single byte slice.
+func (c gorumsCodec) gorumsMarshal(msg *gorumsMessage) (b []byte, err error) {
+	mdSize := c.marshaler.Size(msg.metadata)
+	b = protowire.AppendVarint(b, uint64(mdSize))
+	b, err = c.marshaler.MarshalAppend(b, msg.metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	msgSize := c.marshaler.Size(msg.message)
+	b = protowire.AppendVarint(b, uint64(msgSize))
+	b, err = c.marshaler.MarshalAppend(b, msg.message)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
+	switch msg := m.(type) {
+	case *gorumsMessage:
+		return c.gorumsUnmarshal(b, msg)
+	case protoreflect.ProtoMessage:
+		return c.unmarshaler.Unmarshal(b, msg)
+	default:
+		return fmt.Errorf("gorumsEncoder: don't know how to unmarshal message of type '%T'", m)
+	}
+}
+
+// gorumsUnmarshal unmarshals a metadata and a data message from a byte slice.
+func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
+	mdBuf, mdLen := protowire.ConsumeBytes(b)
+	err = c.unmarshaler.Unmarshal(mdBuf, msg.metadata)
+	if err != nil {
+		return err
+	}
+	info := orderingMethods[msg.metadata.MethodID]
+	if msg.reply {
+		msg.message = info.responseType.New().Interface()
+	} else {
+		msg.message = info.requestType.New().Interface()
+	}
+	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
+	err = c.unmarshaler.Unmarshal(msgBuf, msg.message)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // A NodeNotFoundError reports that a specified node could not be found.
@@ -200,6 +300,11 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	for _, opt := range opts {
 		opt(&m.opts)
 	}
+
+	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
+		grpc.CallContentSubtype(gorumsContentType),
+		grpc.ForceCodec(newGorumsCodec()),
+	))
 
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
@@ -465,7 +570,7 @@ type Node struct {
 func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *ordering.Message, opts.sendBuffer),
+		sendQ:        make(chan *gorumsMessage, opts.sendBuffer),
 		node:         n,
 		backoff:      opts.backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -699,7 +804,7 @@ func WithDialTimeout(timeout time.Duration) ManagerOption {
 // the Manager should use when initially connecting to each node in its pool.
 func WithGrpcDialOptions(opts ...grpc.DialOption) ManagerOption {
 	return func(o *managerOptions) {
-		o.grpcDialOpts = opts
+		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
 	}
 }
 
@@ -745,13 +850,15 @@ func WithSendBufferSize(size uint) ManagerOption {
 }
 
 type methodInfo struct {
-	oneway     bool
-	concurrent bool
+	oneway       bool
+	concurrent   bool
+	requestType  protoreflect.Message
+	responseType protoreflect.Message
 }
 
 type orderingResult struct {
 	nid   uint32
-	reply []byte
+	reply protoreflect.ProtoMessage
 	err   error
 }
 
@@ -794,7 +901,7 @@ func (m *receiveQueue) putResult(id uint64, result *orderingResult) {
 
 type orderedNodeStream struct {
 	*receiveQueue
-	sendQ        chan *ordering.Message
+	sendQ        chan *gorumsMessage
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
 	rand         *rand.Rand
@@ -817,7 +924,7 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 }
 
 func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
-	var req *ordering.Message
+	var req *gorumsMessage
 	for {
 		select {
 		case <-ctx.Done():
@@ -827,7 +934,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 			continue
 		}
 		// else try to send message
@@ -841,13 +948,13 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		s.streamMut.RUnlock()
 		s.node.setLastErr(err)
 		// return the error
-		s.putResult(req.GetID(), &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+		s.putResult(req.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 	}
 }
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := new(ordering.Message)
+		resp := newGorumsMessage(true)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
@@ -858,7 +965,7 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.GetID(), &orderingResult{nid: s.node.ID(), reply: resp.GetData(), err: nil})
+			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: nil})
 		}
 
 		select {
@@ -902,38 +1009,33 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*ordering.Message) *ordering.Message
+type requestHandler func(*gorumsMessage) *gorumsMessage
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
-	opts     serverOptions
+	opts     *serverOptions
+	ordering.UnimplementedGorumsServer
 }
 
-func newOrderingServer(opts []ServerOption) *orderingServer {
+func newOrderingServer(opts *serverOptions) *orderingServer {
 	s := &orderingServer{
 		handlers: make(map[int32]requestHandler),
-	}
-	for _, opt := range opts {
-		opt(&s.opts)
+		opts:     opts,
 	}
 	return s
 }
 
-func (s *orderingServer) registerHandler(methodID int32, handler requestHandler) {
-	s.handlers[methodID] = handler
-}
-
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
-	finished := make(chan *ordering.Message, s.opts.buffer)
+	finished := make(chan *gorumsMessage, s.opts.buffer)
 	ordered := make(chan struct {
-		msg  *ordering.Message
+		msg  *gorumsMessage
 		info methodInfo
 	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	handleMsg := func(req *ordering.Message, info methodInfo) {
-		if handler, ok := s.handlers[req.GetMethodID()]; ok {
+	handleMsg := func(req *gorumsMessage, info methodInfo) {
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
 			if info.oneway {
 				handler(req)
 			} else {
@@ -948,7 +1050,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			case <-ctx.Done():
 				return
 			case msg := <-finished:
-				err := srv.Send(msg)
+				err := srv.SendMsg(msg)
 				if err != nil {
 					return
 				}
@@ -968,17 +1070,18 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	}()
 
 	for {
-		req, err := srv.Recv()
+		req := newGorumsMessage(false)
+		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
 
-		if info, ok := orderingMethods[req.MethodID]; ok {
+		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
 			if info.concurrent {
 				go handleMsg(req, info)
 			} else {
 				ordered <- struct {
-					msg  *ordering.Message
+					msg  *gorumsMessage
 					info methodInfo
 				}{req, info}
 			}
@@ -987,7 +1090,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 }
 
 type serverOptions struct {
-	buffer uint
+	buffer   uint
+	grpcOpts []grpc.ServerOption
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -1001,25 +1105,37 @@ func WithServerBufferSize(size uint) ServerOption {
 	}
 }
 
+func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
+	return func(o *serverOptions) {
+		o.grpcOpts = append(o.grpcOpts, opts...)
+	}
+}
+
 // GorumsServer serves all ordering based RPCs using registered handlers.
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
+	opts       serverOptions
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
 func NewGorumsServer(opts ...ServerOption) *GorumsServer {
+	var serverOpts serverOptions
+	for _, opt := range opts {
+		opt(&serverOpts)
+	}
+	serverOpts.grpcOpts = append(serverOpts.grpcOpts, grpc.CustomCodec(newGorumsCodec()))
 	s := &GorumsServer{
-		srv:        newOrderingServer(opts),
-		grpcServer: grpc.NewServer(),
+		srv:        newOrderingServer(&serverOpts),
+		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }
 
 // Serve starts serving on the listener.
-func (s *GorumsServer) Serve(listener net.Listener) {
-	s.grpcServer.Serve(listener)
+func (s *GorumsServer) Serve(listener net.Listener) error {
+	return s.grpcServer.Serve(listener)
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
@@ -1083,17 +1199,6 @@ func (q qcresult) String() string {
 	}
 	return out.String()
 }
-
-var (
-	marshaler = proto.MarshalOptions{
-		AllowPartial:  true,
-		Deterministic: true,
-	}
-	unmarshaler = proto.UnmarshalOptions{
-		AllowPartial:   true,
-		DiscardUnknown: true,
-	}
-)
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
 	for _, y := range set {
@@ -1202,15 +1307,11 @@ var _ empty.Empty
 // with the same in argument. The call is asynchronous and has no return value.
 func (c *Configuration) Multicast(in *TimedMsg) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  multicastMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: multicastMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
@@ -1224,15 +1325,11 @@ var _ empty.Empty
 // with the same in argument. The call is asynchronous and has no return value.
 func (c *Configuration) ConcurrentMulticast(in *TimedMsg) error {
 	msgID := c.mgr.nextMsgID()
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  concurrentMulticastMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: concurrentMulticastMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
@@ -1287,15 +1384,11 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  startServerBenchmarkMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: startServerBenchmarkMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -1320,12 +1413,7 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(StartResponse)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*StartResponse)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.StartServerBenchmarkQF(in, replyValues); quorum {
 				return resp, nil
@@ -1373,15 +1461,11 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  stopServerBenchmarkMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: stopServerBenchmarkMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -1406,12 +1490,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Result)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Result)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.StopServerBenchmarkQF(in, replyValues); quorum {
 				return resp, nil
@@ -1459,15 +1538,11 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  startBenchmarkMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: startBenchmarkMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -1492,12 +1567,7 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(StartResponse)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*StartResponse)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.StartBenchmarkQF(in, replyValues); quorum {
 				return resp, nil
@@ -1545,15 +1615,11 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  stopBenchmarkMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: stopBenchmarkMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -1578,12 +1644,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(MemoryStat)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*MemoryStat)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.StopBenchmarkQF(in, replyValues); quorum {
 				return resp, nil
@@ -1631,15 +1692,11 @@ func (c *Configuration) OrderedQC(ctx context.Context, in *Echo) (resp *Echo, er
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderedQCMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: orderedQCMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -1664,12 +1721,7 @@ func (c *Configuration) OrderedQC(ctx context.Context, in *Echo) (resp *Echo, er
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Echo)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Echo)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.OrderedQCQF(in, replyValues); quorum {
 				return resp, nil
@@ -1717,15 +1769,11 @@ func (c *Configuration) ConcurrentQC(ctx context.Context, in *Echo) (resp *Echo,
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  concurrentQCMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: concurrentQCMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -1750,12 +1798,7 @@ func (c *Configuration) ConcurrentQC(ctx context.Context, in *Echo) (resp *Echo,
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Echo)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Echo)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.ConcurrentQCQF(in, replyValues); quorum {
 				return resp, nil
@@ -1787,19 +1830,11 @@ func (c *Configuration) OrderedAsync(ctx context.Context, in *Echo) *FutureEcho 
 
 	expected := c.n
 
-	var msg *ordering.Message
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		// In case of a marshalling error, we should skip sending any messages
-		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		close(fut.c)
-		return fut
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderedAsyncMethodID,
 	}
-	msg = &ordering.Message{
-		ID:       msgID,
-		MethodID: orderedAsyncMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 
 	// push the message to the nodes
 	for _, n := range c.nodes {
@@ -1835,12 +1870,7 @@ func (c *Configuration) orderedAsyncRecv(ctx context.Context, in *Echo, msgID ui
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-			data := new(Echo)
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*Echo)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderedAsyncQF(in, replyValues); quorum {
 				fut.Echo, fut.err = reply, nil
@@ -1874,19 +1904,11 @@ func (c *Configuration) ConcurrentAsync(ctx context.Context, in *Echo) *FutureEc
 
 	expected := c.n
 
-	var msg *ordering.Message
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		// In case of a marshalling error, we should skip sending any messages
-		fut.err = fmt.Errorf("failed to marshal message: %w", err)
-		close(fut.c)
-		return fut
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  concurrentAsyncMethodID,
 	}
-	msg = &ordering.Message{
-		ID:       msgID,
-		MethodID: concurrentAsyncMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 
 	// push the message to the nodes
 	for _, n := range c.nodes {
@@ -1922,12 +1944,7 @@ func (c *Configuration) concurrentAsyncRecv(ctx context.Context, in *Echo, msgID
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-			data := new(Echo)
-			err := unmarshaler.Unmarshal(r.reply, data)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			data := r.reply.(*Echo)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.ConcurrentAsyncQF(in, replyValues); quorum {
 				fut.Echo, fut.err = reply, nil
@@ -1977,15 +1994,11 @@ func (c *Configuration) OrderedSlowServer(ctx context.Context, in *Echo) (resp *
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  orderedSlowServerMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: orderedSlowServerMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -2010,12 +2023,7 @@ func (c *Configuration) OrderedSlowServer(ctx context.Context, in *Echo) (resp *
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Echo)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Echo)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.OrderedSlowServerQF(in, replyValues); quorum {
 				return resp, nil
@@ -2063,15 +2071,11 @@ func (c *Configuration) ConcurrentSlowServer(ctx context.Context, in *Echo) (res
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
 
-	data, err := marshaler.Marshal(in)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message: %w", err)
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  concurrentSlowServerMethodID,
 	}
-	msg := &ordering.Message{
-		ID:       msgID,
-		MethodID: concurrentSlowServerMethodID,
-		Data:     data,
-	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
 	// push the message to the nodes
 	expected := c.n
 	for _, n := range c.nodes {
@@ -2096,12 +2100,7 @@ func (c *Configuration) ConcurrentSlowServer(ctx context.Context, in *Echo) (res
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			reply := new(Echo)
-			err := unmarshaler.Unmarshal(r.reply, reply)
-			if err != nil {
-				errs = append(errs, GRPCError{r.nid, fmt.Errorf("failed to unmarshal reply: %w", err)})
-				break
-			}
+			reply := r.reply.(*Echo)
 			replyValues = append(replyValues, reply)
 			if resp, quorum = c.qspec.ConcurrentSlowServerQF(in, replyValues); quorum {
 				return resp, nil
@@ -2373,18 +2372,18 @@ const concurrentMulticastMethodID int32 = 11
 
 var orderingMethods = map[int32]methodInfo{
 
-	0:  {oneway: false, concurrent: false},
-	1:  {oneway: false, concurrent: false},
-	2:  {oneway: false, concurrent: false},
-	3:  {oneway: false, concurrent: false},
-	4:  {oneway: false, concurrent: false},
-	5:  {oneway: false, concurrent: true},
-	6:  {oneway: false, concurrent: false},
-	7:  {oneway: false, concurrent: true},
-	8:  {oneway: false, concurrent: false},
-	9:  {oneway: false, concurrent: true},
-	10: {oneway: true, concurrent: false},
-	11: {oneway: true, concurrent: true},
+	0:  {oneway: false, concurrent: false, requestType: new(StartRequest).ProtoReflect(), responseType: new(StartResponse).ProtoReflect()},
+	1:  {oneway: false, concurrent: false, requestType: new(StopRequest).ProtoReflect(), responseType: new(Result).ProtoReflect()},
+	2:  {oneway: false, concurrent: false, requestType: new(StartRequest).ProtoReflect(), responseType: new(StartResponse).ProtoReflect()},
+	3:  {oneway: false, concurrent: false, requestType: new(StopRequest).ProtoReflect(), responseType: new(MemoryStat).ProtoReflect()},
+	4:  {oneway: false, concurrent: false, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	5:  {oneway: false, concurrent: true, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	6:  {oneway: false, concurrent: false, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	7:  {oneway: false, concurrent: true, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	8:  {oneway: false, concurrent: false, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	9:  {oneway: false, concurrent: true, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	10: {oneway: true, concurrent: false, requestType: new(TimedMsg).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	11: {oneway: true, concurrent: true, requestType: new(TimedMsg).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalEcho struct {
@@ -2454,161 +2453,73 @@ type Benchmark interface {
 }
 
 func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
-	s.srv.handlers[startServerBenchmarkMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(StartRequest)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[startServerBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*StartRequest)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: startServerBenchmarkMethodID, ID: in.ID}
-		}
 		resp := srv.StartServerBenchmark(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: startServerBenchmarkMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[stopServerBenchmarkMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(StopRequest)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[stopServerBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*StopRequest)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: stopServerBenchmarkMethodID, ID: in.ID}
-		}
 		resp := srv.StopServerBenchmark(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: stopServerBenchmarkMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[startBenchmarkMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(StartRequest)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[startBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*StartRequest)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: startBenchmarkMethodID, ID: in.ID}
-		}
 		resp := srv.StartBenchmark(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: startBenchmarkMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[stopBenchmarkMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(StopRequest)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[stopBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*StopRequest)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: stopBenchmarkMethodID, ID: in.ID}
-		}
 		resp := srv.StopBenchmark(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: stopBenchmarkMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderedQCMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderedQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Echo)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderedQCMethodID, ID: in.ID}
-		}
 		resp := srv.OrderedQC(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderedQCMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[concurrentQCMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[concurrentQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Echo)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: concurrentQCMethodID, ID: in.ID}
-		}
 		resp := srv.ConcurrentQC(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: concurrentQCMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderedAsyncMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderedAsyncMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Echo)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderedAsyncMethodID, ID: in.ID}
-		}
 		resp := srv.OrderedAsync(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderedAsyncMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[concurrentAsyncMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[concurrentAsyncMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Echo)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: concurrentAsyncMethodID, ID: in.ID}
-		}
 		resp := srv.ConcurrentAsync(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: concurrentAsyncMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[orderedSlowServerMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[orderedSlowServerMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Echo)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: orderedSlowServerMethodID, ID: in.ID}
-		}
 		resp := srv.OrderedSlowServer(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: orderedSlowServerMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[concurrentSlowServerMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(Echo)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
+	s.srv.handlers[concurrentSlowServerMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*Echo)
 		// TODO: how to handle marshaling errors here
-		if err != nil {
-			return &ordering.Message{MethodID: concurrentSlowServerMethodID, ID: in.ID}
-		}
 		resp := srv.ConcurrentSlowServer(req)
-		data, err := marshaler.Marshal(resp)
-		if err != nil {
-			return new(ordering.Message)
-		}
-		return &ordering.Message{Data: data, MethodID: concurrentSlowServerMethodID, ID: in.ID}
+		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
-	s.srv.handlers[multicastMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(TimedMsg)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*TimedMsg)
 		srv.Multicast(req)
 		return nil
 	}
-	s.srv.handlers[concurrentMulticastMethodID] = func(in *ordering.Message) *ordering.Message {
-		req := new(TimedMsg)
-		err := unmarshaler.Unmarshal(in.GetData(), req)
-		if err != nil {
-			return nil
-		}
+	s.srv.handlers[concurrentMulticastMethodID] = func(in *gorumsMessage) *gorumsMessage {
+		req := in.message.(*TimedMsg)
 		srv.ConcurrentMulticast(req)
 		return nil
 	}
