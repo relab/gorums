@@ -12,6 +12,7 @@ import (
 	grpc "google.golang.org/grpc"
 	backoff "google.golang.org/grpc/backoff"
 	codes "google.golang.org/grpc/codes"
+	encoding "google.golang.org/grpc/encoding"
 	status "google.golang.org/grpc/status"
 	protowire "google.golang.org/protobuf/encoding/protowire"
 	proto "google.golang.org/protobuf/proto"
@@ -101,6 +102,12 @@ func (c *Configuration) SubError() <-chan GRPCError {
 	return c.errs
 }
 
+const gorumsContentType = "gorums"
+
+func init() {
+	encoding.RegisterCodec(newGorumsCodec())
+}
+
 type gorumsMessage struct {
 	metadata *ordering.Metadata
 	message  protoreflect.ProtoMessage
@@ -123,6 +130,14 @@ func newGorumsCodec() *gorumsCodec {
 	}
 }
 
+func (c gorumsCodec) Name() string {
+	return gorumsContentType
+}
+
+func (c gorumsCodec) String() string {
+	return gorumsContentType
+}
+
 func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *gorumsMessage:
@@ -134,17 +149,21 @@ func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	}
 }
 
+// gorumsMarshal marshals a metadata and a data message into a single byte slice.
 func (c gorumsCodec) gorumsMarshal(msg *gorumsMessage) (b []byte, err error) {
-	md, err := c.marshaler.Marshal(msg.metadata)
+	mdSize := c.marshaler.Size(msg.metadata)
+	b = protowire.AppendVarint(b, uint64(mdSize))
+	b, err = c.marshaler.MarshalAppend(b, msg.metadata)
 	if err != nil {
 		return nil, err
 	}
-	b = protowire.AppendBytes(b, md)
-	data, err := c.marshaler.Marshal(msg.message)
+
+	msgSize := c.marshaler.Size(msg.message)
+	b = protowire.AppendVarint(b, uint64(msgSize))
+	b, err = c.marshaler.MarshalAppend(b, msg.message)
 	if err != nil {
 		return nil, err
 	}
-	b = protowire.AppendBytes(b, data)
 	return b, nil
 }
 
@@ -159,6 +178,7 @@ func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
 	}
 }
 
+// gorumsUnmarshal unmarshals a metadata and a data message from a byte slice.
 func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
 	mdBuf, mdLen := protowire.ConsumeBytes(b)
 	err = c.unmarshaler.Unmarshal(mdBuf, msg.metadata)
@@ -279,6 +299,11 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	for _, opt := range opts {
 		opt(&m.opts)
 	}
+
+	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
+		grpc.CallContentSubtype(gorumsContentType),
+		grpc.ForceCodec(newGorumsCodec()),
+	))
 
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
@@ -778,7 +803,7 @@ func WithDialTimeout(timeout time.Duration) ManagerOption {
 // the Manager should use when initially connecting to each node in its pool.
 func WithGrpcDialOptions(opts ...grpc.DialOption) ManagerOption {
 	return func(o *managerOptions) {
-		o.grpcDialOpts = opts
+		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
 	}
 }
 
@@ -987,16 +1012,14 @@ type requestHandler func(*gorumsMessage) *gorumsMessage
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
-	opts     serverOptions
+	opts     *serverOptions
 	ordering.UnimplementedGorumsServer
 }
 
-func newOrderingServer(opts []ServerOption) *orderingServer {
+func newOrderingServer(opts *serverOptions) *orderingServer {
 	s := &orderingServer{
 		handlers: make(map[int32]requestHandler),
-	}
-	for _, opt := range opts {
-		opt(&s.opts)
+		opts:     opts,
 	}
 	return s
 }
@@ -1066,7 +1089,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 }
 
 type serverOptions struct {
-	buffer uint
+	buffer   uint
+	grpcOpts []grpc.ServerOption
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -1080,17 +1104,29 @@ func WithServerBufferSize(size uint) ServerOption {
 	}
 }
 
+func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
+	return func(o *serverOptions) {
+		o.grpcOpts = append(o.grpcOpts, opts...)
+	}
+}
+
 // GorumsServer serves all ordering based RPCs using registered handlers.
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
+	opts       serverOptions
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
 func NewGorumsServer(opts ...ServerOption) *GorumsServer {
+	var serverOpts serverOptions
+	for _, opt := range opts {
+		opt(&serverOpts)
+	}
+	serverOpts.grpcOpts = append(serverOpts.grpcOpts, grpc.CustomCodec(newGorumsCodec()))
 	s := &GorumsServer{
-		srv:        newOrderingServer(opts),
-		grpcServer: grpc.NewServer(),
+		srv:        newOrderingServer(&serverOpts),
+		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
