@@ -244,3 +244,13 @@ func exclusivelyOrdering(service *protogen.Service) bool {
 	}
 	return true
 }
+
+// nodeStreamMethods returns all Gorums methods that use ordering.
+func nodeStreamMethods(methods []*protogen.Method) (s []*protogen.Method) {
+	for _, method := range methods {
+		if hasMethodOption(method, nodeStreamCallTypes...) {
+			s = append(s, method)
+		}
+	}
+	return
+}
