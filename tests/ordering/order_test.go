@@ -54,6 +54,17 @@ func (s *testSrv) QCFuture(req *Request) *Response {
 	}
 }
 
+func (s *testSrv) AsyncHandler(req *Request, c chan<- *Response) {
+	response := &Response{
+		InOrder: s.isInOrder(req.GetNum()),
+	}
+	go func() {
+		// simulate some async action
+		time.Sleep(10 * time.Millisecond)
+		c <- response
+	}()
+}
+
 func (s *testSrv) UnaryRPC(req *Request) *Response {
 	return &Response{
 		InOrder: s.isInOrder(req.GetNum()),
@@ -81,6 +92,10 @@ func (q testQSpec) QCQF(_ *Request, replies []*Response) (*Response, bool) {
 }
 
 func (q testQSpec) QCFutureQF(_ *Request, replies []*Response) (*Response, bool) {
+	return q.qf(replies)
+}
+
+func (q testQSpec) AsyncHandlerQF(_ *Request, replies []*Response) (*Response, bool) {
 	return q.qf(replies)
 }
 
@@ -235,6 +250,55 @@ func TestQCFutureOrdering(t *testing.T) {
 	}
 	wg.Wait()
 	cancel()
+	man.Close()
+	for _, srv := range srvs {
+		srv.Stop()
+	}
+}
+
+func TestAsyncHandlerOrdering(t *testing.T) {
+	defer leakcheck.Check(t)
+	// servers setup
+	numServers := 4
+	srvs := make([]*GorumsServer, numServers)
+	addrs := make([]string, numServers)
+	for i := 0; i < numServers; i++ {
+		srv := NewGorumsServer()
+		srv.RegisterGorumsTestServer(&testSrv{})
+		lis, err := getListener()
+		if err != nil {
+			t.Fatalf("Failed to listen on port: %v", err)
+		}
+		addrs[i] = lis.Addr().String()
+		srvs[i] = srv
+		go srv.Serve(lis)
+	}
+
+	// client setup
+	man, err := NewManager(addrs,
+		WithGrpcDialOptions(grpc.WithInsecure()),
+		WithDialTimeout(10*time.Second),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+	c, err := man.NewConfiguration(man.NodeIDs(), &testQSpec{})
+	if err != nil {
+		t.Fatalf("Failed to create configuration: %v", err)
+	}
+
+	// begin test
+	numRuns := 1 << 16
+	for i := 1; i < numRuns; i++ {
+		resp, err := c.QC(context.Background(), &Request{Num: uint64(i)})
+		if err != nil {
+			t.Fatalf("QC error: %v", err)
+		}
+		if !resp.GetInOrder() {
+			t.Fatalf("Message received out of order.")
+		}
+	}
+
 	man.Close()
 	for _, srv := range srvs {
 		srv.Stop()
