@@ -127,6 +127,7 @@ func NewGorumsServer(opts ...ServerOption) *GorumsServer {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
+	serverOpts.grpcOpts = append(serverOpts.grpcOpts, grpc.CustomCodec(newGorumsCodec()))
 	s := &GorumsServer{
 		srv:        newOrderingServer(&serverOpts),
 		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
