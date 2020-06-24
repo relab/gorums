@@ -16,16 +16,14 @@ type requestHandler func(*gorumsMessage) *gorumsMessage
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
-	opts     serverOptions
+	opts     *serverOptions
 	ordering.UnimplementedGorumsServer
 }
 
-func newOrderingServer(opts []ServerOption) *orderingServer {
+func newOrderingServer(opts *serverOptions) *orderingServer {
 	s := &orderingServer{
 		handlers: make(map[int32]requestHandler),
-	}
-	for _, opt := range opts {
-		opt(&s.opts)
+		opts:     opts,
 	}
 	return s
 }
@@ -95,7 +93,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 }
 
 type serverOptions struct {
-	buffer uint
+	buffer   uint
+	grpcOpts []grpc.ServerOption
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -109,17 +108,28 @@ func WithServerBufferSize(size uint) ServerOption {
 	}
 }
 
+func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
+	return func(o *serverOptions) {
+		o.grpcOpts = append(o.grpcOpts, opts...)
+	}
+}
+
 // GorumsServer serves all ordering based RPCs using registered handlers.
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
+	opts       serverOptions
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
 func NewGorumsServer(opts ...ServerOption) *GorumsServer {
+	var serverOpts serverOptions
+	for _, opt := range opts {
+		opt(&serverOpts)
+	}
 	s := &GorumsServer{
-		srv:        newOrderingServer(opts),
-		grpcServer: grpc.NewServer(),
+		srv:        newOrderingServer(&serverOpts),
+		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s

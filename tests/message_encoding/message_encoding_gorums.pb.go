@@ -135,16 +135,19 @@ func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 }
 
 func (c gorumsCodec) gorumsMarshal(msg *gorumsMessage) (b []byte, err error) {
-	md, err := c.marshaler.Marshal(msg.metadata)
+	mdSize := c.marshaler.Size(msg.metadata)
+	b = protowire.AppendVarint(b, uint64(mdSize))
+	b, err = c.marshaler.MarshalAppend(b, msg.metadata)
 	if err != nil {
 		return nil, err
 	}
-	b = protowire.AppendBytes(b, md)
-	data, err := c.marshaler.Marshal(msg.message)
+
+	msgSize := c.marshaler.Size(msg.message)
+	b = protowire.AppendVarint(b, uint64(msgSize))
+	b, err = c.marshaler.MarshalAppend(b, msg.message)
 	if err != nil {
 		return nil, err
 	}
-	b = protowire.AppendBytes(b, data)
 	return b, nil
 }
 
