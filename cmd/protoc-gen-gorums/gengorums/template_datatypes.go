@@ -16,7 +16,7 @@ var orderingMethods = map[int32]methodInfo{
 	{{$genFile := .GenFile}}
 	{{$methods := methods .Services}}
 	{{range $index, $method := nodeStreamMethods $methods}}
-		{{$index}}: { concurrent: {{isConcurrent $method}}, requestType: new({{in $genFile $method}}).ProtoReflect(), responseType: new({{out $genFile $method}}).ProtoReflect() },
+		{{$index}}: { requestType: new({{in $genFile $method}}).ProtoReflect(), responseType: new({{out $genFile $method}}).ProtoReflect() },
 	{{- end}}
 }
 `

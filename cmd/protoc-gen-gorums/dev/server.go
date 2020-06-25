@@ -30,18 +30,8 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ordered := make(chan struct {
-		msg  *gorumsMessage
-		info methodInfo
-	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	handleMsg := func(req *gorumsMessage, info methodInfo) {
-		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			handler(req, finished)
-		}
-	}
 
 	go func() {
 		for {
@@ -57,33 +47,14 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req := <-ordered:
-				handleMsg(req.msg, req.info)
-			}
-		}
-	}()
-
 	for {
 		req := newGorumsMessage(false)
 		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
-
-		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
-			if info.concurrent {
-				go handleMsg(req, info)
-			} else {
-				ordered <- struct {
-					msg  *gorumsMessage
-					info methodInfo
-				}{req, info}
-			}
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
+			handler(req, finished)
 		}
 	}
 }

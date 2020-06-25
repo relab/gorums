@@ -17,7 +17,6 @@ import (
 )
 
 type methodInfo struct {
-	concurrent   bool
 	requestType  protoreflect.Message
 	responseType protoreflect.Message
 }

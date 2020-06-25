@@ -46,31 +46,20 @@ func (s *testSrv) isInOrder(num uint64) bool {
 	return false
 }
 
-func (s *testSrv) QC(req *Request) *Response {
-	return &Response{
+func (s *testSrv) QC(req *Request, c chan<- *Response) {
+	c <- &Response{
 		InOrder: s.isInOrder(req.GetNum()),
 	}
 }
 
-func (s *testSrv) QCFuture(req *Request) *Response {
-	return &Response{
+func (s *testSrv) QCFuture(req *Request, c chan<- *Response) {
+	c <- &Response{
 		InOrder: s.isInOrder(req.GetNum()),
 	}
 }
 
-func (s *testSrv) AsyncHandler(req *Request, c chan<- *Response) {
-	response := &Response{
-		InOrder: s.isInOrder(req.GetNum()),
-	}
-	go func() {
-		// simulate some async action
-		time.Sleep(1 * time.Millisecond)
-		c <- response
-	}()
-}
-
-func (s *testSrv) UnaryRPC(req *Request) *Response {
-	return &Response{
+func (s *testSrv) UnaryRPC(req *Request, c chan<- *Response) {
+	c <- &Response{
 		InOrder: s.isInOrder(req.GetNum()),
 	}
 }
@@ -182,37 +171,6 @@ func TestQCFutureOrdering(t *testing.T) {
 	numRuns := 1 << 16
 	for i := 1; i < numRuns; i++ {
 		promise := cfg.QCFuture(ctx, &Request{Num: uint64(i)})
-		wg.Add(1)
-		go func(promise *FutureResponse) {
-			defer wg.Done()
-			resp, err := promise.Get()
-			if err != nil {
-				if qcError, ok := err.(QuorumCallError); ok {
-					if qcError.Reason == context.Canceled.Error() {
-						return
-					}
-				}
-				t.Errorf("QC error: %v", err)
-			}
-			if !resp.GetInOrder() {
-				t.Errorf("Message received out of order.")
-			}
-		}(promise)
-	}
-	wg.Wait()
-	cancel()
-}
-
-func TestAsyncHandlerOrdering(t *testing.T) {
-	defer leakcheck.Check(t)
-	cfg, teardown := setup(t, 4)
-	defer teardown()
-	ctx, cancel := context.WithCancel(context.Background())
-	// begin test
-	var wg sync.WaitGroup
-	numRuns := 1 << 16
-	for i := 1; i < numRuns; i++ {
-		promise := cfg.AsyncHandler(ctx, &Request{Num: uint64(i)})
 		wg.Add(1)
 		go func(promise *FutureResponse) {
 			defer wg.Done()

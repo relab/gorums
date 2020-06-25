@@ -18,13 +18,6 @@ service GorumsTest {
     option (gorums.async) = true;
   }
 
-  rpc AsyncHandler(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-    option (gorums.async) = true;
-    option (gorums.async_handler) = true;
-  }
-
   rpc UnaryRPC(Request) returns (Response) { option (gorums.ordered) = true; }
 }
 

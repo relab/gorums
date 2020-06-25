@@ -13,22 +13,17 @@ type ZorumsService interface {
 	Multicast2(*Request)
 	Multicast3(*Request)
 	Multicast4(*empty.Empty)
-	MulticastConcurrent(*Request)
-	OrderingQC(*Request) *Response
-	OrderingPerNodeArg(*Request) *Response
-	OrderingCustomReturnType(*Request) *Response
-	OrderingCombo(*Request) *Response
-	OrderingConcurrent(*Request) *Response
-	OrderingUnaryRPC(*Request) *Response
-	OrderingUnaryRPCConcurrent(*Request) *Response
-	OrderingFuture(*Request) *Response
-	OrderingFuturePerNodeArg(*Request) *Response
-	OrderingFutureCustomReturnType(*Request) *Response
-	OrderingFutureConcurrent(*Request) *Response
-	OrderingFutureCombo(*Request) *Response
+	OrderingQC(*Request, chan<- *Response)
+	OrderingPerNodeArg(*Request, chan<- *Response)
+	OrderingCustomReturnType(*Request, chan<- *Response)
+	OrderingCombo(*Request, chan<- *Response)
+	OrderingUnaryRPC(*Request, chan<- *Response)
+	OrderingFuture(*Request, chan<- *Response)
+	OrderingFuturePerNodeArg(*Request, chan<- *Response)
+	OrderingFutureCustomReturnType(*Request, chan<- *Response)
+	OrderingFutureCombo(*Request, chan<- *Response)
 	Unicast(*Request)
 	Unicast2(*Request)
-	UnicastConcurrent(*Request)
 }
 
 func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
@@ -52,69 +47,86 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 		req := in.message.(*empty.Empty)
 		srv.Multicast4(req)
 	}
-	s.srv.handlers[multicastConcurrentMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		srv.MulticastConcurrent(req)
-	}
 	s.srv.handlers[orderingQCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingQC(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingQC(req, c)
 	}
 	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingPerNodeArg(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingPerNodeArg(req, c)
 	}
 	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingCustomReturnType(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingCustomReturnType(req, c)
 	}
 	s.srv.handlers[orderingComboMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingCombo(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingConcurrentMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		resp := srv.OrderingConcurrent(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingCombo(req, c)
 	}
 	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingUnaryRPC(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingUnaryRPCConcurrentMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		resp := srv.OrderingUnaryRPCConcurrent(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingUnaryRPC(req, c)
 	}
 	s.srv.handlers[orderingFutureMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingFuture(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingFuture(req, c)
 	}
 	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingFuturePerNodeArg(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingFuturePerNodeArg(req, c)
 	}
 	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingFutureCustomReturnType(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingFutureConcurrentMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		resp := srv.OrderingFutureConcurrent(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingFutureCustomReturnType(req, c)
 	}
 	s.srv.handlers[orderingFutureComboMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		resp := srv.OrderingFutureCombo(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingFutureCombo(req, c)
 	}
 	s.srv.handlers[unicastMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
@@ -123,9 +135,5 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[unicast2MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.Unicast2(req)
-	}
-	s.srv.handlers[unicastConcurrentMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		srv.UnicastConcurrent(req)
 	}
 }
