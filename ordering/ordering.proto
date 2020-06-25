@@ -3,10 +3,15 @@ syntax = "proto3";
 package ordering;
 option go_package = "github.com/relab/gorums/ordering";
 
-service Gorums { rpc NodeStream(stream Message) returns (stream Message); }
+service Gorums {
+  // NodeStream is a stream that connects a client to a Node.
+  // The messages that are sent on the stream contain both Metadata
+  // and an application-specific message.
+  rpc NodeStream(stream Metadata) returns (stream Metadata);
+}
 
-message Message {}
-
+// Metadata is sent together with application-specific message types,
+// and contains information necessary for Gorums to handle the messages.
 message Metadata {
   uint64 MessageID = 1;
   int32 MethodID = 2;
