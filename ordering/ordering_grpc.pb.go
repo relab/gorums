@@ -17,6 +17,9 @@ const _ = grpc.SupportPackageIsVersion6
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type GorumsClient interface {
+	// NodeStream is a stream that connects a client to a Node.
+	// The messages that are sent on the stream contain both Metadata
+	// and an application-specific message.
 	NodeStream(ctx context.Context, opts ...grpc.CallOption) (Gorums_NodeStreamClient, error)
 }
 
@@ -38,8 +41,8 @@ func (c *gorumsClient) NodeStream(ctx context.Context, opts ...grpc.CallOption) 
 }
 
 type Gorums_NodeStreamClient interface {
-	Send(*Message) error
-	Recv() (*Message, error)
+	Send(*Metadata) error
+	Recv() (*Metadata, error)
 	grpc.ClientStream
 }
 
@@ -47,12 +50,12 @@ type gorumsNodeStreamClient struct {
 	grpc.ClientStream
 }
 
-func (x *gorumsNodeStreamClient) Send(m *Message) error {
+func (x *gorumsNodeStreamClient) Send(m *Metadata) error {
 	return x.ClientStream.SendMsg(m)
 }
 
-func (x *gorumsNodeStreamClient) Recv() (*Message, error) {
-	m := new(Message)
+func (x *gorumsNodeStreamClient) Recv() (*Metadata, error) {
+	m := new(Metadata)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
@@ -63,6 +66,9 @@ func (x *gorumsNodeStreamClient) Recv() (*Message, error) {
 // All implementations must embed UnimplementedGorumsServer
 // for forward compatibility
 type GorumsServer interface {
+	// NodeStream is a stream that connects a client to a Node.
+	// The messages that are sent on the stream contain both Metadata
+	// and an application-specific message.
 	NodeStream(Gorums_NodeStreamServer) error
 	mustEmbedUnimplementedGorumsServer()
 }
@@ -85,8 +91,8 @@ func _Gorums_NodeStream_Handler(srv interface{}, stream grpc.ServerStream) error
 }
 
 type Gorums_NodeStreamServer interface {
-	Send(*Message) error
-	Recv() (*Message, error)
+	Send(*Metadata) error
+	Recv() (*Metadata, error)
 	grpc.ServerStream
 }
 
@@ -94,12 +100,12 @@ type gorumsNodeStreamServer struct {
 	grpc.ServerStream
 }
 
-func (x *gorumsNodeStreamServer) Send(m *Message) error {
+func (x *gorumsNodeStreamServer) Send(m *Metadata) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func (x *gorumsNodeStreamServer) Recv() (*Message, error) {
-	m := new(Message)
+func (x *gorumsNodeStreamServer) Recv() (*Metadata, error) {
+	m := new(Metadata)
 	if err := x.ServerStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
