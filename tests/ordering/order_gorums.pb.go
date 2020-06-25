@@ -1365,79 +1365,76 @@ func (c *Configuration) qCFutureRecv(ctx context.Context, in *Request, msgID uin
 	}
 }
 
-// AsyncHandler is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-func (c *Configuration) AsyncHandler(ctx context.Context, in *Request) (resp *Response, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "AsyncHandler")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
+// AsyncHandler asynchronously invokes a quorum call on configuration c
+// and returns a FutureResponse, which can be used to inspect the quorum call
+// reply and error when available.
+func (c *Configuration) AsyncHandler(ctx context.Context, in *Request) *FutureResponse {
+	fut := &FutureResponse{
+		NodeIDs: make([]uint32, 0, c.n),
+		c:       make(chan struct{}, 1),
 	}
-
 	// get the ID which will be used to return the correct responses for a request
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
-	// remove the replies channel when we are done
-	defer c.mgr.deleteChan(msgID)
+	expected := c.n
 
 	metadata := &ordering.Metadata{
 		MessageID: msgID,
 		MethodID:  asyncHandlerMethodID,
 	}
 	msg := &gorumsMessage{metadata: metadata, message: in}
+
 	// push the message to the nodes
-	expected := c.n
 	for _, n := range c.nodes {
 		n.sendQ <- msg
 	}
 
+	go c.asyncHandlerRecv(ctx, in, msgID, expected, replyChan, fut)
+
+	return fut
+}
+
+func (c *Configuration) asyncHandlerRecv(ctx context.Context, in *Request, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureResponse) {
+	defer close(fut.c)
+
+	if fut.err != nil {
+		return
+	}
+
+	defer c.mgr.deleteChan(msgID)
+
 	var (
-		replyValues = make([]*Response, 0, expected)
+		replyValues = make([]*Response, 0, c.n)
+		reply       *Response
 		errs        []GRPCError
 		quorum      bool
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
+			fut.NodeIDs = append(fut.NodeIDs, r.nid)
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			reply := r.reply.(*Response)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.AsyncHandlerQF(in, replyValues); quorum {
-				return resp, nil
+			data := r.reply.(*Response)
+			replyValues = append(replyValues, data)
+			if reply, quorum = c.qspec.AsyncHandlerQF(in, replyValues); quorum {
+				fut.Response, fut.err = reply, nil
+				return
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return
 		}
-
 		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+			return
 		}
 	}
 }
@@ -1491,11 +1488,46 @@ type QuorumSpec interface {
 	QCFutureQF(in *Request, replies []*Response) (*Response, bool)
 
 	// AsyncHandlerQF is the quorum function for the AsyncHandler
-	// ordered quorum call method. The in parameter is the request object
+	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the AsyncHandler method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
 	AsyncHandlerQF(in *Request, replies []*Response) (*Response, bool)
+}
+
+// GorumsTest is the server-side API for the GorumsTest Service
+type GorumsTest interface {
+	QC(*Request) *Response
+	QCFuture(*Request) *Response
+	AsyncHandler(*Request, chan<- *Response)
+	UnaryRPC(*Request) *Response
+}
+
+func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
+	s.srv.handlers[qCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		resp := srv.QC(req)
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+	}
+	s.srv.handlers[qCFutureMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		resp := srv.QCFuture(req)
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+	}
+	s.srv.handlers[asyncHandlerMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		srv.AsyncHandler(req, c)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+	}
+	s.srv.handlers[unaryRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		resp := srv.UnaryRPC(req)
+		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+	}
 }
 
 const hasOrderingMethods = true
@@ -1542,40 +1574,5 @@ func (f *FutureResponse) Done() bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// GorumsTest is the server-side API for the GorumsTest Service
-type GorumsTest interface {
-	QC(*Request) *Response
-	QCFuture(*Request) *Response
-	AsyncHandler(*Request, chan<- *Response)
-	UnaryRPC(*Request) *Response
-}
-
-func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
-	s.srv.handlers[qCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		resp := srv.QC(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[qCFutureMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		resp := srv.QCFuture(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[asyncHandlerMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		c := make(chan *Response)
-		srv.AsyncHandler(req, c)
-		go func() {
-			resp := <-c
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		}()
-	}
-	s.srv.handlers[unaryRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
-		req := in.message.(*Request)
-		resp := srv.UnaryRPC(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 }
