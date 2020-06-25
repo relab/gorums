@@ -88,11 +88,6 @@ service ZorumsService {
   rpc Multicast4(google.protobuf.Empty) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;
   }
-  // MutlicastConcurrent uses a concurrent server-side handler
-  rpc MulticastConcurrent(Request) returns (Response) {
-    option (gorums.multicast) = true;
-    option (gorums.concurrent) = true;
-  }
 
   // ---------------------------------------------------------------
   // Future variants
@@ -231,21 +226,9 @@ service ZorumsService {
     option (gorums.per_node_arg) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
-  rpc OrderingConcurrent(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-    option (gorums.concurrent) = true;
-  }
-
   // OrderingUnaryRPC is testing that we can create ordered Unary RPCs
   rpc OrderingUnaryRPC(Request) returns (Response) {
     option (gorums.ordered) = true;
-  }
-  // OrderingUnaryRPC is testing that we can create ordered Unary RPCs with
-  // concurrent handlers
-  rpc OrderingUnaryRPCConcurrent(Request) returns (Response) {
-    option (gorums.ordered) = true;
-    option (gorums.concurrent) = true;
   }
 
   // ---------------------------------------------------------------
@@ -269,12 +252,7 @@ service ZorumsService {
     option (gorums.ordered) = true;
     option (gorums.custom_return_type) = "MyResponse";
   }
-  rpc OrderingFutureConcurrent(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-    option (gorums.ordered) = true;
-    option (gorums.concurrent) = true;
-  }
+
   rpc OrderingFutureCombo(Request) returns (Response) {
     option (gorums.quorumcall) = true;
     option (gorums.async) = true;
@@ -291,10 +269,5 @@ service ZorumsService {
 
   rpc Unicast2(Request) returns (google.protobuf.Empty) {
     option (gorums.unicast) = true;
-  }
-
-  rpc UnicastConcurrent(Request) returns (google.protobuf.Empty) {
-    option (gorums.unicast) = true;
-    option (gorums.concurrent) = true;
   }
 }

@@ -212,13 +212,6 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Request'.
 	OrderingComboQF(in *Request, replies []*Response) (*MyResponse, bool)
 
-	// OrderingConcurrentQF is the quorum function for the OrderingConcurrent
-	// ordered quorum call method. The in parameter is the request object
-	// supplied to the OrderingConcurrent method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Request'.
-	OrderingConcurrentQF(in *Request, replies []*Response) (*Response, bool)
-
 	// OrderingFutureQF is the quorum function for the OrderingFuture
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFuture method at call time, and may or may not
@@ -239,13 +232,6 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
 	OrderingFutureCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
-
-	// OrderingFutureConcurrentQF is the quorum function for the OrderingFutureConcurrent
-	// asynchronous ordered quorum call method. The in parameter is the request object
-	// supplied to the OrderingFutureConcurrent method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Request'.
-	OrderingFutureConcurrentQF(in *Request, replies []*Response) (*Response, bool)
 
 	// OrderingFutureComboQF is the quorum function for the OrderingFutureCombo
 	// asynchronous ordered quorum call method. The in parameter is the request object

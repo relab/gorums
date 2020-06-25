@@ -14,46 +14,36 @@ const multicastPerNodeArgMethodID int32 = 1
 const multicast2MethodID int32 = 2
 const multicast3MethodID int32 = 3
 const multicast4MethodID int32 = 4
-const multicastConcurrentMethodID int32 = 5
-const orderingQCMethodID int32 = 6
-const orderingPerNodeArgMethodID int32 = 7
-const orderingCustomReturnTypeMethodID int32 = 8
-const orderingComboMethodID int32 = 9
-const orderingConcurrentMethodID int32 = 10
-const orderingUnaryRPCMethodID int32 = 11
-const orderingUnaryRPCConcurrentMethodID int32 = 12
-const orderingFutureMethodID int32 = 13
-const orderingFuturePerNodeArgMethodID int32 = 14
-const orderingFutureCustomReturnTypeMethodID int32 = 15
-const orderingFutureConcurrentMethodID int32 = 16
-const orderingFutureComboMethodID int32 = 17
-const unicastMethodID int32 = 18
-const unicast2MethodID int32 = 19
-const unicastConcurrentMethodID int32 = 20
+const orderingQCMethodID int32 = 5
+const orderingPerNodeArgMethodID int32 = 6
+const orderingCustomReturnTypeMethodID int32 = 7
+const orderingComboMethodID int32 = 8
+const orderingUnaryRPCMethodID int32 = 9
+const orderingFutureMethodID int32 = 10
+const orderingFuturePerNodeArgMethodID int32 = 11
+const orderingFutureCustomReturnTypeMethodID int32 = 12
+const orderingFutureComboMethodID int32 = 13
+const unicastMethodID int32 = 14
+const unicast2MethodID int32 = 15
 
 var orderingMethods = map[int32]methodInfo{
 
-	0:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	1:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	2:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	3:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	4:  {concurrent: false, requestType: new(empty.Empty).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	5:  {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	6:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	7:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	8:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	9:  {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	10: {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	11: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	12: {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	13: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	14: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	15: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	16: {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	17: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	18: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	19: {concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	20: {concurrent: true, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	0:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	1:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	2:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	3:  {requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	4:  {requestType: new(empty.Empty).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	5:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	6:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	7:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	8:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	9:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	10: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	11: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	12: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	13: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	14: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	15: {requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalEmpty struct {

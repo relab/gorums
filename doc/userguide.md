@@ -122,8 +122,8 @@ Our server side storage interface:
 
 ```go
 type Storage interface {
-  Read(*ReadRequest) *State
-  Write(*State) *WriteResponse
+  Read(*ReadRequest, chan<- *State)
+  Write(*State, chan<- *WriteResponse)
 }
 ```
 
@@ -138,22 +138,23 @@ type storageSrv struct {
   state *State
 }
 
-func (srv *storageSrv) Read(req *ReadRequest) *State {
+func (srv *storageSrv) Read(req *ReadRequest, out chan<- *State) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   fmt.Println("Got Read()")
-  return srv.state
+  out <- srv.state
 }
 
-func (srv *storageSrv) Write(req *State) *WriteResponse {
+func (srv *storageSrv) Write(req *State, out chan<- *WriteResponse) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if srv.state.Timestamp < req.Timestamp {
     srv.state = req
     fmt.Println("Got Write(", req.Value, ")")
-    return &WriteResponse{New: true}
+    out <- &WriteResponse{New: true}
+    return
   }
-  return &WriteResponse{New: false}
+  out <- &WriteResponse{New: false}
 }
 ```
 

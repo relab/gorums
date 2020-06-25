@@ -111,12 +111,6 @@ var funcMap = template.FuncMap{
 		}
 		return
 	},
-	"isConcurrent": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Concurrent)
-	},
-	"hasAsyncHandler": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_AsyncHandler)
-	},
 	"out":                   out,
 	"outType":               outType,
 	"internalOut":           internalOut,

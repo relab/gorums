@@ -31,17 +31,3 @@ func (n *Node) Unicast2(in *Request) error {
 	n.sendQ <- msg
 	return nil
 }
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ empty.Empty
-
-func (n *Node) UnicastConcurrent(in *Request) error {
-	msgID := n.nextMsgID()
-	metadata := &ordering.Metadata{
-		MessageID: msgID,
-		MethodID:  unicastConcurrentMethodID,
-	}
-	msg := &gorumsMessage{metadata: metadata, message: in}
-	n.sendQ <- msg
-	return nil
-}

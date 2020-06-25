@@ -9,10 +9,8 @@ type {{$service}} interface {
 	{{- range nodeStreamMethods .Methods}}
 	{{- if isOneway .}}
 	{{.GoName}}(*{{in $genFile .}})
-	{{- else if hasAsyncHandler .}}
+	{{- else}}
 	{{.GoName}}(*{{in $genFile .}}, chan<- *{{out $genFile .}})
-	{{- else }}
-	{{.GoName}}(*{{in $genFile .}}) *{{out $genFile .}}
 	{{- end}}
 	{{- end}}
 }
@@ -27,20 +25,15 @@ func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 	{{- range nodeStreamMethods .Methods}}
 	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *gorumsMessage ,{{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *gorumsMessage) {
 		req := in.message.(*{{in $genFile .}})
-		{{- if hasAsyncHandler .}}
+		{{- if isOneway .}}
+		srv.{{.GoName}}(req)
+		{{- else }}
 		c := make(chan *{{out $genFile .}})
-		srv.{{.GoName}}(req, c)
 		go func() {
 			resp := <-c
 			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 		}()
-		{{- else }}
-		{{- if isOneway .}}
-		srv.{{.GoName}}(req)
-		{{- else}}
-		resp := srv.{{.GoName}}(req)
-		finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		{{- end}}
+		srv.{{.GoName}}(req, c)
 		{{- end}}
 	}
 	{{- end}}

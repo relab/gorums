@@ -19,6 +19,7 @@ import (
 	proto "google.golang.org/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	fnv "hash/fnv"
+	io "io"
 	log "log"
 	math "math"
 	rand "math/rand"
@@ -517,7 +518,7 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	h := fnv.New32a()
 	for _, id := range uniqueIDs {
-		_ = binary.Write(h, binary.LittleEndian, id)
+		binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
@@ -849,8 +850,6 @@ func WithSendBufferSize(size uint) ManagerOption {
 }
 
 type methodInfo struct {
-	oneway       bool
-	concurrent   bool
 	requestType  protoreflect.Message
 	responseType protoreflect.Message
 }
@@ -1008,7 +1007,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage) *gorumsMessage
+type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -1026,22 +1025,8 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ordered := make(chan struct {
-		msg  *gorumsMessage
-		info methodInfo
-	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	handleMsg := func(req *gorumsMessage, info methodInfo) {
-		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			if info.oneway {
-				handler(req)
-			} else {
-				finished <- handler(req)
-			}
-		}
-	}
 
 	go func() {
 		for {
@@ -1057,33 +1042,14 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req := <-ordered:
-				handleMsg(req.msg, req.info)
-			}
-		}
-	}()
-
 	for {
 		req := newGorumsMessage(false)
 		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
-
-		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
-			if info.concurrent {
-				go handleMsg(req, info)
-			} else {
-				ordered <- struct {
-					msg  *gorumsMessage
-					info methodInfo
-				}{req, info}
-			}
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
+			handler(req, finished)
 		}
 	}
 }
@@ -1156,11 +1122,16 @@ type firstLine struct {
 	cid      uint32
 }
 
-func (f firstLine) String() string {
+func (f *firstLine) String() string {
+	var line bytes.Buffer
+	io.WriteString(&line, "QC: to config")
+	fmt.Fprintf(&line, "%v deadline:", f.cid)
 	if f.deadline != 0 {
-		return fmt.Sprintf("QC: to config%d deadline: %d", f.cid, f.deadline)
+		fmt.Fprint(&line, f.deadline)
+	} else {
+		io.WriteString(&line, "none")
 	}
-	return fmt.Sprintf("QC: to config%d deadline: none", f.cid)
+	return line.String()
 }
 
 type payload struct {
@@ -1183,10 +1154,14 @@ type qcresult struct {
 }
 
 func (q qcresult) String() string {
-	if q.err == nil {
-		return fmt.Sprintf("recv QC reply: ids: %v, reply: %v", q.ids, q.reply)
+	var out bytes.Buffer
+	io.WriteString(&out, "recv QC reply: ")
+	fmt.Fprintf(&out, "ids: %v, ", q.ids)
+	fmt.Fprintf(&out, "reply: %v ", q.reply)
+	if q.err != nil {
+		fmt.Fprintf(&out, ", error: %v", q.err)
 	}
-	return fmt.Sprintf("recv QC reply: ids: %v, reply: %v, error: %v", q.ids, q.reply, q.err)
+	return out.String()
 }
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
@@ -1299,24 +1274,6 @@ func (c *Configuration) Multicast(in *TimedMsg) error {
 	metadata := &ordering.Metadata{
 		MessageID: msgID,
 		MethodID:  multicastMethodID,
-	}
-	msg := &gorumsMessage{metadata: metadata, message: in}
-	for _, n := range c.nodes {
-		n.sendQ <- msg
-	}
-	return nil
-}
-
-// Reference imports to suppress errors if they are not otherwise used.
-var _ empty.Empty
-
-// ConcurrentMulticast is a one-way multicast call on all nodes in configuration c,
-// with the same in argument. The call is asynchronous and has no return value.
-func (c *Configuration) ConcurrentMulticast(in *TimedMsg) error {
-	msgID := c.mgr.nextMsgID()
-	metadata := &ordering.Metadata{
-		MessageID: msgID,
-		MethodID:  concurrentMulticastMethodID,
 	}
 	msg := &gorumsMessage{metadata: metadata, message: in}
 	for _, n := range c.nodes {
@@ -1725,83 +1682,6 @@ func (c *Configuration) OrderedQC(ctx context.Context, in *Echo) (resp *Echo, er
 	}
 }
 
-// ConcurrentQC is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-func (c *Configuration) ConcurrentQC(ctx context.Context, in *Echo) (resp *Echo, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ConcurrentQC")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	// get the ID which will be used to return the correct responses for a request
-	msgID := c.mgr.nextMsgID()
-
-	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
-
-	// remove the replies channel when we are done
-	defer c.mgr.deleteChan(msgID)
-
-	metadata := &ordering.Metadata{
-		MessageID: msgID,
-		MethodID:  concurrentQCMethodID,
-	}
-	msg := &gorumsMessage{metadata: metadata, message: in}
-	// push the message to the nodes
-	expected := c.n
-	for _, n := range c.nodes {
-		n.sendQ <- msg
-	}
-
-	var (
-		replyValues = make([]*Echo, 0, expected)
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replies:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			reply := r.reply.(*Echo)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.ConcurrentQCQF(in, replyValues); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-		}
-
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
-		}
-	}
-}
-
 // OrderedAsync asynchronously invokes a quorum call on configuration c
 // and returns a FutureEcho, which can be used to inspect the quorum call
 // reply and error when available.
@@ -1862,80 +1742,6 @@ func (c *Configuration) orderedAsyncRecv(ctx context.Context, in *Echo, msgID ui
 			data := r.reply.(*Echo)
 			replyValues = append(replyValues, data)
 			if reply, quorum = c.qspec.OrderedAsyncQF(in, replyValues); quorum {
-				fut.Echo, fut.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			fut.Echo, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-			return
-		}
-		if len(errs)+len(replyValues) == expected {
-			fut.Echo, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
-			return
-		}
-	}
-}
-
-// ConcurrentAsync asynchronously invokes a quorum call on configuration c
-// and returns a FutureEcho, which can be used to inspect the quorum call
-// reply and error when available.
-func (c *Configuration) ConcurrentAsync(ctx context.Context, in *Echo) *FutureEcho {
-	fut := &FutureEcho{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	// get the ID which will be used to return the correct responses for a request
-	msgID := c.mgr.nextMsgID()
-
-	// set up a channel to collect replies
-	replyChan := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replyChan)
-
-	expected := c.n
-
-	metadata := &ordering.Metadata{
-		MessageID: msgID,
-		MethodID:  concurrentAsyncMethodID,
-	}
-	msg := &gorumsMessage{metadata: metadata, message: in}
-
-	// push the message to the nodes
-	for _, n := range c.nodes {
-		n.sendQ <- msg
-	}
-
-	go c.concurrentAsyncRecv(ctx, in, msgID, expected, replyChan, fut)
-
-	return fut
-}
-
-func (c *Configuration) concurrentAsyncRecv(ctx context.Context, in *Echo, msgID uint64, expected int, replyChan chan *orderingResult, fut *FutureEcho) {
-	defer close(fut.c)
-
-	if fut.err != nil {
-		return
-	}
-
-	defer c.mgr.deleteChan(msgID)
-
-	var (
-		replyValues = make([]*Echo, 0, c.n)
-		reply       *Echo
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			fut.NodeIDs = append(fut.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-			data := r.reply.(*Echo)
-			replyValues = append(replyValues, data)
-			if reply, quorum = c.qspec.ConcurrentAsyncQF(in, replyValues); quorum {
 				fut.Echo, fut.err = reply, nil
 				return
 			}
@@ -2027,83 +1833,6 @@ func (c *Configuration) OrderedSlowServer(ctx context.Context, in *Echo) (resp *
 	}
 }
 
-// ConcurrentSlowServer is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-func (c *Configuration) ConcurrentSlowServer(ctx context.Context, in *Echo) (resp *Echo, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "ConcurrentSlowServer")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	// get the ID which will be used to return the correct responses for a request
-	msgID := c.mgr.nextMsgID()
-
-	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
-
-	// remove the replies channel when we are done
-	defer c.mgr.deleteChan(msgID)
-
-	metadata := &ordering.Metadata{
-		MessageID: msgID,
-		MethodID:  concurrentSlowServerMethodID,
-	}
-	msg := &gorumsMessage{metadata: metadata, message: in}
-	// push the message to the nodes
-	expected := c.n
-	for _, n := range c.nodes {
-		n.sendQ <- msg
-	}
-
-	var (
-		replyValues = make([]*Echo, 0, expected)
-		errs        []GRPCError
-		quorum      bool
-	)
-
-	for {
-		select {
-		case r := <-replies:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			reply := r.reply.(*Echo)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.ConcurrentSlowServerQF(in, replyValues); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
-		}
-
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
-		}
-	}
-}
-
 // QuorumSpec is the interface of quorum functions for Benchmark.
 type QuorumSpec interface {
 
@@ -2149,13 +1878,6 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Echo'.
 	OrderedQCQF(in *Echo, replies []*Echo) (*Echo, bool)
 
-	// ConcurrentQCQF is the quorum function for the ConcurrentQC
-	// ordered quorum call method. The in parameter is the request object
-	// supplied to the ConcurrentQC method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Echo'.
-	ConcurrentQCQF(in *Echo, replies []*Echo) (*Echo, bool)
-
 	// UnorderedAsyncQF is the quorum function for the UnorderedAsync
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the UnorderedAsync method at call time, and may or may not
@@ -2170,13 +1892,6 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Echo'.
 	OrderedAsyncQF(in *Echo, replies []*Echo) (*Echo, bool)
 
-	// ConcurrentAsyncQF is the quorum function for the ConcurrentAsync
-	// asynchronous ordered quorum call method. The in parameter is the request object
-	// supplied to the ConcurrentAsync method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Echo'.
-	ConcurrentAsyncQF(in *Echo, replies []*Echo) (*Echo, bool)
-
 	// UnorderedSlowServerQF is the quorum function for the UnorderedSlowServer
 	// quorum call method. The in parameter is the request object
 	// supplied to the UnorderedSlowServer method at call time, and may or may not
@@ -2190,13 +1905,6 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Echo'.
 	OrderedSlowServerQF(in *Echo, replies []*Echo) (*Echo, bool)
-
-	// ConcurrentSlowServerQF is the quorum function for the ConcurrentSlowServer
-	// ordered quorum call method. The in parameter is the request object
-	// supplied to the ConcurrentSlowServer method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Echo'.
-	ConcurrentSlowServerQF(in *Echo, replies []*Echo) (*Echo, bool)
 }
 
 // benchmarks
@@ -2344,6 +2052,88 @@ func (n *Node) UnorderedSlowServer(ctx context.Context, in *Echo, replyChan chan
 	replyChan <- internalEcho{n.id, reply, err}
 }
 
+// Benchmark is the server-side API for the Benchmark Service
+type Benchmark interface {
+	StartServerBenchmark(*StartRequest, chan<- *StartResponse)
+	StopServerBenchmark(*StopRequest, chan<- *Result)
+	StartBenchmark(*StartRequest, chan<- *StartResponse)
+	StopBenchmark(*StopRequest, chan<- *MemoryStat)
+	OrderedQC(*Echo, chan<- *Echo)
+	OrderedAsync(*Echo, chan<- *Echo)
+	OrderedSlowServer(*Echo, chan<- *Echo)
+	Multicast(*TimedMsg)
+}
+
+func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
+	s.srv.handlers[startServerBenchmarkMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*StartRequest)
+		c := make(chan *StartResponse)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.StartServerBenchmark(req, c)
+	}
+	s.srv.handlers[stopServerBenchmarkMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*StopRequest)
+		c := make(chan *Result)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.StopServerBenchmark(req, c)
+	}
+	s.srv.handlers[startBenchmarkMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*StartRequest)
+		c := make(chan *StartResponse)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.StartBenchmark(req, c)
+	}
+	s.srv.handlers[stopBenchmarkMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*StopRequest)
+		c := make(chan *MemoryStat)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.StopBenchmark(req, c)
+	}
+	s.srv.handlers[orderedQCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Echo)
+		c := make(chan *Echo)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderedQC(req, c)
+	}
+	s.srv.handlers[orderedAsyncMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Echo)
+		c := make(chan *Echo)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderedAsync(req, c)
+	}
+	s.srv.handlers[orderedSlowServerMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Echo)
+		c := make(chan *Echo)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderedSlowServer(req, c)
+	}
+	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+		req := in.message.(*TimedMsg)
+		srv.Multicast(req)
+	}
+}
+
 const hasOrderingMethods = true
 
 const startServerBenchmarkMethodID int32 = 0
@@ -2351,28 +2141,20 @@ const stopServerBenchmarkMethodID int32 = 1
 const startBenchmarkMethodID int32 = 2
 const stopBenchmarkMethodID int32 = 3
 const orderedQCMethodID int32 = 4
-const concurrentQCMethodID int32 = 5
-const orderedAsyncMethodID int32 = 6
-const concurrentAsyncMethodID int32 = 7
-const orderedSlowServerMethodID int32 = 8
-const concurrentSlowServerMethodID int32 = 9
-const multicastMethodID int32 = 10
-const concurrentMulticastMethodID int32 = 11
+const orderedAsyncMethodID int32 = 5
+const orderedSlowServerMethodID int32 = 6
+const multicastMethodID int32 = 7
 
 var orderingMethods = map[int32]methodInfo{
 
-	0:  {oneway: false, concurrent: false, requestType: new(StartRequest).ProtoReflect(), responseType: new(StartResponse).ProtoReflect()},
-	1:  {oneway: false, concurrent: false, requestType: new(StopRequest).ProtoReflect(), responseType: new(Result).ProtoReflect()},
-	2:  {oneway: false, concurrent: false, requestType: new(StartRequest).ProtoReflect(), responseType: new(StartResponse).ProtoReflect()},
-	3:  {oneway: false, concurrent: false, requestType: new(StopRequest).ProtoReflect(), responseType: new(MemoryStat).ProtoReflect()},
-	4:  {oneway: false, concurrent: false, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
-	5:  {oneway: false, concurrent: true, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
-	6:  {oneway: false, concurrent: false, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
-	7:  {oneway: false, concurrent: true, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
-	8:  {oneway: false, concurrent: false, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
-	9:  {oneway: false, concurrent: true, requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
-	10: {oneway: true, concurrent: false, requestType: new(TimedMsg).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	11: {oneway: true, concurrent: true, requestType: new(TimedMsg).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	0: {requestType: new(StartRequest).ProtoReflect(), responseType: new(StartResponse).ProtoReflect()},
+	1: {requestType: new(StopRequest).ProtoReflect(), responseType: new(Result).ProtoReflect()},
+	2: {requestType: new(StartRequest).ProtoReflect(), responseType: new(StartResponse).ProtoReflect()},
+	3: {requestType: new(StopRequest).ProtoReflect(), responseType: new(MemoryStat).ProtoReflect()},
+	4: {requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	5: {requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	6: {requestType: new(Echo).ProtoReflect(), responseType: new(Echo).ProtoReflect()},
+	7: {requestType: new(TimedMsg).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalEcho struct {
@@ -2422,84 +2204,5 @@ func (f *FutureEcho) Done() bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// Benchmark is the server-side API for the Benchmark Service
-type Benchmark interface {
-	StartServerBenchmark(*StartRequest) *StartResponse
-	StopServerBenchmark(*StopRequest) *Result
-	StartBenchmark(*StartRequest) *StartResponse
-	StopBenchmark(*StopRequest) *MemoryStat
-	OrderedQC(*Echo) *Echo
-	ConcurrentQC(*Echo) *Echo
-	OrderedAsync(*Echo) *Echo
-	ConcurrentAsync(*Echo) *Echo
-	OrderedSlowServer(*Echo) *Echo
-	ConcurrentSlowServer(*Echo) *Echo
-	Multicast(*TimedMsg)
-	ConcurrentMulticast(*TimedMsg)
-}
-
-func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
-	s.srv.handlers[startServerBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*StartRequest)
-		resp := srv.StartServerBenchmark(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[stopServerBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*StopRequest)
-		resp := srv.StopServerBenchmark(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[startBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*StartRequest)
-		resp := srv.StartBenchmark(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[stopBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*StopRequest)
-		resp := srv.StopBenchmark(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderedQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Echo)
-		resp := srv.OrderedQC(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[concurrentQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Echo)
-		resp := srv.ConcurrentQC(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderedAsyncMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Echo)
-		resp := srv.OrderedAsync(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[concurrentAsyncMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Echo)
-		resp := srv.ConcurrentAsync(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderedSlowServerMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Echo)
-		resp := srv.OrderedSlowServer(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[concurrentSlowServerMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Echo)
-		resp := srv.ConcurrentSlowServer(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*TimedMsg)
-		srv.Multicast(req)
-		return nil
-	}
-	s.srv.handlers[concurrentMulticastMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*TimedMsg)
-		srv.ConcurrentMulticast(req)
-		return nil
 	}
 }

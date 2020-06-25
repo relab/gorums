@@ -88,17 +88,3 @@ func (c *Configuration) Multicast4(in *empty.Empty) error {
 	}
 	return nil
 }
-
-// MutlicastConcurrent uses a concurrent server-side handler
-func (c *Configuration) MulticastConcurrent(in *Request) error {
-	msgID := c.mgr.nextMsgID()
-	metadata := &ordering.Metadata{
-		MessageID: msgID,
-		MethodID:  multicastConcurrentMethodID,
-	}
-	msg := &gorumsMessage{metadata: metadata, message: in}
-	for _, n := range c.nodes {
-		n.sendQ <- msg
-	}
-	return nil
-}
