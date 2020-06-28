@@ -1,9 +1,7 @@
 package dev
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"time"
 
 	"golang.org/x/net/trace"
@@ -19,16 +17,11 @@ type firstLine struct {
 	cid      uint32
 }
 
-func (f *firstLine) String() string {
-	var line bytes.Buffer
-	io.WriteString(&line, "QC: to config")
-	fmt.Fprintf(&line, "%v deadline:", f.cid)
+func (f firstLine) String() string {
 	if f.deadline != 0 {
-		fmt.Fprint(&line, f.deadline)
-	} else {
-		io.WriteString(&line, "none")
+		return fmt.Sprintf("QC: to config%d deadline: %d", f.cid, f.deadline)
 	}
-	return line.String()
+	return fmt.Sprintf("QC: to config%d deadline: none", f.cid)
 }
 
 type payload struct {
@@ -51,12 +44,8 @@ type qcresult struct {
 }
 
 func (q qcresult) String() string {
-	var out bytes.Buffer
-	io.WriteString(&out, "recv QC reply: ")
-	fmt.Fprintf(&out, "ids: %v, ", q.ids)
-	fmt.Fprintf(&out, "reply: %v ", q.reply)
-	if q.err != nil {
-		fmt.Fprintf(&out, ", error: %v", q.err)
+	if q.err == nil {
+		return fmt.Sprintf("recv QC reply: ids: %v, reply: %v", q.ids, q.reply)
 	}
-	return out.String()
+	return fmt.Sprintf("recv QC reply: ids: %v, reply: %v, error: %v", q.ids, q.reply, q.err)
 }

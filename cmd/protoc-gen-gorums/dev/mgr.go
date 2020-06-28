@@ -267,7 +267,7 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	h := fnv.New32a()
 	for _, id := range uniqueIDs {
-		binary.Write(h, binary.LittleEndian, id)
+		_ = binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
