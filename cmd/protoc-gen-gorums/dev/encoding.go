@@ -16,14 +16,23 @@ func init() {
 	encoding.RegisterCodec(newGorumsCodec())
 }
 
+type gorumsMsgType uint8
+
+const (
+	gorumsRequest gorumsMsgType = iota + 1
+	gorumsResponse
+)
+
 type gorumsMessage struct {
 	metadata *ordering.Metadata
 	message  protoreflect.ProtoMessage
-	reply    bool
+	msgType  gorumsMsgType
 }
 
-func newGorumsMessage(reply bool) *gorumsMessage {
-	return &gorumsMessage{metadata: &ordering.Metadata{}, reply: reply}
+// newGorumsMessage creates a new gorumsMessage struct for unmarshaling.
+// msgType specifies the type of message that should be unmarshaled.
+func newGorumsMessage(msgType gorumsMsgType) *gorumsMessage {
+	return &gorumsMessage{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
 type gorumsCodec struct {
@@ -53,7 +62,7 @@ func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	case protoreflect.ProtoMessage:
 		return c.marshaler.Marshal(msg)
 	default:
-		return nil, fmt.Errorf("gorumsEncoder: don't know how to marshal message of type '%T'", m)
+		return nil, fmt.Errorf("gorumsCodec: don't know how to marshal message of type '%T'", m)
 	}
 }
 
@@ -82,7 +91,7 @@ func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
 	case protoreflect.ProtoMessage:
 		return c.unmarshaler.Unmarshal(b, msg)
 	default:
-		return fmt.Errorf("gorumsEncoder: don't know how to unmarshal message of type '%T'", m)
+		return fmt.Errorf("gorumsCodec: don't know how to unmarshal message of type '%T'", m)
 	}
 }
 
@@ -94,10 +103,13 @@ func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
 		return err
 	}
 	info := orderingMethods[msg.metadata.MethodID]
-	if msg.reply {
-		msg.message = info.responseType.New().Interface()
-	} else {
+	switch msg.msgType {
+	case gorumsRequest:
 		msg.message = info.requestType.New().Interface()
+	case gorumsResponse:
+		msg.message = info.responseType.New().Interface()
+	default:
+		return fmt.Errorf("gorumsCodec: Unknown message type.")
 	}
 	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
 	err = c.unmarshaler.Unmarshal(msgBuf, msg.message)

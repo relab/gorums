@@ -28,7 +28,7 @@ func TestUnmarshalGorumsMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := &gorumsMessage{metadata: &ordering.Metadata{}, message: &Request{}}
+	msg := newGorumsMessage(gorumsRequest)
 	err = codec.Unmarshal(buf, msg)
 	if err != nil {
 		t.Fatal(err)
