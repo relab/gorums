@@ -48,7 +48,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	}()
 
 	for {
-		req := newGorumsMessage(false)
+		req := newGorumsMessage(gorumsRequest)
 		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
