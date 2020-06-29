@@ -102,14 +102,17 @@ func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
 	if err != nil {
 		return err
 	}
-	info := orderingMethods[msg.metadata.MethodID]
+	info, ok := orderingMethods[msg.metadata.MethodID]
+	if !ok {
+		return fmt.Errorf("gorumsCodec: Unknown MethodID")
+	}
 	switch msg.msgType {
 	case gorumsRequest:
 		msg.message = info.requestType.New().Interface()
 	case gorumsResponse:
 		msg.message = info.responseType.New().Interface()
 	default:
-		return fmt.Errorf("gorumsCodec: Unknown message type.")
+		return fmt.Errorf("gorumsCodec: Unknown message type")
 	}
 	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
 	err = c.unmarshaler.Unmarshal(msgBuf, msg.message)
