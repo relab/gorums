@@ -28,6 +28,8 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
+// NodeStream handles a connection to a single client. The stream is aborted if there
+// is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
