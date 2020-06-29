@@ -2,11 +2,13 @@ package benchmark
 
 import (
 	fmt "fmt"
-	"math"
+	math "math"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/eclesh/welford"
 )
 
 // Format returns a tab formatted string representation of the result
@@ -14,8 +16,8 @@ func (r *Result) Format() string {
 	b := new(strings.Builder)
 	fmt.Fprintf(b, "%s\t", r.Name)
 	fmt.Fprintf(b, "%.2f ops/sec\t", r.Throughput)
-	fmt.Fprintf(b, "%.2f ms\t", r.LatencyAvg)
-	fmt.Fprintf(b, "%.2f ms\t", math.Sqrt(r.LatencyVar))
+	fmt.Fprintf(b, "%.2f ms\t", r.LatencyAvg/float64(time.Millisecond))
+	fmt.Fprintf(b, "%.2f ms\t", math.Sqrt(r.LatencyVar)/float64(time.Millisecond))
 	fmt.Fprintf(b, "%d B/op\t", r.MemPerOp)
 	fmt.Fprintf(b, "%d allocs/op\t", r.AllocsPerOp)
 	return b.String()
@@ -24,7 +26,7 @@ func (r *Result) Format() string {
 // Stats records and processes the raw data of a benchmark
 type Stats struct {
 	mut       sync.Mutex
-	latencies []time.Duration
+	stats     welford.Stats
 	startTime time.Time
 	endTime   time.Time
 	startMs   runtime.MemStats
@@ -54,7 +56,7 @@ func (s *Stats) AddLatency(l time.Duration) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
-	s.latencies = append(s.latencies, l)
+	s.stats.Add(float64(l))
 }
 
 // GetResult computes and returns the result of the benchmark
@@ -63,21 +65,11 @@ func (s *Stats) GetResult() *Result {
 	defer s.mut.Unlock()
 
 	r := &Result{}
-	r.TotalOps = uint64(len(s.latencies))
+	r.TotalOps = s.stats.Count()
 	r.TotalTime = int64(s.endTime.Sub(s.startTime))
 	r.Throughput = float64(r.TotalOps) / float64(time.Duration(r.TotalTime).Seconds())
-
-	var latencySum time.Duration
-	for _, l := range s.latencies {
-		latencySum += l
-	}
-	r.LatencyAvg = float64(latencySum.Milliseconds()) / float64(r.TotalOps)
-
-	for _, l := range s.latencies {
-		r.LatencyVar += math.Pow(float64(l.Milliseconds())-r.LatencyAvg, 2)
-	}
-	r.LatencyVar /= float64(r.TotalOps - 1)
-
+	r.LatencyAvg = s.stats.Mean()
+	r.LatencyVar = s.stats.Variance()
 	r.AllocsPerOp = (s.endMs.Mallocs - s.startMs.Mallocs) / r.TotalOps
 	r.MemPerOp = (s.endMs.TotalAlloc - s.startMs.TotalAlloc) / r.TotalOps
 	return r
@@ -86,7 +78,7 @@ func (s *Stats) GetResult() *Result {
 // Clear zeroes out the stats
 func (s *Stats) Clear() {
 	s.mut.Lock()
-	s.latencies = nil
+	s.stats.Reset()
 	s.startTime = time.Time{}
 	s.endTime = time.Time{}
 	s.startMs = runtime.MemStats{}

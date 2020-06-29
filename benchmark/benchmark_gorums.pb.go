@@ -19,7 +19,6 @@ import (
 	proto "google.golang.org/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	fnv "hash/fnv"
-	io "io"
 	log "log"
 	math "math"
 	rand "math/rand"
@@ -518,7 +517,7 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	h := fnv.New32a()
 	for _, id := range uniqueIDs {
-		binary.Write(h, binary.LittleEndian, id)
+		_ = binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
@@ -1115,7 +1114,6 @@ func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
-	opts       serverOptions
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
@@ -1158,16 +1156,11 @@ type firstLine struct {
 	cid      uint32
 }
 
-func (f *firstLine) String() string {
-	var line bytes.Buffer
-	io.WriteString(&line, "QC: to config")
-	fmt.Fprintf(&line, "%v deadline:", f.cid)
+func (f firstLine) String() string {
 	if f.deadline != 0 {
-		fmt.Fprint(&line, f.deadline)
-	} else {
-		io.WriteString(&line, "none")
+		return fmt.Sprintf("QC: to config%d deadline: %d", f.cid, f.deadline)
 	}
-	return line.String()
+	return fmt.Sprintf("QC: to config%d deadline: none", f.cid)
 }
 
 type payload struct {
@@ -1190,14 +1183,10 @@ type qcresult struct {
 }
 
 func (q qcresult) String() string {
-	var out bytes.Buffer
-	io.WriteString(&out, "recv QC reply: ")
-	fmt.Fprintf(&out, "ids: %v, ", q.ids)
-	fmt.Fprintf(&out, "reply: %v ", q.reply)
-	if q.err != nil {
-		fmt.Fprintf(&out, ", error: %v", q.err)
+	if q.err == nil {
+		return fmt.Sprintf("recv QC reply: ids: %v, reply: %v", q.ids, q.reply)
 	}
-	return out.String()
+	return fmt.Sprintf("recv QC reply: ids: %v, reply: %v, error: %v", q.ids, q.reply, q.err)
 }
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
@@ -2455,61 +2444,51 @@ type Benchmark interface {
 func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
 	s.srv.handlers[startServerBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*StartRequest)
-		// TODO: how to handle marshaling errors here
 		resp := srv.StartServerBenchmark(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[stopServerBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*StopRequest)
-		// TODO: how to handle marshaling errors here
 		resp := srv.StopServerBenchmark(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[startBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*StartRequest)
-		// TODO: how to handle marshaling errors here
 		resp := srv.StartBenchmark(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[stopBenchmarkMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*StopRequest)
-		// TODO: how to handle marshaling errors here
 		resp := srv.StopBenchmark(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderedQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Echo)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderedQC(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[concurrentQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Echo)
-		// TODO: how to handle marshaling errors here
 		resp := srv.ConcurrentQC(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderedAsyncMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Echo)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderedAsync(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[concurrentAsyncMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Echo)
-		// TODO: how to handle marshaling errors here
 		resp := srv.ConcurrentAsync(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[orderedSlowServerMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Echo)
-		// TODO: how to handle marshaling errors here
 		resp := srv.OrderedSlowServer(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 	s.srv.handlers[concurrentSlowServerMethodID] = func(in *gorumsMessage) *gorumsMessage {
 		req := in.message.(*Echo)
-		// TODO: how to handle marshaling errors here
 		resp := srv.ConcurrentSlowServer(req)
 		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
