@@ -3,7 +3,6 @@ module github.com/relab/gorums
 go 1.14
 
 require (
-	github.com/eclesh/welford v0.0.0-20150116075914-eec62615b1f0
 	github.com/golang/protobuf v1.4.2
 	github.com/google/go-cmp v0.4.0
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a
