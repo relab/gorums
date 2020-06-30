@@ -113,12 +113,7 @@ func (n *Node) Read(ctx context.Context, in *ReadRequest) (*State, error)
 func (n *Node) Write(ctx context.Context, in *State) (*WriteResponse, error)
 ```
 
-**Note:** You should for a real use case keep the `proto` and generated `pb.go`
-files in a separate directory and import the generate Gorums API as a sub
-package into to your main application. We skip this step in this example for
-the sake of simplicity.
-
-Our server side storage interface:
+And this is our server interface:
 
 ```go
 type Storage interface {
@@ -126,6 +121,11 @@ type Storage interface {
   Write(*State, chan<- *WriteResponse)
 }
 ```
+
+**Note:** You should for a real use case keep the `proto` and generated `pb.go`
+files in a separate directory and import the generate Gorums API as a sub
+package into to your main application. We skip this step in this example for
+the sake of simplicity.
 
 ## Simple Client/Server setup
 
@@ -157,6 +157,30 @@ func (srv *storageSrv) Write(req *State, out chan<- *WriteResponse) {
   out <- &WriteResponse{New: false}
 }
 ```
+
+There are some important things to note about implementing the server interfaces:
+
+* Reply messages should be returned using the `out` channel.
+* The handlers are run synchronously, in the order that messages are received.
+  This means that a long-running handler will prevent other messages from being handled.
+  However, you can start additional goroutines within each handler, provided that they return a result on the `out` channel.
+  For example, the `Read` handler could be made asynchronous like this:
+
+  ```go
+  func (srv *storageSrv) Read(req *ReadRequest, out chan<- *State) {
+    go func() {
+      srv.mut.Lock()
+      defer srv.mut.Unlock()
+      fmt.Println("Got Read()")
+      out <- srv.state
+    }()
+  }
+  ```
+
+* It is currently not possible to send more than one reply message per request.
+  This may change with other call types in the future.
+
+For more information about message ordering and why we use channels instead of `return` in our handlers, read [ordering.md](./ordering.md)
 
 To start the server, we need to create a *listener* and a *GorumsServer*, and then register our server implementation with the GorumsServer:
 
@@ -259,7 +283,7 @@ allows users to invoke the RPC as Quorum Call on the configuration.
 If a RPC is invoked as Quorum Call, Gorums will invoke the RPC on all nodes in
 in the configuration in parallel, collect and process replies.
 
-For the Gorums plugin to generate quorum calls we have to specify the quorumcall option
+For the Gorums plugin to generate quorum calls we have to specify the `quorumcall` option
 for our RPC methods in the proto file, as shown below:
 
 ```protobuf
