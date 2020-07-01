@@ -82,6 +82,25 @@ However, with our channel-based API, the handler can simply add the request to t
 start a goroutine to wait for the response and pass it to the channel, and then return.
 While the goroutine started by the handler is waiting, another request can be processed by the server.
 Hence, the penalty for running server handlers synchronously is reduced, and ordering can still be preserved.
+Below is an example of how such a handler could be written:
+
+```go
+func (s *testSrv) AsyncHandler(req *Request, c chan<- *Response) {
+  // do synchronous work
+  response := &Response{
+    InOrder: s.isInOrder(req.GetNum()),
+  }
+  // start a goroutine and return
+  go func() {
+    // this code will run concurrently with other handlers
+    // perform slow / async work here
+    time.Sleep(10 * time.Millisecond)
+    // at some point later, the response passed back to Gorums through the channel,
+    // and gets sent back to the client.
+    c <- response
+  }()
+}
+```
 
 ## Notes
 
