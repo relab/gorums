@@ -6,7 +6,6 @@ This option will likely become the default at some point in the future.
 It may be relevant to read the gRPC "Getting Started" documentation found
 [here](http://www.grpc.io/docs/) before continuing.
 Gorums uses gRPC under the hood, and exposes some of its configuration.
-In addition, the implementation of a Gorums server is similar to implementing a gRPC server.
 
 ## Prerequisites
 
@@ -40,13 +39,15 @@ go get github.com/relab/gorums/cmd/protoc-gen-gorums
 We will in this example create a very simple storage service.  The storage
 can store a single `{string,timestamp}` tuple and has two methods:
 
-* Read() State
-* Write(State) Response
+* `Read() State`
+* `Write(State) Response`
 
 The first thing we should do is to define our storage as a gRPC service by
-using the protocol buffers interface definition language. Let's create a file,
-`storage.proto`, in a new Go package called `gorumsexample`. The
-package file path may for example be
+using the protocol buffers interface definition language (IDL).
+Refer to the protocol buffers [language guide](https://developers.google.com/protocol-buffers/docs/proto3)
+to learn more about the protobuf IDL.
+Let's create a file, `storage.proto`, in a new Go package called `gorumsexample`.
+The package file path may for example be
 
 ```text
 $GOPATH/src/github.com/yourusername/gorumsexample
@@ -88,6 +89,10 @@ Every protobuf RPC method must take and return a single protobuf message. The
 `Read` method must in this example therefore take an empty "dummy"
 `ReadRequest` as input.
 
+**Note:** having both a request and a response type is a requirement of the Protobuf IDL.
+Gorums offers one-way message types through the `unicast` and `multicast` call types.
+For these calltypes, the response message type will be unused by Gorums.
+
 We should next compile our service definition into Go code which includes:
 
 1. Go code to access and manage the defined protobuf messages.
@@ -103,9 +108,10 @@ protoc -I=$GOPATH/src:. \
   storage.proto
 ```
 
-You should now two files named `storage.pb.go` and `storage_gorums.pb.go` in your package directory.
+You should now have two files named `storage.pb.go` and `storage_gorums.pb.go` in your package directory.
 The former contains the Protobuf definitions of our messages.
 The latter contains the generated Gorums client API and server interface.
+If wee look through the `storage_gorums.pb.go` file, we will see some of the code that was generated from our protobuf definitions.
 Our two RPC methods have the following signatures:
 
 ```go
@@ -273,8 +279,8 @@ We can now invoke the write rpc on each of the `Nodes` in the configuration:
   }
 ```
 
-While Gorums allows to call RPCs on single nodes, Gorums provides Quorum Calls
-to invoke a RPC on all nodes in a configuration:
+While Gorums allows to call RPCs on single nodes like we did above,
+Gorums also provides Quorum Calls to invoke a RPC on all nodes in a configuration:
 
 ## Quorum Calls
 
@@ -289,12 +295,12 @@ for our RPC methods in the proto file, as shown below:
 ```protobuf
 service QCStorage {
   rpc Read(ReadRequest) returns (State) {
-    option (gorums.ordered) = true;
     option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
    }
   rpc Write(State) returns (WriteResponse) {
-    option (gorums.ordered) = true;
     option (gorums.quorumcall) = true;
+    option (gorums.ordered) = true;
    }
 }
 ```
