@@ -49,14 +49,14 @@ The use of a channel to return messages from the RPC handler makes the handlers 
 ### RPC API Differences from gRPC
 
 ```go
-// the "old" gRPC-style server API
+// the old gRPC-style server API
 type Server interface {
   // Handler takes a request and returns a response.
   // Runs synchronously.
   RPC(*Request) *Response
 }
 
-// the "new" Gorums server API
+// the new Gorums server API
 type Server interface {
   // Handler takes a request and a channel to send the response on.
   // Runs synchronously, but may spawn goroutines and return early.
@@ -69,7 +69,7 @@ type Server interface {
 The RPC API of Gorums was a lot closer to gRPC in older versions.
 However, as we worked on implementing message ordering in Gorums, we recognized that we needed a more flexible API in order to offer good performance.
 Specifically, we decided to use channels instead of the `return` statement when passing response messages back from server handlers.
-In order to ensure message ordering, the server has to receive and process messages synchronously (i.e. one at a time).
+In order to ensure message ordering, the server has to receive and process messages synchronously, i.e. one at a time.
 Thus, we want to ensure that the time it takes to process a single request is as short as possible.
 
 However, the application may only need to worry about message ordering up to a certain point.
@@ -80,8 +80,8 @@ it is not possible to start any goroutines without also waiting for them to retu
 In other words, the handler must **block** the server until the response is ready.
 However, with our channel-based API, the handler can simply add the request to the queue,
 start a goroutine to wait for the response and pass it to the channel, and then return.
-While the goroutine stared by the handler is waiting, another request can be processed by the server.
-This the penalty for running server handlers synchronously is reduced, and ordering can still be preserved.
+While the goroutine started by the handler is waiting, another request can be processed by the server.
+Hence, the penalty for running server handlers synchronously is reduced, and ordering can still be preserved.
 
 ## Notes
 
