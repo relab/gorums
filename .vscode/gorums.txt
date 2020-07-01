@@ -1,5 +1,6 @@
 Ansible
 Erevik
+GOBIN
 GOPATH
 Gorums
 ICDCS
