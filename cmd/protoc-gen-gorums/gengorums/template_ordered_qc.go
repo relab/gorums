@@ -55,7 +55,6 @@ var orderingLoop = `
 
 var orderingReply = `
 	var (
-		//replyValues = make([]*{{$out}}, 0, expected)
 		errs []GRPCError
 		quorum      bool
 		replys = make(map[uint32]*{{$out}})

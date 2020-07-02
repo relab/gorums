@@ -55,7 +55,6 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 	}
 
 	var (
-		//replyValues = make([]*Response, 0, expected)
 		errs   []GRPCError
 		quorum bool
 		replys = make(map[uint32]*Response)
@@ -141,7 +140,6 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 	}
 
 	var (
-		//replyValues = make([]*Response, 0, expected)
 		errs   []GRPCError
 		quorum bool
 		replys = make(map[uint32]*Response)
@@ -219,7 +217,6 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 	}
 
 	var (
-		//replyValues = make([]*Response, 0, expected)
 		errs   []GRPCError
 		quorum bool
 		replys = make(map[uint32]*Response)
@@ -305,7 +302,6 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 	}
 
 	var (
-		//replyValues = make([]*Response, 0, expected)
 		errs   []GRPCError
 		quorum bool
 		replys = make(map[uint32]*Response)
@@ -383,7 +379,6 @@ func (c *Configuration) OrderingConcurrent(ctx context.Context, in *Request) (re
 	}
 
 	var (
-		//replyValues = make([]*Response, 0, expected)
 		errs   []GRPCError
 		quorum bool
 		replys = make(map[uint32]*Response)
