@@ -1,15 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"context"
+	"errors"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/chzyer/readline"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/shlex"
 	"github.com/relab/gorums/examples/storage/proto"
@@ -53,19 +54,32 @@ type repl struct {
 
 func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
 	r := &repl{mgr, defaultCfg}
-	scanner := bufio.NewScanner(os.Stdin)
+	rl, err := readline.New(prompt)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create readline instance: %v\n", err)
+		os.Exit(1)
+	}
+	defer rl.Close()
 
 	fmt.Println(help)
 	fmt.Print(prompt)
 
-	for scanner.Scan() {
-		l := scanner.Text()
+	for {
+		l, err := rl.Readline()
+		if errors.Is(err, io.EOF) {
+			return
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to read line: %v\n", err)
+			os.Exit(1)
+		}
 		args, err := shlex.Split(l)
 		if err != nil {
-			log.Fatalf("Failed to split command: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Failed to split command: %v\n", err)
+			os.Exit(1)
 		}
 		if len(args) < 1 {
-			goto prompt
+			continue
 		}
 
 		switch args[0] {
@@ -82,9 +96,6 @@ func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
 		default:
 			fmt.Printf("Unknown command '%s'. Type 'help' to see available commands.\n", args[0])
 		}
-
-	prompt:
-		fmt.Print(prompt)
 	}
 }
 
