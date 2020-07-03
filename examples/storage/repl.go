@@ -66,12 +66,25 @@ func newRepl(mgr *proto.Manager, cfg *proto.Configuration) *repl {
 	}
 }
 
+// NOTE: x/crypto/ssh/terminal is moving to x/terminal at some point.
+// See: https://github.com/golang/go/issues/31044 and https://github.com/golang/term
+//
+// FIXME: ReadLine currently does not work with arrow keys on windows for some reason
+// See: https://stackoverflow.com/questions/58237670/terminal-raw-mode-does-not-support-arrows-on-windows
+//
+// ReadLine reads a line from the terminal in raw mode
 func (r repl) ReadLine() (string, error) {
-	oldState, err := terminal.MakeRaw(0)
+	fd := int(os.Stdin.Fd())
+	oldState, err := terminal.MakeRaw(fd)
 	if err != nil {
 		panic(err)
 	}
-	defer terminal.Restore(0, oldState)
+	defer func() {
+		err := terminal.Restore(fd, oldState)
+		if err != nil {
+			panic(err)
+		}
+	}()
 
 	return r.term.ReadLine()
 }
