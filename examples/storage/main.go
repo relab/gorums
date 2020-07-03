@@ -14,7 +14,7 @@ func main() {
 	flag.Parse()
 
 	if *server != "" {
-		RunServer(*server)
+		runServer(*server)
 		return
 	}
 
@@ -24,7 +24,7 @@ func main() {
 		addrs = nil
 		srvs := make([]*proto.GorumsServer, 0, 4)
 		for i := 0; i < 4; i++ {
-			srv, addr := StartServer("127.0.0.1:0")
+			srv, addr := startServer("127.0.0.1:0")
 			srvs = append(srvs, srv)
 			addrs = append(addrs, addr)
 			log.Printf("Started storage server on %s\n", addr)
@@ -36,5 +36,5 @@ func main() {
 		}()
 	}
 
-	RunClient(addrs)
+	runClient(addrs)
 }
