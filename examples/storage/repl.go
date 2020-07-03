@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chzyer/readline"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/shlex"
 	"github.com/relab/gorums/examples/storage/proto"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 var help = `
@@ -49,27 +49,39 @@ The command performs the write qourum call on node 1 and 2
 The command performs the write quorum call on node 0 and 2
 `
 
-var prompt = "> "
-
 type repl struct {
-	mgr *proto.Manager
-	cfg *proto.Configuration
+	mgr  *proto.Manager
+	cfg  *proto.Configuration
+	term *terminal.Terminal
+}
+
+func newRepl(mgr *proto.Manager, cfg *proto.Configuration) *repl {
+	return &repl{
+		mgr: mgr,
+		cfg: cfg,
+		term: terminal.NewTerminal(struct {
+			io.Reader
+			io.Writer
+		}{os.Stdin, os.Stderr}, "> "),
+	}
+}
+
+func (r repl) ReadLine() (string, error) {
+	oldState, err := terminal.MakeRaw(0)
+	if err != nil {
+		panic(err)
+	}
+	defer terminal.Restore(0, oldState)
+
+	return r.term.ReadLine()
 }
 
 func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
-	r := &repl{mgr, defaultCfg}
-	rl, err := readline.New(prompt)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create readline instance: %v\n", err)
-		os.Exit(1)
-	}
-	defer rl.Close()
+	r := newRepl(mgr, defaultCfg)
 
 	fmt.Println(help)
-	fmt.Print(prompt)
-
 	for {
-		l, err := rl.Readline()
+		l, err := r.ReadLine()
 		if errors.Is(err, io.EOF) {
 			return
 		}
