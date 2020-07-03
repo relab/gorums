@@ -16,7 +16,7 @@ Both the client and the server are included in the same binary, and four local s
 
 Install:
 
-`go get -u github.com/relab/gorums/examples/storage`
+`go get github.com/relab/gorums/examples/storage`
 
 Run:
 
