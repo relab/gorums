@@ -113,6 +113,8 @@ func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
 
 		switch args[0] {
 		case "exit":
+			fallthrough
+		case "quit":
 			return
 		case "help":
 			fmt.Println(help)
