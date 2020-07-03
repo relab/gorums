@@ -18,12 +18,16 @@ import (
 
 var help = `
 This interface allows you to run RPCs and quorum calls against the Storage
-Servers interactively. The following commands can be used:
+Servers interactively. Take a look at the files 'client.go' and 'server.go'
+for the source code of the RPC handlers and quorum functions.
+The following commands can be used:
 
-rpc	[node index] [operation]	Executes an RPC on the given node.
-qc 	[operation]             	Executes a quorum call on all nodes.
-cfg	[config] [opertation]   	Executes a quorum call on a given configuration.
-
+help 	                        	Show this text
+exit 	                        	Exit the program
+nodes	                        	Print a list of the available nodes
+rpc  	[node index] [operation]	Executes an RPC on the given node.
+qc   	[operation]             	Executes a quorum call on all nodes.
+cfg  	[config] [opertation]   	Executes a quorum call on a configuration.
 
 The following operations are supported:
 
@@ -93,6 +97,11 @@ func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
 			r.qc(args[1:])
 		case "cfg":
 			r.qcCfg(args[1:])
+		case "nodes":
+			fmt.Println("Nodes: ")
+			for i, n := range mgr.Nodes() {
+				fmt.Printf("%d: %s\n", i, n.Address())
+			}
 		default:
 			fmt.Printf("Unknown command '%s'. Type 'help' to see available commands.\n", args[0])
 		}
