@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func RunClient(addresses []string) {
+func runClient(addresses []string) {
 	if len(addresses) < 1 {
 		log.Fatalln("No addresses provided!")
 	}
@@ -61,13 +61,13 @@ func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies []*proto.ReadResponse) (*p
 func (q qspec) WriteQCQF(in *proto.WriteRequest, replies []*proto.WriteResponse) (*proto.WriteResponse, bool) {
 	// wait until at least half of the replicas have responded and have updated their value
 	if numUpdated(replies) <= q.cfgSize/2 {
-		// if all replicas have responded, the write must have failed
+		// if all replicas have responded, there must have been another write before ours
+		// that had a newer timestamp
 		if len(replies) == q.cfgSize {
 			return &proto.WriteResponse{New: false}, true
 		}
 		return nil, false
 	}
-	// return true
 	return &proto.WriteResponse{New: true}, true
 }
 

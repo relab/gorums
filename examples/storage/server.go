@@ -14,7 +14,7 @@ import (
 	"github.com/relab/gorums/examples/storage/proto"
 )
 
-func StartServer(address string) (*proto.GorumsServer, string) {
+func startServer(address string) (*proto.GorumsServer, string) {
 	// listen on given address
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
@@ -40,12 +40,12 @@ func StartServer(address string) (*proto.GorumsServer, string) {
 	return srv, lis.Addr().String()
 }
 
-func RunServer(address string) {
+func runServer(address string) {
 	// catch signals in order to shut down gracefully
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	srv, addr := StartServer(address)
+	srv, addr := startServer(address)
 
 	log.Printf("Started storage server on %s\n", addr)
 
