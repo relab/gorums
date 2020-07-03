@@ -108,6 +108,12 @@ func (r repl) rpc(args []string) {
 	index, err := strconv.Atoi(args[0])
 	if err != nil {
 		fmt.Printf("Invalid id '%s'. node index must be numeric.\n", args[0])
+		return
+	}
+
+	if index < 0 || index >= r.cfg.Size() {
+		fmt.Printf("Invalid index. Must be between 0 and %d.\n", r.cfg.Size())
+		return
 	}
 
 	node := r.cfg.Nodes()[index]
@@ -165,6 +171,7 @@ func (_ repl) readRPC(args []string, node *proto.Node) {
 	}
 	if !resp.GetOK() {
 		fmt.Printf("%s was not found\n", args[0])
+		return
 	}
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
@@ -202,6 +209,7 @@ func (_ repl) readQC(args []string, cfg *proto.Configuration) {
 	}
 	if !resp.GetOK() {
 		fmt.Printf("%s was not found\n", args[0])
+		return
 	}
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
