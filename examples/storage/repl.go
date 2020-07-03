@@ -148,7 +148,7 @@ func (r repl) rpc(args []string) {
 	}
 
 	if index < 0 || index >= r.cfg.Size() {
-		fmt.Printf("Invalid index. Must be between 0 and %d.\n", r.cfg.Size())
+		fmt.Printf("Invalid index. Must be between 0 and %d.\n", r.cfg.Size()-1)
 		return
 	}
 
