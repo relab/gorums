@@ -1,6 +1,6 @@
 // +build tools
 
-package hotstuff
+package examples
 
 import (
 	_ "github.com/relab/gorums"
