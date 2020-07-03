@@ -14,23 +14,17 @@ import (
 	"github.com/relab/gorums/examples/storage/proto"
 )
 
-var logger *log.Logger
-
-func RunServer(address string) {
-	logger = log.New(os.Stderr, fmt.Sprintf("%s: ", address), log.Ltime|log.Lmicroseconds|log.Lmsgprefix)
-
-	// catch signals in order to shut down gracefully
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
-
+func StartServer(address string) (*proto.GorumsServer, string) {
 	// listen on given address
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
-		logger.Fatalf("Failed to listen on '%s': %v\n", address, err)
+		log.Fatalf("Failed to listen on '%s': %v\n", address, err)
 	}
 
 	// init server implementation
 	storage := newStorageServer()
+	storage.logger = log.New(os.Stderr, fmt.Sprintf("%s: ", lis.Addr()), log.Ltime|log.Lmicroseconds|log.Lmsgprefix)
+
 	// create Gorums server
 	srv := proto.NewGorumsServer()
 	// register server implementation with Gorums server
@@ -39,14 +33,23 @@ func RunServer(address string) {
 	go func() {
 		err := srv.Serve(lis)
 		if err != nil {
-			logger.Fatalf("Server error: %v\n", err)
+			storage.logger.Fatalf("Server error: %v\n", err)
 		}
 	}()
 
-	logger.Printf("Started storage server on %s\n", lis.Addr().String())
+	return srv, lis.Addr().String()
+}
+
+func RunServer(address string) {
+	// catch signals in order to shut down gracefully
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+
+	srv, addr := StartServer(address)
+
+	log.Printf("Started storage server on %s\n", addr)
 
 	<-signals
-	logger.Println("Exiting...")
 	// shutdown Gorums server
 	srv.Stop()
 }
@@ -60,6 +63,7 @@ type state struct {
 type storageServer struct {
 	storage map[string]state
 	mut     sync.RWMutex
+	logger  *log.Logger
 }
 
 func newStorageServer() *storageServer {
@@ -94,20 +98,20 @@ func (s *storageServer) WriteQC(req *proto.WriteRequest, out chan<- *proto.Write
 
 // Read reads a value from storage
 func (s *storageServer) Read(req *proto.ReadRequest) *proto.ReadResponse {
-	logger.Printf("Read '%s'\n", req.GetKey())
+	s.logger.Printf("Read '%s'\n", req.GetKey())
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 	state, ok := s.storage[req.GetKey()]
 	time, err := ptypes.TimestampProto(state.Time)
 	if err != nil {
-		logger.Printf("Failed to marshal time: %v\n", err)
+		s.logger.Printf("Failed to marshal time: %v\n", err)
 	}
 	return &proto.ReadResponse{OK: ok, Value: state.Value, Time: time}
 }
 
 // Write writes a new value to storage if it is newer than the old value
 func (s *storageServer) Write(req *proto.WriteRequest) *proto.WriteResponse {
-	logger.Printf("Write '%s' = '%s'\n", req.GetKey(), req.GetValue())
+	s.logger.Printf("Write '%s' = '%s'\n", req.GetKey(), req.GetValue())
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	oldState, ok := s.storage[req.GetKey()]
