@@ -46,7 +46,7 @@ type qspec struct {
 // you should implement your quorum function with '_ *ReadRequest'.
 func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies []*proto.ReadResponse) (*proto.ReadResponse, bool) {
 	// wait until at least half of the replicas have responded
-	if len(replies) < q.cfgSize/2 {
+	if len(replies) <= q.cfgSize/2 {
 		return nil, false
 	}
 	// return the value with the most recent timestamp
@@ -60,7 +60,11 @@ func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies []*proto.ReadResponse) (*p
 // you should implement your quorum function with '_ *WriteRequest'.
 func (q qspec) WriteQCQF(in *proto.WriteRequest, replies []*proto.WriteResponse) (*proto.WriteResponse, bool) {
 	// wait until at least half of the replicas have responded and have updated their value
-	if numUpdated(replies) < q.cfgSize/2 {
+	if numUpdated(replies) <= q.cfgSize/2 {
+		// if all replicas have responded, the write must have failed
+		if len(replies) == q.cfgSize {
+			return &proto.WriteResponse{New: false}, true
+		}
 		return nil, false
 	}
 	// return true
