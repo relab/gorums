@@ -130,3 +130,24 @@ func TestSortedNodesInMappedGlobalConfiguration(t *testing.T) {
 	}
 
 }
+
+func TestIDduplicationInMappedGlobalConfiguration(t *testing.T) {
+	addrs := map[string]uint32{
+		"localhost:8080": 1,
+		"localhost:8081": 2,
+		"localhost:8082": 3,
+		"localhost:8083": 1,
+	}
+
+	_, err1 := qc.NewManager(qc.WithNoConnect(), qc.WithNodeMap(addrs))
+	if err1 == nil {
+		t.Errorf("expected error. No error given when there are duplicate node ids.")
+	}
+
+	addrs["localhost:8083"] = 4
+
+	_, err2 := qc.NewManager(qc.WithNoConnect(), qc.WithNodeMap(addrs))
+	if err2 != nil {
+		t.Fatal(err2)
+	}
+}

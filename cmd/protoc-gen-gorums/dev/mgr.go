@@ -65,6 +65,10 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 	var nodeAddrs []string
 	if m.opts.idMapping != nil {
 		for naddr, id := range m.opts.idMapping {
+			if m.lookup[id] != nil {
+				err := fmt.Errorf("two node ids are identical(id %d). Node ids has to be unique!", id)
+				return nil, ManagerCreationError(err)
+			}
 			nodeAddrs = append(nodeAddrs, naddr)
 			node, err := m.createNode(naddr, id)
 			if err != nil {
