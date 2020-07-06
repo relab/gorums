@@ -60,13 +60,7 @@ func (c *Configuration) {{unexport .Method.GoName}}(` +
 
 var correctableCallReply = `
 	var (
-		{{- if correctableStream .Method}}
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		//replyValues	= make([]*{{$out}}, 0, c.n*2)
-		{{else}}
-		//replyValues	= make([]*{{$out}}, 0, c.n)
-		{{end -}}
-		replys = make(map[uint32]*{{$out}})
+		replies = make(map[uint32]*{{$out}}, c.n*2)
 		clevel		= LevelNotSet
 		reply		*{{$customOut}}
 		rlevel		int
@@ -83,8 +77,7 @@ var correctableCallReply = `
 				break
 			}
 			{{template "traceLazyLog"}}
-			replys[r.nid] = r.reply
-			//replyValues = append(replyValues, r.reply)
+			replies[r.nid] = r.reply
 			reply, rlevel, quorum = c.qspec.{{$method}}QF(in, replys)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)

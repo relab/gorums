@@ -11,11 +11,11 @@ func TestEqualGlobalConfigurationIDsDifferentOrder(t *testing.T) {
 	addrsOne := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
 	addrsTwo := []string{"localhost:8081", "localhost:8082", "localhost:8080"}
 
-	mgrOne, err := qc.NewManager(qc.WithNoConnect(), qc.WithoutSpesifedNodeID(addrsOne))
+	mgrOne, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeList(addrsOne))
 	if err != nil {
 		t.Fatal(err)
 	}
-	mgrTwo, err := qc.NewManager(qc.WithNoConnect(), qc.WithoutSpesifedNodeID(addrsTwo))
+	mgrTwo, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeList(addrsTwo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestEqualGlobalConfigurationIDsDifferentOrder(t *testing.T) {
 
 func TestEqualGlobalConfigurationIDsDuplicateID(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
-	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithoutSpesifedNodeID(addrs))
+	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestEqualGlobalConfigurationIDsDuplicateID(t *testing.T) {
 
 func TestCreateConfiguration(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
-	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithoutSpesifedNodeID(addrs))
+	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,4 +101,32 @@ func equal(a, b []uint32) bool {
 		}
 	}
 	return true
+}
+
+func TestSortedNodesInMappedGlobalConfiguration(t *testing.T) {
+	addrs := map[string]uint32{
+		"localhost:8080": 1,
+		"localhost:8081": 2,
+		"localhost:8082": 3,
+		"localhost:8083": 4,
+	}
+
+	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeMap(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ids := mgr.NodeIDs()
+	amountOfNodes := 0
+	for i, id := range ids {
+		if i+1 != int(id) {
+			t.Errorf("node ids are not created in the correct order. Expected %d, got %d", i+1, int(id))
+		}
+		amountOfNodes++
+	}
+
+	if amountOfNodes != 4 {
+		t.Errorf("amount of nodes created is not correct. Expected 4 nodes, got %d", amountOfNodes)
+	}
+
 }

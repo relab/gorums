@@ -75,7 +75,7 @@ var orderedFutureRecvBody = `
 		reply		*{{$customOut}}
 		errs		[]GRPCError
 		quorum		bool
-		replys = make(map[uint32]*{{$out}})
+		replies = make(map[uint32]*{{$out}}, 2*c.n)
 	)
 
 	for {
@@ -88,7 +88,7 @@ var orderedFutureRecvBody = `
 			}
 			{{- /*template "traceLazyLog"*/}}
 			data := r.reply.(*{{$out}})
-			replys[r.nid] = data
+			replies[r.nid] = data
 			if reply, quorum = c.qspec.{{$method}}QF(in, replys); quorum {
 				fut.{{$customOutField}}, fut.err = reply, nil
 				return

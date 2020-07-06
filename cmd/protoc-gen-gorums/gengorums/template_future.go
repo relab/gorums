@@ -55,11 +55,10 @@ func (c *Configuration) {{unexport .Method.GoName}}(` +
 
 var futureCallReply = `
 	var (
-		//replyValues	= make([]*{{$out}}, 0, c.n)
 		reply		*{{$customOut}}
 		errs		[]GRPCError
 		quorum		bool
-		replys = make(map[uint32]*{{$out}})
+		replies = make(map[uint32]*{{$out}}, 2*c.n)
 	)
 
 	for {
@@ -71,8 +70,7 @@ var futureCallReply = `
 				break
 			}
 			{{template "traceLazyLog"}}
-			replys[r.nid] = r.reply
-			//replyValues = append(replyValues, r.reply)
+			replies[r.nid] = r.reply
 			if reply, quorum = c.qspec.{{$method}}QF(in, replys); quorum {
 				resp.{{$customOutField}}, resp.err = reply, nil
 				return

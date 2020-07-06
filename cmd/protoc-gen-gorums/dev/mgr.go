@@ -52,7 +52,7 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 		grpc.ForceCodec(newGorumsCodec()),
 	))
 
-	if len(m.opts.addrsList) == 0 && len(m.opts.IDMapping) == 0 {
+	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {
 		return nil, fmt.Errorf("could not create manager: no nodes provided")
 	}
 
@@ -63,51 +63,30 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 	}
 
 	var nodeAddrs []string
-	if m.opts.IDMapping != nil {
-		for naddr, id := range m.opts.IDMapping {
-
+	if m.opts.idMapping != nil {
+		for naddr, id := range m.opts.idMapping {
 			nodeAddrs = append(nodeAddrs, naddr)
-			node, err2 := m.createNode(naddr, id)
-
-			if err2 != nil {
-				return nil, ManagerCreationError(err2)
+			node, err := m.createNode(naddr, id)
+			if err != nil {
+				return nil, ManagerCreationError(err)
 			}
 			m.lookup[node.id] = node
 			m.nodes = append(m.nodes, node)
-
 		}
 
-		// Sorting the nodes when puting them in the node list from lowest to highest id value. This has to be done in order for there to be some system when
-		// returning node IDs. Looping over a map is none-deterministic and therefor the nodes can't simpely be put in a list.
-
-		temp := make([]*Node, len(m.nodes))
-		index := 0
-		for _, node1 := range m.nodes {
-			for _, node2 := range m.nodes {
-				if node2.id < node1.id {
-					index++
-				}
-			}
-			temp[index] = node1
-			index = 0
-		}
-		m.nodes = temp
+		// Sort nodes since map iteration is non-deterministic.
+		OrderedBy(ID).Sort(m.nodes)
 
 	} else if m.opts.addrsList != nil {
-
 		nodeAddrs = m.opts.addrsList
-
 		for _, naddr := range m.opts.addrsList {
-
-			node, err2 := m.createNode(naddr, 0)
-
-			if err2 != nil {
-				return nil, ManagerCreationError(err2)
+			node, err := m.createNode(naddr, 0)
+			if err != nil {
+				return nil, ManagerCreationError(err)
 			}
 			m.lookup[node.id] = node
 			m.nodes = append(m.nodes, node)
 		}
-
 	}
 
 	if m.opts.trace {
@@ -115,8 +94,7 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
-	err := m.connectAll()
-	if err != nil {
+	if err := m.connectAll(); err != nil {
 		return nil, ManagerCreationError(err)
 	}
 
