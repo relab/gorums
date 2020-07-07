@@ -47,29 +47,29 @@ func (s *testSrv) isInOrder(num uint64) bool {
 	return false
 }
 
-func (s *testSrv) QC(req *Request, c chan<- *Response) {
-	c <- &Response{
+func (s *testSrv) QC(_ context.Context, req *Request, out func(*Response)) {
+	out(&Response{
 		InOrder: s.isInOrder(req.GetNum()),
-	}
+	})
 }
 
-func (s *testSrv) QCFuture(req *Request, c chan<- *Response) {
-	c <- &Response{
+func (s *testSrv) QCFuture(_ context.Context, req *Request, out func(*Response)) {
+	out(&Response{
 		InOrder: s.isInOrder(req.GetNum()),
-	}
+	})
 }
 
-func (s *testSrv) UnaryRPC(req *Request, c chan<- *Response) {
-	c <- &Response{
+func (s *testSrv) UnaryRPC(_ context.Context, req *Request, out func(*Response)) {
+	out(&Response{
 		InOrder: s.isInOrder(req.GetNum()),
-	}
+	})
 }
 
 type testQSpec struct {
 	quorum int
 }
 
-func (q testQSpec) qf(replies []*Response) (*Response, bool) {
+func (q testQSpec) qf(replies map[uint32]*Response) (*Response, bool) {
 	if len(replies) < q.quorum {
 		return nil, false
 	}
@@ -81,15 +81,15 @@ func (q testQSpec) qf(replies []*Response) (*Response, bool) {
 	return replies[0], true
 }
 
-func (q testQSpec) QCQF(_ *Request, replies []*Response) (*Response, bool) {
+func (q testQSpec) QCQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
 	return q.qf(replies)
 }
 
-func (q testQSpec) QCFutureQF(_ *Request, replies []*Response) (*Response, bool) {
+func (q testQSpec) QCFutureQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
 	return q.qf(replies)
 }
 
-func (q testQSpec) AsyncHandlerQF(_ *Request, replies []*Response) (*Response, bool) {
+func (q testQSpec) AsyncHandlerQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
 	return q.qf(replies)
 }
 
@@ -100,7 +100,7 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 		srv.RegisterGorumsTestServer(&testSrv{})
 		return srv
 	})
-	mgr, err := NewManager(addrs, WithDialTimeout(100*time.Millisecond), WithGrpcDialOptions(
+	mgr, err := NewManager(WithNodeList(addrs), WithDialTimeout(100*time.Millisecond), WithGrpcDialOptions(
 		grpc.WithBlock(), grpc.WithInsecure(),
 	))
 	if err != nil {
@@ -174,7 +174,7 @@ func TestQCFutureOrdering(t *testing.T) {
 				}
 				t.Errorf("QC error: %v", err)
 			}
-			if !resp.GetInOrder() {
+			if !resp.GetInOrder() && !t.Failed() {
 				t.Errorf("Message received out of order.")
 			}
 		}(promise)
