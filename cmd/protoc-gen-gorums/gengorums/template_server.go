@@ -10,7 +10,7 @@ type {{$service}} interface {
 	{{- if isOneway .}}
 	{{.GoName}}(*{{in $genFile .}})
 	{{- else}}
-	{{.GoName}}(*{{in $genFile .}}, chan<- *{{out $genFile .}})
+	{{.GoName}}(*{{in $genFile .}}, func(*{{out $genFile .}}))
 	{{- end}}
 	{{- end}}
 }
@@ -28,12 +28,10 @@ func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 		{{- if isOneway .}}
 		srv.{{.GoName}}(req)
 		{{- else }}
-		c := make(chan *{{out $genFile .}})
-		go func() {
-			resp := <-c
+		f := func(resp *{{out $genFile .}}) {
 			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		}()
-		srv.{{.GoName}}(req, c)
+		}
+		srv.{{.GoName}}(req, f)
 		{{- end}}
 	}
 	{{- end}}
