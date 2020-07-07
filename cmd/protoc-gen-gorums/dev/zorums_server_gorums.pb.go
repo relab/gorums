@@ -3,119 +3,148 @@
 package dev
 
 import (
+	context "context"
 	empty "github.com/golang/protobuf/ptypes/empty"
+	sync "sync"
 )
 
 // ZorumsService is the server-side API for the ZorumsService Service
 type ZorumsService interface {
-	Multicast(*Request)
-	MulticastPerNodeArg(*Request)
-	Multicast2(*Request)
-	Multicast3(*Request)
-	Multicast4(*empty.Empty)
-	OrderingQC(*Request, func(*Response))
-	OrderingPerNodeArg(*Request, func(*Response))
-	OrderingCustomReturnType(*Request, func(*Response))
-	OrderingCombo(*Request, func(*Response))
-	OrderingUnaryRPC(*Request, func(*Response))
-	OrderingFuture(*Request, func(*Response))
-	OrderingFuturePerNodeArg(*Request, func(*Response))
-	OrderingFutureCustomReturnType(*Request, func(*Response))
-	OrderingFutureCombo(*Request, func(*Response))
-	Unicast(*Request)
-	Unicast2(*Request)
+	Multicast(context.Context, *Request)
+	MulticastPerNodeArg(context.Context, *Request)
+	Multicast2(context.Context, *Request)
+	Multicast3(context.Context, *Request)
+	Multicast4(context.Context, *empty.Empty)
+	OrderingQC(context.Context, *Request, func(*Response))
+	OrderingPerNodeArg(context.Context, *Request, func(*Response))
+	OrderingCustomReturnType(context.Context, *Request, func(*Response))
+	OrderingCombo(context.Context, *Request, func(*Response))
+	OrderingUnaryRPC(context.Context, *Request, func(*Response))
+	OrderingFuture(context.Context, *Request, func(*Response))
+	OrderingFuturePerNodeArg(context.Context, *Request, func(*Response))
+	OrderingFutureCustomReturnType(context.Context, *Request, func(*Response))
+	OrderingFutureCombo(context.Context, *Request, func(*Response))
+	Unicast(context.Context, *Request)
+	Unicast2(context.Context, *Request)
 }
 
 func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
-	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+	s.srv.handlers[multicastMethodID] = func(ctx context.Context, in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		srv.Multicast(req)
+		srv.Multicast(ctx, req)
 	}
-	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+	s.srv.handlers[multicastPerNodeArgMethodID] = func(ctx context.Context, in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		srv.MulticastPerNodeArg(req)
+		srv.MulticastPerNodeArg(ctx, req)
 	}
-	s.srv.handlers[multicast2MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+	s.srv.handlers[multicast2MethodID] = func(ctx context.Context, in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		srv.Multicast2(req)
+		srv.Multicast2(ctx, req)
 	}
-	s.srv.handlers[multicast3MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+	s.srv.handlers[multicast3MethodID] = func(ctx context.Context, in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		srv.Multicast3(req)
+		srv.Multicast3(ctx, req)
 	}
-	s.srv.handlers[multicast4MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+	s.srv.handlers[multicast4MethodID] = func(ctx context.Context, in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*empty.Empty)
-		srv.Multicast4(req)
+		srv.Multicast4(ctx, req)
 	}
-	s.srv.handlers[orderingQCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingQCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingQC(req, f)
+		srv.OrderingQC(ctx, req, f)
 	}
-	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingPerNodeArgMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingPerNodeArg(req, f)
+		srv.OrderingPerNodeArg(ctx, req, f)
 	}
-	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingCustomReturnType(req, f)
+		srv.OrderingCustomReturnType(ctx, req, f)
 	}
-	s.srv.handlers[orderingComboMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingComboMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingCombo(req, f)
+		srv.OrderingCombo(ctx, req, f)
 	}
-	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingUnaryRPCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingUnaryRPC(req, f)
+		srv.OrderingUnaryRPC(ctx, req, f)
 	}
-	s.srv.handlers[orderingFutureMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingFutureMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingFuture(req, f)
+		srv.OrderingFuture(ctx, req, f)
 	}
-	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingFuturePerNodeArg(req, f)
+		srv.OrderingFuturePerNodeArg(ctx, req, f)
 	}
-	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingFutureCustomReturnType(req, f)
+		srv.OrderingFutureCustomReturnType(ctx, req, f)
 	}
-	s.srv.handlers[orderingFutureComboMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[orderingFutureComboMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
+		once := new(sync.Once)
 		f := func(resp *Response) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.OrderingFutureCombo(req, f)
+		srv.OrderingFutureCombo(ctx, req, f)
 	}
-	s.srv.handlers[unicastMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+	s.srv.handlers[unicastMethodID] = func(ctx context.Context, in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		srv.Unicast(req)
+		srv.Unicast(ctx, req)
 	}
-	s.srv.handlers[unicast2MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+	s.srv.handlers[unicast2MethodID] = func(ctx context.Context, in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
-		srv.Unicast2(req)
+		srv.Unicast2(ctx, req)
 	}
 }

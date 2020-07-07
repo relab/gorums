@@ -6,6 +6,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/metadata"
 )
 
 type managerOptions struct {
@@ -18,6 +19,8 @@ type managerOptions struct {
 	sendBuffer      uint
 	idMapping       map[string]uint32
 	addrsList       []string
+	metadata        metadata.MD
+	perNodeMD       func(uint32) metadata.MD
 }
 
 func newManagerOptions() managerOptions {
@@ -99,5 +102,22 @@ func WithNodeMap(idMap map[string]uint32) ManagerOption {
 func WithNodeList(addrsList []string) ManagerOption {
 	return func(o *managerOptions) {
 		o.addrsList = addrsList
+	}
+}
+
+// WithMetadata returns a ManagerOption that sets the metadata that is sent to each node
+// when the connection is initially established. This metadata can be retrieved from the
+// server-side method handlers.
+func WithMetadata(md metadata.MD) ManagerOption {
+	return func(o *managerOptions) {
+		o.metadata = md
+	}
+}
+
+// WithPerNodeMetadata returns a ManagerOption that allows you to set metadata for each
+// node individually.
+func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
+	return func(o *managerOptions) {
+		o.perNodeMD = f
 	}
 }

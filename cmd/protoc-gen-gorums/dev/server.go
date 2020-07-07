@@ -12,7 +12,7 @@ import (
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
+type requestHandler func(context.Context, *gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -32,8 +32,7 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 // is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := srv.Context()
 
 	go func() {
 		for {
@@ -56,7 +55,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			return err
 		}
 		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			handler(req, finished)
+			handler(ctx, req, finished)
 		}
 	}
 }
