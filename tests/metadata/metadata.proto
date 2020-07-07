@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package metadata;
+
+option go_package = "github.com/relab/gorums/tests/metadata";
+
+import "gorums.proto";
+import "google/protobuf/empty.proto";
+
+service MetadataTest {
+  rpc IDFromMD(google.protobuf.Empty) returns (NodeID) {
+    option (gorums.ordered) = true;
+  }
+}
+
+message NodeID { uint32 ID = 1; }
