@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/leakcheck"
 	"google.golang.org/grpc"
 )
@@ -94,19 +95,11 @@ func (q testQSpec) AsyncHandlerQF(_ *Request, replies []*Response) (*Response, b
 
 func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 	t.Helper()
-	servers := make([]*GorumsServer, cfgSize)
-	addrs := make([]string, cfgSize)
-	for i := 0; i < cfgSize; i++ {
+	addrs, closeServers := gorums.TestSetup(t, cfgSize, func() interface{} {
 		srv := NewGorumsServer()
 		srv.RegisterGorumsTestServer(&testSrv{})
-		lis, err := getListener()
-		if err != nil {
-			t.Fatalf("Failed to listen on port: %v", err)
-		}
-		addrs[i] = lis.Addr().String()
-		servers[i] = srv
-		go srv.Serve(lis)
-	}
+		return srv
+	})
 	mgr, err := NewManager(addrs, WithDialTimeout(100*time.Millisecond), WithGrpcDialOptions(
 		grpc.WithBlock(), grpc.WithInsecure(),
 	))
@@ -119,9 +112,7 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 	}
 	teardown = func() {
 		mgr.Close()
-		for _, srv := range servers {
-			srv.Stop()
-		}
+		closeServers()
 	}
 	return cfg, teardown
 }
