@@ -71,16 +71,16 @@ var futureCallReply = `
 			}
 			{{template "traceLazyLog"}}
 			replies[r.nid] = r.reply
-			if reply, quorum = c.qspec.{{$method}}QF(in, replys); quorum {
+			if reply, quorum = c.qspec.{{$method}}QF(in, replies); quorum {
 				resp.{{$customOutField}}, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replys) == expected {
-			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}

@@ -78,7 +78,7 @@ var correctableCallReply = `
 			}
 			{{template "traceLazyLog"}}
 			replies[r.nid] = r.reply
-			reply, rlevel, quorum = c.qspec.{{$method}}QF(in, replys)
+			reply, rlevel, quorum = c.qspec.{{$method}}QF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -88,15 +88,15 @@ var correctableCallReply = `
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replys), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		{{- if correctableStream .Method}}
 		if len(errs) == expected { // Can't rely on reply count.
 		{{else}}
-		if len(errs)+len(replys) == expected {
+		if len(errs)+len(replies) == expected {
 		{{end -}}
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replys), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}

@@ -81,7 +81,7 @@ var quorumCallReply = `
 		case <-ctx.Done():
 			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replys) == expected {
+		if len(errs)+len(replies) == expected {
 			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}

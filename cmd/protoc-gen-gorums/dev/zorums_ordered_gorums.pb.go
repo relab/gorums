@@ -37,8 +37,8 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -55,14 +55,14 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 	}
 
 	var (
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -73,16 +73,16 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 			}
 
 			reply := r.reply.(*Response)
-			replys[r.nid] = reply
-			if resp, quorum = c.qspec.OrderingQCQF(in, replys); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingQCQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replys) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -117,8 +117,8 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -128,7 +128,7 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 	for _, n := range c.nodes {
 		nodeArg := f(in, n.ID())
 		if nodeArg == nil {
-			//expected--
+			expected--
 			continue
 		}
 		metadata := &ordering.Metadata{
@@ -140,14 +140,14 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 	}
 
 	var (
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -158,16 +158,16 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 			}
 
 			reply := r.reply.(*Response)
-			replys[r.nid] = reply
-			if resp, quorum = c.qspec.OrderingPerNodeArgQF(in, replys); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingPerNodeArgQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replys) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -199,8 +199,8 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -217,14 +217,14 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 	}
 
 	var (
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -235,16 +235,16 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 			}
 
 			reply := r.reply.(*Response)
-			replys[r.nid] = reply
-			if resp, quorum = c.qspec.OrderingCustomReturnTypeQF(in, replys); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingCustomReturnTypeQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replys) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -279,8 +279,8 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -290,7 +290,7 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 	for _, n := range c.nodes {
 		nodeArg := f(in, n.ID())
 		if nodeArg == nil {
-			//expected--
+			expected--
 			continue
 		}
 		metadata := &ordering.Metadata{
@@ -302,14 +302,14 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 	}
 
 	var (
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -320,16 +320,16 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 			}
 
 			reply := r.reply.(*Response)
-			replys[r.nid] = reply
-			if resp, quorum = c.qspec.OrderingComboQF(in, replys); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingComboQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replys) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -361,8 +361,8 @@ func (c *Configuration) OrderingConcurrent(ctx context.Context, in *Request) (re
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -379,14 +379,14 @@ func (c *Configuration) OrderingConcurrent(ctx context.Context, in *Request) (re
 	}
 
 	var (
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -397,16 +397,16 @@ func (c *Configuration) OrderingConcurrent(ctx context.Context, in *Request) (re
 			}
 
 			reply := r.reply.(*Response)
-			replys[r.nid] = reply
-			if resp, quorum = c.qspec.OrderingConcurrentQF(in, replys); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingConcurrentQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replys) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -418,8 +418,8 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 	msgID := n.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, 1)
-	n.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, 1)
+	n.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
@@ -432,7 +432,7 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 	n.sendQ <- msg
 
 	select {
-	case r := <-replies:
+	case r := <-replyChan:
 		if r.err != nil {
 			return nil, r.err
 		}
@@ -451,8 +451,8 @@ func (n *Node) OrderingUnaryRPCConcurrent(ctx context.Context, in *Request, opts
 	msgID := n.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, 1)
-	n.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, 1)
+	n.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
@@ -465,7 +465,7 @@ func (n *Node) OrderingUnaryRPCConcurrent(ctx context.Context, in *Request, opts
 	n.sendQ <- msg
 
 	select {
-	case r := <-replies:
+	case r := <-replyChan:
 		if r.err != nil {
 			return nil, r.err
 		}
@@ -519,10 +519,10 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		reply  *Response
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -534,17 +534,17 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 				break
 			}
 			data := r.reply.(*Response)
-			replys[r.nid] = data
-			if reply, quorum = c.qspec.OrderingFutureQF(in, replys); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFutureQF(in, replies); quorum {
 				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replys) == expected {
-			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -601,10 +601,10 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		reply  *Response
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -616,17 +616,17 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 				break
 			}
 			data := r.reply.(*Response)
-			replys[r.nid] = data
-			if reply, quorum = c.qspec.OrderingFuturePerNodeArgQF(in, replys); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFuturePerNodeArgQF(in, replies); quorum {
 				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replys) == expected {
-			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -675,10 +675,10 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		reply  *MyResponse
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		reply   *MyResponse
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -690,17 +690,17 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 				break
 			}
 			data := r.reply.(*Response)
-			replys[r.nid] = data
-			if reply, quorum = c.qspec.OrderingFutureCustomReturnTypeQF(in, replys); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFutureCustomReturnTypeQF(in, replies); quorum {
 				fut.MyResponse, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replys) == expected {
-			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -749,10 +749,10 @@ func (c *Configuration) orderingFutureConcurrentRecv(ctx context.Context, in *Re
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		reply  *Response
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -764,17 +764,17 @@ func (c *Configuration) orderingFutureConcurrentRecv(ctx context.Context, in *Re
 				break
 			}
 			data := r.reply.(*Response)
-			replys[r.nid] = data
-			if reply, quorum = c.qspec.OrderingFutureConcurrentQF(in, replys); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFutureConcurrentQF(in, replies); quorum {
 				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replys) == expected {
-			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -831,10 +831,10 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		reply  *MyResponse
-		errs   []GRPCError
-		quorum bool
-		replys = make(map[uint32]*Response)
+		reply   *MyResponse
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -846,17 +846,17 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 				break
 			}
 			data := r.reply.(*Response)
-			replys[r.nid] = data
-			if reply, quorum = c.qspec.OrderingFutureComboQF(in, replys); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFutureComboQF(in, replies); quorum {
 				fut.MyResponse, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replys) == expected {
-			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}

@@ -18,8 +18,8 @@ var orderingPreamble = `
 	msgID := c.mgr.nextMsgID()
 	
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 	
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -62,7 +62,7 @@ var orderingReply = `
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break

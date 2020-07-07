@@ -89,16 +89,16 @@ var orderedFutureRecvBody = `
 			{{- /*template "traceLazyLog"*/}}
 			data := r.reply.(*{{$out}})
 			replies[r.nid] = data
-			if reply, quorum = c.qspec.{{$method}}QF(in, replys); quorum {
+			if reply, quorum = c.qspec.{{$method}}QF(in, replies); quorum {
 				fut.{{$customOutField}}, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.{{$customOutField}}, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replys), errs}
+			fut.{{$customOutField}}, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replys) == expected {
-			fut.{{$customOutField}}, fut.err = reply, QuorumCallError{"incomplete call", len(replys), errs}
+		if len(errs)+len(replies) == expected {
+			fut.{{$customOutField}}, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
