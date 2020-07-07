@@ -18,8 +18,8 @@ var orderingPreamble = `
 	msgID := c.mgr.nextMsgID()
 	
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 	
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -55,30 +55,30 @@ var orderingLoop = `
 
 var orderingReply = `
 	var (
-		replyValues = make([]*{{$out}}, 0, expected)
 		errs []GRPCError
 		quorum      bool
+		replies = make(map[uint32]*{{$out}})
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 			{{template "traceLazyLog"}}
 			reply := r.reply.(*{{$out}})
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.{{$method}}QF(in, replyValues); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.{{$method}}QF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }

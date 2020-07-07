@@ -17,9 +17,9 @@ type Configuration struct {
 
 // NewConfig returns a configuration for the given node addresses and quorum spec.
 // The returned func() must be called to close the underlying connections.
-// This is experimental API.
-func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
-	man, err := NewManager(addrs, opts...)
+// This is an experimental API.
+func NewConfig(qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+	man, err := NewManager(opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
 	}

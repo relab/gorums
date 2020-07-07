@@ -55,10 +55,10 @@ func (c *Configuration) {{unexport .Method.GoName}}(` +
 
 var futureCallReply = `
 	var (
-		replyValues	= make([]*{{$out}}, 0, c.n)
 		reply		*{{$customOut}}
 		errs		[]GRPCError
 		quorum		bool
+		replies = make(map[uint32]*{{$out}}, 2*c.n)
 	)
 
 	for {
@@ -70,17 +70,17 @@ var futureCallReply = `
 				break
 			}
 			{{template "traceLazyLog"}}
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.{{$method}}QF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.{{$method}}QF(in, replies); quorum {
 				resp.{{$customOutField}}, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}

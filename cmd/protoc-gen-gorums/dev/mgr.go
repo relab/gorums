@@ -34,10 +34,7 @@ type Manager struct {
 
 // NewManager attempts to connect to the given set of node addresses and if
 // successful returns a new Manager containing connections to those nodes.
-func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
-	if len(nodeAddrs) == 0 {
-		return nil, fmt.Errorf("could not create manager: no nodes provided")
-	}
+func NewManager(opts ...ManagerOption) (*Manager, error) {
 
 	m := &Manager{
 		lookup:       make(map[uint32]*Node),
@@ -55,19 +52,45 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		grpc.ForceCodec(newGorumsCodec()),
 	))
 
+	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {
+		return nil, fmt.Errorf("could not create manager: no nodes provided")
+	}
+
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},
 		))
 	}
 
-	for _, naddr := range nodeAddrs {
-		node, err2 := m.createNode(naddr)
-		if err2 != nil {
-			return nil, ManagerCreationError(err2)
+	var nodeAddrs []string
+	if m.opts.idMapping != nil {
+		for naddr, id := range m.opts.idMapping {
+			if m.lookup[id] != nil {
+				err := fmt.Errorf("two node ids are identical(id %d). Node ids has to be unique!", id)
+				return nil, ManagerCreationError(err)
+			}
+			nodeAddrs = append(nodeAddrs, naddr)
+			node, err := m.createNode(naddr, id)
+			if err != nil {
+				return nil, ManagerCreationError(err)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
 		}
-		m.lookup[node.id] = node
-		m.nodes = append(m.nodes, node)
+
+		// Sort nodes since map iteration is non-deterministic.
+		OrderedBy(ID).Sort(m.nodes)
+
+	} else if m.opts.addrsList != nil {
+		nodeAddrs = m.opts.addrsList
+		for _, naddr := range m.opts.addrsList {
+			node, err := m.createNode(naddr, 0)
+			if err != nil {
+				return nil, ManagerCreationError(err)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
+		}
 	}
 
 	if m.opts.trace {
@@ -75,8 +98,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
-	err := m.connectAll()
-	if err != nil {
+	if err := m.connectAll(); err != nil {
 		return nil, ManagerCreationError(err)
 	}
 
@@ -91,7 +113,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) createNode(addr string) (*Node, error) {
+func (m *Manager) createNode(addr string, id uint32) (*Node, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -100,9 +122,11 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		return nil, fmt.Errorf("create node %s error: %v", addr, err)
 	}
 
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(tcpAddr.String()))
-	id := h.Sum32()
+	if id == 0 {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(tcpAddr.String()))
+		id = h.Sum32()
+	}
 
 	if _, found := m.lookup[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)

@@ -41,9 +41,9 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grp
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -58,15 +58,15 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grp
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -118,9 +118,9 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -135,15 +135,15 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallPerNodeArgQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallPerNodeArgQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -190,9 +190,9 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -207,15 +207,15 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallCustomReturnTypeQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallCustomReturnTypeQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -267,9 +267,9 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -284,15 +284,15 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallComboQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallComboQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -339,9 +339,9 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, op
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -356,15 +356,15 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, op
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallEmptyQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallEmptyQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -411,9 +411,9 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts 
 	}
 
 	var (
-		replyValues = make([]*empty.Empty, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*empty.Empty)
 	)
 
 	for {
@@ -428,15 +428,15 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallEmpty2QF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallEmpty2QF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }

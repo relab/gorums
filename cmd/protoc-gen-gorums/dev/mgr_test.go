@@ -3,19 +3,20 @@ package dev_test
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	qc "github.com/relab/gorums/cmd/protoc-gen-gorums/dev"
 )
 
-func TestEqualGlobalConfigurationIDsDifferentOrder(t *testing.T) {
+func TestIdenticalNodeListsDifferentOrder(t *testing.T) {
 	// Equal set of addresses, but different order.
 	addrsOne := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
 	addrsTwo := []string{"localhost:8081", "localhost:8082", "localhost:8080"}
 
-	mgrOne, err := qc.NewManager(addrsOne, qc.WithNoConnect())
+	mgrOne, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeList(addrsOne))
 	if err != nil {
 		t.Fatal(err)
 	}
-	mgrTwo, err := qc.NewManager(addrsTwo, qc.WithNoConnect())
+	mgrTwo, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeList(addrsTwo))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,9 +39,9 @@ func TestEqualGlobalConfigurationIDsDifferentOrder(t *testing.T) {
 	}
 }
 
-func TestEqualGlobalConfigurationIDsDuplicateID(t *testing.T) {
+func TestNodeListDuplicateIDs(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
-	mgr, err := qc.NewManager(addrs, qc.WithNoConnect())
+	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,22 +68,20 @@ func TestEqualGlobalConfigurationIDsDuplicateID(t *testing.T) {
 
 func TestCreateConfiguration(t *testing.T) {
 	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082"}
-	mgr, err := qc.NewManager(addrs, qc.WithNoConnect())
+	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	ids := mgr.NodeIDs()
-
 	config, err := mgr.NewConfiguration(ids, nil)
 	if err != nil {
-		t.Errorf("got error creating configuration, want none (%v)", err)
+		t.Fatal(err)
 	}
 
 	cfgNodeIDs := config.NodeIDs()
-	if !equal(cfgNodeIDs, ids) {
-		t.Errorf("ids from Manager (got %v) and ids from configuration containing all nodes (got %v) should be equal",
-			ids, cfgNodeIDs)
+	if diff := cmp.Diff(ids, cfgNodeIDs); diff != "" {
+		t.Errorf("NodeIDs() mismatch (-ids +cfgNodeIDs):\n%s", diff)
 	}
 
 	_, size := mgr.Size()
@@ -91,14 +90,60 @@ func TestCreateConfiguration(t *testing.T) {
 	}
 }
 
-func equal(a, b []uint32) bool {
-	if len(a) != len(b) {
-		return false
+func TestWithNodeMap(t *testing.T) {
+	addrs := map[string]uint32{
+		"localhost:8080": 1,
+		"localhost:8081": 2,
+		"localhost:8082": 3,
+		"localhost:8083": 4,
 	}
-	for i, x := range a {
-		if x != b[i] {
-			return false
+
+	mgr, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeMap(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mgrSize, _ := mgr.Size()
+	if mgrSize != len(addrs) {
+		t.Errorf("Size() = %d; want %d", mgrSize, len(addrs))
+	}
+
+	nodes := mgr.NodeIDs()
+	if len(nodes) != len(addrs) {
+		t.Errorf("Number of nodes %d; want %d", mgrSize, len(addrs))
+	}
+
+	// set comparison
+	numNodes := 0
+	for _, nodeID := range nodes {
+		for _, addrID := range addrs {
+			if nodeID == addrID {
+				numNodes++
+			}
 		}
 	}
-	return true
+	if numNodes != len(addrs) {
+		t.Errorf("Found %d unique nodes; want %d", numNodes, len(addrs))
+	}
+}
+
+func TestWithNodeMapDuplicateIDs(t *testing.T) {
+	addrs := map[string]uint32{
+		"localhost:8080": 1,
+		"localhost:8081": 2,
+		"localhost:8082": 3,
+		"localhost:8083": 1,
+	}
+
+	_, err := qc.NewManager(qc.WithNoConnect(), qc.WithNodeMap(addrs))
+	if err == nil {
+		t.Errorf("expected error due to duplicate node IDs.")
+	}
+
+	addrs["localhost:8083"] = 4
+
+	_, err = qc.NewManager(qc.WithNoConnect(), qc.WithNodeMap(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
 }

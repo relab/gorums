@@ -61,9 +61,9 @@ var quorumCallLoop = `
 
 var quorumCallReply = `
 	var (
-		replyValues = make([]*{{$out}}, 0, expected)
 		errs        []GRPCError
 		quorum      bool
+		replies = make(map[uint32]*{{$out}})
 	)
 
 	for {
@@ -74,15 +74,15 @@ var quorumCallReply = `
 				break
 			}
 			{{template "traceLazyLog"}}
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.{{$method}}QF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.{{$method}}QF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }

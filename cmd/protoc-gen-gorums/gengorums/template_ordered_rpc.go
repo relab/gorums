@@ -13,8 +13,8 @@ var orderingRPCPreamble = `
 	msgID := n.nextMsgID()
 	
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, 1)
-	n.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, 1)
+	n.putChan(msgID, replyChan)
 	
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
@@ -29,7 +29,7 @@ var orderingRPCBody = `
 	n.sendQ <- msg
 
 	select {
-	case r := <-replies:
+	case r := <-replyChan:
 		if r.err != nil {
 			return nil, r.err
 		}

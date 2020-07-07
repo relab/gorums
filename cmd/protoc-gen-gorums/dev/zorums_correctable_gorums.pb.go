@@ -52,12 +52,12 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -73,8 +73,8 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -84,11 +84,11 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -151,12 +151,12 @@ func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, 
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -172,8 +172,8 @@ func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectablePerNodeArgQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectablePerNodeArgQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -183,11 +183,11 @@ func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -245,12 +245,12 @@ func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Req
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *MyResponse
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *MyResponse
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -266,8 +266,8 @@ func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Req
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableCustomReturnTypeQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableCustomReturnTypeQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -277,11 +277,11 @@ func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Req
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -344,12 +344,12 @@ func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f fun
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *MyResponse
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *MyResponse
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -365,8 +365,8 @@ func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f fun
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableComboQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableComboQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -376,11 +376,11 @@ func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f fun
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -438,12 +438,12 @@ func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp 
 	}
 
 	var (
-		replyValues = make([]*empty.Empty, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *empty.Empty
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*empty.Empty, c.n*2)
+		clevel  = LevelNotSet
+		reply   *empty.Empty
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -459,8 +459,8 @@ func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableEmptyQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableEmptyQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -470,11 +470,11 @@ func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -533,12 +533,12 @@ func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, 
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -554,8 +554,8 @@ func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableEmpty2QF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableEmpty2QF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -565,11 +565,11 @@ func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -627,13 +627,12 @@ func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -649,8 +648,8 @@ func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -660,11 +659,11 @@ func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -734,13 +733,12 @@ func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Req
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -756,8 +754,8 @@ func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Req
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamPerNodeArgQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamPerNodeArgQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -767,11 +765,11 @@ func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Req
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -836,13 +834,12 @@ func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, i
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *MyResponse
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *MyResponse
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -858,8 +855,8 @@ func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, i
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamCustomReturnTypeQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamCustomReturnTypeQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -869,11 +866,11 @@ func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, i
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -943,13 +940,12 @@ func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request,
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *MyResponse
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *MyResponse
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -965,8 +961,8 @@ func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request,
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamComboQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamComboQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -976,11 +972,11 @@ func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request,
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -1045,13 +1041,12 @@ func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request,
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*empty.Empty, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *empty.Empty
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*empty.Empty, c.n*2)
+		clevel  = LevelNotSet
+		reply   *empty.Empty
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -1067,8 +1062,8 @@ func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request,
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamEmptyQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamEmptyQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -1078,11 +1073,11 @@ func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request,
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -1148,13 +1143,12 @@ func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.E
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -1170,8 +1164,8 @@ func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.E
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamEmpty2QF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamEmpty2QF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -1181,11 +1175,11 @@ func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.E
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}

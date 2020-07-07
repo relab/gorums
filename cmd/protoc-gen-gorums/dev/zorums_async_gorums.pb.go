@@ -53,10 +53,10 @@ func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp 
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -72,17 +72,17 @@ func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureQF(in, replies); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -147,10 +147,10 @@ func (c *Configuration) quorumCallFuturePerNodeArg(ctx context.Context, in *Requ
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -166,17 +166,17 @@ func (c *Configuration) quorumCallFuturePerNodeArg(ctx context.Context, in *Requ
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFuturePerNodeArgQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFuturePerNodeArgQF(in, replies); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -236,10 +236,10 @@ func (c *Configuration) quorumCallFutureCustomReturnType(ctx context.Context, in
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *MyResponse
-		errs        []GRPCError
-		quorum      bool
+		reply   *MyResponse
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -255,17 +255,17 @@ func (c *Configuration) quorumCallFutureCustomReturnType(ctx context.Context, in
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureCustomReturnTypeQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureCustomReturnTypeQF(in, replies); quorum {
 				resp.MyResponse, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -330,10 +330,10 @@ func (c *Configuration) quorumCallFutureCombo(ctx context.Context, in *Request, 
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *MyResponse
-		errs        []GRPCError
-		quorum      bool
+		reply   *MyResponse
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -349,17 +349,17 @@ func (c *Configuration) quorumCallFutureCombo(ctx context.Context, in *Request, 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureComboQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureComboQF(in, replies); quorum {
 				resp.MyResponse, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -419,10 +419,10 @@ func (c *Configuration) quorumCallFuture2(ctx context.Context, in *Request, resp
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -438,17 +438,17 @@ func (c *Configuration) quorumCallFuture2(ctx context.Context, in *Request, resp
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFuture2QF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFuture2QF(in, replies); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -508,10 +508,10 @@ func (c *Configuration) quorumCallFutureEmpty(ctx context.Context, in *Request, 
 	}
 
 	var (
-		replyValues = make([]*empty.Empty, 0, c.n)
-		reply       *empty.Empty
-		errs        []GRPCError
-		quorum      bool
+		reply   *empty.Empty
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*empty.Empty, 2*c.n)
 	)
 
 	for {
@@ -527,17 +527,17 @@ func (c *Configuration) quorumCallFutureEmpty(ctx context.Context, in *Request, 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureEmptyQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureEmptyQF(in, replies); quorum {
 				resp.Empty, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Empty, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Empty, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Empty, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Empty, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -598,10 +598,10 @@ func (c *Configuration) quorumCallFutureEmpty2(ctx context.Context, in *empty.Em
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -617,17 +617,17 @@ func (c *Configuration) quorumCallFutureEmpty2(ctx context.Context, in *empty.Em
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureEmpty2QF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureEmpty2QF(in, replies); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}

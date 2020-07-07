@@ -14,243 +14,243 @@ type QuorumSpec interface {
 	// supplied to the QuorumCall method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallPerNodeArgQF is the quorum function for the QuorumCallPerNodeArg
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallPerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallPerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallPerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallCustomReturnTypeQF is the quorum function for the QuorumCallCustomReturnType
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
+	QuorumCallCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// QuorumCallComboQF is the quorum function for the QuorumCallCombo
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	QuorumCallComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// QuorumCallEmptyQF is the quorum function for the QuorumCallEmpty
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
-	QuorumCallEmptyQF(in *empty.Empty, replies []*Response) (*Response, bool)
+	QuorumCallEmptyQF(in *empty.Empty, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallEmpty2QF is the quorum function for the QuorumCallEmpty2
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallEmpty2QF(in *Request, replies []*empty.Empty) (*empty.Empty, bool)
+	QuorumCallEmpty2QF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, bool)
 
 	// QuorumCallFutureQF is the quorum function for the QuorumCallFuture
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFuture method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallFutureQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallFuturePerNodeArgQF is the quorum function for the QuorumCallFuturePerNodeArg
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFuturePerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFuturePerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallFuturePerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallFutureCustomReturnTypeQF is the quorum function for the QuorumCallFutureCustomReturnType
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFutureCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
+	QuorumCallFutureCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// QuorumCallFutureComboQF is the quorum function for the QuorumCallFutureCombo
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFutureCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	QuorumCallFutureComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// QuorumCallFuture2QF is the quorum function for the QuorumCallFuture2
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFuture2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFuture2QF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallFuture2QF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallFutureEmptyQF is the quorum function for the QuorumCallFutureEmpty
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFutureEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureEmptyQF(in *Request, replies []*empty.Empty) (*empty.Empty, bool)
+	QuorumCallFutureEmptyQF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, bool)
 
 	// QuorumCallFutureEmpty2QF is the quorum function for the QuorumCallFutureEmpty2
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFutureEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
-	QuorumCallFutureEmpty2QF(in *empty.Empty, replies []*Response) (*Response, bool)
+	QuorumCallFutureEmpty2QF(in *empty.Empty, replies map[uint32]*Response) (*Response, bool)
 
 	// CorrectableQF is the quorum function for the Correctable
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the Correctable method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableQF(in *Request, replies []*Response) (*Response, int, bool)
+	CorrectableQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectablePerNodeArgQF is the quorum function for the CorrectablePerNodeArg
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectablePerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectablePerNodeArgQF(in *Request, replies []*Response) (*Response, int, bool)
+	CorrectablePerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableCustomReturnTypeQF is the quorum function for the CorrectableCustomReturnType
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectableCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+	CorrectableCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, int, bool)
 
 	// CorrectableComboQF is the quorum function for the CorrectableCombo
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectableCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableComboQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+	CorrectableComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, int, bool)
 
 	// CorrectableEmptyQF is the quorum function for the CorrectableEmpty
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectableEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableEmptyQF(in *Request, replies []*empty.Empty) (*empty.Empty, int, bool)
+	CorrectableEmptyQF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, int, bool)
 
 	// CorrectableEmpty2QF is the quorum function for the CorrectableEmpty2
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectableEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
-	CorrectableEmpty2QF(in *empty.Empty, replies []*Response) (*Response, int, bool)
+	CorrectableEmpty2QF(in *empty.Empty, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableStreamQF is the quorum function for the CorrectableStream
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStream method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamQF(in *Request, replies []*Response) (*Response, int, bool)
+	CorrectableStreamQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableStreamPerNodeArgQF is the quorum function for the CorrectableStreamPerNodeArg
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamPerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamPerNodeArgQF(in *Request, replies []*Response) (*Response, int, bool)
+	CorrectableStreamPerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableStreamCustomReturnTypeQF is the quorum function for the CorrectableStreamCustomReturnType
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+	CorrectableStreamCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, int, bool)
 
 	// CorrectableStreamComboQF is the quorum function for the CorrectableStreamCombo
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamComboQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+	CorrectableStreamComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, int, bool)
 
 	// CorrectableStreamEmptyQF is the quorum function for the CorrectableStreamEmpty
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamEmptyQF(in *Request, replies []*empty.Empty) (*empty.Empty, int, bool)
+	CorrectableStreamEmptyQF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, int, bool)
 
 	// CorrectableStreamEmpty2QF is the quorum function for the CorrectableStreamEmpty2
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
-	CorrectableStreamEmpty2QF(in *empty.Empty, replies []*Response) (*Response, int, bool)
+	CorrectableStreamEmpty2QF(in *empty.Empty, replies map[uint32]*Response) (*Response, int, bool)
 
 	// OrderingQCQF is the quorum function for the OrderingQC
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingQC method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingQCQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingQCQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingPerNodeArgQF is the quorum function for the OrderingPerNodeArg
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingPerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingPerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingPerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingCustomReturnTypeQF is the quorum function for the OrderingCustomReturnType
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// OrderingComboQF is the quorum function for the OrderingCombo
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// OrderingConcurrentQF is the quorum function for the OrderingConcurrent
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingConcurrent method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingConcurrentQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingConcurrentQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingFutureQF is the quorum function for the OrderingFuture
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFuture method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFutureQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingFutureQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingFuturePerNodeArgQF is the quorum function for the OrderingFuturePerNodeArg
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFuturePerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFuturePerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingFuturePerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingFutureCustomReturnTypeQF is the quorum function for the OrderingFutureCustomReturnType
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFutureCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFutureCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingFutureCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// OrderingFutureConcurrentQF is the quorum function for the OrderingFutureConcurrent
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFutureConcurrent method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFutureConcurrentQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingFutureConcurrentQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingFutureComboQF is the quorum function for the OrderingFutureCombo
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFutureCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFutureComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingFutureComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 }
