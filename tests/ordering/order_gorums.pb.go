@@ -849,7 +849,6 @@ func WithSendBufferSize(size uint) ManagerOption {
 }
 
 type methodInfo struct {
-	oneway       bool
 	concurrent   bool
 	requestType  protoreflect.Message
 	responseType protoreflect.Message
@@ -1008,7 +1007,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage) *gorumsMessage
+type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -1026,22 +1025,8 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ordered := make(chan struct {
-		msg  *gorumsMessage
-		info methodInfo
-	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	handleMsg := func(req *gorumsMessage, info methodInfo) {
-		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			if info.oneway {
-				handler(req)
-			} else {
-				finished <- handler(req)
-			}
-		}
-	}
 
 	go func() {
 		for {
@@ -1057,33 +1042,14 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req := <-ordered:
-				handleMsg(req.msg, req.info)
-			}
-		}
-	}()
-
 	for {
 		req := newGorumsMessage(false)
 		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
-
-		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
-			if info.concurrent {
-				go handleMsg(req, info)
-			} else {
-				ordered <- struct {
-					msg  *gorumsMessage
-					info methodInfo
-				}{req, info}
-			}
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
+			handler(req, finished)
 		}
 	}
 }
@@ -1114,7 +1080,6 @@ func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
-	opts       serverOptions
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
@@ -1420,6 +1385,43 @@ type QuorumSpec interface {
 	QCFutureQF(in *Request, replies []*Response) (*Response, bool)
 }
 
+// GorumsTest is the server-side API for the GorumsTest Service
+type GorumsTest interface {
+	QC(*Request, chan<- *Response)
+	QCFuture(*Request, chan<- *Response)
+	UnaryRPC(*Request, chan<- *Response)
+}
+
+func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
+	s.srv.handlers[qCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.QC(req, c)
+	}
+	s.srv.handlers[qCFutureMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.QCFuture(req, c)
+	}
+	s.srv.handlers[unaryRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.UnaryRPC(req, c)
+	}
+}
+
 const hasOrderingMethods = true
 
 const qCMethodID int32 = 0
@@ -1428,9 +1430,9 @@ const unaryRPCMethodID int32 = 2
 
 var orderingMethods = map[int32]methodInfo{
 
-	0: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	1: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	2: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	0: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	1: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	2: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
 }
 
 type internalResponse struct {
@@ -1462,33 +1464,5 @@ func (f *FutureResponse) Done() bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// GorumsTest is the server-side API for the GorumsTest Service
-type GorumsTest interface {
-	QC(*Request) *Response
-	QCFuture(*Request) *Response
-	UnaryRPC(*Request) *Response
-}
-
-func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
-	s.srv.handlers[qCMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.QC(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[qCFutureMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.QCFuture(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[unaryRPCMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.UnaryRPC(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 }

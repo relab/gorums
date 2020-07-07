@@ -1,9 +1,5 @@
 package gengorums
 
-import (
-	"google.golang.org/protobuf/compiler/protogen"
-)
-
 var globals = `
 const hasOrderingMethods = {{hasOrderingMethods .Services}}
 `
@@ -20,7 +16,7 @@ var orderingMethods = map[int32]methodInfo{
 	{{$genFile := .GenFile}}
 	{{$methods := methods .Services}}
 	{{range $index, $method := nodeStreamMethods $methods}}
-		{{$index}}: { oneway: {{isOneway $method}}, concurrent: {{isConcurrent $method}}, requestType: new({{in $genFile $method}}).ProtoReflect(), responseType: new({{out $genFile $method}}).ProtoReflect() },
+		{{$index}}: { requestType: new({{in $genFile $method}}).ProtoReflect(), responseType: new({{out $genFile $method}}).ProtoReflect() },
 	{{- end}}
 }
 `
@@ -154,59 +150,9 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 {{end}}
 `
 
-var serverInterface = `
-{{$genFile := .GenFile}}
-{{range .Services -}}
-{{$service := .GoName}}
-// {{$service}} is the server-side API for the {{$service}} Service
-type {{$service}} interface {
-	{{- range nodeStreamMethods .Methods}}
-	{{- if isOneway .}}
-	{{.GoName}}(*{{in $genFile .}})
-	{{- else}}
-	{{.GoName}}(*{{in $genFile .}}) *{{out $genFile .}}
-	{{- end}}
-	{{- end}}
-}
-{{- end}}
-`
-
-var registerInterface = `
-{{$genFile := .GenFile}}
-{{range .Services -}}
-{{$service := .GoName}}
-func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
-	{{- range nodeStreamMethods .Methods}}
-	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*{{in $genFile .}})
-		{{- if isOneway .}}
-		srv.{{.GoName}}(req)
-		return nil
-		{{- else}}
-		resp := srv.{{.GoName}}(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-		{{- end}}
-	}
-	{{- end}}
-}
-{{- end}}
-`
-
 var datatypes = globals +
 	orderingIDs +
 	orderingMethods +
 	internalOutDataType +
 	futureDataType +
-	correctableDataType +
-	serverInterface +
-	registerInterface
-
-// nodeStreamMethods returns all Gorums methods that use ordering.
-func nodeStreamMethods(methods []*protogen.Method) (s []*protogen.Method) {
-	for _, method := range methods {
-		if hasMethodOption(method, nodeStreamCallTypes...) {
-			s = append(s, method)
-		}
-	}
-	return
-}
+	correctableDataType

@@ -133,14 +133,23 @@ func init() {
 	encoding.RegisterCodec(newGorumsCodec())
 }
 
+type gorumsMsgType uint8
+
+const (
+	gorumsRequest gorumsMsgType = iota + 1
+	gorumsResponse
+)
+
 type gorumsMessage struct {
 	metadata *ordering.Metadata
 	message  protoreflect.ProtoMessage
-	reply    bool
+	msgType  gorumsMsgType
 }
 
-func newGorumsMessage(reply bool) *gorumsMessage {
-	return &gorumsMessage{metadata: &ordering.Metadata{}, reply: reply}
+// newGorumsMessage creates a new gorumsMessage struct for unmarshaling.
+// msgType specifies the type of message that should be unmarshaled.
+func newGorumsMessage(msgType gorumsMsgType) *gorumsMessage {
+	return &gorumsMessage{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
 type gorumsCodec struct {
@@ -170,7 +179,7 @@ func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	case protoreflect.ProtoMessage:
 		return c.marshaler.Marshal(msg)
 	default:
-		return nil, fmt.Errorf("gorumsEncoder: don't know how to marshal message of type '%T'", m)
+		return nil, fmt.Errorf("gorumsCodec: don't know how to marshal message of type '%T'", m)
 	}
 }
 
@@ -199,7 +208,7 @@ func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
 	case protoreflect.ProtoMessage:
 		return c.unmarshaler.Unmarshal(b, msg)
 	default:
-		return fmt.Errorf("gorumsEncoder: don't know how to unmarshal message of type '%T'", m)
+		return fmt.Errorf("gorumsCodec: don't know how to unmarshal message of type '%T'", m)
 	}
 }
 
@@ -210,11 +219,17 @@ func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
 	if err != nil {
 		return err
 	}
-	info := orderingMethods[msg.metadata.MethodID]
-	if msg.reply {
-		msg.message = info.responseType.New().Interface()
-	} else {
+	info, ok := orderingMethods[msg.metadata.MethodID]
+	if !ok {
+		return fmt.Errorf("gorumsCodec: Unknown MethodID")
+	}
+	switch msg.msgType {
+	case gorumsRequest:
 		msg.message = info.requestType.New().Interface()
+	case gorumsResponse:
+		msg.message = info.responseType.New().Interface()
+	default:
+		return fmt.Errorf("gorumsCodec: Unknown message type")
 	}
 	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
 	err = c.unmarshaler.Unmarshal(msgBuf, msg.message)
@@ -915,8 +930,6 @@ func WithNodeList(addrsList []string) ManagerOption {
 }
 
 type methodInfo struct {
-	oneway       bool
-	concurrent   bool
 	requestType  protoreflect.Message
 	responseType protoreflect.Message
 }
@@ -1019,7 +1032,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := newGorumsMessage(true)
+		resp := newGorumsMessage(gorumsResponse)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
@@ -1074,7 +1087,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage) *gorumsMessage
+type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -1090,24 +1103,12 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
+// NodeStream handles a connection to a single client. The stream is aborted if there
+// is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ordered := make(chan struct {
-		msg  *gorumsMessage
-		info methodInfo
-	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	handleMsg := func(req *gorumsMessage, info methodInfo) {
-		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			if info.oneway {
-				handler(req)
-			} else {
-				finished <- handler(req)
-			}
-		}
-	}
 
 	go func() {
 		for {
@@ -1123,33 +1124,14 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req := <-ordered:
-				handleMsg(req.msg, req.info)
-			}
-		}
-	}()
-
 	for {
-		req := newGorumsMessage(false)
+		req := newGorumsMessage(gorumsRequest)
 		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
-
-		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
-			if info.concurrent {
-				go handleMsg(req, info)
-			} else {
-				ordered <- struct {
-					msg  *gorumsMessage
-					info methodInfo
-				}{req, info}
-			}
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
+			handler(req, finished)
 		}
 	}
 }

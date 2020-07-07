@@ -26,7 +26,6 @@ Each call type may in addition specify some advanced options:
 | Custom return type | `gorums.custom_return_type` | string | Makes the quorum function return a different type than the RPC response type.                  |
 | Per node arguments | `gorums.per_node_arg`       | bool   | Makes it possible to send different requests objects to each node in a call.                   |
 | Asynchronous       | `gorums.async`              | bool   | Makes the quorum call run asynchronously and return a "future" object to fetch the result.     |
-| Concurrent         | `gorums.concurrent`         | bool   | Makes server-side RPC handlers run concurrently. FIFO ordering is lost if this option is used. |
 
 The following matrix shows which call types support different options:
 
@@ -35,7 +34,6 @@ The following matrix shows which call types support different options:
 | Custom return type | N/A         | N/A         | N/A       | Yes         | Yes                 | Yes         |
 | Per node arguments | N/A         | N/A         | Yes       | Yes         | Yes                 | Yes         |
 | Asynchronous       | No          | No          | N/A       | Yes         | Yes                 | No          |
-| Concurrent         | N/A         | Yes         | Yes       | N/A         | Yes                 | N/A         |
 
 ```proto
 service Storage {

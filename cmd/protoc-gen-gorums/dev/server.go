@@ -12,7 +12,7 @@ import (
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage) *gorumsMessage
+type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -28,24 +28,12 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
+// NodeStream handles a connection to a single client. The stream is aborted if there
+// is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ordered := make(chan struct {
-		msg  *gorumsMessage
-		info methodInfo
-	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	handleMsg := func(req *gorumsMessage, info methodInfo) {
-		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			if info.oneway {
-				handler(req)
-			} else {
-				finished <- handler(req)
-			}
-		}
-	}
 
 	go func() {
 		for {
@@ -61,33 +49,14 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req := <-ordered:
-				handleMsg(req.msg, req.info)
-			}
-		}
-	}()
-
 	for {
-		req := newGorumsMessage(false)
+		req := newGorumsMessage(gorumsRequest)
 		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
-
-		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
-			if info.concurrent {
-				go handleMsg(req, info)
-			} else {
-				ordered <- struct {
-					msg  *gorumsMessage
-					info methodInfo
-				}{req, info}
-			}
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
+			handler(req, finished)
 		}
 	}
 }

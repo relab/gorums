@@ -252,11 +252,6 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedQC) },
 		},
 		{
-			Name:        "ConcurrentQC",
-			Description: "NodeStream based quorum call implementation with concurrent handlers and no FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.ConcurrentQC) },
-		},
-		{
 			Name:        "UnorderedAsync",
 			Description: "Unary RPC based async quorum call implementation without FIFO ordering",
 			runBench: func(opts Options) (*Result, error) {
@@ -269,11 +264,6 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 			Name:        "OrderedAsync",
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
 			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.OrderedAsync) },
-		},
-		{
-			Name:        "ConcurrentAsync",
-			Description: "NodeStream based async quorum call implementation with concurrent handlers and no FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.ConcurrentAsync) },
 		},
 		{
 			Name:        "UnorderedSlowServer",
@@ -290,21 +280,9 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedSlowServer) },
 		},
 		{
-			Name:        "ConcurrentSlowServer",
-			Description: "ConcurrentQC with a 10s processing time on the server",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.ConcurrentSlowServer) },
-		},
-		{
 			Name:        "Multicast",
 			Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
 			runBench:    func(opts Options) (*Result, error) { return runServerBenchmark(opts, cfg, cfg.Multicast) },
-		},
-		{
-			Name:        "ConcurrentMulticast",
-			Description: "NodeStream based multicast implementation with concurrent handlers (servers measuer latency and throughput)",
-			runBench: func(opts Options) (*Result, error) {
-				return runServerBenchmark(opts, cfg, cfg.ConcurrentMulticast)
-			},
 		},
 	}
 	return m

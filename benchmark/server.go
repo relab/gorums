@@ -40,20 +40,12 @@ func (srv *unorderedServer) OrderedQC(_ context.Context, _ *Echo) (_ *Echo, _ er
 	panic("Not implemented")
 }
 
-func (srv *unorderedServer) ConcurrentQC(_ context.Context, _ *Echo) (_ *Echo, _ error) {
-	panic("Not implemented")
-}
-
 func (srv *unorderedServer) UnorderedAsync(_ context.Context, in *Echo) (out *Echo, _ error) {
 	out = in
 	return
 }
 
 func (srv *unorderedServer) OrderedAsync(_ context.Context, _ *Echo) (_ *Echo, _ error) {
-	panic("Not implemented")
-}
-
-func (srv *unorderedServer) ConcurrentAsync(_ context.Context, _ *Echo) (_ *Echo, _ error) {
 	panic("Not implemented")
 }
 
@@ -67,15 +59,7 @@ func (srv *unorderedServer) OrderedSlowServer(_ context.Context, _ *Echo) (_ *Ec
 	panic("Not implemented")
 }
 
-func (srv *unorderedServer) ConcurrentSlowServer(_ context.Context, _ *Echo) (_ *Echo, _ error) {
-	panic("Not implemented")
-}
-
 func (srv *unorderedServer) Multicast(_ context.Context, _ *TimedMsg) (_ *empty.Empty, _ error) {
-	panic("Not implemented")
-}
-
-func (srv *unorderedServer) ConcurrentMulticast(_ context.Context, _ *TimedMsg) (_ *empty.Empty, _ error) {
 	panic("Not implemented")
 }
 
@@ -83,30 +67,19 @@ type orderedServer struct {
 	stats *Stats
 }
 
-func (srv *orderedServer) OrderedQC(in *Echo) *Echo {
-	return in
+func (srv *orderedServer) OrderedQC(in *Echo, out chan<- *Echo) {
+	out <- in
 }
 
-func (srv *orderedServer) ConcurrentQC(in *Echo) *Echo {
-	return in
+func (srv *orderedServer) OrderedAsync(in *Echo, out chan<- *Echo) {
+	out <- in
 }
 
-func (srv *orderedServer) OrderedAsync(in *Echo) *Echo {
-	return in
-}
-
-func (srv *orderedServer) ConcurrentAsync(in *Echo) *Echo {
-	return in
-}
-
-func (srv *orderedServer) OrderedSlowServer(in *Echo) *Echo {
-	time.Sleep(10 * time.Millisecond)
-	return in
-}
-
-func (srv *orderedServer) ConcurrentSlowServer(in *Echo) *Echo {
-	time.Sleep(10 * time.Millisecond)
-	return in
+func (srv *orderedServer) OrderedSlowServer(in *Echo, out chan<- *Echo) {
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		out <- in
+	}()
 }
 
 func (srv *orderedServer) Multicast(msg *TimedMsg) {
@@ -114,31 +87,26 @@ func (srv *orderedServer) Multicast(msg *TimedMsg) {
 	srv.stats.AddLatency(time.Duration(latency))
 }
 
-func (srv *orderedServer) ConcurrentMulticast(msg *TimedMsg) {
-	latency := time.Now().UnixNano() - msg.SendTime
-	srv.stats.AddLatency(time.Duration(latency))
-}
-
-func (srv *orderedServer) StartServerBenchmark(_ *StartRequest) *StartResponse {
+func (srv *orderedServer) StartServerBenchmark(_ *StartRequest, out chan<- *StartResponse) {
 	srv.stats.Clear()
 	srv.stats.Start()
-	return &StartResponse{}
+	out <- &StartResponse{}
 }
 
-func (srv *orderedServer) StopServerBenchmark(_ *StopRequest) *Result {
+func (srv *orderedServer) StopServerBenchmark(_ *StopRequest, out chan<- *Result) {
 	srv.stats.End()
-	return srv.stats.GetResult()
+	out <- srv.stats.GetResult()
 }
 
-func (srv *orderedServer) StartBenchmark(_ *StartRequest) *StartResponse {
+func (srv *orderedServer) StartBenchmark(_ *StartRequest, out chan<- *StartResponse) {
 	srv.stats.Clear()
 	srv.stats.Start()
-	return &StartResponse{}
+	out <- &StartResponse{}
 }
 
-func (srv *orderedServer) StopBenchmark(_ *StopRequest) *MemoryStat {
+func (srv *orderedServer) StopBenchmark(_ *StopRequest, out chan<- *MemoryStat) {
 	srv.stats.End()
-	return &MemoryStat{
+	out <- &MemoryStat{
 		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,
 		Memory: srv.stats.endMs.TotalAlloc - srv.stats.startMs.TotalAlloc,
 	}

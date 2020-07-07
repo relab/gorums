@@ -1,25 +1,29 @@
 {
     "protoc": {
-        "path": "/usr/local/bin/protoc",
         "compile_on_save": false,
         "options": [
             "--proto_path=${workspaceRoot}",
             "--proto_path=${workspaceRoot}/cmd/protoc-gen-gorums/dev",
         ]
     },
-    "cSpell.words": [
-        "Ansible",
-        "Erevik",
-        "ICDCS",
-        "Jehl",
-        "Mallocs",
-        "Paxos",
-        "QCQF",
-        "Tormod",
-        "calltypes",
-        "cpuprofile",
-        "golangci",
-        "memprofile"
+    "cSpell.enabled": true,
+    "cSpell.showStatus": true,
+    "cSpell.languageSettings": [
+        {
+            // use with Markdown files
+            "languageId": "markdown",
+            // Exclude code.
+            "ignoreRegExpList": [
+                "/^\\s*```(.|\\n)+?^\\s*```/gm"
+            ]
+        }
+    ],
+    "cSpell.customWorkspaceDictionaries": [
+        {
+            "addWords": true,
+            "name": "gorums",
+            "path": "${workspaceRoot}/.vscode/gorums.txt"
+        }
     ],
     "go.lintTool": "golangci-lint",
     "go.lintFlags": [

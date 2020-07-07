@@ -17,8 +17,6 @@ import (
 )
 
 type methodInfo struct {
-	oneway       bool
-	concurrent   bool
 	requestType  protoreflect.Message
 	responseType protoreflect.Message
 }
@@ -121,7 +119,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := newGorumsMessage(true)
+		resp := newGorumsMessage(gorumsResponse)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
