@@ -185,6 +185,7 @@ func main() {
 	}
 
 	var mgrOpts = []benchmark.ManagerOption{
+		benchmark.WithNodeList(remotes),
 		benchmark.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 		benchmark.WithDialTimeout(10 * time.Second),
 		benchmark.WithSendBufferSize(*sendBuffer),
@@ -194,7 +195,7 @@ func main() {
 		mgrOpts = append(mgrOpts, benchmark.WithTracing())
 	}
 
-	mgr, err := benchmark.NewManager(remotes, mgrOpts...)
+	mgr, err := benchmark.NewManager(mgrOpts...)
 	if err != nil {
 		log.Fatalf("Failed to create manager: %v\n", err)
 	}
