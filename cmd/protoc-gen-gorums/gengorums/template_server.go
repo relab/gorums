@@ -1,5 +1,9 @@
 package gengorums
 
+var serverVariables = `
+{{$context := use "context.Context" .GenFile}}
+`
+
 var serverInterface = `
 {{$genFile := .GenFile}}
 {{range .Services -}}
@@ -8,9 +12,9 @@ var serverInterface = `
 type {{$service}} interface {
 	{{- range nodeStreamMethods .Methods}}
 	{{- if isOneway .}}
-	{{.GoName}}(*{{in $genFile .}})
+	{{.GoName}}({{$context}}, *{{in $genFile .}})
 	{{- else}}
-	{{.GoName}}(*{{in $genFile .}}, func(*{{out $genFile .}}))
+	{{.GoName}}({{$context}}, *{{in $genFile .}}, func(*{{out $genFile .}}))
 	{{- end}}
 	{{- end}}
 }
@@ -23,15 +27,18 @@ var registerInterface = `
 {{$service := .GoName}}
 func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 	{{- range nodeStreamMethods .Methods}}
-	s.srv.handlers[{{unexport .GoName}}MethodID] = func(in *gorumsMessage ,{{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *gorumsMessage) {
+	s.srv.handlers[{{unexport .GoName}}MethodID] = func(ctx {{$context}}, in *gorumsMessage ,{{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *gorumsMessage) {
 		req := in.message.(*{{in $genFile .}})
 		{{- if isOneway .}}
-		srv.{{.GoName}}(req)
+		srv.{{.GoName}}(ctx, req)
 		{{- else }}
+		once := new({{use "sync.Once" $genFile}})
 		f := func(resp *{{out $genFile .}}) {
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
 		}
-		srv.{{.GoName}}(req, f)
+		srv.{{.GoName}}(ctx, req, f)
 		{{- end}}
 	}
 	{{- end}}
@@ -39,4 +46,4 @@ func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 {{- end}}
 `
 
-var server = serverInterface + registerInterface
+var server = serverVariables + serverInterface + registerInterface

@@ -7,31 +7,32 @@ package gengorums
 // These identifiers are used by the Gorums protoc plugin to generate
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
-	"bytes":                            "Buffer",
-	"context":                          "Background",
-	"encoding/binary":                  "LittleEndian",
-	"fmt":                              "Errorf",
-	"github.com/relab/gorums/ordering": "GorumsClient",
-	"golang.org/x/net/trace":           "EventLog",
-	"google.golang.org/grpc":           "CallContentSubtype",
-	"google.golang.org/grpc/backoff":   "Config",
-	"google.golang.org/grpc/codes":     "Unavailable",
-	"google.golang.org/grpc/encoding":  "RegisterCodec",
-	"google.golang.org/grpc/status":    "Errorf",
+	"bytes":                                           "Buffer",
+	"context":                                         "Background",
+	"encoding/binary":                                 "LittleEndian",
+	"fmt":                                             "Errorf",
+	"github.com/relab/gorums/ordering":                "GorumsClient",
+	"golang.org/x/net/trace":                          "EventLog",
+	"google.golang.org/grpc":                          "CallContentSubtype",
+	"google.golang.org/grpc/backoff":                  "Config",
+	"google.golang.org/grpc/codes":                    "Unavailable",
+	"google.golang.org/grpc/encoding":                 "RegisterCodec",
+	"google.golang.org/grpc/metadata":                 "Join",
+	"google.golang.org/grpc/status":                   "Errorf",
 	"google.golang.org/protobuf/encoding/protowire":   "AppendVarint",
 	"google.golang.org/protobuf/proto":                "MarshalOptions",
 	"google.golang.org/protobuf/reflect/protoreflect": "Message",
-	"hash/fnv":    "New32a",
-	"log":         "Logger",
-	"math":        "Min",
-	"math/rand":   "Float64",
-	"net":         "Listener",
-	"sort":        "Sort",
-	"strconv":     "Atoi",
-	"strings":     "Join",
-	"sync":        "Mutex",
-	"sync/atomic": "AddUint64",
-	"time":        "After",
+	"hash/fnv":                                        "New32a",
+	"log":                                             "Logger",
+	"math":                                            "Min",
+	"math/rand":                                       "Float64",
+	"net":                                             "Listener",
+	"sort":                                            "Sort",
+	"strconv":                                         "Atoi",
+	"strings":                                         "Join",
+	"sync":                                            "Mutex",
+	"sync/atomic":                                     "AddUint64",
+	"time":                                            "After",
 }
 
 // reservedIdents holds the set of Gorums reserved identifiers.
@@ -645,8 +646,13 @@ func (n *Node) connect(opts managerOptions) error {
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %w", err)
 	}
+	md := opts.metadata.Copy()
+	if opts.perNodeMD != nil {
+		md = metadata.Join(md, opts.perNodeMD(n.id))
+	}
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	// only start ordering RPCs when needed
 	if hasOrderingMethods {
 		err = n.connectOrderedStream(ctx, n.conn)
@@ -841,6 +847,8 @@ type managerOptions struct {
 	sendBuffer      uint
 	idMapping       map[string]uint32
 	addrsList       []string
+	metadata        metadata.MD
+	perNodeMD       func(uint32) metadata.MD
 }
 
 func newManagerOptions() managerOptions {
@@ -922,6 +930,23 @@ func WithNodeMap(idMap map[string]uint32) ManagerOption {
 func WithNodeList(addrsList []string) ManagerOption {
 	return func(o *managerOptions) {
 		o.addrsList = addrsList
+	}
+}
+
+// WithMetadata returns a ManagerOption that sets the metadata that is sent to each node
+// when the connection is initially established. This metadata can be retrieved from the
+// server-side method handlers.
+func WithMetadata(md metadata.MD) ManagerOption {
+	return func(o *managerOptions) {
+		o.metadata = md
+	}
+}
+
+// WithPerNodeMetadata returns a ManagerOption that allows you to set metadata for each
+// node individually.
+func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
+	return func(o *managerOptions) {
+		o.perNodeMD = f
 	}
 }
 
@@ -1083,7 +1108,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
+type requestHandler func(context.Context, *gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -1103,8 +1128,7 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 // is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := srv.Context()
 
 	go func() {
 		for {
@@ -1127,7 +1151,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			return err
 		}
 		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			handler(req, finished)
+			handler(ctx, req, finished)
 		}
 	}
 }

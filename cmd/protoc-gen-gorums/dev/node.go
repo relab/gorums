@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 const nilAngleString = "<nil>"
@@ -52,8 +53,13 @@ func (n *Node) connect(opts managerOptions) error {
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %w", err)
 	}
+	md := opts.metadata.Copy()
+	if opts.perNodeMD != nil {
+		md = metadata.Join(md, opts.perNodeMD(n.id))
+	}
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	// only start ordering RPCs when needed
 	if hasOrderingMethods {
 		err = n.connectOrderedStream(ctx, n.conn)
