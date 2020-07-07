@@ -67,44 +67,44 @@ type orderedServer struct {
 	stats *Stats
 }
 
-func (srv *orderedServer) OrderedQC(in *Echo, out func(*Echo)) {
+func (srv *orderedServer) OrderedQC(_ context.Context, in *Echo, out func(*Echo)) {
 	out(in)
 }
 
-func (srv *orderedServer) OrderedAsync(in *Echo, out func(*Echo)) {
+func (srv *orderedServer) OrderedAsync(_ context.Context, in *Echo, out func(*Echo)) {
 	out(in)
 }
 
-func (srv *orderedServer) OrderedSlowServer(in *Echo, out func(*Echo)) {
+func (srv *orderedServer) OrderedSlowServer(_ context.Context, in *Echo, out func(*Echo)) {
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		out(in)
 	}()
 }
 
-func (srv *orderedServer) Multicast(msg *TimedMsg) {
+func (srv *orderedServer) Multicast(_ context.Context, msg *TimedMsg) {
 	latency := time.Now().UnixNano() - msg.SendTime
 	srv.stats.AddLatency(time.Duration(latency))
 }
 
-func (srv *orderedServer) StartServerBenchmark(_ *StartRequest, out func(*StartResponse)) {
+func (srv *orderedServer) StartServerBenchmark(_ context.Context, _ *StartRequest, out func(*StartResponse)) {
 	srv.stats.Clear()
 	srv.stats.Start()
 	out(&StartResponse{})
 }
 
-func (srv *orderedServer) StopServerBenchmark(_ *StopRequest, out func(*Result)) {
+func (srv *orderedServer) StopServerBenchmark(_ context.Context, _ *StopRequest, out func(*Result)) {
 	srv.stats.End()
 	out(srv.stats.GetResult())
 }
 
-func (srv *orderedServer) StartBenchmark(_ *StartRequest, out func(*StartResponse)) {
+func (srv *orderedServer) StartBenchmark(_ context.Context, _ *StartRequest, out func(*StartResponse)) {
 	srv.stats.Clear()
 	srv.stats.Start()
 	out(&StartResponse{})
 }
 
-func (srv *orderedServer) StopBenchmark(_ *StopRequest, out func(*MemoryStat)) {
+func (srv *orderedServer) StopBenchmark(_ context.Context, _ *StopRequest, out func(*MemoryStat)) {
 	srv.stats.End()
 	out(&MemoryStat{
 		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,
