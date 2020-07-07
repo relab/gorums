@@ -15,7 +15,7 @@ import (
 func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingQC")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "OrderingQC")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -95,7 +95,7 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingPerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "OrderingPerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -177,7 +177,7 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "OrderingCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -257,7 +257,7 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "OrderingCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id

@@ -19,7 +19,6 @@ import (
 	proto "google.golang.org/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	fnv "hash/fnv"
-	io "io"
 	log "log"
 	math "math"
 	rand "math/rand"
@@ -45,9 +44,9 @@ type Configuration struct {
 
 // NewConfig returns a configuration for the given node addresses and quorum spec.
 // The returned func() must be called to close the underlying connections.
-// This is experimental API.
-func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
-	man, err := NewManager(addrs, opts...)
+// This is an experimental API.
+func NewConfig(qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+	man, err := NewManager(opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
 	}
@@ -86,10 +85,6 @@ func (c *Configuration) Size() int {
 }
 
 func (c *Configuration) String() string {
-	return fmt.Sprintf("configuration %d", c.id)
-}
-
-func (c *Configuration) tstring() string {
 	return fmt.Sprintf("config-%d", c.id)
 }
 
@@ -109,14 +104,23 @@ func init() {
 	encoding.RegisterCodec(newGorumsCodec())
 }
 
+type gorumsMsgType uint8
+
+const (
+	gorumsRequest gorumsMsgType = iota + 1
+	gorumsResponse
+)
+
 type gorumsMessage struct {
 	metadata *ordering.Metadata
 	message  protoreflect.ProtoMessage
-	reply    bool
+	msgType  gorumsMsgType
 }
 
-func newGorumsMessage(reply bool) *gorumsMessage {
-	return &gorumsMessage{metadata: &ordering.Metadata{}, reply: reply}
+// newGorumsMessage creates a new gorumsMessage struct for unmarshaling.
+// msgType specifies the type of message that should be unmarshaled.
+func newGorumsMessage(msgType gorumsMsgType) *gorumsMessage {
+	return &gorumsMessage{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
 type gorumsCodec struct {
@@ -146,7 +150,7 @@ func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	case protoreflect.ProtoMessage:
 		return c.marshaler.Marshal(msg)
 	default:
-		return nil, fmt.Errorf("gorumsEncoder: don't know how to marshal message of type '%T'", m)
+		return nil, fmt.Errorf("gorumsCodec: don't know how to marshal message of type '%T'", m)
 	}
 }
 
@@ -175,7 +179,7 @@ func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
 	case protoreflect.ProtoMessage:
 		return c.unmarshaler.Unmarshal(b, msg)
 	default:
-		return fmt.Errorf("gorumsEncoder: don't know how to unmarshal message of type '%T'", m)
+		return fmt.Errorf("gorumsCodec: don't know how to unmarshal message of type '%T'", m)
 	}
 }
 
@@ -186,11 +190,17 @@ func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
 	if err != nil {
 		return err
 	}
-	info := orderingMethods[msg.metadata.MethodID]
-	if msg.reply {
-		msg.message = info.responseType.New().Interface()
-	} else {
+	info, ok := orderingMethods[msg.metadata.MethodID]
+	if !ok {
+		return fmt.Errorf("gorumsCodec: Unknown MethodID")
+	}
+	switch msg.msgType {
+	case gorumsRequest:
 		msg.message = info.requestType.New().Interface()
+	case gorumsResponse:
+		msg.message = info.responseType.New().Interface()
+	default:
+		return fmt.Errorf("gorumsCodec: Unknown message type")
 	}
 	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
 	err = c.unmarshaler.Unmarshal(msgBuf, msg.message)
@@ -285,10 +295,7 @@ type Manager struct {
 
 // NewManager attempts to connect to the given set of node addresses and if
 // successful returns a new Manager containing connections to those nodes.
-func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
-	if len(nodeAddrs) == 0 {
-		return nil, fmt.Errorf("could not create manager: no nodes provided")
-	}
+func NewManager(opts ...ManagerOption) (*Manager, error) {
 
 	m := &Manager{
 		lookup:       make(map[uint32]*Node),
@@ -306,19 +313,45 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		grpc.ForceCodec(newGorumsCodec()),
 	))
 
+	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {
+		return nil, fmt.Errorf("could not create manager: no nodes provided")
+	}
+
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},
 		))
 	}
 
-	for _, naddr := range nodeAddrs {
-		node, err2 := m.createNode(naddr)
-		if err2 != nil {
-			return nil, ManagerCreationError(err2)
+	var nodeAddrs []string
+	if m.opts.idMapping != nil {
+		for naddr, id := range m.opts.idMapping {
+			if m.lookup[id] != nil {
+				err := fmt.Errorf("two node ids are identical(id %d). Node ids has to be unique!", id)
+				return nil, ManagerCreationError(err)
+			}
+			nodeAddrs = append(nodeAddrs, naddr)
+			node, err := m.createNode(naddr, id)
+			if err != nil {
+				return nil, ManagerCreationError(err)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
 		}
-		m.lookup[node.id] = node
-		m.nodes = append(m.nodes, node)
+
+		// Sort nodes since map iteration is non-deterministic.
+		OrderedBy(ID).Sort(m.nodes)
+
+	} else if m.opts.addrsList != nil {
+		nodeAddrs = m.opts.addrsList
+		for _, naddr := range m.opts.addrsList {
+			node, err := m.createNode(naddr, 0)
+			if err != nil {
+				return nil, ManagerCreationError(err)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
+		}
 	}
 
 	if m.opts.trace {
@@ -326,8 +359,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
-	err := m.connectAll()
-	if err != nil {
+	if err := m.connectAll(); err != nil {
 		return nil, ManagerCreationError(err)
 	}
 
@@ -342,7 +374,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) createNode(addr string) (*Node, error) {
+func (m *Manager) createNode(addr string, id uint32) (*Node, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -351,9 +383,11 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		return nil, fmt.Errorf("create node %s error: %v", addr, err)
 	}
 
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(tcpAddr.String()))
-	id := h.Sum32()
+	if id == 0 {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(tcpAddr.String()))
+		id = h.Sum32()
+	}
 
 	if _, found := m.lookup[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)
@@ -518,7 +552,7 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	h := fnv.New32a()
 	for _, id := range uniqueIDs {
-		binary.Write(h, binary.LittleEndian, id)
+		_ = binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
@@ -780,6 +814,8 @@ type managerOptions struct {
 	trace           bool
 	backoff         backoff.Config
 	sendBuffer      uint
+	idMapping       map[string]uint32
+	addrsList       []string
 }
 
 func newManagerOptions() managerOptions {
@@ -849,9 +885,22 @@ func WithSendBufferSize(size uint) ManagerOption {
 	}
 }
 
+// WithNodeMap returns a ManagerOption containing the provided mapping from node addresses to application-specific IDs.
+func WithNodeMap(idMap map[string]uint32) ManagerOption {
+	return func(o *managerOptions) {
+		o.idMapping = idMap
+	}
+}
+
+// WithNodeList returns a ManagerOption containing the provided list of node addresses.
+// With this option, NodeIDs are generated by the Manager.
+func WithNodeList(addrsList []string) ManagerOption {
+	return func(o *managerOptions) {
+		o.addrsList = addrsList
+	}
+}
+
 type methodInfo struct {
-	oneway       bool
-	concurrent   bool
 	requestType  protoreflect.Message
 	responseType protoreflect.Message
 }
@@ -954,7 +1003,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := newGorumsMessage(true)
+		resp := newGorumsMessage(gorumsResponse)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
@@ -1009,7 +1058,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage) *gorumsMessage
+type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -1025,24 +1074,12 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
+// NodeStream handles a connection to a single client. The stream is aborted if there
+// is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ordered := make(chan struct {
-		msg  *gorumsMessage
-		info methodInfo
-	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	handleMsg := func(req *gorumsMessage, info methodInfo) {
-		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			if info.oneway {
-				handler(req)
-			} else {
-				finished <- handler(req)
-			}
-		}
-	}
 
 	go func() {
 		for {
@@ -1058,33 +1095,14 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req := <-ordered:
-				handleMsg(req.msg, req.info)
-			}
-		}
-	}()
-
 	for {
-		req := newGorumsMessage(false)
+		req := newGorumsMessage(gorumsRequest)
 		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
-
-		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
-			if info.concurrent {
-				go handleMsg(req, info)
-			} else {
-				ordered <- struct {
-					msg  *gorumsMessage
-					info methodInfo
-				}{req, info}
-			}
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
+			handler(req, finished)
 		}
 	}
 }
@@ -1115,7 +1133,6 @@ func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
-	opts       serverOptions
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
@@ -1158,16 +1175,11 @@ type firstLine struct {
 	cid      uint32
 }
 
-func (f *firstLine) String() string {
-	var line bytes.Buffer
-	io.WriteString(&line, "QC: to config")
-	fmt.Fprintf(&line, "%v deadline:", f.cid)
+func (f firstLine) String() string {
 	if f.deadline != 0 {
-		fmt.Fprint(&line, f.deadline)
-	} else {
-		io.WriteString(&line, "none")
+		return fmt.Sprintf("QC: to config%d deadline: %d", f.cid, f.deadline)
 	}
-	return line.String()
+	return fmt.Sprintf("QC: to config%d deadline: none", f.cid)
 }
 
 type payload struct {
@@ -1190,14 +1202,10 @@ type qcresult struct {
 }
 
 func (q qcresult) String() string {
-	var out bytes.Buffer
-	io.WriteString(&out, "recv QC reply: ")
-	fmt.Fprintf(&out, "ids: %v, ", q.ids)
-	fmt.Fprintf(&out, "reply: %v ", q.reply)
-	if q.err != nil {
-		fmt.Fprintf(&out, ", error: %v", q.err)
+	if q.err == nil {
+		return fmt.Sprintf("recv QC reply: ids: %v, reply: %v", q.ids, q.reply)
 	}
-	return out.String()
+	return fmt.Sprintf("recv QC reply: ids: %v, reply: %v, error: %v", q.ids, q.reply, q.err)
 }
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
@@ -1257,17 +1265,6 @@ func (n *Node) closeStream() (err error) {
 type QuorumSpec interface {
 }
 
-const hasOrderingMethods = true
-
-const multicastMethodID int32 = 0
-const multicastEmptyMethodID int32 = 1
-
-var orderingMethods = map[int32]methodInfo{
-
-	0: {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	1: {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-}
-
 // Multicast is the server-side API for the Multicast Service
 type Multicast interface {
 	Multicast(*Request)
@@ -1275,14 +1272,23 @@ type Multicast interface {
 }
 
 func (s *GorumsServer) RegisterMulticastServer(srv Multicast) {
-	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.Multicast(req)
-		return nil
 	}
-	s.srv.handlers[multicastEmptyMethodID] = func(in *gorumsMessage) *gorumsMessage {
+	s.srv.handlers[multicastEmptyMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		srv.MulticastEmpty(req)
-		return nil
 	}
+}
+
+const hasOrderingMethods = true
+
+const multicastMethodID int32 = 0
+const multicastEmptyMethodID int32 = 1
+
+var orderingMethods = map[int32]methodInfo{
+
+	0: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	1: {requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
 }

@@ -16,7 +16,7 @@ import (
 func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCall")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCall")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -88,7 +88,7 @@ func (n *Node) QuorumCall(ctx context.Context, in *Request, replyChan chan<- int
 func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallPerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallPerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -165,7 +165,7 @@ func (n *Node) QuorumCallPerNodeArg(ctx context.Context, in *Request, replyChan 
 func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -237,7 +237,7 @@ func (n *Node) QuorumCallCustomReturnType(ctx context.Context, in *Request, repl
 func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -314,7 +314,7 @@ func (n *Node) QuorumCallCombo(ctx context.Context, in *Request, replyChan chan<
 func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallEmpty")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -386,7 +386,7 @@ func (n *Node) QuorumCallEmpty(ctx context.Context, in *empty.Empty, replyChan c
 func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *empty.Empty, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallEmpty2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id

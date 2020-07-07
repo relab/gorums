@@ -15,7 +15,7 @@ import (
 // qspecServices
 //
 
-func TestQSpecMethods(t *testing.T) {
+func xTestQSpecMethods(t *testing.T) {
 	protoc("testprotos/calltypes/calltypes.proto")
 	_ = modulePath()
 }

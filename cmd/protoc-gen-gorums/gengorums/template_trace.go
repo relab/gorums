@@ -25,7 +25,7 @@ var traceDefinition = `
 {{define "trace"}}
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = {{use "trace.New" .GenFile}}("gorums."+c.tstring()+".Sent", "{{.Method.GoName}}")
+		ti.Trace = {{use "trace.New" .GenFile}}("gorums."+c.String()+".Sent", "{{.Method.GoName}}")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id

@@ -28,7 +28,7 @@ func (c *Configuration) QuorumCallFuture(ctx context.Context, in *Request, opts 
 func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuture")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFuture")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -117,7 +117,7 @@ func (c *Configuration) QuorumCallFuturePerNodeArg(ctx context.Context, in *Requ
 func (c *Configuration) quorumCallFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuturePerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFuturePerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -211,7 +211,7 @@ func (c *Configuration) QuorumCallFutureCustomReturnType(ctx context.Context, in
 func (c *Configuration) quorumCallFutureCustomReturnType(ctx context.Context, in *Request, resp *FutureMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFutureCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -300,7 +300,7 @@ func (c *Configuration) QuorumCallFutureCombo(ctx context.Context, in *Request, 
 func (c *Configuration) quorumCallFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *FutureMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFutureCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -394,7 +394,7 @@ func (c *Configuration) QuorumCallFuture2(ctx context.Context, in *Request, opts
 func (c *Configuration) quorumCallFuture2(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuture2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFuture2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -483,7 +483,7 @@ func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request, 
 func (c *Configuration) quorumCallFutureEmpty(ctx context.Context, in *Request, resp *FutureEmpty, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureEmpty")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFutureEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -573,7 +573,7 @@ func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Em
 func (c *Configuration) quorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureEmpty2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFutureEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id

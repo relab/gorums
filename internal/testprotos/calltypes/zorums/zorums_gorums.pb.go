@@ -45,9 +45,9 @@ type Configuration struct {
 
 // NewConfig returns a configuration for the given node addresses and quorum spec.
 // The returned func() must be called to close the underlying connections.
-// This is experimental API.
-func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
-	man, err := NewManager(addrs, opts...)
+// This is an experimental API.
+func NewConfig(qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+	man, err := NewManager(opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
 	}
@@ -86,10 +86,6 @@ func (c *Configuration) Size() int {
 }
 
 func (c *Configuration) String() string {
-	return fmt.Sprintf("configuration %d", c.id)
-}
-
-func (c *Configuration) tstring() string {
 	return fmt.Sprintf("config-%d", c.id)
 }
 
@@ -109,14 +105,23 @@ func init() {
 	encoding.RegisterCodec(newGorumsCodec())
 }
 
+type gorumsMsgType uint8
+
+const (
+	gorumsRequest gorumsMsgType = iota + 1
+	gorumsResponse
+)
+
 type gorumsMessage struct {
 	metadata *ordering.Metadata
 	message  protoreflect.ProtoMessage
-	reply    bool
+	msgType  gorumsMsgType
 }
 
-func newGorumsMessage(reply bool) *gorumsMessage {
-	return &gorumsMessage{metadata: &ordering.Metadata{}, reply: reply}
+// newGorumsMessage creates a new gorumsMessage struct for unmarshaling.
+// msgType specifies the type of message that should be unmarshaled.
+func newGorumsMessage(msgType gorumsMsgType) *gorumsMessage {
+	return &gorumsMessage{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
 type gorumsCodec struct {
@@ -146,7 +151,7 @@ func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	case protoreflect.ProtoMessage:
 		return c.marshaler.Marshal(msg)
 	default:
-		return nil, fmt.Errorf("gorumsEncoder: don't know how to marshal message of type '%T'", m)
+		return nil, fmt.Errorf("gorumsCodec: don't know how to marshal message of type '%T'", m)
 	}
 }
 
@@ -175,7 +180,7 @@ func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
 	case protoreflect.ProtoMessage:
 		return c.unmarshaler.Unmarshal(b, msg)
 	default:
-		return fmt.Errorf("gorumsEncoder: don't know how to unmarshal message of type '%T'", m)
+		return fmt.Errorf("gorumsCodec: don't know how to unmarshal message of type '%T'", m)
 	}
 }
 
@@ -186,11 +191,17 @@ func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
 	if err != nil {
 		return err
 	}
-	info := orderingMethods[msg.metadata.MethodID]
-	if msg.reply {
-		msg.message = info.responseType.New().Interface()
-	} else {
+	info, ok := orderingMethods[msg.metadata.MethodID]
+	if !ok {
+		return fmt.Errorf("gorumsCodec: Unknown MethodID")
+	}
+	switch msg.msgType {
+	case gorumsRequest:
 		msg.message = info.requestType.New().Interface()
+	case gorumsResponse:
+		msg.message = info.responseType.New().Interface()
+	default:
+		return fmt.Errorf("gorumsCodec: Unknown message type")
 	}
 	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
 	err = c.unmarshaler.Unmarshal(msgBuf, msg.message)
@@ -285,10 +296,7 @@ type Manager struct {
 
 // NewManager attempts to connect to the given set of node addresses and if
 // successful returns a new Manager containing connections to those nodes.
-func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
-	if len(nodeAddrs) == 0 {
-		return nil, fmt.Errorf("could not create manager: no nodes provided")
-	}
+func NewManager(opts ...ManagerOption) (*Manager, error) {
 
 	m := &Manager{
 		lookup:       make(map[uint32]*Node),
@@ -306,19 +314,45 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		grpc.ForceCodec(newGorumsCodec()),
 	))
 
+	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {
+		return nil, fmt.Errorf("could not create manager: no nodes provided")
+	}
+
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},
 		))
 	}
 
-	for _, naddr := range nodeAddrs {
-		node, err2 := m.createNode(naddr)
-		if err2 != nil {
-			return nil, ManagerCreationError(err2)
+	var nodeAddrs []string
+	if m.opts.idMapping != nil {
+		for naddr, id := range m.opts.idMapping {
+			if m.lookup[id] != nil {
+				err := fmt.Errorf("two node ids are identical(id %d). Node ids has to be unique!", id)
+				return nil, ManagerCreationError(err)
+			}
+			nodeAddrs = append(nodeAddrs, naddr)
+			node, err := m.createNode(naddr, id)
+			if err != nil {
+				return nil, ManagerCreationError(err)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
 		}
-		m.lookup[node.id] = node
-		m.nodes = append(m.nodes, node)
+
+		// Sort nodes since map iteration is non-deterministic.
+		OrderedBy(ID).Sort(m.nodes)
+
+	} else if m.opts.addrsList != nil {
+		nodeAddrs = m.opts.addrsList
+		for _, naddr := range m.opts.addrsList {
+			node, err := m.createNode(naddr, 0)
+			if err != nil {
+				return nil, ManagerCreationError(err)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
+		}
 	}
 
 	if m.opts.trace {
@@ -326,8 +360,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
-	err := m.connectAll()
-	if err != nil {
+	if err := m.connectAll(); err != nil {
 		return nil, ManagerCreationError(err)
 	}
 
@@ -342,7 +375,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) createNode(addr string) (*Node, error) {
+func (m *Manager) createNode(addr string, id uint32) (*Node, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -351,9 +384,11 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		return nil, fmt.Errorf("create node %s error: %v", addr, err)
 	}
 
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(tcpAddr.String()))
-	id := h.Sum32()
+	if id == 0 {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(tcpAddr.String()))
+		id = h.Sum32()
+	}
 
 	if _, found := m.lookup[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)
@@ -518,7 +553,7 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	h := fnv.New32a()
 	for _, id := range uniqueIDs {
-		binary.Write(h, binary.LittleEndian, id)
+		_ = binary.Write(h, binary.LittleEndian, id)
 	}
 	cid := h.Sum32()
 
@@ -780,6 +815,8 @@ type managerOptions struct {
 	trace           bool
 	backoff         backoff.Config
 	sendBuffer      uint
+	idMapping       map[string]uint32
+	addrsList       []string
 }
 
 func newManagerOptions() managerOptions {
@@ -849,9 +886,22 @@ func WithSendBufferSize(size uint) ManagerOption {
 	}
 }
 
+// WithNodeMap returns a ManagerOption containing the provided mapping from node addresses to application-specific IDs.
+func WithNodeMap(idMap map[string]uint32) ManagerOption {
+	return func(o *managerOptions) {
+		o.idMapping = idMap
+	}
+}
+
+// WithNodeList returns a ManagerOption containing the provided list of node addresses.
+// With this option, NodeIDs are generated by the Manager.
+func WithNodeList(addrsList []string) ManagerOption {
+	return func(o *managerOptions) {
+		o.addrsList = addrsList
+	}
+}
+
 type methodInfo struct {
-	oneway       bool
-	concurrent   bool
 	requestType  protoreflect.Message
 	responseType protoreflect.Message
 }
@@ -954,7 +1004,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := newGorumsMessage(true)
+		resp := newGorumsMessage(gorumsResponse)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
@@ -1009,7 +1059,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage) *gorumsMessage
+type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -1025,24 +1075,12 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
+// NodeStream handles a connection to a single client. The stream is aborted if there
+// is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ordered := make(chan struct {
-		msg  *gorumsMessage
-		info methodInfo
-	}, s.opts.buffer)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	handleMsg := func(req *gorumsMessage, info methodInfo) {
-		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			if info.oneway {
-				handler(req)
-			} else {
-				finished <- handler(req)
-			}
-		}
-	}
 
 	go func() {
 		for {
@@ -1058,33 +1096,14 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case req := <-ordered:
-				handleMsg(req.msg, req.info)
-			}
-		}
-	}()
-
 	for {
-		req := newGorumsMessage(false)
+		req := newGorumsMessage(gorumsRequest)
 		err := srv.RecvMsg(req)
 		if err != nil {
 			return err
 		}
-
-		if info, ok := orderingMethods[req.metadata.MethodID]; ok {
-			if info.concurrent {
-				go handleMsg(req, info)
-			} else {
-				ordered <- struct {
-					msg  *gorumsMessage
-					info methodInfo
-				}{req, info}
-			}
+		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
+			handler(req, finished)
 		}
 	}
 }
@@ -1115,7 +1134,6 @@ func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 type GorumsServer struct {
 	srv        *orderingServer
 	grpcServer *grpc.Server
-	opts       serverOptions
 }
 
 // NewGorumsServer returns a new instance of GorumsServer.
@@ -1158,16 +1176,11 @@ type firstLine struct {
 	cid      uint32
 }
 
-func (f *firstLine) String() string {
-	var line bytes.Buffer
-	io.WriteString(&line, "QC: to config")
-	fmt.Fprintf(&line, "%v deadline:", f.cid)
+func (f firstLine) String() string {
 	if f.deadline != 0 {
-		fmt.Fprint(&line, f.deadline)
-	} else {
-		io.WriteString(&line, "none")
+		return fmt.Sprintf("QC: to config%d deadline: %d", f.cid, f.deadline)
 	}
-	return line.String()
+	return fmt.Sprintf("QC: to config%d deadline: none", f.cid)
 }
 
 type payload struct {
@@ -1190,14 +1203,10 @@ type qcresult struct {
 }
 
 func (q qcresult) String() string {
-	var out bytes.Buffer
-	io.WriteString(&out, "recv QC reply: ")
-	fmt.Fprintf(&out, "ids: %v, ", q.ids)
-	fmt.Fprintf(&out, "reply: %v ", q.reply)
-	if q.err != nil {
-		fmt.Fprintf(&out, ", error: %v", q.err)
+	if q.err == nil {
+		return fmt.Sprintf("recv QC reply: ids: %v, reply: %v", q.ids, q.reply)
 	}
-	return out.String()
+	return fmt.Sprintf("recv QC reply: ids: %v, reply: %v, error: %v", q.ids, q.reply, q.err)
 }
 
 func appendIfNotPresent(set []uint32, x uint32) []uint32 {
@@ -1225,7 +1234,7 @@ func (c *Configuration) QuorumCallFuture(ctx context.Context, in *Request, opts 
 func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuture")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFuture")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1250,10 +1259,10 @@ func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp 
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -1269,17 +1278,17 @@ func (c *Configuration) quorumCallFuture(ctx context.Context, in *Request, resp 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureQF(in, replies); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -1314,7 +1323,7 @@ func (c *Configuration) QuorumCallFuturePerNodeArg(ctx context.Context, in *Requ
 func (c *Configuration) quorumCallFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuturePerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFuturePerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1344,10 +1353,10 @@ func (c *Configuration) quorumCallFuturePerNodeArg(ctx context.Context, in *Requ
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -1363,17 +1372,17 @@ func (c *Configuration) quorumCallFuturePerNodeArg(ctx context.Context, in *Requ
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFuturePerNodeArgQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFuturePerNodeArgQF(in, replies); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -1408,7 +1417,7 @@ func (c *Configuration) QuorumCallFutureCustomReturnType(ctx context.Context, in
 func (c *Configuration) quorumCallFutureCustomReturnType(ctx context.Context, in *Request, resp *FutureMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFutureCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1433,10 +1442,10 @@ func (c *Configuration) quorumCallFutureCustomReturnType(ctx context.Context, in
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *MyResponse
-		errs        []GRPCError
-		quorum      bool
+		reply   *MyResponse
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -1452,17 +1461,17 @@ func (c *Configuration) quorumCallFutureCustomReturnType(ctx context.Context, in
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureCustomReturnTypeQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureCustomReturnTypeQF(in, replies); quorum {
 				resp.MyResponse, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -1497,7 +1506,7 @@ func (c *Configuration) QuorumCallFutureCombo(ctx context.Context, in *Request, 
 func (c *Configuration) quorumCallFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *FutureMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFutureCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1527,10 +1536,10 @@ func (c *Configuration) quorumCallFutureCombo(ctx context.Context, in *Request, 
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *MyResponse
-		errs        []GRPCError
-		quorum      bool
+		reply   *MyResponse
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -1546,17 +1555,17 @@ func (c *Configuration) quorumCallFutureCombo(ctx context.Context, in *Request, 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureComboQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureComboQF(in, replies); quorum {
 				resp.MyResponse, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.MyResponse, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.MyResponse, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -1591,7 +1600,7 @@ func (c *Configuration) QuorumCallFuture2(ctx context.Context, in *Request, opts
 func (c *Configuration) quorumCallFuture2(ctx context.Context, in *Request, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFuture2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFuture2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1616,10 +1625,10 @@ func (c *Configuration) quorumCallFuture2(ctx context.Context, in *Request, resp
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -1635,17 +1644,17 @@ func (c *Configuration) quorumCallFuture2(ctx context.Context, in *Request, resp
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFuture2QF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFuture2QF(in, replies); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -1680,7 +1689,7 @@ func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request, 
 func (c *Configuration) quorumCallFutureEmpty(ctx context.Context, in *Request, resp *FutureEmpty, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureEmpty")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFutureEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1705,10 +1714,10 @@ func (c *Configuration) quorumCallFutureEmpty(ctx context.Context, in *Request, 
 	}
 
 	var (
-		replyValues = make([]*empty.Empty, 0, c.n)
-		reply       *empty.Empty
-		errs        []GRPCError
-		quorum      bool
+		reply   *empty.Empty
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*empty.Empty, 2*c.n)
 	)
 
 	for {
@@ -1724,17 +1733,17 @@ func (c *Configuration) quorumCallFutureEmpty(ctx context.Context, in *Request, 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureEmptyQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureEmptyQF(in, replies); quorum {
 				resp.Empty, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Empty, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Empty, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Empty, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Empty, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -1770,7 +1779,7 @@ func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Em
 func (c *Configuration) quorumCallFutureEmpty2(ctx context.Context, in *empty.Empty, resp *FutureResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallFutureEmpty2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallFutureEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1795,10 +1804,10 @@ func (c *Configuration) quorumCallFutureEmpty2(ctx context.Context, in *empty.Em
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -1814,17 +1823,17 @@ func (c *Configuration) quorumCallFutureEmpty2(ctx context.Context, in *empty.Em
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if reply, quorum = c.qspec.QuorumCallFutureEmpty2QF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if reply, quorum = c.qspec.QuorumCallFutureEmpty2QF(in, replies); quorum {
 				resp.Response, resp.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			resp.Response, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			resp.Response, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -1857,7 +1866,7 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request, opts ...gr
 func (c *Configuration) correctable(ctx context.Context, in *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "Correctable")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "Correctable")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1882,12 +1891,12 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -1903,8 +1912,8 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -1914,11 +1923,11 @@ func (c *Configuration) correctable(ctx context.Context, in *Request, resp *Corr
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -1951,7 +1960,7 @@ func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, 
 func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectablePerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectablePerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1981,12 +1990,12 @@ func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, 
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2002,8 +2011,8 @@ func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectablePerNodeArgQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectablePerNodeArgQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2013,11 +2022,11 @@ func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2050,7 +2059,7 @@ func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Req
 func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Request, resp *CorrectableMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2075,12 +2084,12 @@ func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Req
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *MyResponse
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *MyResponse
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2096,8 +2105,8 @@ func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Req
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableCustomReturnTypeQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableCustomReturnTypeQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2107,11 +2116,11 @@ func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Req
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2144,7 +2153,7 @@ func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f fun
 func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2174,12 +2183,12 @@ func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f fun
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *MyResponse
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *MyResponse
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2195,8 +2204,8 @@ func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f fun
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableComboQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableComboQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2206,11 +2215,11 @@ func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f fun
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2243,7 +2252,7 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request, opts 
 func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp *CorrectableEmpty, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableEmpty")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2268,12 +2277,12 @@ func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp 
 	}
 
 	var (
-		replyValues = make([]*empty.Empty, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *empty.Empty
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*empty.Empty, c.n*2)
+		clevel  = LevelNotSet
+		reply   *empty.Empty
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2289,8 +2298,8 @@ func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableEmptyQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableEmptyQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2300,11 +2309,11 @@ func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2338,7 +2347,7 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *empty.Empty, 
 func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, resp *CorrectableResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableEmpty2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2363,12 +2372,12 @@ func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, 
 	}
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2384,8 +2393,8 @@ func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableEmpty2QF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableEmpty2QF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2395,11 +2404,11 @@ func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, 
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+		if len(errs)+len(replies) == expected {
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2432,7 +2441,7 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *Request, opts
 func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStream")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStream")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2457,13 +2466,12 @@ func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2479,8 +2487,8 @@ func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2490,11 +2498,11 @@ func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2534,7 +2542,7 @@ func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Req
 func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamPerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamPerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2564,13 +2572,12 @@ func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Req
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2586,8 +2593,8 @@ func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Req
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamPerNodeArgQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamPerNodeArgQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2597,11 +2604,11 @@ func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Req
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2641,7 +2648,7 @@ func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, i
 func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, in *Request, resp *CorrectableStreamMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2666,13 +2673,12 @@ func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, i
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *MyResponse
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *MyResponse
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2688,8 +2694,8 @@ func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, i
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamCustomReturnTypeQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamCustomReturnTypeQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2699,11 +2705,11 @@ func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, i
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2743,7 +2749,7 @@ func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request,
 func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableStreamMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2773,13 +2779,12 @@ func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request,
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *MyResponse
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *MyResponse
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2795,8 +2800,8 @@ func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request,
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamComboQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamComboQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2806,11 +2811,11 @@ func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request,
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2850,7 +2855,7 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request,
 func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request, resp *CorrectableStreamEmpty, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamEmpty")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2875,13 +2880,12 @@ func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request,
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*empty.Empty, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *empty.Empty
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*empty.Empty, c.n*2)
+		clevel  = LevelNotSet
+		reply   *empty.Empty
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -2897,8 +2901,8 @@ func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request,
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamEmptyQF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamEmptyQF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -2908,11 +2912,11 @@ func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request,
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -2953,7 +2957,7 @@ func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *empty.E
 func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.Empty, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamEmpty2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -2978,13 +2982,12 @@ func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.E
 	}
 
 	var (
-		//TODO(meling) don't recall why we need n*2 reply slots?
-		replyValues = make([]*Response, 0, c.n*2)
-		clevel      = LevelNotSet
-		reply       *Response
-		rlevel      int
-		errs        []GRPCError
-		quorum      bool
+		replies = make(map[uint32]*Response, c.n*2)
+		clevel  = LevelNotSet
+		reply   *Response
+		rlevel  int
+		errs    []GRPCError
+		quorum  bool
 	)
 
 	for {
@@ -3000,8 +3003,8 @@ func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.E
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			reply, rlevel, quorum = c.qspec.CorrectableStreamEmpty2QF(in, replyValues)
+			replies[r.nid] = r.reply
+			reply, rlevel, quorum = c.qspec.CorrectableStreamEmpty2QF(in, replies)
 			if quorum {
 				resp.set(reply, rlevel, nil, true)
 				return
@@ -3011,11 +3014,11 @@ func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.E
 				resp.set(reply, rlevel, nil, false)
 			}
 		case <-ctx.Done():
-			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 			return
 		}
 		if len(errs) == expected { // Can't rely on reply count.
-			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replyValues), errs}, true)
+			resp.set(reply, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 			return
 		}
 	}
@@ -3173,7 +3176,7 @@ func (n *Node) closeStream() (err error) {
 func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingQC")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "OrderingQC")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -3195,8 +3198,8 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -3213,14 +3216,14 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -3231,16 +3234,16 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 			}
 
 			reply := r.reply.(*Response)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.OrderingQCQF(in, replyValues); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingQCQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -3253,7 +3256,7 @@ func (c *Configuration) OrderingQC(ctx context.Context, in *Request) (resp *Resp
 func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingPerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "OrderingPerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -3275,8 +3278,8 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -3298,14 +3301,14 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -3316,16 +3319,16 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 			}
 
 			reply := r.reply.(*Response)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.OrderingPerNodeArgQF(in, replyValues); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingPerNodeArgQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -3335,7 +3338,7 @@ func (c *Configuration) OrderingPerNodeArg(ctx context.Context, in *Request, f f
 func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "OrderingCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -3357,8 +3360,8 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -3375,14 +3378,14 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -3393,16 +3396,16 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 			}
 
 			reply := r.reply.(*Response)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.OrderingCustomReturnTypeQF(in, replyValues); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingCustomReturnTypeQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -3415,7 +3418,7 @@ func (c *Configuration) OrderingCustomReturnType(ctx context.Context, in *Reques
 func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "OrderingCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "OrderingCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -3437,8 +3440,8 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -3460,14 +3463,14 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
@@ -3478,16 +3481,16 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 			}
 
 			reply := r.reply.(*Response)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.OrderingComboQF(in, replyValues); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.OrderingComboQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -3498,8 +3501,8 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 	msgID := n.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, 1)
-	n.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, 1)
+	n.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
@@ -3512,7 +3515,7 @@ func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.C
 	n.sendQ <- msg
 
 	select {
-	case r := <-replies:
+	case r := <-replyChan:
 		if r.err != nil {
 			return nil, r.err
 		}
@@ -3566,10 +3569,10 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -3581,17 +3584,17 @@ func (c *Configuration) orderingFutureRecv(ctx context.Context, in *Request, msg
 				break
 			}
 			data := r.reply.(*Response)
-			replyValues = append(replyValues, data)
-			if reply, quorum = c.qspec.OrderingFutureQF(in, replyValues); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFutureQF(in, replies); quorum {
 				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -3648,10 +3651,10 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *Response
-		errs        []GRPCError
-		quorum      bool
+		reply   *Response
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -3663,17 +3666,17 @@ func (c *Configuration) orderingFuturePerNodeArgRecv(ctx context.Context, in *Re
 				break
 			}
 			data := r.reply.(*Response)
-			replyValues = append(replyValues, data)
-			if reply, quorum = c.qspec.OrderingFuturePerNodeArgQF(in, replyValues); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFuturePerNodeArgQF(in, replies); quorum {
 				fut.Response, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.Response, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			fut.Response, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -3722,10 +3725,10 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *MyResponse
-		errs        []GRPCError
-		quorum      bool
+		reply   *MyResponse
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -3737,17 +3740,17 @@ func (c *Configuration) orderingFutureCustomReturnTypeRecv(ctx context.Context, 
 				break
 			}
 			data := r.reply.(*Response)
-			replyValues = append(replyValues, data)
-			if reply, quorum = c.qspec.OrderingFutureCustomReturnTypeQF(in, replyValues); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFutureCustomReturnTypeQF(in, replies); quorum {
 				fut.MyResponse, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -3804,10 +3807,10 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 	defer c.mgr.deleteChan(msgID)
 
 	var (
-		replyValues = make([]*Response, 0, c.n)
-		reply       *MyResponse
-		errs        []GRPCError
-		quorum      bool
+		reply   *MyResponse
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response, 2*c.n)
 	)
 
 	for {
@@ -3819,17 +3822,17 @@ func (c *Configuration) orderingFutureComboRecv(ctx context.Context, in *Request
 				break
 			}
 			data := r.reply.(*Response)
-			replyValues = append(replyValues, data)
-			if reply, quorum = c.qspec.OrderingFutureComboQF(in, replyValues); quorum {
+			replies[r.nid] = data
+			if reply, quorum = c.qspec.OrderingFutureComboQF(in, replies); quorum {
 				fut.MyResponse, fut.err = reply, nil
 				return
 			}
 		case <-ctx.Done():
-			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			fut.MyResponse, fut.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 			return
 		}
-		if len(errs)+len(replyValues) == expected {
-			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			fut.MyResponse, fut.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
 			return
 		}
 	}
@@ -3843,238 +3846,238 @@ type QuorumSpec interface {
 	// supplied to the QuorumCall method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallPerNodeArgQF is the quorum function for the QuorumCallPerNodeArg
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallPerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallPerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallPerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallCustomReturnTypeQF is the quorum function for the QuorumCallCustomReturnType
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
+	QuorumCallCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// QuorumCallComboQF is the quorum function for the QuorumCallCombo
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	QuorumCallComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// QuorumCallEmptyQF is the quorum function for the QuorumCallEmpty
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
-	QuorumCallEmptyQF(in *empty.Empty, replies []*Response) (*Response, bool)
+	QuorumCallEmptyQF(in *empty.Empty, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallEmpty2QF is the quorum function for the QuorumCallEmpty2
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallEmpty2QF(in *Request, replies []*empty.Empty) (*empty.Empty, bool)
+	QuorumCallEmpty2QF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, bool)
 
 	// QuorumCallFutureQF is the quorum function for the QuorumCallFuture
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFuture method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallFutureQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallFuturePerNodeArgQF is the quorum function for the QuorumCallFuturePerNodeArg
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFuturePerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFuturePerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallFuturePerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallFutureCustomReturnTypeQF is the quorum function for the QuorumCallFutureCustomReturnType
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFutureCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
+	QuorumCallFutureCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// QuorumCallFutureComboQF is the quorum function for the QuorumCallFutureCombo
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFutureCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	QuorumCallFutureComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// QuorumCallFuture2QF is the quorum function for the QuorumCallFuture2
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFuture2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFuture2QF(in *Request, replies []*Response) (*Response, bool)
+	QuorumCallFuture2QF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallFutureEmptyQF is the quorum function for the QuorumCallFutureEmpty
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFutureEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureEmptyQF(in *Request, replies []*empty.Empty) (*empty.Empty, bool)
+	QuorumCallFutureEmptyQF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, bool)
 
 	// QuorumCallFutureEmpty2QF is the quorum function for the QuorumCallFutureEmpty2
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallFutureEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
-	QuorumCallFutureEmpty2QF(in *empty.Empty, replies []*Response) (*Response, bool)
+	QuorumCallFutureEmpty2QF(in *empty.Empty, replies map[uint32]*Response) (*Response, bool)
 
 	// CorrectableQF is the quorum function for the Correctable
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the Correctable method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableQF(in *Request, replies []*Response) (*Response, int, bool)
+	CorrectableQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectablePerNodeArgQF is the quorum function for the CorrectablePerNodeArg
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectablePerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectablePerNodeArgQF(in *Request, replies []*Response) (*Response, int, bool)
+	CorrectablePerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableCustomReturnTypeQF is the quorum function for the CorrectableCustomReturnType
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectableCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+	CorrectableCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, int, bool)
 
 	// CorrectableComboQF is the quorum function for the CorrectableCombo
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectableCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableComboQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+	CorrectableComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, int, bool)
 
 	// CorrectableEmptyQF is the quorum function for the CorrectableEmpty
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectableEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableEmptyQF(in *Request, replies []*empty.Empty) (*empty.Empty, int, bool)
+	CorrectableEmptyQF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, int, bool)
 
 	// CorrectableEmpty2QF is the quorum function for the CorrectableEmpty2
 	// correctable quorum call method. The in parameter is the request object
 	// supplied to the CorrectableEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
-	CorrectableEmpty2QF(in *empty.Empty, replies []*Response) (*Response, int, bool)
+	CorrectableEmpty2QF(in *empty.Empty, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableStreamQF is the quorum function for the CorrectableStream
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStream method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamQF(in *Request, replies []*Response) (*Response, int, bool)
+	CorrectableStreamQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableStreamPerNodeArgQF is the quorum function for the CorrectableStreamPerNodeArg
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamPerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamPerNodeArgQF(in *Request, replies []*Response) (*Response, int, bool)
+	CorrectableStreamPerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableStreamCustomReturnTypeQF is the quorum function for the CorrectableStreamCustomReturnType
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+	CorrectableStreamCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, int, bool)
 
 	// CorrectableStreamComboQF is the quorum function for the CorrectableStreamCombo
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamComboQF(in *Request, replies []*Response) (*MyResponse, int, bool)
+	CorrectableStreamComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, int, bool)
 
 	// CorrectableStreamEmptyQF is the quorum function for the CorrectableStreamEmpty
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamEmptyQF(in *Request, replies []*empty.Empty) (*empty.Empty, int, bool)
+	CorrectableStreamEmptyQF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, int, bool)
 
 	// CorrectableStreamEmpty2QF is the quorum function for the CorrectableStreamEmpty2
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStreamEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
-	CorrectableStreamEmpty2QF(in *empty.Empty, replies []*Response) (*Response, int, bool)
+	CorrectableStreamEmpty2QF(in *empty.Empty, replies map[uint32]*Response) (*Response, int, bool)
 
 	// OrderingQCQF is the quorum function for the OrderingQC
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingQC method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingQCQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingQCQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingPerNodeArgQF is the quorum function for the OrderingPerNodeArg
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingPerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingPerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingPerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingCustomReturnTypeQF is the quorum function for the OrderingCustomReturnType
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// OrderingComboQF is the quorum function for the OrderingCombo
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// OrderingFutureQF is the quorum function for the OrderingFuture
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFuture method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFutureQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingFutureQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingFuturePerNodeArgQF is the quorum function for the OrderingFuturePerNodeArg
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFuturePerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFuturePerNodeArgQF(in *Request, replies []*Response) (*Response, bool)
+	OrderingFuturePerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// OrderingFutureCustomReturnTypeQF is the quorum function for the OrderingFutureCustomReturnType
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFutureCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFutureCustomReturnTypeQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingFutureCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
 	// OrderingFutureComboQF is the quorum function for the OrderingFutureCombo
 	// asynchronous ordered quorum call method. The in parameter is the request object
 	// supplied to the OrderingFutureCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	OrderingFutureComboQF(in *Request, replies []*Response) (*MyResponse, bool)
+	OrderingFutureComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 }
 
 // QuorumCall plain.
 func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCall")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCall")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -4099,9 +4102,9 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grp
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -4116,15 +4119,15 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grp
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -4146,7 +4149,7 @@ func (n *Node) QuorumCall(ctx context.Context, in *Request, replyChan chan<- int
 func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallPerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallPerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -4176,9 +4179,9 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -4193,15 +4196,15 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallPerNodeArgQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallPerNodeArgQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -4223,7 +4226,7 @@ func (n *Node) QuorumCallPerNodeArg(ctx context.Context, in *Request, replyChan 
 func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -4248,9 +4251,9 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -4265,15 +4268,15 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallCustomReturnTypeQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallCustomReturnTypeQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -4295,7 +4298,7 @@ func (n *Node) QuorumCallCustomReturnType(ctx context.Context, in *Request, repl
 func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -4325,9 +4328,9 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -4342,15 +4345,15 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallComboQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallComboQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -4372,7 +4375,7 @@ func (n *Node) QuorumCallCombo(ctx context.Context, in *Request, replyChan chan<
 func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (resp *Response, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallEmpty")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -4397,9 +4400,9 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, op
 	}
 
 	var (
-		replyValues = make([]*Response, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*Response)
 	)
 
 	for {
@@ -4414,15 +4417,15 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, op
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallEmptyQF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallEmptyQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -4444,7 +4447,7 @@ func (n *Node) QuorumCallEmpty(ctx context.Context, in *empty.Empty, replyChan c
 func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *empty.Empty, err error) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "QuorumCallEmpty2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -4469,9 +4472,9 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts 
 	}
 
 	var (
-		replyValues = make([]*empty.Empty, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*empty.Empty)
 	)
 
 	for {
@@ -4486,15 +4489,15 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts 
 				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
 			}
 
-			replyValues = append(replyValues, r.reply)
-			if resp, quorum = c.qspec.QuorumCallEmpty2QF(in, replyValues); quorum {
+			replies[r.nid] = r.reply
+			if resp, quorum = c.qspec.QuorumCallEmpty2QF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -4510,6 +4513,128 @@ func (n *Node) QuorumCallEmpty2(ctx context.Context, in *Request, replyChan chan
 		n.setLastErr(err)
 	}
 	replyChan <- internalEmpty{n.id, reply, err}
+}
+
+// ZorumsService is the server-side API for the ZorumsService Service
+type ZorumsService interface {
+	Multicast(*Request)
+	MulticastPerNodeArg(*Request)
+	Multicast2(*Request)
+	Multicast3(*Request)
+	Multicast4(*empty.Empty)
+	OrderingQC(*Request, chan<- *Response)
+	OrderingPerNodeArg(*Request, chan<- *Response)
+	OrderingCustomReturnType(*Request, chan<- *Response)
+	OrderingCombo(*Request, chan<- *Response)
+	OrderingUnaryRPC(*Request, chan<- *Response)
+	OrderingFuture(*Request, chan<- *Response)
+	OrderingFuturePerNodeArg(*Request, chan<- *Response)
+	OrderingFutureCustomReturnType(*Request, chan<- *Response)
+	OrderingFutureCombo(*Request, chan<- *Response)
+}
+
+func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
+	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		srv.Multicast(req)
+	}
+	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		srv.MulticastPerNodeArg(req)
+	}
+	s.srv.handlers[multicast2MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		srv.Multicast2(req)
+	}
+	s.srv.handlers[multicast3MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		srv.Multicast3(req)
+	}
+	s.srv.handlers[multicast4MethodID] = func(in *gorumsMessage, _ chan<- *gorumsMessage) {
+		req := in.message.(*empty.Empty)
+		srv.Multicast4(req)
+	}
+	s.srv.handlers[orderingQCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingQC(req, c)
+	}
+	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingPerNodeArg(req, c)
+	}
+	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingCustomReturnType(req, c)
+	}
+	s.srv.handlers[orderingComboMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingCombo(req, c)
+	}
+	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingUnaryRPC(req, c)
+	}
+	s.srv.handlers[orderingFutureMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingFuture(req, c)
+	}
+	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingFuturePerNodeArg(req, c)
+	}
+	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingFutureCustomReturnType(req, c)
+	}
+	s.srv.handlers[orderingFutureComboMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*Request)
+		c := make(chan *Response)
+		go func() {
+			resp := <-c
+			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+		}()
+		srv.OrderingFutureCombo(req, c)
+	}
 }
 
 const hasOrderingMethods = true
@@ -4531,20 +4656,20 @@ const orderingFutureComboMethodID int32 = 13
 
 var orderingMethods = map[int32]methodInfo{
 
-	0:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	1:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	2:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	3:  {oneway: true, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	4:  {oneway: true, concurrent: false, requestType: new(empty.Empty).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
-	5:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	6:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	7:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	8:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	9:  {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	10: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	11: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	12: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
-	13: {oneway: false, concurrent: false, requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	0:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	1:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	2:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	3:  {requestType: new(Request).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	4:  {requestType: new(empty.Empty).ProtoReflect(), responseType: new(empty.Empty).ProtoReflect()},
+	5:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	6:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	7:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	8:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	9:  {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	10: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	11: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	12: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
+	13: {requestType: new(Request).ProtoReflect(), responseType: new(Response).ProtoReflect()},
 }
 
 type internalEmpty struct {
@@ -5090,105 +5215,5 @@ func (c *CorrectableStreamResponse) set(reply *Response, level int, err error, d
 			close(c.watchers[i].ch)
 			c.watchers[i] = nil
 		}
-	}
-}
-
-// ZorumsService is the server-side API for the ZorumsService Service
-type ZorumsService interface {
-	Multicast(*Request)
-	MulticastPerNodeArg(*Request)
-	Multicast2(*Request)
-	Multicast3(*Request)
-	Multicast4(*empty.Empty)
-	OrderingQC(*Request) *Response
-	OrderingPerNodeArg(*Request) *Response
-	OrderingCustomReturnType(*Request) *Response
-	OrderingCombo(*Request) *Response
-	OrderingUnaryRPC(*Request) *Response
-	OrderingFuture(*Request) *Response
-	OrderingFuturePerNodeArg(*Request) *Response
-	OrderingFutureCustomReturnType(*Request) *Response
-	OrderingFutureCombo(*Request) *Response
-}
-
-func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
-	s.srv.handlers[multicastMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		srv.Multicast(req)
-		return nil
-	}
-	s.srv.handlers[multicastPerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		srv.MulticastPerNodeArg(req)
-		return nil
-	}
-	s.srv.handlers[multicast2MethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		srv.Multicast2(req)
-		return nil
-	}
-	s.srv.handlers[multicast3MethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		srv.Multicast3(req)
-		return nil
-	}
-	s.srv.handlers[multicast4MethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*empty.Empty)
-		srv.Multicast4(req)
-		return nil
-	}
-	s.srv.handlers[orderingQCMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingQC(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingPerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingPerNodeArg(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingCustomReturnType(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingComboMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingCombo(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingUnaryRPCMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingUnaryRPC(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingFutureMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingFuture(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingFuturePerNodeArg(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingFutureCustomReturnType(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
-	}
-	s.srv.handlers[orderingFutureComboMethodID] = func(in *gorumsMessage) *gorumsMessage {
-		req := in.message.(*Request)
-		// TODO: how to handle marshaling errors here
-		resp := srv.OrderingFutureCombo(req)
-		return &gorumsMessage{metadata: in.metadata, message: resp}
 	}
 }

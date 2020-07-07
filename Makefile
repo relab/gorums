@@ -46,7 +46,7 @@ tools:
 	@go mod download
 	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % go install %
 
-installgorums: bootstrapgorums $(plugin_deps)
+installgorums: bootstrapgorums $(plugin_deps) Makefile
 	@go install $(PLUGIN_PATH)
 
 ifeq (, $(shell which protoc-gen-gorums))

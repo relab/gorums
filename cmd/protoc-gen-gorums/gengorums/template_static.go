@@ -110,10 +110,6 @@ func (c *Configuration) Size() int {
 }
 
 func (c *Configuration) String() string {
-	return fmt.Sprintf("configuration %d", c.id)
-}
-
-func (c *Configuration) tstring() string {
 	return fmt.Sprintf("config-%d", c.id)
 }
 

@@ -27,7 +27,7 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request, opts ...gr
 func (c *Configuration) correctable(ctx context.Context, in *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "Correctable")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "Correctable")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -121,7 +121,7 @@ func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, 
 func (c *Configuration) correctablePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectablePerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectablePerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -220,7 +220,7 @@ func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Req
 func (c *Configuration) correctableCustomReturnType(ctx context.Context, in *Request, resp *CorrectableMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -314,7 +314,7 @@ func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f fun
 func (c *Configuration) correctableCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -413,7 +413,7 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request, opts 
 func (c *Configuration) correctableEmpty(ctx context.Context, in *Request, resp *CorrectableEmpty, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableEmpty")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -508,7 +508,7 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *empty.Empty, 
 func (c *Configuration) correctableEmpty2(ctx context.Context, in *empty.Empty, resp *CorrectableResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableEmpty2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -602,7 +602,7 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *Request, opts
 func (c *Configuration) correctableStream(ctx context.Context, in *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStream")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStream")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -703,7 +703,7 @@ func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Req
 func (c *Configuration) correctableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamPerNodeArg")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamPerNodeArg")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -809,7 +809,7 @@ func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, i
 func (c *Configuration) correctableStreamCustomReturnType(ctx context.Context, in *Request, resp *CorrectableStreamMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamCustomReturnType")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamCustomReturnType")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -910,7 +910,7 @@ func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request,
 func (c *Configuration) correctableStreamCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, resp *CorrectableStreamMyResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamCombo")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamCombo")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1016,7 +1016,7 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request,
 func (c *Configuration) correctableStreamEmpty(ctx context.Context, in *Request, resp *CorrectableStreamEmpty, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamEmpty")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamEmpty")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
@@ -1118,7 +1118,7 @@ func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *empty.E
 func (c *Configuration) correctableStreamEmpty2(ctx context.Context, in *empty.Empty, resp *CorrectableStreamResponse, opts ...grpc.CallOption) {
 	var ti traceInfo
 	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.tstring()+".Sent", "CorrectableStreamEmpty2")
+		ti.Trace = trace.New("gorums."+c.String()+".Sent", "CorrectableStreamEmpty2")
 		defer ti.Finish()
 
 		ti.firstLine.cid = c.id
