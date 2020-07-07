@@ -114,8 +114,10 @@ func (s testSrv) IgnoreReq(_ context.Context, req *Request) (*Response, error) {
 
 func BenchmarkFullStackQF(b *testing.B) {
 	for n := 3; n < 20; n += 2 {
-		srvAdrs, stop := gorums.TestSetup(b, n, func(srv *grpc.Server) {
+		srvAdrs, stop := gorums.TestSetup(b, n, func() interface{} {
+			srv := grpc.NewServer()
 			RegisterQuorumFunctionServer(srv, &testSrv{})
+			return srv
 		})
 		c, closeFn, err := NewConfig(srvAdrs, &testQSpec{quorum: n / 2},
 			WithGrpcDialOptions(grpc.WithInsecure()),
