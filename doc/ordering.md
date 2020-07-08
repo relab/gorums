@@ -41,7 +41,7 @@ Upon receiving a request, the receiving goroutine *synchronously* executes the h
 Before the handler is called, Gorums creates a channel to receive the response message.
 When Gorums receives a message on this channel, it gets tagged with the same message ID as the request, and is then sent back to the client.
 
-The use of a channel to return messages from the RPC handler makes the handlers a lot more flexible than a function that simply returns a result:
+The use of a function to return messages from the RPC handler makes the handlers a lot more flexible than handlers that simply return a result:
 
 * Since the handler functions are executed synchronously by the receiving goroutine, we can ensure that requests are processed in the correct order.
 * You can still do concurrent processing of requests if you start a goroutine from the RPC handler.
@@ -58,17 +58,17 @@ type Server interface {
 
 // the new Gorums server API
 type Server interface {
-  // Handler takes a request and a channel to send the response on.
+  // Handler takes a request and a func to return the response.
   // Runs synchronously, but may spawn goroutines and return early.
   // This allows the server to start processing the next request.
-  // Goroutines can then asynchronously send response on channel.
-  RPC(*Request, chan<- *Response)
+  // Goroutines can then asynchronously send response back using the func.
+  RPC(context.Context, *Request, func(*Response))
 }
 ```
 
 The RPC API of Gorums was a lot closer to gRPC in older versions.
 However, as we worked on implementing message ordering in Gorums, we recognized that we needed a more flexible API in order to offer good performance.
-Specifically, we decided to use channels instead of the `return` statement when passing response messages back from server handlers.
+Specifically, we decided to use a function instead of the `return` statement when passing response messages back from server handlers.
 In order to ensure message ordering, the server has to receive and process messages synchronously, i.e. one at a time.
 Thus, we want to ensure that the time it takes to process a single request is as short as possible.
 
@@ -78,14 +78,14 @@ The handler for this application needs to put the request into a queue, and then
 With a gRPC-style RPC handler API (a function takes the request and returns the response),
 it is not possible to start any goroutines without also waiting for them to return.
 In other words, the handler must **block** the server until the response is ready.
-However, with our channel-based API, the handler can simply add the request to the queue,
-start a goroutine to wait for the response and pass it to the channel, and then return.
+However, with our API, the handler can simply add the request to the queue, start a goroutine, and then return.
 While the goroutine started by the handler is waiting, another request can be processed by the server.
+At some point later, the goroutine has finished waiting or processing the reply, and it can be sent back to Gorums using the `ret` function.
 Hence, the penalty for running server handlers synchronously is reduced, and ordering can still be preserved.
 Below is an example of how such a handler could be written:
 
 ```go
-func (s *testSrv) AsyncHandler(req *Request, c chan<- *Response) {
+func (s *testSrv) AsyncHandler(_ context.Context, req *Request, ret func(*Response)) {
   // do synchronous work
   response := &Response{
     InOrder: s.isInOrder(req.GetNum()),
@@ -95,9 +95,9 @@ func (s *testSrv) AsyncHandler(req *Request, c chan<- *Response) {
     // this code will run concurrently with other handlers
     // perform slow / async work here
     time.Sleep(10 * time.Millisecond)
-    // at some point later, the response passed back to Gorums through the channel,
+    // at some point later, the response passed back to Gorums through the `ret` function,
     // and gets sent back to the client.
-    c <- response
+    ret(response)
   }()
 }
 ```
