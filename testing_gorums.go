@@ -1,9 +1,7 @@
 package gorums
 
 import (
-	"fmt"
 	"net"
-	"sync"
 	"testing"
 )
 
@@ -28,7 +26,8 @@ func TestSetup(t testing.TB, numServers int, srvFunc func() interface{}) ([]stri
 		if srv, ok = srvFunc().(server); !ok {
 			t.Fatal("Incompatible server type. You should use a GorumsServer or grpc.Server")
 		}
-		lis, err := getListener()
+		// listen on any available port
+		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("Failed to listen on port: %v", err)
 		}
@@ -42,23 +41,4 @@ func TestSetup(t testing.TB, numServers int, srvFunc func() interface{}) ([]stri
 		}
 	}
 	return addrs, stopFn
-}
-
-type portSupplier struct {
-	p int
-	sync.Mutex
-}
-
-func (p *portSupplier) get() int {
-	p.Lock()
-	newPort := p.p
-	p.p++
-	p.Unlock()
-	return newPort
-}
-
-var supplier = portSupplier{p: 22332}
-
-func getListener() (net.Listener, error) {
-	return net.Listen("tcp", fmt.Sprintf(":%d", supplier.get()))
 }
