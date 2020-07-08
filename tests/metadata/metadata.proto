@@ -8,9 +8,16 @@ import "gorums.proto";
 import "google/protobuf/empty.proto";
 
 service MetadataTest {
+  // IDFromMD returns the 'id' field from the metadata.
   rpc IDFromMD(google.protobuf.Empty) returns (NodeID) {
+    option (gorums.ordered) = true;
+  }
+  // WhatIP returns the address of the client that calls it.
+  rpc WhatIP(google.protobuf.Empty) returns (IPAddr) {
     option (gorums.ordered) = true;
   }
 }
 
 message NodeID { uint32 ID = 1; }
+
+message IPAddr { string Addr = 1; }

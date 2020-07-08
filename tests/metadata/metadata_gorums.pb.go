@@ -1253,6 +1253,7 @@ func (n *Node) closeStream() (err error) {
 	return err
 }
 
+// IDFromMD returns the 'id' field from the metadata.
 func (n *Node) IDFromMD(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (resp *NodeID, err error) {
 
 	// get the ID which will be used to return the correct responses for a request
@@ -1284,6 +1285,38 @@ func (n *Node) IDFromMD(ctx context.Context, in *empty.Empty, opts ...grpc.CallO
 	}
 }
 
+// WhatIP returns the address of the client that calls it.
+func (n *Node) WhatIP(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (resp *IPAddr, err error) {
+
+	// get the ID which will be used to return the correct responses for a request
+	msgID := n.nextMsgID()
+
+	// set up a channel to collect replies
+	replyChan := make(chan *orderingResult, 1)
+	n.putChan(msgID, replyChan)
+
+	// remove the replies channel when we are done
+	defer n.deleteChan(msgID)
+
+	metadata := &ordering.Metadata{
+		MessageID: msgID,
+		MethodID:  whatIPMethodID,
+	}
+	msg := &gorumsMessage{metadata: metadata, message: in}
+	n.sendQ <- msg
+
+	select {
+	case r := <-replyChan:
+		if r.err != nil {
+			return nil, r.err
+		}
+		reply := r.reply.(*IPAddr)
+		return reply, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
 // QuorumSpec is the interface of quorum functions for MetadataTest.
 type QuorumSpec interface {
 }
@@ -1291,6 +1324,7 @@ type QuorumSpec interface {
 // MetadataTest is the server-side API for the MetadataTest Service
 type MetadataTest interface {
 	IDFromMD(context.Context, *empty.Empty, func(*NodeID))
+	WhatIP(context.Context, *empty.Empty, func(*IPAddr))
 }
 
 func (s *GorumsServer) RegisterMetadataTestServer(srv MetadataTest) {
@@ -1304,13 +1338,25 @@ func (s *GorumsServer) RegisterMetadataTestServer(srv MetadataTest) {
 		}
 		srv.IDFromMD(ctx, req, f)
 	}
+	s.srv.handlers[whatIPMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
+		req := in.message.(*empty.Empty)
+		once := new(sync.Once)
+		f := func(resp *IPAddr) {
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
+		}
+		srv.WhatIP(ctx, req, f)
+	}
 }
 
 const hasOrderingMethods = true
 
 const iDFromMDMethodID int32 = 0
+const whatIPMethodID int32 = 1
 
 var orderingMethods = map[int32]methodInfo{
 
 	0: {requestType: new(empty.Empty).ProtoReflect(), responseType: new(NodeID).ProtoReflect()},
+	1: {requestType: new(empty.Empty).ProtoReflect(), responseType: new(IPAddr).ProtoReflect()},
 }
