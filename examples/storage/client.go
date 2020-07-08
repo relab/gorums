@@ -14,7 +14,8 @@ func runClient(addresses []string) {
 	}
 
 	// init gorums manager
-	mgr, err := proto.NewManager(addresses,
+	mgr, err := proto.NewManager(
+		proto.WithNodeList(addresses),
 		proto.WithDialTimeout(1*time.Second),
 		proto.WithGrpcDialOptions(
 			grpc.WithInsecure(), // disable TLS
@@ -44,7 +45,7 @@ type qspec struct {
 // supplied to the ReadQC method at call time, and may or may not
 // be used by the quorum function. If the in parameter is not needed
 // you should implement your quorum function with '_ *ReadRequest'.
-func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies []*proto.ReadResponse) (*proto.ReadResponse, bool) {
+func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies map[uint32]*proto.ReadResponse) (*proto.ReadResponse, bool) {
 	// wait until at least half of the replicas have responded
 	if len(replies) <= q.cfgSize/2 {
 		return nil, false
@@ -58,7 +59,7 @@ func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies []*proto.ReadResponse) (*p
 // supplied to the WriteQC method at call time, and may or may not
 // be used by the quorum function. If the in parameter is not needed
 // you should implement your quorum function with '_ *WriteRequest'.
-func (q qspec) WriteQCQF(in *proto.WriteRequest, replies []*proto.WriteResponse) (*proto.WriteResponse, bool) {
+func (q qspec) WriteQCQF(in *proto.WriteRequest, replies map[uint32]*proto.WriteResponse) (*proto.WriteResponse, bool) {
 	// wait until at least half of the replicas have responded and have updated their value
 	if numUpdated(replies) <= q.cfgSize/2 {
 		// if all replicas have responded, there must have been another write before ours
@@ -72,12 +73,12 @@ func (q qspec) WriteQCQF(in *proto.WriteRequest, replies []*proto.WriteResponse)
 }
 
 // newestValue returns the reply that had the most recent timestamp
-func newestValue(values []*proto.ReadResponse) *proto.ReadResponse {
+func newestValue(values map[uint32]*proto.ReadResponse) *proto.ReadResponse {
 	if len(values) < 1 {
 		return nil
 	}
-	newest := values[0]
-	for _, v := range values[1:] {
+	var newest *proto.ReadResponse
+	for _, v := range values {
 		if v.GetTime().AsTime().After(newest.GetTime().AsTime()) {
 			newest = v
 		}
@@ -86,7 +87,7 @@ func newestValue(values []*proto.ReadResponse) *proto.ReadResponse {
 }
 
 // numUpdated returns the number of replicas that updated their value
-func numUpdated(replies []*proto.WriteResponse) int {
+func numUpdated(replies map[uint32]*proto.WriteResponse) int {
 	count := 0
 	for _, r := range replies {
 		if r.GetNew() {
