@@ -3059,8 +3059,6 @@ func (c *Configuration) Multicast(in *Request) error {
 }
 
 // MulticastPerNodeArg with per_node_arg option.
-// TODO(meling) currently this is not supported, but compiles as if
-// per_node_arg wasn't specified. Need to implement support.
 func (c *Configuration) MulticastPerNodeArg(in *Request, f func(*Request, uint32) *Request) error {
 	msgID := c.mgr.nextMsgID()
 	for _, n := range c.nodes {

@@ -36,8 +36,6 @@ type ZorumsServiceClient interface {
 	// Multicast plain. Response type is not needed here.
 	Multicast(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// MulticastPerNodeArg with per_node_arg option.
-	// TODO(meling) currently this is not supported, but compiles as if
-	// per_node_arg wasn't specified. Need to implement support.
 	MulticastPerNodeArg(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
 	// Multicast2 is testing whether multiple streams work.
 	Multicast2(ctx context.Context, in *Request, opts ...grpc.CallOption) (*Response, error)
@@ -646,8 +644,6 @@ type ZorumsServiceServer interface {
 	// Multicast plain. Response type is not needed here.
 	Multicast(context.Context, *Request) (*Response, error)
 	// MulticastPerNodeArg with per_node_arg option.
-	// TODO(meling) currently this is not supported, but compiles as if
-	// per_node_arg wasn't specified. Need to implement support.
 	MulticastPerNodeArg(context.Context, *Request) (*Response, error)
 	// Multicast2 is testing whether multiple streams work.
 	Multicast2(context.Context, *Request) (*Response, error)
