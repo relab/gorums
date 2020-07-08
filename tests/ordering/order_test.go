@@ -2,8 +2,6 @@ package ordering
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"sync"
 	"testing"
 	"time"
@@ -12,25 +10,6 @@ import (
 	"github.com/relab/gorums/internal/leakcheck"
 	"google.golang.org/grpc"
 )
-
-type portSupplier struct {
-	p int
-	sync.Mutex
-}
-
-func (p *portSupplier) get() int {
-	p.Lock()
-	newPort := p.p
-	p.p++
-	p.Unlock()
-	return newPort
-}
-
-var supplier = portSupplier{p: 22332}
-
-func getListener() (net.Listener, error) {
-	return net.Listen("tcp", fmt.Sprintf(":%d", supplier.get()))
-}
 
 type testSrv struct {
 	sync.Mutex
@@ -78,7 +57,12 @@ func (q testQSpec) qf(replies map[uint32]*Response) (*Response, bool) {
 			return reply, true
 		}
 	}
-	return replies[0], true
+	var reply *Response
+	for _, r := range replies {
+		reply = r
+		break
+	}
+	return reply, true
 }
 
 func (q testQSpec) QCQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
