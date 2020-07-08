@@ -11,6 +11,7 @@ import (
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 type testSrv struct {
@@ -39,6 +40,15 @@ func (srv testSrv) IDFromMD(ctx context.Context, _ *empty.Empty, out func(*NodeI
 	out(&NodeID{ID: uint32(id)})
 }
 
+func (srv testSrv) WhatIP(ctx context.Context, _ *empty.Empty, ret func(*IPAddr)) {
+	peerInfo, ok := peer.FromContext(ctx)
+	if !ok {
+		ret(&IPAddr{})
+		return
+	}
+	ret(&IPAddr{Addr: peerInfo.Addr.String()})
+}
+
 func initServer(t *testing.T) *GorumsServer {
 	srv := NewGorumsServer()
 	srv.RegisterMetadataTestServer(&testSrv{t})
@@ -61,7 +71,7 @@ func TestMetadata(t *testing.T) {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
 
-	node := mgr.nodes[0]
+	node := mgr.Nodes()[0]
 	resp, err := node.IDFromMD(context.Background(), &empty.Empty{})
 	if err != nil {
 		t.Fatalf("Failed to execute RPC: %v", err)
@@ -99,5 +109,29 @@ func TestPerNodeMetadata(t *testing.T) {
 		if resp.GetID() != node.ID() {
 			t.Fatalf("Wrong message")
 		}
+	}
+}
+
+func TestCanGetPeerInfo(t *testing.T) {
+	addrs, teardown := gorums.TestSetup(t, 1, func() interface{} { return initServer(t) })
+	defer teardown()
+
+	mgr, err := NewManager(WithNodeList(addrs), WithDialTimeout(1*time.Second), WithGrpcDialOptions(
+		grpc.WithBlock(),
+		grpc.WithInsecure(),
+	))
+	if err != nil {
+		t.Fatalf("Failed to create manager: %v", err)
+	}
+
+	node := mgr.Nodes()[0]
+
+	ip, err := node.WhatIP(context.Background(), &empty.Empty{})
+	if err != nil {
+		t.Fatalf("Failed to execute RPC: %v", err)
+	}
+
+	if ip.GetAddr() == "" {
+		t.Fatalf("No data returned")
 	}
 }
