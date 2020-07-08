@@ -119,8 +119,8 @@ And this is our server interface:
 
 ```go
 type Storage interface {
-  Read(*ReadRequest, chan<- *State)
-  Write(*State, chan<- *WriteResponse)
+  Read(context.Context, *ReadRequest, func(*State))
+  Write(context.Context, *State, func(*WriteResponse))
 }
 ```
 
@@ -138,41 +138,44 @@ type storageSrv struct {
   state *State
 }
 
-func (srv *storageSrv) Read(req *ReadRequest, out chan<- *State) {
+func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, ret func(*State)) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   fmt.Println("Got Read()")
-  out <- srv.state
+  ret(srv.state)
 }
 
-func (srv *storageSrv) Write(req *State, out chan<- *WriteResponse) {
+func (srv *storageSrv) Write(_ context.Context, req *State, ret func(*WriteResponse)) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if srv.state.Timestamp < req.Timestamp {
     srv.state = req
     fmt.Println("Got Write(", req.Value, ")")
-    out <- &WriteResponse{New: true}
+    ret(&WriteResponse{New: true})
     return
   }
-  out <- &WriteResponse{New: false}
+  ret(&WriteResponse{New: false})
 }
 ```
 
 There are some important things to note about implementing the server interfaces:
 
-* Reply messages should be returned using the `out` channel.
+* Reply messages should be returned using the `ret` function.
 * The handlers are run synchronously, in the order that messages are received.
   This means that a long-running handler will prevent other messages from being handled.
-  However, you can start additional goroutines within each handler, provided that they return a result on the `out` channel.
+  However, you can start additional goroutines within each handler, provided that they return a result using the `ret` function.
   For example, the `Read` handler could be made asynchronous like this:
+* The context that is passed to the handlers is the gRPC stream context of the underlying gRPC stream.
+  You can use this context to retrieve [metadata](https://github.com/grpc/grpc-go/blob/master/Documentation/grpc-metadata.md)
+  and [peer](https://godoc.org/google.golang.org/grpc/peer) information from the client.
 
   ```go
-  func (srv *storageSrv) Read(req *ReadRequest, out chan<- *State) {
+  func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, ret func(*State)) {
     go func() {
       srv.mut.Lock()
       defer srv.mut.Unlock()
       fmt.Println("Got Read()")
-      out <- srv.state
+      ret(srv.state)
     }()
   }
   ```
