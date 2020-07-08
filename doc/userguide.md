@@ -325,11 +325,11 @@ The `QuorumSpec` generated for our example is as follows:
 type QuorumSpec interface {
   // ReadQF is the quorum function for the Read
   // quorum call method.
-  ReadQF(replies []*State) (*State, bool)
+  ReadQF(req *ReadRequest, replies map[uint32]*State) (*State, bool)
 
   // WriteQF is the quorum function for the Write
   // quorum call method.
-  WriteQF(replies []*WriteResponse) (*WriteResponse, bool)
+  WriteQF(req *WriteRequest, replies map[uint32]*WriteResponse) (*WriteResponse, bool)
 }
 ```
 
@@ -353,26 +353,35 @@ type QSpec struct {
 }
 
 // Define a quorum function for the Read RPC method.
-func (qs *QSpec) ReadQF(replies []*State) (*State, bool) {
+func (qs *QSpec) ReadQF(_ *ReadResponse, replies map[uint32]*State) (*State, bool) {
   if len(replies) < qs.quorumSize {
     return nil, false
   }
-  sort.Sort(ByTimestamp(replies))
-  return replies[len(replies)-1], true
+  return newestState(replies), true
 }
 
 func (qs *QSpec) WriteQF(replies []*WriteResponse) (*WriteResponse, bool) {
   if len(replies) < qs.quorumSize {
     return nil, false
   }
-  return replies[0], true
+  // return the rist response we find
+  var reply *WriteResponse
+  for _, r := range replies {
+    reply = r
+    break
+  }
+  return reply, true
 }
 
-type ByTimestamp []*State
-
-func (a ByTimestamp) Len() int           { return len(a) }
-func (a ByTimestamp) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a ByTimestamp) Less(i, j int) bool { return a[i].Timestamp < a[j].Timestamp }
+func newestState(replies map[uint32]*State) *State {
+  var newest *State
+  for _, s := range replies {
+    if s.GetTimestamp() >= newest.GetTimestamp() {
+      newest = s
+    }
+  }
+  return newest
+}
 ```
 
 ## Invoking Quorum Calls on the Configuration in the StorageClient
@@ -391,12 +400,10 @@ func ExampleStorageClient() {
     "127.0.0.1:8082",
   }
 
-  mgr, err := NewManager(addrs, WithGrpcDialOptions(
+  mgr, err := NewManager(WithNodeList(addrs), WithDialTimeout(50*time.Millisecond), WithGrpcDialOptions(
     grpc.WithBlock(),
-    grpc.WithTimeout(50*time.Millisecond),
     grpc.WithInsecure(),
-  ),
-  )
+  ))
   if err != nil {
     log.Fatal(err)
   }
