@@ -13,6 +13,7 @@ import (
 	backoff "google.golang.org/grpc/backoff"
 	codes "google.golang.org/grpc/codes"
 	encoding "google.golang.org/grpc/encoding"
+	metadata "google.golang.org/grpc/metadata"
 	status "google.golang.org/grpc/status"
 	protowire "google.golang.org/protobuf/encoding/protowire"
 	proto "google.golang.org/protobuf/proto"
@@ -43,9 +44,9 @@ type Configuration struct {
 
 // NewConfig returns a configuration for the given node addresses and quorum spec.
 // The returned func() must be called to close the underlying connections.
-// This is experimental API.
-func NewConfig(addrs []string, qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
-	man, err := NewManager(addrs, opts...)
+// This is an experimental API.
+func NewConfig(qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+	man, err := NewManager(opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
 	}
@@ -84,10 +85,6 @@ func (c *Configuration) Size() int {
 }
 
 func (c *Configuration) String() string {
-	return fmt.Sprintf("configuration %d", c.id)
-}
-
-func (c *Configuration) tstring() string {
 	return fmt.Sprintf("config-%d", c.id)
 }
 
@@ -298,10 +295,7 @@ type Manager struct {
 
 // NewManager attempts to connect to the given set of node addresses and if
 // successful returns a new Manager containing connections to those nodes.
-func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
-	if len(nodeAddrs) == 0 {
-		return nil, fmt.Errorf("could not create manager: no nodes provided")
-	}
+func NewManager(opts ...ManagerOption) (*Manager, error) {
 
 	m := &Manager{
 		lookup:       make(map[uint32]*Node),
@@ -319,19 +313,45 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		grpc.ForceCodec(newGorumsCodec()),
 	))
 
+	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {
+		return nil, fmt.Errorf("could not create manager: no nodes provided")
+	}
+
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},
 		))
 	}
 
-	for _, naddr := range nodeAddrs {
-		node, err2 := m.createNode(naddr)
-		if err2 != nil {
-			return nil, ManagerCreationError(err2)
+	var nodeAddrs []string
+	if m.opts.idMapping != nil {
+		for naddr, id := range m.opts.idMapping {
+			if m.lookup[id] != nil {
+				err := fmt.Errorf("two node ids are identical(id %d). Node ids has to be unique!", id)
+				return nil, ManagerCreationError(err)
+			}
+			nodeAddrs = append(nodeAddrs, naddr)
+			node, err := m.createNode(naddr, id)
+			if err != nil {
+				return nil, ManagerCreationError(err)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
 		}
-		m.lookup[node.id] = node
-		m.nodes = append(m.nodes, node)
+
+		// Sort nodes since map iteration is non-deterministic.
+		OrderedBy(ID).Sort(m.nodes)
+
+	} else if m.opts.addrsList != nil {
+		nodeAddrs = m.opts.addrsList
+		for _, naddr := range m.opts.addrsList {
+			node, err := m.createNode(naddr, 0)
+			if err != nil {
+				return nil, ManagerCreationError(err)
+			}
+			m.lookup[node.id] = node
+			m.nodes = append(m.nodes, node)
+		}
 	}
 
 	if m.opts.trace {
@@ -339,8 +359,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
 
-	err := m.connectAll()
-	if err != nil {
+	if err := m.connectAll(); err != nil {
 		return nil, ManagerCreationError(err)
 	}
 
@@ -355,7 +374,7 @@ func NewManager(nodeAddrs []string, opts ...ManagerOption) (*Manager, error) {
 	return m, nil
 }
 
-func (m *Manager) createNode(addr string) (*Node, error) {
+func (m *Manager) createNode(addr string, id uint32) (*Node, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -364,9 +383,11 @@ func (m *Manager) createNode(addr string) (*Node, error) {
 		return nil, fmt.Errorf("create node %s error: %v", addr, err)
 	}
 
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(tcpAddr.String()))
-	id := h.Sum32()
+	if id == 0 {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(tcpAddr.String()))
+		id = h.Sum32()
+	}
 
 	if _, found := m.lookup[id]; found {
 		return nil, fmt.Errorf("create node %s error: node already exists", addr)
@@ -599,8 +620,13 @@ func (n *Node) connect(opts managerOptions) error {
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %w", err)
 	}
+	md := opts.metadata.Copy()
+	if opts.perNodeMD != nil {
+		md = metadata.Join(md, opts.perNodeMD(n.id))
+	}
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	// only start ordering RPCs when needed
 	if hasOrderingMethods {
 		err = n.connectOrderedStream(ctx, n.conn)
@@ -793,6 +819,10 @@ type managerOptions struct {
 	trace           bool
 	backoff         backoff.Config
 	sendBuffer      uint
+	idMapping       map[string]uint32
+	addrsList       []string
+	metadata        metadata.MD
+	perNodeMD       func(uint32) metadata.MD
 }
 
 func newManagerOptions() managerOptions {
@@ -859,6 +889,38 @@ func WithBackoff(backoff backoff.Config) ManagerOption {
 func WithSendBufferSize(size uint) ManagerOption {
 	return func(o *managerOptions) {
 		o.sendBuffer = size
+	}
+}
+
+// WithNodeMap returns a ManagerOption containing the provided mapping from node addresses to application-specific IDs.
+func WithNodeMap(idMap map[string]uint32) ManagerOption {
+	return func(o *managerOptions) {
+		o.idMapping = idMap
+	}
+}
+
+// WithNodeList returns a ManagerOption containing the provided list of node addresses.
+// With this option, NodeIDs are generated by the Manager.
+func WithNodeList(addrsList []string) ManagerOption {
+	return func(o *managerOptions) {
+		o.addrsList = addrsList
+	}
+}
+
+// WithMetadata returns a ManagerOption that sets the metadata that is sent to each node
+// when the connection is initially established. This metadata can be retrieved from the
+// server-side method handlers.
+func WithMetadata(md metadata.MD) ManagerOption {
+	return func(o *managerOptions) {
+		o.metadata = md
+	}
+}
+
+// WithPerNodeMetadata returns a ManagerOption that allows you to set metadata for each
+// node individually.
+func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
+	return func(o *managerOptions) {
+		o.perNodeMD = f
 	}
 }
 
@@ -1020,7 +1082,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(*gorumsMessage, chan<- *gorumsMessage)
+type requestHandler func(context.Context, *gorumsMessage, chan<- *gorumsMessage)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -1040,8 +1102,7 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 // is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	finished := make(chan *gorumsMessage, s.opts.buffer)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := srv.Context()
 
 	go func() {
 		for {
@@ -1064,7 +1125,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			return err
 		}
 		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
-			handler(req, finished)
+			handler(ctx, req, finished)
 		}
 	}
 }
@@ -1198,8 +1259,8 @@ func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOp
 	msgID := n.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, 1)
-	n.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, 1)
+	n.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
@@ -1212,7 +1273,7 @@ func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest, opts ...grpc.CallOp
 	n.sendQ <- msg
 
 	select {
-	case r := <-replies:
+	case r := <-replyChan:
 		if r.err != nil {
 			return nil, r.err
 		}
@@ -1230,8 +1291,8 @@ func (n *Node) WriteRPC(ctx context.Context, in *WriteRequest, opts ...grpc.Call
 	msgID := n.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, 1)
-	n.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, 1)
+	n.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer n.deleteChan(msgID)
@@ -1244,7 +1305,7 @@ func (n *Node) WriteRPC(ctx context.Context, in *WriteRequest, opts ...grpc.Call
 	n.sendQ <- msg
 
 	select {
-	case r := <-replies:
+	case r := <-replyChan:
 		if r.err != nil {
 			return nil, r.err
 		}
@@ -1263,8 +1324,8 @@ func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) (resp *Read
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -1281,30 +1342,30 @@ func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) (resp *Read
 	}
 
 	var (
-		replyValues = make([]*ReadResponse, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*ReadResponse)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 
 			reply := r.reply.(*ReadResponse)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.ReadQCQF(in, replyValues); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.ReadQCQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -1317,8 +1378,8 @@ func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) (resp *Wr
 	msgID := c.mgr.nextMsgID()
 
 	// set up a channel to collect replies
-	replies := make(chan *orderingResult, c.n)
-	c.mgr.putChan(msgID, replies)
+	replyChan := make(chan *orderingResult, c.n)
+	c.mgr.putChan(msgID, replyChan)
 
 	// remove the replies channel when we are done
 	defer c.mgr.deleteChan(msgID)
@@ -1335,30 +1396,30 @@ func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) (resp *Wr
 	}
 
 	var (
-		replyValues = make([]*WriteResponse, 0, expected)
-		errs        []GRPCError
-		quorum      bool
+		errs    []GRPCError
+		quorum  bool
+		replies = make(map[uint32]*WriteResponse)
 	)
 
 	for {
 		select {
-		case r := <-replies:
+		case r := <-replyChan:
 			if r.err != nil {
 				errs = append(errs, GRPCError{r.nid, r.err})
 				break
 			}
 
 			reply := r.reply.(*WriteResponse)
-			replyValues = append(replyValues, reply)
-			if resp, quorum = c.qspec.WriteQCQF(in, replyValues); quorum {
+			replies[r.nid] = reply
+			if resp, quorum = c.qspec.WriteQCQF(in, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replyValues), errs}
+			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
 		}
 
-		if len(errs)+len(replyValues) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replyValues), errs}
+		if len(errs)+len(replies) == expected {
+			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
 }
@@ -1371,60 +1432,64 @@ type QuorumSpec interface {
 	// supplied to the ReadQC method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *ReadRequest'.
-	ReadQCQF(in *ReadRequest, replies []*ReadResponse) (*ReadResponse, bool)
+	ReadQCQF(in *ReadRequest, replies map[uint32]*ReadResponse) (*ReadResponse, bool)
 
 	// WriteQCQF is the quorum function for the WriteQC
 	// ordered quorum call method. The in parameter is the request object
 	// supplied to the WriteQC method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *WriteRequest'.
-	WriteQCQF(in *WriteRequest, replies []*WriteResponse) (*WriteResponse, bool)
+	WriteQCQF(in *WriteRequest, replies map[uint32]*WriteResponse) (*WriteResponse, bool)
 }
 
 // Storage is the server-side API for the Storage Service
 type Storage interface {
-	ReadRPC(*ReadRequest, chan<- *ReadResponse)
-	WriteRPC(*WriteRequest, chan<- *WriteResponse)
-	ReadQC(*ReadRequest, chan<- *ReadResponse)
-	WriteQC(*WriteRequest, chan<- *WriteResponse)
+	ReadRPC(context.Context, *ReadRequest, func(*ReadResponse))
+	WriteRPC(context.Context, *WriteRequest, func(*WriteResponse))
+	ReadQC(context.Context, *ReadRequest, func(*ReadResponse))
+	WriteQC(context.Context, *WriteRequest, func(*WriteResponse))
 }
 
 func (s *GorumsServer) RegisterStorageServer(srv Storage) {
-	s.srv.handlers[readRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[readRPCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*ReadRequest)
-		c := make(chan *ReadResponse)
-		go func() {
-			resp := <-c
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		}()
-		srv.ReadRPC(req, c)
+		once := new(sync.Once)
+		f := func(resp *ReadResponse) {
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
+		}
+		srv.ReadRPC(ctx, req, f)
 	}
-	s.srv.handlers[writeRPCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[writeRPCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*WriteRequest)
-		c := make(chan *WriteResponse)
-		go func() {
-			resp := <-c
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		}()
-		srv.WriteRPC(req, c)
+		once := new(sync.Once)
+		f := func(resp *WriteResponse) {
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
+		}
+		srv.WriteRPC(ctx, req, f)
 	}
-	s.srv.handlers[readQCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[readQCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*ReadRequest)
-		c := make(chan *ReadResponse)
-		go func() {
-			resp := <-c
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		}()
-		srv.ReadQC(req, c)
+		once := new(sync.Once)
+		f := func(resp *ReadResponse) {
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
+		}
+		srv.ReadQC(ctx, req, f)
 	}
-	s.srv.handlers[writeQCMethodID] = func(in *gorumsMessage, finished chan<- *gorumsMessage) {
+	s.srv.handlers[writeQCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*WriteRequest)
-		c := make(chan *WriteResponse)
-		go func() {
-			resp := <-c
-			finished <- &gorumsMessage{metadata: in.metadata, message: resp}
-		}()
-		srv.WriteQC(req, c)
+		once := new(sync.Once)
+		f := func(resp *WriteResponse) {
+			once.Do(func() {
+				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+			})
+		}
+		srv.WriteQC(ctx, req, f)
 	}
 }
 

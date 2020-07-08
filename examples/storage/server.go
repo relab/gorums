@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -73,27 +74,27 @@ func newStorageServer() *storageServer {
 }
 
 // ReadRPC is an RPC handler
-func (s *storageServer) ReadRPC(req *proto.ReadRequest, out chan<- *proto.ReadResponse) {
+func (s *storageServer) ReadRPC(_ context.Context, req *proto.ReadRequest, ret func(*proto.ReadResponse)) {
 	resp := s.Read(req)
-	out <- resp
+	ret(resp)
 }
 
 // WriteRPC is an RPC handler
-func (s *storageServer) WriteRPC(req *proto.WriteRequest, out chan<- *proto.WriteResponse) {
+func (s *storageServer) WriteRPC(_ context.Context, req *proto.WriteRequest, ret func(*proto.WriteResponse)) {
 	resp := s.Write(req)
-	out <- resp
+	ret(resp)
 }
 
 // ReadQC is an RPC handler for a quorum call
-func (s *storageServer) ReadQC(req *proto.ReadRequest, out chan<- *proto.ReadResponse) {
+func (s *storageServer) ReadQC(_ context.Context, req *proto.ReadRequest, ret func(*proto.ReadResponse)) {
 	resp := s.Read(req)
-	out <- resp
+	ret(resp)
 }
 
 // WriteQC is an RPC handler for a quorum call
-func (s *storageServer) WriteQC(req *proto.WriteRequest, out chan<- *proto.WriteResponse) {
+func (s *storageServer) WriteQC(_ context.Context, req *proto.WriteRequest, ret func(*proto.WriteResponse)) {
 	resp := s.Write(req)
-	out <- resp
+	ret(resp)
 }
 
 // Read reads a value from storage
