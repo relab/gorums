@@ -12,6 +12,7 @@ RPC's
 RPCs
 Tormod
 Unexported
+Zorums
 calltypes
 cpuprofile
 gengorums
@@ -25,8 +26,10 @@ multicast
 proto
 protobuf
 protoc
+ptypes
 qspec
 quorumcall
 relab
+testprotos
 unexport
 unicast
