@@ -1,6 +1,6 @@
-.PHONY: all qf order message_encoding metadata tls
+.PHONY: all qf order message_encoding metadata tls reconnect
 
-all: qf order message_encoding metadata
+all: qf order message_encoding metadata tls reconnect
 
 qf: qf/qf.pb.go qf/qf_grpc.pb.go qf/qf_gorums.pb.go
 
@@ -11,6 +11,8 @@ message_encoding: message_encoding/message_encoding.pb.go message_encoding/messa
 metadata: metadata/metadata.pb.go metadata/metadata_gorums.pb.go
 
 tls: tls/tls.pb.go tls/tls_gorums.pb.go
+
+reconnect: reconnect/reconnect.pb.go reconnect/reconnect_gorums.pb.go
 
 %.pb.go : %.proto
 	@protoc -I=..:. --go_out=paths=source_relative:. $<
