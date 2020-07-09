@@ -22,19 +22,13 @@ func generateCert() (cert, privKey []byte, err error) {
 	caTmpl := &x509.Certificate{
 		SerialNumber: sn,
 		Subject: pkix.Name{
-			Organization:  []string{"TEST"},
-			Country:       []string{"NO"},
-			Province:      []string{""},
-			Locality:      []string{"Stavanger"},
-			StreetAddress: []string{""},
-			PostalCode:    []string{"4036"},
+			CommonName: "Gorums TLS Test",
 		},
 		IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().AddDate(0, 1, 0),
-		IsCA:                  true,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		NotAfter:              time.Now().AddDate(0, 0, 1),
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		BasicConstraintsValid: true,
 	}
 
