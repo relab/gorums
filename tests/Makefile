@@ -1,4 +1,4 @@
-.PHONY: all qf order message_encoding metadata
+.PHONY: all qf order message_encoding metadata tls
 
 all: qf order message_encoding metadata
 
@@ -9,6 +9,8 @@ order: ordering/order.pb.go ordering/order_gorums.pb.go
 message_encoding: message_encoding/message_encoding.pb.go message_encoding/message_encoding_gorums.pb.go
 
 metadata: metadata/metadata.pb.go metadata/metadata_gorums.pb.go
+
+tls: tls/tls.pb.go tls/tls_gorums.pb.go
 
 %.pb.go : %.proto
 	@protoc -I=..:. --go_out=paths=source_relative:. $<
