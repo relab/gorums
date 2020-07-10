@@ -49,14 +49,14 @@ The use of a function to return messages from the RPC handler makes the handlers
 ### RPC API Differences from gRPC
 
 ```go
-// the old gRPC-style server API
+// the unary gRPC-style server API
 type Server interface {
   // Handler takes a request and returns a response.
   // Runs synchronously.
-  RPC(*Request) *Response
+  RPC(context.Context, *Request) (*Response, error)
 }
 
-// the new Gorums server API
+// the Gorums server API
 type Server interface {
   // Handler takes a request and a func to return the response.
   // Runs synchronously, but may spawn goroutines and return early.
@@ -85,7 +85,7 @@ Hence, the penalty for running server handlers synchronously is reduced, and ord
 Below is an example of how such a handler could be written:
 
 ```go
-func (s *testSrv) AsyncHandler(_ context.Context, req *Request, ret func(*Response)) {
+func (s *testSrv) AsyncHandler(_ context.Context, req *Request, ret func(*Response, error)) {
   // do synchronous work
   response := &Response{
     InOrder: s.isInOrder(req.GetNum()),
