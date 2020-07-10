@@ -1039,7 +1039,8 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: nil})
+			err := status.FromProto(resp.metadata.GetStatus()).Err()
+			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: err})
 		}
 
 		select {
@@ -1097,6 +1098,16 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 		opts:     opts,
 	}
 	return s
+}
+
+// wrapMessage wraps the metadata, response and error status in a gorumsMessage
+func wrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *gorumsMessage {
+	errStatus, ok := status.FromError(err)
+	if !ok {
+		errStatus = status.New(codes.Unknown, err.Error())
+	}
+	md.Status = errStatus.Proto()
+	return &gorumsMessage{metadata: md, message: resp}
 }
 
 // NodeStream handles a connection to a single client. The stream is aborted if there
@@ -2122,13 +2133,13 @@ func (n *Node) UnorderedSlowServer(ctx context.Context, in *Echo, replyChan chan
 
 // Benchmark is the server-side API for the Benchmark Service
 type Benchmark interface {
-	StartServerBenchmark(context.Context, *StartRequest, func(*StartResponse))
-	StopServerBenchmark(context.Context, *StopRequest, func(*Result))
-	StartBenchmark(context.Context, *StartRequest, func(*StartResponse))
-	StopBenchmark(context.Context, *StopRequest, func(*MemoryStat))
-	OrderedQC(context.Context, *Echo, func(*Echo))
-	OrderedAsync(context.Context, *Echo, func(*Echo))
-	OrderedSlowServer(context.Context, *Echo, func(*Echo))
+	StartServerBenchmark(context.Context, *StartRequest, func(*StartResponse, error))
+	StopServerBenchmark(context.Context, *StopRequest, func(*Result, error))
+	StartBenchmark(context.Context, *StartRequest, func(*StartResponse, error))
+	StopBenchmark(context.Context, *StopRequest, func(*MemoryStat, error))
+	OrderedQC(context.Context, *Echo, func(*Echo, error))
+	OrderedAsync(context.Context, *Echo, func(*Echo, error))
+	OrderedSlowServer(context.Context, *Echo, func(*Echo, error))
 	Multicast(context.Context, *TimedMsg)
 }
 
@@ -2136,9 +2147,9 @@ func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
 	s.srv.handlers[startServerBenchmarkMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*StartRequest)
 		once := new(sync.Once)
-		f := func(resp *StartResponse) {
+		f := func(resp *StartResponse, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.StartServerBenchmark(ctx, req, f)
@@ -2146,9 +2157,9 @@ func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
 	s.srv.handlers[stopServerBenchmarkMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*StopRequest)
 		once := new(sync.Once)
-		f := func(resp *Result) {
+		f := func(resp *Result, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.StopServerBenchmark(ctx, req, f)
@@ -2156,9 +2167,9 @@ func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
 	s.srv.handlers[startBenchmarkMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*StartRequest)
 		once := new(sync.Once)
-		f := func(resp *StartResponse) {
+		f := func(resp *StartResponse, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.StartBenchmark(ctx, req, f)
@@ -2166,9 +2177,9 @@ func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
 	s.srv.handlers[stopBenchmarkMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*StopRequest)
 		once := new(sync.Once)
-		f := func(resp *MemoryStat) {
+		f := func(resp *MemoryStat, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.StopBenchmark(ctx, req, f)
@@ -2176,9 +2187,9 @@ func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
 	s.srv.handlers[orderedQCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Echo)
 		once := new(sync.Once)
-		f := func(resp *Echo) {
+		f := func(resp *Echo, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderedQC(ctx, req, f)
@@ -2186,9 +2197,9 @@ func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
 	s.srv.handlers[orderedAsyncMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Echo)
 		once := new(sync.Once)
-		f := func(resp *Echo) {
+		f := func(resp *Echo, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderedAsync(ctx, req, f)
@@ -2196,9 +2207,9 @@ func (s *GorumsServer) RegisterBenchmarkServer(srv Benchmark) {
 	s.srv.handlers[orderedSlowServerMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Echo)
 		once := new(sync.Once)
-		f := func(resp *Echo) {
+		f := func(resp *Echo, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderedSlowServer(ctx, req, f)
