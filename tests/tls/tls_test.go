@@ -64,6 +64,6 @@ func TestTLS(t *testing.T) {
 	}
 
 	if !resp.GetOK() {
-		t.Fatalf("TLS was not enabled")
+		t.Fatalf("TestTLS() == %t, want %t", resp.GetOK(), true)
 	}
 }
