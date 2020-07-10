@@ -26,22 +26,22 @@ func (s *testSrv) isInOrder(num uint64) bool {
 	return false
 }
 
-func (s *testSrv) QC(_ context.Context, req *Request, out func(*Response)) {
+func (s *testSrv) QC(_ context.Context, req *Request, out func(*Response, error)) {
 	out(&Response{
 		InOrder: s.isInOrder(req.GetNum()),
-	})
+	}, nil)
 }
 
-func (s *testSrv) QCFuture(_ context.Context, req *Request, out func(*Response)) {
+func (s *testSrv) QCFuture(_ context.Context, req *Request, out func(*Response, error)) {
 	out(&Response{
 		InOrder: s.isInOrder(req.GetNum()),
-	})
+	}, nil)
 }
 
-func (s *testSrv) UnaryRPC(_ context.Context, req *Request, out func(*Response)) {
+func (s *testSrv) UnaryRPC(_ context.Context, req *Request, out func(*Response, error)) {
 	out(&Response{
 		InOrder: s.isInOrder(req.GetNum()),
-	})
+	}, nil)
 }
 
 type testQSpec struct {

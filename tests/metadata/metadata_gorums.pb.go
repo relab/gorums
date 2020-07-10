@@ -1039,7 +1039,8 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: nil})
+			err := status.FromProto(resp.metadata.GetStatus()).Err()
+			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: err})
 		}
 
 		select {
@@ -1097,6 +1098,16 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 		opts:     opts,
 	}
 	return s
+}
+
+// wrapMessage wraps the metadata, response and error status in a gorumsMessage
+func wrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *gorumsMessage {
+	errStatus, ok := status.FromError(err)
+	if !ok {
+		errStatus = status.New(codes.Unknown, err.Error())
+	}
+	md.Status = errStatus.Proto()
+	return &gorumsMessage{metadata: md, message: resp}
 }
 
 // NodeStream handles a connection to a single client. The stream is aborted if there
@@ -1323,17 +1334,17 @@ type QuorumSpec interface {
 
 // MetadataTest is the server-side API for the MetadataTest Service
 type MetadataTest interface {
-	IDFromMD(context.Context, *empty.Empty, func(*NodeID))
-	WhatIP(context.Context, *empty.Empty, func(*IPAddr))
+	IDFromMD(context.Context, *empty.Empty, func(*NodeID, error))
+	WhatIP(context.Context, *empty.Empty, func(*IPAddr, error))
 }
 
 func (s *GorumsServer) RegisterMetadataTestServer(srv MetadataTest) {
 	s.srv.handlers[iDFromMDMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*empty.Empty)
 		once := new(sync.Once)
-		f := func(resp *NodeID) {
+		f := func(resp *NodeID, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.IDFromMD(ctx, req, f)
@@ -1341,9 +1352,9 @@ func (s *GorumsServer) RegisterMetadataTestServer(srv MetadataTest) {
 	s.srv.handlers[whatIPMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*empty.Empty)
 		once := new(sync.Once)
-		f := func(resp *IPAddr) {
+		f := func(resp *IPAddr, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.WhatIP(ctx, req, f)

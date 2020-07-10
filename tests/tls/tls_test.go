@@ -15,13 +15,13 @@ import (
 
 type testSrv struct{}
 
-func (t testSrv) TestTLS(ctx context.Context, in *Request, out func(*Response)) {
+func (t testSrv) TestTLS(ctx context.Context, in *Request, out func(*Response, error)) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok || peerInfo.AuthInfo.AuthType() != "tls" {
-		out(&Response{OK: false})
+		out(&Response{OK: false}, nil)
 		return
 	}
-	out(&Response{OK: true})
+	out(&Response{OK: true}, nil)
 }
 
 func TestTLS(t *testing.T) {

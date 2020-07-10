@@ -1038,7 +1038,8 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: nil})
+			err := status.FromProto(resp.metadata.GetStatus()).Err()
+			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: err})
 		}
 
 		select {
@@ -1096,6 +1097,16 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 		opts:     opts,
 	}
 	return s
+}
+
+// wrapMessage wraps the metadata, response and error status in a gorumsMessage
+func wrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *gorumsMessage {
+	errStatus, ok := status.FromError(err)
+	if !ok {
+		errStatus = status.New(codes.Unknown, err.Error())
+	}
+	md.Status = errStatus.Proto()
+	return &gorumsMessage{metadata: md, message: resp}
 }
 
 // NodeStream handles a connection to a single client. The stream is aborted if there
@@ -1454,18 +1465,18 @@ type QuorumSpec interface {
 
 // GorumsTest is the server-side API for the GorumsTest Service
 type GorumsTest interface {
-	QC(context.Context, *Request, func(*Response))
-	QCFuture(context.Context, *Request, func(*Response))
-	UnaryRPC(context.Context, *Request, func(*Response))
+	QC(context.Context, *Request, func(*Response, error))
+	QCFuture(context.Context, *Request, func(*Response, error))
+	UnaryRPC(context.Context, *Request, func(*Response, error))
 }
 
 func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
 	s.srv.handlers[qCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.QC(ctx, req, f)
@@ -1473,9 +1484,9 @@ func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
 	s.srv.handlers[qCFutureMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.QCFuture(ctx, req, f)
@@ -1483,9 +1494,9 @@ func (s *GorumsServer) RegisterGorumsTestServer(srv GorumsTest) {
 	s.srv.handlers[unaryRPCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.UnaryRPC(ctx, req, f)
