@@ -1038,7 +1038,8 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: nil})
+			err := status.FromProto(resp.metadata.GetStatus()).Err()
+			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: err})
 		}
 
 		select {
@@ -1096,6 +1097,16 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 		opts:     opts,
 	}
 	return s
+}
+
+// wrapMessage wraps the metadata, response and error status in a gorumsMessage
+func wrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *gorumsMessage {
+	errStatus, ok := status.FromError(err)
+	if !ok {
+		errStatus = status.New(codes.Unknown, err.Error())
+	}
+	md.Status = errStatus.Proto()
+	return &gorumsMessage{metadata: md, message: resp}
 }
 
 // NodeStream handles a connection to a single client. The stream is aborted if there
@@ -1444,19 +1455,19 @@ type QuorumSpec interface {
 
 // Storage is the server-side API for the Storage Service
 type Storage interface {
-	ReadRPC(context.Context, *ReadRequest, func(*ReadResponse))
-	WriteRPC(context.Context, *WriteRequest, func(*WriteResponse))
-	ReadQC(context.Context, *ReadRequest, func(*ReadResponse))
-	WriteQC(context.Context, *WriteRequest, func(*WriteResponse))
+	ReadRPC(context.Context, *ReadRequest, func(*ReadResponse, error))
+	WriteRPC(context.Context, *WriteRequest, func(*WriteResponse, error))
+	ReadQC(context.Context, *ReadRequest, func(*ReadResponse, error))
+	WriteQC(context.Context, *WriteRequest, func(*WriteResponse, error))
 }
 
 func (s *GorumsServer) RegisterStorageServer(srv Storage) {
 	s.srv.handlers[readRPCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*ReadRequest)
 		once := new(sync.Once)
-		f := func(resp *ReadResponse) {
+		f := func(resp *ReadResponse, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.ReadRPC(ctx, req, f)
@@ -1464,9 +1475,9 @@ func (s *GorumsServer) RegisterStorageServer(srv Storage) {
 	s.srv.handlers[writeRPCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*WriteRequest)
 		once := new(sync.Once)
-		f := func(resp *WriteResponse) {
+		f := func(resp *WriteResponse, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.WriteRPC(ctx, req, f)
@@ -1474,9 +1485,9 @@ func (s *GorumsServer) RegisterStorageServer(srv Storage) {
 	s.srv.handlers[readQCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*ReadRequest)
 		once := new(sync.Once)
-		f := func(resp *ReadResponse) {
+		f := func(resp *ReadResponse, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.ReadQC(ctx, req, f)
@@ -1484,9 +1495,9 @@ func (s *GorumsServer) RegisterStorageServer(srv Storage) {
 	s.srv.handlers[writeQCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*WriteRequest)
 		once := new(sync.Once)
-		f := func(resp *WriteResponse) {
+		f := func(resp *WriteResponse, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.WriteQC(ctx, req, f)

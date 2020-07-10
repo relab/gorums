@@ -74,51 +74,51 @@ func newStorageServer() *storageServer {
 }
 
 // ReadRPC is an RPC handler
-func (s *storageServer) ReadRPC(_ context.Context, req *proto.ReadRequest, ret func(*proto.ReadResponse)) {
-	resp := s.Read(req)
-	ret(resp)
+func (s *storageServer) ReadRPC(_ context.Context, req *proto.ReadRequest, ret func(*proto.ReadResponse, error)) {
+	ret(s.Read(req))
 }
 
 // WriteRPC is an RPC handler
-func (s *storageServer) WriteRPC(_ context.Context, req *proto.WriteRequest, ret func(*proto.WriteResponse)) {
-	resp := s.Write(req)
-	ret(resp)
+func (s *storageServer) WriteRPC(_ context.Context, req *proto.WriteRequest, ret func(*proto.WriteResponse, error)) {
+	ret(s.Write(req))
 }
 
 // ReadQC is an RPC handler for a quorum call
-func (s *storageServer) ReadQC(_ context.Context, req *proto.ReadRequest, ret func(*proto.ReadResponse)) {
-	resp := s.Read(req)
-	ret(resp)
+func (s *storageServer) ReadQC(_ context.Context, req *proto.ReadRequest, ret func(*proto.ReadResponse, error)) {
+	ret(s.Read(req))
 }
 
 // WriteQC is an RPC handler for a quorum call
-func (s *storageServer) WriteQC(_ context.Context, req *proto.WriteRequest, ret func(*proto.WriteResponse)) {
-	resp := s.Write(req)
-	ret(resp)
+func (s *storageServer) WriteQC(_ context.Context, req *proto.WriteRequest, ret func(*proto.WriteResponse, error)) {
+	ret(s.Write(req))
 }
 
 // Read reads a value from storage
-func (s *storageServer) Read(req *proto.ReadRequest) *proto.ReadResponse {
+func (s *storageServer) Read(req *proto.ReadRequest) (*proto.ReadResponse, error) {
 	s.logger.Printf("Read '%s'\n", req.GetKey())
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 	state, ok := s.storage[req.GetKey()]
+	if !ok {
+		return &proto.ReadResponse{OK: false}, nil
+	}
 	time, err := ptypes.TimestampProto(state.Time)
 	if err != nil {
 		s.logger.Printf("Failed to marshal time: %v\n", err)
+		return nil, err
 	}
-	return &proto.ReadResponse{OK: ok, Value: state.Value, Time: time}
+	return &proto.ReadResponse{OK: true, Value: state.Value, Time: time}, nil
 }
 
 // Write writes a new value to storage if it is newer than the old value
-func (s *storageServer) Write(req *proto.WriteRequest) *proto.WriteResponse {
+func (s *storageServer) Write(req *proto.WriteRequest) (*proto.WriteResponse, error) {
 	s.logger.Printf("Write '%s' = '%s'\n", req.GetKey(), req.GetValue())
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	oldState, ok := s.storage[req.GetKey()]
 	if ok && oldState.Time.After(req.GetTime().AsTime()) {
-		return &proto.WriteResponse{New: false}
+		return &proto.WriteResponse{New: false}, nil
 	}
 	s.storage[req.GetKey()] = state{Value: req.GetValue(), Time: req.GetTime().AsTime()}
-	return &proto.WriteResponse{New: true}
+	return &proto.WriteResponse{New: true}, nil
 }
