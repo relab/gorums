@@ -4,6 +4,7 @@
         "options": [
             "--proto_path=${workspaceRoot}",
             "--proto_path=${workspaceRoot}/cmd/protoc-gen-gorums/dev",
+            "--proto_path=${workspaceRoot}/third_party"
         ]
     },
     "cSpell.enabled": true,
