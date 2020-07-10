@@ -2,63 +2,83 @@ package zorums_test
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// stability: installgorums
-// 	@echo "Running protoc test with source files expected to remain stable (no output change between runs)"
-// 	@protoc -I. \
-// 		--go_out=paths=source_relative:. \
-// 		--go-grpc_out=paths=source_relative:. \
-// 		--gorums_out=paths=source_relative,trace=true:. $(tests_zorums_proto) \
-// 	|| (echo "unexpected failure with exit code: $$?")
-// 	@cp $(tests_zorums_gen) $(tmp_dir)/x_gorums.pb.go
-// 	@protoc -I. \
-// 		--go_out=paths=source_relative:. \
-// 		--go-grpc_out=paths=source_relative:. \
-// 		--gorums_out=paths=source_relative,trace=true:. $(tests_zorums_proto) \
-// 	|| (echo "unexpected failure with exit code: $$?")
-// 	@diff $(tests_zorums_gen) $(tmp_dir)/x_gorums.pb.go \
-// 	|| (echo "unexpected instability, observed changes between protoc runs: $$?")
-// 	@rm -rf $(tmp_dir)
-
 func TestGorumsStability(t *testing.T) {
 	t.Log("Running protoc test with source files expected to remain stable (no output change between runs)")
-	// Go 1.15 specific funcs
+	// TODO(meling); replace with Go 1.15 specific funcs
 	// dir1 := t.TempDir()
 	// dir2 := t.TempDir()
-	// cp zorums.proto dir1
-	// cp zorums.proto dir2
-	protoc("zorums.proto")
-	// protoc("dir2/zorums.proto")
-	// diff dir1 dir2
-	// return error if different; maybe use cmp package to show differences.
+	dir1, err := ioutil.TempDir("", "gorums-stability")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir1)
+
+	protoc("sourceRelative", "zorums.proto")
+	moveGenFiles(t, dir1)
+
+	dir2, err := ioutil.TempDir("", "gorums-stability")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir2)
+
+	protoc("sourceRelative", "zorums.proto")
+	moveGenFiles(t, dir2)
+
+	out, _ := exec.Command("diff", dir1, dir2).CombinedOutput()
+	// checking only 'out' here; err would only show exit status 1 if output is different
+	if string(out) != "" {
+		t.Errorf("unexpected instability; observed changes between protoc runs:\n%s", string(out))
+	}
 }
 
-// protoc --go_out=. --go_opt=module=google.golang.org/protobuf google/protobuf/empty.proto
+func moveGenFiles(t *testing.T, toDir string) {
+	t.Helper()
+	matches, err := filepath.Glob("zorums*.pb.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range matches {
+		err = os.Rename(m, filepath.Join(toDir, m))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
-func protoc(args ...string) {
-	// cmd := exec.Command("protoc", "-I.", "-I"+repoRoot(),
-	// 	"--go_out=paths=source_relative:.",
-	// 	"--go-grpc_out=paths=source_relative:.",
-	// 	"--gorums_out=paths=source_relative,trace=true:.",
-	// )
-	cmd := exec.Command("protoc", "-I.", "-I"+repoRoot(),
-		"--go_opt=module=github.com/relab/gorums",
-		"--go-grpc_opt=module=github.com/relab/gorums",
+var protoArgs = map[string][]string{
+	"sourceRelative": {
+		"--go_out=paths=source_relative:.",
+		"--go-grpc_out=paths=source_relative:.",
+		"--gorums_out=paths=source_relative,trace=true:.",
+	},
+	"module": {
 		"--go_out=.",
+		"--go_opt=module=" + modulePath(),
 		"--go-grpc_out=.",
+		"--go-grpc_opt=module=" + modulePath(),
 		"--gorums_out=trace=true:.",
-	)
+		"--gorums_opt=module=" + modulePath(),
+	},
+}
+
+func protoc(compileType string, args ...string) {
+	cmd := exec.Command("protoc", "-I.:"+repoRoot())
+	cmd.Args = append(cmd.Args, protoArgs[compileType]...)
 	cmd.Args = append(cmd.Args, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("executing: %v\n%s\n", strings.Join(cmd.Args, " "), out)
 	}
 	check(err)
-	_ = modulePath() //TODO(meling) remove; currently used only to avoid compile error due to unused func.
 }
 
 // repoRoot returns the repository root.
