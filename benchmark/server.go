@@ -67,18 +67,18 @@ type orderedServer struct {
 	stats *Stats
 }
 
-func (srv *orderedServer) OrderedQC(_ context.Context, in *Echo, out func(*Echo)) {
-	out(in)
+func (srv *orderedServer) OrderedQC(_ context.Context, in *Echo, out func(*Echo, error)) {
+	out(in, nil)
 }
 
-func (srv *orderedServer) OrderedAsync(_ context.Context, in *Echo, out func(*Echo)) {
-	out(in)
+func (srv *orderedServer) OrderedAsync(_ context.Context, in *Echo, out func(*Echo, error)) {
+	out(in, nil)
 }
 
-func (srv *orderedServer) OrderedSlowServer(_ context.Context, in *Echo, out func(*Echo)) {
+func (srv *orderedServer) OrderedSlowServer(_ context.Context, in *Echo, out func(*Echo, error)) {
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		out(in)
+		out(in, nil)
 	}()
 }
 
@@ -87,29 +87,29 @@ func (srv *orderedServer) Multicast(_ context.Context, msg *TimedMsg) {
 	srv.stats.AddLatency(time.Duration(latency))
 }
 
-func (srv *orderedServer) StartServerBenchmark(_ context.Context, _ *StartRequest, out func(*StartResponse)) {
+func (srv *orderedServer) StartServerBenchmark(_ context.Context, _ *StartRequest, out func(*StartResponse, error)) {
 	srv.stats.Clear()
 	srv.stats.Start()
-	out(&StartResponse{})
+	out(&StartResponse{}, nil)
 }
 
-func (srv *orderedServer) StopServerBenchmark(_ context.Context, _ *StopRequest, out func(*Result)) {
+func (srv *orderedServer) StopServerBenchmark(_ context.Context, _ *StopRequest, out func(*Result, error)) {
 	srv.stats.End()
-	out(srv.stats.GetResult())
+	out(srv.stats.GetResult(), nil)
 }
 
-func (srv *orderedServer) StartBenchmark(_ context.Context, _ *StartRequest, out func(*StartResponse)) {
+func (srv *orderedServer) StartBenchmark(_ context.Context, _ *StartRequest, out func(*StartResponse, error)) {
 	srv.stats.Clear()
 	srv.stats.Start()
-	out(&StartResponse{})
+	out(&StartResponse{}, nil)
 }
 
-func (srv *orderedServer) StopBenchmark(_ context.Context, _ *StopRequest, out func(*MemoryStat)) {
+func (srv *orderedServer) StopBenchmark(_ context.Context, _ *StopRequest, out func(*MemoryStat, error)) {
 	srv.stats.End()
 	out(&MemoryStat{
 		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,
 		Memory: srv.stats.endMs.TotalAlloc - srv.stats.startMs.TotalAlloc,
-	})
+	}, nil)
 }
 
 // Server is a unified server for both ordered and unordered methods
