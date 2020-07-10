@@ -56,7 +56,7 @@ bootstrapgorums: tools
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
 endif
 
-test:
+test: installgorums
 	@go test -v $(dev_path)
 	@$(MAKE) --no-print-directory -C ./tests -B runtests
 
