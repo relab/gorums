@@ -62,7 +62,7 @@ type Server interface {
   // Runs synchronously, but may spawn goroutines and return early.
   // This allows the server to start processing the next request.
   // Goroutines can then asynchronously send response back using the func.
-  RPC(context.Context, *Request, func(*Response))
+  RPC(context.Context, *Request, func(*Response, error))
 }
 ```
 
@@ -97,7 +97,7 @@ func (s *testSrv) AsyncHandler(_ context.Context, req *Request, ret func(*Respon
     time.Sleep(10 * time.Millisecond)
     // at some point later, the response passed back to Gorums through the `ret` function,
     // and gets sent back to the client.
-    ret(response)
+    ret(response, nil)
   }()
 }
 ```

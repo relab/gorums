@@ -119,8 +119,8 @@ And this is our server interface:
 
 ```go
 type Storage interface {
-  Read(context.Context, *ReadRequest, func(*State))
-  Write(context.Context, *State, func(*WriteResponse))
+  Read(context.Context, *ReadRequest, func(*State, error))
+  Write(context.Context, *State, func(*WriteResponse, error))
 }
 ```
 
@@ -138,23 +138,23 @@ type storageSrv struct {
   state *State
 }
 
-func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, ret func(*State)) {
+func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, ret func(*State, error)) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   fmt.Println("Got Read()")
-  ret(srv.state)
+  ret(srv.state, nil)
 }
 
-func (srv *storageSrv) Write(_ context.Context, req *State, ret func(*WriteResponse)) {
+func (srv *storageSrv) Write(_ context.Context, req *State, ret func(*WriteResponse, error)) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if srv.state.Timestamp < req.Timestamp {
     srv.state = req
     fmt.Println("Got Write(", req.Value, ")")
-    ret(&WriteResponse{New: true})
+    ret(&WriteResponse{New: true}, nil)
     return
   }
-  ret(&WriteResponse{New: false})
+  ret(&WriteResponse{New: false}, nil)
 }
 ```
 
@@ -168,14 +168,15 @@ There are some important things to note about implementing the server interfaces
 * The context that is passed to the handlers is the gRPC stream context of the underlying gRPC stream.
   You can use this context to retrieve [metadata](https://github.com/grpc/grpc-go/blob/master/Documentation/grpc-metadata.md)
   and [peer](https://godoc.org/google.golang.org/grpc/peer) information from the client.
+* You can return errors using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
 
   ```go
-  func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, ret func(*State)) {
+  func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, ret func(*State), error) {
     go func() {
       srv.mut.Lock()
       defer srv.mut.Unlock()
       fmt.Println("Got Read()")
-      ret(srv.state)
+      ret(srv.state, nil)
     }()
   }
   ```
