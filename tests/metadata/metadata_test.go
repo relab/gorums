@@ -40,7 +40,7 @@ func (srv testSrv) IDFromMD(ctx context.Context, _ *empty.Empty, ret func(*NodeI
 func (srv testSrv) WhatIP(ctx context.Context, _ *empty.Empty, ret func(*IPAddr, error)) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
-		ret(nil, fmt.Errorf("Peer info unavailable"))
+		ret(nil, status.Error(codes.NotFound, "Peer info unavailable"))
 		return
 	}
 	ret(&IPAddr{Addr: peerInfo.Addr.String()}, nil)
@@ -53,11 +53,13 @@ func initServer(t *testing.T) *GorumsServer {
 }
 
 func TestMetadata(t *testing.T) {
+	want := uint32(1)
+
 	addrs, teardown := gorums.TestSetup(t, 1, func() interface{} { return initServer(t) })
 	defer teardown()
 
 	md := metadata.New(map[string]string{
-		"id": "1",
+		"id": fmt.Sprint(want),
 	})
 
 	mgr, err := NewManager(WithNodeList(addrs), WithMetadata(md), WithDialTimeout(1*time.Second), WithGrpcDialOptions(
@@ -74,8 +76,8 @@ func TestMetadata(t *testing.T) {
 		t.Fatalf("Failed to execute RPC: %v", err)
 	}
 
-	if resp.GetID() != 1 {
-		t.Fatalf("Wrong id")
+	if resp.GetID() != want {
+		t.Fatalf("IDFromMD() == %d, want %d", resp.GetID(), want)
 	}
 }
 
@@ -104,7 +106,7 @@ func TestPerNodeMetadata(t *testing.T) {
 		}
 
 		if resp.GetID() != node.ID() {
-			t.Fatalf("Wrong message")
+			t.Fatalf("IDFromMD() == %d, want %d", resp.GetID(), node.ID())
 		}
 	}
 }
@@ -129,6 +131,6 @@ func TestCanGetPeerInfo(t *testing.T) {
 	}
 
 	if ip.GetAddr() == "" {
-		t.Fatalf("No data returned")
+		t.Fatalf("WhatIP() == '%s', want non-empty string", ip.GetAddr())
 	}
 }

@@ -16,6 +16,8 @@ func (t testSrv) Test(_ context.Context, in *Echo, out func(*Echo, error)) {
 }
 
 func TestReconnect(t *testing.T) {
+	want := "Hello"
+
 	addrs, teardown := gorums.TestSetup(t, 1, func() interface{} {
 		srv := NewGorumsServer()
 		srv.RegisterReconnectServer(&testSrv{})
@@ -35,13 +37,13 @@ func TestReconnect(t *testing.T) {
 	node := mgr.Nodes()[0]
 
 	testRPC := func() {
-		resp, err := node.Test(context.Background(), &Echo{Value: "Hello"})
+		resp, err := node.Test(context.Background(), &Echo{Value: want})
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
 
-		if resp.GetValue() != "Hello" {
-			t.Fatalf("Wrong value")
+		if resp.GetValue() != want {
+			t.Fatalf("Test() == %s, want %s", resp.GetValue(), want)
 		}
 	}
 
