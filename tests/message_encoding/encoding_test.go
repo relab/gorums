@@ -322,7 +322,7 @@ func BenchmarkGorumsCodec(b *testing.B) {
 					b.StartTimer()
 				}
 				for i := 0; i < b.N; i++ {
-					msg := newGorumsMessage(false)
+					msg := newGorumsMessage(gorumsRequest)
 					err := codec.gorumsUnmarshal(buf, msg)
 					if err != nil {
 						b.Error(err)

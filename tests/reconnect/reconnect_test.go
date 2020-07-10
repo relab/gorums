@@ -11,8 +11,8 @@ import (
 
 type testSrv struct{}
 
-func (t testSrv) Test(_ context.Context, in *Echo, out func(*Echo)) {
-	out(in)
+func (t testSrv) Test(_ context.Context, in *Echo, out func(*Echo, error)) {
+	out(in, nil)
 }
 
 func TestReconnect(t *testing.T) {

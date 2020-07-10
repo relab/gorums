@@ -10,48 +10,45 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	status "google.golang.org/grpc/status"
 )
 
-type testSrv struct {
-	t *testing.T
-}
+type testSrv struct{}
 
-func (srv testSrv) IDFromMD(ctx context.Context, _ *empty.Empty, out func(*NodeID)) {
+func (srv testSrv) IDFromMD(ctx context.Context, _ *empty.Empty, ret func(*NodeID, error)) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		srv.t.Error("Failed to obtain metadata!")
-		out(&NodeID{})
+		ret(nil, status.Error(codes.NotFound, "Metadata unavailable"))
 		return
 	}
 	v := md.Get("id")
 	if len(v) < 1 {
-		srv.t.Error("id is empty")
-		out(&NodeID{})
+		ret(nil, status.Error(codes.NotFound, "ID field missing"))
 		return
 	}
 	id, err := strconv.Atoi(v[0])
 	if err != nil {
-		srv.t.Error("id is not an integer")
-		out(&NodeID{})
+		ret(nil, status.Errorf(codes.InvalidArgument, "Got '%s', but could not convert to integer", v[0]))
 		return
 	}
-	out(&NodeID{ID: uint32(id)})
+	ret(&NodeID{ID: uint32(id)}, nil)
 }
 
-func (srv testSrv) WhatIP(ctx context.Context, _ *empty.Empty, ret func(*IPAddr)) {
+func (srv testSrv) WhatIP(ctx context.Context, _ *empty.Empty, ret func(*IPAddr, error)) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
-		ret(&IPAddr{})
+		ret(nil, fmt.Errorf("Peer info unavailable"))
 		return
 	}
-	ret(&IPAddr{Addr: peerInfo.Addr.String()})
+	ret(&IPAddr{Addr: peerInfo.Addr.String()}, nil)
 }
 
 func initServer(t *testing.T) *GorumsServer {
 	srv := NewGorumsServer()
-	srv.RegisterMetadataTestServer(&testSrv{t})
+	srv.RegisterMetadataTestServer(&testSrv{})
 	return srv
 }
 
