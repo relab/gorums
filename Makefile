@@ -12,6 +12,7 @@ test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing
 failing_test_files		:= $(shell find $(tests_path) -name "*.proto" -path "*failing*")
 test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
 tmp_dir					:= $(shell mktemp -d -t gorums-XXXXX)
+proto_path 				:= $(dev_path):third_party:.
 
 plugin_deps				:= gorums.pb.go internal/ordering/opts.pb.go internal/correctable/opts.pb.go $(static_file)
 benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_grpc.pb.go benchmark/benchmark_gorums.pb.go
@@ -20,7 +21,7 @@ benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_grpc.pb.go ben
 
 dev: installgorums ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 	@rm -f $(dev_path)/zorums*.pb.go
-	@protoc -I$(dev_path):. \
+	@protoc -I=$(proto_path) \
 		--go_out=:. \
 		--go-grpc_out=:. \
 		--gorums_out=dev=true,trace=true:. \
@@ -34,13 +35,13 @@ $(static_file): $(static_files)
 	@protoc-gen-gorums --bundle=$(static_file)
 
 %.pb.go : %.proto
-	@protoc --go_out=paths=source_relative:. $^
+	@protoc -I=$(proto_path) --go_out=paths=source_relative:. $^
 
 %_grpc.pb.go : %.proto
-	@protoc --go-grpc_out=paths=source_relative:. $^
+	@protoc -I=$(proto_path) --go-grpc_out=paths=source_relative:. $^
 
 %_gorums.pb.go : %.proto
-	@protoc --gorums_out=paths=source_relative,trace=true:. $^
+	@protoc -I=$(proto_path) --gorums_out=paths=source_relative,trace=true:. $^
 
 tools:
 	@go mod download
