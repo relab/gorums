@@ -1,10 +1,14 @@
-.PHONY: all qf order message_encoding metadata tls reconnect
+.PHONY: runtests qf order message_encoding metadata tls reconnect
 
-all: qf order message_encoding metadata tls reconnect
+# Tests that should be run each time
+runtests: ordering message_encoding metadata tls reconnect
+	@for package in $^; do \
+		go test -v ./$$package; \
+	done
 
 qf: qf/qf.pb.go qf/qf_grpc.pb.go qf/qf_gorums.pb.go
 
-order: ordering/order.pb.go ordering/order_gorums.pb.go
+ordering: ordering/order.pb.go ordering/order_gorums.pb.go
 
 message_encoding: message_encoding/message_encoding.pb.go message_encoding/message_encoding_gorums.pb.go
 
