@@ -34,6 +34,7 @@ func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 		{{- else }}
 		once := new({{use "sync.Once" $genFile}})
 		f := func(resp *{{out $genFile .}}) {
+			{{- /* Only one response message is supported */ -}}
 			once.Do(func() {
 				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
 			})
