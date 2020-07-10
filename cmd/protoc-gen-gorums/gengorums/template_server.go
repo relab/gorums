@@ -14,7 +14,7 @@ type {{$service}} interface {
 	{{- if isOneway .}}
 	{{.GoName}}({{$context}}, *{{in $genFile .}})
 	{{- else}}
-	{{.GoName}}({{$context}}, *{{in $genFile .}}, func(*{{out $genFile .}}))
+	{{.GoName}}({{$context}}, *{{in $genFile .}}, func(*{{out $genFile .}}, error))
 	{{- end}}
 	{{- end}}
 }
@@ -33,10 +33,10 @@ func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
 		srv.{{.GoName}}(ctx, req)
 		{{- else }}
 		once := new({{use "sync.Once" $genFile}})
-		f := func(resp *{{out $genFile .}}) {
+		f := func(resp *{{out $genFile .}}, err error) {
 			{{- /* Only one response message is supported */ -}}
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.{{.GoName}}(ctx, req, f)

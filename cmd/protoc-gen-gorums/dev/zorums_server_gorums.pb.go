@@ -15,15 +15,15 @@ type ZorumsService interface {
 	Multicast2(context.Context, *Request)
 	Multicast3(context.Context, *Request)
 	Multicast4(context.Context, *empty.Empty)
-	OrderingQC(context.Context, *Request, func(*Response))
-	OrderingPerNodeArg(context.Context, *Request, func(*Response))
-	OrderingCustomReturnType(context.Context, *Request, func(*Response))
-	OrderingCombo(context.Context, *Request, func(*Response))
-	OrderingUnaryRPC(context.Context, *Request, func(*Response))
-	OrderingFuture(context.Context, *Request, func(*Response))
-	OrderingFuturePerNodeArg(context.Context, *Request, func(*Response))
-	OrderingFutureCustomReturnType(context.Context, *Request, func(*Response))
-	OrderingFutureCombo(context.Context, *Request, func(*Response))
+	OrderingQC(context.Context, *Request, func(*Response, error))
+	OrderingPerNodeArg(context.Context, *Request, func(*Response, error))
+	OrderingCustomReturnType(context.Context, *Request, func(*Response, error))
+	OrderingCombo(context.Context, *Request, func(*Response, error))
+	OrderingUnaryRPC(context.Context, *Request, func(*Response, error))
+	OrderingFuture(context.Context, *Request, func(*Response, error))
+	OrderingFuturePerNodeArg(context.Context, *Request, func(*Response, error))
+	OrderingFutureCustomReturnType(context.Context, *Request, func(*Response, error))
+	OrderingFutureCombo(context.Context, *Request, func(*Response, error))
 	Unicast(context.Context, *Request)
 	Unicast2(context.Context, *Request)
 }
@@ -52,9 +52,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingQCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingQC(ctx, req, f)
@@ -62,9 +62,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingPerNodeArgMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingPerNodeArg(ctx, req, f)
@@ -72,9 +72,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingCustomReturnTypeMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingCustomReturnType(ctx, req, f)
@@ -82,9 +82,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingComboMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingCombo(ctx, req, f)
@@ -92,9 +92,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingUnaryRPCMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingUnaryRPC(ctx, req, f)
@@ -102,9 +102,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingFutureMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingFuture(ctx, req, f)
@@ -112,9 +112,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingFuturePerNodeArgMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingFuturePerNodeArg(ctx, req, f)
@@ -122,9 +122,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingFutureCustomReturnTypeMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingFutureCustomReturnType(ctx, req, f)
@@ -132,9 +132,9 @@ func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
 	s.srv.handlers[orderingFutureComboMethodID] = func(ctx context.Context, in *gorumsMessage, finished chan<- *gorumsMessage) {
 		req := in.message.(*Request)
 		once := new(sync.Once)
-		f := func(resp *Response) {
+		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- &gorumsMessage{metadata: in.metadata, message: resp}
+				finished <- wrapMessage(in.metadata, resp, err)
 			})
 		}
 		srv.OrderingFutureCombo(ctx, req, f)

@@ -3,6 +3,8 @@ syntax = "proto3";
 package ordering;
 option go_package = "github.com/relab/gorums/ordering";
 
+import "google/rpc/status.proto";
+
 service Gorums {
   // NodeStream is a stream that connects a client to a Node.
   // The messages that are sent on the stream contain both Metadata
@@ -15,4 +17,5 @@ service Gorums {
 message Metadata {
   uint64 MessageID = 1;
   int32 MethodID = 2;
+  google.rpc.Status Status = 3;
 }
