@@ -48,4 +48,3 @@ The Makefile itself also serves as documentation; inspect it for details.
 | `installgorums`   | Reinstalls the `protoc-gen-gorums` plugin.                                   |
 | `bootstrapgorums` | Used to bootstrap the plugin.                                                |
 | `gentests`        | Generate code from test files.                                               |
-| `stability`       | Used to test that plugin output is stable across consecutive runs.           |
