@@ -57,6 +57,7 @@ bootstrapgorums: tools
 endif
 
 test:
+	go test -v $(dev_path)
 	$(MAKE) --no-print-directory -C ./tests -B runtests
 
 .PHONY: gentests $(test_files)
