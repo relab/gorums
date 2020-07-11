@@ -23,7 +23,7 @@ func TestGorumsStability(t *testing.T) {
 	}
 	defer os.RemoveAll(dir1)
 
-	err = protoc.Run("sourceRelative", "zorums.proto")
+	_, err = protoc.Run("sourceRelative", "zorums.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestGorumsStability(t *testing.T) {
 	}
 	defer os.RemoveAll(dir2)
 
-	err = protoc.Run("sourceRelative", "zorums.proto")
+	_, err = protoc.Run("sourceRelative", "zorums.proto")
 	if err != nil {
 		t.Fatal(err)
 	}

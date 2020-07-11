@@ -7,8 +7,8 @@ import (
 )
 
 func TestFailingProtoFiles(t *testing.T) {
-	err := protoc.Run("sourceRelative", "failing/reservednames/reserved.proto")
+	out, err := protoc.Run("sourceRelative", "failing/reservednames/reserved.proto")
 	if err == nil {
-		t.Fatal("expected protoc to fail with '--gorums_out: protoc-gen-gorums: Plugin failed with status code 1.'")
+		t.Fatalf("expected protoc to fail with:\n%s", out)
 	}
 }

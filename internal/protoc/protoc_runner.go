@@ -1,23 +1,18 @@
 package protoc
 
 import (
-	"fmt"
 	"os/exec"
 	"strings"
 )
 
 // Run runs the protoc generator, using either sourceRelative or module compileType,
 // with additional arguments, the last of which should be the proto filename.
-func Run(compileType string, args ...string) error {
+func Run(compileType string, args ...string) (string, error) {
 	cmd := exec.Command("protoc", "-I.:"+repoRoot())
 	cmd.Args = append(cmd.Args, protoArgs[compileType]...)
 	cmd.Args = append(cmd.Args, args...)
 	out, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Printf("executing: %v\n%s\n", strings.Join(cmd.Args, " "), out)
-		return err
-	}
-	return nil
+	return string(out), err
 }
 
 var protoArgs = map[string][]string{

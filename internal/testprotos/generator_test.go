@@ -2,6 +2,7 @@ package testprotos_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -42,19 +43,47 @@ func TestGenerateProtoFiles(t *testing.T) {
 
 	err = filepath.Walk(".",
 		taskFn(".proto", func(path string) error {
-			return protoc.Run("sourceRelative", path)
+			_, err := protoc.Run("sourceRelative", path)
+			return err
 		}))
 	if err != nil {
 		t.Errorf("error walking the path %q: %w", ".", err)
 	}
-	//TODO(meling) check that the generated code compiles
+
+	// build the packages with .pb.go files to check they compile
+	alreadyBuilt := make(map[string]struct{})
+	err = filepath.Walk(".",
+		taskFn(".pb.go", func(path string) error {
+			dir := filepath.Dir(path)
+			if _, ok := alreadyBuilt[dir]; ok {
+				return nil
+			}
+			alreadyBuilt[dir] = struct{}{}
+			return build(t, dir)
+		}))
+	if err != nil {
+		t.Errorf("error walking the path %q: %w", ".", err)
+	}
 
 	err = filepath.Walk(".",
 		taskFn(".pb.go", func(path string) error {
 			return os.Remove(path)
 		}))
-
 	if err != nil {
 		t.Errorf("error walking the path %q: %w", ".", err)
 	}
+}
+
+func build(t *testing.T, path string) error {
+	t.Helper()
+	cmd := exec.Command("go", "build")
+	cmd.Dir = path
+	out, err := cmd.CombinedOutput()
+	if string(out) != "" {
+		t.Log(strings.TrimSpace(string(out)))
+	}
+	if err != nil {
+		return err
+	}
+	return nil
 }
