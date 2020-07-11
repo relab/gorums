@@ -13,6 +13,7 @@ RPCs
 Tormod
 Unexported
 Zorums
+bootstrapgorums
 calltypes
 cpuprofile
 gengorums
@@ -21,11 +22,13 @@ golangci
 goroutines
 gorumsexample
 grpc
+installgorums
 memprofile
 multicast
 proto
 protobuf
 protoc
+protoimpl
 ptypes
 qspec
 quorumcall

@@ -1,17 +1,19 @@
 package zorums_test
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/relab/gorums/internal/protoc"
 )
 
+// TestGorumsStability runs protoc twice on the same proto file that captures all
+// variations of Gorums specific code generation. The test objective is to discover
+// if the output changes between runs over the same proto file.
 func TestGorumsStability(t *testing.T) {
-	t.Log("Running protoc test with source files expected to remain stable (no output change between runs)")
 	// TODO(meling); replace with Go 1.15 specific funcs
 	// dir1 := t.TempDir()
 	// dir2 := t.TempDir()
@@ -21,8 +23,8 @@ func TestGorumsStability(t *testing.T) {
 	}
 	defer os.RemoveAll(dir1)
 
-	protoc("sourceRelative", "zorums.proto")
-	moveGenFiles(t, dir1)
+	protoc.Run("sourceRelative", "zorums.proto")
+	moveFiles(t, "zorums*.pb.go", dir1)
 
 	dir2, err := ioutil.TempDir("", "gorums-stability")
 	if err != nil {
@@ -30,8 +32,8 @@ func TestGorumsStability(t *testing.T) {
 	}
 	defer os.RemoveAll(dir2)
 
-	protoc("sourceRelative", "zorums.proto")
-	moveGenFiles(t, dir2)
+	protoc.Run("sourceRelative", "zorums.proto")
+	moveFiles(t, "zorums*.pb.go", dir2)
 
 	out, _ := exec.Command("diff", dir1, dir2).CombinedOutput()
 	// checking only 'out' here; err would only show exit status 1 if output is different
@@ -40,9 +42,10 @@ func TestGorumsStability(t *testing.T) {
 	}
 }
 
-func moveGenFiles(t *testing.T, toDir string) {
+// moveFiles moves files matching glob to toDir.
+func moveFiles(t *testing.T, glob, toDir string) {
 	t.Helper()
-	matches, err := filepath.Glob("zorums*.pb.go")
+	matches, err := filepath.Glob(glob)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,54 +54,5 @@ func moveGenFiles(t *testing.T, toDir string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
-}
-
-var protoArgs = map[string][]string{
-	"sourceRelative": {
-		"--go_out=paths=source_relative:.",
-		"--go-grpc_out=paths=source_relative:.",
-		"--gorums_out=paths=source_relative,trace=true:.",
-	},
-	"module": {
-		"--go_out=.",
-		"--go_opt=module=" + modulePath(),
-		"--go-grpc_out=.",
-		"--go-grpc_opt=module=" + modulePath(),
-		"--gorums_out=trace=true:.",
-		"--gorums_opt=module=" + modulePath(),
-	},
-}
-
-func protoc(compileType string, args ...string) {
-	cmd := exec.Command("protoc", "-I.:"+repoRoot())
-	cmd.Args = append(cmd.Args, protoArgs[compileType]...)
-	cmd.Args = append(cmd.Args, args...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Printf("executing: %v\n%s\n", strings.Join(cmd.Args, " "), out)
-	}
-	check(err)
-}
-
-// repoRoot returns the repository root.
-func repoRoot() string {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").CombinedOutput()
-	check(err)
-	return strings.TrimSpace(string(out))
-}
-
-// modulePath return the module's path.
-func modulePath() string {
-	cmd := exec.Command("go", "list", "-m", "-f", "{{.Path}}")
-	cmd.Dir = repoRoot()
-	out, err := cmd.CombinedOutput()
-	check(err)
-	return strings.TrimSpace(string(out))
-}
-
-func check(err error) {
-	if err != nil {
-		panic(err)
 	}
 }
