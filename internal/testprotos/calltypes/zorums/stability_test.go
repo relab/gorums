@@ -23,7 +23,10 @@ func TestGorumsStability(t *testing.T) {
 	}
 	defer os.RemoveAll(dir1)
 
-	protoc.Run("sourceRelative", "zorums.proto")
+	err = protoc.Run("sourceRelative", "zorums.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
 	moveFiles(t, "zorums*.pb.go", dir1)
 
 	dir2, err := ioutil.TempDir("", "gorums-stability")
@@ -32,7 +35,10 @@ func TestGorumsStability(t *testing.T) {
 	}
 	defer os.RemoveAll(dir2)
 
-	protoc.Run("sourceRelative", "zorums.proto")
+	err = protoc.Run("sourceRelative", "zorums.proto")
+	if err != nil {
+		t.Fatal(err)
+	}
 	moveFiles(t, "zorums*.pb.go", dir2)
 
 	out, _ := exec.Command("diff", dir1, dir2).CombinedOutput()
