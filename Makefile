@@ -1,12 +1,9 @@
 PLUGIN_PATH				:= ./cmd/protoc-gen-gorums
 dev_path				:= $(PLUGIN_PATH)/dev
 gen_path				:= $(PLUGIN_PATH)/gengorums
-tests_path				:= internal/testprotos
 zorums_proto			:= $(dev_path)/zorums.proto
 static_file				:= $(gen_path)/template_static.go
 static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
-test_files				:= $(shell find $(tests_path) -name "*.proto" -not -path "*failing*")
-test_gen_files			:= $(patsubst %.proto,%_gorums.pb.go,$(test_files))
 proto_path 				:= $(dev_path):third_party:.
 
 plugin_deps				:= gorums.pb.go internal/ordering/opts.pb.go internal/correctable/opts.pb.go $(static_file)
@@ -54,14 +51,3 @@ endif
 test: installgorums
 	@go test -v $(dev_path)
 	@$(MAKE) --no-print-directory -C ./tests -B runtests
-
-.PHONY: gentests $(test_files)
-gentests: $(test_files)
-
-$(test_files): installgorums
-	@echo "Running protoc test with source files expected to pass"
-	@protoc -I. \
-		--go_out=paths=source_relative:. \
-		--go-grpc_out=paths=source_relative:. \
-		--gorums_out=paths=source_relative,trace=true:. $@ \
-	|| (echo "unexpected failure with exit code: $$?")
