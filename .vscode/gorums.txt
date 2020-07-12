@@ -15,7 +15,9 @@ Unexported
 Zorums
 bootstrapgorums
 calltypes
+clevel
 cpuprofile
+donech
 gengorums
 godoc
 golangci
@@ -30,9 +32,12 @@ protobuf
 protoc
 protoimpl
 ptypes
+qcresult
 qspec
 quorumcall
 relab
+rlevel
 testprotos
+tmpl
 unexport
 unicast
