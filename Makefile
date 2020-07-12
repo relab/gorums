@@ -52,3 +52,16 @@ endif
 test: installgorums
 	@go test -v $(dev_path)
 	@$(MAKE) --no-print-directory -C ./tests -B runtests
+
+# Warning: will probably run for 10 minutes; the timeout does not work
+stressdev: tools
+	go test -c $(dev_path)
+	stress -timeout=5s -p=1 ./dev.test
+
+# Warning: should not be aborted (CTRL-C), as otherwise it may
+# leave behind compiled files in-place.
+# Again the timeout does not work, so it will probably leave behind generated files.
+stressgen: tools
+	cd ./internal/testprotos; go test -c
+	cd ./internal/testprotos; stress -timeout=10s -p=1 ./testprotos.test
+	rm ./internal/testprotos/testprotos.test
