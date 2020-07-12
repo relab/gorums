@@ -53,6 +53,9 @@ test: installgorums
 	@go test -v $(dev_path)
 	@$(MAKE) --no-print-directory -C ./tests -B runtests
 
+testrace: test
+	go test -race -cpu=1,2,4 ./...
+
 # Warning: will probably run for 10 minutes; the timeout does not work
 stressdev: tools
 	go test -c $(dev_path)
