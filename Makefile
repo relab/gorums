@@ -1,6 +1,7 @@
 PLUGIN_PATH				:= ./cmd/protoc-gen-gorums
 dev_path				:= $(PLUGIN_PATH)/dev
 gen_path				:= $(PLUGIN_PATH)/gengorums
+gen_files				:= $(shell find $(gen_path) -name "*.go" -not -name "*_test.go")
 zorums_proto			:= $(dev_path)/zorums.proto
 static_file				:= $(gen_path)/template_static.go
 static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
@@ -39,7 +40,7 @@ tools:
 	@go mod download
 	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % go install %
 
-installgorums: bootstrapgorums $(plugin_deps) Makefile
+installgorums: bootstrapgorums $(gen_files) $(plugin_deps) Makefile
 	@go install $(PLUGIN_PATH)
 
 ifeq (, $(shell which protoc-gen-gorums))
