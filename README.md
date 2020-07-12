@@ -26,6 +26,21 @@ To build and deploy Gorums, you need the following software installed:
 * Make
 * Ansible (used by benchmark script)
 
+## Contributors Guide
+
+We value your contributions.
+Before starting a contribution, please reach out to us by posting on an existing issue or creating a new one.
+Students and other contributors are encouraged to follow these guidelines:
+
+* We recommend using VSCode with the following plugins
+  * Go plugin with the
+    * gopls language server enabled
+    * golangci-lint enabled
+  * Code Spell Checker
+  * markdownlint
+  * vscode-proto3
+* Code should regularly be merged into master through pull requests.
+
 ## Examples
 
 The original EPaxos implementation modified to use Gorums can be found

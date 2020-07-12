@@ -3,9 +3,11 @@ Erevik
 GOBIN
 GOPATH
 Gorums
+Hein
 ICDCS
 Jehl
 Mallocs
+Meling
 Paxos
 QCQF
 RPC's
@@ -17,14 +19,17 @@ bootstrapgorums
 calltypes
 clevel
 cpuprofile
+devguide
 donech
 gengorums
 godoc
 golangci
+gopls
 goroutines
 gorumsexample
 grpc
 installgorums
+markdownlint
 memprofile
 multicast
 proto
@@ -41,3 +46,4 @@ testprotos
 tmpl
 unexport
 unicast
+userguide
