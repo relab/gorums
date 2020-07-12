@@ -120,7 +120,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 					return err
 				}
 				atomic.AddUint64(&async, ^uint64(0))
-				warmupFunc()
+				_ = warmupFunc()
 				return nil
 			})
 		}
@@ -155,7 +155,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 				}
 				s.AddLatency(time.Since(start))
 				atomic.AddUint64(&async, ^uint64(0))
-				benchmarkFunc()
+				_ = benchmarkFunc()
 				return nil
 			})
 		}
@@ -207,9 +207,12 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	for n := 0; n < opts.Concurrent; n++ {
 		g.Go(func() error { return benchmarkFunc(warmupEnd) })
 	}
-	g.Wait()
+	err := g.Wait()
+	if err != nil {
+		return nil, err
+	}
 
-	_, err := cfg.StartServerBenchmark(ctx, &StartRequest{})
+	_, err = cfg.StartServerBenchmark(ctx, &StartRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +222,10 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	for n := 0; n < opts.Concurrent; n++ {
 		g.Go(func() error { return benchmarkFunc(endTime) })
 	}
-	g.Wait()
+	err = g.Wait()
+	if err != nil {
+		return nil, err
+	}
 	runtime.ReadMemStats(&end)
 
 	resp, err := cfg.StopServerBenchmark(ctx, &StopRequest{})

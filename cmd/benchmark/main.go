@@ -167,7 +167,7 @@ func main() {
 			os.Exit(1)
 		}
 		srv := benchmark.NewServer(benchmark.WithServerBufferSize(*serverBuffer))
-		go srv.Serve(lis)
+		go func() { _ = srv.Serve(lis) }()
 
 		fmt.Printf("Running benchmark server on '%s'\n", *server)
 

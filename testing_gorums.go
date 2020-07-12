@@ -33,7 +33,7 @@ func TestSetup(t testing.TB, numServers int, srvFunc func() interface{}) ([]stri
 		}
 		addrs[i] = lis.Addr().String()
 		servers[i] = srv
-		go srv.Serve(lis)
+		go func() { _ = srv.Serve(lis) }()
 	}
 	stopFn := func() {
 		for _, srv := range servers {

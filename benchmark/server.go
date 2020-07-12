@@ -146,7 +146,7 @@ func StartLocalServers(ctx context.Context, n int, opts ...ServerOption) []strin
 		}
 		srv := NewServer(opts...)
 		servers = append(servers, srv)
-		go srv.Serve(lis)
+		go func() { _ = srv.Serve(lis) }()
 	}
 	go func() {
 		<-ctx.Done()
