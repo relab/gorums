@@ -23,6 +23,7 @@ type Options struct {
 	Remote     bool          // Whether the servers are remote (true) or local (false)
 }
 
+// Bench is a Benchmark with a name and description
 type Bench struct {
 	Name        string
 	Description string
@@ -241,6 +242,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	return resp, nil
 }
 
+// GetBenchmarks returns a list of Benchmarks that can be performed on the configuration
 func GetBenchmarks(cfg *Configuration) []Bench {
 	m := []Bench{
 		{

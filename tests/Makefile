@@ -1,7 +1,7 @@
 # Tests that should be run each time
-RUNTESTS := ordering message_encoding metadata tls reconnect
+RUNTESTS := ordering encoding metadata tls reconnect
 
-.PHONY: all runtests qf order message_encoding metadata tls reconnect
+.PHONY: all runtests qf order encoding metadata tls reconnect
 
 all: $(RUNTESTS)
 
@@ -14,7 +14,7 @@ qf: qf/qf.pb.go qf/qf_grpc.pb.go qf/qf_gorums.pb.go
 
 ordering: ordering/order.pb.go ordering/order_gorums.pb.go
 
-message_encoding: message_encoding/message_encoding.pb.go message_encoding/message_encoding_gorums.pb.go
+encoding: encoding/encoding.pb.go encoding/encoding_gorums.pb.go
 
 metadata: metadata/metadata.pb.go metadata/metadata_gorums.pb.go
 
