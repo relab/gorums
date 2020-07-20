@@ -5,6 +5,10 @@ var orderingVariables = `
 {{$unexportMethod := unexport .Method.GoName}}
 `
 
+var orderedRPCVariables = orderingVariables + `
+{{$context := use "context.Context" .GenFile}}
+`
+
 var orderedQCSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}})` +
@@ -85,8 +89,7 @@ var orderingReply = `
 `
 
 var orderingQC = commonVariables +
-	quorumCallVariables +
-	orderingVariables +
+	orderedRPCVariables +
 	quorumCallComment +
 	orderedQCSignature +
 	orderingPreamble +

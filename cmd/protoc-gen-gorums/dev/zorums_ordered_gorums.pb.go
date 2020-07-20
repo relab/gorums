@@ -6,7 +6,6 @@ import (
 	context "context"
 	ordering "github.com/relab/gorums/ordering"
 	trace "golang.org/x/net/trace"
-	grpc "google.golang.org/grpc"
 	time "time"
 )
 
@@ -335,7 +334,7 @@ func (c *Configuration) OrderingCombo(ctx context.Context, in *Request, f func(*
 }
 
 // OrderingUnaryRPC is testing that we can create ordered Unary RPCs
-func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
+func (n *Node) OrderingUnaryRPC(ctx context.Context, in *Request) (resp *Response, err error) {
 
 	// get the ID which will be used to return the correct responses for a request
 	msgID := n.nextMsgID()
