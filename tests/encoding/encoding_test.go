@@ -1,4 +1,4 @@
-package message_encoding
+package encoding
 
 import (
 	"fmt"

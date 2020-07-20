@@ -89,6 +89,8 @@ func (r repl) ReadLine() (string, error) {
 	return r.term.ReadLine()
 }
 
+// Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
+// RPCs and quorum calls using the manager and configuration.
 func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
 	r := newRepl(mgr, defaultCfg)
 
@@ -193,7 +195,7 @@ func (r repl) qcCfg(args []string) {
 	}
 }
 
-func (_ repl) readRPC(args []string, node *proto.Node) {
+func (repl) readRPC(args []string, node *proto.Node) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -212,7 +214,7 @@ func (_ repl) readRPC(args []string, node *proto.Node) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (_ repl) writeRPC(args []string, node *proto.Node) {
+func (repl) writeRPC(args []string, node *proto.Node) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
@@ -231,7 +233,7 @@ func (_ repl) writeRPC(args []string, node *proto.Node) {
 	fmt.Println("Write OK")
 }
 
-func (_ repl) readQC(args []string, cfg *proto.Configuration) {
+func (repl) readQC(args []string, cfg *proto.Configuration) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -250,7 +252,7 @@ func (_ repl) readQC(args []string, cfg *proto.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (_ repl) writeQC(args []string, cfg *proto.Configuration) {
+func (repl) writeQC(args []string, cfg *proto.Configuration) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return

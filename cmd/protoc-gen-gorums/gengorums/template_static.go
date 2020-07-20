@@ -353,7 +353,7 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 	if m.opts.idMapping != nil {
 		for naddr, id := range m.opts.idMapping {
 			if m.lookup[id] != nil {
-				err := fmt.Errorf("two node ids are identical(id %d). Node ids has to be unique!", id)
+				err := fmt.Errorf("Two node ids are identical(id %d). Node ids have to be unique", id)
 				return nil, ManagerCreationError(err)
 			}
 			nodeAddrs = append(nodeAddrs, naddr)
@@ -1183,6 +1183,7 @@ func WithServerBufferSize(size uint) ServerOption {
 	}
 }
 
+// WithGRPCServerOptions allows to set gRPC options for the server.
 func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 	return func(o *serverOptions) {
 		o.grpcOpts = append(o.grpcOpts, opts...)

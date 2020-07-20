@@ -89,6 +89,7 @@ func WithServerBufferSize(size uint) ServerOption {
 	}
 }
 
+// WithGRPCServerOptions allows to set gRPC options for the server.
 func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 	return func(o *serverOptions) {
 		o.grpcOpts = append(o.grpcOpts, opts...)
