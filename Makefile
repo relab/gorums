@@ -10,7 +10,9 @@ proto_path 				:= $(dev_path):third_party:.
 plugin_deps				:= gorums.pb.go internal/ordering/opts.pb.go internal/correctable/opts.pb.go $(static_file)
 benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_grpc.pb.go benchmark/benchmark_gorums.pb.go
 
-.PHONY: dev tools bootstrapgorums installgorums benchmark test
+.PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests
+
+all: dev benchmark compiletests
 
 dev: installgorums ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 	@rm -f $(dev_path)/zorums*.pb.go
@@ -48,6 +50,9 @@ bootstrapgorums: tools
 	@echo "Bootstrapping gorums plugin"
 	@go install github.com/relab/gorums/cmd/protoc-gen-gorums
 endif
+
+compiletests: installgorums
+	@$(MAKE) --no-print-directory -C ./tests all
 
 test: installgorums
 	@go test -v $(dev_path)
