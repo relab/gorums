@@ -1,18 +1,29 @@
 name: golangci-lint
-on:
-  push:
-    tags:
-      - v*
-    branches:
-      - master
-  pull_request:
+on: [push, pull_request]
 
 jobs:
   golangci:
     name: lint
     runs-on: ubuntu-latest
     steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@master
+        with:
+          version: '3.x'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/cache@v2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
       - uses: actions/checkout@v2
+      - name: Run Make
+        run: make
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v1
         with:

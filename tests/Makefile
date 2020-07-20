@@ -1,7 +1,11 @@
-.PHONY: runtests qf order message_encoding metadata tls reconnect
-
 # Tests that should be run each time
-runtests: ordering message_encoding metadata tls reconnect
+RUNTESTS := ordering message_encoding metadata tls reconnect
+
+.PHONY: all runtests qf order message_encoding metadata tls reconnect
+
+all: $(RUNTESTS)
+
+runtests: $(RUNTESTS)
 	@for package in $^; do \
 		go test -v ./$$package; \
 	done
