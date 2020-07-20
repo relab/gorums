@@ -3,8 +3,7 @@ package gengorums
 var orderingRPCComment = `{{.Method.Comments.Leading}}`
 
 var orderingRPCSignature = `func (n *Node) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}, ` +
-	`opts ...{{$opts}})` +
+	`ctx {{$context}}, in *{{$in}}) ` +
 	`(resp *{{$out}}, err error) {
 `
 
@@ -42,8 +41,7 @@ var orderingRPCBody = `
 `
 
 var orderingRPC = commonVariables +
-	quorumCallVariables +
-	orderingVariables +
+	orderedRPCVariables +
 	orderingRPCComment +
 	orderingRPCSignature +
 	orderingRPCPreamble +
