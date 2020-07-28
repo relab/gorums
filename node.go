@@ -1,4 +1,4 @@
-package dev
+package gorums
 
 import (
 	"context"
@@ -29,9 +29,6 @@ type Node struct {
 	latency time.Duration
 
 	*orderedNodeStream
-
-	// embed generated nodeServices
-	nodeServices
 }
 
 func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
@@ -60,14 +57,11 @@ func (n *Node) connect(opts managerOptions) error {
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	// only start ordering RPCs when needed
-	if hasOrderingMethods {
-		err = n.connectOrderedStream(ctx, n.conn)
-		if err != nil {
-			return fmt.Errorf("starting stream failed: %w", err)
-		}
+	err = n.connectOrderedStream(ctx, n.conn)
+	if err != nil {
+		return fmt.Errorf("starting stream failed: %w", err)
 	}
-	return n.connectStream(ctx) // call generated method
+	return nil
 }
 
 // close this node for further calls and optionally stream.
@@ -75,9 +69,8 @@ func (n *Node) close() error {
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("%d: conn close error: %w", n.id, err)
 	}
-	err := n.closeStream() // call generated method
 	n.cancel()
-	return err
+	return nil
 }
 
 // ID returns the ID of n.

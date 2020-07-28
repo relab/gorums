@@ -1,4 +1,4 @@
-package dev
+package gorums
 
 import (
 	"testing"
@@ -7,12 +7,19 @@ import (
 	"github.com/relab/gorums/ordering"
 )
 
+var methods = map[int32]MethodInfo{
+	2: {
+		requestType:  (&ordering.Metadata{}).ProtoReflect(),
+		responseType: (&ordering.Metadata{}).ProtoReflect(),
+	},
+}
+
 var (
 	testMsg = &gorumsMessage{
 		metadata: &ordering.Metadata{MessageID: 1, MethodID: 2},
-		message:  &Request{Value: "foo bar"},
+		message:  &ordering.Metadata{MessageID: 42},
 	}
-	codec = newGorumsCodec()
+	codec = NewGorumsCodec(methods)
 )
 
 func TestMarshalGorumsMessage(t *testing.T) {
@@ -34,7 +41,7 @@ func TestUnmarshalGorumsMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if msg.metadata.MessageID != 1 || msg.metadata.MethodID != 2 || msg.message.(*Request).Value != "foo bar" {
+	if msg.metadata.MessageID != 1 || msg.metadata.MethodID != 2 || msg.message.(*ordering.Metadata).MessageID != 42 {
 		t.Fatal("Failed to unmarshal message correctly.")
 	}
 }
@@ -54,13 +61,13 @@ func TestMarshalAndUnmarshalProtobuf(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := &Request{}
+	msg := &ordering.Metadata{}
 	err = codec.Unmarshal(buf, msg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if msg.Value != testMsg.message.(*Request).Value {
+	if msg.MethodID != testMsg.message.(*ordering.Metadata).MethodID {
 		t.Fatal("Failed to unmarshal message correctly.")
 	}
 }

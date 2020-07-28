@@ -2,23 +2,25 @@ package dev
 
 import (
 	"fmt"
+
+	"github.com/relab/gorums"
 )
 
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
 	id    uint32
-	nodes []*Node
+	nodes []*gorums.Node
 	n     int
-	mgr   *Manager
+	mgr   *gorums.Manager
 	qspec QuorumSpec
-	errs  chan GRPCError
+	errs  chan gorums.GRPCError
 }
 
 // NewConfig returns a configuration for the given node addresses and quorum spec.
 // The returned func() must be called to close the underlying connections.
 // This is an experimental API.
-func NewConfig(qspec QuorumSpec, opts ...ManagerOption) (*Configuration, func(), error) {
+func NewConfig(qspec QuorumSpec, opts ...gorums.ManagerOption) (*Configuration, func(), error) {
 	man, err := NewManager(opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
@@ -48,7 +50,7 @@ func (c *Configuration) NodeIDs() []uint32 {
 
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Configuration.
-func (c *Configuration) Nodes() []*Node {
+func (c *Configuration) Nodes() []*gorums.Node {
 	return c.nodes
 }
 
@@ -67,6 +69,6 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 
 // SubError returns a channel for listening to individual node errors. Currently
 // only a single listener is supported.
-func (c *Configuration) SubError() <-chan GRPCError {
+func (c *Configuration) SubError() <-chan gorums.GRPCError {
 	return c.errs
 }

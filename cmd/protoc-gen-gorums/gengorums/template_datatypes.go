@@ -1,12 +1,8 @@
 package gengorums
 
-var globals = `
-const hasOrderingMethods = {{hasOrderingMethods .Services}}
-`
-
 var orderingIDs = `
 {{$methods := methods .Services}}
-{{range $index, $method := nodeStreamMethods $methods}}
+{{range $index, $method := $methods}}
 const {{unexport $method.GoName}}MethodID int32 = {{$index}}
 {{- end}}
 `
@@ -150,8 +146,7 @@ func (c *{{$correctableOut}}) set(reply *{{$customOut}}, level int, err error, d
 {{end}}
 `
 
-var datatypes = globals +
-	orderingIDs +
+var datatypes = orderingIDs +
 	orderingMethods +
 	internalOutDataType +
 	futureDataType +
