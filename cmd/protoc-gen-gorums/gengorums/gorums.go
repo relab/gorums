@@ -205,7 +205,6 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 // The entries in this map is used to generate dev/zorums_{type}.pb.go
 // files for the different keys.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
-	"node":   {template: node},
 	"qspec":  {template: qspecInterface},
 	"types":  {template: datatypes},
 	"server": {template: server},

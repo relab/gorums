@@ -4,452 +4,53 @@ package dev
 
 import (
 	context "context"
-	empty "github.com/golang/protobuf/ptypes/empty"
-	trace "golang.org/x/net/trace"
-	grpc "google.golang.org/grpc"
-	codes "google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
-	time "time"
+	gorums "github.com/relab/gorums"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // QuorumCall plain.
-func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *Response, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCall")
-		defer ti.Finish()
+func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Response, err error) {
 
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
+	cd := gorums.CallData{
+		Manager:  c.mgr,
+		Nodes:    c.Nodes(),
+		Message:  in,
+		MethodID: quorumCallMethodID,
+	}
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[uint32]*Response, len(replies))
+		for k, v := range replies {
+			r[k] = v.(*Response)
 		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
+		result, quorum := c.qspec.QuorumCallQF(req.(*Request), r)
+		return result, quorum
 	}
 
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCall(ctx, in, replyChan)
-	}
-
-	var (
-		errs    []GRPCError
-		quorum  bool
-		replies = make(map[uint32]*Response)
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replies[r.nid] = r.reply
-			if resp, quorum = c.qspec.QuorumCallQF(in, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
-		}
-		if len(errs)+len(replies) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
-		}
-	}
-}
-
-func (n *Node) QuorumCall(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCall", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
+	res, err := gorums.QuorumCall(ctx, cd)
+	return res.(*Response), err
 }
 
 // QuorumCall with per_node_arg option.
-func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *Response, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallPerNodeArg")
-		defer ti.Finish()
+func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error) {
 
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
+	cd := gorums.CallData{
+		Manager:  c.mgr,
+		Nodes:    c.Nodes(),
+		Message:  in,
+		MethodID: quorumCallPerNodeArgMethodID,
+	}
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[uint32]*Response, len(replies))
+		for k, v := range replies {
+			r[k] = v.(*Response)
 		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
+		result, quorum := c.qspec.QuorumCallPerNodeArgQF(req.(*Request), r)
+		return result, quorum
+	}
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+		return f(req.(*Request), nid)
 	}
 
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		nodeArg := f(in, n.id)
-		if nodeArg == nil {
-			expected--
-			continue
-		}
-		go n.QuorumCallPerNodeArg(ctx, nodeArg, replyChan)
-	}
-
-	var (
-		errs    []GRPCError
-		quorum  bool
-		replies = make(map[uint32]*Response)
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replies[r.nid] = r.reply
-			if resp, quorum = c.qspec.QuorumCallPerNodeArgQF(in, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
-		}
-		if len(errs)+len(replies) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
-		}
-	}
-}
-
-func (n *Node) QuorumCallPerNodeArg(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallPerNodeArg", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCall with custom_return_type option.
-func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallCustomReturnType")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallCustomReturnType(ctx, in, replyChan)
-	}
-
-	var (
-		errs    []GRPCError
-		quorum  bool
-		replies = make(map[uint32]*Response)
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replies[r.nid] = r.reply
-			if resp, quorum = c.qspec.QuorumCallCustomReturnTypeQF(in, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
-		}
-		if len(errs)+len(replies) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
-		}
-	}
-}
-
-func (n *Node) QuorumCallCustomReturnType(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallCustomReturnType", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCallCombo with all supported options.
-func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...grpc.CallOption) (resp *MyResponse, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallCombo")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		nodeArg := f(in, n.id)
-		if nodeArg == nil {
-			expected--
-			continue
-		}
-		go n.QuorumCallCombo(ctx, nodeArg, replyChan)
-	}
-
-	var (
-		errs    []GRPCError
-		quorum  bool
-		replies = make(map[uint32]*Response)
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replies[r.nid] = r.reply
-			if resp, quorum = c.qspec.QuorumCallComboQF(in, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
-		}
-		if len(errs)+len(replies) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
-		}
-	}
-}
-
-func (n *Node) QuorumCallCombo(ctx context.Context, in *Request, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallCombo", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCallEmpty for testing imported message type.
-func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (resp *Response, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallEmpty")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalResponse, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallEmpty(ctx, in, replyChan)
-	}
-
-	var (
-		errs    []GRPCError
-		quorum  bool
-		replies = make(map[uint32]*Response)
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replies[r.nid] = r.reply
-			if resp, quorum = c.qspec.QuorumCallEmptyQF(in, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
-		}
-		if len(errs)+len(replies) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
-		}
-	}
-}
-
-func (n *Node) QuorumCallEmpty(ctx context.Context, in *empty.Empty, replyChan chan<- internalResponse) {
-	reply := new(Response)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallEmpty", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalResponse{n.id, reply, err}
-}
-
-// QuorumCallEmpty2 for testing imported message type.
-func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts ...grpc.CallOption) (resp *empty.Empty, err error) {
-	var ti traceInfo
-	if c.mgr.opts.trace {
-		ti.Trace = trace.New("gorums."+c.String()+".Sent", "QuorumCallEmpty2")
-		defer ti.Finish()
-
-		ti.firstLine.cid = c.id
-		if deadline, ok := ctx.Deadline(); ok {
-			ti.firstLine.deadline = time.Until(deadline)
-		}
-		ti.LazyLog(&ti.firstLine, false)
-		ti.LazyLog(&payload{sent: true, msg: in}, false)
-
-		defer func() {
-			ti.LazyLog(&qcresult{reply: resp, err: err}, false)
-			if err != nil {
-				ti.SetError()
-			}
-		}()
-	}
-
-	expected := c.n
-	replyChan := make(chan internalEmpty, expected)
-	for _, n := range c.nodes {
-		go n.QuorumCallEmpty2(ctx, in, replyChan)
-	}
-
-	var (
-		errs    []GRPCError
-		quorum  bool
-		replies = make(map[uint32]*empty.Empty)
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-
-			if c.mgr.opts.trace {
-				ti.LazyLog(&payload{sent: false, id: r.nid, msg: r.reply}, false)
-			}
-
-			replies[r.nid] = r.reply
-			if resp, quorum = c.qspec.QuorumCallEmpty2QF(in, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
-		}
-		if len(errs)+len(replies) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
-		}
-	}
-}
-
-func (n *Node) QuorumCallEmpty2(ctx context.Context, in *Request, replyChan chan<- internalEmpty) {
-	reply := new(empty.Empty)
-	start := time.Now()
-	err := n.conn.Invoke(ctx, "/dev.ZorumsService/QuorumCallEmpty2", in, reply)
-	s, ok := status.FromError(err)
-	if ok && (s.Code() == codes.OK || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- internalEmpty{n.id, reply, err}
+	res, err := gorums.QuorumCall(ctx, cd)
+	return res.(*Response), err
 }

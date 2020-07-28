@@ -1,4 +1,4 @@
-package dev
+package gorums
 
 import (
 	"sync"

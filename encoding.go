@@ -1,20 +1,15 @@
-package dev
+package gorums
 
 import (
 	"fmt"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const gorumsContentType = "gorums"
-
-func init() {
-	encoding.RegisterCodec(newGorumsCodec())
-}
 
 type gorumsMsgType uint8
 
@@ -35,27 +30,29 @@ func newGorumsMessage(msgType gorumsMsgType) *gorumsMessage {
 	return &gorumsMessage{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
-type gorumsCodec struct {
+type GorumsCodec struct {
 	marshaler   proto.MarshalOptions
 	unmarshaler proto.UnmarshalOptions
+	methods     map[int32]MethodInfo
 }
 
-func newGorumsCodec() *gorumsCodec {
-	return &gorumsCodec{
+func NewGorumsCodec(methods map[int32]MethodInfo) *GorumsCodec {
+	return &GorumsCodec{
 		marshaler:   proto.MarshalOptions{AllowPartial: true},
 		unmarshaler: proto.UnmarshalOptions{AllowPartial: true},
+		methods:     methods,
 	}
 }
 
-func (c gorumsCodec) Name() string {
+func (c GorumsCodec) Name() string {
 	return gorumsContentType
 }
 
-func (c gorumsCodec) String() string {
+func (c GorumsCodec) String() string {
 	return gorumsContentType
 }
 
-func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
+func (c GorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *gorumsMessage:
 		return c.gorumsMarshal(msg)
@@ -67,7 +64,7 @@ func (c gorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 }
 
 // gorumsMarshal marshals a metadata and a data message into a single byte slice.
-func (c gorumsCodec) gorumsMarshal(msg *gorumsMessage) (b []byte, err error) {
+func (c GorumsCodec) gorumsMarshal(msg *gorumsMessage) (b []byte, err error) {
 	mdSize := c.marshaler.Size(msg.metadata)
 	b = protowire.AppendVarint(b, uint64(mdSize))
 	b, err = c.marshaler.MarshalAppend(b, msg.metadata)
@@ -84,7 +81,7 @@ func (c gorumsCodec) gorumsMarshal(msg *gorumsMessage) (b []byte, err error) {
 	return b, nil
 }
 
-func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
+func (c GorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
 	switch msg := m.(type) {
 	case *gorumsMessage:
 		return c.gorumsUnmarshal(b, msg)
@@ -96,13 +93,13 @@ func (c gorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
 }
 
 // gorumsUnmarshal unmarshals a metadata and a data message from a byte slice.
-func (c gorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
+func (c GorumsCodec) gorumsUnmarshal(b []byte, msg *gorumsMessage) (err error) {
 	mdBuf, mdLen := protowire.ConsumeBytes(b)
 	err = c.unmarshaler.Unmarshal(mdBuf, msg.metadata)
 	if err != nil {
 		return err
 	}
-	info, ok := orderingMethods[msg.metadata.MethodID]
+	info, ok := c.methods[msg.metadata.MethodID]
 	if !ok {
 		return fmt.Errorf("gorumsCodec: Unknown MethodID")
 	}

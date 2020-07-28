@@ -1,4 +1,4 @@
-package dev
+package gorums
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type methodInfo struct {
+type MethodInfo struct {
 	requestType  protoreflect.Message
 	responseType protoreflect.Message
 }

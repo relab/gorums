@@ -103,10 +103,42 @@ func (n *Node) {{$method}}(ctx {{$context}}, in *{{$in}}, replyChan chan<- {{$in
 }
 `
 
+var qcVar = `
+{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
+{{$callData := use "gorums.CallData" .GenFile}}
+{{$quorumCall := use "gorums.QuorumCall" .GenFile}}
+{{$unexportMethod := unexport .Method.GoName}}
+{{$context := use "context.Context" .GenFile}}
+`
+
+var quorumCallBody = `
+	cd := {{$callData}}{
+		Manager:  c.mgr,
+		Nodes:    c.Nodes(),
+		Message:  in,
+		MethodID: {{$unexportMethod}}MethodID,
+	}
+	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
+		r := make(map[uint32]*{{$out}}, len(replies))
+		for k, v := range replies {
+			r[k] = v.(*{{$out}})
+		}
+		result, quorum := c.qspec.{{$method}}QF(req.(*{{$in}}), r)
+		return result, quorum
+	}
+{{- if hasPerNodeArg .Method}}
+	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+		return f(req.(*{{$in}}), nid)
+	}
+{{- end}}
+
+	res, err := {{$quorumCall}}(ctx, cd)
+	return res.(*{{$customOut}}), err
+}
+`
+
 var quorumCall = commonVariables +
-	quorumCallVariables +
+	qcVar +
 	quorumCallComment +
-	quorumCallSignature +
-	quorumCallLoop +
-	quorumCallReply +
-	nodeCallGrpc
+	orderedQCSignature +
+	quorumCallBody
