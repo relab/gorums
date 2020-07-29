@@ -4,11 +4,46 @@ package dev
 
 import (
 	context "context"
+	gorums "github.com/relab/gorums"
+	sync "sync"
 )
 
 // ZorumsService is the server-side API for the ZorumsService Service
 type ZorumsService interface {
+	GRPCCall(context.Context, *Request, func(*Response, error))
+	QuorumCall(context.Context, *Request, func(*Response, error))
+	QuorumCallPerNodeArg(context.Context, *Request, func(*Response, error))
 }
 
-func (s *GorumsServer) RegisterZorumsServiceServer(srv ZorumsService) {
+func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
+	srv.RegisterHandler(gRPCCallMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.GRPCCall(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCall(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallPerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallPerNodeArg(ctx, req, f)
+	})
 }

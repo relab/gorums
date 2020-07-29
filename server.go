@@ -15,7 +15,7 @@ import (
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(context.Context, *gorumsMessage, chan<- *gorumsMessage)
+type requestHandler func(context.Context, *Message, chan<- *Message)
 
 type orderingServer struct {
 	handlers map[int32]requestHandler
@@ -31,20 +31,20 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
-// wrapMessage wraps the metadata, response and error status in a gorumsMessage
-func wrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *gorumsMessage {
+// WrapMessage wraps the metadata, response and error status in a gorumsMessage
+func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *Message {
 	errStatus, ok := status.FromError(err)
 	if !ok {
 		errStatus = status.New(codes.Unknown, err.Error())
 	}
 	md.Status = errStatus.Proto()
-	return &gorumsMessage{metadata: md, message: resp}
+	return &Message{Metadata: md, Message: resp}
 }
 
 // NodeStream handles a connection to a single client. The stream is aborted if there
 // is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
-	finished := make(chan *gorumsMessage, s.opts.buffer)
+	finished := make(chan *Message, s.opts.buffer)
 	ctx := srv.Context()
 
 	go func() {
@@ -67,7 +67,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
-		if handler, ok := s.handlers[req.metadata.MethodID]; ok {
+		if handler, ok := s.handlers[req.Metadata.MethodID]; ok {
 			handler(ctx, req, finished)
 		}
 	}
@@ -117,6 +117,10 @@ func NewServer(methods map[int32]MethodInfo, opts ...ServerOption) *Server {
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
+}
+
+func (s *Server) RegisterHandler(methodID int32, handler requestHandler) {
+	s.srv.handlers[methodID] = handler
 }
 
 // Serve starts serving on the listener.
