@@ -10,7 +10,7 @@ var serverInterface = `
 {{$service := .GoName}}
 // {{$service}} is the server-side API for the {{$service}} Service
 type {{$service}} interface {
-	{{- range nodeStreamMethods .Methods}}
+	{{- range .Methods}}
 	{{- if isOneway .}}
 	{{.GoName}}({{$context}}, *{{in $genFile .}})
 	{{- else}}
@@ -23,25 +23,26 @@ type {{$service}} interface {
 
 var registerInterface = `
 {{$genFile := .GenFile}}
+{{$gorumsMessage := use "gorums.Message" .GenFile}}
 {{range .Services -}}
 {{$service := .GoName}}
-func (s *GorumsServer) Register{{$service}}Server(srv {{$service}}) {
-	{{- range nodeStreamMethods .Methods}}
-	s.srv.handlers[{{unexport .GoName}}MethodID] = func(ctx {{$context}}, in *gorumsMessage ,{{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *gorumsMessage) {
-		req := in.message.(*{{in $genFile .}})
+func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}) {
+	{{- range .Methods}}
+	srv.RegisterHandler({{unexport .GoName}}MethodID, func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
+		req := in.Message.(*{{in $genFile .}})
 		{{- if isOneway .}}
-		srv.{{.GoName}}(ctx, req)
+		impl.{{.GoName}}(ctx, req)
 		{{- else }}
 		once := new({{use "sync.Once" $genFile}})
 		f := func(resp *{{out $genFile .}}, err error) {
 			{{- /* Only one response message is supported */ -}}
 			once.Do(func() {
-				finished <- wrapMessage(in.metadata, resp, err)
+				finished <- {{use "gorums.WrapMessage" $genFile}}(in.Metadata, resp, err)
 			})
 		}
-		srv.{{.GoName}}(ctx, req, f)
+		impl.{{.GoName}}(ctx, req, f)
 		{{- end}}
-	}
+	})
 	{{- end}}
 }
 {{- end}}

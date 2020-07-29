@@ -8,11 +8,11 @@ const {{unexport $method.GoName}}MethodID int32 = {{$index}}
 `
 
 var orderingMethods = `
-var orderingMethods = map[int32]methodInfo{
+var orderingMethods = map[int32]{{use "gorums.MethodInfo" .GenFile}}{
 	{{$genFile := .GenFile}}
 	{{$methods := methods .Services}}
-	{{range $index, $method := nodeStreamMethods $methods}}
-		{{$index}}: { requestType: new({{in $genFile $method}}).ProtoReflect(), responseType: new({{out $genFile $method}}).ProtoReflect() },
+	{{range $index, $method := $methods}}
+		{{$index}}: { RequestType: new({{in $genFile $method}}).ProtoReflect(), ResponseType: new({{out $genFile $method}}).ProtoReflect() },
 	{{- end}}
 }
 `

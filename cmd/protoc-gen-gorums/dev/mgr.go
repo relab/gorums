@@ -26,14 +26,12 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	var nodes []*gorums.Node
 	unique := make(map[uint32]struct{})
-	var uniqueIDs []uint32
 	for _, nid := range ids {
 		// ensure that identical IDs are only counted once
 		if _, duplicate := unique[nid]; duplicate {
 			continue
 		}
 		unique[nid] = struct{}{}
-		uniqueIDs = append(uniqueIDs, nid)
 
 		node, found := m.Node(nid)
 		if !found {

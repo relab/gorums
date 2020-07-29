@@ -9,15 +9,15 @@ import (
 
 var methods = map[int32]MethodInfo{
 	2: {
-		requestType:  (&ordering.Metadata{}).ProtoReflect(),
-		responseType: (&ordering.Metadata{}).ProtoReflect(),
+		RequestType:  (&ordering.Metadata{}).ProtoReflect(),
+		ResponseType: (&ordering.Metadata{}).ProtoReflect(),
 	},
 }
 
 var (
-	testMsg = &gorumsMessage{
-		metadata: &ordering.Metadata{MessageID: 1, MethodID: 2},
-		message:  &ordering.Metadata{MessageID: 42},
+	testMsg = &Message{
+		Metadata: &ordering.Metadata{MessageID: 1, MethodID: 2},
+		Message:  &ordering.Metadata{MessageID: 42},
 	}
 	codec = NewGorumsCodec(methods)
 )
@@ -41,7 +41,7 @@ func TestUnmarshalGorumsMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if msg.metadata.MessageID != 1 || msg.metadata.MethodID != 2 || msg.message.(*ordering.Metadata).MessageID != 42 {
+	if msg.Metadata.MessageID != 1 || msg.Metadata.MethodID != 2 || msg.Message.(*ordering.Metadata).MessageID != 42 {
 		t.Fatal("Failed to unmarshal message correctly.")
 	}
 }
@@ -56,7 +56,7 @@ func TestMarshalUnsupportedType(t *testing.T) {
 
 // Test that marshaling normal Protobuf message types works
 func TestMarshalAndUnmarshalProtobuf(t *testing.T) {
-	buf, err := codec.Marshal(testMsg.message)
+	buf, err := codec.Marshal(testMsg.Message)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestMarshalAndUnmarshalProtobuf(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if msg.MethodID != testMsg.message.(*ordering.Metadata).MethodID {
+	if msg.MethodID != testMsg.Message.(*ordering.Metadata).MethodID {
 		t.Fatal("Failed to unmarshal message correctly.")
 	}
 }

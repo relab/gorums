@@ -2,11 +2,20 @@
 
 package dev
 
+import (
+	gorums "github.com/relab/gorums"
+)
+
 const gRPCCallMethodID int32 = 0
 const quorumCallMethodID int32 = 1
 const quorumCallPerNodeArgMethodID int32 = 2
 
-var orderingMethods = map[int32]methodInfo{}
+var orderingMethods = map[int32]gorums.MethodInfo{
+
+	0: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	1: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	2: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+}
 
 type internalResponse struct {
 	nid   uint32

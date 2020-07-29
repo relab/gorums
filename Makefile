@@ -18,7 +18,6 @@ dev: installgorums ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 	@rm -f $(dev_path)/zorums*.pb.go
 	@protoc -I=$(proto_path) \
 		--go_out=:. \
-		--go-grpc_out=:. \
 		--gorums_out=dev=true,trace=true:. \
 		$(zorums_proto)
 

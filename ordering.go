@@ -17,8 +17,8 @@ import (
 )
 
 type MethodInfo struct {
-	requestType  protoreflect.Message
-	responseType protoreflect.Message
+	RequestType  protoreflect.Message
+	ResponseType protoreflect.Message
 }
 
 type orderingResult struct {
@@ -66,7 +66,7 @@ func (m *receiveQueue) putResult(id uint64, result *orderingResult) {
 
 type orderedNodeStream struct {
 	*receiveQueue
-	sendQ        chan *gorumsMessage
+	sendQ        chan *Message
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
 	rand         *rand.Rand
@@ -89,7 +89,7 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 }
 
 func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
-	var req *gorumsMessage
+	var req *Message
 	for {
 		select {
 		case <-ctx.Done():
@@ -99,7 +99,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		// return error if stream is broken
 		if atomic.LoadUint32(&s.streamBroken) == 1 {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.Metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 			continue
 		}
 		// else try to send message
@@ -113,7 +113,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		s.streamMut.RUnlock()
 		s.node.setLastErr(err)
 		// return the error
-		s.putResult(req.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+		s.putResult(req.Metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 	}
 }
 
@@ -130,8 +130,8 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.reconnectStream(ctx)
 		} else {
 			s.streamMut.RUnlock()
-			err := status.FromProto(resp.metadata.GetStatus()).Err()
-			s.putResult(resp.metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.message, err: err})
+			err := status.FromProto(resp.Metadata.GetStatus()).Err()
+			s.putResult(resp.Metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.Message, err: err})
 		}
 
 		select {
