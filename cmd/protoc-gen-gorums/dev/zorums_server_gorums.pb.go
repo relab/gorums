@@ -4,6 +4,7 @@ package dev
 
 import (
 	context "context"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	sync "sync"
 )
@@ -13,6 +14,11 @@ type ZorumsService interface {
 	GRPCCall(context.Context, *Request, func(*Response, error))
 	QuorumCall(context.Context, *Request, func(*Response, error))
 	QuorumCallPerNodeArg(context.Context, *Request, func(*Response, error))
+	Multicast(context.Context, *Request)
+	MulticastPerNodeArg(context.Context, *Request)
+	Multicast2(context.Context, *Request)
+	Multicast3(context.Context, *Request)
+	Multicast4(context.Context, *empty.Empty)
 }
 
 func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
@@ -45,5 +51,25 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 			})
 		}
 		impl.QuorumCallPerNodeArg(ctx, req, f)
+	})
+	srv.RegisterHandler(multicastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		impl.Multicast(ctx, req)
+	})
+	srv.RegisterHandler(multicastPerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		impl.MulticastPerNodeArg(ctx, req)
+	})
+	srv.RegisterHandler(multicast2MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		impl.Multicast2(ctx, req)
+	})
+	srv.RegisterHandler(multicast3MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		impl.Multicast3(ctx, req)
+	})
+	srv.RegisterHandler(multicast4MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*empty.Empty)
+		impl.Multicast4(ctx, req)
 	})
 }
