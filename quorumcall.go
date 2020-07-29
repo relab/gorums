@@ -35,7 +35,8 @@ func QuorumCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage
 		if d.PerNodeArgFn != nil {
 			nodeArg := d.PerNodeArgFn(d.Message, n.id)
 			if nodeArg != nil {
-				msg = nodeArg
+				expected--
+				continue
 			}
 		}
 		n.sendQ <- &Message{Metadata: md, Message: msg}

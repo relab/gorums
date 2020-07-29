@@ -106,7 +106,7 @@ func (n *Node) {{$method}}(ctx {{$context}}, in *{{$in}}, replyChan chan<- {{$in
 var qcVar = `
 {{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
 {{$callData := use "gorums.CallData" .GenFile}}
-{{$quorumCall := use "gorums.QuorumCall" .GenFile}}
+{{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
 {{$context := use "context.Context" .GenFile}}
 `
@@ -132,7 +132,7 @@ var quorumCallBody = `
 	}
 {{- end}}
 
-	res, err := {{$quorumCall}}(ctx, cd)
+	res, err := {{use "gorums.QuorumCall" $genFile}}(ctx, cd)
 	return res.(*{{$customOut}}), err
 }
 `

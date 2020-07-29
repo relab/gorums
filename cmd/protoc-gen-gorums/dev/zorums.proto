@@ -5,7 +5,7 @@ package dev;
 option go_package = "cmd/protoc-gen-gorums/dev";
 
 import "gorums.proto";
-// import "google/protobuf/empty.proto";
+import "google/protobuf/empty.proto";
 
 message Request { string Value = 1; }
 message Response { int64 Result = 1; }
@@ -58,34 +58,34 @@ service ZorumsService {
   //     option (gorums.quorumcall) = true;
   //   }
 
-  //   // ------------------------------------------------------------------
-  //   // Multicast variants
-  //   // The multicast call type does not support the 'custom_return_type'
-  //   // option since multicast is one-way and so it doesn't make sense to
-  //   // operate on response types.
-  //   // ------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  // Multicast variants
+  // The multicast call type does not support the 'custom_return_type'
+  // option since multicast is one-way and so it doesn't make sense to
+  // operate on response types.
+  // ------------------------------------------------------------------
 
-  //   // Multicast plain. Response type is not needed here.
-  //   rpc Multicast(Request) returns (Response) {
-  //     option (gorums.multicast) = true;
-  //   }
-  //   // MulticastPerNodeArg with per_node_arg option.
-  //   rpc MulticastPerNodeArg(Request) returns (Response) {
-  //     option (gorums.multicast) = true;
-  //     option (gorums.per_node_arg) = true;
-  //   }
-  //   // Multicast2 is testing whether multiple streams work.
-  //   rpc Multicast2(Request) returns (Response) {
-  //     option (gorums.multicast) = true;
-  //   }
-  //   // Multicast3 is testing imported message type.
-  //   rpc Multicast3(Request) returns (google.protobuf.Empty) {
-  //     option (gorums.multicast) = true;
-  //   }
-  //   // Multicast4 is testing imported message type.
-  //   rpc Multicast4(google.protobuf.Empty) returns (google.protobuf.Empty) {
-  //     option (gorums.multicast) = true;
-  //   }
+  // Multicast plain. Response type is not needed here.
+  rpc Multicast(Request) returns (Response) {
+    option (gorums.multicast) = true;
+  }
+  // MulticastPerNodeArg with per_node_arg option.
+  rpc MulticastPerNodeArg(Request) returns (Response) {
+    option (gorums.multicast) = true;
+    option (gorums.per_node_arg) = true;
+  }
+  // Multicast2 is testing whether multiple streams work.
+  rpc Multicast2(Request) returns (Response) {
+    option (gorums.multicast) = true;
+  }
+  // Multicast3 is testing imported message type.
+  rpc Multicast3(Request) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
+  // Multicast4 is testing imported message type.
+  rpc Multicast4(google.protobuf.Empty) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
 
   //   // ---------------------------------------------------------------
   //   // Future variants

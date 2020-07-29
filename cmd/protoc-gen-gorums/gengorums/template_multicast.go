@@ -42,4 +42,30 @@ func (c *Configuration) {{$method}}(in *{{$in}}{{perNodeFnType .GenFile .Method 
 }
 `
 
-var multicastCall = commonVariables + orderingVariables + multicastRefImports + multicastMethod
+var multicastSignature = `func (c *Configuration) {{$method}}(` +
+	`ctx {{$context}}, in *{{$in}}` +
+	`{{perNodeFnType .GenFile .Method ", f"}}) {
+`
+
+var multicastBody = `
+	cd := {{$callData}}{
+		Manager:  c.mgr,
+		Nodes:    c.Nodes(),
+		Message:  in,
+		MethodID: {{$unexportMethod}}MethodID,
+	}
+{{- if hasPerNodeArg .Method}}
+	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+		return f(req.(*{{$in}}), nid)
+	}
+{{- end}}
+
+	{{use "gorums.Multicast" $genFile}}(ctx, cd)
+}
+`
+
+var multicastCall = commonVariables +
+	qcVar +
+	quorumCallComment +
+	multicastSignature +
+	multicastBody

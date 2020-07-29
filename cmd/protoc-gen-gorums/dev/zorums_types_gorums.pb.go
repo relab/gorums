@@ -3,18 +3,29 @@
 package dev
 
 import (
+	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 )
 
 const gRPCCallMethodID int32 = 0
 const quorumCallMethodID int32 = 1
 const quorumCallPerNodeArgMethodID int32 = 2
+const multicastMethodID int32 = 3
+const multicastPerNodeArgMethodID int32 = 4
+const multicast2MethodID int32 = 5
+const multicast3MethodID int32 = 6
+const multicast4MethodID int32 = 7
 
 var orderingMethods = map[int32]gorums.MethodInfo{
 
 	0: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	1: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	2: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	3: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	4: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	5: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	6: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	7: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalResponse struct {
