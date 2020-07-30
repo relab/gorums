@@ -12,9 +12,9 @@ import (
 // Multicast plain. Response type is not needed here.
 func (c *Configuration) Multicast(ctx context.Context, in *Request) {
 
-	cd := gorums.CallData{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+	cd := gorums.QuorumCallData{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: multicastMethodID,
 	}
@@ -25,9 +25,9 @@ func (c *Configuration) Multicast(ctx context.Context, in *Request) {
 // MulticastPerNodeArg with per_node_arg option.
 func (c *Configuration) MulticastPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) {
 
-	cd := gorums.CallData{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+	cd := gorums.QuorumCallData{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: multicastPerNodeArgMethodID,
 	}
@@ -41,9 +41,9 @@ func (c *Configuration) MulticastPerNodeArg(ctx context.Context, in *Request, f 
 // Multicast2 is testing whether multiple streams work.
 func (c *Configuration) Multicast2(ctx context.Context, in *Request) {
 
-	cd := gorums.CallData{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+	cd := gorums.QuorumCallData{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: multicast2MethodID,
 	}
@@ -54,9 +54,9 @@ func (c *Configuration) Multicast2(ctx context.Context, in *Request) {
 // Multicast3 is testing imported message type.
 func (c *Configuration) Multicast3(ctx context.Context, in *Request) {
 
-	cd := gorums.CallData{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+	cd := gorums.QuorumCallData{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: multicast3MethodID,
 	}
@@ -67,9 +67,9 @@ func (c *Configuration) Multicast3(ctx context.Context, in *Request) {
 // Multicast4 is testing imported message type.
 func (c *Configuration) Multicast4(ctx context.Context, in *empty.Empty) {
 
-	cd := gorums.CallData{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+	cd := gorums.QuorumCallData{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: multicast4MethodID,
 	}

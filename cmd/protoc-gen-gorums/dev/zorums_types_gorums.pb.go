@@ -15,6 +15,7 @@ const multicastPerNodeArgMethodID int32 = 4
 const multicast2MethodID int32 = 5
 const multicast3MethodID int32 = 6
 const multicast4MethodID int32 = 7
+const orderingUnaryRPCMethodID int32 = 8
 
 var orderingMethods = map[int32]gorums.MethodInfo{
 
@@ -26,6 +27,7 @@ var orderingMethods = map[int32]gorums.MethodInfo{
 	5: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	6: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 	7: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	8: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 }
 
 type internalResponse struct {

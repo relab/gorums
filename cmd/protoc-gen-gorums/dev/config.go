@@ -12,7 +12,7 @@ type Configuration struct {
 	id    uint32
 	nodes []*gorums.Node
 	n     int
-	mgr   *gorums.Manager
+	mgr   *Manager
 	qspec QuorumSpec
 	errs  chan gorums.GRPCError
 }
@@ -50,8 +50,12 @@ func (c *Configuration) NodeIDs() []uint32 {
 
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Configuration.
-func (c *Configuration) Nodes() []*gorums.Node {
-	return c.nodes
+func (c *Configuration) Nodes() []*Node {
+	nodes := make([]*Node, 0, len(c.nodes))
+	for _, n := range c.nodes {
+		nodes = append(nodes, &Node{n, c.mgr})
+	}
+	return nodes
 }
 
 // Size returns the number of nodes in the configuration.

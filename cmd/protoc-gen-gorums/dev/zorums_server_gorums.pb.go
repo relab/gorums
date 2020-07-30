@@ -19,6 +19,7 @@ type ZorumsService interface {
 	Multicast2(context.Context, *Request)
 	Multicast3(context.Context, *Request)
 	Multicast4(context.Context, *empty.Empty)
+	OrderingUnaryRPC(context.Context, *Request, func(*Response, error))
 }
 
 func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
@@ -71,5 +72,15 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 	srv.RegisterHandler(multicast4MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*empty.Empty)
 		impl.Multicast4(ctx, req)
+	})
+	srv.RegisterHandler(orderingUnaryRPCMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.OrderingUnaryRPC(ctx, req, f)
 	})
 }

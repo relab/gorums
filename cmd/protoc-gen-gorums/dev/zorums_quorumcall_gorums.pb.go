@@ -11,9 +11,9 @@ import (
 // QuorumCall plain.
 func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Response, err error) {
 
-	cd := gorums.CallData{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+	cd := gorums.QuorumCallData{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: quorumCallMethodID,
 	}
@@ -33,9 +33,9 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Resp
 // QuorumCall with per_node_arg option.
 func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error) {
 
-	cd := gorums.CallData{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+	cd := gorums.QuorumCallData{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: quorumCallPerNodeArgMethodID,
 	}
