@@ -66,6 +66,7 @@ var multicastBody = `
 
 var multicastCall = commonVariables +
 	qcVar +
+	multicastRefImports +
 	quorumCallComment +
 	multicastSignature +
 	multicastBody
