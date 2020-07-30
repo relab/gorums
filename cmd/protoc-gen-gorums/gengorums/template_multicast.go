@@ -49,8 +49,8 @@ var multicastSignature = `func (c *Configuration) {{$method}}(` +
 
 var multicastBody = `
 	cd := {{$callData}}{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: {{$unexportMethod}}MethodID,
 	}

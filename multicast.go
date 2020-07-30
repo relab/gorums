@@ -6,7 +6,7 @@ import (
 	"github.com/relab/gorums/ordering"
 )
 
-func Multicast(ctx context.Context, d CallData) {
+func Multicast(ctx context.Context, d QuorumCallData) {
 	msgID := d.Manager.nextMsgID()
 	// set up channel to collect replies to this call.
 	replyChan := make(chan *orderingResult, len(d.Nodes))

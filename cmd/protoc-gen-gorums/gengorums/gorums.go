@@ -295,7 +295,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			callTypeName(ordering.E_OrderedRpc): {
 				extInfo:  ordering.E_OrderedRpc,
 				docName:  "ordered",
-				template: orderingRPC,
+				template: rpcCall,
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Ordered) && !hasGorumsCallType(m)
 				},

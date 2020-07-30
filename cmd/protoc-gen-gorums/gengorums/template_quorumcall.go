@@ -105,7 +105,7 @@ func (n *Node) {{$method}}(ctx {{$context}}, in *{{$in}}, replyChan chan<- {{$in
 
 var qcVar = `
 {{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
-{{$callData := use "gorums.CallData" .GenFile}}
+{{$callData := use "gorums.QuorumCallData" .GenFile}}
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
 {{$context := use "context.Context" .GenFile}}
@@ -113,8 +113,8 @@ var qcVar = `
 
 var quorumCallBody = `
 	cd := {{$callData}}{
-		Manager:  c.mgr,
-		Nodes:    c.Nodes(),
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
 		Message:  in,
 		MethodID: {{$unexportMethod}}MethodID,
 	}

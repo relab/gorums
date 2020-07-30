@@ -49,7 +49,7 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	c := &Configuration{
 		nodes: nodes,
 		n:     len(nodes),
-		mgr:   m.Manager,
+		mgr:   m,
 		qspec: qspec,
 	}
 	return c, nil
