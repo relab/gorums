@@ -16,18 +16,22 @@ const multicast2MethodID int32 = 5
 const multicast3MethodID int32 = 6
 const multicast4MethodID int32 = 7
 const orderingUnaryRPCMethodID int32 = 8
+const unicastMethodID int32 = 9
+const unicast2MethodID int32 = 10
 
 var orderingMethods = map[int32]gorums.MethodInfo{
 
-	0: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	1: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	2: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	3: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	4: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	5: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	6: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
-	7: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
-	8: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	0:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	1:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	2:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	3:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	4:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	5:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	6:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	7:  {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	8:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	9:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	10: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalResponse struct {

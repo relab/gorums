@@ -1,19 +1,24 @@
 package gengorums
 
-var unicastMethod = `
-func (n *Node) {{$method}}(in *{{$in}}) error {
-	msgID := n.nextMsgID()
-	metadata := &{{$gorumsMD}}{
-		MessageID: msgID,
+var unicastSignature = `func (n *Node) {{$method}}(` +
+	`ctx {{$context}}, in *{{$in}}) {
+`
+
+var unicastBody = `
+	cd := {{$callData}}{
+		Manager:  n.mgr.Manager,
+		Node:     n.Node,
+		Message:  in,
 		MethodID: {{$unexportMethod}}MethodID,
 	}
-	msg := &gorumsMessage{metadata: metadata, message: in}
-	n.sendQ <- msg
-	return nil
+
+	{{use "gorums.Unicast" $genFile}}(ctx, cd)
 }
 `
 
 var unicastCall = commonVariables +
-	orderingVariables +
+	rpcVar +
 	multicastRefImports +
-	unicastMethod
+	quorumCallComment +
+	unicastSignature +
+	unicastBody

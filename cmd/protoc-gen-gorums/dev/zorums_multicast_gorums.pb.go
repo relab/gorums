@@ -51,6 +51,9 @@ func (c *Configuration) Multicast2(ctx context.Context, in *Request) {
 	gorums.Multicast(ctx, cd)
 }
 
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
+
 // Multicast3 is testing imported message type.
 func (c *Configuration) Multicast3(ctx context.Context, in *Request) {
 
@@ -63,6 +66,9 @@ func (c *Configuration) Multicast3(ctx context.Context, in *Request) {
 
 	gorums.Multicast(ctx, cd)
 }
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
 
 // Multicast4 is testing imported message type.
 func (c *Configuration) Multicast4(ctx context.Context, in *empty.Empty) {
