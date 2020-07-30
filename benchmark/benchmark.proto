@@ -43,52 +43,30 @@ message MemoryStatList { repeated MemoryStat MemoryStats = 1; }
 service Benchmark {
   rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
     option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
   }
 
   rpc StopServerBenchmark(StopRequest) returns (Result) {
     option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
   }
 
   rpc StartBenchmark(StartRequest) returns (StartResponse) {
     option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
   }
 
   rpc StopBenchmark(StopRequest) returns (MemoryStat) {
     option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
     option (gorums.custom_return_type) = "MemoryStatList";
   }
 
   // benchmarks
-  rpc UnorderedQC(Echo) returns (Echo) { option (gorums.quorumcall) = true; }
+  rpc QuorumCall(Echo) returns (Echo) { option (gorums.quorumcall) = true; }
 
-  rpc OrderedQC(Echo) returns (Echo) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-  }
-
-  rpc UnorderedAsync(Echo) returns (Echo) {
+  rpc AsyncQuorumCall(Echo) returns (Echo) {
     option (gorums.quorumcall) = true;
     option (gorums.async) = true;
   }
 
-  rpc OrderedAsync(Echo) returns (Echo) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-    option (gorums.async) = true;
-  }
-
-  rpc UnorderedSlowServer(Echo) returns (Echo) {
-    option (gorums.quorumcall) = true;
-  }
-
-  rpc OrderedSlowServer(Echo) returns (Echo) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-  }
+  rpc SlowServer(Echo) returns (Echo) { option (gorums.quorumcall) = true; }
 
   rpc Multicast(TimedMsg) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;

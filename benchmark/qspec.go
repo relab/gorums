@@ -93,47 +93,17 @@ func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies map[uint32]*MemorySt
 	return &MemoryStatList{MemoryStats: replyList}, true
 }
 
-// UnorderedQCQF is the quorum function for the UnorderedQC quorumcall
-func (qspec *QSpec) UnorderedQCQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
-	return qspec.qf(replies)
-}
-
 // OrderedQCQF is the quorum function for the OrderedQC quorumcall
-func (qspec *QSpec) OrderedQCQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
-	return qspec.qf(replies)
-}
-
-// ConcurrentQCQF is the quorum function for the ConcurrentQC quorumcall
-func (qspec *QSpec) ConcurrentQCQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
-	return qspec.qf(replies)
-}
-
-// UnorderedAsyncQF is the quorum function for the UnorderedAsync quorumcall
-func (qspec *QSpec) UnorderedAsyncQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
+func (qspec *QSpec) QuorumCallQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }
 
 // OrderedAsyncQF is the quorum function for the OrderedAsync quorumcall
-func (qspec *QSpec) OrderedAsyncQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
-	return qspec.qf(replies)
-}
-
-// ConcurrentAsyncQF is the quorum function for the ConcurrentAsync quorumcall
-func (qspec *QSpec) ConcurrentAsyncQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
-	return qspec.qf(replies)
-}
-
-// UnorderedSlowServerQF is the quorum function for the UnorderedSlowServer quorumcall
-func (qspec *QSpec) UnorderedSlowServerQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
+func (qspec *QSpec) AsyncQuorumCallQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }
 
 // OrderedSlowServerQF is the quorum function for the OrderedSlowServer quorumcall
-func (qspec *QSpec) OrderedSlowServerQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
-	return qspec.qf(replies)
-}
-
-// ConcurrentSlowServerQF is the quorum function for the ConcurrentSlowServer quorumcall
-func (qspec *QSpec) ConcurrentSlowServerQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
+func (qspec *QSpec) SlowServerQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }

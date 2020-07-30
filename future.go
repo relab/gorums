@@ -36,8 +36,6 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 	// set up channel to collect replies to this call.
 	replyChan := make(chan *orderingResult, len(d.Nodes))
 	d.Manager.putChan(msgID, replyChan)
-	// and remove it when the call it scomplete
-	defer d.Manager.deleteChan(msgID)
 
 	md := &ordering.Metadata{
 		MessageID: msgID,
@@ -60,6 +58,7 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 	fut := &Future{NodeIDs: make([]uint32, 0, len(d.Nodes)), c: make(chan struct{}, 1)}
 
 	go func() {
+		defer d.Manager.deleteChan(msgID)
 		defer close(fut.c)
 
 		var (
@@ -80,12 +79,15 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 				replies[r.nid] = reply
 				if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
 					fut.reply, fut.err = resp, nil
+					return
 				}
 			case <-ctx.Done():
 				fut.reply, fut.err = resp, QuorumCallError{"incomplete call", len(replies), errs}
+				return
 			}
 			if len(errs)+len(replies) == expected {
 				fut.reply, fut.err = resp, QuorumCallError{"incomplete call", len(replies), errs}
+				return
 			}
 		}
 	}()

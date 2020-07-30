@@ -26,7 +26,6 @@ type ZorumsService interface {
 	QuorumCallFuture2(context.Context, *Request, func(*Response, error))
 	QuorumCallFutureEmpty(context.Context, *Request, func(*empty.Empty, error))
 	QuorumCallFutureEmpty2(context.Context, *empty.Empty, func(*Response, error))
-	OrderingUnaryRPC(context.Context, *Request, func(*Response, error))
 	Unicast(context.Context, *Request)
 	Unicast2(context.Context, *Request)
 }
@@ -151,16 +150,6 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 			})
 		}
 		impl.QuorumCallFutureEmpty2(ctx, req, f)
-	})
-	srv.RegisterHandler(orderingUnaryRPCMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
-		req := in.Message.(*Request)
-		once := new(sync.Once)
-		f := func(resp *Response, err error) {
-			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
-			})
-		}
-		impl.OrderingUnaryRPC(ctx, req, f)
 	})
 	srv.RegisterHandler(unicastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)

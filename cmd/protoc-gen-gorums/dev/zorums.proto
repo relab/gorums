@@ -228,11 +228,6 @@ service ZorumsService {
   //     option (gorums.custom_return_type) = "MyResponse";
   //   }
 
-  // OrderingUnaryRPC is testing that we can create ordered Unary RPCs
-  rpc OrderingUnaryRPC(Request) returns (Response) {
-    option (gorums.ordered) = true;
-  }
-
   //   // ---------------------------------------------------------------
   //   // Ordered Future variants
   //   // ---------------------------------------------------------------

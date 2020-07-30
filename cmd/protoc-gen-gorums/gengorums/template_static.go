@@ -18,6 +18,7 @@ var reservedIdents = []string{
 	"Configuration",
 	"Manager",
 	"NewManager",
+	"Node",
 	"QuorumSpec",
 }
 
@@ -27,7 +28,7 @@ type Configuration struct {
 	id    uint32
 	nodes []*gorums.Node
 	n     int
-	mgr   *gorums.Manager
+	mgr   *Manager
 	qspec QuorumSpec
 	errs  chan gorums.GRPCError
 }
@@ -65,8 +66,12 @@ func (c *Configuration) NodeIDs() []uint32 {
 
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Configuration.
-func (c *Configuration) Nodes() []*gorums.Node {
-	return c.nodes
+func (c *Configuration) Nodes() []*Node {
+	nodes := make([]*Node, 0, len(c.nodes))
+	for _, n := range c.nodes {
+		nodes = append(nodes, &Node{n, c.mgr})
+	}
+	return nodes
 }
 
 // Size returns the number of nodes in the configuration.
@@ -131,10 +136,15 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	c := &Configuration{
 		nodes: nodes,
 		n:     len(nodes),
-		mgr:   m.Manager,
+		mgr:   m,
 		qspec: qspec,
 	}
 	return c, nil
+}
+
+type Node struct {
+	*gorums.Node
+	mgr *Manager
 }
 
 func NewServer(opts ...gorums.ServerOption) *gorums.Server {
