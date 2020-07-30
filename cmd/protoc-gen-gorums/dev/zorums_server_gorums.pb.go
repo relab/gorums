@@ -19,6 +19,13 @@ type ZorumsService interface {
 	Multicast2(context.Context, *Request)
 	Multicast3(context.Context, *Request)
 	Multicast4(context.Context, *empty.Empty)
+	QuorumCallFuture(context.Context, *Request, func(*Response, error))
+	QuorumCallFuturePerNodeArg(context.Context, *Request, func(*Response, error))
+	QuorumCallFutureCustomReturnType(context.Context, *Request, func(*Response, error))
+	QuorumCallFutureCombo(context.Context, *Request, func(*Response, error))
+	QuorumCallFuture2(context.Context, *Request, func(*Response, error))
+	QuorumCallFutureEmpty(context.Context, *Request, func(*empty.Empty, error))
+	QuorumCallFutureEmpty2(context.Context, *empty.Empty, func(*Response, error))
 	OrderingUnaryRPC(context.Context, *Request, func(*Response, error))
 	Unicast(context.Context, *Request)
 	Unicast2(context.Context, *Request)
@@ -74,6 +81,76 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 	srv.RegisterHandler(multicast4MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*empty.Empty)
 		impl.Multicast4(ctx, req)
+	})
+	srv.RegisterHandler(quorumCallFutureMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallFuture(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallFuturePerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallFuturePerNodeArg(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallFutureCustomReturnTypeMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallFutureCustomReturnType(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallFutureComboMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallFutureCombo(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallFuture2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallFuture2(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallFutureEmptyMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *empty.Empty, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallFutureEmpty(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallFutureEmpty2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*empty.Empty)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallFutureEmpty2(ctx, req, f)
 	})
 	srv.RegisterHandler(orderingUnaryRPCMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)

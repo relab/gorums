@@ -87,12 +87,38 @@ var futureCallReply = `
 }
 `
 
+var futureVar = qcVar + `
+{{$futureOut := outType .Method $customOut}}
+`
+
+var futureBody = `
+	cd := {{$callData}}{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
+		Message:  in,
+		MethodID: {{$unexportMethod}}MethodID,
+	}
+	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
+		r := make(map[uint32]*{{$out}}, len(replies))
+		for k, v := range replies {
+			r[k] = v.(*{{$out}})
+		}
+		result, quorum := c.qspec.{{$method}}QF(req.(*{{$in}}), r)
+		return result, quorum
+	}
+{{- if hasPerNodeArg .Method}}
+	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+		return f(req.(*{{$in}}), nid)
+	}
+{{- end}}
+
+	fut := {{use "gorums.FutureCall" $genFile}}(ctx, cd)
+	return &{{$futureOut}}{fut}
+}
+`
+
 var futureCall = commonVariables +
-	futureCallVariables +
+	futureVar +
 	futureCallComment +
-	futureCallSignature +
-	futureCallBody +
-	futureCallUnexportedSignature +
-	quorumCallLoop +
-	futureCallReply +
-	nodeCallGrpc
+	orderedFutureSignature +
+	futureBody

@@ -15,9 +15,16 @@ const multicastPerNodeArgMethodID int32 = 4
 const multicast2MethodID int32 = 5
 const multicast3MethodID int32 = 6
 const multicast4MethodID int32 = 7
-const orderingUnaryRPCMethodID int32 = 8
-const unicastMethodID int32 = 9
-const unicast2MethodID int32 = 10
+const quorumCallFutureMethodID int32 = 8
+const quorumCallFuturePerNodeArgMethodID int32 = 9
+const quorumCallFutureCustomReturnTypeMethodID int32 = 10
+const quorumCallFutureComboMethodID int32 = 11
+const quorumCallFuture2MethodID int32 = 12
+const quorumCallFutureEmptyMethodID int32 = 13
+const quorumCallFutureEmpty2MethodID int32 = 14
+const orderingUnaryRPCMethodID int32 = 15
+const unicastMethodID int32 = 16
+const unicast2MethodID int32 = 17
 
 var orderingMethods = map[int32]gorums.MethodInfo{
 
@@ -31,11 +38,60 @@ var orderingMethods = map[int32]gorums.MethodInfo{
 	7:  {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 	8:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	9:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	10: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	10: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	11: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	12: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	13: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	14: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	15: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	16: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	17: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+}
+
+type internalEmpty struct {
+	nid   uint32
+	reply *empty.Empty
+	err   error
 }
 
 type internalResponse struct {
 	nid   uint32
 	reply *Response
 	err   error
+}
+
+// FutureEmpty is a future object for processing replies.
+type FutureEmpty struct {
+	*gorums.Future
+}
+
+// Get returns the reply and any error associated with the called method.
+// The method blocks until a reply or error is available.
+func (f *FutureEmpty) Get() (*empty.Empty, error) {
+	resp, err := f.Future.Get()
+	return resp.(*empty.Empty), err
+}
+
+// FutureMyResponse is a future object for processing replies.
+type FutureMyResponse struct {
+	*gorums.Future
+}
+
+// Get returns the reply and any error associated with the called method.
+// The method blocks until a reply or error is available.
+func (f *FutureMyResponse) Get() (*MyResponse, error) {
+	resp, err := f.Future.Get()
+	return resp.(*MyResponse), err
+}
+
+// FutureResponse is a future object for processing replies.
+type FutureResponse struct {
+	*gorums.Future
+}
+
+// Get returns the reply and any error associated with the called method.
+// The method blocks until a reply or error is available.
+func (f *FutureResponse) Get() (*Response, error) {
+	resp, err := f.Future.Get()
+	return resp.(*Response), err
 }
