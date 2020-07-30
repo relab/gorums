@@ -22,9 +22,8 @@ const quorumCallFutureComboMethodID int32 = 11
 const quorumCallFuture2MethodID int32 = 12
 const quorumCallFutureEmptyMethodID int32 = 13
 const quorumCallFutureEmpty2MethodID int32 = 14
-const orderingUnaryRPCMethodID int32 = 15
-const unicastMethodID int32 = 16
-const unicast2MethodID int32 = 17
+const unicastMethodID int32 = 15
+const unicast2MethodID int32 = 16
 
 var orderingMethods = map[int32]gorums.MethodInfo{
 
@@ -44,8 +43,7 @@ var orderingMethods = map[int32]gorums.MethodInfo{
 	13: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 	14: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	15: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	16: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	17: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	16: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalEmpty struct {

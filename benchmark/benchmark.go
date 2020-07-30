@@ -33,7 +33,7 @@ type Bench struct {
 type benchFunc func(Options) (*Result, error)
 type qcFunc func(context.Context, *Echo) (*Echo, error)
 type asyncQCFunc func(context.Context, *Echo) *FutureEcho
-type serverFunc func(*TimedMsg) error
+type serverFunc func(context.Context, *TimedMsg)
 
 func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -196,10 +196,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	benchmarkFunc := func(stopTime time.Time) error {
 		for !time.Now().After(stopTime) {
 			msg := &TimedMsg{SendTime: time.Now().UnixNano(), Payload: payload}
-			err := f(msg)
-			if err != nil {
-				return err
-			}
+			f(ctx, msg)
 		}
 		return nil
 	}
@@ -246,46 +243,19 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 func GetBenchmarks(cfg *Configuration) []Bench {
 	m := []Bench{
 		{
-			Name:        "UnorderedQC",
-			Description: "Unary RPC based quorum call implementation without FIFO ordering",
-			runBench: func(opts Options) (*Result, error) {
-				return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
-					return cfg.UnorderedQC(ctx, msg)
-				})
-			},
-		},
-		{
-			Name:        "OrderedQC",
+			Name:        "QuorumCall",
 			Description: "NodeStream based quorum call implementation with FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedQC) },
+			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.QuorumCall) },
 		},
 		{
-			Name:        "UnorderedAsync",
-			Description: "Unary RPC based async quorum call implementation without FIFO ordering",
-			runBench: func(opts Options) (*Result, error) {
-				return runAsyncQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) *FutureEcho {
-					return cfg.UnorderedAsync(ctx, msg)
-				})
-			},
-		},
-		{
-			Name:        "OrderedAsync",
+			Name:        "AsyncQuorumCall",
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.OrderedAsync) },
+			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.AsyncQuorumCall) },
 		},
 		{
-			Name:        "UnorderedSlowServer",
-			Description: "UnorderedQC with a 10ms processing time on the server",
-			runBench: func(opts Options) (*Result, error) {
-				return runQCBenchmark(opts, cfg, func(ctx context.Context, msg *Echo) (*Echo, error) {
-					return cfg.UnorderedSlowServer(ctx, msg)
-				})
-			},
-		},
-		{
-			Name:        "OrderedSlowServer",
-			Description: "OrderedQC with a 10s processing time on the server",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.OrderedSlowServer) },
+			Name:        "SlowServer",
+			Description: "QC with a 10s processing time on the server",
+			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.SlowServer) },
 		},
 		{
 			Name:        "Multicast",

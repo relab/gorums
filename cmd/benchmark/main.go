@@ -17,6 +17,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/relab/gorums"
 	"github.com/relab/gorums/benchmark"
 	"google.golang.org/grpc"
 )
@@ -166,7 +167,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Failed to listen on '%s': %v\n", *server, err)
 			os.Exit(1)
 		}
-		srv := benchmark.NewServer(benchmark.WithServerBufferSize(*serverBuffer))
+		srv := benchmark.NewServer(gorums.WithServerBufferSize(*serverBuffer))
 		go func() { _ = srv.Serve(lis) }()
 
 		fmt.Printf("Running benchmark server on '%s'\n", *server)
@@ -181,18 +182,18 @@ func main() {
 		remote = false
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		remotes = benchmark.StartLocalServers(ctx, *cfgSize, benchmark.WithServerBufferSize(*serverBuffer))
+		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithServerBufferSize(*serverBuffer))
 	}
 
-	var mgrOpts = []benchmark.ManagerOption{
-		benchmark.WithNodeList(remotes),
-		benchmark.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
-		benchmark.WithDialTimeout(10 * time.Second),
-		benchmark.WithSendBufferSize(*sendBuffer),
+	var mgrOpts = []gorums.ManagerOption{
+		gorums.WithNodeList(remotes),
+		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+		gorums.WithDialTimeout(10 * time.Second),
+		gorums.WithSendBufferSize(*sendBuffer),
 	}
 
 	if trace.IsEnabled() {
-		mgrOpts = append(mgrOpts, benchmark.WithTracing())
+		mgrOpts = append(mgrOpts, gorums.WithTracing())
 	}
 
 	mgr, err := benchmark.NewManager(mgrOpts...)
@@ -209,7 +210,7 @@ func main() {
 	options.Duration = benchTime
 	options.Remote = remote
 
-	numNodes, _ := mgr.Size()
+	numNodes := mgr.Size()
 	if *cfgSize < 1 || *cfgSize > numNodes {
 		options.NumNodes = numNodes
 	} else {
