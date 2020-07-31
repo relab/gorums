@@ -5,11 +5,6 @@ RUNTESTS := ordering metadata tls
 
 all: $(RUNTESTS)
 
-runtests: $(RUNTESTS)
-	@for package in $^; do \
-		go test -v ./$$package; \
-	done
-
 qf: qf/qf.pb.go qf/qf_grpc.pb.go qf/qf_gorums.pb.go
 
 ordering: ordering/order.pb.go ordering/order_gorums.pb.go
