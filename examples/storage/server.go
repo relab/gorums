@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
+	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/storage/proto"
 )
 
-func startServer(address string) (*proto.GorumsServer, string) {
+func startServer(address string) (*gorums.Server, string) {
 	// listen on given address
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
@@ -27,9 +28,9 @@ func startServer(address string) (*proto.GorumsServer, string) {
 	storage.logger = log.New(os.Stderr, fmt.Sprintf("%s: ", lis.Addr()), log.Ltime|log.Lmicroseconds|log.Lmsgprefix)
 
 	// create Gorums server
-	srv := proto.NewGorumsServer()
+	srv := proto.NewServer()
 	// register server implementation with Gorums server
-	srv.RegisterStorageServer(storage)
+	proto.RegisterStorageServer(srv, storage)
 	// handle requests on listener
 	go func() {
 		err := srv.Serve(lis)

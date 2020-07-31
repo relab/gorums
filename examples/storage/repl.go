@@ -276,7 +276,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
 		var err error
-		numNodes, _ := r.mgr.Size()
+		numNodes := r.mgr.Size()
 		if i == 0 {
 			start = 0
 		} else {

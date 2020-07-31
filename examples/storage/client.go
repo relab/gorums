@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/storage/proto"
 	"google.golang.org/grpc"
 )
@@ -15,9 +16,9 @@ func runClient(addresses []string) {
 
 	// init gorums manager
 	mgr, err := proto.NewManager(
-		proto.WithNodeList(addresses),
-		proto.WithDialTimeout(1*time.Second),
-		proto.WithGrpcDialOptions(
+		gorums.WithNodeList(addresses),
+		gorums.WithDialTimeout(1*time.Second),
+		gorums.WithGrpcDialOptions(
 			grpc.WithInsecure(), // disable TLS
 			grpc.WithBlock(),    // block until connections are made
 		),
