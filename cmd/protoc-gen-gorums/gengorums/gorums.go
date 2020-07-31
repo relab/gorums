@@ -146,7 +146,7 @@ func callTypeOptions(method *protogen.Method) []*callTypeInfo {
 func hasGorumsMethods(services []*protogen.Service) bool {
 	for _, service := range services {
 		for _, method := range service.Methods {
-			for _, callTypeInfo := range callTypeOptions(method) {
+			for _, callTypeInfo := range gorumsCallTypesInfo {
 				callType := callTypeInfo.deriveCallType(method)
 				if callType.check(method) {
 					return true
