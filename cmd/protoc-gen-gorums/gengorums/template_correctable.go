@@ -125,15 +125,52 @@ func (n *Node) {{$method}}(ctx {{$context}}, in *{{$in}}, replyChan chan<- {{$in
 }
 `
 
-var correctableCommon = commonVariables +
-	correctableCallVariables +
+var correctableVar = `
+{{$correctableOut := outType .Method $customOut}}
+{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
+{{$callData := use "gorums.CorrectableCallData" .GenFile}}
+{{$genFile := .GenFile}}
+{{$unexportMethod := unexport .Method.GoName}}
+{{$context := use "context.Context" .GenFile}}
+`
+
+var correctableSignature = `func (c *Configuration) {{$method}}(` +
+	`ctx {{$context}}, in *{{$in}}` +
+	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
+	`*{{$correctableOut}} {`
+
+var correctableBody = `
+	cd := {{$callData}}{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
+		Message:  in,
+		MethodID: {{$unexportMethod}}MethodID,
+	{{- if correctableStream .Method}}
+		ServerStream: true,
+	{{- else}}
+		ServerStream: false,
+	{{- end}}
+	}
+	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, int, bool) {
+		r := make(map[uint32]*{{$out}}, len(replies))
+		for k, v := range replies {
+			r[k] = v.(*{{$out}})
+		}
+		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
+	}
+{{- if hasPerNodeArg .Method}}
+	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+		return f(req.(*{{$in}}), nid)
+	}
+{{- end}}
+
+	corr := {{use "gorums.CorrectableCall" $genFile}}(ctx, cd)
+	return &{{$correctableOut}}{corr}
+}
+`
+
+var correctableCall = commonVariables +
+	correctableVar +
 	correctableCallComment +
-	correctableCallSignature +
-	correctableCallBody +
-	correctableCallUnexportedSignature +
-	quorumCallLoop +
-	correctableCallReply
-
-var correctableCall = correctableCommon + nodeCallGrpc
-
-var correctableStreamCall = correctableCommon + correctableStreamCallGrpc
+	correctableSignature +
+	correctableBody

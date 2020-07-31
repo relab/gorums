@@ -22,8 +22,7 @@ func (c *Configuration) QuorumCallFuture(ctx context.Context, in *Request) *Futu
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		result, quorum := c.qspec.QuorumCallFutureQF(req.(*Request), r)
-		return result, quorum
+		return c.qspec.QuorumCallFutureQF(req.(*Request), r)
 	}
 
 	fut := gorums.FutureCall(ctx, cd)
@@ -43,8 +42,7 @@ func (c *Configuration) QuorumCallFuturePerNodeArg(ctx context.Context, in *Requ
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		result, quorum := c.qspec.QuorumCallFuturePerNodeArgQF(req.(*Request), r)
-		return result, quorum
+		return c.qspec.QuorumCallFuturePerNodeArgQF(req.(*Request), r)
 	}
 	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
@@ -67,8 +65,7 @@ func (c *Configuration) QuorumCallFutureCustomReturnType(ctx context.Context, in
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		result, quorum := c.qspec.QuorumCallFutureCustomReturnTypeQF(req.(*Request), r)
-		return result, quorum
+		return c.qspec.QuorumCallFutureCustomReturnTypeQF(req.(*Request), r)
 	}
 
 	fut := gorums.FutureCall(ctx, cd)
@@ -88,8 +85,7 @@ func (c *Configuration) QuorumCallFutureCombo(ctx context.Context, in *Request, 
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		result, quorum := c.qspec.QuorumCallFutureComboQF(req.(*Request), r)
-		return result, quorum
+		return c.qspec.QuorumCallFutureComboQF(req.(*Request), r)
 	}
 	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
@@ -112,8 +108,7 @@ func (c *Configuration) QuorumCallFuture2(ctx context.Context, in *Request) *Fut
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		result, quorum := c.qspec.QuorumCallFuture2QF(req.(*Request), r)
-		return result, quorum
+		return c.qspec.QuorumCallFuture2QF(req.(*Request), r)
 	}
 
 	fut := gorums.FutureCall(ctx, cd)
@@ -133,8 +128,7 @@ func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request) 
 		for k, v := range replies {
 			r[k] = v.(*empty.Empty)
 		}
-		result, quorum := c.qspec.QuorumCallFutureEmptyQF(req.(*Request), r)
-		return result, quorum
+		return c.qspec.QuorumCallFutureEmptyQF(req.(*Request), r)
 	}
 
 	fut := gorums.FutureCall(ctx, cd)
@@ -155,8 +149,7 @@ func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Em
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		result, quorum := c.qspec.QuorumCallFutureEmpty2QF(req.(*empty.Empty), r)
-		return result, quorum
+		return c.qspec.QuorumCallFutureEmpty2QF(req.(*empty.Empty), r)
 	}
 
 	fut := gorums.FutureCall(ctx, cd)

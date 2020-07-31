@@ -38,25 +38,25 @@ service ZorumsService {
     option (gorums.quorumcall) = true;
     option (gorums.per_node_arg) = true;
   }
-  //   // QuorumCall with custom_return_type option.
-  //   rpc QuorumCallCustomReturnType(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-  //   // QuorumCallCombo with all supported options.
-  //   rpc QuorumCallCombo(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.per_node_arg) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-  //   // QuorumCallEmpty for testing imported message type.
-  //   rpc QuorumCallEmpty(google.protobuf.Empty) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //   }
-  //   // QuorumCallEmpty2 for testing imported message type.
-  //   rpc QuorumCallEmpty2(Request) returns (google.protobuf.Empty) {
-  //     option (gorums.quorumcall) = true;
-  //   }
+  // QuorumCall with custom_return_type option.
+  rpc QuorumCallCustomReturnType(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  // QuorumCallCombo with all supported options.
+  rpc QuorumCallCombo(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+    option (gorums.per_node_arg) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  // QuorumCallEmpty for testing imported message type.
+  rpc QuorumCallEmpty(google.protobuf.Empty) returns (Response) {
+    option (gorums.quorumcall) = true;
+  }
+  // QuorumCallEmpty2 for testing imported message type.
+  rpc QuorumCallEmpty2(Request) returns (google.protobuf.Empty) {
+    option (gorums.quorumcall) = true;
+  }
 
   // ------------------------------------------------------------------
   // Multicast variants
@@ -132,131 +132,73 @@ service ZorumsService {
     option (gorums.async) = true;
   }
 
-  //   // ---------------------------------------------------------------
-  //   // Correctable variants
-  //   // ---------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // Correctable variants
+  // ---------------------------------------------------------------
 
-  //   // Correctable plain.
-  //   rpc Correctable(Request) returns (Response) {
-  //     option (gorums.correctable) = true;
-  //   }
-  //   // CorrectablePerNodeArg with per_node_arg option.
-  //   rpc CorrectablePerNodeArg(Request) returns (Response) {
-  //     option (gorums.correctable) = true;
-  //     option (gorums.per_node_arg) = true;
-  //   }
-  //   // CorrectableCustomReturnType with custom_return_type option.
-  //   rpc CorrectableCustomReturnType(Request) returns (Response) {
-  //     option (gorums.correctable) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-  //   // CorrectableCombo with all supported options.
-  //   rpc CorrectableCombo(Request) returns (Response) {
-  //     option (gorums.correctable) = true;
-  //     option (gorums.per_node_arg) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-  //   // CorrectableEmpty for testing imported message type.
-  //   rpc CorrectableEmpty(Request) returns (google.protobuf.Empty) {
-  //     option (gorums.correctable) = true;
-  //   }
-  //   // CorrectableEmpty2 for testing imported message type; with same return
-  //   // type as Correctable: Response.
-  //   rpc CorrectableEmpty2(google.protobuf.Empty) returns (Response) {
-  //     option (gorums.correctable) = true;
-  //   }
+  // Correctable plain.
+  rpc Correctable(Request) returns (Response) {
+    option (gorums.correctable) = true;
+  }
+  // CorrectablePerNodeArg with per_node_arg option.
+  rpc CorrectablePerNodeArg(Request) returns (Response) {
+    option (gorums.correctable) = true;
+    option (gorums.per_node_arg) = true;
+  }
+  // CorrectableCustomReturnType with custom_return_type option.
+  rpc CorrectableCustomReturnType(Request) returns (Response) {
+    option (gorums.correctable) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  // CorrectableCombo with all supported options.
+  rpc CorrectableCombo(Request) returns (Response) {
+    option (gorums.correctable) = true;
+    option (gorums.per_node_arg) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  // CorrectableEmpty for testing imported message type.
+  rpc CorrectableEmpty(Request) returns (google.protobuf.Empty) {
+    option (gorums.correctable) = true;
+  }
+  // CorrectableEmpty2 for testing imported message type; with same return
+  // type as Correctable: Response.
+  rpc CorrectableEmpty2(google.protobuf.Empty) returns (Response) {
+    option (gorums.correctable) = true;
+  }
 
-  //   // ---------------------------------------------------------------
-  //   // CorrectableStream variants
-  //   // ---------------------------------------------------------------
+  // ---------------------------------------------------------------
+  // CorrectableStream variants
+  // ---------------------------------------------------------------
 
-  //   // CorrectableStream plain.
-  //   rpc CorrectableStream(Request) returns (stream Response) {
-  //     option (gorums.correctable) = true;
-  //   }
-  //   // CorrectablePerNodeArg with per_node_arg option.
-  //   rpc CorrectableStreamPerNodeArg(Request) returns (stream Response) {
-  //     option (gorums.correctable) = true;
-  //     option (gorums.per_node_arg) = true;
-  //   }
-  //   // CorrectableCustomReturnType with custom_return_type option.
-  //   rpc CorrectableStreamCustomReturnType(Request) returns (stream Response)
-  //   {
-  //     option (gorums.correctable) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-  //   // CorrectableCombo with all supported options.
-  //   rpc CorrectableStreamCombo(Request) returns (stream Response) {
-  //     option (gorums.correctable) = true;
-  //     option (gorums.per_node_arg) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-  //   // CorrectableEmpty for testing imported message type.
-  //   rpc CorrectableStreamEmpty(Request) returns (stream
-  //   google.protobuf.Empty) {
-  //     option (gorums.correctable) = true;
-  //   }
-  //   // CorrectableEmpty2 for testing imported message type; with same return
-  //   // type as Correctable: Response.
-  //   rpc CorrectableStreamEmpty2(google.protobuf.Empty) returns (stream
-  //   Response) {
-  //     option (gorums.correctable) = true;
-  //   }
-
-  //   // ---------------------------------------------------------------
-  //   // Ordered QuorumCall variants
-  //   // ---------------------------------------------------------------
-
-  //   rpc OrderingQC(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.ordered) = true;
-  //   }
-  //   rpc OrderingPerNodeArg(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.ordered) = true;
-  //     option (gorums.per_node_arg) = true;
-  //   }
-  //   rpc OrderingCustomReturnType(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.ordered) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-  //   rpc OrderingCombo(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.ordered) = true;
-  //     option (gorums.per_node_arg) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-
-  //   // ---------------------------------------------------------------
-  //   // Ordered Future variants
-  //   // ---------------------------------------------------------------
-
-  //   rpc OrderingFuture(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.async) = true;
-  //     option (gorums.ordered) = true;
-  //   }
-  //   rpc OrderingFuturePerNodeArg(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.async) = true;
-  //     option (gorums.ordered) = true;
-  //     option (gorums.per_node_arg) = true;
-  //   }
-  //   rpc OrderingFutureCustomReturnType(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.async) = true;
-  //     option (gorums.ordered) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
-
-  //   rpc OrderingFutureCombo(Request) returns (Response) {
-  //     option (gorums.quorumcall) = true;
-  //     option (gorums.async) = true;
-  //     option (gorums.ordered) = true;
-  //     option (gorums.per_node_arg) = true;
-  //     option (gorums.custom_return_type) = "MyResponse";
-  //   }
+  // CorrectableStream plain.
+  rpc CorrectableStream(Request) returns (stream Response) {
+    option (gorums.correctable) = true;
+  }
+  // CorrectablePerNodeArg with per_node_arg option.
+  rpc CorrectableStreamPerNodeArg(Request) returns (stream Response) {
+    option (gorums.correctable) = true;
+    option (gorums.per_node_arg) = true;
+  }
+  // CorrectableCustomReturnType with custom_return_type option.
+  rpc CorrectableStreamCustomReturnType(Request) returns (stream Response) {
+    option (gorums.correctable) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  // CorrectableCombo with all supported options.
+  rpc CorrectableStreamCombo(Request) returns (stream Response) {
+    option (gorums.correctable) = true;
+    option (gorums.per_node_arg) = true;
+    option (gorums.custom_return_type) = "MyResponse";
+  }
+  // CorrectableEmpty for testing imported message type.
+  rpc CorrectableStreamEmpty(Request) returns (stream google.protobuf.Empty) {
+    option (gorums.correctable) = true;
+  }
+  // CorrectableEmpty2 for testing imported message type; with same return
+  // type as Correctable: Response.
+  rpc CorrectableStreamEmpty2(google.protobuf.Empty) returns (stream Response) {
+    option (gorums.correctable) = true;
+  }
 
   // ---------------------------------------------------------------
   // Unicast
