@@ -107,8 +107,10 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	defer teardown()
 	node := cfg.Nodes()[0]
 	// begin test
-	numRuns := 1 << 16
-	for i := 1; i < numRuns; i++ {
+	stopTime := time.Now().Add(5 * time.Second)
+	i := 0
+	for time.Now().Before(stopTime) {
+		i++
 		resp, err := node.UnaryRPC(context.Background(), &Request{Num: uint64(i)})
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
@@ -124,8 +126,10 @@ func TestQCOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	// begin test
-	numRuns := 1 << 16
-	for i := 1; i < numRuns; i++ {
+	stopTime := time.Now().Add(5 * time.Second)
+	i := 0
+	for time.Now().Before(stopTime) {
+		i++
 		resp, err := cfg.QC(context.Background(), &Request{Num: uint64(i)})
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
@@ -143,8 +147,10 @@ func TestQCFutureOrdering(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	// begin test
 	var wg sync.WaitGroup
-	numRuns := 1 << 16
-	for i := 1; i < numRuns; i++ {
+	stopTime := time.Now().Add(5 * time.Second)
+	i := 0
+	for time.Now().Before(stopTime) {
+		i++
 		promise := cfg.QCFuture(ctx, &Request{Num: uint64(i)})
 		wg.Add(1)
 		go func(promise *FutureResponse) {
@@ -173,11 +179,11 @@ func TestMixedOrdering(t *testing.T) {
 	defer teardown()
 	nodes := cfg.Nodes()
 	// begin test
-	numRuns := 1 << 15
-	num := uint64(1)
-	for i := 0; i < numRuns; i++ {
-		resp, err := cfg.QC(context.Background(), &Request{Num: num})
-		num++
+	stopTime := time.Now().Add(5 * time.Second)
+	i := 0
+	for time.Now().Before(stopTime) {
+		resp, err := cfg.QC(context.Background(), &Request{Num: uint64(i)})
+		i++
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
 		}
@@ -189,7 +195,7 @@ func TestMixedOrdering(t *testing.T) {
 		for _, node := range nodes {
 			go func(node *Node) {
 				defer wg.Done()
-				resp, err := node.UnaryRPC(context.Background(), &Request{Num: num})
+				resp, err := node.UnaryRPC(context.Background(), &Request{Num: uint64(i)})
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return
@@ -201,6 +207,6 @@ func TestMixedOrdering(t *testing.T) {
 			}(node)
 		}
 		wg.Wait()
-		num++
+		i++
 	}
 }
