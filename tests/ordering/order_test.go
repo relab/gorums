@@ -108,12 +108,15 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	node := cfg.Nodes()[0]
 	// begin test
 	stopTime := time.Now().Add(5 * time.Second)
-	i := 0
+	i := 1
 	for time.Now().Before(stopTime) {
 		i++
 		resp, err := node.UnaryRPC(context.Background(), &Request{Num: uint64(i)})
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
+		}
+		if resp == nil {
+			t.Fatal("Got nil response")
 		}
 		if !resp.GetInOrder() {
 			t.Fatalf("Message received out of order.")
@@ -127,12 +130,15 @@ func TestQCOrdering(t *testing.T) {
 	defer teardown()
 	// begin test
 	stopTime := time.Now().Add(5 * time.Second)
-	i := 0
+	i := 1
 	for time.Now().Before(stopTime) {
 		i++
 		resp, err := cfg.QC(context.Background(), &Request{Num: uint64(i)})
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
+		}
+		if resp == nil {
+			t.Fatal("Got nil response")
 		}
 		if !resp.GetInOrder() {
 			t.Fatalf("Message received out of order.")
@@ -148,7 +154,7 @@ func TestQCFutureOrdering(t *testing.T) {
 	// begin test
 	var wg sync.WaitGroup
 	stopTime := time.Now().Add(5 * time.Second)
-	i := 0
+	i := 1
 	for time.Now().Before(stopTime) {
 		i++
 		promise := cfg.QCFuture(ctx, &Request{Num: uint64(i)})
@@ -163,6 +169,9 @@ func TestQCFutureOrdering(t *testing.T) {
 					}
 				}
 				t.Errorf("QC error: %v", err)
+			}
+			if resp == nil {
+				t.Errorf("Got nil response")
 			}
 			if !resp.GetInOrder() && !t.Failed() {
 				t.Errorf("Message received out of order.")
@@ -180,12 +189,15 @@ func TestMixedOrdering(t *testing.T) {
 	nodes := cfg.Nodes()
 	// begin test
 	stopTime := time.Now().Add(5 * time.Second)
-	i := 0
+	i := 1
 	for time.Now().Before(stopTime) {
 		resp, err := cfg.QC(context.Background(), &Request{Num: uint64(i)})
 		i++
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
+		}
+		if resp == nil {
+			t.Fatal("Got nil response")
 		}
 		if !resp.GetInOrder() {
 			t.Fatalf("Message received out of order.")
@@ -199,6 +211,9 @@ func TestMixedOrdering(t *testing.T) {
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return
+				}
+				if resp == nil {
+					t.Error("Got nil response")
 				}
 				if !resp.GetInOrder() {
 					t.Errorf("Message received out of order.")
