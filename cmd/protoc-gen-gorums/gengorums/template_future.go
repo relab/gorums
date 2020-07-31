@@ -1,11 +1,5 @@
 package gengorums
 
-var futureCallVariables = `
-{{$context := use "context.Context" .GenFile}}
-{{$opts := use "grpc.CallOption" .GenFile}}
-{{$futureOut := outType .Method $customOut}}
-`
-
 var futureCallComment = `
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
@@ -27,65 +21,10 @@ var futureCallComment = `
 {{end -}}
 `
 
-var futureCallSignature = `func (c *Configuration) {{$method}}(` +
+var futureSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}` +
-	`, opts ...{{$opts}}) ` +
+	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
 	`*{{$futureOut}} {`
-
-var futureCallBody = `
-	fut := &{{$futureOut}}{
-		NodeIDs: make([]uint32, 0, c.n),
-		c:       make(chan struct{}, 1),
-	}
-	go func() {
-		defer close(fut.c)
-		c.{{unexport .Method.GoName}}(ctx, in{{perNodeArg .Method ", f"}}, fut, opts...)
-	}()
-	return fut
-}
-`
-
-var futureCallUnexportedSignature = `
-func (c *Configuration) {{unexport .Method.GoName}}(` +
-	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}` +
-	`, resp *{{$futureOut}}, opts ...{{$opts}}) {
-`
-
-var futureCallReply = `
-	var (
-		reply		*{{$customOut}}
-		errs		[]GRPCError
-		quorum		bool
-		replies = make(map[uint32]*{{$out}}, 2*c.n)
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			resp.NodeIDs = append(resp.NodeIDs, r.nid)
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-			{{template "traceLazyLog"}}
-			replies[r.nid] = r.reply
-			if reply, quorum = c.qspec.{{$method}}QF(in, replies); quorum {
-				resp.{{$customOutField}}, resp.err = reply, nil
-				return
-			}
-		case <-ctx.Done():
-			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{ctx.Err().Error(), len(replies), errs}
-			return
-		}
-		if len(errs)+len(replies) == expected {
-			resp.{{$customOutField}}, resp.err = reply, QuorumCallError{"incomplete call", len(replies), errs}
-			return
-		}
-	}
-}
-`
 
 var futureVar = qcVar + `
 {{$futureOut := outType .Method $customOut}}
@@ -119,5 +58,5 @@ var futureBody = `
 var futureCall = commonVariables +
 	futureVar +
 	futureCallComment +
-	orderedFutureSignature +
+	futureSignature +
 	futureBody

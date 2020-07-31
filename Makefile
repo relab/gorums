@@ -7,7 +7,7 @@ static_file				:= $(gen_path)/template_static.go
 static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
 proto_path 				:= $(dev_path):third_party:.
 
-plugin_deps				:= gorums.pb.go internal/ordering/opts.pb.go internal/correctable/opts.pb.go $(static_file)
+plugin_deps				:= gorums.pb.go internal/correctable/opts.pb.go $(static_file)
 benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_gorums.pb.go
 
 .PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests
@@ -18,7 +18,7 @@ dev: installgorums ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 	@rm -f $(dev_path)/zorums*.pb.go
 	@protoc -I=$(proto_path) \
 		--go_out=:. \
-		--gorums_out=dev=true,trace=true:. \
+		--gorums_out=dev=true:. \
 		$(zorums_proto)
 
 benchmark: installgorums $(benchmark_deps)

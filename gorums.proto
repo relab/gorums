@@ -12,6 +12,7 @@ extend google.protobuf.MethodOptions {
   bool multicast = 50003;
   bool correctable = 50004;
   bool unicast = 50005;
+  bool rpc = 50006;
   bool per_node_arg = 50010;
 
   string custom_return_type = 51000;

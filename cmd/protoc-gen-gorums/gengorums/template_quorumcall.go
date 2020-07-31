@@ -11,11 +11,6 @@ var commonVariables = `
 {{$unexportOutput := unexport .Method.Output.GoIdent.GoName}}
 `
 
-var quorumCallVariables = `
-{{$context := use "context.Context" .GenFile}}
-{{$opts := use "grpc.CallOption" .GenFile}}
-`
-
 var quorumCallComment = `
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
@@ -36,71 +31,8 @@ var quorumCallComment = `
 
 var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}` +
-	`, opts ...{{$opts}})` +
+	`{{perNodeFnType .GenFile .Method ", f"}})` +
 	`(resp *{{$customOut}}, err error) {
-`
-
-var quorumCallLoop = `
-	{{- template "trace" .}}
-	expected := c.n
-	replyChan := make(chan {{$intOut}}, expected)
-	for _, n := range c.nodes {
-		{{- if hasPerNodeArg .Method}}
-		nodeArg := f(in, n.id)
-		if nodeArg == nil {
-			expected--
-			continue
-		}
-		go n.{{$method}}(ctx, nodeArg, replyChan)
-		{{else}}
-		go n.{{$method}}(ctx, in, replyChan)
-		{{end -}}
-	}
-`
-
-var quorumCallReply = `
-	var (
-		errs        []GRPCError
-		quorum      bool
-		replies = make(map[uint32]*{{$out}})
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
-				break
-			}
-			{{template "traceLazyLog"}}
-			replies[r.nid] = r.reply
-			if resp, quorum = c.qspec.{{$method}}QF(in, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
-		}
-		if len(errs)+len(replies) == expected {
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
-		}
-	}
-}
-`
-
-var nodeCallGrpc = `
-func (n *Node) {{$method}}(ctx {{$context}}, in *{{$in}}, replyChan chan<- {{$intOut}}) {
-	reply := new({{$out}})
-	start := {{use "time.Now" .GenFile}}()
-	err := n.conn.Invoke(ctx, "{{fullName .Method}}", in, reply)
-	s, ok := {{use "status.FromError" .GenFile}}(err)
-	if ok && (s.Code() == {{use "codes.OK" .GenFile}} || s.Code() == codes.Canceled) {
-		n.setLatency(time.Since(start))
-	} else {
-		n.setLastErr(err)
-	}
-	replyChan <- {{$intOut}}{n.id, reply, err}
-}
 `
 
 var qcVar = `
@@ -139,5 +71,5 @@ var quorumCallBody = `
 var quorumCall = commonVariables +
 	qcVar +
 	quorumCallComment +
-	orderedQCSignature +
+	quorumCallSignature +
 	quorumCallBody
