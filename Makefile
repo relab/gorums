@@ -53,11 +53,10 @@ endif
 compiletests: installgorums
 	@$(MAKE) --no-print-directory -C ./tests all
 
-test: installgorums
-	@go test -v $(dev_path)
-	@$(MAKE) --no-print-directory -C ./tests -B runtests
+test: compiletests
+	@go test ./...
 
-testrace: test
+testrace: compiletests
 	go test -race -cpu=1,2,4 ./...
 
 # Warning: will probably run for 10 minutes; the timeout does not work
