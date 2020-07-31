@@ -31,6 +31,7 @@ func (c *Configuration) MulticastPerNodeArg(ctx context.Context, in *Request, f 
 		Message:  in,
 		MethodID: multicastPerNodeArgMethodID,
 	}
+
 	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
 	}
