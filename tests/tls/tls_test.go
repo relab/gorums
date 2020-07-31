@@ -41,13 +41,13 @@ func TestTLS(t *testing.T) {
 	}
 
 	addrs, teardown := gorums.TestSetup(t, 1, func() interface{} {
-		srv := NewGorumsServer(WithGRPCServerOptions(grpc.Creds(credentials.NewServerTLSFromCert(&tlsCert))))
-		srv.RegisterTLSServer(&testSrv{})
+		srv := NewServer(gorums.WithGRPCServerOptions(grpc.Creds(credentials.NewServerTLSFromCert(&tlsCert))))
+		RegisterTLSServer(srv, &testSrv{})
 		return srv
 	})
 	defer teardown()
 
-	mgr, err := NewManager(WithNodeList(addrs), WithDialTimeout(100*time.Millisecond), WithGrpcDialOptions(
+	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithDialTimeout(100*time.Millisecond), gorums.WithGrpcDialOptions(
 		grpc.WithBlock(),
 		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
 		grpc.WithReturnConnectionError(),

@@ -4,18 +4,13 @@ package metadata;
 
 option go_package = "github.com/relab/gorums/tests/metadata";
 
-import "gorums.proto";
 import "google/protobuf/empty.proto";
 
 service MetadataTest {
   // IDFromMD returns the 'id' field from the metadata.
-  rpc IDFromMD(google.protobuf.Empty) returns (NodeID) {
-    option (gorums.ordered) = true;
-  }
+  rpc IDFromMD(google.protobuf.Empty) returns (NodeID) {}
   // WhatIP returns the address of the client that calls it.
-  rpc WhatIP(google.protobuf.Empty) returns (IPAddr) {
-    option (gorums.ordered) = true;
-  }
+  rpc WhatIP(google.protobuf.Empty) returns (IPAddr) {}
 }
 
 message NodeID { uint32 ID = 1; }
