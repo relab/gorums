@@ -4,10 +4,8 @@ package tls;
 
 option go_package = "github.com/relab/gorums/tests/tls";
 
-import "gorums.proto";
-
 service TLS {
-  rpc TestTLS(Request) returns (Response) { option (gorums.ordered) = true; }
+  rpc TestTLS(Request) returns (Response) {}
 }
 
 message Request {}

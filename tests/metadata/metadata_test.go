@@ -46,9 +46,9 @@ func (srv testSrv) WhatIP(ctx context.Context, _ *empty.Empty, ret func(*IPAddr,
 	ret(&IPAddr{Addr: peerInfo.Addr.String()}, nil)
 }
 
-func initServer(t *testing.T) *GorumsServer {
-	srv := NewGorumsServer()
-	srv.RegisterMetadataTestServer(&testSrv{})
+func initServer(t *testing.T) *gorums.Server {
+	srv := NewServer()
+	RegisterMetadataTestServer(srv, &testSrv{})
 	return srv
 }
 
@@ -62,7 +62,7 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	mgr, err := NewManager(WithNodeList(addrs), WithMetadata(md), WithDialTimeout(1*time.Second), WithGrpcDialOptions(
+	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithMetadata(md), gorums.WithDialTimeout(1*time.Second), gorums.WithGrpcDialOptions(
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
 	))
@@ -91,7 +91,7 @@ func TestPerNodeMetadata(t *testing.T) {
 		})
 	}
 
-	mgr, err := NewManager(WithNodeList(addrs), WithPerNodeMetadata(perNodeMD), WithDialTimeout(1*time.Second), WithGrpcDialOptions(
+	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithPerNodeMetadata(perNodeMD), gorums.WithDialTimeout(1*time.Second), gorums.WithGrpcDialOptions(
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
 	))
@@ -115,7 +115,7 @@ func TestCanGetPeerInfo(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func() interface{} { return initServer(t) })
 	defer teardown()
 
-	mgr, err := NewManager(WithNodeList(addrs), WithDialTimeout(1*time.Second), WithGrpcDialOptions(
+	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithDialTimeout(1*time.Second), gorums.WithGrpcDialOptions(
 		grpc.WithBlock(),
 		grpc.WithInsecure(),
 	))

@@ -35,7 +35,7 @@ $(static_file): $(static_files)
 	@protoc -I=$(proto_path) --go-grpc_out=paths=source_relative:. $^
 
 %_gorums.pb.go : %.proto
-	@protoc -I=$(proto_path) --gorums_out=paths=source_relative,trace=true:. $^
+	@protoc -I=$(proto_path) --gorums_out=paths=source_relative:. $^
 
 tools:
 	@go mod download

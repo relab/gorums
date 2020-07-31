@@ -80,11 +80,11 @@ func (q testQSpec) AsyncHandlerQF(_ *Request, replies map[uint32]*Response) (*Re
 func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 	t.Helper()
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func() interface{} {
-		srv := NewGorumsServer()
-		srv.RegisterGorumsTestServer(&testSrv{})
+		srv := NewServer()
+		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	mgr, err := NewManager(WithNodeList(addrs), WithDialTimeout(100*time.Millisecond), WithGrpcDialOptions(
+	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithDialTimeout(100*time.Millisecond), gorums.WithGrpcDialOptions(
 		grpc.WithBlock(), grpc.WithInsecure(),
 	))
 	if err != nil {
@@ -151,7 +151,7 @@ func TestQCFutureOrdering(t *testing.T) {
 			defer wg.Done()
 			resp, err := promise.Get()
 			if err != nil {
-				if qcError, ok := err.(QuorumCallError); ok {
+				if qcError, ok := err.(gorums.QuorumCallError); ok {
 					if qcError.Reason == context.Canceled.Error() {
 						return
 					}
