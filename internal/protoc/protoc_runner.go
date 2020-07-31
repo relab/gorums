@@ -18,14 +18,11 @@ func Run(compileType string, args ...string) (string, error) {
 var protoArgs = map[string][]string{
 	"sourceRelative": {
 		"--go_out=paths=source_relative:.",
-		"--go-grpc_out=paths=source_relative:.",
 		"--gorums_out=paths=source_relative:.",
 	},
 	"module": {
 		"--go_out=.",
 		"--go_opt=module=" + modulePath(),
-		"--go-grpc_out=.",
-		"--go-grpc_opt=module=" + modulePath(),
 		"--gorums_out=.",
 		"--gorums_opt=module=" + modulePath(),
 	},
