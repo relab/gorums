@@ -8,10 +8,9 @@ import (
 )
 
 type Future struct {
-	reply   protoreflect.ProtoMessage
-	NodeIDs []uint32
-	err     error
-	c       chan struct{}
+	reply protoreflect.ProtoMessage
+	err   error
+	c     chan struct{}
 }
 
 // Get returns the reply and any error associated with the called method.
@@ -55,7 +54,7 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 		n.sendQ <- &Message{Metadata: md, Message: msg}
 	}
 
-	fut := &Future{NodeIDs: make([]uint32, 0, len(d.Nodes)), c: make(chan struct{}, 1)}
+	fut := &Future{c: make(chan struct{}, 1)}
 
 	go func() {
 		defer d.Manager.deleteChan(msgID)

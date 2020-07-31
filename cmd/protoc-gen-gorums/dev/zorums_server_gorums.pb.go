@@ -14,6 +14,10 @@ type ZorumsService interface {
 	GRPCCall(context.Context, *Request, func(*Response, error))
 	QuorumCall(context.Context, *Request, func(*Response, error))
 	QuorumCallPerNodeArg(context.Context, *Request, func(*Response, error))
+	QuorumCallCustomReturnType(context.Context, *Request, func(*Response, error))
+	QuorumCallCombo(context.Context, *Request, func(*Response, error))
+	QuorumCallEmpty(context.Context, *empty.Empty, func(*Response, error))
+	QuorumCallEmpty2(context.Context, *Request, func(*empty.Empty, error))
 	Multicast(context.Context, *Request)
 	MulticastPerNodeArg(context.Context, *Request)
 	Multicast2(context.Context, *Request)
@@ -26,6 +30,18 @@ type ZorumsService interface {
 	QuorumCallFuture2(context.Context, *Request, func(*Response, error))
 	QuorumCallFutureEmpty(context.Context, *Request, func(*empty.Empty, error))
 	QuorumCallFutureEmpty2(context.Context, *empty.Empty, func(*Response, error))
+	Correctable(context.Context, *Request, func(*Response, error))
+	CorrectablePerNodeArg(context.Context, *Request, func(*Response, error))
+	CorrectableCustomReturnType(context.Context, *Request, func(*Response, error))
+	CorrectableCombo(context.Context, *Request, func(*Response, error))
+	CorrectableEmpty(context.Context, *Request, func(*empty.Empty, error))
+	CorrectableEmpty2(context.Context, *empty.Empty, func(*Response, error))
+	CorrectableStream(context.Context, *Request, func(*Response, error))
+	CorrectableStreamPerNodeArg(context.Context, *Request, func(*Response, error))
+	CorrectableStreamCustomReturnType(context.Context, *Request, func(*Response, error))
+	CorrectableStreamCombo(context.Context, *Request, func(*Response, error))
+	CorrectableStreamEmpty(context.Context, *Request, func(*empty.Empty, error))
+	CorrectableStreamEmpty2(context.Context, *empty.Empty, func(*Response, error))
 	Unicast(context.Context, *Request)
 	Unicast2(context.Context, *Request)
 }
@@ -60,6 +76,46 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 			})
 		}
 		impl.QuorumCallPerNodeArg(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallCustomReturnTypeMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallCustomReturnType(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallComboMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallCombo(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallEmptyMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*empty.Empty)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallEmpty(ctx, req, f)
+	})
+	srv.RegisterHandler(quorumCallEmpty2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *empty.Empty, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.QuorumCallEmpty2(ctx, req, f)
 	})
 	srv.RegisterHandler(multicastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
@@ -150,6 +206,126 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 			})
 		}
 		impl.QuorumCallFutureEmpty2(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.Correctable(ctx, req, f)
+	})
+	srv.RegisterHandler(correctablePerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectablePerNodeArg(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableCustomReturnTypeMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableCustomReturnType(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableComboMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableCombo(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableEmptyMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *empty.Empty, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableEmpty(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableEmpty2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*empty.Empty)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableEmpty2(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableStreamMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableStream(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableStreamPerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableStreamPerNodeArg(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableStreamCustomReturnTypeMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableStreamCustomReturnType(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableStreamComboMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableStreamCombo(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableStreamEmptyMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		once := new(sync.Once)
+		f := func(resp *empty.Empty, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableStreamEmpty(ctx, req, f)
+	})
+	srv.RegisterHandler(correctableStreamEmpty2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*empty.Empty)
+		once := new(sync.Once)
+		f := func(resp *Response, err error) {
+			once.Do(func() {
+				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+			})
+		}
+		impl.CorrectableStreamEmpty2(ctx, req, f)
 	})
 	srv.RegisterHandler(unicastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)

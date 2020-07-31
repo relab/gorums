@@ -252,7 +252,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			callTypeName(correctable.E_CorrectableStream): {
 				extInfo:   correctable.E_CorrectableStream,
 				docName:   "correctable stream quorum",
-				template:  correctableStreamCall,
+				template:  correctableCall,
 				outPrefix: "CorrectableStream",
 				chkFn: func(m *protogen.Method) bool {
 					return hasMethodOption(m, gorums.E_Correctable) && m.Desc.IsStreamingServer()

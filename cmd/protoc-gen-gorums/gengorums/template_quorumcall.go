@@ -123,8 +123,7 @@ var quorumCallBody = `
 		for k, v := range replies {
 			r[k] = v.(*{{$out}})
 		}
-		result, quorum := c.qspec.{{$method}}QF(req.(*{{$in}}), r)
-		return result, quorum
+		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
 	}
 {{- if hasPerNodeArg .Method}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
