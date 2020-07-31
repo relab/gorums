@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/relab/gorums/examples/storage/proto"
+	"github.com/relab/gorums"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 	// start local servers if no remote servers were specified
 	if len(addrs) == 1 && addrs[0] == "" {
 		addrs = nil
-		srvs := make([]*proto.GorumsServer, 0, 4)
+		srvs := make([]*gorums.Server, 0, 4)
 		for i := 0; i < 4; i++ {
 			srv, addr := startServer("127.0.0.1:0")
 			srvs = append(srvs, srv)
