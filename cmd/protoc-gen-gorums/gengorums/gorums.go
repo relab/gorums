@@ -10,7 +10,6 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/correctable"
-	"github.com/relab/gorums/internal/ordering"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/runtime/protoimpl"
@@ -209,8 +208,8 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"types":  {template: datatypes},
 	"server": {template: server},
 
-	callTypeName(ordering.E_OrderedRpc): {
-		extInfo:  ordering.E_OrderedRpc,
+	callTypeName(gorums.E_Rpc): {
+		extInfo:  gorums.E_Rpc,
 		docName:  "rpc",
 		template: rpcCall,
 		chkFn: func(m *protogen.Method) bool {
@@ -276,40 +275,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Unicast)
 		},
 	},
-	callTypeName(gorums.E_Ordered): {
-		extInfo: gorums.E_Ordered,
-		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Ordered)
-		},
-		nestedCallType: map[string]*callTypeInfo{
-			callTypeName(ordering.E_OrderedQc): {
-				extInfo:  ordering.E_OrderedQc,
-				docName:  "ordered quorum",
-				template: orderingQC,
-				chkFn: func(m *protogen.Method) bool {
-					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall) &&
-						!hasMethodOption(m, gorums.E_Async)
-				},
-			},
-			callTypeName(ordering.E_OrderedFuture): {
-				extInfo:   ordering.E_OrderedFuture,
-				docName:   "asynchronous ordered quorum",
-				template:  orderedFutureCall,
-				outPrefix: "Future",
-				chkFn: func(m *protogen.Method) bool {
-					return hasAllMethodOption(m, gorums.E_Ordered, gorums.E_Quorumcall, gorums.E_Async)
-				},
-			},
-			callTypeName(ordering.E_OrderedRpc): {
-				extInfo:  ordering.E_OrderedRpc,
-				docName:  "ordered",
-				template: rpcCall,
-				chkFn: func(m *protogen.Method) bool {
-					return hasMethodOption(m, gorums.E_Ordered) && !hasGorumsCallType(m)
-				},
-			},
-		},
-	},
 }
 
 // gorumsCallTypes should list all available call types supported by Gorums.
@@ -336,13 +301,6 @@ var callTypesWithInternal = []*protoimpl.ExtensionInfo{
 var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 	gorums.E_Async,
 	gorums.E_Correctable,
-}
-
-// nodeStreamCallTypes lists all call types that make use of the NodeStream
-var nodeStreamCallTypes = []*protoimpl.ExtensionInfo{
-	gorums.E_Ordered,
-	gorums.E_Multicast,
-	gorums.E_Unicast,
 }
 
 // hasGorumsCallType returns true if the given method has specified

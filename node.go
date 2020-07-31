@@ -133,20 +133,6 @@ func (n *Node) LastErr() error {
 	return n.lastErr
 }
 
-func (n *Node) setLatency(lat time.Duration) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.latency = lat
-}
-
-// Latency returns the latency of the last successful remote procedure call
-// made to this node.
-func (n *Node) Latency() time.Duration {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return n.latency
-}
-
 type lessFunc func(n1, n2 *Node) bool
 
 // MultiSorter implements the Sort interface, sorting the nodes within.
@@ -217,15 +203,6 @@ var Port = func(n1, n2 *Node) bool {
 	p1, _ := strconv.Atoi(n1.Port())
 	p2, _ := strconv.Atoi(n2.Port())
 	return p1 < p2
-}
-
-// Latency sorts nodes by latency in increasing order. Latencies less then
-// zero (sentinel value) are considered greater than any positive latency.
-var Latency = func(n1, n2 *Node) bool {
-	if n1.latency < 0 {
-		return false
-	}
-	return n1.latency < n2.latency
 }
 
 // Error sorts nodes by their LastErr() status in increasing order. A

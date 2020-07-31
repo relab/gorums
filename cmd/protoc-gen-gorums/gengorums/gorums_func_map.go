@@ -119,16 +119,11 @@ var funcMap = template.FuncMap{
 	"mapInternalOutType":    mapInternalOutType,
 	"mapCorrectableOutType": mapCorrectableOutType,
 	"mapFutureOutType":      mapFutureOutType,
-	"streamMethods":         streamMethods,
 	"qspecServices":         qspecServices,
 	"qspecMethods":          qspecMethods,
-	"nodeStreamMethods":     nodeStreamMethods,
 	"unexport":              unexport,
-	"qcresult":              qcresult,
 	"contains":              strings.Contains,
 	"field":                 field,
-	"hasOrderingMethods":    hasOrderingMethods,
-	"exclusivelyOrdering":   exclusivelyOrdering,
 }
 
 type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
@@ -209,7 +204,7 @@ func field(typeName string) string {
 func unexport(s string) string { return strings.ToLower(s[:1]) + s[1:] }
 
 func parseTemplate(name, tmpl string) *template.Template {
-	return template.Must(template.New(name).Funcs(funcMap).Parse(trace() + tmpl))
+	return template.Must(template.New(name).Funcs(funcMap).Parse(tmpl))
 }
 
 func mustExecute(t *template.Template, data interface{}) string {
@@ -218,34 +213,4 @@ func mustExecute(t *template.Template, data interface{}) string {
 		panic(err)
 	}
 	return b.String()
-}
-
-func hasOrderingMethods(services []*protogen.Service) bool {
-	for _, service := range services {
-		for _, method := range service.Methods {
-			if hasMethodOption(method, nodeStreamCallTypes...) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func exclusivelyOrdering(service *protogen.Service) bool {
-	for _, method := range service.Methods {
-		if !hasMethodOption(method, nodeStreamCallTypes...) {
-			return false
-		}
-	}
-	return true
-}
-
-// nodeStreamMethods returns all Gorums methods that use ordering.
-func nodeStreamMethods(methods []*protogen.Method) (s []*protogen.Method) {
-	for _, method := range methods {
-		if hasMethodOption(method, nodeStreamCallTypes...) {
-			s = append(s, method)
-		}
-	}
-	return
 }

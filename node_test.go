@@ -33,14 +33,6 @@ func TestNodeSort(t *testing.T) {
 
 	n := len(nodes)
 
-	OrderedBy(Latency).Sort(nodes)
-	for i := n - 1; i > 0; i-- {
-		if nodes[i].latency < nodes[i-1].latency {
-			t.Error("by latency: not sorted")
-			printNodes(t, nodes)
-		}
-	}
-
 	OrderedBy(ID).Sort(nodes)
 	for i := n - 1; i > 0; i-- {
 		if nodes[i].id < nodes[i-1].id {

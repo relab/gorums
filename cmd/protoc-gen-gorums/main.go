@@ -33,17 +33,12 @@ func main() {
 	var (
 		flags flag.FlagSet
 		dev   = flags.Bool("dev", false, "generate development files in dev folder")
-		trace = flags.Bool("trace", false, "enable tracing")
 		opts  = &protogen.Options{
 			ParamFunc: flags.Set,
 		}
 	)
 
 	opts.Run(func(gen *protogen.Plugin) error {
-		if *trace {
-			gengorums.SetTrace(*trace)
-			fmt.Fprintf(os.Stderr, "Generating code with tracing enabled\n")
-		}
 		for _, f := range gen.Files {
 			if f.Generate {
 				switch {
