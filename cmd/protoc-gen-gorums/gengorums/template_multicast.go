@@ -7,6 +7,13 @@ var _ {{$out}}
 {{end}}
 `
 
+var mcVar = `
+{{$callData := use "gorums.QuorumCallData" .GenFile}}
+{{$genFile := .GenFile}}
+{{$unexportMethod := unexport .Method.GoName}}
+{{$context := use "context.Context" .GenFile}}
+`
+
 var multicastSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) {
@@ -20,6 +27,7 @@ var multicastBody = `
 		MethodID: {{$unexportMethod}}MethodID,
 	}
 {{- if hasPerNodeArg .Method}}
+{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}
@@ -30,7 +38,7 @@ var multicastBody = `
 `
 
 var multicastCall = commonVariables +
-	qcVar +
+	mcVar +
 	multicastRefImports +
 	quorumCallComment +
 	multicastSignature +
