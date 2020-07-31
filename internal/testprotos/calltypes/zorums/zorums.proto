@@ -66,24 +66,24 @@ service ZorumsService {
   // ------------------------------------------------------------------
 
   // Multicast plain. Response type is not needed here.
-  rpc Multicast(stream Request) returns (Response) {
+  rpc Multicast(Request) returns (Response) {
     option (gorums.multicast) = true;
   }
   // MulticastPerNodeArg with per_node_arg option.
-  rpc MulticastPerNodeArg(stream Request) returns (Response) {
+  rpc MulticastPerNodeArg(Request) returns (Response) {
     option (gorums.multicast) = true;
     option (gorums.per_node_arg) = true;
   }
   // Multicast2 is testing whether multiple streams work.
-  rpc Multicast2(stream Request) returns (Response) {
+  rpc Multicast2(Request) returns (Response) {
     option (gorums.multicast) = true;
   }
   // Multicast3 is testing imported message type.
-  rpc Multicast3(stream Request) returns (google.protobuf.Empty) {
+  rpc Multicast3(Request) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;
   }
   // Multicast4 is testing imported message type.
-  rpc Multicast4(stream google.protobuf.Empty) returns (google.protobuf.Empty) {
+  rpc Multicast4(google.protobuf.Empty) returns (google.protobuf.Empty) {
     option (gorums.multicast) = true;
   }
 
@@ -201,59 +201,12 @@ service ZorumsService {
   }
 
   // ---------------------------------------------------------------
-  // Ordered QuorumCall variants
+  // Unicast
   // ---------------------------------------------------------------
 
-  rpc OrderingQC(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-  }
-  rpc OrderingPerNodeArg(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-    option (gorums.per_node_arg) = true;
-  }
-  rpc OrderingCustomReturnType(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  rpc OrderingCombo(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.ordered) = true;
-    option (gorums.per_node_arg) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  rpc OrderingUnaryRPC(Request) returns (Response) {
-    option (gorums.ordered) = true;
-  }
+  rpc Unicast(Request) returns (Response) { option (gorums.unicast) = true; }
 
-  // ---------------------------------------------------------------
-  // Ordered Future variants
-  // ---------------------------------------------------------------
-
-  rpc OrderingFuture(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-    option (gorums.ordered) = true;
-  }
-  rpc OrderingFuturePerNodeArg(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-    option (gorums.ordered) = true;
-    option (gorums.per_node_arg) = true;
-  }
-  rpc OrderingFutureCustomReturnType(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-    option (gorums.ordered) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  rpc OrderingFutureCombo(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-    option (gorums.ordered) = true;
-    option (gorums.per_node_arg) = true;
-    option (gorums.custom_return_type) = "MyResponse";
+  rpc Unicast2(Request) returns (google.protobuf.Empty) {
+    option (gorums.unicast) = true;
   }
 }
