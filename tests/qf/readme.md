@@ -18,11 +18,13 @@ The conclusion from the benchmarks below is that `UseReqQF` is always slower, wh
 First compile the qf proto file.
 
 ```sh
-cd cmd/protoc-gen-gorums/tests
+cd tests
 make qf
 ```
 
 To plot graphs based on the benchmarks, you will need benchgraph:
+
+TODO(meling): fork this repo and fix the go.mod file
 
 ```sh
 go get -v github.com/AntonioSun/benchgraph
@@ -36,8 +38,9 @@ go test -bench=BenchmarkQF | benchgraph -title "Quorum Function Evaluation"
 go test -bench=BenchmarkFullStackQF | benchgraph -title "Quorum Function Evaluation (full stack)"
 ```
 
-To view plots for three separate runs:
+To view plots for three separate runs with slice implementation and one with both map and slice implementations:
 
 - [Run 1](plots/benchgraph-run1.html)
 - [Run 2](plots/benchgraph-run2.html)
 - [Run 3](plots/benchgraph-run3.html)
+- [New Run with both slice and map comparison](plots/benchgraph-run-map-and-slice.html)
