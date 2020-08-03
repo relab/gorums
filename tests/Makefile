@@ -5,7 +5,7 @@ RUNTESTS := ordering metadata tls
 
 all: $(RUNTESTS)
 
-qf: qf/qf.pb.go qf/qf_grpc.pb.go qf/qf_gorums.pb.go
+qf: qf/qf.pb.go qf/qf_gorums.pb.go
 
 ordering: ordering/order.pb.go ordering/order_gorums.pb.go
 
@@ -21,3 +21,9 @@ tls: tls/tls.pb.go tls/tls_gorums.pb.go
 
 %_gorums.pb.go : %.proto
 	@protoc -I=..:. --gorums_out=paths=source_relative:. $<
+
+clean:
+	rm metadata/metadata.pb.go metadata/metadata_gorums.pb.go
+	rm ordering/order.pb.go ordering/order_gorums.pb.go
+	rm tls/tls.pb.go tls/tls_gorums.pb.go
+	rm qf/qf.pb.go qf/qf_grpc.pb.go qf/qf_gorums.pb.go

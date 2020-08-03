@@ -15,6 +15,7 @@ RPCs
 Tormod
 Unexported
 Zorums
+benchgraph
 bootstrapgorums
 calltypes
 clevel
