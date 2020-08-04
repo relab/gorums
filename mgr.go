@@ -33,7 +33,7 @@ type Manager struct {
 // successful returns a new Manager containing connections to those nodes.
 // This function is meant for internal Gorums use. You should use the `NewManager`
 // function in the generated code instead.
-func NewManager(methods map[int32]MethodInfo, opts ...ManagerOption) (*Manager, error) {
+func NewManager(opts ...ManagerOption) (*Manager, error) {
 
 	m := &Manager{
 		lookup:       make(map[uint32]*Node),
@@ -47,7 +47,6 @@ func NewManager(methods map[int32]MethodInfo, opts ...ManagerOption) (*Manager, 
 
 	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
 		grpc.CallContentSubtype(gorumsContentType),
-		grpc.ForceCodec(NewGorumsCodec(methods)),
 	))
 
 	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {

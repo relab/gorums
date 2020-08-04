@@ -105,12 +105,11 @@ type Server struct {
 // NewServer returns a new instance of GorumsServer.
 // This function is intended for internal Gorums use.
 // You should call `NewServer` in the generated code instead.
-func NewServer(methods map[int32]MethodInfo, opts ...ServerOption) *Server {
+func NewServer(opts ...ServerOption) *Server {
 	var serverOpts serverOptions
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
-	serverOpts.grpcOpts = append(serverOpts.grpcOpts, grpc.CustomCodec(NewGorumsCodec(methods)))
 	s := &Server{
 		srv:        newOrderingServer(&serverOpts),
 		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),

@@ -71,7 +71,7 @@ func NewBenchServer(opts ...gorums.ServerOption) *Server {
 	srv := &Server{}
 	srv.server.stats = &srv.stats
 
-	srv.Server = NewServer(opts...)
+	srv.Server = gorums.NewServer(opts...)
 	RegisterBenchmarkServer(srv.Server, &srv.server)
 	return srv
 }

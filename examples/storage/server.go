@@ -28,7 +28,7 @@ func startServer(address string) (*gorums.Server, string) {
 	storage.logger = log.New(os.Stderr, fmt.Sprintf("%s: ", lis.Addr()), log.Ltime|log.Lmicroseconds|log.Lmsgprefix)
 
 	// create Gorums server
-	srv := proto.NewServer()
+	srv := gorums.NewServer()
 	// register server implementation with Gorums server
 	proto.RegisterStorageServer(srv, storage)
 	// handle requests on listener

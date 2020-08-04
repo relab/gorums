@@ -6,6 +6,7 @@ import (
 	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
+	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	sort "sort"
 	sync "sync"
@@ -82,9 +83,13 @@ func (c *Configuration) SubError() <-chan gorums.GRPCError {
 	return c.errs
 }
 
+func init() {
+	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+}
+
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
 	mgr = &Manager{}
-	mgr.Manager, err = gorums.NewManager(orderingMethods, opts...)
+	mgr.Manager, err = gorums.NewManager(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -145,10 +150,6 @@ func (m *Manager) Nodes() []*Node {
 type Node struct {
 	*gorums.Node
 	mgr *Manager
-}
-
-func NewServer(opts ...gorums.ServerOption) *gorums.Server {
-	return gorums.NewServer(orderingMethods, opts...)
 }
 
 // QuorumSpec is the interface of quorum functions for Storage.

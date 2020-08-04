@@ -167,7 +167,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Failed to listen on '%s': %v\n", *server, err)
 			os.Exit(1)
 		}
-		srv := benchmark.NewServer(gorums.WithServerBufferSize(*serverBuffer))
+		srv := gorums.NewServer(gorums.WithServerBufferSize(*serverBuffer))
 		go func() { _ = srv.Serve(lis) }()
 
 		fmt.Printf("Running benchmark server on '%s'\n", *server)

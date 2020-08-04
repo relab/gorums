@@ -190,7 +190,7 @@ func (s testSrv) IgnoreReq(_ context.Context, req *Request, out func(*Response, 
 func BenchmarkFullStackQF(b *testing.B) {
 	for n := 3; n < 20; n += 2 {
 		_, stop := gorums.TestSetup(b, n, func() interface{} {
-			srv := NewServer()
+			srv := gorums.NewServer()
 			RegisterQuorumFunctionServer(srv, &testSrv{})
 			return srv
 		})

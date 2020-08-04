@@ -7,9 +7,10 @@ package gengorums
 // These identifiers are used by the Gorums protoc plugin to generate
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
-	"fmt":                     "Errorf",
-	"github.com/relab/gorums": "GRPCError",
-	"sort":                    "Search",
+	"fmt":                             "Errorf",
+	"github.com/relab/gorums":         "GRPCError",
+	"google.golang.org/grpc/encoding": "RegisterCodec",
+	"sort":                            "Search",
 }
 
 // reservedIdents holds the set of Gorums reserved identifiers.
@@ -93,9 +94,13 @@ func (c *Configuration) SubError() <-chan gorums.GRPCError {
 	return c.errs
 }
 
+func init() {
+	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+}
+
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
 	mgr = &Manager{}
-	mgr.Manager, err = gorums.NewManager(orderingMethods, opts...)
+	mgr.Manager, err = gorums.NewManager(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -156,10 +161,6 @@ func (m *Manager) Nodes() []*Node {
 type Node struct {
 	*gorums.Node
 	mgr *Manager
-}
-
-func NewServer(opts ...gorums.ServerOption) *gorums.Server {
-	return gorums.NewServer(orderingMethods, opts...)
 }
 
 `

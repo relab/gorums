@@ -4,11 +4,16 @@ import (
 	"sort"
 
 	"github.com/relab/gorums"
+	"google.golang.org/grpc/encoding"
 )
+
+func init() {
+	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+}
 
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
 	mgr = &Manager{}
-	mgr.Manager, err = gorums.NewManager(orderingMethods, opts...)
+	mgr.Manager, err = gorums.NewManager(opts...)
 	if err != nil {
 		return nil, err
 	}
