@@ -7,6 +7,7 @@ import (
 	fmt "fmt"
 	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
+	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	sort "sort"
 	sync "sync"
@@ -83,9 +84,13 @@ func (c *Configuration) SubError() <-chan gorums.GRPCError {
 	return c.errs
 }
 
+func init() {
+	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+}
+
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
 	mgr = &Manager{}
-	mgr.Manager, err = gorums.NewManager(orderingMethods, opts...)
+	mgr.Manager, err = gorums.NewManager(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -132,13 +137,20 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	return c, nil
 }
 
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Manager.
+func (m *Manager) Nodes() []*Node {
+	gorumsNodes := m.Manager.Nodes()
+	nodes := make([]*Node, 0, len(gorumsNodes))
+	for _, n := range gorumsNodes {
+		nodes = append(nodes, &Node{n, m})
+	}
+	return nodes
+}
+
 type Node struct {
 	*gorums.Node
 	mgr *Manager
-}
-
-func NewServer(opts ...gorums.ServerOption) *gorums.Server {
-	return gorums.NewServer(orderingMethods, opts...)
 }
 
 // AsyncQuorumCall asynchronously invokes a quorum call on configuration c
@@ -156,8 +168,7 @@ func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *FutureEc
 		for k, v := range replies {
 			r[k] = v.(*Echo)
 		}
-		result, quorum := c.qspec.AsyncQuorumCallQF(req.(*Echo), r)
-		return result, quorum
+		return c.qspec.AsyncQuorumCallQF(req.(*Echo), r)
 	}
 
 	fut := gorums.FutureCall(ctx, cd)
@@ -249,8 +260,7 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 		for k, v := range replies {
 			r[k] = v.(*StartResponse)
 		}
-		result, quorum := c.qspec.StartServerBenchmarkQF(req.(*StartRequest), r)
-		return result, quorum
+		return c.qspec.StartServerBenchmarkQF(req.(*StartRequest), r)
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
@@ -272,8 +282,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 		for k, v := range replies {
 			r[k] = v.(*Result)
 		}
-		result, quorum := c.qspec.StopServerBenchmarkQF(req.(*StopRequest), r)
-		return result, quorum
+		return c.qspec.StopServerBenchmarkQF(req.(*StopRequest), r)
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
@@ -295,8 +304,7 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 		for k, v := range replies {
 			r[k] = v.(*StartResponse)
 		}
-		result, quorum := c.qspec.StartBenchmarkQF(req.(*StartRequest), r)
-		return result, quorum
+		return c.qspec.StartBenchmarkQF(req.(*StartRequest), r)
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
@@ -318,8 +326,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 		for k, v := range replies {
 			r[k] = v.(*MemoryStat)
 		}
-		result, quorum := c.qspec.StopBenchmarkQF(req.(*StopRequest), r)
-		return result, quorum
+		return c.qspec.StopBenchmarkQF(req.(*StopRequest), r)
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
@@ -340,8 +347,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, e
 		for k, v := range replies {
 			r[k] = v.(*Echo)
 		}
-		result, quorum := c.qspec.QuorumCallQF(req.(*Echo), r)
-		return result, quorum
+		return c.qspec.QuorumCallQF(req.(*Echo), r)
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
@@ -363,8 +369,7 @@ func (c *Configuration) SlowServer(ctx context.Context, in *Echo) (resp *Echo, e
 		for k, v := range replies {
 			r[k] = v.(*Echo)
 		}
-		result, quorum := c.qspec.SlowServerQF(req.(*Echo), r)
-		return result, quorum
+		return c.qspec.SlowServerQF(req.(*Echo), r)
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)

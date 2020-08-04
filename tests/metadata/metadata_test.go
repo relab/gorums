@@ -47,7 +47,7 @@ func (srv testSrv) WhatIP(ctx context.Context, _ *empty.Empty, ret func(*IPAddr,
 }
 
 func initServer(t *testing.T) *gorums.Server {
-	srv := NewServer()
+	srv := gorums.NewServer()
 	RegisterMetadataTestServer(srv, &testSrv{})
 	return srv
 }
