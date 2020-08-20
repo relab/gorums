@@ -193,17 +193,16 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	var start runtime.MemStats
 	var end runtime.MemStats
 
-	benchmarkFunc := func(stopTime time.Time) error {
+	benchmarkFunc := func(stopTime time.Time) {
 		for !time.Now().After(stopTime) {
 			msg := &TimedMsg{SendTime: time.Now().UnixNano(), Payload: payload}
 			f(ctx, msg)
 		}
-		return nil
 	}
 
 	warmupEnd := time.Now().Add(opts.Warmup)
 	for n := 0; n < opts.Concurrent; n++ {
-		g.Go(func() error { return benchmarkFunc(warmupEnd) })
+		go benchmarkFunc(warmupEnd)
 	}
 	err := g.Wait()
 	if err != nil {
@@ -218,7 +217,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	runtime.ReadMemStats(&start)
 	endTime := time.Now().Add(opts.Duration)
 	for n := 0; n < opts.Concurrent; n++ {
-		g.Go(func() error { return benchmarkFunc(endTime) })
+		benchmarkFunc(endTime)
 	}
 	err = g.Wait()
 	if err != nil {
@@ -254,7 +253,7 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 		},
 		{
 			Name:        "SlowServer",
-			Description: "QC with a 10s processing time on the server",
+			Description: "Quorum Call with a 10s processing time on the server",
 			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.SlowServer) },
 		},
 		{
