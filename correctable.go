@@ -82,7 +82,7 @@ type CorrectableCallData struct {
 func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	msgID := d.Manager.nextMsgID()
 	// set up channel to collect replies to this call.
-	replyChan := make(chan *orderingResult, len(d.Nodes))
+	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
 	d.Manager.putChan(msgID, replyChan)
 
 	md := &ordering.Metadata{
@@ -100,7 +100,7 @@ func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 				continue
 			}
 		}
-		n.sendQ <- &Message{Metadata: md, Message: msg}
+		n.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: msg}}
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}

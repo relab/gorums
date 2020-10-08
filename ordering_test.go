@@ -16,9 +16,9 @@ import (
 func BenchmarkReceiveQueue(b *testing.B) {
 	rq := newReceiveQueue()
 	// dummy channel
-	replies := make(chan *orderingResult, 1)
+	replies := make(chan *gorumsStreamResult, 1)
 	// dummy result
-	result := &orderingResult{nid: 2, reply: nil, err: nil}
+	result := &gorumsStreamResult{nid: 2, reply: nil, err: nil}
 	b.Run("RWMutexMap", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msgID := rq.nextMsgID()
@@ -42,7 +42,7 @@ func BenchmarkReceiveQueue(b *testing.B) {
 			msgID := rq.nextMsgID()
 			syncrq.Store(msgID, replies)
 			xc, ok := syncrq.Load(msgID)
-			c := xc.(chan *orderingResult)
+			c := xc.(chan *gorumsStreamResult)
 			if ok {
 				// ignore sending result on channel
 				_ = c
@@ -52,7 +52,7 @@ func BenchmarkReceiveQueue(b *testing.B) {
 	})
 }
 
-func (m *receiveQueue) putResult2(id uint64, result *orderingResult) {
+func (m *receiveQueue) putResult2(id uint64, result *gorumsStreamResult) {
 	m.recvQMut.RLock()
 	c, ok := m.recvQ[id]
 	m.recvQMut.RUnlock()
@@ -66,7 +66,7 @@ type rQueue struct {
 	sync.Map
 }
 
-func (m *rQueue) putChan(id uint64, c chan *orderingResult) {
+func (m *rQueue) putChan(id uint64, c chan *gorumsStreamResult) {
 	m.Store(id, c)
 }
 
@@ -74,9 +74,9 @@ func (m *rQueue) deleteChan(id uint64) {
 	m.Delete(id)
 }
 
-func (m *rQueue) putResult(id uint64, result *orderingResult) {
+func (m *rQueue) putResult(id uint64, result *gorumsStreamResult) {
 	xc, ok := m.Load(id)
-	c := xc.(chan *orderingResult)
+	c := xc.(chan *gorumsStreamResult)
 	if ok {
 		// ignore sending result on channel
 		_ = c

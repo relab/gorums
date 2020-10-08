@@ -19,7 +19,7 @@ type QuorumCallData struct {
 func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	msgID := d.Manager.nextMsgID()
 	// set up channel to collect replies to this call.
-	replyChan := make(chan *orderingResult, len(d.Nodes))
+	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
 	d.Manager.putChan(msgID, replyChan)
 	// and remove it when the call it scomplete
 	defer d.Manager.deleteChan(msgID)
@@ -39,7 +39,7 @@ func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoM
 				continue
 			}
 		}
-		n.sendQ <- &Message{Metadata: md, Message: msg}
+		n.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: msg}}
 	}
 
 	var (

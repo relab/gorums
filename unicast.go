@@ -14,5 +14,5 @@ func Unicast(ctx context.Context, d CallData) {
 		MethodID:  d.MethodID,
 	}
 
-	d.Node.sendQ <- &Message{Metadata: md, Message: d.Message}
+	d.Node.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: d.Message}}
 }

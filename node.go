@@ -34,7 +34,7 @@ type Node struct {
 func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
 	n.orderedNodeStream = &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan *Message, opts.sendBuffer),
+		sendQ:        make(chan gorumsStreamRequest, opts.sendBuffer),
 		node:         n,
 		backoff:      opts.backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
