@@ -84,9 +84,11 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithDialTimeout(100*time.Millisecond), gorums.WithGrpcDialOptions(
-		grpc.WithBlock(), grpc.WithInsecure(),
-	))
+	mgr, err := NewManager(
+		gorums.WithNodeList(addrs),
+		gorums.WithDialTimeout(100*time.Millisecond),
+		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+	)
 	if err != nil {
 		t.Fatalf("Failed to start manager: %v", err)
 	}
