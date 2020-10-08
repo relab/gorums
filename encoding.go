@@ -14,8 +14,8 @@ const gorumsContentType = "gorums"
 type gorumsMsgType uint8
 
 const (
-	gorumsRequest gorumsMsgType = iota + 1
-	gorumsResponse
+	gorumsRequestType gorumsMsgType = iota + 1
+	gorumsResponseType
 )
 
 type Message struct {
@@ -104,9 +104,9 @@ func (c GorumsCodec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 		return fmt.Errorf("gorumsCodec: Unknown MethodID")
 	}
 	switch msg.msgType {
-	case gorumsRequest:
+	case gorumsRequestType:
 		msg.Message = info.RequestType.New().Interface()
-	case gorumsResponse:
+	case gorumsResponseType:
 		msg.Message = info.ResponseType.New().Interface()
 	default:
 		return fmt.Errorf("gorumsCodec: Unknown message type")

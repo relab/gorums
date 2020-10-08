@@ -33,7 +33,7 @@ func (f *Future) Done() bool {
 func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 	msgID := d.Manager.nextMsgID()
 	// set up channel to collect replies to this call.
-	replyChan := make(chan *orderingResult, len(d.Nodes))
+	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
 	d.Manager.putChan(msgID, replyChan)
 
 	md := &ordering.Metadata{
@@ -51,7 +51,7 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 				continue
 			}
 		}
-		n.sendQ <- &Message{Metadata: md, Message: msg}
+		n.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: msg}}
 	}
 
 	fut := &Future{c: make(chan struct{}, 1)}

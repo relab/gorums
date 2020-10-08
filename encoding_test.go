@@ -35,7 +35,7 @@ func TestUnmarshalGorumsMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := newGorumsMessage(gorumsRequest)
+	msg := newGorumsMessage(gorumsRequestType)
 	err = codec.Unmarshal(buf, msg)
 	if err != nil {
 		t.Fatal(err)

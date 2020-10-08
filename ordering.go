@@ -21,7 +21,12 @@ type MethodInfo struct {
 	ResponseType protoreflect.Message
 }
 
-type orderingResult struct {
+type gorumsStreamRequest struct {
+	ctx context.Context
+	msg *Message
+}
+
+type gorumsStreamResult struct {
 	nid   uint32
 	reply protoreflect.ProtoMessage
 	err   error
@@ -29,13 +34,13 @@ type orderingResult struct {
 
 type receiveQueue struct {
 	msgID    uint64
-	recvQ    map[uint64]chan *orderingResult
+	recvQ    map[uint64]chan *gorumsStreamResult
 	recvQMut sync.RWMutex
 }
 
 func newReceiveQueue() *receiveQueue {
 	return &receiveQueue{
-		recvQ: make(map[uint64]chan *orderingResult),
+		recvQ: make(map[uint64]chan *gorumsStreamResult),
 	}
 }
 
@@ -43,7 +48,7 @@ func (m *receiveQueue) nextMsgID() uint64 {
 	return atomic.AddUint64(&m.msgID, 1)
 }
 
-func (m *receiveQueue) putChan(id uint64, c chan *orderingResult) {
+func (m *receiveQueue) putChan(id uint64, c chan *gorumsStreamResult) {
 	m.recvQMut.Lock()
 	m.recvQ[id] = c
 	m.recvQMut.Unlock()
@@ -55,7 +60,7 @@ func (m *receiveQueue) deleteChan(id uint64) {
 	m.recvQMut.Unlock()
 }
 
-func (m *receiveQueue) putResult(id uint64, result *orderingResult) {
+func (m *receiveQueue) putResult(id uint64, result *gorumsStreamResult) {
 	m.recvQMut.RLock()
 	c, ok := m.recvQ[id]
 	m.recvQMut.RUnlock()
@@ -66,14 +71,14 @@ func (m *receiveQueue) putResult(id uint64, result *orderingResult) {
 
 type orderedNodeStream struct {
 	*receiveQueue
-	sendQ        chan *Message
+	sendQ        chan gorumsStreamRequest
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
 	rand         *rand.Rand
 	gorumsClient ordering.GorumsClient
 	gorumsStream ordering.Gorums_NodeStreamClient
 	streamMut    sync.RWMutex
-	streamBroken uint32
+	streamBroken bool
 }
 
 func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc.ClientConn) error {
@@ -88,8 +93,32 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 	return nil
 }
 
+func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
+	s.streamMut.RLock()
+	defer s.streamMut.RUnlock()
+
+	c := make(chan struct{})
+	go func() {
+		err = s.gorumsStream.SendMsg(req.msg)
+		if err != nil {
+			s.node.setLastErr(err)
+		}
+		c <- struct{}{}
+	}()
+
+	select {
+	case <-c:
+	case <-req.ctx.Done():
+		s.gorumsStream.CloseSend()
+		err = req.ctx.Err()
+		s.streamBroken = true
+	}
+
+	return err
+}
+
 func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
-	var req *Message
+	var req gorumsStreamRequest
 	for {
 		select {
 		case <-ctx.Done():
@@ -97,33 +126,27 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 		case req = <-s.sendQ:
 		}
 		// return error if stream is broken
-		if atomic.LoadUint32(&s.streamBroken) == 1 {
+		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.Metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{nid: s.node.ID(), reply: nil, err: err})
 			continue
 		}
 		// else try to send message
-		s.streamMut.RLock()
-		err := s.gorumsStream.SendMsg(req)
-		if err == nil {
-			s.streamMut.RUnlock()
-			continue
+		err := s.sendMsg(req)
+		if err != nil {
+			// return the error
+			s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{nid: s.node.ID(), reply: nil, err: err})
 		}
-		atomic.StoreUint32(&s.streamBroken, 1)
-		s.streamMut.RUnlock()
-		s.node.setLastErr(err)
-		// return the error
-		s.putResult(req.Metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: nil, err: err})
 	}
 }
 
 func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 	for {
-		resp := newGorumsMessage(gorumsResponse)
+		resp := newGorumsMessage(gorumsResponseType)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {
-			atomic.StoreUint32(&s.streamBroken, 1)
+			s.streamBroken = true
 			s.streamMut.RUnlock()
 			s.node.setLastErr(err)
 			// attempt to reconnect
@@ -131,7 +154,7 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 		} else {
 			s.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			s.putResult(resp.Metadata.MessageID, &orderingResult{nid: s.node.ID(), reply: resp.Message, err: err})
+			s.putResult(resp.Metadata.MessageID, &gorumsStreamResult{nid: s.node.ID(), reply: resp.Message, err: err})
 		}
 
 		select {
@@ -151,7 +174,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 		var err error
 		s.gorumsStream, err = s.gorumsClient.NodeStream(ctx)
 		if err == nil {
-			atomic.StoreUint32(&s.streamBroken, 0)
+			s.streamBroken = true
 			return
 		}
 		s.node.setLastErr(err)

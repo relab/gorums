@@ -17,7 +17,7 @@ type CallData struct {
 func RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
 	msgID := d.Manager.nextMsgID()
 	// set up channel to collect replies to this call.
-	replyChan := make(chan *orderingResult, 1)
+	replyChan := make(chan *gorumsStreamResult, 1)
 	d.Manager.putChan(msgID, replyChan)
 	// and remove it when the call it scomplete
 	defer d.Manager.deleteChan(msgID)
@@ -27,7 +27,7 @@ func RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, e
 		MethodID:  d.MethodID,
 	}
 
-	d.Node.sendQ <- &Message{Metadata: md, Message: d.Message}
+	d.Node.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: d.Message}}
 
 	select {
 	case r := <-replyChan:
