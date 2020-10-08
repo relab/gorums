@@ -27,6 +27,9 @@ var rpcBody = `
 {{- end}}
 
 	res, err := {{use "gorums.RPCCall" $genFile}}(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*{{$customOut}}), err
 }
 `

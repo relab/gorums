@@ -43,6 +43,9 @@ type {{$futureOut}} struct {
 // The method blocks until a reply or error is available.
 func (f *{{$futureOut}}) Get() (*{{$customOut}}, error) {
 	resp, err := f.Future.Get()
+	if err != nil {
+		return nil, err
+	}
 	return resp.(*{{$customOut}}), err
 }
 {{end}}
@@ -67,6 +70,9 @@ type {{$correctableOut}} struct {
 // ensure that a reply is available.
 func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
 	resp, level, err := c.Correctable.Get()
+	if err != nil {
+		return nil, level, err
+	}
 	return resp.(*{{$customOut}}), level, err
 }
 {{- end -}}

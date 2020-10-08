@@ -19,5 +19,8 @@ func (n *Node) GRPCCall(ctx context.Context, in *Request) (resp *Response, err e
 	}
 
 	res, err := gorums.RPCCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Response), err
 }

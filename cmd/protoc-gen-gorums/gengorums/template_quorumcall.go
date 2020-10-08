@@ -64,6 +64,9 @@ var quorumCallBody = `
 {{- end}}
 
 	res, err := {{use "gorums.QuorumCall" $genFile}}(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*{{$customOut}}), err
 }
 `
