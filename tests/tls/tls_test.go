@@ -47,11 +47,15 @@ func TestTLS(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithDialTimeout(100*time.Millisecond), gorums.WithGrpcDialOptions(
-		grpc.WithBlock(),
-		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
-		grpc.WithReturnConnectionError(),
-	))
+	mgr, err := NewManager(
+		gorums.WithNodeList(addrs), 
+		gorums.WithDialTimeout(100*time.Millisecond), 
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
+			grpc.WithReturnConnectionError(),
+		),
+	)
 	if err != nil {
 		t.Fatalf("Failed to start manager: %v", err)
 	}

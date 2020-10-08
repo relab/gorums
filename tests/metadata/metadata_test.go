@@ -62,10 +62,12 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithMetadata(md), gorums.WithDialTimeout(1*time.Second), gorums.WithGrpcDialOptions(
-		grpc.WithBlock(),
-		grpc.WithInsecure(),
-	))
+	mgr, err := NewManager(
+		gorums.WithNodeList(addrs),
+		gorums.WithMetadata(md),
+		gorums.WithDialTimeout(1*time.Second),
+		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+	)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -91,10 +93,12 @@ func TestPerNodeMetadata(t *testing.T) {
 		})
 	}
 
-	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithPerNodeMetadata(perNodeMD), gorums.WithDialTimeout(1*time.Second), gorums.WithGrpcDialOptions(
-		grpc.WithBlock(),
-		grpc.WithInsecure(),
-	))
+	mgr, err := NewManager(
+		gorums.WithNodeList(addrs),
+		gorums.WithPerNodeMetadata(perNodeMD),
+		gorums.WithDialTimeout(1*time.Second),
+		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+	)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
@@ -115,10 +119,11 @@ func TestCanGetPeerInfo(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func() interface{} { return initServer(t) })
 	defer teardown()
 
-	mgr, err := NewManager(gorums.WithNodeList(addrs), gorums.WithDialTimeout(1*time.Second), gorums.WithGrpcDialOptions(
-		grpc.WithBlock(),
-		grpc.WithInsecure(),
-	))
+	mgr, err := NewManager(
+		gorums.WithNodeList(addrs),
+		gorums.WithDialTimeout(1*time.Second),
+		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+	)
 	if err != nil {
 		t.Fatalf("Failed to create manager: %v", err)
 	}
