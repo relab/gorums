@@ -1,7 +1,7 @@
 # Tests that should be run each time
-RUNTESTS := ordering metadata tls 
+RUNTESTS := ordering metadata tls unresponsive
 
-.PHONY: all runtests qf order metadata tls 
+.PHONY: all runtests qf order metadata tls unresponsive
 
 all: $(RUNTESTS)
 
@@ -12,6 +12,8 @@ ordering: ordering/order.pb.go ordering/order_gorums.pb.go
 metadata: metadata/metadata.pb.go metadata/metadata_gorums.pb.go
 
 tls: tls/tls.pb.go tls/tls_gorums.pb.go
+
+unresponsive: unresponsive/unresponsive.pb.go unresponsive/unresponsive_gorums.pb.go
 
 %.pb.go : %.proto
 	@protoc -I=..:. --go_out=paths=source_relative:. $<
