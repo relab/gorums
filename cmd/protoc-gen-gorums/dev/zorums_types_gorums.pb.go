@@ -99,6 +99,9 @@ type FutureEmpty struct {
 // The method blocks until a reply or error is available.
 func (f *FutureEmpty) Get() (*empty.Empty, error) {
 	resp, err := f.Future.Get()
+	if err != nil {
+		return nil, err
+	}
 	return resp.(*empty.Empty), err
 }
 
@@ -111,6 +114,9 @@ type FutureMyResponse struct {
 // The method blocks until a reply or error is available.
 func (f *FutureMyResponse) Get() (*MyResponse, error) {
 	resp, err := f.Future.Get()
+	if err != nil {
+		return nil, err
+	}
 	return resp.(*MyResponse), err
 }
 
@@ -123,6 +129,9 @@ type FutureResponse struct {
 // The method blocks until a reply or error is available.
 func (f *FutureResponse) Get() (*Response, error) {
 	resp, err := f.Future.Get()
+	if err != nil {
+		return nil, err
+	}
 	return resp.(*Response), err
 }
 
@@ -138,6 +147,9 @@ type CorrectableEmpty struct {
 // ensure that a reply is available.
 func (c *CorrectableEmpty) Get() (*empty.Empty, int, error) {
 	resp, level, err := c.Correctable.Get()
+	if err != nil {
+		return nil, level, err
+	}
 	return resp.(*empty.Empty), level, err
 }
 
@@ -153,6 +165,9 @@ type CorrectableMyResponse struct {
 // ensure that a reply is available.
 func (c *CorrectableMyResponse) Get() (*MyResponse, int, error) {
 	resp, level, err := c.Correctable.Get()
+	if err != nil {
+		return nil, level, err
+	}
 	return resp.(*MyResponse), level, err
 }
 
@@ -168,6 +183,9 @@ type CorrectableResponse struct {
 // ensure that a reply is available.
 func (c *CorrectableResponse) Get() (*Response, int, error) {
 	resp, level, err := c.Correctable.Get()
+	if err != nil {
+		return nil, level, err
+	}
 	return resp.(*Response), level, err
 }
 
@@ -183,6 +201,9 @@ type CorrectableStreamEmpty struct {
 // ensure that a reply is available.
 func (c *CorrectableStreamEmpty) Get() (*empty.Empty, int, error) {
 	resp, level, err := c.Correctable.Get()
+	if err != nil {
+		return nil, level, err
+	}
 	return resp.(*empty.Empty), level, err
 }
 
@@ -198,6 +219,9 @@ type CorrectableStreamMyResponse struct {
 // ensure that a reply is available.
 func (c *CorrectableStreamMyResponse) Get() (*MyResponse, int, error) {
 	resp, level, err := c.Correctable.Get()
+	if err != nil {
+		return nil, level, err
+	}
 	return resp.(*MyResponse), level, err
 }
 
@@ -213,5 +237,8 @@ type CorrectableStreamResponse struct {
 // ensure that a reply is available.
 func (c *CorrectableStreamResponse) Get() (*Response, int, error) {
 	resp, level, err := c.Correctable.Get()
+	if err != nil {
+		return nil, level, err
+	}
 	return resp.(*Response), level, err
 }

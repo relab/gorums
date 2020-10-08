@@ -27,6 +27,9 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Resp
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Response), err
 }
 
@@ -51,6 +54,9 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Response), err
 }
 
@@ -72,6 +78,9 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*MyResponse), err
 }
 
@@ -96,6 +105,9 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*MyResponse), err
 }
 
@@ -117,6 +129,9 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty) (r
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Response), err
 }
 
@@ -138,5 +153,8 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*empty.Empty), err
 }
