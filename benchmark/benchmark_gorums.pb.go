@@ -21,7 +21,7 @@ type Configuration struct {
 	n     int
 	mgr   *Manager
 	qspec QuorumSpec
-	errs  chan gorums.GRPCError
+	errs  chan gorums.Error
 }
 
 // NewConfig returns a configuration for the given node addresses and quorum spec.
@@ -80,7 +80,7 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 
 // SubError returns a channel for listening to individual node errors. Currently
 // only a single listener is supported.
-func (c *Configuration) SubError() <-chan gorums.GRPCError {
+func (c *Configuration) SubError() <-chan gorums.Error {
 	return c.errs
 }
 

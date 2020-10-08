@@ -41,7 +41,7 @@ func TestNodeSort(t *testing.T) {
 		}
 	}
 
-	OrderedBy(Error).Sort(nodes)
+	OrderedBy(LastNodeError).Sort(nodes)
 	for i := n - 1; i > 0; i-- {
 		if nodes[i].lastErr == nil && nodes[i-1].lastErr != nil {
 			t.Error("by error: not sorted")

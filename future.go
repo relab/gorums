@@ -62,7 +62,7 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 
 		var (
 			resp    protoreflect.ProtoMessage
-			errs    []GRPCError
+			errs    []Error
 			quorum  bool
 			replies = make(map[uint32]protoreflect.ProtoMessage)
 		)
@@ -71,7 +71,7 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 			select {
 			case r := <-replyChan:
 				if r.err != nil {
-					errs = append(errs, GRPCError{r.nid, r.err})
+					errs = append(errs, Error{r.nid, r.err})
 					break
 				}
 				reply := r.reply

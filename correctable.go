@@ -110,7 +110,7 @@ func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 
 		var (
 			resp    protoreflect.ProtoMessage
-			errs    []GRPCError
+			errs    []Error
 			rlevel  int
 			clevel  = LevelNotSet
 			quorum  bool
@@ -121,7 +121,7 @@ func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 			select {
 			case r := <-replyChan:
 				if r.err != nil {
-					errs = append(errs, GRPCError{r.nid, r.err})
+					errs = append(errs, Error{r.nid, r.err})
 					break
 				}
 				reply := r.reply

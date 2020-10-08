@@ -38,7 +38,7 @@ func ManagerCreationError(err error) error {
 type QuorumCallError struct {
 	Reason     string
 	ReplyCount int
-	Errors     []GRPCError
+	Errors     []Error
 }
 
 func (e QuorumCallError) Error() string {
@@ -58,12 +58,12 @@ func (e QuorumCallError) Error() string {
 	return b.String()
 }
 
-// GRPCError is used to report that a single gRPC call failed.
-type GRPCError struct {
+// Error is used to report that a single gRPC call failed.
+type Error struct {
 	NodeID uint32
 	Cause  error
 }
 
-func (e GRPCError) Error() string {
+func (e Error) Error() string {
 	return fmt.Sprintf("node %d: %v", e.NodeID, e.Cause.Error())
 }

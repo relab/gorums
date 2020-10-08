@@ -43,7 +43,7 @@ func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoM
 	}
 
 	var (
-		errs    []GRPCError
+		errs    []Error
 		quorum  bool
 		replies = make(map[uint32]protoreflect.ProtoMessage)
 	)
@@ -52,7 +52,7 @@ func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoM
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errs = append(errs, GRPCError{r.nid, r.err})
+				errs = append(errs, Error{r.nid, r.err})
 				break
 			}
 			reply := r.reply

@@ -205,9 +205,9 @@ var Port = func(n1, n2 *Node) bool {
 	return p1 < p2
 }
 
-// Error sorts nodes by their LastErr() status in increasing order. A
+// LastNodeError sorts nodes by their LastErr() status in increasing order. A
 // node with LastErr() != nil is larger than a node with LastErr() == nil.
-var Error = func(n1, n2 *Node) bool {
+var LastNodeError = func(n1, n2 *Node) bool {
 	if n1.lastErr != nil && n2.lastErr == nil {
 		return false
 	}

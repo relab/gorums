@@ -8,7 +8,7 @@ package gengorums
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
 	"fmt":                             "Errorf",
-	"github.com/relab/gorums":         "GRPCError",
+	"github.com/relab/gorums":         "Error",
 	"google.golang.org/grpc/encoding": "RegisterCodec",
 	"sort":                            "Search",
 }
@@ -31,7 +31,7 @@ type Configuration struct {
 	n     int
 	mgr   *Manager
 	qspec QuorumSpec
-	errs  chan gorums.GRPCError
+	errs  chan gorums.Error
 }
 
 // NewConfig returns a configuration for the given node addresses and quorum spec.
@@ -90,7 +90,7 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 
 // SubError returns a channel for listening to individual node errors. Currently
 // only a single listener is supported.
-func (c *Configuration) SubError() <-chan gorums.GRPCError {
+func (c *Configuration) SubError() <-chan gorums.Error {
 	return c.errs
 }
 
