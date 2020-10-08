@@ -167,7 +167,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Failed to listen on '%s': %v\n", *server, err)
 			os.Exit(1)
 		}
-		srv := gorums.NewServer(gorums.WithServerBufferSize(*serverBuffer))
+		srv := gorums.NewServer(gorums.WithReceiveBufferSize(*serverBuffer))
 		go func() { _ = srv.Serve(lis) }()
 
 		fmt.Printf("Running benchmark server on '%s'\n", *server)
@@ -182,7 +182,7 @@ func main() {
 		remote = false
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithServerBufferSize(*serverBuffer))
+		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithReceiveBufferSize(*serverBuffer))
 	}
 
 	var mgrOpts = []gorums.ManagerOption{
