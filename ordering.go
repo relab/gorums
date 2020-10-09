@@ -79,17 +79,22 @@ type orderedNodeStream struct {
 	gorumsStream ordering.Gorums_NodeStreamClient
 	streamMut    sync.RWMutex
 	streamBroken bool
+	parentCtx    context.Context
+	streamCtx    context.Context
+	cancelStream context.CancelFunc
 }
 
 func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc.ClientConn) error {
 	var err error
+	s.parentCtx = ctx
+	s.streamCtx, s.cancelStream = context.WithCancel(s.parentCtx)
 	s.gorumsClient = ordering.NewGorumsClient(conn)
-	s.gorumsStream, err = s.gorumsClient.NodeStream(ctx)
+	s.gorumsStream, err = s.gorumsClient.NodeStream(s.streamCtx)
 	if err != nil {
 		return err
 	}
-	go s.sendMsgs(ctx)
-	go s.recvMsgs(ctx)
+	go s.sendMsgs()
+	go s.recvMsgs()
 	return nil
 }
 
@@ -98,30 +103,32 @@ func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
 	defer s.streamMut.RUnlock()
 
 	c := make(chan struct{})
+
+	// wait for either the message to be sent, or the request context being cancelled.
+	// if the request context was cancelled, then we most likely have a blocked stream.
 	go func() {
-		err = s.gorumsStream.SendMsg(req.msg)
-		if err != nil {
-			s.node.setLastErr(err)
+		select {
+		case <-c:
+		case <-req.ctx.Done():
+			s.cancelStream()
 		}
-		c <- struct{}{}
 	}()
 
-	select {
-	case <-c:
-	case <-req.ctx.Done():
-		s.gorumsStream.CloseSend()
-		err = req.ctx.Err()
+	err = s.gorumsStream.SendMsg(req.msg)
+	if err != nil {
+		s.node.setLastErr(err)
 		s.streamBroken = true
 	}
+	c <- struct{}{}
 
 	return err
 }
 
-func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
+func (s *orderedNodeStream) sendMsgs() {
 	var req gorumsStreamRequest
 	for {
 		select {
-		case <-ctx.Done():
+		case <-s.parentCtx.Done():
 			return
 		case req = <-s.sendQ:
 		}
@@ -140,7 +147,7 @@ func (s *orderedNodeStream) sendMsgs(ctx context.Context) {
 	}
 }
 
-func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
+func (s *orderedNodeStream) recvMsgs() {
 	for {
 		resp := newGorumsMessage(gorumsResponseType)
 		s.streamMut.RLock()
@@ -150,7 +157,7 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 			s.streamMut.RUnlock()
 			s.node.setLastErr(err)
 			// attempt to reconnect
-			s.reconnectStream(ctx)
+			s.reconnectStream()
 		} else {
 			s.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
@@ -158,25 +165,28 @@ func (s *orderedNodeStream) recvMsgs(ctx context.Context) {
 		}
 
 		select {
-		case <-ctx.Done():
+		case <-s.parentCtx.Done():
 			return
 		default:
 		}
 	}
 }
 
-func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
+func (s *orderedNodeStream) reconnectStream() {
 	s.streamMut.Lock()
 	defer s.streamMut.Unlock()
 
 	var retries float64
 	for {
 		var err error
-		s.gorumsStream, err = s.gorumsClient.NodeStream(ctx)
+
+		s.streamCtx, s.cancelStream = context.WithCancel(s.parentCtx)
+		s.gorumsStream, err = s.gorumsClient.NodeStream(s.streamCtx)
 		if err == nil {
-			s.streamBroken = true
+			s.streamBroken = false
 			return
 		}
+		s.cancelStream()
 		s.node.setLastErr(err)
 		delay := float64(s.backoff.BaseDelay)
 		max := float64(s.backoff.MaxDelay)
@@ -188,7 +198,7 @@ func (s *orderedNodeStream) reconnectStream(ctx context.Context) {
 		select {
 		case <-time.After(time.Duration(delay)):
 			retries++
-		case <-ctx.Done():
+		case <-s.parentCtx.Done():
 			return
 		}
 	}
