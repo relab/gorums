@@ -4,8 +4,13 @@ package unresponsive;
 
 option go_package = "github.com/relab/gorums/tests/unresponsive";
 
+import "gorums.proto";
+
 service Unresponsive {
   rpc TestUnresponsive(Empty) returns (Empty) {}
+  rpc TestUnresponsiveFF(Empty) returns (Empty) {
+    option (gorums.unicast) = true;
+  }
 }
 
 message Empty {}

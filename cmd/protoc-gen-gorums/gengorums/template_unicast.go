@@ -1,7 +1,13 @@
 package gengorums
 
+var unicastVar = `
+{{$callData := use "gorums.CallData" .GenFile}}
+{{$genFile := .GenFile}}
+{{$unexportMethod := unexport .Method.GoName}}
+`
+
 var unicastSignature = `func (n *Node) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}) {
+	`in *{{$in}}) {
 `
 
 var unicastBody = `
@@ -12,12 +18,12 @@ var unicastBody = `
 		MethodID: {{$unexportMethod}}MethodID,
 	}
 
-	{{use "gorums.Unicast" $genFile}}(ctx, cd)
+	{{use "gorums.Unicast" $genFile}}(cd)
 }
 `
 
 var unicastCall = commonVariables +
-	rpcVar +
+	unicastVar +
 	multicastRefImports +
 	quorumCallComment +
 	unicastSignature +

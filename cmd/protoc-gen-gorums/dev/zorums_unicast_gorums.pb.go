@@ -3,14 +3,13 @@
 package dev
 
 import (
-	context "context"
 	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 )
 
 // Unicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (n *Node) Unicast(ctx context.Context, in *Request) {
+func (n *Node) Unicast(in *Request) {
 
 	cd := gorums.CallData{
 		Manager:  n.mgr.Manager,
@@ -19,7 +18,7 @@ func (n *Node) Unicast(ctx context.Context, in *Request) {
 		MethodID: unicastMethodID,
 	}
 
-	gorums.Unicast(ctx, cd)
+	gorums.Unicast(cd)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -27,7 +26,7 @@ var _ empty.Empty
 
 // Unicast2 is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (n *Node) Unicast2(ctx context.Context, in *Request) {
+func (n *Node) Unicast2(in *Request) {
 
 	cd := gorums.CallData{
 		Manager:  n.mgr.Manager,
@@ -36,5 +35,5 @@ func (n *Node) Unicast2(ctx context.Context, in *Request) {
 		MethodID: unicast2MethodID,
 	}
 
-	gorums.Unicast(ctx, cd)
+	gorums.Unicast(cd)
 }
