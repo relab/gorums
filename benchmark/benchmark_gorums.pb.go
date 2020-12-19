@@ -180,7 +180,7 @@ var _ empty.Empty
 
 // Multicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg) {
+func (c *Configuration) Multicast(in *TimedMsg) {
 
 	cd := gorums.QuorumCallData{
 		Manager:  c.mgr.Manager,
@@ -189,7 +189,7 @@ func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg) {
 		MethodID: multicastMethodID,
 	}
 
-	gorums.Multicast(ctx, cd)
+	gorums.Multicast(cd)
 }
 
 // QuorumSpec is the interface of quorum functions for Benchmark.
@@ -264,6 +264,9 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*StartResponse), err
 }
 
@@ -286,6 +289,9 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Result), err
 }
 
@@ -308,6 +314,9 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*StartResponse), err
 }
 
@@ -330,6 +339,9 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*MemoryStatList), err
 }
 
@@ -351,6 +363,9 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, e
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Echo), err
 }
 
@@ -373,6 +388,9 @@ func (c *Configuration) SlowServer(ctx context.Context, in *Echo) (resp *Echo, e
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Echo), err
 }
 
@@ -519,5 +537,8 @@ type FutureEcho struct {
 // The method blocks until a reply or error is available.
 func (f *FutureEcho) Get() (*Echo, error) {
 	resp, err := f.Future.Get()
+	if err != nil {
+		return nil, err
+	}
 	return resp.(*Echo), err
 }

@@ -11,7 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-const _ = grpc.SupportPackageIsVersion6
+const _ = grpc.SupportPackageIsVersion7
 
 // GorumsClient is the client API for Gorums service.
 //
@@ -77,12 +77,19 @@ type GorumsServer interface {
 type UnimplementedGorumsServer struct {
 }
 
-func (*UnimplementedGorumsServer) NodeStream(Gorums_NodeStreamServer) error {
+func (UnimplementedGorumsServer) NodeStream(Gorums_NodeStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method NodeStream not implemented")
 }
-func (*UnimplementedGorumsServer) mustEmbedUnimplementedGorumsServer() {}
+func (UnimplementedGorumsServer) mustEmbedUnimplementedGorumsServer() {}
 
-func RegisterGorumsServer(s *grpc.Server, srv GorumsServer) {
+// UnsafeGorumsServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to GorumsServer will
+// result in compilation errors.
+type UnsafeGorumsServer interface {
+	mustEmbedUnimplementedGorumsServer()
+}
+
+func RegisterGorumsServer(s grpc.ServiceRegistrar, srv GorumsServer) {
 	s.RegisterService(&_Gorums_serviceDesc, srv)
 }
 

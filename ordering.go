@@ -74,7 +74,7 @@ type orderedNodeStream struct {
 	sendQ        chan gorumsStreamRequest
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
-	rand         *rand.Rand
+	sendTimeout  time.Duration
 	gorumsClient ordering.GorumsClient
 	gorumsStream ordering.Gorums_NodeStreamClient
 	streamMut    sync.RWMutex
@@ -102,6 +102,17 @@ func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
 	s.streamMut.RLock()
 	defer s.streamMut.RUnlock()
 
+	ctx := req.ctx
+
+	// for unicast and multicast, we set up an internal context to cancel the stream
+	// if sendTimeout passes before the message is sent
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), s.sendTimeout)
+		defer cancel()
+	}
+
+	// will be used to notify the goroutine below that the message was sent
 	c := make(chan struct{})
 
 	// wait for either the message to be sent, or the request context being cancelled.
@@ -109,7 +120,7 @@ func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
 	go func() {
 		select {
 		case <-c:
-		case <-req.ctx.Done():
+		case <-ctx.Done():
 			s.cancelStream()
 		}
 	}()
@@ -119,6 +130,7 @@ func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
 		s.node.setLastErr(err)
 		s.streamBroken = true
 	}
+
 	c <- struct{}{}
 
 	return err

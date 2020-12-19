@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net"
 	"sort"
 	"strconv"
@@ -37,7 +36,7 @@ func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
 		sendQ:        make(chan gorumsStreamRequest, opts.sendBuffer),
 		node:         n,
 		backoff:      opts.backoff,
-		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+		sendTimeout:  opts.sendTimeout,
 	}
 }
 
