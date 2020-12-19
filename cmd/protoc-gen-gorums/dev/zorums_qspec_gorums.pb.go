@@ -183,18 +183,4 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *empty.Empty'.
 	CorrectableStreamEmpty2QF(in *empty.Empty, replies map[uint32]*Response) (*Response, int, bool)
-
-	// UnicastQF is the quorum function for the Unicast
-	// unicast call method. The in parameter is the request object
-	// supplied to the Unicast method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Request'.
-	UnicastQF(in *Request, replies map[uint32]*Response) (*Response, bool)
-
-	// Unicast2QF is the quorum function for the Unicast2
-	// unicast call method. The in parameter is the request object
-	// supplied to the Unicast2 method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Request'.
-	Unicast2QF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, bool)
 }
