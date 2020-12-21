@@ -152,10 +152,6 @@ type Node struct {
 	mgr *Manager
 }
 
-func NewServer(opts ...gorums.ServerOption) *gorums.Server {
-	return gorums.NewServer(opts...)
-}
-
 // QuorumSpec is the interface of quorum functions for QuorumFunction.
 type QuorumSpec interface {
 
@@ -193,6 +189,9 @@ func (c *Configuration) UseReq(ctx context.Context, in *Request) (resp *Response
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Response), err
 }
 
@@ -215,6 +214,9 @@ func (c *Configuration) IgnoreReq(ctx context.Context, in *Request) (resp *Respo
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*Response), err
 }
 
