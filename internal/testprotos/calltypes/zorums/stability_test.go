@@ -2,7 +2,6 @@ package zorums_test
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,31 +14,18 @@ import (
 // variations of Gorums specific code generation. The test objective is to discover
 // if the output changes between runs over the same proto file.
 func TestGorumsStability(t *testing.T) {
-	// TODO(meling); replace with Go 1.15 specific funcs
-	// dir1 := t.TempDir()
-	// dir2 := t.TempDir()
-	dir1, err := ioutil.TempDir("", "gorums-stability")
+	_, err := protoc.Run("sourceRelative", "zorums.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(dir1)
-
-	_, err = protoc.Run("sourceRelative", "zorums.proto")
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir1 := t.TempDir()
 	moveFiles(t, "zorums*.pb.go", dir1)
 
-	dir2, err := ioutil.TempDir("", "gorums-stability")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir2)
-
 	_, err = protoc.Run("sourceRelative", "zorums.proto")
 	if err != nil {
 		t.Fatal(err)
 	}
+	dir2 := t.TempDir()
 	moveFiles(t, "zorums*.pb.go", dir2)
 
 	out, _ := exec.Command("diff", dir1, dir2).CombinedOutput()
@@ -65,7 +51,7 @@ func moveFile(t *testing.T, from, to string) {
 	t.Helper()
 	err := os.Rename(from, to)
 	if err != nil {
-		// Rename may fail if renaming accross devices, so try copy instead
+		// Rename may fail if renaming across devices, so try copy instead
 		s, err := os.Stat(from)
 		if err != nil {
 			t.Fatal(err)

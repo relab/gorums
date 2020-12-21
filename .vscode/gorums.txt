@@ -23,6 +23,7 @@ clevel
 cpuprofile
 devguide
 donech
+emptypb
 errcheck
 extendee
 gengorums
