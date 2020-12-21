@@ -4,9 +4,9 @@ package dev
 
 import (
 	context "context"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // QuorumCall plain.
@@ -112,7 +112,7 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 }
 
 // QuorumCallEmpty for testing imported message type.
-func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty) (resp *Response, err error) {
+func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) (resp *Response, err error) {
 
 	cd := gorums.QuorumCallData{
 		Manager:  c.mgr.Manager,
@@ -125,7 +125,7 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty) (r
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		return c.qspec.QuorumCallEmptyQF(req.(*empty.Empty), r)
+		return c.qspec.QuorumCallEmptyQF(req.(*emptypb.Empty), r)
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
@@ -136,7 +136,7 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty) (r
 }
 
 // QuorumCallEmpty2 for testing imported message type.
-func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp *empty.Empty, err error) {
+func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp *emptypb.Empty, err error) {
 
 	cd := gorums.QuorumCallData{
 		Manager:  c.mgr.Manager,
@@ -145,9 +145,9 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp
 		MethodID: quorumCallEmpty2MethodID,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*empty.Empty, len(replies))
+		r := make(map[uint32]*emptypb.Empty, len(replies))
 		for k, v := range replies {
-			r[k] = v.(*empty.Empty)
+			r[k] = v.(*emptypb.Empty)
 		}
 		return c.qspec.QuorumCallEmpty2QF(req.(*Request), r)
 	}
@@ -156,5 +156,5 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp
 	if err != nil {
 		return nil, err
 	}
-	return res.(*empty.Empty), err
+	return res.(*emptypb.Empty), err
 }
