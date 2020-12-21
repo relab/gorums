@@ -19,7 +19,7 @@ func RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, e
 	// set up channel to collect replies to this call.
 	replyChan := make(chan *gorumsStreamResult, 1)
 	d.Manager.putChan(msgID, replyChan)
-	// and remove it when the call it scomplete
+	// and remove it when the call is complete
 	defer d.Manager.deleteChan(msgID)
 
 	md := &ordering.Metadata{

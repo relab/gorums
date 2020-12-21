@@ -9,7 +9,7 @@ func Multicast(d QuorumCallData) {
 	// set up channel to collect replies to this call.
 	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
 	d.Manager.putChan(msgID, replyChan)
-	// and remove it when the call it scomplete
+	// and remove it when the call is complete
 	defer d.Manager.deleteChan(msgID)
 
 	md := &ordering.Metadata{
