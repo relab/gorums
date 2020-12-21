@@ -5,6 +5,7 @@ GOPATH
 Gorums
 Hein
 ICDCS
+Idxs
 Jehl
 Mallocs
 Meling
@@ -23,6 +24,7 @@ cpuprofile
 devguide
 donech
 errcheck
+extendee
 gengorums
 godoc
 golangci
@@ -45,6 +47,7 @@ quorumcall
 relab
 rlevel
 testprotos
+timestamppb
 tmpl
 unexport
 unicast
