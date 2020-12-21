@@ -20,7 +20,7 @@ type Configuration struct {
 	n     int
 	mgr   *Manager
 	qspec QuorumSpec
-	errs  chan gorums.GRPCError
+	errs  chan gorums.Error
 }
 
 // NewConfig returns a configuration for the given node addresses and quorum spec.
@@ -79,7 +79,7 @@ func Equal(a, b *Configuration) bool { return a.id == b.id }
 
 // SubError returns a channel for listening to individual node errors. Currently
 // only a single listener is supported.
-func (c *Configuration) SubError() <-chan gorums.GRPCError {
+func (c *Configuration) SubError() <-chan gorums.Error {
 	return c.errs
 }
 
@@ -189,6 +189,9 @@ func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) (resp *Read
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*ReadResponse), err
 }
 
@@ -211,6 +214,9 @@ func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) (resp *Wr
 	}
 
 	res, err := gorums.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*WriteResponse), err
 }
 
@@ -225,6 +231,9 @@ func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse
 	}
 
 	res, err := gorums.RPCCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*ReadResponse), err
 }
 
@@ -239,6 +248,9 @@ func (n *Node) WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteRespo
 	}
 
 	res, err := gorums.RPCCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
 	return res.(*WriteResponse), err
 }
 
