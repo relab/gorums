@@ -3,9 +3,9 @@
 package dev
 
 import (
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // Multicast plain. Response type is not needed here.
@@ -52,7 +52,7 @@ func (c *Configuration) Multicast2(in *Request) {
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ empty.Empty
+var _ emptypb.Empty
 
 // Multicast3 is testing imported message type.
 func (c *Configuration) Multicast3(in *Request) {
@@ -68,10 +68,10 @@ func (c *Configuration) Multicast3(in *Request) {
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ empty.Empty
+var _ emptypb.Empty
 
 // Multicast4 is testing imported message type.
-func (c *Configuration) Multicast4(in *empty.Empty) {
+func (c *Configuration) Multicast4(in *emptypb.Empty) {
 
 	cd := gorums.QuorumCallData{
 		Manager:  c.mgr.Manager,

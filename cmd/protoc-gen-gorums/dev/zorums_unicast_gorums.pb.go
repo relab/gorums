@@ -3,8 +3,8 @@
 package dev
 
 import (
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // Unicast is a quorum call invoked on all nodes in configuration c,
@@ -22,7 +22,7 @@ func (n *Node) Unicast(in *Request) {
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ empty.Empty
+var _ emptypb.Empty
 
 // Unicast2 is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.

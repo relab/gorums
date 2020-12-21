@@ -3,8 +3,8 @@
 package dev
 
 import (
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const gRPCCallMethodID int32 = 0
@@ -48,39 +48,39 @@ var orderingMethods = map[int32]gorums.MethodInfo{
 	2:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	3:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	4:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	5:  {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	6:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	5:  {RequestType: new(emptypb.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	6:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(emptypb.Empty).ProtoReflect()},
 	7:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	8:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	9:  {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	10: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
-	11: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	10: {RequestType: new(Request).ProtoReflect(), ResponseType: new(emptypb.Empty).ProtoReflect()},
+	11: {RequestType: new(emptypb.Empty).ProtoReflect(), ResponseType: new(emptypb.Empty).ProtoReflect()},
 	12: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	13: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	14: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	15: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	16: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	17: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
-	18: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	17: {RequestType: new(Request).ProtoReflect(), ResponseType: new(emptypb.Empty).ProtoReflect()},
+	18: {RequestType: new(emptypb.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	19: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	20: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	21: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	22: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	23: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
-	24: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	23: {RequestType: new(Request).ProtoReflect(), ResponseType: new(emptypb.Empty).ProtoReflect()},
+	24: {RequestType: new(emptypb.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	25: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	26: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	27: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	28: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	29: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
-	30: {RequestType: new(empty.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
+	29: {RequestType: new(Request).ProtoReflect(), ResponseType: new(emptypb.Empty).ProtoReflect()},
+	30: {RequestType: new(emptypb.Empty).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
 	31: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	32: {RequestType: new(Request).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
+	32: {RequestType: new(Request).ProtoReflect(), ResponseType: new(emptypb.Empty).ProtoReflect()},
 }
 
 type internalEmpty struct {
 	nid   uint32
-	reply *empty.Empty
+	reply *emptypb.Empty
 	err   error
 }
 
@@ -97,12 +97,12 @@ type FutureEmpty struct {
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *FutureEmpty) Get() (*empty.Empty, error) {
+func (f *FutureEmpty) Get() (*emptypb.Empty, error) {
 	resp, err := f.Future.Get()
 	if err != nil {
 		return nil, err
 	}
-	return resp.(*empty.Empty), err
+	return resp.(*emptypb.Empty), err
 }
 
 // FutureMyResponse is a future object for processing replies.
@@ -145,12 +145,12 @@ type CorrectableEmpty struct {
 // intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *CorrectableEmpty) Get() (*empty.Empty, int, error) {
+func (c *CorrectableEmpty) Get() (*emptypb.Empty, int, error) {
 	resp, level, err := c.Correctable.Get()
 	if err != nil {
 		return nil, level, err
 	}
-	return resp.(*empty.Empty), level, err
+	return resp.(*emptypb.Empty), level, err
 }
 
 // CorrectableMyResponse is a correctable object for processing replies.
@@ -199,12 +199,12 @@ type CorrectableStreamEmpty struct {
 // intermediate) reply or error is available. Level is set to LevelNotSet if no
 // reply has yet been received. The Done or Watch methods should be used to
 // ensure that a reply is available.
-func (c *CorrectableStreamEmpty) Get() (*empty.Empty, int, error) {
+func (c *CorrectableStreamEmpty) Get() (*emptypb.Empty, int, error) {
 	resp, level, err := c.Correctable.Get()
 	if err != nil {
 		return nil, level, err
 	}
-	return resp.(*empty.Empty), level, err
+	return resp.(*emptypb.Empty), level, err
 }
 
 // CorrectableStreamMyResponse is a correctable object for processing replies.
