@@ -7,6 +7,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// QuorumCallData holds the message, destination nodes, method information,
+// and other information necessary to perform the various quorum call types
+// supported by Gorums.
 type QuorumCallData struct {
 	Manager        *Manager
 	Nodes          []*Node
