@@ -172,8 +172,9 @@ func (r repl) multicast(args []string) {
 		return
 	}
 
-	// TODO: should use a cancel context at least
-	r.cfg.WriteMulticast(context.Background(), &proto.WriteRequest{Key: args[0], Value: args[1]})
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	r.cfg.WriteMulticast(ctx, &proto.WriteRequest{Key: args[0], Value: args[1]})
+	cancel()
 }
 
 func (r repl) qc(args []string) {

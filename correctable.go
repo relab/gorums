@@ -100,7 +100,7 @@ func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 				continue
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: msg}}
+		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
