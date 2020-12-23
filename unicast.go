@@ -1,10 +1,12 @@
 package gorums
 
 import (
+	"context"
+
 	"github.com/relab/gorums/ordering"
 )
 
-func Unicast(d CallData) {
+func Unicast(ctx context.Context, d CallData) {
 	msgID := d.Manager.nextMsgID()
 
 	md := &ordering.Metadata{
@@ -12,5 +14,5 @@ func Unicast(d CallData) {
 		MethodID:  d.MethodID,
 	}
 
-	d.Node.sendQ <- gorumsStreamRequest{nil, &Message{Metadata: md, Message: d.Message}}
+	d.Node.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: d.Message}}
 }

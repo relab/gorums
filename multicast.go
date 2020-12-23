@@ -1,10 +1,12 @@
 package gorums
 
 import (
+	"context"
+
 	"github.com/relab/gorums/ordering"
 )
 
-func Multicast(d QuorumCallData) {
+func Multicast(ctx context.Context, d QuorumCallData) {
 	msgID := d.Manager.nextMsgID()
 	// set up channel to collect replies to this call.
 	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
@@ -25,6 +27,6 @@ func Multicast(d QuorumCallData) {
 				continue
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{nil, &Message{Metadata: md, Message: msg}}
+		n.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: msg}}
 	}
 }

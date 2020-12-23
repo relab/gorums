@@ -158,7 +158,7 @@ var _ empty.Empty
 
 // WriteMulticast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) WriteMulticast(in *WriteRequest) {
+func (c *Configuration) WriteMulticast(ctx context.Context, in *WriteRequest) {
 
 	cd := gorums.QuorumCallData{
 		Manager:  c.mgr.Manager,
@@ -167,7 +167,7 @@ func (c *Configuration) WriteMulticast(in *WriteRequest) {
 		MethodID: writeMulticastMethodID,
 	}
 
-	gorums.Multicast(cd)
+	gorums.Multicast(ctx, cd)
 }
 
 // QuorumSpec is the interface of quorum functions for Storage.

@@ -12,7 +12,6 @@ import (
 type managerOptions struct {
 	grpcDialOpts    []grpc.DialOption
 	nodeDialTimeout time.Duration
-	sendTimeout     time.Duration
 	logger          *log.Logger
 	noConnect       bool
 	trace           bool
@@ -26,9 +25,8 @@ type managerOptions struct {
 
 func newManagerOptions() managerOptions {
 	return managerOptions{
-		backoff:     backoff.DefaultConfig,
-		sendBuffer:  0,
-		sendTimeout: time.Second, // TODO: is this an OK default?
+		backoff:    backoff.DefaultConfig,
+		sendBuffer: 0,
 	}
 }
 
@@ -40,16 +38,6 @@ type ManagerOption func(*managerOptions)
 func WithDialTimeout(timeout time.Duration) ManagerOption {
 	return func(o *managerOptions) {
 		o.nodeDialTimeout = timeout
-	}
-}
-
-// WithSendTimeout returns a ManagerOption which is used to set the send
-// timeout for unicast and multicast methods. A send timeout may occur when a
-// node is slow to respond or not responding at all.
-// RPC-based methods should use context cancellation instead.
-func WithSendTimeout(timeout time.Duration) ManagerOption {
-	return func(o *managerOptions) {
-		o.sendTimeout = timeout
 	}
 }
 
