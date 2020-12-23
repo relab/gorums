@@ -6,6 +6,7 @@ option go_package = "github.com/relab/gorums/examples/storage/proto";
 
 import "gorums.proto";
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
 service Storage {
   // ReadRPC executes the Read RPC on a single Node
@@ -21,6 +22,10 @@ service Storage {
   // of Nodes and returns true if a majority of Nodes were updated.
   rpc WriteQC(WriteRequest) returns (WriteResponse) {
     option (gorums.quorumcall) = true;
+  }
+
+  rpc WriteMulticast(WriteRequest) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
   }
 }
 

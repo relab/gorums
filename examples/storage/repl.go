@@ -126,6 +126,8 @@ func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
 			r.qc(args[1:])
 		case "cfg":
 			r.qcCfg(args[1:])
+		case "multicast":
+			r.multicast(args[1:])
 		case "nodes":
 			fmt.Println("Nodes: ")
 			for i, n := range mgr.Nodes() {
@@ -162,6 +164,15 @@ func (r repl) rpc(args []string) {
 	case "write":
 		r.writeRPC(args[2:], node)
 	}
+}
+
+func (r repl) multicast(args []string) {
+	if len(args) < 2 {
+		fmt.Println("'multicast' requires a key and a value.")
+		return
+	}
+
+	r.cfg.WriteMulticast(&proto.WriteRequest{Key: args[0], Value: args[1]})
 }
 
 func (r repl) qc(args []string) {

@@ -5,6 +5,7 @@ package proto
 import (
 	context "context"
 	fmt "fmt"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -152,6 +153,23 @@ type Node struct {
 	mgr *Manager
 }
 
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
+
+// WriteMulticast is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) WriteMulticast(in *WriteRequest) {
+
+	cd := gorums.QuorumCallData{
+		Manager:  c.mgr.Manager,
+		Nodes:    c.nodes,
+		Message:  in,
+		MethodID: writeMulticastMethodID,
+	}
+
+	gorums.Multicast(cd)
+}
+
 // QuorumSpec is the interface of quorum functions for Storage.
 type QuorumSpec interface {
 
@@ -260,6 +278,7 @@ type Storage interface {
 	WriteRPC(context.Context, *WriteRequest, func(*WriteResponse, error))
 	ReadQC(context.Context, *ReadRequest, func(*ReadResponse, error))
 	WriteQC(context.Context, *WriteRequest, func(*WriteResponse, error))
+	WriteMulticast(context.Context, *WriteRequest)
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl Storage) {
@@ -303,12 +322,17 @@ func RegisterStorageServer(srv *gorums.Server, impl Storage) {
 		}
 		impl.WriteQC(ctx, req, f)
 	})
+	srv.RegisterHandler(writeMulticastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*WriteRequest)
+		impl.WriteMulticast(ctx, req)
+	})
 }
 
 const readRPCMethodID int32 = 0
 const writeRPCMethodID int32 = 1
 const readQCMethodID int32 = 2
 const writeQCMethodID int32 = 3
+const writeMulticastMethodID int32 = 4
 
 var orderingMethods = map[int32]gorums.MethodInfo{
 
@@ -316,6 +340,7 @@ var orderingMethods = map[int32]gorums.MethodInfo{
 	1: {RequestType: new(WriteRequest).ProtoReflect(), ResponseType: new(WriteResponse).ProtoReflect()},
 	2: {RequestType: new(ReadRequest).ProtoReflect(), ResponseType: new(ReadResponse).ProtoReflect()},
 	3: {RequestType: new(WriteRequest).ProtoReflect(), ResponseType: new(WriteResponse).ProtoReflect()},
+	4: {RequestType: new(WriteRequest).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalReadResponse struct {
