@@ -11,10 +11,11 @@ var mcVar = `
 {{$callData := use "gorums.QuorumCallData" .GenFile}}
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
+{{$context := use "context.Context" .GenFile}}
 `
 
 var multicastSignature = `func (c *Configuration) {{$method}}(` +
-	`in *{{$in}}` +
+	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) {
 `
 
@@ -32,7 +33,7 @@ var multicastBody = `
 	}
 {{- end}}
 
-	{{use "gorums.Multicast" $genFile}}(cd)
+	{{use "gorums.Multicast" $genFile}}(ctx, cd)
 }
 `
 

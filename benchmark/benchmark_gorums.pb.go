@@ -180,7 +180,7 @@ var _ empty.Empty
 
 // Multicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) Multicast(in *TimedMsg) {
+func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg) {
 
 	cd := gorums.QuorumCallData{
 		Manager:  c.mgr.Manager,
@@ -189,7 +189,7 @@ func (c *Configuration) Multicast(in *TimedMsg) {
 		MethodID: multicastMethodID,
 	}
 
-	gorums.Multicast(cd)
+	gorums.Multicast(ctx, cd)
 }
 
 // QuorumSpec is the interface of quorum functions for Benchmark.
