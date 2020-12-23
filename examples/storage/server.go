@@ -94,6 +94,13 @@ func (s *storageServer) WriteQC(_ context.Context, req *proto.WriteRequest, ret 
 	ret(s.Write(req))
 }
 
+func (s *storageServer) WriteMulticast(_ context.Context, req *proto.WriteRequest) {
+	_, err := s.Write(req)
+	if err != nil {
+		s.logger.Printf("Write error: %v", err)
+	}
+}
+
 // Read reads a value from storage
 func (s *storageServer) Read(req *proto.ReadRequest) (*proto.ReadResponse, error) {
 	s.logger.Printf("Read '%s'\n", req.GetKey())
