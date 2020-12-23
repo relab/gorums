@@ -6,13 +6,18 @@ import (
 	"github.com/relab/gorums/ordering"
 )
 
-func Multicast(ctx context.Context, d QuorumCallData) {
+func Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
+	o := getCallOptions(E_Multicast, opts)
+
 	msgID := d.Manager.nextMsgID()
-	// set up channel to collect replies to this call.
-	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
-	d.Manager.putChan(msgID, replyChan)
-	// and remove it when the call is complete
-	defer d.Manager.deleteChan(msgID)
+
+	var replyChan chan *gorumsStreamResult
+	if !o.sendAsync {
+		replyChan = make(chan *gorumsStreamResult, len(d.Nodes))
+		d.Manager.putChan(msgID, replyChan)
+		// and remove it when the call is complete
+		defer d.Manager.deleteChan(msgID)
+	}
 
 	md := &ordering.Metadata{
 		MessageID: msgID,
@@ -27,6 +32,13 @@ func Multicast(ctx context.Context, d QuorumCallData) {
 				continue
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{ctx, &Message{Metadata: md, Message: msg}}
+		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
+	}
+
+	// wait until the messages have been sent (nodeStream will give empty replies when this happens)
+	if !o.sendAsync {
+		for range d.Nodes {
+			<-replyChan
+		}
 	}
 }

@@ -22,8 +22,9 @@ type MethodInfo struct {
 }
 
 type gorumsStreamRequest struct {
-	ctx context.Context
-	msg *Message
+	ctx  context.Context
+	msg  *Message
+	opts callOptions
 }
 
 type gorumsStreamResult struct {
@@ -120,6 +121,11 @@ func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
 		s.streamBroken = true
 	}
 	c <- struct{}{}
+
+	// unblock the waiting caller when sendAsync is not enabled
+	if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.sendAsync {
+		s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{})
+	}
 
 	return err
 }
