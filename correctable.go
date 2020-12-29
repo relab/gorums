@@ -73,7 +73,7 @@ type CorrectableCallData struct {
 	Manager        *Manager
 	Nodes          []*Node
 	Message        protoreflect.ProtoMessage
-	MethodID       int32
+	Method         string
 	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
 	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool)
 	ServerStream   bool
@@ -87,7 +87,7 @@ func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 
 	md := &ordering.Metadata{
 		MessageID: msgID,
-		MethodID:  d.MethodID,
+		Method:    d.Method,
 	}
 
 	expected := len(d.Nodes)

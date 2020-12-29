@@ -16,6 +16,6 @@ service Gorums {
 // and contains information necessary for Gorums to handle the messages.
 message Metadata {
   uint64 MessageID = 1;
-  int32 MethodID = 2;
+  string Method = 2;
   google.rpc.Status Status = 3;
 }

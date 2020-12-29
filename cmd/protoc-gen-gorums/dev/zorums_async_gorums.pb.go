@@ -12,10 +12,10 @@ import (
 // QuorumCallFuture plain.
 func (c *Configuration) QuorumCallFuture(ctx context.Context, in *Request) *FutureResponse {
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallFutureMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallFuture",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -32,10 +32,10 @@ func (c *Configuration) QuorumCallFuture(ctx context.Context, in *Request) *Futu
 // QuorumCallFuturePerNodeArg with per_node_arg option.
 func (c *Configuration) QuorumCallFuturePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *FutureResponse {
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallFuturePerNodeArgMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallFuturePerNodeArg",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -55,10 +55,10 @@ func (c *Configuration) QuorumCallFuturePerNodeArg(ctx context.Context, in *Requ
 // QuorumCallFutureCustomReturnType with custom_return_type option.
 func (c *Configuration) QuorumCallFutureCustomReturnType(ctx context.Context, in *Request) *FutureMyResponse {
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallFutureCustomReturnTypeMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallFutureCustomReturnType",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -75,10 +75,10 @@ func (c *Configuration) QuorumCallFutureCustomReturnType(ctx context.Context, in
 // QuorumCallFutureCombo with all supported options.
 func (c *Configuration) QuorumCallFutureCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *FutureMyResponse {
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallFutureComboMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallFutureCombo",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -98,10 +98,10 @@ func (c *Configuration) QuorumCallFutureCombo(ctx context.Context, in *Request, 
 // QuorumCallFuture2 plain; with same return type: Response.
 func (c *Configuration) QuorumCallFuture2(ctx context.Context, in *Request) *FutureResponse {
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallFuture2MethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallFuture2",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -118,10 +118,10 @@ func (c *Configuration) QuorumCallFuture2(ctx context.Context, in *Request) *Fut
 // QuorumCallFutureEmpty for testing imported message type.
 func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request) *FutureEmpty {
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallFutureEmptyMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallFutureEmpty",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*empty.Empty, len(replies))
@@ -139,10 +139,10 @@ func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request) 
 // type as QuorumCallFuture: Response.
 func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Empty) *FutureResponse {
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallFutureEmpty2MethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallFutureEmpty2",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))

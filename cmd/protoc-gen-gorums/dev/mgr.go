@@ -8,7 +8,9 @@ import (
 )
 
 func init() {
-	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
 }
 
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {

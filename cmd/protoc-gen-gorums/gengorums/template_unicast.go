@@ -11,7 +11,7 @@ var unicastBody = `
 		Manager:  n.mgr.Manager,
 		Node:     n.Node,
 		Message:  in,
-		MethodID: {{$unexportMethod}}MethodID,
+		Method: "{{$fullName}}",
 	}
 
 	{{use "gorums.Unicast" $genFile}}(ctx, cd, opts...)

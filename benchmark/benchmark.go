@@ -259,7 +259,9 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 		{
 			Name:        "Multicast",
 			Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
-			runBench:    func(opts Options) (*Result, error) { return runServerBenchmark(opts, cfg, cfg.Multicast) },
+			runBench: func(opts Options) (*Result, error) {
+				return runServerBenchmark(opts, cfg, func(ctx context.Context, msg *TimedMsg) { cfg.Multicast(ctx, msg) })
+			},
 		},
 	}
 	return m

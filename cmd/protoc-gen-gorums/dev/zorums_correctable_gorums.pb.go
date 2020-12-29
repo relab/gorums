@@ -15,7 +15,7 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request) *Correctab
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableMethodID,
+		Method:       "dev.ZorumsService.Correctable",
 		ServerStream: false,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -36,7 +36,7 @@ func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, 
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctablePerNodeArgMethodID,
+		Method:       "dev.ZorumsService.CorrectablePerNodeArg",
 		ServerStream: false,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -60,7 +60,7 @@ func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Req
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableCustomReturnTypeMethodID,
+		Method:       "dev.ZorumsService.CorrectableCustomReturnType",
 		ServerStream: false,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -81,7 +81,7 @@ func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f fun
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableComboMethodID,
+		Method:       "dev.ZorumsService.CorrectableCombo",
 		ServerStream: false,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -105,7 +105,7 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *Corr
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableEmptyMethodID,
+		Method:       "dev.ZorumsService.CorrectableEmpty",
 		ServerStream: false,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -127,7 +127,7 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *empty.Empty) 
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableEmpty2MethodID,
+		Method:       "dev.ZorumsService.CorrectableEmpty2",
 		ServerStream: false,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -148,7 +148,7 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *Cor
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableStreamMethodID,
+		Method:       "dev.ZorumsService.CorrectableStream",
 		ServerStream: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -169,7 +169,7 @@ func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Req
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableStreamPerNodeArgMethodID,
+		Method:       "dev.ZorumsService.CorrectableStreamPerNodeArg",
 		ServerStream: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -193,7 +193,7 @@ func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, i
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableStreamCustomReturnTypeMethodID,
+		Method:       "dev.ZorumsService.CorrectableStreamCustomReturnType",
 		ServerStream: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -214,7 +214,7 @@ func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request,
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableStreamComboMethodID,
+		Method:       "dev.ZorumsService.CorrectableStreamCombo",
 		ServerStream: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -238,7 +238,7 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request)
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableStreamEmptyMethodID,
+		Method:       "dev.ZorumsService.CorrectableStreamEmpty",
 		ServerStream: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
@@ -260,7 +260,7 @@ func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *empty.E
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
 		Message:      in,
-		MethodID:     correctableStreamEmpty2MethodID,
+		Method:       "dev.ZorumsService.CorrectableStreamEmpty2",
 		ServerStream: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {

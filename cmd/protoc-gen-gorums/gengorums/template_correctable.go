@@ -43,7 +43,7 @@ var correctableBody = `
 		Manager:  c.mgr.Manager,
 		Nodes:    c.nodes,
 		Message:  in,
-		MethodID: {{$unexportMethod}}MethodID,
+		Method: "{{$fullName}}",
 	{{- if correctableStream .Method}}
 		ServerStream: true,
 	{{- else}}

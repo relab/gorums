@@ -28,7 +28,7 @@ var registerInterface = `
 {{$service := .GoName}}
 func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}) {
 	{{- range .Methods}}
-	srv.RegisterHandler({{unexport .GoName}}MethodID, func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
+	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})
 		{{- if isOneway .}}
 		impl.{{.GoName}}(ctx, req)

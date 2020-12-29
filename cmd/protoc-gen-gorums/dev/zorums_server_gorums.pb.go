@@ -47,7 +47,7 @@ type ZorumsService interface {
 }
 
 func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
-	srv.RegisterHandler(gRPCCallMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -57,7 +57,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.GRPCCall(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCall", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -67,7 +67,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCall(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallPerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallPerNodeArg", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -77,7 +77,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallPerNodeArg(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallCustomReturnTypeMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallCustomReturnType", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -87,7 +87,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallCustomReturnType(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallComboMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallCombo", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -97,7 +97,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallCombo(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallEmptyMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*empty.Empty)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -107,7 +107,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallEmpty(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallEmpty2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *empty.Empty, err error) {
@@ -117,27 +117,27 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallEmpty2(ctx, req, f)
 	})
-	srv.RegisterHandler(multicastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		impl.Multicast(ctx, req)
 	})
-	srv.RegisterHandler(multicastPerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.MulticastPerNodeArg", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		impl.MulticastPerNodeArg(ctx, req)
 	})
-	srv.RegisterHandler(multicast2MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast2", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		impl.Multicast2(ctx, req)
 	})
-	srv.RegisterHandler(multicast3MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast3", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		impl.Multicast3(ctx, req)
 	})
-	srv.RegisterHandler(multicast4MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast4", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*empty.Empty)
 		impl.Multicast4(ctx, req)
 	})
-	srv.RegisterHandler(quorumCallFutureMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallFuture", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -147,7 +147,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallFuture(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallFuturePerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallFuturePerNodeArg", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -157,7 +157,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallFuturePerNodeArg(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallFutureCustomReturnTypeMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallFutureCustomReturnType", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -167,7 +167,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallFutureCustomReturnType(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallFutureComboMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallFutureCombo", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -177,7 +177,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallFutureCombo(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallFuture2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallFuture2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -187,7 +187,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallFuture2(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallFutureEmptyMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallFutureEmpty", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *empty.Empty, err error) {
@@ -197,7 +197,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallFutureEmpty(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallFutureEmpty2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallFutureEmpty2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*empty.Empty)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -207,7 +207,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.QuorumCallFutureEmpty2(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Correctable", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -217,7 +217,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.Correctable(ctx, req, f)
 	})
-	srv.RegisterHandler(correctablePerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectablePerNodeArg", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -227,7 +227,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectablePerNodeArg(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableCustomReturnTypeMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableCustomReturnType", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -237,7 +237,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableCustomReturnType(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableComboMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableCombo", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -247,7 +247,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableCombo(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableEmptyMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *empty.Empty, err error) {
@@ -257,7 +257,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableEmpty(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableEmpty2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*empty.Empty)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -267,7 +267,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableEmpty2(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableStreamMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStream", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -277,7 +277,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableStream(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableStreamPerNodeArgMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamPerNodeArg", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -287,7 +287,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableStreamPerNodeArg(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableStreamCustomReturnTypeMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCustomReturnType", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -297,7 +297,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableStreamCustomReturnType(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableStreamComboMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCombo", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -307,7 +307,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableStreamCombo(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableStreamEmptyMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *empty.Empty, err error) {
@@ -317,7 +317,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableStreamEmpty(ctx, req, f)
 	})
-	srv.RegisterHandler(correctableStreamEmpty2MethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*empty.Empty)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -327,11 +327,11 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		}
 		impl.CorrectableStreamEmpty2(ctx, req, f)
 	})
-	srv.RegisterHandler(unicastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Unicast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		impl.Unicast(ctx, req)
 	})
-	srv.RegisterHandler(unicast2MethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Unicast2", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		impl.Unicast2(ctx, req)
 	})

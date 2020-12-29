@@ -14,7 +14,7 @@ type QuorumCallData struct {
 	Manager        *Manager
 	Nodes          []*Node
 	Message        protoreflect.ProtoMessage
-	MethodID       int32
+	Method         string
 	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
 	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
 }
@@ -29,7 +29,7 @@ func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoM
 
 	md := &ordering.Metadata{
 		MessageID: msgID,
-		MethodID:  d.MethodID,
+		Method:    d.Method,
 	}
 
 	expected := len(d.Nodes)

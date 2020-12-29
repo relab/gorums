@@ -18,14 +18,14 @@ import (
 type requestHandler func(context.Context, *Message, chan<- *Message)
 
 type orderingServer struct {
-	handlers map[int32]requestHandler
+	handlers map[string]requestHandler
 	opts     *serverOptions
 	ordering.UnimplementedGorumsServer
 }
 
 func newOrderingServer(opts *serverOptions) *orderingServer {
 	s := &orderingServer{
-		handlers: make(map[int32]requestHandler),
+		handlers: make(map[string]requestHandler),
 		opts:     opts,
 	}
 	return s
@@ -67,7 +67,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
-		if handler, ok := s.handlers[req.Metadata.MethodID]; ok {
+		if handler, ok := s.handlers[req.Metadata.Method]; ok {
 			handler(ctx, req, finished)
 		}
 	}
@@ -118,8 +118,8 @@ func NewServer(opts ...ServerOption) *Server {
 	return s
 }
 
-func (s *Server) RegisterHandler(methodID int32, handler requestHandler) {
-	s.srv.handlers[methodID] = handler
+func (s *Server) RegisterHandler(method string, handler requestHandler) {
+	s.srv.handlers[method] = handler
 }
 
 // Serve starts serving on the listener.

@@ -21,7 +21,7 @@ func Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 
 	md := &ordering.Metadata{
 		MessageID: msgID,
-		MethodID:  d.MethodID,
+		Method:    d.Method,
 	}
 
 	for _, n := range d.Nodes {

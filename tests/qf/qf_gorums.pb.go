@@ -84,7 +84,9 @@ func (c *Configuration) SubError() <-chan gorums.Error {
 }
 
 func init() {
-	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
 }
 
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
@@ -175,10 +177,10 @@ type QuorumSpec interface {
 func (c *Configuration) UseReq(ctx context.Context, in *Request) (resp *Response, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: useReqMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "gorums.tests.qf.QuorumFunction.UseReq",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -200,10 +202,10 @@ func (c *Configuration) UseReq(ctx context.Context, in *Request) (resp *Response
 func (c *Configuration) IgnoreReq(ctx context.Context, in *Request) (resp *Response, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: ignoreReqMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "gorums.tests.qf.QuorumFunction.IgnoreReq",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -227,7 +229,7 @@ type QuorumFunction interface {
 }
 
 func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunction) {
-	srv.RegisterHandler(useReqMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("gorums.tests.qf.QuorumFunction.UseReq", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
@@ -237,7 +239,7 @@ func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunction) {
 		}
 		impl.UseReq(ctx, req, f)
 	})
-	srv.RegisterHandler(ignoreReqMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("gorums.tests.qf.QuorumFunction.IgnoreReq", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {

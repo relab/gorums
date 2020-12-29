@@ -38,7 +38,7 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 
 	md := &ordering.Metadata{
 		MessageID: msgID,
-		MethodID:  d.MethodID,
+		Method:    d.Method,
 	}
 
 	expected := len(d.Nodes)

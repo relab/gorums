@@ -7,9 +7,10 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
-const gorumsContentType = "gorums"
+const ContentSubtype = "gorums"
 
 type gorumsMsgType uint8
 
@@ -30,29 +31,27 @@ func newGorumsMessage(msgType gorumsMsgType) *Message {
 	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
-type GorumsCodec struct {
+type Codec struct {
 	marshaler   proto.MarshalOptions
 	unmarshaler proto.UnmarshalOptions
-	methods     map[int32]MethodInfo
 }
 
-func NewGorumsCodec(methods map[int32]MethodInfo) *GorumsCodec {
-	return &GorumsCodec{
+func NewCodec() *Codec {
+	return &Codec{
 		marshaler:   proto.MarshalOptions{AllowPartial: true},
 		unmarshaler: proto.UnmarshalOptions{AllowPartial: true},
-		methods:     methods,
 	}
 }
 
-func (c GorumsCodec) Name() string {
-	return gorumsContentType
+func (c Codec) Name() string {
+	return ContentSubtype
 }
 
-func (c GorumsCodec) String() string {
-	return gorumsContentType
+func (c Codec) String() string {
+	return ContentSubtype
 }
 
-func (c GorumsCodec) Marshal(m interface{}) (b []byte, err error) {
+func (c Codec) Marshal(m interface{}) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *Message:
 		return c.gorumsMarshal(msg)
@@ -64,7 +63,7 @@ func (c GorumsCodec) Marshal(m interface{}) (b []byte, err error) {
 }
 
 // gorumsMarshal marshals a metadata and a data message into a single byte slice.
-func (c GorumsCodec) gorumsMarshal(msg *Message) (b []byte, err error) {
+func (c Codec) gorumsMarshal(msg *Message) (b []byte, err error) {
 	mdSize := c.marshaler.Size(msg.Metadata)
 	b = protowire.AppendVarint(b, uint64(mdSize))
 	b, err = c.marshaler.MarshalAppend(b, msg.Metadata)
@@ -81,7 +80,7 @@ func (c GorumsCodec) gorumsMarshal(msg *Message) (b []byte, err error) {
 	return b, nil
 }
 
-func (c GorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
+func (c Codec) Unmarshal(b []byte, m interface{}) (err error) {
 	switch msg := m.(type) {
 	case *Message:
 		return c.gorumsUnmarshal(b, msg)
@@ -93,28 +92,42 @@ func (c GorumsCodec) Unmarshal(b []byte, m interface{}) (err error) {
 }
 
 // gorumsUnmarshal unmarshals a metadata and a data message from a byte slice.
-func (c GorumsCodec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
+func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
+	// unmarshal metadata
 	mdBuf, mdLen := protowire.ConsumeBytes(b)
 	err = c.unmarshaler.Unmarshal(mdBuf, msg.Metadata)
 	if err != nil {
 		return err
 	}
-	info, ok := c.methods[msg.Metadata.MethodID]
-	if !ok {
-		return fmt.Errorf("gorumsCodec: Unknown MethodID")
-	}
-	switch msg.msgType {
-	case gorumsRequestType:
-		msg.Message = info.RequestType.New().Interface()
-	case gorumsResponseType:
-		msg.Message = info.ResponseType.New().Interface()
-	default:
-		return fmt.Errorf("gorumsCodec: Unknown message type")
-	}
-	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
-	err = c.unmarshaler.Unmarshal(msgBuf, msg.Message)
+
+	// get method descriptor from registry
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(msg.Metadata.Method))
 	if err != nil {
 		return err
 	}
-	return nil
+	methodDesc := desc.(protoreflect.MethodDescriptor)
+
+	// get message name depending on whether we are creating a request or response message
+	var messageName protoreflect.FullName
+	switch msg.msgType {
+	case gorumsRequestType:
+		messageName = methodDesc.Input().FullName()
+	case gorumsResponseType:
+		messageName = methodDesc.Output().FullName()
+	default:
+		return fmt.Errorf("gorumsCodec: Unknown message type")
+	}
+
+	// now get the message type from the types registry
+	msgType, err := protoregistry.GlobalTypes.FindMessageByName(messageName)
+	if err != nil {
+		return err
+	}
+	msg.Message = msgType.New().Interface()
+
+	// unmarshal message
+	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
+	err = c.unmarshaler.Unmarshal(msgBuf, msg.Message)
+
+	return err
 }

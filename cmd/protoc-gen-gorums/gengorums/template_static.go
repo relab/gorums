@@ -8,8 +8,8 @@ package gengorums
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
 	"fmt":                             "Errorf",
-	"github.com/relab/gorums":         "Error",
-	"google.golang.org/grpc/encoding": "RegisterCodec",
+	"github.com/relab/gorums":         "ContentSubtype",
+	"google.golang.org/grpc/encoding": "GetCodec",
 	"sort":                            "Search",
 }
 
@@ -95,7 +95,9 @@ func (c *Configuration) SubError() <-chan gorums.Error {
 }
 
 func init() {
-	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
 }
 
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {

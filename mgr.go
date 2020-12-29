@@ -46,7 +46,7 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 	}
 
 	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
-		grpc.CallContentSubtype(gorumsContentType),
+		grpc.CallContentSubtype(ContentSubtype),
 	))
 
 	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {

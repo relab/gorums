@@ -8,10 +8,10 @@ import (
 )
 
 type CallData struct {
-	Manager  *Manager
-	Node     *Node
-	Message  protoreflect.ProtoMessage
-	MethodID int32
+	Manager *Manager
+	Node    *Node
+	Message protoreflect.ProtoMessage
+	Method  string
 }
 
 func RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
@@ -24,7 +24,7 @@ func RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, e
 
 	md := &ordering.Metadata{
 		MessageID: msgID,
-		MethodID:  d.MethodID,
+		Method:    d.Method,
 	}
 
 	d.Node.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
