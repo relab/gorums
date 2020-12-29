@@ -2,6 +2,7 @@ package gengorums
 
 // Common variables used in several template functions.
 var commonVariables = `
+{{$fullName := .Method.Desc.FullName}}
 {{$method := .Method.GoName}}
 {{$in := in .GenFile .Method}}
 {{$out := out .GenFile .Method}}
@@ -48,7 +49,7 @@ var quorumCallBody = `
 		Manager:  c.mgr.Manager,
 		Nodes:    c.nodes,
 		Message:  in,
-		MethodID: {{$unexportMethod}}MethodID,
+		Method: "{{$fullName}}",
 	}
 	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
 		r := make(map[uint32]*{{$out}}, len(replies))

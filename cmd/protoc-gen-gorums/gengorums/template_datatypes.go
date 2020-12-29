@@ -1,22 +1,5 @@
 package gengorums
 
-var orderingIDs = `
-{{$methods := methods .Services}}
-{{range $index, $method := $methods}}
-const {{unexport $method.GoName}}MethodID int32 = {{$index}}
-{{- end}}
-`
-
-var orderingMethods = `
-var orderingMethods = map[int32]{{use "gorums.MethodInfo" .GenFile}}{
-	{{$genFile := .GenFile}}
-	{{$methods := methods .Services}}
-	{{range $index, $method := $methods}}
-		{{$index}}: { RequestType: new({{in $genFile $method}}).ProtoReflect(), ResponseType: new({{out $genFile $method}}).ProtoReflect() },
-	{{- end}}
-}
-`
-
 var internalOutDataType = `
 {{range $intOut, $out := mapInternalOutType .GenFile .Services}}
 type {{$intOut}} struct {
@@ -78,8 +61,6 @@ func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
 {{- end -}}
 `
 
-var datatypes = orderingIDs +
-	orderingMethods +
-	internalOutDataType +
+var datatypes = internalOutDataType +
 	futureDataType +
 	correctableDataType

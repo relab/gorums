@@ -85,7 +85,9 @@ func (c *Configuration) SubError() <-chan gorums.Error {
 }
 
 func init() {
-	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
 }
 
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
@@ -158,10 +160,10 @@ type Node struct {
 // reply and error when available.
 func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *FutureEcho {
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: asyncQuorumCallMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "benchmark.Benchmark.AsyncQuorumCall",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Echo, len(replies))
@@ -180,16 +182,16 @@ var _ empty.Empty
 
 // Multicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg) {
+func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: multicastMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "benchmark.Benchmark.Multicast",
 	}
 
-	gorums.Multicast(ctx, cd)
+	gorums.Multicast(ctx, cd, opts...)
 }
 
 // QuorumSpec is the interface of quorum functions for Benchmark.
@@ -250,10 +252,10 @@ type QuorumSpec interface {
 func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: startServerBenchmarkMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "benchmark.Benchmark.StartServerBenchmark",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*StartResponse, len(replies))
@@ -275,10 +277,10 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *Result, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: stopServerBenchmarkMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "benchmark.Benchmark.StopServerBenchmark",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Result, len(replies))
@@ -300,10 +302,10 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: startBenchmarkMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "benchmark.Benchmark.StartBenchmark",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*StartResponse, len(replies))
@@ -325,10 +327,10 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (resp *MemoryStatList, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: stopBenchmarkMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "benchmark.Benchmark.StopBenchmark",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*MemoryStat, len(replies))
@@ -349,10 +351,10 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "benchmark.Benchmark.QuorumCall",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Echo, len(replies))
@@ -374,10 +376,10 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, e
 func (c *Configuration) SlowServer(ctx context.Context, in *Echo) (resp *Echo, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: slowServerMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "benchmark.Benchmark.SlowServer",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Echo, len(replies))
@@ -407,7 +409,7 @@ type Benchmark interface {
 }
 
 func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
-	srv.RegisterHandler(startServerBenchmarkMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("benchmark.Benchmark.StartServerBenchmark", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*StartRequest)
 		once := new(sync.Once)
 		f := func(resp *StartResponse, err error) {
@@ -417,7 +419,7 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		}
 		impl.StartServerBenchmark(ctx, req, f)
 	})
-	srv.RegisterHandler(stopServerBenchmarkMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("benchmark.Benchmark.StopServerBenchmark", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*StopRequest)
 		once := new(sync.Once)
 		f := func(resp *Result, err error) {
@@ -427,7 +429,7 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		}
 		impl.StopServerBenchmark(ctx, req, f)
 	})
-	srv.RegisterHandler(startBenchmarkMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("benchmark.Benchmark.StartBenchmark", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*StartRequest)
 		once := new(sync.Once)
 		f := func(resp *StartResponse, err error) {
@@ -437,7 +439,7 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		}
 		impl.StartBenchmark(ctx, req, f)
 	})
-	srv.RegisterHandler(stopBenchmarkMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("benchmark.Benchmark.StopBenchmark", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*StopRequest)
 		once := new(sync.Once)
 		f := func(resp *MemoryStat, err error) {
@@ -447,7 +449,7 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		}
 		impl.StopBenchmark(ctx, req, f)
 	})
-	srv.RegisterHandler(quorumCallMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Echo)
 		once := new(sync.Once)
 		f := func(resp *Echo, err error) {
@@ -457,7 +459,7 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		}
 		impl.QuorumCall(ctx, req, f)
 	})
-	srv.RegisterHandler(asyncQuorumCallMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("benchmark.Benchmark.AsyncQuorumCall", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Echo)
 		once := new(sync.Once)
 		f := func(resp *Echo, err error) {
@@ -467,7 +469,7 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		}
 		impl.AsyncQuorumCall(ctx, req, f)
 	})
-	srv.RegisterHandler(slowServerMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("benchmark.Benchmark.SlowServer", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Echo)
 		once := new(sync.Once)
 		f := func(resp *Echo, err error) {
@@ -477,31 +479,10 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		}
 		impl.SlowServer(ctx, req, f)
 	})
-	srv.RegisterHandler(multicastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("benchmark.Benchmark.Multicast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*TimedMsg)
 		impl.Multicast(ctx, req)
 	})
-}
-
-const startServerBenchmarkMethodID int32 = 0
-const stopServerBenchmarkMethodID int32 = 1
-const startBenchmarkMethodID int32 = 2
-const stopBenchmarkMethodID int32 = 3
-const quorumCallMethodID int32 = 4
-const asyncQuorumCallMethodID int32 = 5
-const slowServerMethodID int32 = 6
-const multicastMethodID int32 = 7
-
-var orderingMethods = map[int32]gorums.MethodInfo{
-
-	0: {RequestType: new(StartRequest).ProtoReflect(), ResponseType: new(StartResponse).ProtoReflect()},
-	1: {RequestType: new(StopRequest).ProtoReflect(), ResponseType: new(Result).ProtoReflect()},
-	2: {RequestType: new(StartRequest).ProtoReflect(), ResponseType: new(StartResponse).ProtoReflect()},
-	3: {RequestType: new(StopRequest).ProtoReflect(), ResponseType: new(MemoryStat).ProtoReflect()},
-	4: {RequestType: new(Echo).ProtoReflect(), ResponseType: new(Echo).ProtoReflect()},
-	5: {RequestType: new(Echo).ProtoReflect(), ResponseType: new(Echo).ProtoReflect()},
-	6: {RequestType: new(Echo).ProtoReflect(), ResponseType: new(Echo).ProtoReflect()},
-	7: {RequestType: new(TimedMsg).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalEcho struct {

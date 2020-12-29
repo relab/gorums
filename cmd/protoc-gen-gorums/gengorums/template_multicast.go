@@ -26,7 +26,7 @@ var multicastBody = `
 		Manager:  c.mgr.Manager,
 		Nodes:    c.nodes,
 		Message:  in,
-		MethodID: {{$unexportMethod}}MethodID,
+		Method: "{{$fullName}}",
 	}
 {{- if hasPerNodeArg .Method}}
 {{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}

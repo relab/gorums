@@ -17,7 +17,7 @@ var rpcBody = `
 		Manager:  n.mgr.Manager,
 		Node:     n.Node,
 		Message:  in,
-		MethodID: {{$unexportMethod}}MethodID,
+		Method: "{{$fullName}}",
 	}
 {{- if hasPerNodeArg .Method}}
 	{{$protoMessage := use "protoreflect.ProtoMessage" $genFile}}

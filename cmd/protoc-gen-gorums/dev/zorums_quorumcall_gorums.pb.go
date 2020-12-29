@@ -13,10 +13,10 @@ import (
 func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Response, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCall",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -37,10 +37,10 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Resp
 func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallPerNodeArgMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallPerNodeArg",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -64,10 +64,10 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallCustomReturnTypeMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallCustomReturnType",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -88,10 +88,10 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *MyResponse, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallComboMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallCombo",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -115,10 +115,10 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty) (resp *Response, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallEmptyMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallEmpty",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -139,10 +139,10 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *empty.Empty) (r
 func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp *empty.Empty, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: quorumCallEmpty2MethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "dev.ZorumsService.QuorumCallEmpty2",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*empty.Empty, len(replies))
