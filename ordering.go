@@ -16,11 +16,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type MethodInfo struct {
-	RequestType  protoreflect.Message
-	ResponseType protoreflect.Message
-}
-
 type gorumsStreamRequest struct {
 	ctx  context.Context
 	msg  *Message
