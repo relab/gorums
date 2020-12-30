@@ -251,15 +251,6 @@ func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunction) {
 	})
 }
 
-const useReqMethodID int32 = 0
-const ignoreReqMethodID int32 = 1
-
-var orderingMethods = map[int32]gorums.MethodInfo{
-
-	0: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-	1: {RequestType: new(Request).ProtoReflect(), ResponseType: new(Response).ProtoReflect()},
-}
-
 type internalResponse struct {
 	nid   uint32
 	reply *Response
