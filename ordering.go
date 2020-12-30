@@ -155,7 +155,7 @@ func (s *orderedNodeStream) sendMsgs() {
 
 func (s *orderedNodeStream) recvMsgs() {
 	for {
-		resp := newGorumsMessage(gorumsResponseType)
+		resp := newMessage(responseType)
 		s.streamMut.RLock()
 		err := s.gorumsStream.RecvMsg(resp)
 		if err != nil {

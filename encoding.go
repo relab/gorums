@@ -15,8 +15,8 @@ const ContentSubtype = "gorums"
 type gorumsMsgType uint8
 
 const (
-	gorumsRequestType gorumsMsgType = iota + 1
-	gorumsResponseType
+	requestType gorumsMsgType = iota + 1
+	responseType
 )
 
 type Message struct {
@@ -25,9 +25,9 @@ type Message struct {
 	msgType  gorumsMsgType
 }
 
-// newGorumsMessage creates a new gorumsMessage struct for unmarshaling.
+// newMessage creates a new gorumsMessage struct for unmarshaling.
 // msgType specifies the type of message that should be unmarshaled.
-func newGorumsMessage(msgType gorumsMsgType) *Message {
+func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
@@ -110,9 +110,9 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	// get message name depending on whether we are creating a request or response message
 	var messageName protoreflect.FullName
 	switch msg.msgType {
-	case gorumsRequestType:
+	case requestType:
 		messageName = methodDesc.Input().FullName()
-	case gorumsResponseType:
+	case responseType:
 		messageName = methodDesc.Output().FullName()
 	default:
 		return fmt.Errorf("gorumsCodec: Unknown message type")
