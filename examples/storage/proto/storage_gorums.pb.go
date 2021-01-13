@@ -5,10 +5,10 @@ package proto
 import (
 	context "context"
 	fmt "fmt"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	sort "sort"
 	sync "sync"
 )
@@ -85,7 +85,9 @@ func (c *Configuration) SubError() <-chan gorums.Error {
 }
 
 func init() {
-	encoding.RegisterCodec(gorums.NewGorumsCodec(orderingMethods))
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
 }
 
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
@@ -154,17 +156,17 @@ type Node struct {
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
-var _ empty.Empty
+var _ emptypb.Empty
 
 // WriteMulticast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: writeMulticastMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "storage.Storage.WriteMulticast",
 	}
 
 	gorums.Multicast(ctx, cd, opts...)
@@ -193,10 +195,10 @@ type QuorumSpec interface {
 func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: readQCMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "storage.Storage.ReadQC",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*ReadResponse, len(replies))
@@ -218,10 +220,10 @@ func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) (resp *Read
 func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error) {
 
 	cd := gorums.QuorumCallData{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
-		Message:  in,
-		MethodID: writeQCMethodID,
+		Manager: c.mgr.Manager,
+		Nodes:   c.nodes,
+		Message: in,
+		Method:  "storage.Storage.WriteQC",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*WriteResponse, len(replies))
@@ -242,10 +244,10 @@ func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) (resp *Wr
 func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error) {
 
 	cd := gorums.CallData{
-		Manager:  n.mgr.Manager,
-		Node:     n.Node,
-		Message:  in,
-		MethodID: readRPCMethodID,
+		Manager: n.mgr.Manager,
+		Node:    n.Node,
+		Message: in,
+		Method:  "storage.Storage.ReadRPC",
 	}
 
 	res, err := gorums.RPCCall(ctx, cd)
@@ -259,10 +261,10 @@ func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse
 func (n *Node) WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error) {
 
 	cd := gorums.CallData{
-		Manager:  n.mgr.Manager,
-		Node:     n.Node,
-		Message:  in,
-		MethodID: writeRPCMethodID,
+		Manager: n.mgr.Manager,
+		Node:    n.Node,
+		Message: in,
+		Method:  "storage.Storage.WriteRPC",
 	}
 
 	res, err := gorums.RPCCall(ctx, cd)
@@ -282,7 +284,7 @@ type Storage interface {
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl Storage) {
-	srv.RegisterHandler(readRPCMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.ReadRPC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*ReadRequest)
 		once := new(sync.Once)
 		f := func(resp *ReadResponse, err error) {
@@ -292,7 +294,7 @@ func RegisterStorageServer(srv *gorums.Server, impl Storage) {
 		}
 		impl.ReadRPC(ctx, req, f)
 	})
-	srv.RegisterHandler(writeRPCMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.WriteRPC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*WriteRequest)
 		once := new(sync.Once)
 		f := func(resp *WriteResponse, err error) {
@@ -302,7 +304,7 @@ func RegisterStorageServer(srv *gorums.Server, impl Storage) {
 		}
 		impl.WriteRPC(ctx, req, f)
 	})
-	srv.RegisterHandler(readQCMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.ReadQC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*ReadRequest)
 		once := new(sync.Once)
 		f := func(resp *ReadResponse, err error) {
@@ -312,7 +314,7 @@ func RegisterStorageServer(srv *gorums.Server, impl Storage) {
 		}
 		impl.ReadQC(ctx, req, f)
 	})
-	srv.RegisterHandler(writeQCMethodID, func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.WriteQC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*WriteRequest)
 		once := new(sync.Once)
 		f := func(resp *WriteResponse, err error) {
@@ -322,25 +324,10 @@ func RegisterStorageServer(srv *gorums.Server, impl Storage) {
 		}
 		impl.WriteQC(ctx, req, f)
 	})
-	srv.RegisterHandler(writeMulticastMethodID, func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.WriteMulticast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*WriteRequest)
 		impl.WriteMulticast(ctx, req)
 	})
-}
-
-const readRPCMethodID int32 = 0
-const writeRPCMethodID int32 = 1
-const readQCMethodID int32 = 2
-const writeQCMethodID int32 = 3
-const writeMulticastMethodID int32 = 4
-
-var orderingMethods = map[int32]gorums.MethodInfo{
-
-	0: {RequestType: new(ReadRequest).ProtoReflect(), ResponseType: new(ReadResponse).ProtoReflect()},
-	1: {RequestType: new(WriteRequest).ProtoReflect(), ResponseType: new(WriteResponse).ProtoReflect()},
-	2: {RequestType: new(ReadRequest).ProtoReflect(), ResponseType: new(ReadResponse).ProtoReflect()},
-	3: {RequestType: new(WriteRequest).ProtoReflect(), ResponseType: new(WriteResponse).ProtoReflect()},
-	4: {RequestType: new(WriteRequest).ProtoReflect(), ResponseType: new(empty.Empty).ProtoReflect()},
 }
 
 type internalReadResponse struct {

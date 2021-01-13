@@ -4,9 +4,9 @@ package dev
 
 import (
 	context "context"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // Correctable plain.
@@ -109,9 +109,9 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *Corr
 		ServerStream: false,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*empty.Empty, len(replies))
+		r := make(map[uint32]*emptypb.Empty, len(replies))
 		for k, v := range replies {
-			r[k] = v.(*empty.Empty)
+			r[k] = v.(*emptypb.Empty)
 		}
 		return c.qspec.CorrectableEmptyQF(req.(*Request), r)
 	}
@@ -122,7 +122,7 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *Corr
 
 // CorrectableEmpty2 for testing imported message type; with same return
 // type as Correctable: Response.
-func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *empty.Empty) *CorrectableResponse {
+func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
@@ -135,7 +135,7 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *empty.Empty) 
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		return c.qspec.CorrectableEmpty2QF(req.(*empty.Empty), r)
+		return c.qspec.CorrectableEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
 	corr := gorums.CorrectableCall(ctx, cd)
@@ -242,9 +242,9 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request)
 		ServerStream: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*empty.Empty, len(replies))
+		r := make(map[uint32]*emptypb.Empty, len(replies))
 		for k, v := range replies {
-			r[k] = v.(*empty.Empty)
+			r[k] = v.(*emptypb.Empty)
 		}
 		return c.qspec.CorrectableStreamEmptyQF(req.(*Request), r)
 	}
@@ -255,7 +255,7 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request)
 
 // CorrectableEmpty2 for testing imported message type; with same return
 // type as Correctable: Response.
-func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *empty.Empty) *CorrectableStreamResponse {
+func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
 		Nodes:        c.nodes,
@@ -268,7 +268,7 @@ func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *empty.E
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		return c.qspec.CorrectableStreamEmpty2QF(req.(*empty.Empty), r)
+		return c.qspec.CorrectableStreamEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
 	corr := gorums.CorrectableCall(ctx, cd)

@@ -4,9 +4,9 @@ package dev
 
 import (
 	context "context"
-	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // QuorumCallFuture plain.
@@ -124,9 +124,9 @@ func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request) 
 		Method:  "dev.ZorumsService.QuorumCallFutureEmpty",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*empty.Empty, len(replies))
+		r := make(map[uint32]*emptypb.Empty, len(replies))
 		for k, v := range replies {
-			r[k] = v.(*empty.Empty)
+			r[k] = v.(*emptypb.Empty)
 		}
 		return c.qspec.QuorumCallFutureEmptyQF(req.(*Request), r)
 	}
@@ -137,7 +137,7 @@ func (c *Configuration) QuorumCallFutureEmpty(ctx context.Context, in *Request) 
 
 // QuorumCallFutureEmpty2 for testing imported message type; with same return
 // type as QuorumCallFuture: Response.
-func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Empty) *FutureResponse {
+func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *emptypb.Empty) *FutureResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -149,7 +149,7 @@ func (c *Configuration) QuorumCallFutureEmpty2(ctx context.Context, in *empty.Em
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		return c.qspec.QuorumCallFutureEmpty2QF(req.(*empty.Empty), r)
+		return c.qspec.QuorumCallFutureEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
 	fut := gorums.FutureCall(ctx, cd)
