@@ -25,8 +25,8 @@ type Message struct {
 	msgType  gorumsMsgType
 }
 
-// newMessage creates a new gorumsMessage struct for unmarshaling.
-// msgType specifies the type of message that should be unmarshaled.
+// newMessage creates a new Message struct for unmarshaling.
+// msgType specifies the message type to be unmarshaled.
 func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
 }
@@ -91,7 +91,7 @@ func (c Codec) Unmarshal(b []byte, m interface{}) (err error) {
 	}
 }
 
-// gorumsUnmarshal unmarshals a metadata and a data message from a byte slice.
+// gorumsUnmarshal extracts metadata and message data from b and places the result in msg.
 func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	// unmarshal metadata
 	mdBuf, mdLen := protowire.ConsumeBytes(b)
