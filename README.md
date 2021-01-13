@@ -60,3 +60,10 @@ implemented using Gorums can be found
 [1] Tormod Erevik Lea, Leander Jehl, and Hein Meling.
     _Towards New Abstractions for Implementing Quorum-based Systems._
     In 37th International Conference on Distributed Computing Systems (ICDCS), Jun 2017.
+
+## Authors
+
+* Hein Meling
+* John Ingve Olsen
+* Tormod Erevik Lea
+* Leander Jehl
