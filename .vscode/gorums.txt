@@ -12,6 +12,7 @@ Lmsgprefix
 Mallocs
 Meling
 Paxos
+Pedersen
 QCQF
 RPC's
 RPCs
@@ -58,4 +59,5 @@ timestamppb
 tmpl
 unexport
 unicast
+unmarshaling
 userguide
