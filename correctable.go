@@ -8,6 +8,10 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// LevelNotSet is the zero value level used to indicate that no level (and
+// thereby no reply) has been set for a correctable quorum call.
+const LevelNotSet = -1
+
 type watcher struct {
 	level int
 	ch    chan struct{}
