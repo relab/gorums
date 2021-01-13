@@ -1,7 +1,7 @@
 # Tests that should be run each time
-RUNTESTS := ordering metadata tls unresponsive
+RUNTESTS := qf ordering metadata tls unresponsive
 
-.PHONY: all runtests qf order metadata tls unresponsive
+.PHONY: all qf ordering metadata tls unresponsive
 
 all: $(RUNTESTS)
 
@@ -25,7 +25,4 @@ unresponsive: unresponsive/unresponsive.pb.go unresponsive/unresponsive_gorums.p
 	@protoc -I=..:. --gorums_out=paths=source_relative:. $<
 
 clean:
-	rm metadata/metadata.pb.go metadata/metadata_gorums.pb.go
-	rm ordering/order.pb.go ordering/order_gorums.pb.go
-	rm tls/tls.pb.go tls/tls_gorums.pb.go
-	rm qf/qf.pb.go qf/qf_grpc.pb.go qf/qf_gorums.pb.go
+	find . -name '*.pb.go' -exec rm {} \;
