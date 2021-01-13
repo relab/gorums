@@ -23,6 +23,7 @@ bootstrapgorums
 calltypes
 clevel
 cpuprofile
+descriptorpb
 devguide
 donech
 emptypb
