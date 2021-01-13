@@ -9,7 +9,7 @@ import "gorums.proto";
 service GorumsTest {
   rpc QC(Request) returns (Response) { option (gorums.quorumcall) = true; }
 
-  rpc QCFuture(Request) returns (Response) {
+  rpc QCAsync(Request) returns (Response) {
     option (gorums.quorumcall) = true;
     option (gorums.async) = true;
   }

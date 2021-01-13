@@ -10,7 +10,7 @@ import (
 )
 
 // QuorumCallAsync plain.
-func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request) *FutureResponse {
+func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request) *AsyncResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -25,12 +25,12 @@ func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request) *Futur
 		return c.qspec.QuorumCallAsyncQF(req.(*Request), r)
 	}
 
-	fut := gorums.FutureCall(ctx, cd)
-	return &FutureResponse{fut}
+	fut := gorums.AsyncCall(ctx, cd)
+	return &AsyncResponse{fut}
 }
 
 // QuorumCallAsyncPerNodeArg with per_node_arg option.
-func (c *Configuration) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *FutureResponse {
+func (c *Configuration) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *AsyncResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -48,12 +48,12 @@ func (c *Configuration) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Reque
 		return f(req.(*Request), nid)
 	}
 
-	fut := gorums.FutureCall(ctx, cd)
-	return &FutureResponse{fut}
+	fut := gorums.AsyncCall(ctx, cd)
+	return &AsyncResponse{fut}
 }
 
 // QuorumCallAsyncCustomReturnType with custom_return_type option.
-func (c *Configuration) QuorumCallAsyncCustomReturnType(ctx context.Context, in *Request) *FutureMyResponse {
+func (c *Configuration) QuorumCallAsyncCustomReturnType(ctx context.Context, in *Request) *AsyncMyResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -68,12 +68,12 @@ func (c *Configuration) QuorumCallAsyncCustomReturnType(ctx context.Context, in 
 		return c.qspec.QuorumCallAsyncCustomReturnTypeQF(req.(*Request), r)
 	}
 
-	fut := gorums.FutureCall(ctx, cd)
-	return &FutureMyResponse{fut}
+	fut := gorums.AsyncCall(ctx, cd)
+	return &AsyncMyResponse{fut}
 }
 
 // QuorumCallAsyncCombo with all supported options.
-func (c *Configuration) QuorumCallAsyncCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *FutureMyResponse {
+func (c *Configuration) QuorumCallAsyncCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *AsyncMyResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -91,12 +91,12 @@ func (c *Configuration) QuorumCallAsyncCombo(ctx context.Context, in *Request, f
 		return f(req.(*Request), nid)
 	}
 
-	fut := gorums.FutureCall(ctx, cd)
-	return &FutureMyResponse{fut}
+	fut := gorums.AsyncCall(ctx, cd)
+	return &AsyncMyResponse{fut}
 }
 
 // QuorumCallAsync2 plain; with same return type: Response.
-func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request) *FutureResponse {
+func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request) *AsyncResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -111,12 +111,12 @@ func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request) *Futu
 		return c.qspec.QuorumCallAsync2QF(req.(*Request), r)
 	}
 
-	fut := gorums.FutureCall(ctx, cd)
-	return &FutureResponse{fut}
+	fut := gorums.AsyncCall(ctx, cd)
+	return &AsyncResponse{fut}
 }
 
 // QuorumCallAsyncEmpty for testing imported message type.
-func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *FutureEmpty {
+func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *AsyncEmpty {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -131,13 +131,13 @@ func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *
 		return c.qspec.QuorumCallAsyncEmptyQF(req.(*Request), r)
 	}
 
-	fut := gorums.FutureCall(ctx, cd)
-	return &FutureEmpty{fut}
+	fut := gorums.AsyncCall(ctx, cd)
+	return &AsyncEmpty{fut}
 }
 
 // QuorumCallAsyncEmpty2 for testing imported message type; with same return
 // type as QuorumCallAsync: Response.
-func (c *Configuration) QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) *FutureResponse {
+func (c *Configuration) QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) *AsyncResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -152,6 +152,6 @@ func (c *Configuration) QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.E
 		return c.qspec.QuorumCallAsyncEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
-	fut := gorums.FutureCall(ctx, cd)
-	return &FutureResponse{fut}
+	fut := gorums.AsyncCall(ctx, cd)
+	return &AsyncResponse{fut}
 }
