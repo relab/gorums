@@ -51,6 +51,7 @@ quorumcall
 relab
 rlevel
 shlex
+syncrq
 testprotos
 timestamppb
 tmpl

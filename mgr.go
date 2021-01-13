@@ -34,7 +34,6 @@ type Manager struct {
 // This function is meant for internal Gorums use. You should use the `NewManager`
 // function in the generated code instead.
 func NewManager(opts ...ManagerOption) (*Manager, error) {
-
 	m := &Manager{
 		lookup:       make(map[uint32]*Node),
 		receiveQueue: newReceiveQueue(),
