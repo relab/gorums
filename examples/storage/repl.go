@@ -13,7 +13,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/shlex"
 	"github.com/relab/gorums/examples/storage/proto"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 var help = `
@@ -27,7 +27,7 @@ exit 	                        	Exit the program
 nodes	                        	Print a list of the available nodes
 rpc  	[node index] [operation]	Executes an RPC on the given node.
 qc   	[operation]             	Executes a quorum call on all nodes.
-cfg  	[config] [opertation]   	Executes a quorum call on a configuration.
+cfg  	[config] [operation]   		Executes a quorum call on a configuration.
 
 The following operations are supported:
 
@@ -43,7 +43,7 @@ The command performs the 'write' RPC on node 0, and sets 'foo' = 'bar'
 The command performs the 'read' quorum call, and returns the value of 'foo'
 
 > cfg 1:3 write foo bar
-The command performs the write qourum call on node 1 and 2
+The command performs the write quorum call on node 1 and 2
 
 > cfg 0,2 write foo 'bar baz'
 The command performs the write quorum call on node 0 and 2
@@ -52,35 +52,32 @@ The command performs the write quorum call on node 0 and 2
 type repl struct {
 	mgr  *proto.Manager
 	cfg  *proto.Configuration
-	term *terminal.Terminal
+	term *term.Terminal
 }
 
 func newRepl(mgr *proto.Manager, cfg *proto.Configuration) *repl {
 	return &repl{
 		mgr: mgr,
 		cfg: cfg,
-		term: terminal.NewTerminal(struct {
+		term: term.NewTerminal(struct {
 			io.Reader
 			io.Writer
 		}{os.Stdin, os.Stderr}, "> "),
 	}
 }
 
-// NOTE: x/crypto/ssh/terminal is moving to x/terminal at some point.
-// See: https://github.com/golang/go/issues/31044 and https://github.com/golang/term
+// ReadLine reads a line from the terminal in raw mode.
 //
 // FIXME: ReadLine currently does not work with arrow keys on windows for some reason
 // See: https://stackoverflow.com/questions/58237670/terminal-raw-mode-does-not-support-arrows-on-windows
-//
-// ReadLine reads a line from the terminal in raw mode
 func (r repl) ReadLine() (string, error) {
 	fd := int(os.Stdin.Fd())
-	oldState, err := terminal.MakeRaw(fd)
+	oldState, err := term.MakeRaw(fd)
 	if err != nil {
 		panic(err)
 	}
 	defer func() {
-		err := terminal.Restore(fd, oldState)
+		err := term.Restore(fd, oldState)
 		if err != nil {
 			panic(err)
 		}

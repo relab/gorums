@@ -48,6 +48,7 @@ qspec
 quorumcall
 relab
 rlevel
+shlex
 testprotos
 timestamppb
 tmpl
