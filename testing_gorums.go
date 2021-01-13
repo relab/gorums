@@ -10,12 +10,10 @@ type server interface {
 	Stop()
 }
 
-// Package testing provide a public API for setting up Gorums.
-// This package can be used by other packages, such as Raft and HotStuff.
-
 // TestSetup starts numServers gRPC servers using the given registration
 // function, and returns the server addresses along with a stop function
 // that should be called to shut down the test.
+// This function can be used by other packages for testing purposes.
 func TestSetup(t testing.TB, numServers int, srvFunc func() interface{}) ([]string, func()) {
 	t.Helper()
 	servers := make([]server, numServers)
