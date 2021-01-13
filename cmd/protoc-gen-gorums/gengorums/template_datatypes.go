@@ -11,21 +11,21 @@ type {{$intOut}} struct {
 `
 
 // This struct and API functions are generated only once per return type
-// for a future call type. That is, if multiple future calls use the same
+// for a async call type. That is, if multiple async calls use the same
 // return type, this struct and associated methods are only generated once.
-var futureDataType = `
-{{$future := use "gorums.Future" .GenFile}}
-{{range $futureOut, $customOut := mapFutureOutType .GenFile .Services}}
+var asyncDataType = `
+{{$async := use "gorums.Async" .GenFile}}
+{{range $asyncOut, $customOut := mapAsyncOutType .GenFile .Services}}
 {{$customOutField := field $customOut}}
-// {{$futureOut}} is a future object for processing replies.
-type {{$futureOut}} struct {
-	*{{$future}}
+// {{$asyncOut}} is a async object for processing replies.
+type {{$asyncOut}} struct {
+	*{{$async}}
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *{{$futureOut}}) Get() (*{{$customOut}}, error) {
-	resp, err := f.Future.Get()
+func (f *{{$asyncOut}}) Get() (*{{$customOut}}, error) {
+	resp, err := f.Async.Get()
 	if err != nil {
 		return nil, err
 	}
@@ -62,5 +62,5 @@ func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
 `
 
 var datatypes = internalOutDataType +
-	futureDataType +
+	asyncDataType +
 	correctableDataType

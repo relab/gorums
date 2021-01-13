@@ -227,8 +227,8 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	callTypeName(gorums.E_Async): {
 		extInfo:   gorums.E_Async,
 		docName:   "asynchronous quorum",
-		template:  futureCall,
-		outPrefix: "Future",
+		template:  asyncCall,
+		outPrefix: "Async",
 		chkFn: func(m *protogen.Method) bool {
 			return hasAllMethodOption(m, gorums.E_Quorumcall, gorums.E_Async) && !hasMethodOption(m, gorums.E_Ordered)
 		},
@@ -297,7 +297,7 @@ var callTypesWithInternal = []*protoimpl.ExtensionInfo{
 }
 
 // callTypesWithPromiseObject lists all call types that returns
-// a promise (future or correctable) object.
+// a promise (async or correctable) object.
 var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 	gorums.E_Async,
 	gorums.E_Correctable,

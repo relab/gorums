@@ -32,7 +32,7 @@ func (s *testSrv) QC(_ context.Context, req *Request, out func(*Response, error)
 	}, nil)
 }
 
-func (s *testSrv) QCFuture(_ context.Context, req *Request, out func(*Response, error)) {
+func (s *testSrv) QCAsync(_ context.Context, req *Request, out func(*Response, error)) {
 	out(&Response{
 		InOrder: s.isInOrder(req.GetNum()),
 	}, nil)
@@ -69,7 +69,7 @@ func (q testQSpec) QCQF(_ *Request, replies map[uint32]*Response) (*Response, bo
 	return q.qf(replies)
 }
 
-func (q testQSpec) QCFutureQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
+func (q testQSpec) QCAsyncQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
 	return q.qf(replies)
 }
 
@@ -148,7 +148,7 @@ func TestQCOrdering(t *testing.T) {
 	}
 }
 
-func TestQCFutureOrdering(t *testing.T) {
+func TestQCAsyncOrdering(t *testing.T) {
 	defer leakcheck.Check(t)
 	cfg, teardown := setup(t, 4)
 	defer teardown()
@@ -159,9 +159,9 @@ func TestQCFutureOrdering(t *testing.T) {
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		promise := cfg.QCFuture(ctx, &Request{Num: uint64(i)})
+		promise := cfg.QCAsync(ctx, &Request{Num: uint64(i)})
 		wg.Add(1)
-		go func(promise *FutureResponse) {
+		go func(promise *AsyncResponse) {
 			defer wg.Done()
 			resp, err := promise.Get()
 			if err != nil {

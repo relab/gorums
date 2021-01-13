@@ -7,7 +7,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type Future struct {
+type Async struct {
 	reply protoreflect.ProtoMessage
 	err   error
 	c     chan struct{}
@@ -15,13 +15,13 @@ type Future struct {
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *Future) Get() (protoreflect.ProtoMessage, error) {
+func (f *Async) Get() (protoreflect.ProtoMessage, error) {
 	<-f.c
 	return f.reply, f.err
 }
 
 // Done reports if a reply and/or error is available for the called method.
-func (f *Future) Done() bool {
+func (f *Async) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -30,7 +30,7 @@ func (f *Future) Done() bool {
 	}
 }
 
-func FutureCall(ctx context.Context, d QuorumCallData) *Future {
+func AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 	msgID := d.Manager.nextMsgID()
 	// set up channel to collect replies to this call.
 	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
@@ -54,7 +54,7 @@ func FutureCall(ctx context.Context, d QuorumCallData) *Future {
 		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
-	fut := &Future{c: make(chan struct{}, 1)}
+	fut := &Async{c: make(chan struct{}, 1)}
 
 	go func() {
 		defer d.Manager.deleteChan(msgID)
