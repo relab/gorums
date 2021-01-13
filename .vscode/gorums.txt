@@ -8,6 +8,7 @@ ICDCS
 Idxs
 Ingve
 Jehl
+Lmsgprefix
 Mallocs
 Meling
 Paxos
@@ -36,6 +37,7 @@ gorumsexample
 grpc
 installgorums
 markdownlint
+mcast
 memprofile
 multicast
 proto

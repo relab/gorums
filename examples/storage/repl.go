@@ -22,12 +22,13 @@ Servers interactively. Take a look at the files 'client.go' and 'server.go'
 for the source code of the RPC handlers and quorum functions.
 The following commands can be used:
 
-help 	                        	Show this text
-exit 	                        	Exit the program
-nodes	                        	Print a list of the available nodes
-rpc  	[node index] [operation]	Executes an RPC on the given node.
-qc   	[operation]             	Executes a quorum call on all nodes.
-cfg  	[config] [operation]   		Executes a quorum call on a configuration.
+help                            Show this text
+exit                            Exit the program
+nodes                           Print a list of the available nodes
+rpc   [node index] [operation]	Executes an RPC on the given node.
+qc    [operation]             	Executes a quorum call on all nodes.
+mcast [key] [value]             Executes a multicast write call on all nodes.
+cfg   [config] [operation]   	Executes a quorum call on a configuration.
 
 The following operations are supported:
 
@@ -123,6 +124,8 @@ func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
 			r.qc(args[1:])
 		case "cfg":
 			r.qcCfg(args[1:])
+		case "mcast":
+			fallthrough
 		case "multicast":
 			r.multicast(args[1:])
 		case "nodes":
@@ -172,6 +175,7 @@ func (r repl) multicast(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	r.cfg.WriteMulticast(ctx, &proto.WriteRequest{Key: args[0], Value: args[1]})
 	cancel()
+	fmt.Println("Multicast OK: (server output not synchronized)")
 }
 
 func (r repl) qc(args []string) {
