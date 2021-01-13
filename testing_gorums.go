@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-type server interface {
+type ServerIface interface {
 	Serve(net.Listener) error
 	Stop()
 }
@@ -14,16 +14,12 @@ type server interface {
 // function, and returns the server addresses along with a stop function
 // that should be called to shut down the test.
 // This function can be used by other packages for testing purposes.
-func TestSetup(t testing.TB, numServers int, srvFunc func() interface{}) ([]string, func()) {
+func TestSetup(t testing.TB, numServers int, srvFn func() ServerIface) ([]string, func()) {
 	t.Helper()
-	servers := make([]server, numServers)
+	servers := make([]ServerIface, numServers)
 	addrs := make([]string, numServers)
 	for i := 0; i < numServers; i++ {
-		var srv server
-		var ok bool
-		if srv, ok = srvFunc().(server); !ok {
-			t.Fatal("Incompatible server type. You should use a GorumsServer or grpc.Server")
-		}
+		srv := srvFn()
 		// listen on any available port
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
