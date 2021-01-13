@@ -51,54 +51,54 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Request'.
 	QuorumCallEmpty2QF(in *Request, replies map[uint32]*emptypb.Empty) (*emptypb.Empty, bool)
 
-	// QuorumCallFutureQF is the quorum function for the QuorumCallFuture
+	// QuorumCallAsyncQF is the quorum function for the QuorumCallAsync
 	// asynchronous quorum call method. The in parameter is the request object
-	// supplied to the QuorumCallFuture method at call time, and may or may not
+	// supplied to the QuorumCallAsync method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureQF(in *Request, replies map[uint32]*Response) (*Response, bool)
+	QuorumCallAsyncQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
-	// QuorumCallFuturePerNodeArgQF is the quorum function for the QuorumCallFuturePerNodeArg
+	// QuorumCallAsyncPerNodeArgQF is the quorum function for the QuorumCallAsyncPerNodeArg
 	// asynchronous quorum call method. The in parameter is the request object
-	// supplied to the QuorumCallFuturePerNodeArg method at call time, and may or may not
+	// supplied to the QuorumCallAsyncPerNodeArg method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFuturePerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
+	QuorumCallAsyncPerNodeArgQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
-	// QuorumCallFutureCustomReturnTypeQF is the quorum function for the QuorumCallFutureCustomReturnType
+	// QuorumCallAsyncCustomReturnTypeQF is the quorum function for the QuorumCallAsyncCustomReturnType
 	// asynchronous quorum call method. The in parameter is the request object
-	// supplied to the QuorumCallFutureCustomReturnType method at call time, and may or may not
+	// supplied to the QuorumCallAsyncCustomReturnType method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
+	QuorumCallAsyncCustomReturnTypeQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
-	// QuorumCallFutureComboQF is the quorum function for the QuorumCallFutureCombo
+	// QuorumCallAsyncComboQF is the quorum function for the QuorumCallAsyncCombo
 	// asynchronous quorum call method. The in parameter is the request object
-	// supplied to the QuorumCallFutureCombo method at call time, and may or may not
+	// supplied to the QuorumCallAsyncCombo method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
+	QuorumCallAsyncComboQF(in *Request, replies map[uint32]*Response) (*MyResponse, bool)
 
-	// QuorumCallFuture2QF is the quorum function for the QuorumCallFuture2
+	// QuorumCallAsync2QF is the quorum function for the QuorumCallAsync2
 	// asynchronous quorum call method. The in parameter is the request object
-	// supplied to the QuorumCallFuture2 method at call time, and may or may not
+	// supplied to the QuorumCallAsync2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFuture2QF(in *Request, replies map[uint32]*Response) (*Response, bool)
+	QuorumCallAsync2QF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
-	// QuorumCallFutureEmptyQF is the quorum function for the QuorumCallFutureEmpty
+	// QuorumCallAsyncEmptyQF is the quorum function for the QuorumCallAsyncEmpty
 	// asynchronous quorum call method. The in parameter is the request object
-	// supplied to the QuorumCallFutureEmpty method at call time, and may or may not
+	// supplied to the QuorumCallAsyncEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	QuorumCallFutureEmptyQF(in *Request, replies map[uint32]*emptypb.Empty) (*emptypb.Empty, bool)
+	QuorumCallAsyncEmptyQF(in *Request, replies map[uint32]*emptypb.Empty) (*emptypb.Empty, bool)
 
-	// QuorumCallFutureEmpty2QF is the quorum function for the QuorumCallFutureEmpty2
+	// QuorumCallAsyncEmpty2QF is the quorum function for the QuorumCallAsyncEmpty2
 	// asynchronous quorum call method. The in parameter is the request object
-	// supplied to the QuorumCallFutureEmpty2 method at call time, and may or may not
+	// supplied to the QuorumCallAsyncEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *emptypb.Empty'.
-	QuorumCallFutureEmpty2QF(in *emptypb.Empty, replies map[uint32]*Response) (*Response, bool)
+	QuorumCallAsyncEmpty2QF(in *emptypb.Empty, replies map[uint32]*Response) (*Response, bool)
 
 	// CorrectableQF is the quorum function for the Correctable
 	// correctable quorum call method. The in parameter is the request object
