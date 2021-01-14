@@ -55,7 +55,6 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	c := &Configuration{
 		nodes: nodes,
-		n:     len(nodes),
 		mgr:   m,
 		qspec: qspec,
 	}
