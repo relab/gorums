@@ -20,8 +20,7 @@ type QuorumCallData struct {
 
 func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(d.Nodes)
-	replyChan := make(chan *gorumsStreamResult, expectedReplies)
-	md, callDone := d.Manager.newCall(d.Method, replyChan)
+	md, replyChan, callDone := d.Manager.newCall(d.Method, expectedReplies, true)
 	defer callDone()
 
 	for _, n := range d.Nodes {
