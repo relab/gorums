@@ -40,6 +40,21 @@ func newReceiveQueue() *receiveQueue {
 	}
 }
 
+// newCall returns metadata for the call and a function to be called for clean up.
+func (m *receiveQueue) newCall(method string, replyChan chan *gorumsStreamResult) (*ordering.Metadata, func()) {
+	var msgID uint64
+	m.recvQMut.Lock()
+	m.msgID++
+	msgID = m.msgID
+	m.recvQ[msgID] = replyChan
+	m.recvQMut.Unlock()
+	md := &ordering.Metadata{
+		MessageID: msgID,
+		Method:    method,
+	}
+	return md, func() { m.deleteChan(msgID) }
+}
+
 func (m *receiveQueue) nextMsgID() uint64 {
 	return atomic.AddUint64(&m.msgID, 1)
 }
