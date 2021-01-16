@@ -2,27 +2,11 @@ package gorums
 
 import (
 	"context"
-
-	"github.com/relab/gorums/ordering"
 )
 
 func Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-
-	msgID := d.Manager.nextMsgID()
-
-	var replyChan chan *gorumsStreamResult
-	if !o.sendAsync {
-		replyChan = make(chan *gorumsStreamResult, len(d.Nodes))
-		d.Manager.putChan(msgID, replyChan)
-		// and remove it when the call is complete
-		defer d.Manager.deleteChan(msgID)
-	}
-
-	md := &ordering.Metadata{
-		MessageID: msgID,
-		Method:    d.Method,
-	}
+	md, replyChan, callDone := d.Manager.newCall(d.Method, len(d.Nodes), !o.sendAsync)
 
 	for _, n := range d.Nodes {
 		msg := d.Message
@@ -40,5 +24,6 @@ func Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 		for range d.Nodes {
 			<-replyChan
 		}
+		callDone()
 	}
 }
