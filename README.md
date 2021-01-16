@@ -1,8 +1,8 @@
-# gorums
+# Gorums
 
 [![license](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/relab/gorums/raw/master/LICENSE)
-[![GoDoc](https://godoc.org/github.com/relab/gorums?status.svg)](https://godoc.org/github.com/relab/gorums)
-[![Travis Build Status](https://travis-ci.org/relab/gorums.svg?branch=master)](https://travis-ci.org/relab/gorums)
+[![go reference](https://pkg.go.dev/badge/github.com/relab/gorums.svg)](https://pkg.go.dev/github.com/relab/gorums)
+[![build](https://github.com/relab/gorums/workflows/Test/badge.svg)](https://github.com/relab/gorums/actions)
 [![golangci-lint](https://github.com/relab/gorums/workflows/golangci-lint/badge.svg)](https://github.com/relab/gorums/actions)
 
 Gorums [1] is a novel framework for building fault tolerant distributed systems.
@@ -52,14 +52,18 @@ implemented using Gorums can be found
 
 ## Documentation
 
-* [User guide](doc/userguide.md)
-* [Developer guide](doc/devguide.md)
+* [User guide](doc/user-guide.md)
+* [Developer guide](doc/dev-guide.md)
 
-## References
+## Publications
 
 [1] Tormod Erevik Lea, Leander Jehl, and Hein Meling.
     _Towards New Abstractions for Implementing Quorum-based Systems._
     In 37th International Conference on Distributed Computing Systems (ICDCS), Jun 2017.
+
+[2] Sebastian Pedersen, Hein Meling, and Leander Jehl.
+    _An Analysis of Quorum-based Abstractions: A Case Study using Gorums to Implement Raft._
+    In Proceedings of the 2018 Workshop on Advanced Tools, Programming Languages, and PLatforms for Implementing and Evaluating Algorithms for Distributed systems.
 
 ## Authors
 

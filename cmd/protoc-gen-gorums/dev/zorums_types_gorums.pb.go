@@ -19,45 +19,45 @@ type internalResponse struct {
 	err   error
 }
 
-// FutureEmpty is a future object for processing replies.
-type FutureEmpty struct {
-	*gorums.Future
+// AsyncEmpty is a async object for processing replies.
+type AsyncEmpty struct {
+	*gorums.Async
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *FutureEmpty) Get() (*emptypb.Empty, error) {
-	resp, err := f.Future.Get()
+func (f *AsyncEmpty) Get() (*emptypb.Empty, error) {
+	resp, err := f.Async.Get()
 	if err != nil {
 		return nil, err
 	}
 	return resp.(*emptypb.Empty), err
 }
 
-// FutureMyResponse is a future object for processing replies.
-type FutureMyResponse struct {
-	*gorums.Future
+// AsyncMyResponse is a async object for processing replies.
+type AsyncMyResponse struct {
+	*gorums.Async
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *FutureMyResponse) Get() (*MyResponse, error) {
-	resp, err := f.Future.Get()
+func (f *AsyncMyResponse) Get() (*MyResponse, error) {
+	resp, err := f.Async.Get()
 	if err != nil {
 		return nil, err
 	}
 	return resp.(*MyResponse), err
 }
 
-// FutureResponse is a future object for processing replies.
-type FutureResponse struct {
-	*gorums.Future
+// AsyncResponse is a async object for processing replies.
+type AsyncResponse struct {
+	*gorums.Async
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *FutureResponse) Get() (*Response, error) {
-	resp, err := f.Future.Get()
+func (f *AsyncResponse) Get() (*Response, error) {
+	resp, err := f.Async.Get()
 	if err != nil {
 		return nil, err
 	}

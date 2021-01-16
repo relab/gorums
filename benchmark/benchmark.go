@@ -30,10 +30,12 @@ type Bench struct {
 	runBench    benchFunc
 }
 
-type benchFunc func(Options) (*Result, error)
-type qcFunc func(context.Context, *Echo) (*Echo, error)
-type asyncQCFunc func(context.Context, *Echo) *FutureEcho
-type serverFunc func(context.Context, *TimedMsg)
+type (
+	benchFunc   func(Options) (*Result, error)
+	qcFunc      func(context.Context, *Echo) (*Echo, error)
+	asyncQCFunc func(context.Context, *Echo) *AsyncEcho
+	serverFunc  func(context.Context, *TimedMsg)
+)
 
 func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())

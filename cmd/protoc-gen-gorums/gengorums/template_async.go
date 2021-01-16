@@ -1,6 +1,6 @@
 package gengorums
 
-var futureCallComment = `
+var asyncCallComment = `
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
 {{$comments -}}
@@ -8,34 +8,34 @@ var futureCallComment = `
 {{if hasPerNodeArg .Method}}
 // {{$method}} asynchronously invokes a quorum call on each node in
 // configuration c, with the argument returned by the provided function f
-// and returns the result as a {{$futureOut}}, which can be used to inspect
+// and returns the result as a {{$asyncOut}}, which can be used to inspect
 // the quorum call reply and error when available.
 // The provide per node function f takes the provided {{$in}} argument
 // and returns an {{$out}} object to be passed to the given nodeID.
 // The per node function f should be thread-safe.
 {{else}}
 // {{$method}} asynchronously invokes a quorum call on configuration c
-// and returns a {{$futureOut}}, which can be used to inspect the quorum call
+// and returns a {{$asyncOut}}, which can be used to inspect the quorum call
 // reply and error when available.
 {{end -}}
 {{end -}}
 `
 
-var futureSignature = `func (c *Configuration) {{$method}}(` +
+var asyncSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
-	`*{{$futureOut}} {`
+	`*{{$asyncOut}} {`
 
-var futureVar = qcVar + `
-{{$futureOut := outType .Method $customOut}}
+var asyncVar = qcVar + `
+{{$asyncOut := outType .Method $customOut}}
 `
 
-var futureBody = `
+var asyncBody = `
 	cd := {{$callData}}{
 		Manager:  c.mgr.Manager,
 		Nodes:    c.nodes,
 		Message:  in,
-		Method: "{{$fullName}}",
+		Method:   "{{$fullName}}",
 	}
 	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
 		r := make(map[uint32]*{{$out}}, len(replies))
@@ -50,13 +50,13 @@ var futureBody = `
 	}
 {{- end}}
 
-	fut := {{use "gorums.FutureCall" $genFile}}(ctx, cd)
-	return &{{$futureOut}}{fut}
+	fut := {{use "gorums.AsyncCall" $genFile}}(ctx, cd)
+	return &{{$asyncOut}}{fut}
 }
 `
 
-var futureCall = commonVariables +
-	futureVar +
-	futureCallComment +
-	futureSignature +
-	futureBody
+var asyncCall = commonVariables +
+	asyncVar +
+	asyncCallComment +
+	asyncSignature +
+	asyncBody

@@ -156,9 +156,9 @@ type Node struct {
 }
 
 // AsyncQuorumCall asynchronously invokes a quorum call on configuration c
-// and returns a FutureEcho, which can be used to inspect the quorum call
+// and returns a AsyncEcho, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *FutureEcho {
+func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
 		Nodes:   c.nodes,
@@ -173,8 +173,8 @@ func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *FutureEc
 		return c.qspec.AsyncQuorumCallQF(req.(*Echo), r)
 	}
 
-	fut := gorums.FutureCall(ctx, cd)
-	return &FutureEcho{fut}
+	fut := gorums.AsyncCall(ctx, cd)
+	return &AsyncEcho{fut}
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -509,15 +509,15 @@ type internalStartResponse struct {
 	err   error
 }
 
-// FutureEcho is a future object for processing replies.
-type FutureEcho struct {
-	*gorums.Future
+// AsyncEcho is a async object for processing replies.
+type AsyncEcho struct {
+	*gorums.Async
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *FutureEcho) Get() (*Echo, error) {
-	resp, err := f.Future.Get()
+func (f *AsyncEcho) Get() (*Echo, error) {
+	resp, err := f.Async.Get()
 	if err != nil {
 		return nil, err
 	}
