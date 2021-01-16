@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -84,23 +83,16 @@ type CorrectableCallData struct {
 }
 
 func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
-	msgID := d.Manager.nextMsgID()
-	// set up channel to collect replies to this call.
-	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
-	d.Manager.putChan(msgID, replyChan)
+	expectedReplies := len(d.Nodes)
+	replyChan := make(chan *gorumsStreamResult, expectedReplies)
+	md, callDone := d.Manager.newCall(d.Method, replyChan)
 
-	md := &ordering.Metadata{
-		MessageID: msgID,
-		Method:    d.Method,
-	}
-
-	expected := len(d.Nodes)
 	for _, n := range d.Nodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			nodeArg := d.PerNodeArgFn(d.Message, n.id)
 			if nodeArg != nil {
-				expected--
+				expectedReplies--
 				continue
 			}
 		}
@@ -110,7 +102,7 @@ func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	corr := &Correctable{donech: make(chan struct{}, 1)}
 
 	go func() {
-		defer d.Manager.deleteChan(msgID)
+		defer callDone()
 
 		var (
 			resp    protoreflect.ProtoMessage
@@ -128,23 +120,22 @@ func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 					errs = append(errs, Error{r.nid, r.err})
 					break
 				}
-				reply := r.reply
-				replies[r.nid] = reply
+				replies[r.nid] = r.reply
 				if resp, rlevel, quorum = d.QuorumFunction(d.Message, replies); quorum {
 					if quorum {
-						corr.set(reply, rlevel, nil, true)
+						corr.set(r.reply, rlevel, nil, true)
 						return
 					}
 					if rlevel > clevel {
 						clevel = rlevel
-						corr.set(reply, rlevel, nil, false)
+						corr.set(r.reply, rlevel, nil, false)
 					}
 				}
 			case <-ctx.Done():
 				corr.set(resp, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 				return
 			}
-			if (d.ServerStream && len(errs) == expected) || (!d.ServerStream && len(errs)+len(replies) == expected) {
+			if (d.ServerStream && len(errs) == expectedReplies) || (!d.ServerStream && len(errs)+len(replies) == expectedReplies) {
 				corr.set(resp, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
 				return
 			}
