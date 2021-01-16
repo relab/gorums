@@ -3,6 +3,8 @@ package gorums
 import (
 	"sync"
 	"testing"
+
+	"github.com/relab/gorums/ordering"
 )
 
 // BenchmarkReceiveQueue is here to benchmark whether or not the receiveQueue
@@ -14,14 +16,32 @@ import (
 // BenchmarkReceiveQueue/syncMapDirect-12      	 2494368	       485 ns/op
 //
 func BenchmarkReceiveQueue(b *testing.B) {
+	const (
+		numNodes   = 3
+		methodName = "Some/Dummy/Method"
+	)
 	rq := newReceiveQueue()
-	// dummy channel
-	replies := make(chan *gorumsStreamResult, 1)
 	// dummy result
 	result := &gorumsStreamResult{nid: 2, reply: nil, err: nil}
+	b.Run("NewCall", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			replies := make(chan *gorumsStreamResult, numNodes)
+			md, f := rq.newCall(methodName, replies)
+			rq.putResult2(md.MessageID, result)
+			f()
+		}
+	})
+	b.Run("NewCall2", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			md, _, f := rq.newCall2(numNodes, methodName)
+			rq.putResult2(md.MessageID, result)
+			f()
+		}
+	})
 	b.Run("RWMutexMap", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msgID := rq.nextMsgID()
+			replies := make(chan *gorumsStreamResult, numNodes)
 			rq.putChan(msgID, replies)
 			rq.putResult2(msgID, result)
 			rq.deleteChan(msgID)
@@ -31,6 +51,7 @@ func BenchmarkReceiveQueue(b *testing.B) {
 	b.Run("syncMapStruct", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msgID := rq.nextMsgID()
+			replies := make(chan *gorumsStreamResult, numNodes)
 			srq.putChan(msgID, replies)
 			srq.putResult(msgID, result)
 			srq.deleteChan(msgID)
@@ -40,6 +61,7 @@ func BenchmarkReceiveQueue(b *testing.B) {
 	b.Run("syncMapDirect", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msgID := rq.nextMsgID()
+			replies := make(chan *gorumsStreamResult, numNodes)
 			syncrq.Store(msgID, replies)
 			xc, ok := syncrq.Load(msgID)
 			c := xc.(chan *gorumsStreamResult)
@@ -50,6 +72,17 @@ func BenchmarkReceiveQueue(b *testing.B) {
 			syncrq.Delete(msgID)
 		}
 	})
+}
+
+func (m *receiveQueue) newCall2(nodes int, method string) (*ordering.Metadata, chan *gorumsStreamResult, func()) {
+	msgID := m.nextMsgID()
+	replyChan := make(chan *gorumsStreamResult, nodes)
+	m.putChan(msgID, replyChan)
+	md := &ordering.Metadata{
+		MessageID: msgID,
+		Method:    method,
+	}
+	return md, replyChan, func() { m.deleteChan(msgID) }
 }
 
 func (m *receiveQueue) putResult2(id uint64, result *gorumsStreamResult) {
