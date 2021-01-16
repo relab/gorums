@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 
-	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -20,25 +19,17 @@ type QuorumCallData struct {
 }
 
 func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
-	msgID := d.Manager.nextMsgID()
-	// set up channel to collect replies to this call.
-	replyChan := make(chan *gorumsStreamResult, len(d.Nodes))
-	d.Manager.putChan(msgID, replyChan)
-	// and remove it when the call is complete
-	defer d.Manager.deleteChan(msgID)
+	expectedReplies := len(d.Nodes)
+	replyChan := make(chan *gorumsStreamResult, expectedReplies)
+	md, callDone := d.Manager.newCall(d.Method, replyChan)
+	defer callDone()
 
-	md := &ordering.Metadata{
-		MessageID: msgID,
-		Method:    d.Method,
-	}
-
-	expected := len(d.Nodes)
 	for _, n := range d.Nodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			nodeArg := d.PerNodeArgFn(d.Message, n.id)
 			if nodeArg != nil {
-				expected--
+				expectedReplies--
 				continue
 			}
 		}
@@ -58,15 +49,14 @@ func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoM
 				errs = append(errs, Error{r.nid, r.err})
 				break
 			}
-			reply := r.reply
-			replies[r.nid] = reply
+			replies[r.nid] = r.reply
 			if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
 				return resp, nil
 			}
 		case <-ctx.Done():
 			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
-		if len(errs)+len(replies) == expected {
+		if len(errs)+len(replies) == expectedReplies {
 			return resp, QuorumCallError{"incomplete call", len(replies), errs}
 		}
 	}
