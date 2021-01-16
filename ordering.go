@@ -40,19 +40,27 @@ func newReceiveQueue() *receiveQueue {
 	}
 }
 
-// newCall returns metadata for the call and a function to be called for clean up.
-func (m *receiveQueue) newCall(method string, replyChan chan *gorumsStreamResult) (*ordering.Metadata, func()) {
-	var msgID uint64
-	m.recvQMut.Lock()
-	m.msgID++
-	msgID = m.msgID
-	m.recvQ[msgID] = replyChan
-	m.recvQMut.Unlock()
-	md := &ordering.Metadata{
+// newCall returns metadata for the call, a channel for receiving replies
+// and a done function to be called for clean up.
+// Only if reply is true will replyChan and the done function be allocated.
+func (m *receiveQueue) newCall(method string, maxReplies int, reply bool) (md *ordering.Metadata, replyChan chan *gorumsStreamResult, done func()) {
+	msgID := atomic.AddUint64(&m.msgID, 1)
+	md = &ordering.Metadata{
 		MessageID: msgID,
 		Method:    method,
 	}
-	return md, func() { m.deleteChan(msgID) }
+	if reply {
+		replyChan = make(chan *gorumsStreamResult, maxReplies)
+		m.recvQMut.Lock()
+		m.recvQ[msgID] = replyChan
+		m.recvQMut.Unlock()
+		done = func() {
+			m.recvQMut.Lock()
+			delete(m.recvQ, msgID)
+			m.recvQMut.Unlock()
+		}
+	}
+	return
 }
 
 func (m *receiveQueue) nextMsgID() uint64 {

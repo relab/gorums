@@ -3,8 +3,6 @@ package gorums
 import (
 	"sync"
 	"testing"
-
-	"github.com/relab/gorums/ordering"
 )
 
 // BenchmarkReceiveQueue is here to benchmark whether or not the receiveQueue
@@ -20,8 +18,7 @@ import (
 //
 // On MacPro (Late 2013) 2,7 GHz 12-Core Intel Xeon E5:
 // % go test -v -benchmem -run none -bench BenchmarkReceiveQueue
-// BenchmarkReceiveQueue/NewCall-24         	 2903644	       396 ns/op	     240 B/op	       4 allocs/op
-// BenchmarkReceiveQueue/NewCall2-24        	 2835172	       421 ns/op	     240 B/op	       4 allocs/op
+// BenchmarkReceiveQueue/NewCall-24         	 2943565	       405 ns/op	     240 B/op	       4 allocs/op
 // BenchmarkReceiveQueue/RWMutexMap-24      	 4028078	       298 ns/op	     128 B/op	       2 allocs/op
 // BenchmarkReceiveQueue/syncMapStruct-24   	 1281080	       929 ns/op	     464 B/op	      10 allocs/op
 // BenchmarkReceiveQueue/syncMapDirect-24   	 1293362	       929 ns/op	     464 B/op	      10 allocs/op
@@ -61,15 +58,7 @@ func BenchmarkReceiveQueue(b *testing.B) {
 	result := &gorumsStreamResult{nid: 2, reply: nil, err: nil}
 	b.Run("NewCall", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			replies := make(chan *gorumsStreamResult, numNodes)
-			md, f := rq.newCall(methodName, replies)
-			rq.putResult2(md.MessageID, result)
-			f()
-		}
-	})
-	b.Run("NewCall2", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			md, _, f := rq.newCall2(numNodes, methodName)
+			md, _, f := rq.newCall(methodName, numNodes, true)
 			rq.putResult2(md.MessageID, result)
 			f()
 		}
@@ -108,17 +97,6 @@ func BenchmarkReceiveQueue(b *testing.B) {
 			syncrq.Delete(msgID)
 		}
 	})
-}
-
-func (m *receiveQueue) newCall2(nodes int, method string) (*ordering.Metadata, chan *gorumsStreamResult, func()) {
-	msgID := m.nextMsgID()
-	replyChan := make(chan *gorumsStreamResult, nodes)
-	m.putChan(msgID, replyChan)
-	md := &ordering.Metadata{
-		MessageID: msgID,
-		Method:    method,
-	}
-	return md, replyChan, func() { m.deleteChan(msgID) }
 }
 
 func (m *receiveQueue) putResult2(id uint64, result *gorumsStreamResult) {

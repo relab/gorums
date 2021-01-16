@@ -84,8 +84,7 @@ type CorrectableCallData struct {
 
 func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(d.Nodes)
-	replyChan := make(chan *gorumsStreamResult, expectedReplies)
-	md, callDone := d.Manager.newCall(d.Method, replyChan)
+	md, replyChan, callDone := d.Manager.newCall(d.Method, expectedReplies, true)
 
 	for _, n := range d.Nodes {
 		msg := d.Message
