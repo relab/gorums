@@ -24,12 +24,13 @@ func Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
 	}
 
-	if !o.sendAsync {
-		// wait until the messages have been sent
-		// (nodeStream will produce empty replies when this happens)
-		for range d.Nodes {
-			<-replyChan
-		}
-		callDone()
+	if o.sendAsync {
+		// don't wait for messages to be sent
+		return
 	}
+	// wait until the messages have been sent (nodeStream sends empty replies when this happens)
+	for range d.Nodes {
+		<-replyChan
+	}
+	callDone()
 }

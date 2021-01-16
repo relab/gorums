@@ -14,10 +14,11 @@ func Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	md, replyChan, callDone := d.Manager.newCall(d.Method, 1, !o.sendAsync)
 	d.Node.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
-	if !o.sendAsync {
-		// wait until the message has been sent
-		// (nodeStream will produce an empty reply when this happens)
-		<-replyChan
-		callDone()
+	if o.sendAsync {
+		// don't wait for message to be sent
+		return
 	}
+	// wait until the message has been sent (nodeStream sends an empty reply when this happens)
+	<-replyChan
+	callDone()
 }
