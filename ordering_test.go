@@ -15,6 +15,42 @@ import (
 // BenchmarkReceiveQueue/syncMapStruct-12      	 2467936	       482 ns/op
 // BenchmarkReceiveQueue/syncMapDirect-12      	 2494368	       485 ns/op
 //
+// Below are results from experiments with a new NewCall method that implements
+// the behavior of all uses of the receiveQueue's methods.
+//
+// On MacPro (Late 2013) 2,7 GHz 12-Core Intel Xeon E5:
+// % go test -v -benchmem -run none -bench BenchmarkReceiveQueue
+// BenchmarkReceiveQueue/NewCall-24         	 2903644	       396 ns/op	     240 B/op	       4 allocs/op
+// BenchmarkReceiveQueue/NewCall2-24        	 2835172	       421 ns/op	     240 B/op	       4 allocs/op
+// BenchmarkReceiveQueue/RWMutexMap-24      	 4028078	       298 ns/op	     128 B/op	       2 allocs/op
+// BenchmarkReceiveQueue/syncMapStruct-24   	 1281080	       929 ns/op	     464 B/op	      10 allocs/op
+// BenchmarkReceiveQueue/syncMapDirect-24   	 1293362	       929 ns/op	     464 B/op	      10 allocs/op
+//
+// Note that NewCall is expected to require more allocations than RWMutexMap
+// because it allocates Metadata and the delete function, and will be a bit slower
+// for these reasons. However, when used in QuorumCall, which also has to allocate
+// Metadata, it appears to have insignificant performance overhead.
+//
+// Before replacing the receiveQueue methods with NewCall:
+//
+// cmd/benchmark/benchmark -config-size 9 -quorum-size 5 -time 5s -benchmarks ^QuorumCall
+// Benchmark     Throughput         Latency    Std.dev    Client+Servers
+// QuorumCall    1044.15 ops/sec    0.96 ms    0.36 ms    19912 B/op        535 allocs/op
+// QuorumCall    1032.27 ops/sec    0.97 ms    0.36 ms    19901 B/op        535 allocs/op
+// QuorumCall    1054.69 ops/sec    0.95 ms    0.35 ms    19921 B/op        535 allocs/op
+// QuorumCall    1043.53 ops/sec    0.96 ms    0.35 ms    19930 B/op        535 allocs/op
+// QuorumCall    1041.38 ops/sec    0.96 ms    0.35 ms    19893 B/op        535 allocs/op
+//
+// After replacing the receiveQueue methods with NewCall:
+
+// cmd/benchmark/benchmark -config-size 9 -quorum-size 5 -time 5s -benchmarks ^QuorumCall
+// Benchmark     Throughput         Latency    Std.dev    Client+Servers
+// QuorumCall    1044.11 ops/sec    0.96 ms    0.36 ms    19928 B/op        536 allocs/op
+// QuorumCall    1118.45 ops/sec    0.89 ms    0.34 ms    19953 B/op        537 allocs/op
+// QuorumCall    1038.68 ops/sec    0.96 ms    0.36 ms    19914 B/op        535 allocs/op
+// QuorumCall    1038.28 ops/sec    0.96 ms    0.36 ms    19954 B/op        536 allocs/op
+// QuorumCall    1046.57 ops/sec    0.95 ms    0.39 ms    19955 B/op        536 allocs/op
+//
 func BenchmarkReceiveQueue(b *testing.B) {
 	const (
 		numNodes   = 3
