@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 
-	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -15,17 +14,9 @@ type CallData struct {
 }
 
 func RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
-	msgID := d.Manager.nextMsgID()
-	// set up channel to collect replies to this call.
 	replyChan := make(chan *gorumsStreamResult, 1)
-	d.Manager.putChan(msgID, replyChan)
-	// and remove it when the call is complete
-	defer d.Manager.deleteChan(msgID)
-
-	md := &ordering.Metadata{
-		MessageID: msgID,
-		Method:    d.Method,
-	}
+	md, callDone := d.Manager.newCall(d.Method, replyChan)
+	defer callDone()
 
 	d.Node.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
 
