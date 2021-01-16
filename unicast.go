@@ -5,9 +5,9 @@ import (
 )
 
 // Unicast is a one-way call; no replies are processed.
+// By default this function returns once the message has been sent.
 // Providing the call option WithAsyncSend, the function may return
-// before the message has been sent. Without this call option, the
-// function waits until the message has been sent.
+// before the message has been sent.
 func Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 	// sendAsync == true => replyChan and callDone are nil and thus cannot be used
