@@ -4,13 +4,19 @@ import (
 	"context"
 )
 
+// Unicast is a one-way call; no replies are processed.
+// Providing the call option WithAsyncSend, the function may return
+// before the message has been sent. Without this call option, the
+// function waits until the message has been sent.
 func Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
+	// sendAsync == true => replyChan and callDone are nil and thus cannot be used
 	md, replyChan, callDone := d.Manager.newCall(d.Method, 1, !o.sendAsync)
 	d.Node.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
-	// wait until the message has been sent (nodeStream will give an empty reply when this happens)
 	if !o.sendAsync {
+		// wait until the messages have been sent
+		// (nodeStream will produce an empty reply when this happens)
 		<-replyChan
 		callDone()
 	}
