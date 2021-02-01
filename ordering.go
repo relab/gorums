@@ -118,6 +118,18 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 }
 
 func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
+	// unblock the waiting caller when sendAsync is not enabled
+	defer func() {
+		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.sendAsync {
+			s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{})
+		}
+	}()
+
+	// don't send if context is already cancelled.
+	if req.ctx.Err() != nil {
+		return req.ctx.Err()
+	}
+
 	s.streamMut.RLock()
 	defer s.streamMut.RUnlock()
 
@@ -139,11 +151,6 @@ func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
 		s.streamBroken = true
 	}
 	c <- struct{}{}
-
-	// unblock the waiting caller when sendAsync is not enabled
-	if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.sendAsync {
-		s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{})
-	}
 
 	return err
 }
