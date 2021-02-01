@@ -121,7 +121,7 @@ func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
 	s.streamMut.RLock()
 	defer s.streamMut.RUnlock()
 
-	c := make(chan struct{})
+	c := make(chan struct{}, 1)
 
 	// wait for either the message to be sent, or the request context being cancelled.
 	// if the request context was cancelled, then we most likely have a blocked stream.
