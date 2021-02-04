@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
-	"runtime/trace"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -82,7 +81,6 @@ func main() {
 		remotesFlag    = listFlag{}
 		warmupFlag     = durationFlag{val: 100 * time.Millisecond}
 		benchTimeFlag  = durationFlag{val: 1 * time.Second}
-		traceFile      = flag.String("trace", "", "A `file` to write trace to.")
 		cpuprofile     = flag.String("cpuprofile", "", "A `file` to write cpu profile to.")
 		memprofile     = flag.String("memprofile", "", "A `file` to write memory profile to.")
 		payload        = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
@@ -130,20 +128,6 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	if *traceFile != "" {
-		// TODO: not sure if enabling gRPC tracing is appropriate here
-		grpc.EnableTracing = true
-		f, err := os.Create(*traceFile)
-		if err != nil {
-			log.Fatal("Could not create trace file: ", err)
-		}
-		defer f.Close()
-		if err := trace.Start(f); err != nil {
-			log.Fatal("Failed to start trace: ", err)
-		}
-		defer trace.Stop()
-	}
-
 	defer func() {
 		if *memprofile != "" {
 			f, err := os.Create(*memprofile)
@@ -185,15 +169,11 @@ func main() {
 		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithReceiveBufferSize(*serverBuffer))
 	}
 
-	var mgrOpts = []gorums.ManagerOption{
+	mgrOpts := []gorums.ManagerOption{
 		gorums.WithNodeList(remotes),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 		gorums.WithDialTimeout(10 * time.Second),
 		gorums.WithSendBufferSize(*sendBuffer),
-	}
-
-	if trace.IsEnabled() {
-		mgrOpts = append(mgrOpts, gorums.WithTracing())
 	}
 
 	mgr, err := benchmark.NewManager(mgrOpts...)

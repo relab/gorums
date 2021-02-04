@@ -1,6 +1,9 @@
 package gorums_test
 
 import (
+	"bytes"
+	"fmt"
+	"log"
 	"testing"
 
 	"github.com/relab/gorums"
@@ -29,6 +32,26 @@ func TestNewManager(t *testing.T) {
 	if mgr.Size() != len(nodeMap) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
 	}
+}
+
+func TestManagerLogging(t *testing.T) {
+	var (
+		buf    bytes.Buffer
+		logger = log.New(&buf, "logger: ", log.Lshortfile)
+	)
+	nodeMap := map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
+	mgr, err := gorums.NewManager(
+		gorums.WithNodeMap(nodeMap),
+		gorums.WithNoConnect(),
+		gorums.WithLogger(logger),
+	)
+	if err != nil {
+		t.Fatalf("NewManager(): unexpected error: %s", err)
+	}
+	if mgr.Size() != len(nodeMap) {
+		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
+	}
+	fmt.Println(buf.String())
 }
 
 func TestManagerAddNode(t *testing.T) {

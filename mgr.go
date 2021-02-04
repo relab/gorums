@@ -3,10 +3,8 @@ package gorums
 import (
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 
-	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 )
@@ -14,11 +12,9 @@ import (
 // Manager manages a pool of node configurations on which quorum remote
 // procedure calls can be made.
 type Manager struct {
-	mu       sync.Mutex
-	nodes    []*Node
-	lookup   map[uint32]*Node
-	eventLog trace.EventLog
-
+	mu        sync.Mutex
+	nodes     []*Node
+	lookup    map[uint32]*Node
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      managerOptions
@@ -55,19 +51,16 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 		))
 	}
 
-	var nodeAddrs []string
 	if m.opts.idMapping != nil {
 		for naddr, id := range m.opts.idMapping {
 			err := m.AddNode(naddr, id)
 			if err != nil {
 				return nil, ManagerCreationError(err)
 			}
-			nodeAddrs = append(nodeAddrs, naddr)
 		}
 		// Sort nodes since map iteration is non-deterministic.
 		OrderedBy(ID).Sort(m.nodes)
 	} else if m.opts.addrsList != nil {
-		nodeAddrs = m.opts.addrsList
 		for _, naddr := range m.opts.addrsList {
 			err := m.AddNode(naddr, 0)
 			if err != nil {
@@ -76,34 +69,27 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 		}
 	}
 
-	if m.opts.trace {
-		title := strings.Join(nodeAddrs, ",")
-		m.eventLog = trace.NewEventLog("gorums.Manager", title)
-	}
 	if err := m.connectAll(); err != nil {
 		return nil, ManagerCreationError(err)
 	}
 	if m.opts.logger != nil {
 		m.logger = m.opts.logger
 	}
-	if m.eventLog != nil {
-		m.eventLog.Printf("ready")
+	if m.logger != nil {
+		m.logger.Printf("ready")
 	}
 
 	return m, nil
 }
 
 func (m *Manager) connectAll() error {
-	if m.eventLog != nil {
-		m.eventLog.Printf("connecting")
+	if m.logger != nil {
+		m.logger.Printf("connecting")
 	}
 
 	for _, node := range m.nodes {
 		err := node.connect(m.receiveQueue, m.opts)
 		if err != nil {
-			if m.eventLog != nil {
-				m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)
-			}
 			return fmt.Errorf("connect node %s error: %v", node.addr, err)
 		}
 	}
@@ -125,8 +111,8 @@ func (m *Manager) closeNodeConns() {
 // Close closes all node connections and any client streams.
 func (m *Manager) Close() {
 	m.closeOnce.Do(func() {
-		if m.eventLog != nil {
-			m.eventLog.Printf("closing")
+		if m.logger != nil {
+			m.logger.Printf("closing")
 		}
 		m.closeNodeConns()
 	})
