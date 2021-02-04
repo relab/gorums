@@ -28,7 +28,6 @@ var staticCode = `// A Configuration represents a static set of nodes on which q
 type Configuration struct {
 	id    uint32
 	nodes []*gorums.Node
-	n     int
 	mgr   *Manager
 	qspec QuorumSpec
 	errs  chan gorums.Error
@@ -77,7 +76,7 @@ func (c *Configuration) Nodes() []*Node {
 
 // Size returns the number of nodes in the configuration.
 func (c *Configuration) Size() int {
-	return c.n
+	return len(c.nodes)
 }
 
 func (c *Configuration) String() string {
@@ -142,7 +141,6 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 
 	c := &Configuration{
 		nodes: nodes,
-		n:     len(nodes),
 		mgr:   m,
 		qspec: qspec,
 	}
