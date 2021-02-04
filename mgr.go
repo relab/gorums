@@ -94,10 +94,6 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 }
 
 func (m *Manager) connectAll() error {
-	if m.opts.noConnect {
-		return nil
-	}
-
 	if m.eventLog != nil {
 		m.eventLog.Printf("connecting")
 	}

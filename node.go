@@ -51,6 +51,9 @@ func NewNode(addr string, id uint32) (*Node, error) {
 
 // connect to this node to facilitate gRPC calls and optionally client streams.
 func (n *Node) connect(rq *receiveQueue, opts managerOptions) error {
+	if opts.noConnect {
+		return nil
+	}
 	n.orderedNodeStream = newNodeStream(n, rq, opts)
 	var err error
 	ctx, cancel := context.WithTimeout(context.Background(), opts.nodeDialTimeout)
