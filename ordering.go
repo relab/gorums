@@ -103,6 +103,16 @@ type orderedNodeStream struct {
 	cancelStream context.CancelFunc
 }
 
+func newNodeStream(node *Node, rq *receiveQueue, opts managerOptions) *orderedNodeStream {
+	return &orderedNodeStream{
+		receiveQueue: rq,
+		sendQ:        make(chan gorumsStreamRequest, opts.sendBuffer),
+		node:         node,
+		backoff:      opts.backoff,
+		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
+}
+
 func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc.ClientConn) error {
 	var err error
 	s.parentCtx = ctx

@@ -2,12 +2,9 @@ package gorums
 
 import (
 	"fmt"
-	"hash/fnv"
 	"log"
-	"net"
 	"strings"
 	"sync"
-	"time"
 
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
@@ -66,7 +63,7 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 				return nil, ManagerCreationError(err)
 			}
 			nodeAddrs = append(nodeAddrs, naddr)
-			node, err := m.createNode(naddr, id)
+			node, err := NewNode(m, naddr, id)
 			if err != nil {
 				return nil, ManagerCreationError(err)
 			}
@@ -80,7 +77,7 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 	} else if m.opts.addrsList != nil {
 		nodeAddrs = m.opts.addrsList
 		for _, naddr := range m.opts.addrsList {
-			node, err := m.createNode(naddr, 0)
+			node, err := NewNode(m, naddr, 0)
 			if err != nil {
 				return nil, ManagerCreationError(err)
 			}
@@ -93,49 +90,17 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 		title := strings.Join(nodeAddrs, ",")
 		m.eventLog = trace.NewEventLog("gorums.Manager", title)
 	}
-
 	if err := m.connectAll(); err != nil {
 		return nil, ManagerCreationError(err)
 	}
-
 	if m.opts.logger != nil {
 		m.logger = m.opts.logger
 	}
-
 	if m.eventLog != nil {
 		m.eventLog.Printf("ready")
 	}
 
 	return m, nil
-}
-
-func (m *Manager) createNode(addr string, id uint32) (*Node, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("create node %s error: %v", addr, err)
-	}
-
-	if id == 0 {
-		h := fnv.New32a()
-		_, _ = h.Write([]byte(tcpAddr.String()))
-		id = h.Sum32()
-	}
-
-	if _, found := m.lookup[id]; found {
-		return nil, fmt.Errorf("create node %s error: node already exists", addr)
-	}
-
-	node := &Node{
-		id:      id,
-		addr:    tcpAddr.String(),
-		latency: -1 * time.Second,
-	}
-	node.createOrderedStream(m.receiveQueue, m.opts)
-
-	return node, nil
 }
 
 func (m *Manager) connectAll() error {
@@ -148,7 +113,7 @@ func (m *Manager) connectAll() error {
 	}
 
 	for _, node := range m.nodes {
-		err := node.connect(m.opts)
+		err := node.connect(m.receiveQueue, m.opts)
 		if err != nil {
 			if m.eventLog != nil {
 				m.eventLog.Errorf("connect failed, error connecting to node %s, error: %v", node.addr, err)

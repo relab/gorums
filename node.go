@@ -3,7 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"hash/fnv"
 	"net"
 	"sort"
 	"strconv"
@@ -31,18 +31,31 @@ type Node struct {
 	*orderedNodeStream
 }
 
-func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
-	n.orderedNodeStream = &orderedNodeStream{
-		receiveQueue: rq,
-		sendQ:        make(chan gorumsStreamRequest, opts.sendBuffer),
-		node:         n,
-		backoff:      opts.backoff,
-		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+// NewNode returns a new node for the provided address and id.
+func NewNode(mgr *Manager, addr string, id uint32) (*Node, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
 	}
+	if id == 0 {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(tcpAddr.String()))
+		id = h.Sum32()
+	}
+	if _, found := mgr.Node(id); found {
+		return nil, fmt.Errorf("node error: '%s' already exists", addr)
+	}
+
+	return &Node{
+		id:      id,
+		addr:    tcpAddr.String(),
+		latency: -1 * time.Second,
+	}, nil
 }
 
 // connect to this node to facilitate gRPC calls and optionally client streams.
-func (n *Node) connect(opts managerOptions) error {
+func (n *Node) connect(rq *receiveQueue, opts managerOptions) error {
+	n.orderedNodeStream = newNodeStream(n, rq, opts)
 	var err error
 	ctx, cancel := context.WithTimeout(context.Background(), opts.nodeDialTimeout)
 	defer cancel()
