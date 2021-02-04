@@ -147,6 +147,17 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configurati
 	return c, nil
 }
 
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Manager.
+func (m *Manager) Nodes() []*Node {
+	gorumsNodes := m.Manager.Nodes()
+	nodes := make([]*Node, 0, len(gorumsNodes))
+	for _, n := range gorumsNodes {
+		nodes = append(nodes, &Node{n, m})
+	}
+	return nodes
+}
+
 type Node struct {
 	*gorums.Node
 }
