@@ -39,7 +39,7 @@ $(static_file): $(static_files)
 
 tools:
 	@go mod download
-	@go install $(go list -f "{{range .Imports}}{{.}} {{end}}" tools.go)
+	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % go install %
 
 installgorums: bootstrapgorums $(gen_files) $(plugin_deps) Makefile
 	@go install $(PLUGIN_PATH)
