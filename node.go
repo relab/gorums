@@ -78,6 +78,9 @@ func (n *Node) connect(rq *receiveQueue, opts managerOptions) error {
 
 // close this node for further calls and optionally stream.
 func (n *Node) close() error {
+	if n.conn == nil {
+		return nil
+	}
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("%d: conn close error: %w", n.id, err)
 	}
