@@ -67,7 +67,7 @@ func (m *Manager) Nodes() []*Node {
 	gorumsNodes := m.Manager.Nodes()
 	nodes := make([]*Node, 0, len(gorumsNodes))
 	for _, n := range gorumsNodes {
-		nodes = append(nodes, &Node{n, m})
+		nodes = append(nodes, &Node{n})
 	}
 	return nodes
 }
