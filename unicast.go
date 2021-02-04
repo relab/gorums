@@ -11,7 +11,7 @@ import (
 func Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 	// sendAsync == true => replyChan and callDone are nil and thus cannot be used
-	md, replyChan, callDone := d.Manager.newCall(d.Method, 1, !o.sendAsync)
+	md, replyChan, callDone := d.Node.newCall(d.Method, 1, !o.sendAsync)
 	d.Node.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	if o.sendAsync {

@@ -12,7 +12,6 @@ import (
 func (n *Node) GRPCCall(ctx context.Context, in *Request) (resp *Response, err error) {
 
 	cd := gorums.CallData{
-		Manager: n.mgr.Manager,
 		Node:    n.Node,
 		Message: in,
 		Method:  "dev.ZorumsService.GRPCCall",
