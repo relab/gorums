@@ -107,11 +107,12 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs)-1)
 	}
 
-	err = mgr.AddNode(addrs[2], 1)
+	err = mgr.AddNode(addrs[2], 0)
 	if err != nil {
 		t.Errorf("mgr.AddNode(%s, %d) = %q, expected %q", addrs[2], 0, err.Error(), "")
 	}
 	if mgr.Size() != len(addrs) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs))
 	}
+	mgr.Close()
 }

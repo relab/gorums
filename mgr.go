@@ -78,10 +78,7 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 func (m *Manager) closeNodeConns() {
 	for _, node := range m.nodes {
 		err := node.close()
-		if err == nil {
-			continue
-		}
-		if m.logger != nil {
+		if err != nil && m.logger != nil {
 			m.logger.Printf("node %d: error closing: %v", node.id, err)
 		}
 	}
