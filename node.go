@@ -32,7 +32,7 @@ type Node struct {
 }
 
 // NewNode returns a new node for the provided address and id.
-func NewNode(mgr *Manager, addr string, id uint32) (*Node, error) {
+func NewNode(addr string, id uint32) (*Node, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
@@ -42,10 +42,6 @@ func NewNode(mgr *Manager, addr string, id uint32) (*Node, error) {
 		_, _ = h.Write([]byte(tcpAddr.String()))
 		id = h.Sum32()
 	}
-	if _, found := mgr.Node(id); found {
-		return nil, fmt.Errorf("node error: '%s' already exists", addr)
-	}
-
 	return &Node{
 		id:      id,
 		addr:    tcpAddr.String(),

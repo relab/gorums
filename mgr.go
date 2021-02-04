@@ -58,31 +58,21 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 	var nodeAddrs []string
 	if m.opts.idMapping != nil {
 		for naddr, id := range m.opts.idMapping {
-			if m.lookup[id] != nil {
-				err := fmt.Errorf("Two node ids are identical(id %d). Node ids have to be unique", id)
+			err := m.AddNode(naddr, id)
+			if err != nil {
 				return nil, ManagerCreationError(err)
 			}
 			nodeAddrs = append(nodeAddrs, naddr)
-			node, err := NewNode(m, naddr, id)
-			if err != nil {
-				return nil, ManagerCreationError(err)
-			}
-			m.lookup[node.id] = node
-			m.nodes = append(m.nodes, node)
 		}
-
 		// Sort nodes since map iteration is non-deterministic.
 		OrderedBy(ID).Sort(m.nodes)
-
 	} else if m.opts.addrsList != nil {
 		nodeAddrs = m.opts.addrsList
 		for _, naddr := range m.opts.addrsList {
-			node, err := NewNode(m, naddr, 0)
+			err := m.AddNode(naddr, 0)
 			if err != nil {
 				return nil, ManagerCreationError(err)
 			}
-			m.lookup[node.id] = node
-			m.nodes = append(m.nodes, node)
 		}
 	}
 
@@ -181,8 +171,21 @@ func (m *Manager) Size() (nodes int) {
 	return len(m.nodes)
 }
 
-// AddNode attempts to dial to the provide node address. The node is
-// added to the Manager's pool of nodes if a connection was established.
-func (m *Manager) AddNode(addr string) error {
-	panic("not implemented")
+// AddNode adds the node to the manager's node pool.
+// No connections are established here.
+func (m *Manager) AddNode(addr string, id uint32) error {
+	if _, found := m.Node(id); found {
+		// Node IDs must be unique
+		return fmt.Errorf("node ID %d already exists (%s)", id, addr)
+	}
+	node, err := NewNode(addr, id)
+	if err != nil {
+		return err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lookup[node.id] = node
+	m.nodes = append(m.nodes, node)
+	return nil
 }
