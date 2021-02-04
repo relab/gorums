@@ -2,7 +2,6 @@ package gorums_test
 
 import (
 	"bytes"
-	"fmt"
 	"log"
 	"testing"
 
@@ -51,7 +50,7 @@ func TestManagerLogging(t *testing.T) {
 	if mgr.Size() != len(nodeMap) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
 	}
-	fmt.Println(buf.String())
+	t.Log(buf.String())
 }
 
 func TestManagerAddNode(t *testing.T) {
