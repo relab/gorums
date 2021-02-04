@@ -69,8 +69,7 @@ func (n *Node) connect(rq *receiveQueue, opts managerOptions) error {
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	err = n.connectOrderedStream(ctx, n.conn)
-	if err != nil {
+	if err = n.connectOrderedStream(ctx, n.conn); err != nil {
 		return fmt.Errorf("starting stream failed: %w", err)
 	}
 	return nil

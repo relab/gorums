@@ -36,15 +36,15 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 	for _, opt := range opts {
 		opt(&m.opts)
 	}
-
+	if m.opts.logger != nil {
+		m.logger = m.opts.logger
+	}
 	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
 		grpc.CallContentSubtype(ContentSubtype),
 	))
-
 	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {
 		return nil, fmt.Errorf("could not create manager: no nodes provided")
 	}
-
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},
@@ -69,31 +69,10 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 		}
 	}
 
-	if err := m.connectAll(); err != nil {
-		return nil, ManagerCreationError(err)
-	}
-	if m.opts.logger != nil {
-		m.logger = m.opts.logger
-	}
 	if m.logger != nil {
 		m.logger.Printf("ready")
 	}
-
 	return m, nil
-}
-
-func (m *Manager) connectAll() error {
-	if m.logger != nil {
-		m.logger.Printf("connecting")
-	}
-
-	for _, node := range m.nodes {
-		err := node.connect(m.receiveQueue, m.opts)
-		if err != nil {
-			return fmt.Errorf("connect node %s error: %v", node.addr, err)
-		}
-	}
-	return nil
 }
 
 func (m *Manager) closeNodeConns() {
@@ -153,8 +132,8 @@ func (m *Manager) Size() (nodes int) {
 	return len(m.nodes)
 }
 
-// AddNode adds the node to the manager's node pool.
-// No connections are established here.
+// AddNode adds the node to the manager's node pool
+// and establishes a connection to the node.
 func (m *Manager) AddNode(addr string, id uint32) error {
 	if _, found := m.Node(id); found {
 		// Node IDs must be unique
@@ -163,6 +142,12 @@ func (m *Manager) AddNode(addr string, id uint32) error {
 	node, err := NewNode(addr, id)
 	if err != nil {
 		return err
+	}
+	if m.logger != nil {
+		m.logger.Printf("connecting to %s", node)
+	}
+	if err = node.connect(m.receiveQueue, m.opts); err != nil {
+		return fmt.Errorf("connection failed for %s: %w", node, err)
 	}
 
 	m.mu.Lock()
