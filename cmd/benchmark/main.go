@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -81,6 +82,7 @@ func main() {
 		remotesFlag    = listFlag{}
 		warmupFlag     = durationFlag{val: 100 * time.Millisecond}
 		benchTimeFlag  = durationFlag{val: 1 * time.Second}
+		traceFile      = flag.String("trace", "", "A `file` to write trace to.")
 		cpuprofile     = flag.String("cpuprofile", "", "A `file` to write cpu profile to.")
 		memprofile     = flag.String("memprofile", "", "A `file` to write memory profile to.")
 		payload        = flag.Int("payload", 0, "Size of the payload in request and response messages (in bytes).")
@@ -126,6 +128,18 @@ func main() {
 			log.Fatal("Could not start CPU profile: ", err)
 		}
 		defer pprof.StopCPUProfile()
+	}
+
+	if *traceFile != "" {
+		f, err := os.Create(*traceFile)
+		if err != nil {
+			log.Fatal("Could not create trace file: ", err)
+		}
+		defer f.Close()
+		if err := trace.Start(f); err != nil {
+			log.Fatal("Failed to start trace: ", err)
+		}
+		defer trace.Stop()
 	}
 
 	defer func() {
