@@ -21,7 +21,7 @@ func BenchmarkUnicast(b *testing.B) {
 	})
 	b.Run("UnicastAsyncSend/NewCall", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			unicastNewCall(context.Background(), cd, WithAsyncSend())
+			unicastNewCall(context.Background(), cd, WithNoSendWaiting())
 		}
 	})
 	b.Run("UnicastSyncSend/Basic", func(b *testing.B) {
@@ -31,7 +31,7 @@ func BenchmarkUnicast(b *testing.B) {
 	})
 	b.Run("UnicastAsyncSend/Basic", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			unicastBasic(context.Background(), cd, WithAsyncSend())
+			unicastBasic(context.Background(), cd, WithNoSendWaiting())
 		}
 	})
 }
@@ -43,7 +43,7 @@ func TestUnicast(t *testing.T) {
 	}
 	go consumeAndPutResult(cd.rq, cd.sendQ)
 	unicastBasic(context.Background(), cd)
-	unicastBasic(context.Background(), cd, WithAsyncSend())
+	unicastBasic(context.Background(), cd, WithNoSendWaiting())
 }
 
 type callData struct {

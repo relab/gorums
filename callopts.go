@@ -18,9 +18,9 @@ func getCallOptions(callType *protoimpl.ExtensionInfo, opts []CallOption) callOp
 	return o
 }
 
-// WithAsyncSend is a CallOption that makes Unicast or Multicast methods
+// WithNoSendWaiting is a CallOption that makes Unicast or Multicast methods
 // return immediately instead of blocking until the message has been sent.
-func WithAsyncSend() CallOption {
+func WithNoSendWaiting() CallOption {
 	return func(o *callOptions) {
 		o.noSendWaiting = true
 	}
