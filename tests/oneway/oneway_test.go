@@ -13,23 +13,30 @@ import (
 )
 
 type onewaySrv struct {
-	wg       sync.WaitGroup
-	received chan *oneway.Request
+	benchmark bool
+	wg        sync.WaitGroup
+	received  chan *oneway.Request
 }
 
 func (s *onewaySrv) Unicast(ctx context.Context, r *oneway.Request) {
+	if s.benchmark {
+		return
+	}
 	s.received <- r
 	s.wg.Done()
 }
 
 func (s *onewaySrv) Multicast(ctx context.Context, r *oneway.Request) {
+	if s.benchmark {
+		return
+	}
 	s.received <- r
 	s.wg.Done()
 }
 
 type testQSpec struct{}
 
-func setup(t *testing.T, cfgSize int) (cfg *oneway.Configuration, srvs []*onewaySrv, teardown func()) {
+func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*onewaySrv, teardown func()) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := 0; i < cfgSize; i++ {
@@ -117,4 +124,46 @@ func TestOnewayCalls(t *testing.T) {
 			teardown()
 		})
 	}
+}
+
+func BenchmarkUnicast(b *testing.B) {
+	cfg, srvs, teardown := setup(b, 1)
+	for _, srv := range srvs {
+		srv.benchmark = true
+	}
+	in := &oneway.Request{Num: 0}
+	b.Run("UnicastSendWaiting__", func(b *testing.B) {
+		for c := 1; c <= b.N; c++ {
+			in.Num = uint64(c)
+			cfg.Nodes()[0].Unicast(context.Background(), in)
+		}
+	})
+	b.Run("UnicastNoSendWaiting", func(b *testing.B) {
+		for c := 1; c <= b.N; c++ {
+			in.Num = uint64(c)
+			cfg.Nodes()[0].Unicast(context.Background(), in, gorums.WithNoSendWaiting())
+		}
+	})
+	teardown()
+}
+
+func BenchmarkMulticast(b *testing.B) {
+	cfg, srvs, teardown := setup(b, 3)
+	for _, srv := range srvs {
+		srv.benchmark = true
+	}
+	in := &oneway.Request{Num: 0}
+	b.Run("MulticastSendWaiting__", func(b *testing.B) {
+		for c := 1; c <= b.N; c++ {
+			in.Num = uint64(c)
+			cfg.Multicast(context.Background(), in)
+		}
+	})
+	b.Run("MulticastNoSendWaiting", func(b *testing.B) {
+		for c := 1; c <= b.N; c++ {
+			in.Num = uint64(c)
+			cfg.Nodes()[0].Unicast(context.Background(), in, gorums.WithNoSendWaiting())
+		}
+	})
+	teardown()
 }
