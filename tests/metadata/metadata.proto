@@ -1,7 +1,5 @@
 syntax = "proto3";
-
 package metadata;
-
 option go_package = "github.com/relab/gorums/tests/metadata";
 
 import "google/protobuf/empty.proto";

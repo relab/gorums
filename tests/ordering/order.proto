@@ -1,8 +1,6 @@
 syntax = "proto3";
-
 package ordering;
-
-option go_package = "github.com/relab/gorums/cmd/protoc-gen-gorums/tests/ordering";
+option go_package = "github.com/relab/gorums/tests/ordering";
 
 import "gorums.proto";
 
