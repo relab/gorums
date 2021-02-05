@@ -1,7 +1,7 @@
 # Tests that should be run each time
-RUNTESTS := qf ordering metadata tls unresponsive
+RUNTESTS := qf ordering metadata tls unresponsive dummy
 
-.PHONY: all qf ordering metadata tls unresponsive
+.PHONY: all qf ordering metadata tls unresponsive dummy
 
 all: $(RUNTESTS)
 
@@ -14,6 +14,8 @@ metadata: metadata/metadata.pb.go metadata/metadata_gorums.pb.go
 tls: tls/tls.pb.go tls/tls_gorums.pb.go
 
 unresponsive: unresponsive/unresponsive.pb.go unresponsive/unresponsive_gorums.pb.go
+
+dummy: dummy/dummy.pb.go dummy/dummy_gorums.pb.go
 
 %.pb.go : %.proto
 	@protoc -I=..:. --go_out=paths=source_relative:. $<

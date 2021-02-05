@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/tests/unresponsive"
+	"github.com/relab/gorums/tests/dummy"
 	"google.golang.org/grpc"
 )
 
@@ -82,16 +82,16 @@ func TestManagerAddNode(t *testing.T) {
 	}
 }
 
-// Reusing tests/unresponsive/unresponsive.proto definitions
-type testSrv struct{}
+// Proto definition in tests/dummy/dummy.proto
+type dummySrv struct{}
 
-func (srv testSrv) TestUnresponsive(ctx context.Context, _ *unresponsive.Empty, _ func(*unresponsive.Empty, error)) {
+func (_ dummySrv) Test(ctx context.Context, _ *dummy.Empty, _ func(*dummy.Empty, error)) {
 }
 
 func TestManagerAddNodeWithConn(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 3, func() gorums.ServerIface {
 		srv := gorums.NewServer()
-		unresponsive.RegisterUnresponsiveServer(srv, &testSrv{})
+		dummy.RegisterDummyServer(srv, &dummySrv{})
 		return srv
 	})
 	defer teardown()
