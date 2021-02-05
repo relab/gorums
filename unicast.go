@@ -14,7 +14,7 @@ func Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	md := d.Node.newCall(d.Method)
 	d.Node.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
-	if o.sendAsync {
+	if o.noSendWaiting {
 		// don't wait for message to be sent
 		return
 	}

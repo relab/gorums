@@ -23,8 +23,7 @@ func Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
 	}
 
-	// TODO rename sendAsync to waitSend or waitSendCompletion
-	if o.sendAsync {
+	if o.noSendWaiting {
 		// don't wait for messages to be sent
 		return
 	}

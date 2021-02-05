@@ -3,8 +3,8 @@ package gorums
 import "google.golang.org/protobuf/runtime/protoimpl"
 
 type callOptions struct {
-	callType  *protoimpl.ExtensionInfo
-	sendAsync bool
+	callType      *protoimpl.ExtensionInfo
+	noSendWaiting bool
 }
 
 // CallOption is a function that sets a value in the given callOptions struct
@@ -18,10 +18,10 @@ func getCallOptions(callType *protoimpl.ExtensionInfo, opts []CallOption) callOp
 	return o
 }
 
-// WithAsyncSend is a CallOption that makes Unicast or Multicast methods run asynchronously,
-// instead of blocking until the message is sent.
+// WithAsyncSend is a CallOption that makes Unicast or Multicast methods
+// return immediately instead of blocking until the message has been sent.
 func WithAsyncSend() CallOption {
 	return func(o *callOptions) {
-		o.sendAsync = true
+		o.noSendWaiting = true
 	}
 }

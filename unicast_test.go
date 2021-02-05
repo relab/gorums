@@ -64,7 +64,7 @@ func unicastBasic(ctx context.Context, d callData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 	msgID := d.rq.nextMsgID()
 	var replyChan chan *gorumsStreamResult
-	if !o.sendAsync {
+	if !o.noSendWaiting {
 		replyChan = make(chan *gorumsStreamResult, 1)
 		d.rq.putChan(msgID, replyChan)
 		defer d.rq.deleteChan(msgID)
@@ -76,7 +76,7 @@ func unicastBasic(ctx context.Context, d callData, opts ...CallOption) {
 	d.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	// wait until the message has been sent (nodeStream will give an empty reply when this happens)
-	if !o.sendAsync {
+	if !o.noSendWaiting {
 		<-replyChan
 	}
 }
@@ -89,7 +89,7 @@ func unicastNewCall(ctx context.Context, d callData, opts ...CallOption) {
 	d.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	// wait until the message has been sent (nodeStream will give an empty reply when this happens)
-	if !o.sendAsync {
+	if !o.noSendWaiting {
 		<-replyChan
 		callDone()
 	}

@@ -113,9 +113,9 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 }
 
 func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
-	// unblock the waiting caller when sendAsync is not enabled
+	// unblock the waiting caller unless noSendWaiting is enabled
 	defer func() {
-		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.sendAsync {
+		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
 			s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{})
 		}
 	}()
