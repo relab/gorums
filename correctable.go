@@ -84,7 +84,8 @@ type CorrectableCallData struct {
 
 func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(d.Nodes)
-	md, replyChan, callDone := d.Manager.newCall(d.Method, expectedReplies, true)
+	md := d.Manager.newCall(d.Method)
+	replyChan, callDone := d.Manager.newReply(md, expectedReplies)
 
 	for _, n := range d.Nodes {
 		msg := d.Message

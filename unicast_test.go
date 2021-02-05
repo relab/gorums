@@ -83,7 +83,9 @@ func unicastBasic(ctx context.Context, d callData, opts ...CallOption) {
 
 func unicastNewCall(ctx context.Context, d callData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-	md, replyChan, callDone := d.rq.newCall(d.Method, 1, !o.sendAsync)
+	md := d.rq.newCall(d.Method)
+	replyChan, callDone := d.rq.newReply(md, 1)
+
 	d.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	// wait until the message has been sent (nodeStream will give an empty reply when this happens)

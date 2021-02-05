@@ -13,7 +13,8 @@ type CallData struct {
 }
 
 func RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
-	md, replyChan, callDone := d.Node.newCall(d.Method, 1, true)
+	md := d.Node.newCall(d.Method)
+	replyChan, callDone := d.Node.newReply(md, 1)
 	defer callDone()
 
 	d.Node.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
