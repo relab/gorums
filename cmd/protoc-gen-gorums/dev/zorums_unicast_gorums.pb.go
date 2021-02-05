@@ -13,7 +13,6 @@ import (
 func (n *Node) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
 
 	cd := gorums.CallData{
-		Manager: n.mgr.Manager,
 		Node:    n.Node,
 		Message: in,
 		Method:  "dev.ZorumsService.Unicast",
@@ -30,7 +29,6 @@ var _ emptypb.Empty
 func (n *Node) Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
 
 	cd := gorums.CallData{
-		Manager: n.mgr.Manager,
 		Node:    n.Node,
 		Message: in,
 		Method:  "dev.ZorumsService.Unicast2",

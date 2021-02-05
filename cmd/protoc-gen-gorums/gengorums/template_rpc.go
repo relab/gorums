@@ -14,7 +14,6 @@ var rpcVar = `
 
 var rpcBody = `
 	cd := {{$callData}}{
-		Manager:  n.mgr.Manager,
 		Node:     n.Node,
 		Message:  in,
 		Method: "{{$fullName}}",

@@ -69,7 +69,7 @@ func (c *Configuration) NodeIDs() []uint32 {
 func (c *Configuration) Nodes() []*Node {
 	nodes := make([]*Node, 0, len(c.nodes))
 	for _, n := range c.nodes {
-		nodes = append(nodes, &Node{n, c.mgr})
+		nodes = append(nodes, &Node{n})
 	}
 	return nodes
 }
@@ -153,14 +153,13 @@ func (m *Manager) Nodes() []*Node {
 	gorumsNodes := m.Manager.Nodes()
 	nodes := make([]*Node, 0, len(gorumsNodes))
 	for _, n := range gorumsNodes {
-		nodes = append(nodes, &Node{n, m})
+		nodes = append(nodes, &Node{n})
 	}
 	return nodes
 }
 
 type Node struct {
 	*gorums.Node
-	mgr *Manager
 }
 
 `

@@ -14,7 +14,6 @@ type managerOptions struct {
 	nodeDialTimeout time.Duration
 	logger          *log.Logger
 	noConnect       bool
-	trace           bool
 	backoff         backoff.Config
 	sendBuffer      uint
 	idMapping       map[string]uint32
@@ -62,15 +61,6 @@ func WithLogger(logger *log.Logger) ManagerOption {
 func WithNoConnect() ManagerOption {
 	return func(o *managerOptions) {
 		o.noConnect = true
-	}
-}
-
-// WithTracing controls whether to trace quorum calls for this Manager instance
-// using the golang.org/x/net/trace package. Tracing is currently only supported
-// for regular quorum calls.
-func WithTracing() ManagerOption {
-	return func(o *managerOptions) {
-		o.trace = true
 	}
 }
 

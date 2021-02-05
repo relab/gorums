@@ -131,8 +131,6 @@ func main() {
 	}
 
 	if *traceFile != "" {
-		// TODO: not sure if enabling gRPC tracing is appropriate here
-		grpc.EnableTracing = true
 		f, err := os.Create(*traceFile)
 		if err != nil {
 			log.Fatal("Could not create trace file: ", err)
@@ -185,15 +183,11 @@ func main() {
 		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithReceiveBufferSize(*serverBuffer))
 	}
 
-	var mgrOpts = []gorums.ManagerOption{
+	mgrOpts := []gorums.ManagerOption{
 		gorums.WithNodeList(remotes),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 		gorums.WithDialTimeout(10 * time.Second),
 		gorums.WithSendBufferSize(*sendBuffer),
-	}
-
-	if trace.IsEnabled() {
-		mgrOpts = append(mgrOpts, gorums.WithTracing())
 	}
 
 	mgr, err := benchmark.NewManager(mgrOpts...)

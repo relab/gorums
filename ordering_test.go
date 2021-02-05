@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -97,6 +98,25 @@ func BenchmarkReceiveQueue(b *testing.B) {
 			syncrq.Delete(msgID)
 		}
 	})
+}
+
+// nextMsgID is only used except for benchmarking.
+func (m *receiveQueue) nextMsgID() uint64 {
+	return atomic.AddUint64(&m.msgID, 1)
+}
+
+// putChan is only used except for benchmarking.
+func (m *receiveQueue) putChan(id uint64, c chan *gorumsStreamResult) {
+	m.recvQMut.Lock()
+	m.recvQ[id] = c
+	m.recvQMut.Unlock()
+}
+
+// deleteChan is only used except for benchmarking.
+func (m *receiveQueue) deleteChan(id uint64) {
+	m.recvQMut.Lock()
+	delete(m.recvQ, id)
+	m.recvQMut.Unlock()
 }
 
 func (m *receiveQueue) putResult2(id uint64, result *gorumsStreamResult) {

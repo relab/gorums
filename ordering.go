@@ -63,22 +63,6 @@ func (m *receiveQueue) newCall(method string, maxReplies int, reply bool) (md *o
 	return
 }
 
-func (m *receiveQueue) nextMsgID() uint64 {
-	return atomic.AddUint64(&m.msgID, 1)
-}
-
-func (m *receiveQueue) putChan(id uint64, c chan *gorumsStreamResult) {
-	m.recvQMut.Lock()
-	m.recvQ[id] = c
-	m.recvQMut.Unlock()
-}
-
-func (m *receiveQueue) deleteChan(id uint64) {
-	m.recvQMut.Lock()
-	delete(m.recvQ, id)
-	m.recvQMut.Unlock()
-}
-
 func (m *receiveQueue) putResult(id uint64, result *gorumsStreamResult) {
 	m.recvQMut.RLock()
 	c, ok := m.recvQ[id]
@@ -101,6 +85,16 @@ type orderedNodeStream struct {
 	parentCtx    context.Context
 	streamCtx    context.Context
 	cancelStream context.CancelFunc
+}
+
+func newNodeStream(node *Node, rq *receiveQueue, opts managerOptions) *orderedNodeStream {
+	return &orderedNodeStream{
+		receiveQueue: rq,
+		sendQ:        make(chan gorumsStreamRequest, opts.sendBuffer),
+		node:         node,
+		backoff:      opts.backoff,
+		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+	}
 }
 
 func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc.ClientConn) error {

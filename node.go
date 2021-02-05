@@ -3,7 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"hash/fnv"
 	"net"
 	"sort"
 	"strconv"
@@ -31,18 +31,30 @@ type Node struct {
 	*orderedNodeStream
 }
 
-func (n *Node) createOrderedStream(rq *receiveQueue, opts managerOptions) {
-	n.orderedNodeStream = &orderedNodeStream{
-		receiveQueue: rq,
-		sendQ:        make(chan gorumsStreamRequest, opts.sendBuffer),
-		node:         n,
-		backoff:      opts.backoff,
-		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+// NewNode returns a new node for the provided address and id.
+func NewNode(addr string, id uint32) (*Node, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
 	}
+	if id == 0 {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(tcpAddr.String()))
+		id = h.Sum32()
+	}
+	return &Node{
+		id:      id,
+		addr:    tcpAddr.String(),
+		latency: -1 * time.Second,
+	}, nil
 }
 
 // connect to this node to facilitate gRPC calls and optionally client streams.
-func (n *Node) connect(opts managerOptions) error {
+func (n *Node) connect(rq *receiveQueue, opts managerOptions) error {
+	if opts.noConnect {
+		return nil
+	}
+	n.orderedNodeStream = newNodeStream(n, rq, opts)
 	var err error
 	ctx, cancel := context.WithTimeout(context.Background(), opts.nodeDialTimeout)
 	defer cancel()
@@ -57,8 +69,7 @@ func (n *Node) connect(opts managerOptions) error {
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	err = n.connectOrderedStream(ctx, n.conn)
-	if err != nil {
+	if err = n.connectOrderedStream(ctx, n.conn); err != nil {
 		return fmt.Errorf("starting stream failed: %w", err)
 	}
 	return nil
@@ -66,6 +77,9 @@ func (n *Node) connect(opts managerOptions) error {
 
 // close this node for further calls and optionally stream.
 func (n *Node) close() error {
+	if n.conn == nil {
+		return nil
+	}
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("%d: conn close error: %w", n.id, err)
 	}

@@ -52,7 +52,7 @@ func (c *Configuration) NodeIDs() []uint32 {
 func (c *Configuration) Nodes() []*Node {
 	nodes := make([]*Node, 0, len(c.nodes))
 	for _, n := range c.nodes {
-		nodes = append(nodes, &Node{n, c.mgr})
+		nodes = append(nodes, &Node{n})
 	}
 	return nodes
 }
