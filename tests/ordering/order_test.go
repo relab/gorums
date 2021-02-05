@@ -79,7 +79,7 @@ func (q testQSpec) AsyncHandlerQF(_ *Request, replies map[uint32]*Response) (*Re
 
 func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 	t.Helper()
-	addrs, closeServers := gorums.TestSetup(t, cfgSize, func() gorums.ServerIface {
+	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv

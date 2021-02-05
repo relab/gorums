@@ -89,7 +89,7 @@ func (_ dummySrv) Test(ctx context.Context, _ *dummy.Empty, _ func(*dummy.Empty,
 }
 
 func TestManagerAddNodeWithConn(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 3, func() gorums.ServerIface {
+	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		dummy.RegisterDummyServer(srv, &dummySrv{})
 		return srv
