@@ -1,7 +1,5 @@
 syntax = "proto3";
-
 package unresponsive;
-
 option go_package = "github.com/relab/gorums/tests/unresponsive";
 
 service Unresponsive {

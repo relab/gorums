@@ -1,7 +1,5 @@
 syntax = "proto3";
-
 package tls;
-
 option go_package = "github.com/relab/gorums/tests/tls";
 
 service TLS {
