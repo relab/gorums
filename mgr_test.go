@@ -88,7 +88,6 @@ func TestManagerLogging(t *testing.T) {
 }
 
 func TestManagerAddNode(t *testing.T) {
-	nodeMap := map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
 	mgr, err := gorums.NewManager(gorums.WithNodeMap(nodeMap), gorums.WithNoConnect())
 	if err != nil {
 		t.Fatalf("NewManager(): unexpected error: %s", err)
@@ -104,9 +103,13 @@ func TestManagerAddNode(t *testing.T) {
 		{"127.0.1.1:1234", 2, "node ID 2 already exists (127.0.1.1:1234)"},
 	}
 	for _, test := range tests {
-		err = mgr.AddNode(test.addr, test.id)
+		node, err := gorums.NewNodeWithID(test.addr, test.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = mgr.AddNode(node)
 		if err != nil && err.Error() != test.err {
-			t.Errorf("mgr.AddNode(%s, %d) = %s, expected %s", test.addr, test.id, err.Error(), test.err)
+			t.Errorf("mgr.AddNode(Node(%s, %d)) = %s, expected %s", test.addr, test.id, err.Error(), test.err)
 		}
 	}
 }
@@ -136,9 +139,13 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs)-1)
 	}
 
-	err = mgr.AddNode(addrs[2], 0)
+	node, err := gorums.NewNode(addrs[2])
 	if err != nil {
-		t.Errorf("mgr.AddNode(%s, %d) = %q, expected %q", addrs[2], 0, err.Error(), "")
+		t.Fatal(err)
+	}
+	err = mgr.AddNode(node)
+	if err != nil {
+		t.Errorf("mgr.AddNode(%s) = %q, expected %q", addrs[2], err.Error(), "")
 	}
 	if mgr.Size() != len(addrs) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs))

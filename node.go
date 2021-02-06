@@ -31,16 +31,26 @@ type Node struct {
 	*orderedNodeStream
 }
 
-// NewNode returns a new node for the provided address and id.
-func NewNode(addr string, id uint32) (*Node, error) {
+// NewNode returns a new node for the provided address.
+func NewNode(addr string) (*Node, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
 	}
-	if id == 0 {
-		h := fnv.New32a()
-		_, _ = h.Write([]byte(tcpAddr.String()))
-		id = h.Sum32()
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(tcpAddr.String()))
+	return &Node{
+		id:      h.Sum32(),
+		addr:    tcpAddr.String(),
+		latency: -1 * time.Second,
+	}, nil
+}
+
+// NewNodeWithID returns a new node for the provided address and id.
+func NewNodeWithID(addr string, id uint32) (*Node, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
 	}
 	return &Node{
 		id:      id,
