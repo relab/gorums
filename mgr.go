@@ -42,16 +42,20 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
 		grpc.CallContentSubtype(ContentSubtype),
 	))
-	if len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0 {
-		return nil, fmt.Errorf("could not create manager: no nodes provided")
-	}
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},
 		))
 	}
 
-	if m.opts.idMapping != nil {
+	switch {
+	case len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0:
+		return nil, ManagerCreationError(fmt.Errorf("no nodes provided; need WithNodeMap or WithNodeList"))
+
+	case len(m.opts.addrsList) > 0 && len(m.opts.idMapping) > 0:
+		return nil, ManagerCreationError(fmt.Errorf("multiple node lists provided; use only one of WithNodeMap or WithNodeList"))
+
+	case len(m.opts.idMapping) > 0:
 		for naddr, id := range m.opts.idMapping {
 			err := m.AddNode(naddr, id)
 			if err != nil {
@@ -60,7 +64,8 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 		}
 		// Sort nodes since map iteration is non-deterministic.
 		OrderedBy(ID).Sort(m.nodes)
-	} else if m.opts.addrsList != nil {
+
+	case len(m.opts.addrsList) > 0:
 		for _, naddr := range m.opts.addrsList {
 			err := m.AddNode(naddr, 0)
 			if err != nil {

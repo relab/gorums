@@ -12,28 +12,57 @@ import (
 	"google.golang.org/grpc"
 )
 
-func TestNewManager(t *testing.T) {
+var (
+	nodes   = []string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}
+	nodeMap = map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
+)
+
+func TestNewManagerErrors(t *testing.T) {
 	_, err := gorums.NewManager()
 	if err == nil {
 		t.Errorf("NewManager(): expected error: '%s'", "could not create manager: no nodes provided")
 	}
+	_, err = gorums.NewManager(gorums.WithNodeList([]string{}))
+	if err == nil {
+		t.Errorf("NewManager(): expected error: '%s'", "could not create manager: no nodes provided")
+	}
+	_, err = gorums.NewManager(gorums.WithNodeMap(map[string]uint32{}))
+	if err == nil {
+		t.Errorf("NewManager(): expected error: '%s'", "could not create manager: no nodes provided")
+	}
+	_, err = gorums.NewManager(gorums.WithNodeList(nodes), gorums.WithNodeMap(nodeMap), gorums.WithNoConnect())
+	if err == nil {
+		t.Errorf("NewManager(): expected error: '%s'", "could not create manager: multiple node lists provided")
+	}
+}
 
-	nodes := []string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}
+func TestNewManagerWithNodeList(t *testing.T) {
 	mgr, err := gorums.NewManager(gorums.WithNodeList(nodes), gorums.WithNoConnect())
 	if err != nil {
-		t.Fatalf("NewManager(): unexpected error: %s", err)
+		t.Fatal(err)
 	}
 	if mgr.Size() != len(nodes) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes))
 	}
+	for i, node := range mgr.Nodes() {
+		if nodes[i] != node.Address() {
+			t.Errorf("mgr.Nodes()[%d] = %s, expected %s", i, node.Address(), nodes[i])
+		}
+	}
+}
 
-	nodeMap := map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
-	mgr, err = gorums.NewManager(gorums.WithNodeMap(nodeMap), gorums.WithNoConnect())
+func TestNewManagerWithNodeMap(t *testing.T) {
+	mgr, err := gorums.NewManager(gorums.WithNodeMap(nodeMap), gorums.WithNoConnect())
 	if err != nil {
-		t.Fatalf("NewManager(): unexpected error: %s", err)
+		t.Fatal(err)
 	}
 	if mgr.Size() != len(nodeMap) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
+	}
+	for key, id := range nodeMap {
+		if _, found := mgr.Node(id); !found {
+			t.Errorf("mgr.Node(%d) = not found, expected %s", id, key)
+		}
 	}
 }
 
