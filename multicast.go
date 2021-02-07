@@ -12,16 +12,18 @@ func Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 
 	md := d.Manager.newCall(d.Method)
+	sentMsgs := 0
 	send := func() {
 		for _, n := range d.Nodes {
 			msg := d.Message
 			if d.PerNodeArgFn != nil {
-				nodeArg := d.PerNodeArgFn(d.Message, n.id)
-				if nodeArg != nil {
-					continue
+				msg = d.PerNodeArgFn(d.Message, n.id)
+				if !msg.ProtoReflect().IsValid() {
+					continue // don't send if no msg
 				}
 			}
 			n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
+			sentMsgs++
 		}
 	}
 
@@ -30,13 +32,14 @@ func Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 		return // don't wait for messages to be sent
 	}
 
-	replyChan, callDone := d.Manager.newReply(md, len(d.Nodes))
+	replyChan, callDone := d.Manager.newReply(md, sentMsgs)
 	send()
 
 	// nodeStream sends an empty reply on replyChan when the message has been sent
 	// wait until the message has been sent
-	for range d.Nodes {
+	for sentMsgs > 0 {
 		<-replyChan
+		sentMsgs--
 	}
 	callDone()
 }
