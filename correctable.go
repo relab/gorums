@@ -90,10 +90,10 @@ func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	for _, n := range d.Nodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
-			nodeArg := d.PerNodeArgFn(d.Message, n.id)
-			if nodeArg != nil {
+			msg = d.PerNodeArgFn(d.Message, n.id)
+			if !msg.ProtoReflect().IsValid() {
 				expectedReplies--
-				continue
+				continue // don't send if no msg
 			}
 		}
 		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
