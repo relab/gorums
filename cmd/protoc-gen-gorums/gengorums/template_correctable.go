@@ -41,7 +41,7 @@ var correctableSignature = `func (c *Configuration) {{$method}}(` +
 var correctableBody = `
 	cd := {{$callData}}{
 		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
+		Nodes:    c.Configuration.Nodes(),
 		Message:  in,
 		Method: "{{$fullName}}",
 	{{- if correctableStream .Method}}

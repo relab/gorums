@@ -13,7 +13,7 @@ import (
 func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request) *AsyncResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsync",
 	}
@@ -33,7 +33,7 @@ func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request) *Async
 func (c *Configuration) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *AsyncResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncPerNodeArg",
 	}
@@ -56,7 +56,7 @@ func (c *Configuration) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Reque
 func (c *Configuration) QuorumCallAsyncCustomReturnType(ctx context.Context, in *Request) *AsyncMyResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncCustomReturnType",
 	}
@@ -76,7 +76,7 @@ func (c *Configuration) QuorumCallAsyncCustomReturnType(ctx context.Context, in 
 func (c *Configuration) QuorumCallAsyncCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *AsyncMyResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncCombo",
 	}
@@ -99,7 +99,7 @@ func (c *Configuration) QuorumCallAsyncCombo(ctx context.Context, in *Request, f
 func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request) *AsyncResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsync2",
 	}
@@ -119,7 +119,7 @@ func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request) *Asyn
 func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *AsyncEmpty {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncEmpty",
 	}
@@ -140,7 +140,7 @@ func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *
 func (c *Configuration) QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) *AsyncResponse {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncEmpty2",
 	}

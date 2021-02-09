@@ -1,8 +1,6 @@
 package dev
 
 import (
-	"sort"
-
 	"github.com/relab/gorums"
 	"google.golang.org/grpc/encoding"
 )
@@ -26,37 +24,14 @@ type Manager struct {
 	*gorums.Manager
 }
 
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (*Configuration, error) {
-	if len(ids) == 0 {
-		return nil, gorums.IllegalConfigError("need at least one node")
-	}
-
-	var nodes []*gorums.Node
-	unique := make(map[uint32]struct{})
-	for _, nid := range ids {
-		// ensure that identical IDs are only counted once
-		if _, duplicate := unique[nid]; duplicate {
-			continue
-		}
-		unique[nid] = struct{}{}
-
-		node, found := m.Node(nid)
-		if !found {
-			return nil, gorums.NodeNotFoundError(nid)
-		}
-
-		i := sort.Search(len(nodes), func(i int) bool {
-			return node.ID() < nodes[i].ID()
-		})
-		nodes = append(nodes, nil)
-		copy(nodes[i+1:], nodes[i:])
-		nodes[i] = node
-	}
-
-	c := &Configuration{
-		nodes: nodes,
+func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (c *Configuration, err error) {
+	c = &Configuration{
 		mgr:   m,
 		qspec: qspec,
+	}
+	c.Configuration, err = gorums.NewConfiguration(m.Manager, ids)
+	if err != nil {
+		return nil, err
 	}
 	return c, nil
 }

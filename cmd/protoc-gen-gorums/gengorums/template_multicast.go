@@ -24,7 +24,7 @@ var multicastSignature = `func (c *Configuration) {{$method}}(` +
 var multicastBody = `
 	cd := {{$callData}}{
 		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
+		Nodes:    c.Configuration.Nodes(),
 		Message:  in,
 		Method: "{{$fullName}}",
 	}

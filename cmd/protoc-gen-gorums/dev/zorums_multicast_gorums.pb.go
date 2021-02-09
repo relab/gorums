@@ -14,7 +14,7 @@ func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...goru
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.Multicast",
 	}
@@ -27,7 +27,7 @@ func (c *Configuration) MulticastPerNodeArg(ctx context.Context, in *Request, f 
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.MulticastPerNodeArg",
 	}
@@ -44,7 +44,7 @@ func (c *Configuration) Multicast2(ctx context.Context, in *Request, opts ...gor
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.Multicast2",
 	}
@@ -60,7 +60,7 @@ func (c *Configuration) Multicast3(ctx context.Context, in *Request, opts ...gor
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.Multicast3",
 	}
@@ -76,7 +76,7 @@ func (c *Configuration) Multicast4(ctx context.Context, in *emptypb.Empty, opts 
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.Multicast4",
 	}
