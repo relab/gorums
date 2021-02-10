@@ -40,25 +40,26 @@ func newReceiveQueue() *receiveQueue {
 	}
 }
 
-// newCall returns metadata for the call, a channel for receiving replies
-// and a done function to be called for clean up.
-// Only if reply is true will replyChan and the done function be allocated.
-func (m *receiveQueue) newCall(method string, maxReplies int, reply bool) (md *ordering.Metadata, replyChan chan *gorumsStreamResult, done func()) {
+// newCall returns unique metadata for a method call.
+func (m *receiveQueue) newCall(method string) (md *ordering.Metadata) {
 	msgID := atomic.AddUint64(&m.msgID, 1)
-	md = &ordering.Metadata{
+	return &ordering.Metadata{
 		MessageID: msgID,
 		Method:    method,
 	}
-	if reply {
-		replyChan = make(chan *gorumsStreamResult, maxReplies)
+}
+
+// newReply returns a channel for receiving replies
+// and a done function to be called for clean up.
+func (m *receiveQueue) newReply(md *ordering.Metadata, maxReplies int) (replyChan chan *gorumsStreamResult, done func()) {
+	replyChan = make(chan *gorumsStreamResult, maxReplies)
+	m.recvQMut.Lock()
+	m.recvQ[md.MessageID] = replyChan
+	m.recvQMut.Unlock()
+	done = func() {
 		m.recvQMut.Lock()
-		m.recvQ[msgID] = replyChan
+		delete(m.recvQ, md.MessageID)
 		m.recvQMut.Unlock()
-		done = func() {
-			m.recvQMut.Lock()
-			delete(m.recvQ, msgID)
-			m.recvQMut.Unlock()
-		}
 	}
 	return
 }
@@ -112,9 +113,9 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 }
 
 func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
-	// unblock the waiting caller when sendAsync is not enabled
+	// unblock the waiting caller unless noSendWaiting is enabled
 	defer func() {
-		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.sendAsync {
+		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
 			s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{})
 		}
 	}()

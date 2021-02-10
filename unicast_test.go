@@ -21,7 +21,7 @@ func BenchmarkUnicast(b *testing.B) {
 	})
 	b.Run("UnicastAsyncSend/NewCall", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			unicastNewCall(context.Background(), cd, WithAsyncSend())
+			unicastNewCall(context.Background(), cd, WithNoSendWaiting())
 		}
 	})
 	b.Run("UnicastSyncSend/Basic", func(b *testing.B) {
@@ -31,7 +31,7 @@ func BenchmarkUnicast(b *testing.B) {
 	})
 	b.Run("UnicastAsyncSend/Basic", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			unicastBasic(context.Background(), cd, WithAsyncSend())
+			unicastBasic(context.Background(), cd, WithNoSendWaiting())
 		}
 	})
 }
@@ -43,7 +43,7 @@ func TestUnicast(t *testing.T) {
 	}
 	go consumeAndPutResult(cd.rq, cd.sendQ)
 	unicastBasic(context.Background(), cd)
-	unicastBasic(context.Background(), cd, WithAsyncSend())
+	unicastBasic(context.Background(), cd, WithNoSendWaiting())
 }
 
 type callData struct {
@@ -64,7 +64,7 @@ func unicastBasic(ctx context.Context, d callData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 	msgID := d.rq.nextMsgID()
 	var replyChan chan *gorumsStreamResult
-	if !o.sendAsync {
+	if !o.noSendWaiting {
 		replyChan = make(chan *gorumsStreamResult, 1)
 		d.rq.putChan(msgID, replyChan)
 		defer d.rq.deleteChan(msgID)
@@ -76,18 +76,20 @@ func unicastBasic(ctx context.Context, d callData, opts ...CallOption) {
 	d.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	// wait until the message has been sent (nodeStream will give an empty reply when this happens)
-	if !o.sendAsync {
+	if !o.noSendWaiting {
 		<-replyChan
 	}
 }
 
 func unicastNewCall(ctx context.Context, d callData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-	md, replyChan, callDone := d.rq.newCall(d.Method, 1, !o.sendAsync)
+	md := d.rq.newCall(d.Method)
+	replyChan, callDone := d.rq.newReply(md, 1)
+
 	d.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	// wait until the message has been sent (nodeStream will give an empty reply when this happens)
-	if !o.sendAsync {
+	if !o.noSendWaiting {
 		<-replyChan
 		callDone()
 	}

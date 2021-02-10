@@ -40,7 +40,7 @@ func TestTLS(t *testing.T) {
 		t.Errorf("Failed to parse cert: %v", err)
 	}
 
-	addrs, teardown := gorums.TestSetup(t, 1, func() gorums.ServerIface {
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer(gorums.WithGRPCServerOptions(grpc.Creds(credentials.NewServerTLSFromCert(&tlsCert))))
 		RegisterTLSServer(srv, &testSrv{})
 		return srv
