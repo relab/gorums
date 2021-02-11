@@ -11,6 +11,10 @@ func init() {
 	}
 }
 
+type Manager struct {
+	*gorums.Manager
+}
+
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
 	mgr = &Manager{}
 	mgr.Manager, err = gorums.NewManager(opts...)
@@ -18,10 +22,6 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
 		return nil, err
 	}
 	return mgr, nil
-}
-
-type Manager struct {
-	*gorums.Manager
 }
 
 func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (c *Configuration, err error) {
