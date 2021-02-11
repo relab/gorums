@@ -15,7 +15,7 @@ import (
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	*gorums.Configuration
+	gorums.Configuration
 	mgr   *Manager
 	qspec QuorumSpec
 }
@@ -52,6 +52,10 @@ func init() {
 	}
 }
 
+type Manager struct {
+	*gorums.Manager
+}
+
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
 	mgr = &Manager{}
 	mgr.Manager, err = gorums.NewManager(opts...)
@@ -59,10 +63,6 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
 		return nil, err
 	}
 	return mgr, nil
-}
-
-type Manager struct {
-	*gorums.Manager
 }
 
 func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (c *Configuration, err error) {
@@ -77,8 +77,8 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (c *Configura
 	return c, nil
 }
 
-// Nodes returns a slice of each available node. IDs are returned in the same
-// order as they were provided in the creation of the Manager.
+// Nodes returns a slice of available nodes on this manager.
+// IDs are returned in the order they were added at creation of the manager.
 func (m *Manager) Nodes() []*Node {
 	gorumsNodes := m.Manager.Nodes()
 	nodes := make([]*Node, 0, len(gorumsNodes))

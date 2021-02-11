@@ -36,8 +36,8 @@ func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (c *Configura
 	return c, nil
 }
 
-// Nodes returns a slice of each available node. IDs are returned in the same
-// order as they were provided in the creation of the Manager.
+// Nodes returns a slice of available nodes on this manager.
+// IDs are returned in the order they were added at creation of the manager.
 func (m *Manager) Nodes() []*Node {
 	gorumsNodes := m.Manager.Nodes()
 	nodes := make([]*Node, 0, len(gorumsNodes))

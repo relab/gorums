@@ -9,7 +9,7 @@ import (
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	*gorums.Configuration
+	gorums.Configuration
 	mgr   *Manager
 	qspec QuorumSpec
 }
