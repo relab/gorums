@@ -11,9 +11,7 @@ import (
 
 // QuorumCall plain.
 func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Response, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCall",
 	}
@@ -34,9 +32,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Resp
 
 // QuorumCall with per_node_arg option.
 func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallPerNodeArg",
 	}
@@ -60,9 +56,7 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 
 // QuorumCall with custom_return_type option.
 func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallCustomReturnType",
 	}
@@ -83,9 +77,7 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 
 // QuorumCallCombo with all supported options.
 func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *MyResponse, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallCombo",
 	}
@@ -109,9 +101,7 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 
 // QuorumCallEmpty for testing imported message type.
 func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) (resp *Response, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallEmpty",
 	}
@@ -132,9 +122,7 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) 
 
 // QuorumCallEmpty2 for testing imported message type.
 func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp *emptypb.Empty, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallEmpty2",
 	}

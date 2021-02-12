@@ -30,9 +30,7 @@ var asyncVar = qcVar + `
 {{$asyncOut := outType .Method $customOut}}
 `
 
-var asyncBody = `
-	cd := {{$callData}}{
-		Manager: c.mgr.Manager,
+var asyncBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
 	}

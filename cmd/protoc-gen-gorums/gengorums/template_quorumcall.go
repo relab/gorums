@@ -44,9 +44,7 @@ var qcVar = `
 {{$context := use "context.Context" .GenFile}}
 `
 
-var quorumCallBody = `
-	cd := {{$callData}}{
-		Manager: c.mgr.Manager,
+var quorumCallBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
 	}

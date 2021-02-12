@@ -11,7 +11,7 @@ import (
 func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 
-	md := d.Manager.newCall(d.Method)
+	md := c.newCall(d.Method)
 	sentMsgs := 0
 	send := func() {
 		for _, n := range c {
@@ -32,7 +32,7 @@ func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...
 		return // don't wait for messages to be sent
 	}
 
-	replyChan, callDone := d.Manager.newReply(md, sentMsgs)
+	replyChan, callDone := c.newReply(md, sentMsgs)
 	send()
 
 	// nodeStream sends an empty reply on replyChan when the message has been sent

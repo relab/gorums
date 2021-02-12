@@ -38,9 +38,7 @@ var correctableSignature = `func (c *Configuration) {{$method}}(` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
 	`*{{$correctableOut}} {`
 
-var correctableBody = `
-	cd := {{$callData}}{
-		Manager: c.mgr.Manager,
+var correctableBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
 	{{- if correctableStream .Method}}

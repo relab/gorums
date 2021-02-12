@@ -12,7 +12,6 @@ import (
 // Correctable plain.
 func (c *Configuration) Correctable(ctx context.Context, in *Request) *CorrectableResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.Correctable",
 		ServerStream: false,
@@ -32,7 +31,6 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request) *Correctab
 // CorrectablePerNodeArg with per_node_arg option.
 func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectablePerNodeArg",
 		ServerStream: false,
@@ -55,7 +53,6 @@ func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, 
 // CorrectableCustomReturnType with custom_return_type option.
 func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Request) *CorrectableMyResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableCustomReturnType",
 		ServerStream: false,
@@ -75,7 +72,6 @@ func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Req
 // CorrectableCombo with all supported options.
 func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableMyResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableCombo",
 		ServerStream: false,
@@ -98,7 +94,6 @@ func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f fun
 // CorrectableEmpty for testing imported message type.
 func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *CorrectableEmpty {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableEmpty",
 		ServerStream: false,
@@ -119,7 +114,6 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *Corr
 // type as Correctable: Response.
 func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableEmpty2",
 		ServerStream: false,
@@ -139,7 +133,6 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty
 // CorrectableStream plain.
 func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *CorrectableStreamResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStream",
 		ServerStream: true,
@@ -159,7 +152,6 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *Cor
 // CorrectablePerNodeArg with per_node_arg option.
 func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableStreamResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamPerNodeArg",
 		ServerStream: true,
@@ -182,7 +174,6 @@ func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Req
 // CorrectableCustomReturnType with custom_return_type option.
 func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, in *Request) *CorrectableStreamMyResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamCustomReturnType",
 		ServerStream: true,
@@ -202,7 +193,6 @@ func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, i
 // CorrectableCombo with all supported options.
 func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableStreamMyResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamCombo",
 		ServerStream: true,
@@ -225,7 +215,6 @@ func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request,
 // CorrectableEmpty for testing imported message type.
 func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request) *CorrectableStreamEmpty {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamEmpty",
 		ServerStream: true,
@@ -246,7 +235,6 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request)
 // type as Correctable: Response.
 func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse {
 	cd := gorums.CorrectableCallData{
-		Manager:      c.mgr.Manager,
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamEmpty2",
 		ServerStream: true,

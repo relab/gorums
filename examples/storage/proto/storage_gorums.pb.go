@@ -98,9 +98,7 @@ var _ emptypb.Empty
 // WriteMulticast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "storage.Storage.WriteMulticast",
 	}
@@ -129,9 +127,7 @@ type QuorumSpec interface {
 // ReadQC executes the Read Quorum Call on a configuration
 // of Nodes and returns the most recent value.
 func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "storage.Storage.ReadQC",
 	}
@@ -153,9 +149,7 @@ func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) (resp *Read
 // WriteQC executes the Write Quorum Call on a configuration
 // of Nodes and returns true if a majority of Nodes were updated.
 func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "storage.Storage.WriteQC",
 	}

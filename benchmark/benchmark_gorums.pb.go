@@ -97,7 +97,6 @@ type Node struct {
 // reply and error when available.
 func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho {
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "benchmark.Benchmark.AsyncQuorumCall",
 	}
@@ -119,9 +118,7 @@ var _ emptypb.Empty
 // Multicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "benchmark.Benchmark.Multicast",
 	}
@@ -185,9 +182,7 @@ type QuorumSpec interface {
 // StartServerBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "benchmark.Benchmark.StartServerBenchmark",
 	}
@@ -209,9 +204,7 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 // StopServerBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *Result, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "benchmark.Benchmark.StopServerBenchmark",
 	}
@@ -233,9 +226,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 // StartBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "benchmark.Benchmark.StartBenchmark",
 	}
@@ -257,9 +248,7 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 // StopBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (resp *MemoryStatList, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "benchmark.Benchmark.StopBenchmark",
 	}
@@ -280,9 +269,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 
 // benchmarks
 func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "benchmark.Benchmark.QuorumCall",
 	}
@@ -304,9 +291,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, e
 // SlowServer is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) SlowServer(ctx context.Context, in *Echo) (resp *Echo, err error) {
-
 	cd := gorums.QuorumCallData{
-		Manager: c.mgr.Manager,
 		Message: in,
 		Method:  "benchmark.Benchmark.SlowServer",
 	}

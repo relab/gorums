@@ -31,8 +31,8 @@ func (f *Async) Done() bool {
 
 func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 	expectedReplies := len(c)
-	md := d.Manager.newCall(d.Method)
-	replyChan, callDone := d.Manager.newReply(md, expectedReplies)
+	md := c.newCall(d.Method)
+	replyChan, callDone := c.newReply(md, expectedReplies)
 
 	for _, n := range c {
 		msg := d.Message
