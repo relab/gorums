@@ -13,7 +13,6 @@ import (
 func (c *Configuration) Correctable(ctx context.Context, in *Request) *CorrectableResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.Correctable",
 		ServerStream: false,
@@ -26,7 +25,7 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request) *Correctab
 		return c.qspec.CorrectableQF(req.(*Request), r)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableResponse{corr}
 }
 
@@ -34,7 +33,6 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request) *Correctab
 func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectablePerNodeArg",
 		ServerStream: false,
@@ -50,7 +48,7 @@ func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, 
 		return f(req.(*Request), nid)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableResponse{corr}
 }
 
@@ -58,7 +56,6 @@ func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, 
 func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Request) *CorrectableMyResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableCustomReturnType",
 		ServerStream: false,
@@ -71,7 +68,7 @@ func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Req
 		return c.qspec.CorrectableCustomReturnTypeQF(req.(*Request), r)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableMyResponse{corr}
 }
 
@@ -79,7 +76,6 @@ func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Req
 func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableMyResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableCombo",
 		ServerStream: false,
@@ -95,7 +91,7 @@ func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f fun
 		return f(req.(*Request), nid)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableMyResponse{corr}
 }
 
@@ -103,7 +99,6 @@ func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f fun
 func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *CorrectableEmpty {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableEmpty",
 		ServerStream: false,
@@ -116,7 +111,7 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *Corr
 		return c.qspec.CorrectableEmptyQF(req.(*Request), r)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableEmpty{corr}
 }
 
@@ -125,7 +120,6 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *Corr
 func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableEmpty2",
 		ServerStream: false,
@@ -138,7 +132,7 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty
 		return c.qspec.CorrectableEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableResponse{corr}
 }
 
@@ -146,7 +140,6 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty
 func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *CorrectableStreamResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStream",
 		ServerStream: true,
@@ -159,7 +152,7 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *Cor
 		return c.qspec.CorrectableStreamQF(req.(*Request), r)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableStreamResponse{corr}
 }
 
@@ -167,7 +160,6 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *Cor
 func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableStreamResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamPerNodeArg",
 		ServerStream: true,
@@ -183,7 +175,7 @@ func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Req
 		return f(req.(*Request), nid)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableStreamResponse{corr}
 }
 
@@ -191,7 +183,6 @@ func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Req
 func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, in *Request) *CorrectableStreamMyResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamCustomReturnType",
 		ServerStream: true,
@@ -204,7 +195,7 @@ func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, i
 		return c.qspec.CorrectableStreamCustomReturnTypeQF(req.(*Request), r)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableStreamMyResponse{corr}
 }
 
@@ -212,7 +203,6 @@ func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, i
 func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableStreamMyResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamCombo",
 		ServerStream: true,
@@ -228,7 +218,7 @@ func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request,
 		return f(req.(*Request), nid)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableStreamMyResponse{corr}
 }
 
@@ -236,7 +226,6 @@ func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request,
 func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request) *CorrectableStreamEmpty {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamEmpty",
 		ServerStream: true,
@@ -249,7 +238,7 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request)
 		return c.qspec.CorrectableStreamEmptyQF(req.(*Request), r)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableStreamEmpty{corr}
 }
 
@@ -258,7 +247,6 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request)
 func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse {
 	cd := gorums.CorrectableCallData{
 		Manager:      c.mgr.Manager,
-		Nodes:        c.Configuration.Nodes(),
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamEmpty2",
 		ServerStream: true,
@@ -271,6 +259,6 @@ func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *emptypb
 		return c.qspec.CorrectableStreamEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
-	corr := gorums.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &CorrectableStreamResponse{corr}
 }

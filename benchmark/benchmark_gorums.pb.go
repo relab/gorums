@@ -98,7 +98,6 @@ type Node struct {
 func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho {
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "benchmark.Benchmark.AsyncQuorumCall",
 	}
@@ -110,7 +109,7 @@ func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEch
 		return c.qspec.AsyncQuorumCallQF(req.(*Echo), r)
 	}
 
-	fut := gorums.AsyncCall(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd)
 	return &AsyncEcho{fut}
 }
 
@@ -123,12 +122,11 @@ func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg, opts ...gor
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "benchmark.Benchmark.Multicast",
 	}
 
-	gorums.Multicast(ctx, cd, opts...)
+	c.Configuration.Multicast(ctx, cd, opts...)
 }
 
 // QuorumSpec is the interface of quorum functions for Benchmark.
@@ -190,7 +188,6 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "benchmark.Benchmark.StartServerBenchmark",
 	}
@@ -202,7 +199,7 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 		return c.qspec.StartServerBenchmarkQF(req.(*StartRequest), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +212,6 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "benchmark.Benchmark.StopServerBenchmark",
 	}
@@ -227,7 +223,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 		return c.qspec.StopServerBenchmarkQF(req.(*StopRequest), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +236,6 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "benchmark.Benchmark.StartBenchmark",
 	}
@@ -252,7 +247,7 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 		return c.qspec.StartBenchmarkQF(req.(*StartRequest), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +260,6 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "benchmark.Benchmark.StopBenchmark",
 	}
@@ -277,7 +271,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 		return c.qspec.StopBenchmarkQF(req.(*StopRequest), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +283,6 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, e
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "benchmark.Benchmark.QuorumCall",
 	}
@@ -301,7 +294,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, e
 		return c.qspec.QuorumCallQF(req.(*Echo), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +307,6 @@ func (c *Configuration) SlowServer(ctx context.Context, in *Echo) (resp *Echo, e
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "benchmark.Benchmark.SlowServer",
 	}
@@ -326,7 +318,7 @@ func (c *Configuration) SlowServer(ctx context.Context, in *Echo) (resp *Echo, e
 		return c.qspec.SlowServerQF(req.(*Echo), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,6 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Resp
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCall",
 	}
@@ -26,7 +25,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Resp
 		return c.qspec.QuorumCallQF(req.(*Request), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +37,6 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallPerNodeArg",
 	}
@@ -53,7 +51,7 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 		return f(req.(*Request), nid)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +63,6 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallCustomReturnType",
 	}
@@ -77,7 +74,7 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 		return c.qspec.QuorumCallCustomReturnTypeQF(req.(*Request), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +86,6 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallCombo",
 	}
@@ -104,7 +100,7 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 		return f(req.(*Request), nid)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +112,6 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) 
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallEmpty",
 	}
@@ -128,7 +123,7 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) 
 		return c.qspec.QuorumCallEmptyQF(req.(*emptypb.Empty), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +135,6 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallEmpty2",
 	}
@@ -152,7 +146,7 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp
 		return c.qspec.QuorumCallEmpty2QF(req.(*Request), r)
 	}
 
-	res, err := gorums.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

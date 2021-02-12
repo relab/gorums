@@ -46,10 +46,9 @@ var qcVar = `
 
 var quorumCallBody = `
 	cd := {{$callData}}{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.Configuration.Nodes(),
-		Message:  in,
-		Method: "{{$fullName}}",
+		Manager: c.mgr.Manager,
+		Message: in,
+		Method:  "{{$fullName}}",
 	}
 	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
 		r := make(map[uint32]*{{$out}}, len(replies))
@@ -64,7 +63,7 @@ var quorumCallBody = `
 	}
 {{- end}}
 
-	res, err := {{use "gorums.QuorumCall" $genFile}}(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

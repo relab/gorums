@@ -74,7 +74,6 @@ func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error,
 
 type CorrectableCallData struct {
 	Manager        *Manager
-	Nodes          []*Node
 	Message        protoreflect.ProtoMessage
 	Method         string
 	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
@@ -82,12 +81,12 @@ type CorrectableCallData struct {
 	ServerStream   bool
 }
 
-func CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
-	expectedReplies := len(d.Nodes)
+func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
+	expectedReplies := len(c)
 	md := d.Manager.newCall(d.Method)
 	replyChan, callDone := d.Manager.newReply(md, expectedReplies)
 
-	for _, n := range d.Nodes {
+	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)

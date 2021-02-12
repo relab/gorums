@@ -32,10 +32,9 @@ var asyncVar = qcVar + `
 
 var asyncBody = `
 	cd := {{$callData}}{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.Configuration.Nodes(),
-		Message:  in,
-		Method:   "{{$fullName}}",
+		Manager: c.mgr.Manager,
+		Message: in,
+		Method:  "{{$fullName}}",
 	}
 	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
 		r := make(map[uint32]*{{$out}}, len(replies))
@@ -50,7 +49,7 @@ var asyncBody = `
 	}
 {{- end}}
 
-	fut := {{use "gorums.AsyncCall" $genFile}}(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd)
 	return &{{$asyncOut}}{fut}
 }
 `
