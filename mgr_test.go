@@ -44,9 +44,18 @@ func TestNewManagerWithNodeList(t *testing.T) {
 	if mgr.Size() != len(nodes) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes))
 	}
-	for i, node := range mgr.Nodes() {
-		if nodes[i] != node.Address() {
-			t.Errorf("mgr.Nodes()[%d] = %s, expected %s", i, node.Address(), nodes[i])
+	contains := func(nodes []*gorums.Node, addr string) bool {
+		for _, node := range nodes {
+			if addr == node.Address() {
+				return true
+			}
+		}
+		return false
+	}
+	mgrNodes := mgr.Nodes()
+	for _, n := range nodes {
+		if !contains(mgrNodes, n) {
+			t.Errorf("mgr.Nodes() = %v, expected %s", mgrNodes, n)
 		}
 	}
 }

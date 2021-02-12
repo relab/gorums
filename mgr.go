@@ -66,8 +66,6 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 				return nil, ManagerCreationError(err)
 			}
 		}
-		// Sort nodes since map iteration is non-deterministic.
-		OrderedBy(ID).Sort(m.nodes)
 
 	case len(m.opts.addrsList) > 0:
 		for _, naddr := range m.opts.addrsList {
@@ -81,6 +79,8 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 			}
 		}
 	}
+	// Sort nodes to ensure deterministic iteration.
+	OrderedBy(ID).Sort(m.nodes)
 
 	if m.logger != nil {
 		m.logger.Printf("ready")

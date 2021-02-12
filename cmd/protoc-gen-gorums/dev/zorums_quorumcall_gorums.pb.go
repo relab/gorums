@@ -14,7 +14,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Resp
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCall",
 	}
@@ -38,7 +38,7 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallPerNodeArg",
 	}
@@ -65,7 +65,7 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallCustomReturnType",
 	}
@@ -89,7 +89,7 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallCombo",
 	}
@@ -116,7 +116,7 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) 
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallEmpty",
 	}
@@ -140,7 +140,7 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp
 
 	cd := gorums.QuorumCallData{
 		Manager: c.mgr.Manager,
-		Nodes:   c.nodes,
+		Nodes:   c.Configuration.Nodes(),
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallEmpty2",
 	}

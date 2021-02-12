@@ -47,7 +47,7 @@ var qcVar = `
 var quorumCallBody = `
 	cd := {{$callData}}{
 		Manager:  c.mgr.Manager,
-		Nodes:    c.nodes,
+		Nodes:    c.Configuration.Nodes(),
 		Message:  in,
 		Method: "{{$fullName}}",
 	}
