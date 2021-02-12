@@ -47,8 +47,7 @@ func TestTLS(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr, err := NewManager(
-		gorums.WithNodeList(addrs),
+	mgr := NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
 			grpc.WithBlock(),
@@ -56,15 +55,15 @@ func TestTLS(t *testing.T) {
 			grpc.WithReturnConnectionError(),
 		),
 	)
+	_, err = mgr.NewConfiguration(nil, gorums.WithNodeList(addrs))
 	if err != nil {
-		t.Fatalf("Failed to start manager: %v", err)
+		t.Fatal(err)
 	}
 
 	node := mgr.Nodes()[0]
-
 	resp, err := node.TestTLS(context.Background(), &Request{})
 	if err != nil {
-		t.Fatalf("Failed to perform RPC: %v", err)
+		t.Fatalf("RPC error: %v", err)
 	}
 
 	if !resp.GetOK() {

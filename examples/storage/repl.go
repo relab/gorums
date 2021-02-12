@@ -12,6 +12,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/shlex"
+	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/storage/proto"
 	"golang.org/x/term"
 )
@@ -313,7 +314,11 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 			fmt.Println("Invalid configuration.")
 			return nil
 		}
-		cfg, err = r.mgr.NewConfiguration(r.mgr.NodeIDs()[start:stop], &qspec{cfgSize: stop - start})
+		nodes := make([]string, 0)
+		for _, node := range r.mgr.Nodes()[start:stop] {
+			nodes = append(nodes, node.Address())
+		}
+		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -322,21 +327,21 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 	}
 	// configuration using list of indices
 	if indices := strings.Split(cfgStr, ","); len(indices) > 0 {
-		selectedNodes := make([]uint32, 0, len(indices))
-		nodeIDs := r.mgr.NodeIDs()
+		selectedNodes := make([]string, 0, len(indices))
+		nodes := r.mgr.Nodes()
 		for _, index := range indices {
 			i, err := strconv.Atoi(index)
 			if err != nil {
 				fmt.Printf("Failed to parse configuration: %v\n", err)
 				return nil
 			}
-			if i < 0 || i >= len(nodeIDs) {
+			if i < 0 || i >= len(nodes) {
 				fmt.Println("Invalid configuration.")
 				return nil
 			}
-			selectedNodes = append(selectedNodes, nodeIDs[i])
+			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.mgr.NewConfiguration(selectedNodes, &qspec{cfgSize: len(selectedNodes)})
+		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

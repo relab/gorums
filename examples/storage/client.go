@@ -15,23 +15,17 @@ func runClient(addresses []string) {
 	}
 
 	// init gorums manager
-	mgr, err := proto.NewManager(
-		gorums.WithNodeList(addresses),
+	mgr := proto.NewManager(
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(
 			grpc.WithInsecure(), // disable TLS
 			grpc.WithBlock(),    // block until connections are made
 		),
 	)
-	if err != nil {
-		log.Fatalf("Failed to create manager: %v\n", err)
-	}
-
-	nodeIDs := mgr.NodeIDs()
 	// create configuration containing all nodes
-	cfg, err := mgr.NewConfiguration(nodeIDs, &qspec{cfgSize: len(nodeIDs)})
+	cfg, err := mgr.NewConfiguration(&qspec{cfgSize: len(addresses)}, gorums.WithNodeList(addresses))
 	if err != nil {
-		log.Fatalf("Failed to create configuration: %v\n", err)
+		log.Fatal(err)
 	}
 
 	Repl(mgr, cfg)

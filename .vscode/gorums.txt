@@ -22,6 +22,7 @@ Xeon
 Zorums
 benchgraph
 bootstrapgorums
+calltype
 calltypes
 clevel
 cpuprofile
@@ -55,6 +56,7 @@ relab
 rlevel
 shlex
 srvs
+struct
 syncrq
 testprotos
 timestamppb
