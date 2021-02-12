@@ -176,14 +176,12 @@ func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) (resp *Wr
 
 // ReadRPC executes the Read RPC on a single Node
 func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error) {
-
 	cd := gorums.CallData{
-		Node:    n.Node,
 		Message: in,
 		Method:  "storage.Storage.ReadRPC",
 	}
 
-	res, err := gorums.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -192,14 +190,12 @@ func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse
 
 // WriteRPC executes the Write RPC on a single Node
 func (n *Node) WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error) {
-
 	cd := gorums.CallData{
-		Node:    n.Node,
 		Message: in,
 		Method:  "storage.Storage.WriteRPC",
 	}
 
-	res, err := gorums.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

@@ -8,20 +8,20 @@ import (
 // By default this function returns once the message has been sent.
 // Providing the call option WithNoSendWaiting, the function may return
 // before the message has been sent.
-func Unicast(ctx context.Context, d CallData, opts ...CallOption) {
+func (n *Node) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
-	md := d.Node.newCall(d.Method)
+	md := n.newCall(d.Method)
 	req := gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	if o.noSendWaiting {
-		d.Node.sendQ <- req
+		n.sendQ <- req
 		return // don't wait for message to be sent
 	}
 
 	// newReply must be called before adding req to sendQ
-	replyChan, callDone := d.Node.newReply(md, 1)
-	d.Node.sendQ <- req
+	replyChan, callDone := n.newReply(md, 1)
+	n.sendQ <- req
 	// nodeStream sends an empty reply on replyChan when the message has been sent
 	// wait until the message has been sent
 	<-replyChan
