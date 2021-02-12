@@ -6,14 +6,12 @@ var unicastSignature = `func (n *Node) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}, opts ...{{$callOpt}}) {
 `
 
-var unicastBody = `
-	cd := {{$callData}}{
-		Node:     n.Node,
+var unicastBody = `	cd := {{$callData}}{
 		Message:  in,
 		Method: "{{$fullName}}",
 	}
 
-	{{use "gorums.Unicast" $genFile}}(ctx, cd, opts...)
+	n.Node.Unicast(ctx, cd, opts...)
 }
 `
 

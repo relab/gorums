@@ -10,21 +10,19 @@ import (
 // and other information necessary to perform the various quorum call types
 // supported by Gorums.
 type QuorumCallData struct {
-	Manager        *Manager
-	Nodes          []*Node
 	Message        protoreflect.ProtoMessage
 	Method         string
 	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
 	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
 }
 
-func QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
-	expectedReplies := len(d.Nodes)
-	md := d.Manager.newCall(d.Method)
-	replyChan, callDone := d.Manager.newReply(md, expectedReplies)
+func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
+	expectedReplies := len(c)
+	md := c.newCall(d.Method)
+	replyChan, callDone := c.newReply(md, expectedReplies)
 	defer callDone()
 
-	for _, n := range d.Nodes {
+	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)

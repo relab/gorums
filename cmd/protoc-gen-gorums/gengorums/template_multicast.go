@@ -21,12 +21,9 @@ var multicastSignature = `func (c *Configuration) {{$method}}(` +
 	`opts ...{{$callOpt}}) {
 `
 
-var multicastBody = `
-	cd := {{$callData}}{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.Configuration.Nodes(),
-		Message:  in,
-		Method: "{{$fullName}}",
+var multicastBody = `	cd := {{$callData}}{
+		Message: in,
+		Method:  "{{$fullName}}",
 	}
 {{- if hasPerNodeArg .Method}}
 {{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
@@ -35,7 +32,7 @@ var multicastBody = `
 	}
 {{- end}}
 
-	{{use "gorums.Multicast" $genFile}}(ctx, cd, opts...)
+	c.Configuration.Multicast(ctx, cd, opts...)
 }
 `
 

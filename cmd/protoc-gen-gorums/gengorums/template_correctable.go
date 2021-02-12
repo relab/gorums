@@ -38,12 +38,9 @@ var correctableSignature = `func (c *Configuration) {{$method}}(` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
 	`*{{$correctableOut}} {`
 
-var correctableBody = `
-	cd := {{$callData}}{
-		Manager:  c.mgr.Manager,
-		Nodes:    c.Configuration.Nodes(),
-		Message:  in,
-		Method: "{{$fullName}}",
+var correctableBody = `	cd := {{$callData}}{
+		Message: in,
+		Method:  "{{$fullName}}",
 	{{- if correctableStream .Method}}
 		ServerStream: true,
 	{{- else}}
@@ -63,7 +60,7 @@ var correctableBody = `
 	}
 {{- end}}
 
-	corr := {{use "gorums.CorrectableCall" $genFile}}(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd)
 	return &{{$correctableOut}}{corr}
 }
 `

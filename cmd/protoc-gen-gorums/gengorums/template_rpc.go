@@ -12,9 +12,7 @@ var rpcVar = `
 {{$context := use "context.Context" .GenFile}}
 `
 
-var rpcBody = `
-	cd := {{$callData}}{
-		Node:     n.Node,
+var rpcBody = `	cd := {{$callData}}{
 		Message:  in,
 		Method: "{{$fullName}}",
 	}
@@ -25,7 +23,7 @@ var rpcBody = `
 	}
 {{- end}}
 
-	res, err := {{use "gorums.RPCCall" $genFile}}(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

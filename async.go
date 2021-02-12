@@ -29,12 +29,12 @@ func (f *Async) Done() bool {
 	}
 }
 
-func AsyncCall(ctx context.Context, d QuorumCallData) *Async {
-	expectedReplies := len(d.Nodes)
-	md := d.Manager.newCall(d.Method)
-	replyChan, callDone := d.Manager.newReply(md, expectedReplies)
+func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
+	expectedReplies := len(c)
+	md := c.newCall(d.Method)
+	replyChan, callDone := c.newReply(md, expectedReplies)
 
-	for _, n := range d.Nodes {
+	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)

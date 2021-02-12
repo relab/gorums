@@ -16,7 +16,7 @@ func TestNewConfigurationNodeList(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Size() != len(nodes) {
-		t.Errorf("cfg.Size() = %d, expected %d", mgr.Size(), len(nodes))
+		t.Errorf("cfg.Size() = %d, expected %d", cfg.Size(), len(nodes))
 	}
 
 	contains := func(nodes []*gorums.Node, addr string) bool {
@@ -45,7 +45,7 @@ func TestNewConfigurationNodeMap(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cfg.Size() != len(nodeMap) {
-		t.Errorf("cfg.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
+		t.Errorf("cfg.Size() = %d, expected %d", cfg.Size(), len(nodeMap))
 	}
 	for _, node := range cfg.Nodes() {
 		if nodeMap[node.Address()] != node.ID() {

@@ -11,14 +11,12 @@ import (
 // Unicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (n *Node) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-
 	cd := gorums.CallData{
-		Node:    n.Node,
 		Message: in,
 		Method:  "dev.ZorumsService.Unicast",
 	}
 
-	gorums.Unicast(ctx, cd, opts...)
+	n.Node.Unicast(ctx, cd, opts...)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -27,12 +25,10 @@ var _ emptypb.Empty
 // Unicast2 is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (n *Node) Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-
 	cd := gorums.CallData{
-		Node:    n.Node,
 		Message: in,
 		Method:  "dev.ZorumsService.Unicast2",
 	}
 
-	gorums.Unicast(ctx, cd, opts...)
+	n.Node.Unicast(ctx, cd, opts...)
 }

@@ -7,17 +7,16 @@ import (
 )
 
 type CallData struct {
-	Node    *Node
 	Message protoreflect.ProtoMessage
 	Method  string
 }
 
-func RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
-	md := d.Node.newCall(d.Method)
-	replyChan, callDone := d.Node.newReply(md, 1)
+func (n *Node) RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
+	md := n.newCall(d.Method)
+	replyChan, callDone := n.newReply(md, 1)
 	defer callDone()
 
-	d.Node.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
+	n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
 
 	select {
 	case r := <-replyChan:
