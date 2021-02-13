@@ -1,6 +1,8 @@
 package dev
 
 import (
+	"errors"
+
 	"github.com/relab/gorums"
 	"google.golang.org/grpc/encoding"
 )
@@ -36,6 +38,14 @@ func (m *Manager) NewConfiguration(qspec QuorumSpec, opts ...gorums.ConfigOption
 	c.Configuration, err = gorums.NewConfiguration(m.Manager, opts...)
 	if err != nil {
 		return nil, err
+	}
+	// TODO(meling) This is just prototyping
+	if qspec == nil {
+		if qspec, ok := gorums.GetQSpec(opts...).(QuorumSpec); !ok {
+			return nil, errors.New("QuorumSpec error")
+		} else {
+			c.qspec = qspec
+		}
 	}
 	return c, nil
 }
