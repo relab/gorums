@@ -4,6 +4,7 @@ type configOptions struct {
 	idMapping map[string]uint32
 	addrsList []string
 	nodeIDs   []uint32
+	qspec     interface{}
 }
 
 func newConfigOptions() configOptions {
@@ -33,5 +34,12 @@ func WithNodeList(addrsList []string) ConfigOption {
 func WithNodeIDs(nodeIDs []uint32) ConfigOption {
 	return func(o *configOptions) {
 		o.nodeIDs = nodeIDs
+	}
+}
+
+// WithQuorumSpec returns a ConfigOption containing a reference to the QuorumSpec interface.
+func WithQuorumSpec(qspec interface{}) ConfigOption {
+	return func(o *configOptions) {
+		o.qspec = qspec
 	}
 }
