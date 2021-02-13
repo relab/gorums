@@ -61,7 +61,7 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
-// Nodes can be supplied using WithNodeMap or WithNodeList.
+// Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
 func (m *Manager) NewConfiguration(qspec QuorumSpec, opts ...gorums.ConfigOption) (c *Configuration, err error) {
 	c = &Configuration{
 		mgr:   m,
