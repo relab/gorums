@@ -184,16 +184,12 @@ func main() {
 	}
 
 	mgrOpts := []gorums.ManagerOption{
-		gorums.WithNodeList(remotes),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 		gorums.WithDialTimeout(10 * time.Second),
 		gorums.WithSendBufferSize(*sendBuffer),
 	}
 
-	mgr, err := benchmark.NewManager(mgrOpts...)
-	if err != nil {
-		log.Fatalf("Failed to create manager: %v\n", err)
-	}
+	mgr := benchmark.NewManager(mgrOpts...)
 	defer mgr.Close()
 
 	var options benchmark.Options
@@ -204,7 +200,7 @@ func main() {
 	options.Duration = benchTime
 	options.Remote = remote
 
-	numNodes := mgr.Size()
+	numNodes := len(remotes)
 	if *cfgSize < 1 || *cfgSize > numNodes {
 		options.NumNodes = numNodes
 	} else {
@@ -221,7 +217,16 @@ func main() {
 		options.QuorumSize = *qSize
 	}
 
-	results, err := benchmark.RunBenchmarks(benchReg, options, mgr)
+	qspec := &benchmark.QSpec{
+		QSize:   options.QuorumSize,
+		CfgSize: options.NumNodes,
+	}
+	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(remotes[:options.NumNodes]))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	results, err := benchmark.RunBenchmarks(benchReg, options, cfg)
 	if err != nil {
 		log.Fatalf("Error running benchmarks: %v\n", err)
 	}

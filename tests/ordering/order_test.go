@@ -84,17 +84,13 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	mgr, err := NewManager(
-		gorums.WithNodeList(addrs),
+	mgr := NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
+	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList(addrs))
 	if err != nil {
-		t.Fatalf("Failed to start manager: %v", err)
-	}
-	cfg, err = mgr.NewConfiguration(mgr.NodeIDs(), &testQSpec{cfgSize})
-	if err != nil {
-		t.Fatalf("Failed to create configuration: %v", err)
+		t.Fatal(err)
 	}
 	teardown = func() {
 		mgr.Close()

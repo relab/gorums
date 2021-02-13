@@ -17,89 +17,24 @@ var (
 	nodeMap = map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
 )
 
-func TestNewManagerErrors(t *testing.T) {
-	_, err := gorums.NewManager()
-	if err == nil {
-		t.Errorf("NewManager(): expected error: '%s'", "could not create manager: no nodes provided")
-	}
-	_, err = gorums.NewManager(gorums.WithNodeList([]string{}))
-	if err == nil {
-		t.Errorf("NewManager(): expected error: '%s'", "could not create manager: no nodes provided")
-	}
-	_, err = gorums.NewManager(gorums.WithNodeMap(map[string]uint32{}))
-	if err == nil {
-		t.Errorf("NewManager(): expected error: '%s'", "could not create manager: no nodes provided")
-	}
-	_, err = gorums.NewManager(gorums.WithNodeList(nodes), gorums.WithNodeMap(nodeMap), gorums.WithNoConnect())
-	if err == nil {
-		t.Errorf("NewManager(): expected error: '%s'", "could not create manager: multiple node lists provided")
-	}
-}
-
-func TestNewManagerWithNodeList(t *testing.T) {
-	mgr, err := gorums.NewManager(gorums.WithNodeList(nodes), gorums.WithNoConnect())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if mgr.Size() != len(nodes) {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes))
-	}
-	contains := func(nodes []*gorums.Node, addr string) bool {
-		for _, node := range nodes {
-			if addr == node.Address() {
-				return true
-			}
-		}
-		return false
-	}
-	mgrNodes := mgr.Nodes()
-	for _, n := range nodes {
-		if !contains(mgrNodes, n) {
-			t.Errorf("mgr.Nodes() = %v, expected %s", mgrNodes, n)
-		}
-	}
-}
-
-func TestNewManagerWithNodeMap(t *testing.T) {
-	mgr, err := gorums.NewManager(gorums.WithNodeMap(nodeMap), gorums.WithNoConnect())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if mgr.Size() != len(nodeMap) {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
-	}
-	for key, id := range nodeMap {
-		if _, found := mgr.Node(id); !found {
-			t.Errorf("mgr.Node(%d) = not found, expected %s", id, key)
-		}
-	}
-}
-
 func TestManagerLogging(t *testing.T) {
 	var (
 		buf    bytes.Buffer
 		logger = log.New(&buf, "logger: ", log.Lshortfile)
 	)
 	buf.WriteString("\n")
-	nodeMap := map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
-	mgr, err := gorums.NewManager(
-		gorums.WithNodeMap(nodeMap),
+	_ = gorums.NewManager(
 		gorums.WithNoConnect(),
 		gorums.WithLogger(logger),
 	)
-	if err != nil {
-		t.Fatalf("NewManager(): unexpected error: %s", err)
-	}
-	if mgr.Size() != len(nodeMap) {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
-	}
 	t.Log(buf.String())
 }
 
 func TestManagerAddNode(t *testing.T) {
-	mgr, err := gorums.NewManager(gorums.WithNodeMap(nodeMap), gorums.WithNoConnect())
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
-		t.Fatalf("NewManager(): unexpected error: %s", err)
+		t.Fatal(err)
 	}
 	tests := []struct {
 		addr string
@@ -136,11 +71,13 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		return srv
 	})
 	defer teardown()
-	mgr, err := gorums.NewManager(
-		gorums.WithNodeList(addrs[:2]),
+	mgr := gorums.NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(grpc.WithInsecure(), grpc.WithBlock()),
 	)
+	defer mgr.Close()
+
+	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs[:2]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,5 +96,4 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	if mgr.Size() != len(addrs) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs))
 	}
-	mgr.Close()
 }

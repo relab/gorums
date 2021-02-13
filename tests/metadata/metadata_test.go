@@ -62,20 +62,20 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	mgr, err := NewManager(
-		gorums.WithNodeList(addrs),
+	mgr := NewManager(
 		gorums.WithMetadata(md),
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
+	_, err := mgr.NewConfiguration(nil, gorums.WithNodeList(addrs))
 	if err != nil {
-		t.Fatalf("Failed to create manager: %v", err)
+		t.Fatal(err)
 	}
 
 	node := mgr.Nodes()[0]
 	resp, err := node.IDFromMD(context.Background(), &empty.Empty{})
 	if err != nil {
-		t.Fatalf("Failed to execute RPC: %v", err)
+		t.Fatalf("RPC error: %v", err)
 	}
 
 	if resp.GetID() != want {
@@ -93,20 +93,20 @@ func TestPerNodeMetadata(t *testing.T) {
 		})
 	}
 
-	mgr, err := NewManager(
-		gorums.WithNodeList(addrs),
+	mgr := NewManager(
 		gorums.WithPerNodeMetadata(perNodeMD),
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
+	_, err := mgr.NewConfiguration(nil, gorums.WithNodeList(addrs))
 	if err != nil {
-		t.Fatalf("Failed to create manager: %v", err)
+		t.Fatal(err)
 	}
 
 	for _, node := range mgr.Nodes() {
 		resp, err := node.IDFromMD(context.Background(), &empty.Empty{})
 		if err != nil {
-			t.Fatalf("Failed to execute RPC: %v", err)
+			t.Fatalf("RPC error: %v", err)
 		}
 
 		if resp.GetID() != node.ID() {
@@ -119,20 +119,19 @@ func TestCanGetPeerInfo(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer(t) })
 	defer teardown()
 
-	mgr, err := NewManager(
-		gorums.WithNodeList(addrs),
+	mgr := NewManager(
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
+	_, err := mgr.NewConfiguration(nil, gorums.WithNodeList(addrs))
 	if err != nil {
-		t.Fatalf("Failed to create manager: %v", err)
+		t.Fatal(err)
 	}
 
 	node := mgr.Nodes()[0]
-
 	ip, err := node.WhatIP(context.Background(), &empty.Empty{})
 	if err != nil {
-		t.Fatalf("Failed to execute RPC: %v", err)
+		t.Fatalf("RPC error: %v", err)
 	}
 
 	if ip.GetAddr() == "" {

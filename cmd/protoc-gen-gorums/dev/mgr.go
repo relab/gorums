@@ -11,25 +11,29 @@ func init() {
 	}
 }
 
+// Manager maintains a connection pool of nodes on
+// which quorum calls can be performed.
 type Manager struct {
 	*gorums.Manager
 }
 
-func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
+// NewManager returns a new Manager for managing connection to nodes added
+// to the manager. This function accepts manager options used to configure
+// various aspects of the manager.
+func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 	mgr = &Manager{}
-	mgr.Manager, err = gorums.NewManager(opts...)
-	if err != nil {
-		return nil, err
-	}
-	return mgr, nil
+	mgr.Manager = gorums.NewManager(opts...)
+	return mgr
 }
 
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (c *Configuration, err error) {
+// NewConfiguration returns a configuration based on the provided list of nodes.
+// Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
+func (m *Manager) NewConfiguration(qspec QuorumSpec, opts ...gorums.ConfigOption) (c *Configuration, err error) {
 	c = &Configuration{
 		mgr:   m,
 		qspec: qspec,
 	}
-	c.Configuration, err = gorums.NewConfiguration(m.Manager, ids)
+	c.Configuration, err = gorums.NewConfiguration(m.Manager, opts...)
 	if err != nil {
 		return nil, err
 	}

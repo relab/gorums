@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc/backoff"
 )
 
-// Manager manages a pool of node configurations on which quorum remote
-// procedure calls can be made.
+// Manager maintains a connection pool of nodes on
+// which quorum calls can be performed.
 type Manager struct {
 	mu        sync.Mutex
 	nodes     []*Node
@@ -22,17 +22,16 @@ type Manager struct {
 	*receiveQueue
 }
 
-// NewManager attempts to connect to the given set of node addresses and if
-// successful returns a new Manager containing connections to those nodes.
-// This function is meant for internal Gorums use. You should use the `NewManager`
-// function in the generated code instead.
-func NewManager(opts ...ManagerOption) (*Manager, error) {
+// NewManager returns a new Manager for managing connection to nodes added
+// to the manager. This function accepts manager options used to configure
+// various aspects of the manager. This function is meant for internal use.
+// You should use the `NewManager` function in the generated code instead.
+func NewManager(opts ...ManagerOption) *Manager {
 	m := &Manager{
 		lookup:       make(map[uint32]*Node),
 		receiveQueue: newReceiveQueue(),
 		opts:         newManagerOptions(),
 	}
-
 	for _, opt := range opts {
 		opt(&m.opts)
 	}
@@ -47,45 +46,10 @@ func NewManager(opts ...ManagerOption) (*Manager, error) {
 			grpc.ConnectParams{Backoff: m.opts.backoff},
 		))
 	}
-
-	switch {
-	case len(m.opts.addrsList) == 0 && len(m.opts.idMapping) == 0:
-		return nil, ManagerCreationError(fmt.Errorf("no nodes provided; need WithNodeMap or WithNodeList"))
-
-	case len(m.opts.addrsList) > 0 && len(m.opts.idMapping) > 0:
-		return nil, ManagerCreationError(fmt.Errorf("multiple node lists provided; use only one of WithNodeMap or WithNodeList"))
-
-	case len(m.opts.idMapping) > 0:
-		for naddr, id := range m.opts.idMapping {
-			node, err := NewNodeWithID(naddr, id)
-			if err != nil {
-				return nil, ManagerCreationError(err)
-			}
-			err = m.AddNode(node)
-			if err != nil {
-				return nil, ManagerCreationError(err)
-			}
-		}
-
-	case len(m.opts.addrsList) > 0:
-		for _, naddr := range m.opts.addrsList {
-			node, err := NewNode(naddr)
-			if err != nil {
-				return nil, ManagerCreationError(err)
-			}
-			err = m.AddNode(node)
-			if err != nil {
-				return nil, ManagerCreationError(err)
-			}
-		}
-	}
-	// Sort nodes to ensure deterministic iteration.
-	OrderedBy(ID).Sort(m.nodes)
-
 	if m.logger != nil {
 		m.logger.Printf("ready")
 	}
-	return m, nil
+	return m
 }
 
 func (m *Manager) closeNodeConns() {

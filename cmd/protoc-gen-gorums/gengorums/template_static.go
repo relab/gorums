@@ -7,8 +7,7 @@ package gengorums
 // These identifiers are used by the Gorums protoc plugin to generate
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
-	"fmt":                             "Errorf",
-	"github.com/relab/gorums":         "Configuration",
+	"github.com/relab/gorums":         "ConfigOption",
 	"google.golang.org/grpc/encoding": "GetCodec",
 }
 
@@ -17,7 +16,6 @@ var pkgIdentMap = map[string]string{
 var reservedIdents = []string{
 	"Configuration",
 	"Manager",
-	"NewManager",
 	"Node",
 	"QuorumSpec",
 }
@@ -41,46 +39,35 @@ func (c *Configuration) Nodes() []*Node {
 	return nodes
 }
 
-// NewConfig returns a configuration for the given node addresses and quorum spec.
-// The returned func() must be called to close the underlying connections.
-// This is an experimental API.
-func NewConfig(qspec QuorumSpec, opts ...gorums.ManagerOption) (*Configuration, func(), error) {
-	man, err := NewManager(opts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
-	}
-	c, err := man.NewConfiguration(man.NodeIDs(), qspec)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create configuration: %v", err)
-	}
-	return c, func() { man.Close() }, nil
-}
-
 func init() {
 	if encoding.GetCodec(gorums.ContentSubtype) == nil {
 		encoding.RegisterCodec(gorums.NewCodec())
 	}
 }
 
+// Manager maintains a connection pool of nodes on
+// which quorum calls can be performed.
 type Manager struct {
 	*gorums.Manager
 }
 
-func NewManager(opts ...gorums.ManagerOption) (mgr *Manager, err error) {
+// NewManager returns a new Manager for managing connection to nodes added
+// to the manager. This function accepts manager options used to configure
+// various aspects of the manager.
+func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 	mgr = &Manager{}
-	mgr.Manager, err = gorums.NewManager(opts...)
-	if err != nil {
-		return nil, err
-	}
-	return mgr, nil
+	mgr.Manager = gorums.NewManager(opts...)
+	return mgr
 }
 
-func (m *Manager) NewConfiguration(ids []uint32, qspec QuorumSpec) (c *Configuration, err error) {
+// NewConfiguration returns a configuration based on the provided list of nodes.
+// Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
+func (m *Manager) NewConfiguration(qspec QuorumSpec, opts ...gorums.ConfigOption) (c *Configuration, err error) {
 	c = &Configuration{
 		mgr:   m,
 		qspec: qspec,
 	}
-	c.Configuration, err = gorums.NewConfiguration(m.Manager, ids)
+	c.Configuration, err = gorums.NewConfiguration(m.Manager, opts...)
 	if err != nil {
 		return nil, err
 	}

@@ -1,8 +1,6 @@
 package dev
 
 import (
-	"fmt"
-
 	"github.com/relab/gorums"
 )
 
@@ -23,19 +21,4 @@ func (c *Configuration) Nodes() []*Node {
 		nodes = append(nodes, &Node{n})
 	}
 	return nodes
-}
-
-// NewConfig returns a configuration for the given node addresses and quorum spec.
-// The returned func() must be called to close the underlying connections.
-// This is an experimental API.
-func NewConfig(qspec QuorumSpec, opts ...gorums.ManagerOption) (*Configuration, func(), error) {
-	man, err := NewManager(opts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create manager: %v", err)
-	}
-	c, err := man.NewConfiguration(man.NodeIDs(), qspec)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create configuration: %v", err)
-	}
-	return c, func() { man.Close() }, nil
 }

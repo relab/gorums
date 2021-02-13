@@ -61,17 +61,13 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 		nodeMap[addr] = uint32(i)
 	}
 
-	mgr, err := oneway.NewManager(
-		gorums.WithNodeMap(nodeMap),
+	mgr := oneway.NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
+	cfg, err := mgr.NewConfiguration(&testQSpec{}, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
-	}
-	cfg, err = mgr.NewConfiguration(mgr.NodeIDs(), &testQSpec{})
-	if err != nil {
-		t.Fatalf("Failed to create configuration: %v", err)
 	}
 	teardown = func() {
 		mgr.Close()
