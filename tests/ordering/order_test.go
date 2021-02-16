@@ -88,7 +88,10 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList(addrs))
+	cfg, err := mgr.NewConfiguration(
+		gorums.WithQuorumSpec(&testQSpec{cfgSize}),
+		gorums.WithNodeList(addrs),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

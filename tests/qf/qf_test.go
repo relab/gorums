@@ -198,7 +198,9 @@ func BenchmarkFullStackQF(b *testing.B) {
 			gorums.WithGrpcDialOptions(grpc.WithInsecure()),
 			gorums.WithDialTimeout(10*time.Second),
 		)
-		c, err := mgr.NewConfiguration(&testQSpec{quorum: n / 2})
+		c, err := mgr.NewConfiguration(
+			gorums.WithQuorumSpec(&testQSpec{quorum: n / 2}),
+		)
 		if err != nil {
 			b.Fatal(err)
 		}

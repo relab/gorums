@@ -221,7 +221,10 @@ func main() {
 		QSize:   options.QuorumSize,
 		CfgSize: options.NumNodes,
 	}
-	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(remotes[:options.NumNodes]))
+	cfg, err := mgr.NewConfiguration(
+		gorums.WithQuorumSpec(qspec),
+		gorums.WithNodeList(remotes[:options.NumNodes]),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}

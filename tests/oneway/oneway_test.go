@@ -42,8 +42,6 @@ func (s *onewaySrv) MulticastPerNode(ctx context.Context, r *oneway.Request) {
 	s.wg.Done()
 }
 
-type testQSpec struct{}
-
 func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*onewaySrv, teardown func()) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
@@ -65,7 +63,9 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{}, gorums.WithNodeMap(nodeMap))
+	cfg, err := mgr.NewConfiguration(
+		gorums.WithNodeMap(nodeMap),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

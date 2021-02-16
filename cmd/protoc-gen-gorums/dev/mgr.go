@@ -30,19 +30,18 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
-func (m *Manager) NewConfiguration(qspec QuorumSpec, opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	c = &Configuration{
-		mgr:   m,
-		qspec: qspec,
-	}
+// The WithQuorumSpec option can be used to supply a QuorumSpec implementation
+// for configurations that require a quorum specification.
+func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
+	c = &Configuration{}
 	c.Configuration, err = gorums.NewConfiguration(m.Manager, opts...)
 	if err != nil {
 		return nil, err
 	}
-	// TODO(meling) This is just prototyping
-	if qspec == nil {
-		if qspec, ok := gorums.GetQSpec(opts...).(QuorumSpec); !ok {
-			return nil, errors.New("QuorumSpec error")
+	qs := gorums.GetQSpec(opts...)
+	if qs != nil {
+		if qspec, ok := qs.(QuorumSpec); !ok {
+			return nil, errors.New("The supplied QuorumSpec implementation does not match the interface")
 		} else {
 			c.qspec = qspec
 		}

@@ -67,7 +67,7 @@ func TestMetadata(t *testing.T) {
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
-	_, err := mgr.NewConfiguration(nil, gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestPerNodeMetadata(t *testing.T) {
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
-	_, err := mgr.NewConfiguration(nil, gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestCanGetPeerInfo(t *testing.T) {
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
 	)
-	_, err := mgr.NewConfiguration(nil, gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
