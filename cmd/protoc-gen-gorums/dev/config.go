@@ -8,7 +8,6 @@ import (
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.Configuration
-	mgr   *Manager
 	qspec QuorumSpec
 }
 

@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "examples"
+		}
+	],
+	"settings": {
+		"protoc": {
+			"compile_on_save": false,
+			"options": [
+				"--proto_path=${workspaceRoot}",
+				"--proto_path=${workspaceRoot}/cmd/protoc-gen-gorums/dev",
+				"--proto_path=${workspaceRoot}/third_party"
+			]
+		},
+		"cSpell.words": [
+			"Idxs",
+			"QCQF",
+			"emptypb",
+			"extendee",
+			"gorums",
+			"protoimpl",
+			"qspec",
+			"relab",
+			"timestamppb"
+		]
+	}
+}
