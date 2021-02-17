@@ -41,11 +41,7 @@ var correctableSignature = `func (c *Configuration) {{$method}}(` +
 var correctableBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
-	{{- if correctableStream .Method}}
-		ServerStream: true,
-	{{- else}}
-		ServerStream: false,
-	{{- end}}
+		ServerStream: {{correctableStream .Method}},
 	}
 	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, int, bool) {
 		r := make(map[uint32]*{{$out}}, len(replies))
