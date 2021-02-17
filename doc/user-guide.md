@@ -64,8 +64,8 @@ package gorumsexample;
 option go_package = "gorumsexample";
 
 service Storage {
-  rpc Read(ReadRequest) returns (State) {  }
-  rpc Write(State) returns (WriteResponse) {  }
+  rpc Read(ReadRequest) returns (State) { }
+  rpc Write(State) returns (WriteResponse) { }
 }
 
 message State {
