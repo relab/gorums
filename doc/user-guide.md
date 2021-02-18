@@ -54,6 +54,7 @@ We will use `$HOME/gorumsexample` as the project root, and we will use the Go mo
 mkdir $HOME/gorumsexample
 cd $HOME/gorumsexample
 go mod init gorumsexample
+go get github.com/relab/gorums
 ```
 
 The file `storage.proto` should have the following content:
@@ -61,7 +62,7 @@ The file `storage.proto` should have the following content:
 ```protobuf
 syntax = "proto3";
 package gorumsexample;
-option go_package = "gorumsexample";
+option go_package = ".;gorumsexample";
 
 service Storage {
   rpc Read(ReadRequest) returns (State) { }
@@ -95,8 +96,7 @@ Next, we compile our service definition into Go code which includes:
 We simply invoke `protoc` to compile our Protobuf definition:
 
 ```shell
-cd $HOME/gorumsexample
-protoc -I=. \
+protoc -I=$(go list -m -f {{.Dir}} github.com/relab/gorums):. \
   --go_out=paths=source_relative:. \
   --gorums_out=paths=source_relative:. \
   storage.proto
