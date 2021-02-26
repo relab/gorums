@@ -159,8 +159,11 @@ func (srv *storageSrv) Write(_ context.Context, req *State, ret func(*WriteRespo
 There are some important things to note about implementing the server interfaces:
 
 * Reply messages must be returned using the `ret` function.
-* The handlers run synchronously, in the order messages are received.
-  Hence, a long-running handler will prevent other messages from being handled.
+* The handlers run in the order messages are received.
+* Messages from the same sender are executed in FIFO order at all servers.
+* Messages from different senders may be received in a different order at the different servers.
+  To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
+* Handlers run synchronously, and hence a long-running handler will prevent other messages from being handled.
   However, you can start additional goroutines within each handler, provided that they return a result using the `ret` function.
   For example, the `Read` handler could be made asynchronous as shown below.
 
@@ -192,9 +195,9 @@ func ExampleStorageServer(port int) {
   if err != nil {
     log.Fatal(err)
   }
-  gorumsSrv := NewGorumsServer()
+  gorumsSrv := gorums.NewServer()
   srv := storageSrv{state: &State{}}
-  gorumsSrv.RegisterStorageServer(&srv)
+  RegisterStorageServer(gorumsSrv, &srv)
   gorumsSrv.Serve(lis)
 }
 ```
@@ -223,8 +226,8 @@ import (
 
 func ExampleStorageClient() {
   mgr := NewManager(
-    WithDialTimeout(500*time.Millisecond),
-    WithGrpcDialOptions(
+    gorums.WithDialTimeout(500*time.Millisecond),
+    gorums.WithGrpcDialOptions(
       grpc.WithBlock(),
       grpc.WithInsecure(),
     ),
@@ -266,11 +269,11 @@ We can now invoke the Write RPC on each `node` in the configuration:
   }
 
   // Invoke Write RPC on all nodes in config
-  for _, node := range allNodesConfig {
-    respons, err := node.Write(context.Background(), state)
+  for _, node := range allNodesConfig.Nodes() {
+    reply, err := node.Write(context.Background(), state)
     if err != nil {
       log.Fatalln("read rpc returned error:", err)
-    } else if !respons.New {
+    } else if !reply.New {
       log.Println("state was not new.")
     }
   }
@@ -286,6 +289,8 @@ If an RPC is invoked as a quorum call, Gorums will invoke the RPCs on all nodes 
 For the Gorums plugin to generate quorum calls we need to specify the `quorumcall` option for our RPC methods in the proto file, as shown below:
 
 ```protobuf
+import "gorums.proto";
+
 service QCStorage {
   rpc Read(ReadRequest) returns (State) {
     option (gorums.quorumcall) = true;
@@ -400,15 +405,15 @@ func ExampleStorageClient() {
   }
 
   mgr := NewManager(
-    WithDialTimeout(50*time.Millisecond),
-    WithGrpcDialOptions(
+    gorums.WithDialTimeout(50*time.Millisecond),
+    gorums.WithGrpcDialOptions(
       grpc.WithBlock(),
       grpc.WithInsecure(),
   ))
   // Create a configuration including all nodes
   allNodesConfig, err := mgr.NewConfiguration(
     &QSpec{2},
-    WithNodeList(addrs),
+    gorums.WithNodeList(addrs),
   )
   if err != nil {
     log.Fatalln("error creating read config:", err)
