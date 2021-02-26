@@ -1,15 +1,19 @@
 # Benchmarking Gorums
 
-The repository includes a program that can be used to benchmark different calltypes and options.
+The repository includes a program that can be used to benchmark different call types and options.
 The program is compiled from `cmd/benchmark`, and uses the `benchmark` package.
-Using this program, it is possible to run benchmarks on both local and remote servers.
+Using the `benchmark` program, it is possible to run benchmarks on both local and remote servers.
 
 ## Usage
 
-To compile the benchmark program, run `make benchmark`
+To compile the benchmark program, run:
 
-By default, the program runs all of the built in benchmarks on local servers.
-The following command line flags can be used to change various parameters of the benchmarks:
+```shell
+make benchmark
+```
+
+By default, the program runs all of the built-in benchmarks on local servers.
+The following command-line flags can be used to change various parameters of the benchmarks:
 
 ```text
 Usage of cmd/benchmark/benchmark:
@@ -21,6 +25,8 @@ Usage of cmd/benchmark/benchmark:
       Size of the configuration to use. If < 1, all nodes will be used. (default 4)
   -cpuprofile file
       A file to write cpu profile to.
+  -list
+      List all available benchmarks
   -max-async int
       Maximum number of async calls that can be in flight at once. (default 1000)
   -memprofile file
@@ -52,9 +58,9 @@ To run the benchmarks with remote servers, the `--remotes` flag must be used.
 
 ### Remote benchmarks with ansible
 
-In the `scripts/` folder we provide some simple ansible scripts that can be used to run benchmarks on remote servers.
+In the `scripts/` folder, we provide some simple ansible scripts that can be used to run benchmarks on remote servers.
 To use the scripts, an [inventory](https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html) file must be created.
-The ansible script expects two groups, "client" and "servers".
+The ansible script expects two groups, "client" and "servers."
 Below is an example inventory file:
 
 ```ini
@@ -75,10 +81,11 @@ ansible-playbook -i [your inventory file] deploy.yml
 
 (remember to build it using `make benchmark` first).
 
-There is a simple script `benchmark.sh` that runs the appropriate ansible-playbook command, and parses the output.
-To use this, you must first `cd` into the `scripts/` directory, and then run
+The `benchmark.sh` script runs the appropriate ansible-playbook command and parses the output.
+Hence, to run `benchmark.sh`:
 
 ```sh
+cd scripts/
 ./benchmark.sh [your inventory file] [arguments to benchmark]
 ```
 

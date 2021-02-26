@@ -48,8 +48,8 @@ The `Makefile` itself also serves as documentation; inspect it for details.
 
 | Target            | Description                                                                  |
 | ----------------- | ---------------------------------------------------------------------------- |
-| `dev`             | updates `template_static.go` and regenerates generated files from templates. |
-| `benchmark`       | Compiles the benchmark.                                                      |
+| `dev`             | Updates `template_static.go` and regenerates generated files from templates. |
+| `benchmark`       | Compiles the benchmark tool.                                                 |
 | `tools`           | Installs required tools such as `protoc-gen-go` and `protoc-gen-go-grpc`.    |
 | `installgorums`   | Reinstalls the `protoc-gen-gorums` plugin.                                   |
 | `bootstrapgorums` | Used to bootstrap the plugin.                                                |

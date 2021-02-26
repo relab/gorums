@@ -221,7 +221,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		docName:  "quorum",
 		template: quorumCall,
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Ordered, gorums.E_Async)
+			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Async)
 		},
 	},
 	callTypeName(gorums.E_Async): {
@@ -230,7 +230,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		template:  asyncCall,
 		outPrefix: "Async",
 		chkFn: func(m *protogen.Method) bool {
-			return hasAllMethodOption(m, gorums.E_Quorumcall, gorums.E_Async) && !hasMethodOption(m, gorums.E_Ordered)
+			return hasAllMethodOption(m, gorums.E_Quorumcall, gorums.E_Async)
 		},
 	},
 	callTypeName(gorums.E_Correctable): {
