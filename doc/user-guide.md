@@ -15,7 +15,7 @@ There are a few tools that need to be installed first:
 1. Install version 3 of `protoc`, the Protocol Buffers Compiler.
    Installation of this tool is OS/distribution specific.
 
-   On macOS with Homebrew you can use:
+   On Linux/macOS/WSL with Homebrew you can use:
 
    ```shell
    brew install protobuf
