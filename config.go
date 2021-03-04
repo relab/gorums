@@ -11,72 +11,15 @@ type Configuration []*Node
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
+// It is an error to provide multiple node lists.
 func NewConfiguration(mgr *Manager, opts ...ConfigOption) (nodes Configuration, err error) {
-	o := newConfigOptions()
-	for _, opt := range opts {
-		opt(&o)
+	if len(opts) == 0 {
+		return nil, ConfigCreationError(fmt.Errorf("missing required node list"))
 	}
-
-	nodes = make(Configuration, 0)
-	switch {
-	case len(o.addrsList) == 0 && len(o.idMapping) == 0 && len(o.nodeIDs) == 0:
-		return nil, ConfigCreationError(fmt.Errorf("no nodes provided; need WithNodeMap or WithNodeList or WithNodeIDs"))
-
-	case len(o.addrsList) > 0 && len(o.idMapping) > 0:
-		return nil, ConfigCreationError(fmt.Errorf("multiple node lists provided; use only one of WithNodeMap or WithNodeList"))
-	case len(o.addrsList) > 0 && len(o.nodeIDs) > 0:
-		return nil, ConfigCreationError(fmt.Errorf("multiple node lists provided; use only one of WithNodeList or WithNodeIDs"))
-	case len(o.idMapping) > 0 && len(o.nodeIDs) > 0:
-		return nil, ConfigCreationError(fmt.Errorf("multiple node lists provided; use only one of WithNodeMap or WithNodeIDs"))
-
-	case len(o.idMapping) > 0:
-		for naddr, id := range o.idMapping {
-			node, found := mgr.Node(id)
-			if !found {
-				node, err = NewNodeWithID(naddr, id)
-				if err != nil {
-					return nil, ConfigCreationError(err)
-				}
-				err = mgr.AddNode(node)
-				if err != nil {
-					return nil, ConfigCreationError(err)
-				}
-			}
-			nodes = append(nodes, node)
-		}
-
-	case len(o.addrsList) > 0:
-		for _, naddr := range o.addrsList {
-			node, err := NewNode(naddr)
-			if err != nil {
-				return nil, ConfigCreationError(err)
-			}
-			if n, found := mgr.Node(node.ID()); !found {
-				err = mgr.AddNode(node)
-				if err != nil {
-					return nil, ConfigCreationError(err)
-				}
-			} else {
-				node = n
-			}
-			nodes = append(nodes, node)
-		}
-
-	case len(o.nodeIDs) > 0:
-		for _, id := range o.nodeIDs {
-			node, found := mgr.Node(id)
-			if !found {
-				// Node IDs must have been registered previously
-				return nil, ConfigCreationError(fmt.Errorf("node ID %d not found", id))
-			}
-			nodes = append(nodes, node)
-		}
+	if len(opts) > 1 {
+		return nil, ConfigCreationError(fmt.Errorf("multiple node lists provided"))
 	}
-
-	// Sort nodes to ensure deterministic iteration.
-	OrderedBy(ID).Sort(mgr.nodes)
-	OrderedBy(ID).Sort(nodes)
-	return nodes, nil
+	return opts[0].newConfig(mgr)
 }
 
 // NodeIDs returns a slice of this configuration's Node IDs.
