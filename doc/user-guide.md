@@ -245,12 +245,8 @@ The code below shows how to create a configuration:
     "127.0.0.1:8081",
     "127.0.0.1:8082",
   }
-  
   // Create a configuration including all nodes
-  allNodesConfig, err := mgr.NewConfiguration(
-    nil,
-    gorums.WithNodeList(addrs),
-  )
+  allNodesConfig, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
   if err != nil {
     log.Fatalln("error creating read config:", err)
   }
