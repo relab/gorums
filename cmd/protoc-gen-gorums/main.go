@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/relab/gorums/cmd/protoc-gen-gorums/gengorums"
+	"github.com/relab/gorums/internal/version"
 
 	"google.golang.org/protobuf/compiler/protogen"
 )
@@ -16,8 +17,8 @@ const bundleLen = len("--bundle=")
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), gengorums.VersionString())
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version.String())
+		os.Exit(0)
 	}
 	if len(os.Args) == 2 && strings.HasPrefix(os.Args[1], "--bundle=") {
 		bundle := os.Args[1][bundleLen:]

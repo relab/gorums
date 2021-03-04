@@ -27,6 +27,7 @@ calltypes
 clevel
 cpuprofile
 descriptorpb
+devel
 devguide
 donech
 emptypb
@@ -54,6 +55,7 @@ qspec
 quorumcall
 relab
 rlevel
+semver
 shlex
 srvs
 struct
