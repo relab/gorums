@@ -1,6 +1,9 @@
 package dev
 
 import (
+	"errors"
+	"fmt"
+
 	"github.com/relab/gorums"
 	"google.golang.org/grpc/encoding"
 )
@@ -26,15 +29,29 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 	return mgr
 }
 
-// NewConfiguration returns a configuration based on the provided list of nodes.
+// NewConfiguration returns a configuration based on the provided list of nodes
+// and a quorum specification. The QuorumSpec must be provided using WithQuorumSpec.
 // Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
-func (m *Manager) NewConfiguration(qspec QuorumSpec, opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	c = &Configuration{
-		qspec: qspec,
+func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
+	if len(opts) != 2 {
+		return nil, errors.New("not enough options")
 	}
-	c.Configuration, err = gorums.NewConfiguration(m.Manager, opts...)
-	if err != nil {
-		return nil, err
+	c = &Configuration{}
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case QuorumSpec:
+			c.qspec = v
+		case gorums.NodeListOption:
+			c.Configuration, err = gorums.NewConfiguration(m.Manager, v)
+			if err != nil {
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf("unknown option type: %v", v)
+		}
+	}
+	if c.qspec == nil {
+		return nil, errors.New("required QuorumSpec not provide")
 	}
 	return c, nil
 }

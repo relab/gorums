@@ -11,15 +11,11 @@ type Configuration []*Node
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
-// It is an error to provide multiple node lists.
-func NewConfiguration(mgr *Manager, opts ...ConfigOption) (nodes Configuration, err error) {
-	if len(opts) == 0 {
+func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
+	if opt == nil {
 		return nil, ConfigCreationError(fmt.Errorf("missing required node list"))
 	}
-	if len(opts) > 1 {
-		return nil, ConfigCreationError(fmt.Errorf("multiple node lists provided"))
-	}
-	return opts[0].newConfig(mgr)
+	return opt.newConfig(mgr)
 }
 
 // NodeIDs returns a slice of this configuration's Node IDs.
