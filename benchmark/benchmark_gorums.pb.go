@@ -4,7 +4,6 @@ package benchmark
 
 import (
 	context "context"
-	errors "errors"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -76,28 +75,26 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes
-// and quorum specification. The QuorumSpec must be provided using WithQuorumSpec.
+// and a quorum specification. The QuorumSpec must be provided using WithQuorumSpec.
 // Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
 func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	if len(opts) != 2 {
-		return nil, errors.New("not enough options")
+	if len(opts) < 1 || len(opts) > 2 {
+		return nil, fmt.Errorf("wrong number of options: %d", len(opts))
 	}
 	c = &Configuration{}
 	for _, opt := range opts {
 		switch v := opt.(type) {
-		case QuorumSpec:
-			c.qspec = v
 		case gorums.NodeListOption:
 			c.Configuration, err = gorums.NewConfiguration(m.Manager, v)
 			if err != nil {
 				return nil, err
 			}
+		case QuorumSpec:
+			// Must be last since v may match QuorumSpec if it is interface{}
+			c.qspec = v
 		default:
 			return nil, fmt.Errorf("unknown option type: %v", v)
 		}
-	}
-	if c.qspec == nil {
-		return nil, errors.New("required QuorumSpec not provide")
 	}
 	return c, nil
 }
