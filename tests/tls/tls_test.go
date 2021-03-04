@@ -55,7 +55,7 @@ func TestTLS(t *testing.T) {
 			grpc.WithReturnConnectionError(),
 		),
 	)
-	_, err = mgr.NewConfiguration(WithNodeList(addrs))
+	_, err = mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
