@@ -3,11 +3,13 @@
 package dev
 
 import (
+	gorums "github.com/relab/gorums"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 // QuorumSpec is the interface of quorum functions for ZorumsService.
 type QuorumSpec interface {
+	gorums.ConfigOption
 
 	// QuorumCallQF is the quorum function for the QuorumCall
 	// quorum call method. The in parameter is the request object

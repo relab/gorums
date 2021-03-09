@@ -198,7 +198,10 @@ func BenchmarkFullStackQF(b *testing.B) {
 			gorums.WithGrpcDialOptions(grpc.WithInsecure()),
 			gorums.WithDialTimeout(10*time.Second),
 		)
-		c, err := mgr.NewConfiguration(&testQSpec{quorum: n / 2})
+		c, err := mgr.NewConfiguration(
+			&testQSpec{quorum: n / 2},
+			gorums.WithNodeList([]string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}), // dummy node list; won't actually be used in test
+		)
 		if err != nil {
 			b.Fatal(err)
 		}
