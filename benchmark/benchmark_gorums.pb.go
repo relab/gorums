@@ -75,6 +75,11 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			return nil, fmt.Errorf("unknown option type: %v", v)
 		}
 	}
+	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
+	var test interface{} = struct{}{}
+	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+		return nil, fmt.Errorf("missing required QuorumSpec")
+	}
 	return c, nil
 }
 
