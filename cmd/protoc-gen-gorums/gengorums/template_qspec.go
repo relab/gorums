@@ -7,9 +7,12 @@ import (
 
 var qspecInterface = `
 {{$genFile := .GenFile}}
+{{$configOpt := use "gorums.ConfigOption" .GenFile}}
 {{- range qspecServices .Services}}
 // QuorumSpec is the interface of quorum functions for {{.GoName}}.
 type QuorumSpec interface {
+	{{$configOpt}}
+
 {{range qspecMethods .Methods -}}
 	{{/* Below . is the method object */}}
 	{{$method := .GoName}}

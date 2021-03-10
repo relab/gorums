@@ -7,6 +7,7 @@ package gengorums
 // These identifiers are used by the Gorums protoc plugin to generate
 // appropriate import statements.
 var pkgIdentMap = map[string]string{
+	"fmt":                             "Errorf",
 	"github.com/relab/gorums":         "ConfigOption",
 	"google.golang.org/grpc/encoding": "GetCodec",
 }
@@ -59,15 +60,34 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 	return mgr
 }
 
-// NewConfiguration returns a configuration based on the provided list of nodes.
+// NewConfiguration returns a configuration based on the provided list of nodes (required)
+// and an optional quorum specification. The QuorumSpec is require for call types that
+// must process replies. For configurations only used for unicast or multicast call types,
+// a QuorumSpec is not needed. The QuorumSpec interface is also a ConfigOption.
 // Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
-func (m *Manager) NewConfiguration(qspec QuorumSpec, opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	c = &Configuration{
-		qspec: qspec,
+func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
+	if len(opts) < 1 || len(opts) > 2 {
+		return nil, fmt.Errorf("wrong number of options: %d", len(opts))
 	}
-	c.Configuration, err = gorums.NewConfiguration(m.Manager, opts...)
-	if err != nil {
-		return nil, err
+	c = &Configuration{}
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case gorums.NodeListOption:
+			c.Configuration, err = gorums.NewConfiguration(m.Manager, v)
+			if err != nil {
+				return nil, err
+			}
+		case QuorumSpec:
+			// Must be last since v may match QuorumSpec if it is interface{}
+			c.qspec = v
+		default:
+			return nil, fmt.Errorf("unknown option type: %v", v)
+		}
+	}
+	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
+	var test interface{} = struct{}{}
+	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+		return nil, fmt.Errorf("missing required QuorumSpec")
 	}
 	return c, nil
 }

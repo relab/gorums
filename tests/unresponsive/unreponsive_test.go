@@ -30,7 +30,7 @@ func TestUnresponsive(t *testing.T) {
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(grpc.WithInsecure(), grpc.WithBlock()),
 	)
-	_, err := mgr.NewConfiguration(nil, gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
