@@ -22,5 +22,6 @@ func generateDevFile(gen *protogen.Plugin, file *protogen.File, gorumsType strin
 	genGeneratedHeader(gen, g, file)
 	g.P("package ", file.GoPackageName)
 	g.P()
+	genVersionCheck(g)
 	genGorumsType(g, file.Services, gorumsType)
 }

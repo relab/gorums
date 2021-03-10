@@ -7,14 +7,13 @@
 package dev
 
 import (
-	reflect "reflect"
-	sync "sync"
-
 	proto "github.com/golang/protobuf/proto"
 	_ "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	reflect "reflect"
+	sync "sync"
 )
 
 const (
@@ -336,16 +335,13 @@ func file_zorums_proto_rawDescGZIP() []byte {
 	return file_zorums_proto_rawDescData
 }
 
-var (
-	file_zorums_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-	file_zorums_proto_goTypes  = []interface{}{
-		(*Request)(nil),       // 0: dev.Request
-		(*Response)(nil),      // 1: dev.Response
-		(*MyResponse)(nil),    // 2: dev.MyResponse
-		(*emptypb.Empty)(nil), // 3: google.protobuf.Empty
-	}
-)
-
+var file_zorums_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_zorums_proto_goTypes = []interface{}{
+	(*Request)(nil),       // 0: dev.Request
+	(*Response)(nil),      // 1: dev.Response
+	(*MyResponse)(nil),    // 2: dev.MyResponse
+	(*emptypb.Empty)(nil), // 3: google.protobuf.Empty
+}
 var file_zorums_proto_depIdxs = []int32{
 	0,  // 0: dev.ZorumsService.GRPCCall:input_type -> dev.Request
 	0,  // 1: dev.ZorumsService.QuorumCall:input_type -> dev.Request

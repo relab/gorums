@@ -7,12 +7,11 @@
 package correctable
 
 import (
-	reflect "reflect"
-
 	proto "github.com/golang/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
+	reflect "reflect"
 )
 
 const (
@@ -79,7 +78,6 @@ var file_internal_correctable_opts_proto_rawDesc = []byte{
 var file_internal_correctable_opts_proto_goTypes = []interface{}{
 	(*descriptorpb.MethodOptions)(nil), // 0: google.protobuf.MethodOptions
 }
-
 var file_internal_correctable_opts_proto_depIdxs = []int32{
 	0, // 0: correctable.correctable:extendee -> google.protobuf.MethodOptions
 	0, // 1: correctable.correctable_stream:extendee -> google.protobuf.MethodOptions

@@ -7,13 +7,12 @@
 package ordering
 
 import (
-	reflect "reflect"
-	sync "sync"
-
 	proto "github.com/golang/protobuf/proto"
 	status "google.golang.org/genproto/googleapis/rpc/status"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	reflect "reflect"
+	sync "sync"
 )
 
 const (
@@ -127,14 +126,11 @@ func file_ordering_ordering_proto_rawDescGZIP() []byte {
 	return file_ordering_ordering_proto_rawDescData
 }
 
-var (
-	file_ordering_ordering_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
-	file_ordering_ordering_proto_goTypes  = []interface{}{
-		(*Metadata)(nil),      // 0: ordering.Metadata
-		(*status.Status)(nil), // 1: google.rpc.Status
-	}
-)
-
+var file_ordering_ordering_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_ordering_ordering_proto_goTypes = []interface{}{
+	(*Metadata)(nil),      // 0: ordering.Metadata
+	(*status.Status)(nil), // 1: google.rpc.Status
+}
 var file_ordering_ordering_proto_depIdxs = []int32{
 	1, // 0: ordering.Metadata.Status:type_name -> google.rpc.Status
 	0, // 1: ordering.Gorums.NodeStream:input_type -> ordering.Metadata

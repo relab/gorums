@@ -7,12 +7,11 @@
 package gorums
 
 import (
-	reflect "reflect"
-
 	proto "github.com/golang/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	descriptorpb "google.golang.org/protobuf/types/descriptorpb"
+	reflect "reflect"
 )
 
 const (
@@ -163,7 +162,6 @@ var file_gorums_proto_rawDesc = []byte{
 var file_gorums_proto_goTypes = []interface{}{
 	(*descriptorpb.MethodOptions)(nil), // 0: google.protobuf.MethodOptions
 }
-
 var file_gorums_proto_depIdxs = []int32{
 	0, // 0: gorums.rpc:extendee -> google.protobuf.MethodOptions
 	0, // 1: gorums.unicast:extendee -> google.protobuf.MethodOptions

@@ -29,6 +29,7 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) {
 	genGeneratedHeader(gen, g, file)
 	g.P("package ", file.GoPackageName)
 	g.P()
+	genVersionCheck(g)
 	g.P(staticCode)
 	g.P()
 	for path, ident := range pkgIdentMap {
@@ -56,6 +57,18 @@ func genGeneratedHeader(gen *protogen.Plugin, g *protogen.GeneratedFile, f *prot
 		g.P("// source: ", f.Desc.Path())
 	}
 	g.P()
+}
+
+func genVersionCheck(g *protogen.GeneratedFile) {
+	if GenerateVersionMarkers {
+		g.P(`const (
+	// Verify that this generated code is sufficiently up-to-date.
+	_ = gorums.EnforceVersion(gorums.GenVersion - gorums.MinVersion)
+	// Verify that gorums runtime is sufficiently up-to-date.
+	_ = gorums.EnforceVersion(gorums.MaxVersion - gorums.GenVersion)
+)`)
+		g.P()
+	}
 }
 
 // gorumsGuard returns true if there is something for Gorums to generate
