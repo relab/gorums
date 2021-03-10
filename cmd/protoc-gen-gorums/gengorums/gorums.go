@@ -61,12 +61,12 @@ func genGeneratedHeader(gen *protogen.Plugin, g *protogen.GeneratedFile, f *prot
 
 func genVersionCheck(g *protogen.GeneratedFile) {
 	if GenerateVersionMarkers {
-		g.P(`const (
-	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.GenVersion - gorums.MinVersion)
-	// Verify that gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - gorums.GenVersion)
-)`)
+		g.P("const (")
+		g.P("// Verify that this generated code is sufficiently up-to-date.")
+		g.P("_ = gorums.EnforceVersion(", gorums.GenVersion, " - gorums.MinVersion)")
+		g.P("// Verify that the gorums runtime is sufficiently up-to-date.")
+		g.P("_ = gorums.EnforceVersion(gorums.MaxVersion - ", gorums.GenVersion, ")")
+		g.P(")")
 		g.P()
 	}
 }

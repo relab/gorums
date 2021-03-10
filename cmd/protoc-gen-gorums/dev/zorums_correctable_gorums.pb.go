@@ -15,9 +15,9 @@ import (
 
 const (
 	// Verify that this generated code is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.GenVersion - gorums.MinVersion)
-	// Verify that gorums runtime is sufficiently up-to-date.
-	_ = gorums.EnforceVersion(gorums.MaxVersion - gorums.GenVersion)
+	_ = gorums.EnforceVersion(3 - gorums.MinVersion)
+	// Verify that the gorums runtime is sufficiently up-to-date.
+	_ = gorums.EnforceVersion(gorums.MaxVersion - 3)
 )
 
 // Correctable plain.
