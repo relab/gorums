@@ -108,3 +108,45 @@ func (o nodeIDs) newConfig(mgr *Manager) (Configuration, error) {
 func WithNodeIDs(ids []uint32) NodeListOption {
 	return &nodeIDs{nodeIDs: ids}
 }
+
+type addNodes struct {
+	old Configuration
+	new NodeListOption
+}
+
+func (o addNodes) newConfig(mgr *Manager) (nodes Configuration, err error) {
+	newNodes, err := o.new.newConfig(mgr)
+	if err != nil {
+		return nil, err
+	}
+	ac := &addConfig{old: o.old, add: newNodes}
+	return ac.newConfig(mgr)
+}
+
+func (c Configuration) AddNodes(new NodeListOption) NodeListOption {
+	return &addNodes{old: c, new: new}
+}
+
+type addConfig struct {
+	old Configuration
+	add Configuration
+}
+
+func (o addConfig) newConfig(mgr *Manager) (nodes Configuration, err error) {
+	nodes = make(Configuration, 0)
+	m := make(map[uint32]bool)
+	for _, n := range append(o.old, o.add...) {
+		if !m[n.id] {
+			m[n.id] = true
+			nodes = append(nodes, n)
+		}
+	}
+	// Sort nodes to ensure deterministic iteration.
+	OrderedBy(ID).Sort(mgr.nodes)
+	OrderedBy(ID).Sort(nodes)
+	return nodes, err
+}
+
+func (c Configuration) Add(add Configuration) NodeListOption {
+	return &addConfig{old: c, add: add}
+}
