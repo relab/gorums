@@ -73,8 +73,7 @@ func (m *receiveQueue) putResult(id uint64, result *response) {
 	}
 }
 
-type orderedNodeStream struct {
-	*receiveQueue
+type Channel struct {
 	sendQ        chan request
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
@@ -88,17 +87,7 @@ type orderedNodeStream struct {
 	cancelStream context.CancelFunc
 }
 
-func newNodeStream(node *Node, rq *receiveQueue, opts managerOptions) *orderedNodeStream {
-	return &orderedNodeStream{
-		receiveQueue: rq,
-		sendQ:        make(chan request, opts.sendBuffer),
-		node:         node,
-		backoff:      opts.backoff,
-		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
-	}
-}
-
-func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc.ClientConn) error {
+func (s *Channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	var err error
 	s.parentCtx = ctx
 	s.streamCtx, s.cancelStream = context.WithCancel(s.parentCtx)
@@ -112,11 +101,11 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 	return nil
 }
 
-func (s *orderedNodeStream) sendMsg(req request) (err error) {
+func (s *Channel) sendMsg(req request) (err error) {
 	// unblock the waiting caller unless noSendWaiting is enabled
 	defer func() {
 		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
-			s.putResult(req.msg.Metadata.MessageID, &response{})
+			s.node.putResult(req.msg.Metadata.MessageID, &response{})
 		}
 	}()
 
@@ -150,7 +139,7 @@ func (s *orderedNodeStream) sendMsg(req request) (err error) {
 	return err
 }
 
-func (s *orderedNodeStream) sendMsgs() {
+func (s *Channel) sendMsgs() {
 	var req request
 	for {
 		select {
@@ -161,19 +150,19 @@ func (s *orderedNodeStream) sendMsgs() {
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
+			s.node.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
 			continue
 		}
 		// else try to send message
 		err := s.sendMsg(req)
 		if err != nil {
 			// return the error
-			s.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
+			s.node.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
 		}
 	}
 }
 
-func (s *orderedNodeStream) recvMsgs() {
+func (s *Channel) recvMsgs() {
 	for {
 		resp := newMessage(responseType)
 		s.streamMut.RLock()
@@ -183,11 +172,11 @@ func (s *orderedNodeStream) recvMsgs() {
 			s.streamMut.RUnlock()
 			s.node.setLastErr(err)
 			// attempt to reconnect
-			s.reconnectStream()
+			s.reconnect()
 		} else {
 			s.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			s.putResult(resp.Metadata.MessageID, &response{nid: s.node.ID(), msg: resp.Message, err: err})
+			s.node.putResult(resp.Metadata.MessageID, &response{nid: s.node.ID(), msg: resp.Message, err: err})
 		}
 
 		select {
@@ -198,7 +187,7 @@ func (s *orderedNodeStream) recvMsgs() {
 	}
 }
 
-func (s *orderedNodeStream) reconnectStream() {
+func (s *Channel) reconnect() {
 	s.streamMut.Lock()
 	defer s.streamMut.Unlock()
 

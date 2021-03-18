@@ -31,7 +31,7 @@ func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp p
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	var (

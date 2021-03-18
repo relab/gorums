@@ -22,7 +22,7 @@ func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...
 					continue // don't send if no msg
 				}
 			}
-			n.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
+			n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
 			sentMsgs++
 		}
 	}

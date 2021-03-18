@@ -16,7 +16,7 @@ func (n *Node) RPCCall(ctx context.Context, d CallData) (resp protoreflect.Proto
 	replyChan, callDone := n.newReply(md, 1)
 	defer callDone()
 
-	n.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
+	n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
 
 	select {
 	case r := <-replyChan:

@@ -43,7 +43,7 @@ func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	fut := &Async{c: make(chan struct{}, 1)}
