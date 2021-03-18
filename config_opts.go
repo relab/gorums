@@ -123,6 +123,8 @@ func (o addNodes) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	return ac.newConfig(mgr)
 }
 
+// Add returns a NodeListOption that can be used to create a new configuration combining c
+// and the nodes provided via the NodeListOption new.
 func (c Configuration) AddNodes(new NodeListOption) NodeListOption {
 	return &addNodes{old: c, new: new}
 }
@@ -147,6 +149,7 @@ func (o addConfig) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	return nodes, err
 }
 
+// Add returns a NodeListOption that can be used to create a new configuration combining c and add.
 func (c Configuration) Add(add Configuration) NodeListOption {
 	return &addConfig{old: c, add: add}
 }
