@@ -155,3 +155,35 @@ func (o addConfig) newConfig(mgr *Manager) (nodes Configuration, err error) {
 func (c Configuration) Add(add Configuration) NodeListOption {
 	return &addConfig{old: c, add: add}
 }
+
+// RemoveNodes returns a NodeListOption that can be used to create a new configuration
+// from configuration c without the given node IDs.
+func (c Configuration) RemoveNodes(ids ...uint32) NodeListOption {
+	rmIDs := make(map[uint32]bool)
+	for _, id := range ids {
+		rmIDs[id] = true
+	}
+	keepIDs := make([]uint32, 0)
+	for _, cNode := range c {
+		if !rmIDs[cNode.id] {
+			keepIDs = append(keepIDs, cNode.id)
+		}
+	}
+	return &nodeIDs{nodeIDs: keepIDs}
+}
+
+// Remove returns a NodeListOption that can be used to create a new configuration
+// from configuration c without the nodes in configuration rm.
+func (c Configuration) Remove(rm Configuration) NodeListOption {
+	rmIDs := make(map[uint32]bool)
+	for _, rmNode := range rm {
+		rmIDs[rmNode.id] = true
+	}
+	keepIDs := make([]uint32, 0)
+	for _, cNode := range c {
+		if !rmIDs[cNode.id] {
+			keepIDs = append(keepIDs, cNode.id)
+		}
+	}
+	return &nodeIDs{nodeIDs: keepIDs}
+}
