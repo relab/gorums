@@ -18,6 +18,24 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 	return opt.newConfig(mgr)
 }
 
+// Channels returns the default channels for each node in the configuration.
+func (c Configuration) Channels() []*Channel {
+	channels := make([]*Channel, len(c))
+	for i, node := range c {
+		channels[i] = node.Channel()
+	}
+	return channels
+}
+
+// NewChannels creates new channels for each node in the configuration.
+func (c Configuration) NewChannels() []*Channel {
+	channels := make([]*Channel, len(c))
+	for i, node := range c {
+		channels[i] = node.NewChannel()
+	}
+	return channels
+}
+
 // NodeIDs returns a slice of this configuration's Node IDs.
 func (c Configuration) NodeIDs() []uint32 {
 	ids := make([]uint32, len(c))

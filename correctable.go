@@ -80,12 +80,14 @@ type CorrectableCallData struct {
 	ServerStream   bool
 }
 
-func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
+func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallData, opts ...CallOption) *Correctable {
+	o := getCallOptions(E_Correctable, opts)
 	expectedReplies := len(c)
 	md := c.newCall(d.Method)
 	replyChan, callDone := c.newReply(md, expectedReplies)
 
-	for _, n := range c {
+	channels := o.getChannels(c)
+	for i, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)
@@ -94,7 +96,7 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 				continue // don't send if no msg
 			}
 		}
-		n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		channels[i].sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}

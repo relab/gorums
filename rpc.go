@@ -11,12 +11,13 @@ type CallData struct {
 	Method  string
 }
 
-func (n *Node) RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
+func (n *Node) RPCCall(ctx context.Context, d CallData, opts ...CallOption) (resp protoreflect.ProtoMessage, err error) {
+	o := getCallOptions(E_Rpc, opts)
 	md := n.newCall(d.Method)
 	replyChan, callDone := n.newReply(md, 1)
 	defer callDone()
 
-	n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
+	o.getChannel(n).sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
 
 	select {
 	case r := <-replyChan:

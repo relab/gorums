@@ -16,13 +16,15 @@ type QuorumCallData struct {
 	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
 }
 
-func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
+func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData, opts ...CallOption) (resp protoreflect.ProtoMessage, err error) {
+	o := getCallOptions(E_Quorumcall, opts)
 	expectedReplies := len(c)
 	md := c.newCall(d.Method)
 	replyChan, callDone := c.newReply(md, expectedReplies)
 	defer callDone()
 
-	for _, n := range c {
+	channels := o.getChannels(c)
+	for i, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)
@@ -31,7 +33,7 @@ func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp p
 				continue // don't send if no msg
 			}
 		}
-		n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		channels[i].sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	var (

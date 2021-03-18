@@ -29,12 +29,14 @@ func (f *Async) Done() bool {
 	}
 }
 
-func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
+func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData, opts ...CallOption) *Async {
+	o := getCallOptions(E_Async, opts)
 	expectedReplies := len(c)
 	md := c.newCall(d.Method)
 	replyChan, callDone := c.newReply(md, expectedReplies)
 
-	for _, n := range c {
+	channels := o.getChannels(c)
+	for i, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)
@@ -43,7 +45,7 @@ func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 				continue // don't send if no msg
 			}
 		}
-		n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		channels[i].sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	fut := &Async{c: make(chan struct{}, 1)}

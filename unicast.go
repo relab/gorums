@@ -21,7 +21,7 @@ func (n *Node) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 
 	// newReply must be called before adding req to sendQ
 	replyChan, callDone := n.newReply(md, 1)
-	n.channel.sendQ <- req
+	o.getChannel(n).sendQ <- req
 	// nodeStream sends an empty reply on replyChan when the message has been sent
 	// wait until the message has been sent
 	<-replyChan

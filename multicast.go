@@ -14,7 +14,8 @@ func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...
 	md := c.newCall(d.Method)
 	sentMsgs := 0
 	send := func() {
-		for _, n := range c {
+		channels := o.getChannels(c)
+		for i, n := range c {
 			msg := d.Message
 			if d.PerNodeArgFn != nil {
 				msg = d.PerNodeArgFn(d.Message, n.id)
@@ -22,7 +23,7 @@ func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...
 					continue // don't send if no msg
 				}
 			}
-			n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
+			channels[i].sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
 			sentMsgs++
 		}
 	}
