@@ -48,11 +48,11 @@ type nodeList struct {
 	addrsList []string
 }
 
-func (o nodeList) newConfig(mgr *Manager) (Configuration, error) {
+func (o nodeList) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	if len(o.addrsList) == 0 {
 		return nil, ConfigCreationError(fmt.Errorf("node addresses required: WithNodeList"))
 	}
-	nodes := make(Configuration, 0)
+	nodes = make(Configuration, 0)
 	for _, naddr := range o.addrsList {
 		node, err := NewNode(naddr)
 		if err != nil {
@@ -84,11 +84,11 @@ type nodeIDs struct {
 	nodeIDs []uint32
 }
 
-func (o nodeIDs) newConfig(mgr *Manager) (Configuration, error) {
+func (o nodeIDs) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	if len(o.nodeIDs) == 0 {
 		return nil, ConfigCreationError(fmt.Errorf("node IDs required: WithNodeIDs"))
 	}
-	nodes := make(Configuration, 0)
+	nodes = make(Configuration, 0)
 	for _, id := range o.nodeIDs {
 		node, found := mgr.Node(id)
 		if !found {
