@@ -63,10 +63,12 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes (required)
-// and an optional quorum specification. The QuorumSpec is require for call types that
+// and an optional quorum specification. The QuorumSpec is necessary for call types that
 // must process replies. For configurations only used for unicast or multicast call types,
 // a QuorumSpec is not needed. The QuorumSpec interface is also a ConfigOption.
-// Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the Add, AddNodes, Remove, and RemoveNodes methods.
 func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
 	if len(opts) < 1 || len(opts) > 2 {
 		return nil, fmt.Errorf("wrong number of options: %d", len(opts))
