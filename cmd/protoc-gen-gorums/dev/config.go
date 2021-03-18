@@ -14,9 +14,8 @@ type Configuration struct {
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
 func (c *Configuration) Nodes() []*Node {
-	gorumsNodes := c.Configuration.Nodes()
-	nodes := make([]*Node, 0, len(gorumsNodes))
-	for _, n := range gorumsNodes {
+	nodes := make([]*Node, 0, c.Size())
+	for _, n := range c.Configuration {
 		nodes = append(nodes, &Node{n})
 	}
 	return nodes
