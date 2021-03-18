@@ -424,3 +424,60 @@ func ExampleStorageClient() {
   cancel()
 }
 ```
+
+## Working with Configurations
+
+Below is an example demonstrating how to work with configurations.
+We ignore the construction of `mgr` and error handling.
+
+Depending on the application's requirements, the `QSpec` argument may depend on the resulting configuration's size.
+In the example below, we simply use fixed quorum sizes.
+
+```go
+func ExampleStorageClient() {
+  addrs := []string{
+    "127.0.0.1:8080",
+    "127.0.0.1:8081",
+    "127.0.0.1:8082",
+  }
+  // Make configuration c1 from addrs, giving |c1| = |addrs| = 3
+  c1, _ := mgr.NewConfiguration(
+    &QSpec{2},
+    gorums.WithNodeList(addrs),
+  )
+
+  newAddrs := []string{
+    "127.0.0.1:9080",
+    "127.0.0.1:9081",
+  }
+  // Make configuration c2 from newAddrs, giving |c2| = |newAddrs| = 2
+  c2, _ := mgr.NewConfiguration(
+    &QSpec{1},
+    gorums.WithNodeList(newAddrs),
+  )
+
+  // Make new configuration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
+  c3, _ := mgr.NewConfiguration(
+    &QSpec{3},
+    c1.AddNodes(gorums.WithNodeList(newAddrs)),
+  )
+
+  // Make new configuration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
+  c4, _ := mgr.NewConfiguration(
+    &QSpec{3},
+    c1.Add(c2),
+  )
+
+  // Make new configuration c5 from c1 removing the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
+  c5, _ := mgr.NewConfiguration(
+    &QSpec{1},
+    c1.RemoveNodes(c1.NodeIDs()[0]),
+  )
+
+  // Make new configuration c6 from c3 removing c1, giving |c6| = |c3| - |c1| = 5-3 = 2
+  c6, _ := mgr.NewConfiguration(
+    &QSpec{1},
+    c3.Remove(c1),
+  )
+}
+```
