@@ -1,6 +1,6 @@
 package gengorums
 
-var unicastVar = rpcVar + `{{$callOpt := use "gorums.CallOption" .GenFile}}`
+var unicastVar = rpcVar
 
 var unicastSignature = `func (n *Node) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}, opts ...{{$callOpt}}) {

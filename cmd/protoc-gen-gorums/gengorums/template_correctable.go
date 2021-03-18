@@ -35,7 +35,8 @@ var correctableVar = `
 
 var correctableSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
+	`{{perNodeFnType .GenFile .Method ", f"}}, ` +
+	`opts ...{{$callOpt}}) ` +
 	`*{{$correctableOut}} {`
 
 var correctableBody = `	cd := {{$callData}}{

@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/relab/gorums"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -32,8 +33,8 @@ type Bench struct {
 
 type (
 	benchFunc   func(Options) (*Result, error)
-	qcFunc      func(context.Context, *Echo) (*Echo, error)
-	asyncQCFunc func(context.Context, *Echo) *AsyncEcho
+	qcFunc      func(context.Context, *Echo, ...gorums.CallOption) (*Echo, error)
+	asyncQCFunc func(context.Context, *Echo, ...gorums.CallOption) *AsyncEcho
 	serverFunc  func(context.Context, *TimedMsg)
 )
 

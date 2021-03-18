@@ -10,6 +10,7 @@ var commonVariables = `
 {{$customOut := customOut .GenFile .Method}}
 {{$customOutField := field $customOut}}
 {{$unexportOutput := unexport .Method.Output.GoIdent.GoName}}
+{{$callOpt := use "gorums.CallOption" .GenFile}}
 `
 
 var quorumCallComment = `
@@ -32,7 +33,8 @@ var quorumCallComment = `
 
 var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}})` +
+	`{{perNodeFnType .GenFile .Method ", f"}}, ` +
+	`opts ...{{$callOpt}}) ` +
 	`(resp *{{$customOut}}, err error) {
 `
 

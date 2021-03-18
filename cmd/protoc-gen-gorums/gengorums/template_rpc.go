@@ -2,7 +2,8 @@ package gengorums
 
 var rpcSignature = `func (n *Node) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$customOut}}, err error) {
+	`{{perNodeFnType .GenFile .Method ", f"}}, ` +
+	`opts ...{{$callOpt}}) (resp *{{$customOut}}, err error) {
 `
 
 var rpcVar = `
