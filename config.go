@@ -61,7 +61,7 @@ func (c Configuration) newCall(method string) (md *ordering.Metadata) {
 
 // newReply returns a channel for receiving replies
 // and a done function to be called for clean up.
-func (c Configuration) newReply(md *ordering.Metadata, maxReplies int) (replyChan chan *gorumsStreamResult, done func()) {
+func (c Configuration) newReply(md *ordering.Metadata, maxReplies int) (replyChan chan *response, done func()) {
 	// Note that we just use the first node's newReply method since all nodes
 	// associated with the same manager use the same receiveQueue instance.
 	return c[0].newReply(md, maxReplies)

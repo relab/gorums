@@ -43,7 +43,7 @@ func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	fut := &Async{c: make(chan struct{}, 1)}
@@ -66,7 +66,7 @@ func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 					errs = append(errs, Error{r.nid, r.err})
 					break
 				}
-				replies[r.nid] = r.reply
+				replies[r.nid] = r.msg
 				if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
 					fut.reply, fut.err = resp, nil
 					return

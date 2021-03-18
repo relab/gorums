@@ -12,7 +12,7 @@ func (n *Node) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
 	md := n.newCall(d.Method)
-	req := gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
+	req := request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	if o.noSendWaiting {
 		n.sendQ <- req
