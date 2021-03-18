@@ -75,7 +75,7 @@ func BenchmarkReceiveQueue(b *testing.B) {
 	)
 	rq := newReceiveQueue()
 	// dummy result
-	result := &gorumsStreamResult{nid: 2, reply: nil, err: nil}
+	result := &response{nid: 2, msg: nil, err: nil}
 	b.Run("NewCall", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			md := rq.newCall(methodName)
@@ -94,7 +94,7 @@ func BenchmarkReceiveQueue(b *testing.B) {
 	b.Run("RWMutexMap", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msgID := rq.nextMsgID()
-			replies := make(chan *gorumsStreamResult, numNodes)
+			replies := make(chan *response, numNodes)
 			rq.putChan(msgID, replies)
 			rq.putResult2(msgID, result)
 			rq.deleteChan(msgID)
@@ -104,7 +104,7 @@ func BenchmarkReceiveQueue(b *testing.B) {
 	b.Run("syncMapStruct", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msgID := rq.nextMsgID()
-			replies := make(chan *gorumsStreamResult, numNodes)
+			replies := make(chan *response, numNodes)
 			srq.putChan(msgID, replies)
 			srq.putResult(msgID, result)
 			srq.deleteChan(msgID)
@@ -114,10 +114,10 @@ func BenchmarkReceiveQueue(b *testing.B) {
 	b.Run("syncMapDirect", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msgID := rq.nextMsgID()
-			replies := make(chan *gorumsStreamResult, numNodes)
+			replies := make(chan *response, numNodes)
 			syncrq.Store(msgID, replies)
 			xc, ok := syncrq.Load(msgID)
-			c := xc.(chan *gorumsStreamResult)
+			c := xc.(chan *response)
 			if ok {
 				// ignore sending result on channel
 				_ = c
@@ -130,14 +130,14 @@ func BenchmarkReceiveQueue(b *testing.B) {
 // newCall returns metadata for the call, a channel for receiving replies
 // and a done function to be called for clean up.
 // Only if reply is true will replyChan and the done function be allocated.
-func (m *receiveQueue) oldNewCall(method string, maxReplies int, reply bool) (md *ordering.Metadata, replyChan chan *gorumsStreamResult, done func()) {
+func (m *receiveQueue) oldNewCall(method string, maxReplies int, reply bool) (md *ordering.Metadata, replyChan chan *response, done func()) {
 	msgID := atomic.AddUint64(&m.msgID, 1)
 	md = &ordering.Metadata{
 		MessageID: msgID,
 		Method:    method,
 	}
 	if reply {
-		replyChan = make(chan *gorumsStreamResult, maxReplies)
+		replyChan = make(chan *response, maxReplies)
 		m.recvQMut.Lock()
 		m.recvQ[msgID] = replyChan
 		m.recvQMut.Unlock()
@@ -156,7 +156,7 @@ func (m *receiveQueue) nextMsgID() uint64 {
 }
 
 // putChan is only used except for benchmarking.
-func (m *receiveQueue) putChan(id uint64, c chan *gorumsStreamResult) {
+func (m *receiveQueue) putChan(id uint64, c chan *response) {
 	m.recvQMut.Lock()
 	m.recvQ[id] = c
 	m.recvQMut.Unlock()
@@ -169,7 +169,7 @@ func (m *receiveQueue) deleteChan(id uint64) {
 	m.recvQMut.Unlock()
 }
 
-func (m *receiveQueue) putResult2(id uint64, result *gorumsStreamResult) {
+func (m *receiveQueue) putResult2(id uint64, result *response) {
 	m.recvQMut.RLock()
 	c, ok := m.recvQ[id]
 	m.recvQMut.RUnlock()
@@ -183,7 +183,7 @@ type rQueue struct {
 	sync.Map
 }
 
-func (m *rQueue) putChan(id uint64, c chan *gorumsStreamResult) {
+func (m *rQueue) putChan(id uint64, c chan *response) {
 	m.Store(id, c)
 }
 
@@ -191,9 +191,9 @@ func (m *rQueue) deleteChan(id uint64) {
 	m.Delete(id)
 }
 
-func (m *rQueue) putResult(id uint64, result *gorumsStreamResult) {
+func (m *rQueue) putResult(id uint64, result *response) {
 	xc, ok := m.Load(id)
-	c := xc.(chan *gorumsStreamResult)
+	c := xc.(chan *response)
 	if ok {
 		// ignore sending result on channel
 		_ = c

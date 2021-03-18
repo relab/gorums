@@ -94,7 +94,7 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
@@ -118,15 +118,15 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 					errs = append(errs, Error{r.nid, r.err})
 					break
 				}
-				replies[r.nid] = r.reply
+				replies[r.nid] = r.msg
 				if resp, rlevel, quorum = d.QuorumFunction(d.Message, replies); quorum {
 					if quorum {
-						corr.set(r.reply, rlevel, nil, true)
+						corr.set(r.msg, rlevel, nil, true)
 						return
 					}
 					if rlevel > clevel {
 						clevel = rlevel
-						corr.set(r.reply, rlevel, nil, false)
+						corr.set(r.msg, rlevel, nil, false)
 					}
 				}
 			case <-ctx.Done():

@@ -31,7 +31,7 @@ func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp p
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	var (
@@ -47,7 +47,7 @@ func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp p
 				errs = append(errs, Error{r.nid, r.err})
 				break
 			}
-			replies[r.nid] = r.reply
+			replies[r.nid] = r.msg
 			if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
 				return resp, nil
 			}

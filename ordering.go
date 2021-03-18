@@ -16,27 +16,27 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type gorumsStreamRequest struct {
+type request struct {
 	ctx  context.Context
 	msg  *Message
 	opts callOptions
 }
 
-type gorumsStreamResult struct {
-	nid   uint32
-	reply protoreflect.ProtoMessage
-	err   error
+type response struct {
+	nid uint32
+	msg protoreflect.ProtoMessage
+	err error
 }
 
 type receiveQueue struct {
 	msgID    uint64
-	recvQ    map[uint64]chan *gorumsStreamResult
+	recvQ    map[uint64]chan *response
 	recvQMut sync.RWMutex
 }
 
 func newReceiveQueue() *receiveQueue {
 	return &receiveQueue{
-		recvQ: make(map[uint64]chan *gorumsStreamResult),
+		recvQ: make(map[uint64]chan *response),
 	}
 }
 
@@ -51,8 +51,8 @@ func (m *receiveQueue) newCall(method string) (md *ordering.Metadata) {
 
 // newReply returns a channel for receiving replies
 // and a done function to be called for clean up.
-func (m *receiveQueue) newReply(md *ordering.Metadata, maxReplies int) (replyChan chan *gorumsStreamResult, done func()) {
-	replyChan = make(chan *gorumsStreamResult, maxReplies)
+func (m *receiveQueue) newReply(md *ordering.Metadata, maxReplies int) (replyChan chan *response, done func()) {
+	replyChan = make(chan *response, maxReplies)
 	m.recvQMut.Lock()
 	m.recvQ[md.MessageID] = replyChan
 	m.recvQMut.Unlock()
@@ -64,7 +64,7 @@ func (m *receiveQueue) newReply(md *ordering.Metadata, maxReplies int) (replyCha
 	return
 }
 
-func (m *receiveQueue) putResult(id uint64, result *gorumsStreamResult) {
+func (m *receiveQueue) putResult(id uint64, result *response) {
 	m.recvQMut.RLock()
 	c, ok := m.recvQ[id]
 	m.recvQMut.RUnlock()
@@ -75,7 +75,7 @@ func (m *receiveQueue) putResult(id uint64, result *gorumsStreamResult) {
 
 type orderedNodeStream struct {
 	*receiveQueue
-	sendQ        chan gorumsStreamRequest
+	sendQ        chan request
 	node         *Node // needed for ID and setLastError
 	backoff      backoff.Config
 	rand         *rand.Rand
@@ -91,7 +91,7 @@ type orderedNodeStream struct {
 func newNodeStream(node *Node, rq *receiveQueue, opts managerOptions) *orderedNodeStream {
 	return &orderedNodeStream{
 		receiveQueue: rq,
-		sendQ:        make(chan gorumsStreamRequest, opts.sendBuffer),
+		sendQ:        make(chan request, opts.sendBuffer),
 		node:         node,
 		backoff:      opts.backoff,
 		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -112,11 +112,11 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 	return nil
 }
 
-func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
+func (s *orderedNodeStream) sendMsg(req request) (err error) {
 	// unblock the waiting caller unless noSendWaiting is enabled
 	defer func() {
 		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
-			s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{})
+			s.putResult(req.msg.Metadata.MessageID, &response{})
 		}
 	}()
 
@@ -151,7 +151,7 @@ func (s *orderedNodeStream) sendMsg(req gorumsStreamRequest) (err error) {
 }
 
 func (s *orderedNodeStream) sendMsgs() {
-	var req gorumsStreamRequest
+	var req request
 	for {
 		select {
 		case <-s.parentCtx.Done():
@@ -161,14 +161,14 @@ func (s *orderedNodeStream) sendMsgs() {
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
 			continue
 		}
 		// else try to send message
 		err := s.sendMsg(req)
 		if err != nil {
 			// return the error
-			s.putResult(req.msg.Metadata.MessageID, &gorumsStreamResult{nid: s.node.ID(), reply: nil, err: err})
+			s.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
 		}
 	}
 }
@@ -187,7 +187,7 @@ func (s *orderedNodeStream) recvMsgs() {
 		} else {
 			s.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			s.putResult(resp.Metadata.MessageID, &gorumsStreamResult{nid: s.node.ID(), reply: resp.Message, err: err})
+			s.putResult(resp.Metadata.MessageID, &response{nid: s.node.ID(), msg: resp.Message, err: err})
 		}
 
 		select {
