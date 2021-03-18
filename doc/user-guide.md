@@ -428,13 +428,14 @@ func ExampleStorageClient() {
 ## Working with Configurations
 
 Below is an example demonstrating how to work with configurations.
+These configurations are viewed from the client's perspective, and to actually make quorum calls on these configurations, there must be server endpoints to connect to.
 We ignore the construction of `mgr` and error handling.
 
 Depending on the application's requirements, the `QSpec` argument may depend on the resulting configuration's size.
 In the example below, we simply use fixed quorum sizes.
 
 ```go
-func ExampleStorageClient() {
+func ExampleConfigClient() {
   addrs := []string{
     "127.0.0.1:8080",
     "127.0.0.1:8081",
