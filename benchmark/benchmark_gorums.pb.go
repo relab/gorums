@@ -33,12 +33,22 @@ type Configuration struct {
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
 func (c *Configuration) Nodes() []*Node {
-	gorumsNodes := c.Configuration.Nodes()
-	nodes := make([]*Node, 0, len(gorumsNodes))
-	for _, n := range gorumsNodes {
+	nodes := make([]*Node, 0, c.Size())
+	for _, n := range c.Configuration {
 		nodes = append(nodes, &Node{n})
 	}
 	return nodes
+}
+
+// Add returns a NodeListOption that can be used to create a new configuration combining c and add.
+func (c Configuration) Add(add *Configuration) gorums.NodeListOption {
+	return c.Configuration.Add(add.Configuration)
+}
+
+// Remove returns a NodeListOption that can be used to create a new configuration
+// from configuration c without the nodes in configuration rm.
+func (c Configuration) Remove(rm *Configuration) gorums.NodeListOption {
+	return c.Configuration.Remove(rm.Configuration)
 }
 
 func init() {
