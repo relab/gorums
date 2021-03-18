@@ -34,7 +34,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...gor
 		return c.qspec.QuorumCallQF(req.(*Request), r)
 	}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (c *Configuration) QuorumCallPerNodeArg(ctx context.Context, in *Request, f
 		return f(req.(*Request), nid)
 	}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (c *Configuration) QuorumCallCustomReturnType(ctx context.Context, in *Requ
 		return c.qspec.QuorumCallCustomReturnTypeQF(req.(*Request), r)
 	}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (c *Configuration) QuorumCallCombo(ctx context.Context, in *Request, f func
 		return f(req.(*Request), nid)
 	}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty, 
 		return c.qspec.QuorumCallEmptyQF(req.(*emptypb.Empty), r)
 	}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +145,7 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts 
 		return c.qspec.QuorumCallEmpty2QF(req.(*Request), r)
 	}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd, opts...)
 	if err != nil {
 		return nil, err
 	}

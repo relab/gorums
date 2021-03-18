@@ -63,7 +63,7 @@ var quorumCallBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.Configuration.QuorumCall(ctx, cd, opts...)
 	if err != nil {
 		return nil, err
 	}

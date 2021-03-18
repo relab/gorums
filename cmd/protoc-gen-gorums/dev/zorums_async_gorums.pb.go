@@ -34,7 +34,7 @@ func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request, opts .
 		return c.qspec.QuorumCallAsyncQF(req.(*Request), r)
 	}
 
-	fut := c.Configuration.AsyncCall(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd, opts...)
 	return &AsyncResponse{fut}
 }
 
@@ -55,7 +55,7 @@ func (c *Configuration) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Reque
 		return f(req.(*Request), nid)
 	}
 
-	fut := c.Configuration.AsyncCall(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd, opts...)
 	return &AsyncResponse{fut}
 }
 
@@ -73,7 +73,7 @@ func (c *Configuration) QuorumCallAsyncCustomReturnType(ctx context.Context, in 
 		return c.qspec.QuorumCallAsyncCustomReturnTypeQF(req.(*Request), r)
 	}
 
-	fut := c.Configuration.AsyncCall(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd, opts...)
 	return &AsyncMyResponse{fut}
 }
 
@@ -94,7 +94,7 @@ func (c *Configuration) QuorumCallAsyncCombo(ctx context.Context, in *Request, f
 		return f(req.(*Request), nid)
 	}
 
-	fut := c.Configuration.AsyncCall(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd, opts...)
 	return &AsyncMyResponse{fut}
 }
 
@@ -112,7 +112,7 @@ func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request, opts 
 		return c.qspec.QuorumCallAsync2QF(req.(*Request), r)
 	}
 
-	fut := c.Configuration.AsyncCall(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd, opts...)
 	return &AsyncResponse{fut}
 }
 
@@ -130,7 +130,7 @@ func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request, o
 		return c.qspec.QuorumCallAsyncEmptyQF(req.(*Request), r)
 	}
 
-	fut := c.Configuration.AsyncCall(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd, opts...)
 	return &AsyncEmpty{fut}
 }
 
@@ -149,6 +149,6 @@ func (c *Configuration) QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.E
 		return c.qspec.QuorumCallAsyncEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
-	fut := c.Configuration.AsyncCall(ctx, cd)
+	fut := c.Configuration.AsyncCall(ctx, cd, opts...)
 	return &AsyncResponse{fut}
 }

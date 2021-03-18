@@ -26,7 +26,7 @@ func (n *Node) GRPCCall(ctx context.Context, in *Request, opts ...gorums.CallOpt
 		Method:  "dev.ZorumsService.GRPCCall",
 	}
 
-	res, err := n.Node.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd, opts...)
 	if err != nil {
 		return nil, err
 	}

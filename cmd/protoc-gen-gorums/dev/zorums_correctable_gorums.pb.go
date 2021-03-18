@@ -35,7 +35,7 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request, opts ...go
 		return c.qspec.CorrectableQF(req.(*Request), r)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableResponse{corr}
 }
 
@@ -57,7 +57,7 @@ func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, 
 		return f(req.(*Request), nid)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableResponse{corr}
 }
 
@@ -76,7 +76,7 @@ func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Req
 		return c.qspec.CorrectableCustomReturnTypeQF(req.(*Request), r)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableMyResponse{corr}
 }
 
@@ -98,7 +98,7 @@ func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f fun
 		return f(req.(*Request), nid)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableMyResponse{corr}
 }
 
@@ -117,7 +117,7 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request, opts 
 		return c.qspec.CorrectableEmptyQF(req.(*Request), r)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableEmpty{corr}
 }
 
@@ -137,7 +137,7 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty
 		return c.qspec.CorrectableEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableResponse{corr}
 }
 
@@ -156,7 +156,7 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *Request, opts
 		return c.qspec.CorrectableStreamQF(req.(*Request), r)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableStreamResponse{corr}
 }
 
@@ -178,7 +178,7 @@ func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Req
 		return f(req.(*Request), nid)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableStreamResponse{corr}
 }
 
@@ -197,7 +197,7 @@ func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, i
 		return c.qspec.CorrectableStreamCustomReturnTypeQF(req.(*Request), r)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableStreamMyResponse{corr}
 }
 
@@ -219,7 +219,7 @@ func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request,
 		return f(req.(*Request), nid)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableStreamMyResponse{corr}
 }
 
@@ -238,7 +238,7 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request,
 		return c.qspec.CorrectableStreamEmptyQF(req.(*Request), r)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableStreamEmpty{corr}
 }
 
@@ -258,6 +258,6 @@ func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *emptypb
 		return c.qspec.CorrectableStreamEmpty2QF(req.(*emptypb.Empty), r)
 	}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.Configuration.CorrectableCall(ctx, cd, opts...)
 	return &CorrectableStreamResponse{corr}
 }
