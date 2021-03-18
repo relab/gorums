@@ -10,7 +10,7 @@ import (
 type Configuration []*Node
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
-// Nodes can be supplied using WithNodeMap or WithNodeList or WithNodeIDs.
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the Add, AddNodes, Remove, and RemoveNodes methods.
 func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
