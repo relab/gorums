@@ -19,7 +19,7 @@ func (o nodeIDMap) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	if len(o.idMap) == 0 {
 		return nil, ConfigCreationError(fmt.Errorf("node-to-ID map required: WithNodeMap"))
 	}
-	nodes = make(Configuration, 0)
+	nodes = make(Configuration, 0, len(o.idMap))
 	for naddr, id := range o.idMap {
 		node, found := mgr.Node(id)
 		if !found {
@@ -54,7 +54,7 @@ func (o nodeList) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	if len(o.addrsList) == 0 {
 		return nil, ConfigCreationError(fmt.Errorf("node addresses required: WithNodeList"))
 	}
-	nodes = make(Configuration, 0)
+	nodes = make(Configuration, 0, len(o.addrsList))
 	for _, naddr := range o.addrsList {
 		node, err := NewNode(naddr)
 		if err != nil {
@@ -90,7 +90,7 @@ func (o nodeIDs) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	if len(o.nodeIDs) == 0 {
 		return nil, ConfigCreationError(fmt.Errorf("node IDs required: WithNodeIDs"))
 	}
-	nodes = make(Configuration, 0)
+	nodes = make(Configuration, 0, len(o.nodeIDs))
 	for _, id := range o.nodeIDs {
 		node, found := mgr.Node(id)
 		if !found {
@@ -137,7 +137,7 @@ type addConfig struct {
 }
 
 func (o addConfig) newConfig(mgr *Manager) (nodes Configuration, err error) {
-	nodes = make(Configuration, 0)
+	nodes = make(Configuration, 0, len(o.old)+len(o.add))
 	m := make(map[uint32]bool)
 	for _, n := range append(o.old, o.add...) {
 		if !m[n.id] {
@@ -163,7 +163,7 @@ func (c Configuration) RemoveNodes(ids ...uint32) NodeListOption {
 	for _, id := range ids {
 		rmIDs[id] = true
 	}
-	keepIDs := make([]uint32, 0)
+	keepIDs := make([]uint32, 0, len(c))
 	for _, cNode := range c {
 		if !rmIDs[cNode.id] {
 			keepIDs = append(keepIDs, cNode.id)
@@ -179,7 +179,7 @@ func (c Configuration) Remove(rm Configuration) NodeListOption {
 	for _, rmNode := range rm {
 		rmIDs[rmNode.id] = true
 	}
-	keepIDs := make([]uint32, 0)
+	keepIDs := make([]uint32, 0, len(c))
 	for _, cNode := range c {
 		if !rmIDs[cNode.id] {
 			keepIDs = append(keepIDs, cNode.id)
