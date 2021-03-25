@@ -24,7 +24,6 @@ type Node struct {
 	id      uint32
 	addr    string
 	conn    *grpc.ClientConn
-	cancel  func()
 	mu      sync.Mutex
 	lastErr error
 	latency time.Duration
@@ -32,8 +31,9 @@ type Node struct {
 	*receiveQueue
 	opts *managerOptions
 
-	// the default channel
-	channel *Channel
+	channel    *Channel           // the default channel
+	chanCtx    context.Context    // a context given to new channels
+	chanCancel context.CancelFunc // cancels all channels
 }
 
 // NewNode returns a new node for the provided address.
@@ -72,7 +72,6 @@ func (n *Node) connect(mgr *Manager) error {
 	if n.opts.noConnect {
 		return nil
 	}
-	n.channel = n.NewChannel()
 	var err error
 	ctx, cancel := context.WithTimeout(context.Background(), n.opts.nodeDialTimeout)
 	defer cancel()
@@ -85,22 +84,28 @@ func (n *Node) connect(mgr *Manager) error {
 		md = metadata.Join(md, n.opts.perNodeMD(n.id))
 	}
 	// a context for all of the streams
-	ctx, n.cancel = context.WithCancel(context.Background())
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	if err = n.channel.connect(ctx, n.conn); err != nil {
+	ctx, n.chanCancel = context.WithCancel(context.Background())
+	n.chanCtx = metadata.NewOutgoingContext(ctx, md)
+
+	if n.channel, err = n.NewChannel(); err != nil {
 		return fmt.Errorf("starting stream failed: %w", err)
 	}
 	return nil
 }
 
 // NewChannel creates a new channel for this Node.
-func (n *Node) NewChannel() *Channel {
-	return &Channel{
+func (n *Node) NewChannel() (*Channel, error) {
+	ch := &Channel{
 		sendQ:   make(chan request, n.opts.sendBuffer),
 		node:    n,
 		backoff: n.opts.backoff,
 		rand:    rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
+	err := ch.connect()
+	if err != nil {
+		return nil, err
+	}
+	return ch, nil
 }
 
 // Channel returns the default channel for this Node.
@@ -116,7 +121,7 @@ func (n *Node) close() error {
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("%d: conn close error: %w", n.id, err)
 	}
-	n.cancel()
+	n.chanCancel()
 	return nil
 }
 

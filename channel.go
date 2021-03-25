@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -83,15 +82,16 @@ type Channel struct {
 	streamMut    sync.RWMutex
 	streamBroken bool
 	parentCtx    context.Context
+	close        context.CancelFunc
 	streamCtx    context.Context
 	cancelStream context.CancelFunc
 }
 
-func (s *Channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
+func (s *Channel) connect() error {
 	var err error
-	s.parentCtx = ctx
+	s.parentCtx, s.close = context.WithCancel(s.node.chanCtx)
 	s.streamCtx, s.cancelStream = context.WithCancel(s.parentCtx)
-	s.gorumsClient = ordering.NewGorumsClient(conn)
+	s.gorumsClient = ordering.NewGorumsClient(s.node.conn)
 	s.gorumsStream, err = s.gorumsClient.NodeStream(s.streamCtx)
 	if err != nil {
 		return err
@@ -99,6 +99,10 @@ func (s *Channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	go s.sendMsgs()
 	go s.recvMsgs()
 	return nil
+}
+
+func (s *Channel) Close() {
+	s.close()
 }
 
 func (s *Channel) sendMsg(req request) (err error) {

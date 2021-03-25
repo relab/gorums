@@ -28,12 +28,15 @@ func (c Configuration) Channels() []*Channel {
 }
 
 // NewChannels creates new channels for each node in the configuration.
-func (c Configuration) NewChannels() []*Channel {
-	channels := make([]*Channel, len(c))
+func (c Configuration) NewChannels() (channels []*Channel, err error) {
+	channels = make([]*Channel, len(c))
 	for i, node := range c {
-		channels[i] = node.NewChannel()
+		channels[i], err = node.NewChannel()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return channels
+	return channels, nil
 }
 
 // NodeIDs returns a slice of this configuration's Node IDs.
