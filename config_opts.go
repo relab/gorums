@@ -151,9 +151,9 @@ func (o addConfig) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	return nodes, err
 }
 
-// Add returns a NodeListOption that can be used to create a new configuration combining c and add.
-func (c Configuration) Add(add Configuration) NodeListOption {
-	return &addConfig{old: c, add: add}
+// Add returns a NodeListOption that can be used to create a new configuration combining c and d.
+func (c Configuration) Add(d Configuration) NodeListOption {
+	return &addConfig{old: c, add: d}
 }
 
 // WithoutNodes returns a NodeListOption that can be used to create a new configuration
