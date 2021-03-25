@@ -119,7 +119,7 @@ func TestNewConfigurationAdd(t *testing.T) {
 	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
 	c3, err := gorums.NewConfiguration(
 		mgr,
-		c1.AddNodes(gorums.WithNodeList(newNodes)),
+		c1.WithNewNodes(gorums.WithNodeList(newNodes)),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -175,7 +175,7 @@ func TestNewConfigurationRemove(t *testing.T) {
 	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
 	c3, err := gorums.NewConfiguration(
 		mgr,
-		c1.AddNodes(gorums.WithNodeList(newNodes)),
+		c1.WithNewNodes(gorums.WithNodeList(newNodes)),
 	)
 	if err != nil {
 		t.Fatal(err)
