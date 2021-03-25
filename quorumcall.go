@@ -54,7 +54,7 @@ func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData, opts ..
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
+			return resp, ctx.Err()
 		}
 		if len(errs)+len(replies) == expectedReplies {
 			return resp, QuorumCallError{"incomplete call", len(replies), errs}

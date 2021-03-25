@@ -74,7 +74,7 @@ func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData, opts ...
 					return
 				}
 			case <-ctx.Done():
-				fut.reply, fut.err = resp, QuorumCallError{"incomplete call", len(replies), errs}
+				fut.reply, fut.err = resp, ctx.Err()
 				return
 			}
 			if len(errs)+len(replies) == expectedReplies {
