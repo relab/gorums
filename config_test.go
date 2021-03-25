@@ -163,7 +163,7 @@ func TestNewConfigurationRemove(t *testing.T) {
 	}
 	c2, err := gorums.NewConfiguration(
 		mgr,
-		c1.RemoveNodes(c1[0].ID()),
+		c1.WithoutNodes(c1[0].ID()),
 	)
 	if err != nil {
 		t.Fatal(err)

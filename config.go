@@ -12,7 +12,7 @@ type Configuration []*Node
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
-// using the Add, WithNewNodes, Remove, and RemoveNodes methods.
+// using the Add, WithNewNodes, Remove, and WithoutNodes methods.
 func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
 	if opt == nil {
 		return nil, ConfigCreationError(fmt.Errorf("missing required node list"))

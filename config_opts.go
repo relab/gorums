@@ -156,9 +156,9 @@ func (c Configuration) Add(add Configuration) NodeListOption {
 	return &addConfig{old: c, add: add}
 }
 
-// RemoveNodes returns a NodeListOption that can be used to create a new configuration
+// WithoutNodes returns a NodeListOption that can be used to create a new configuration
 // from configuration c without the given node IDs.
-func (c Configuration) RemoveNodes(ids ...uint32) NodeListOption {
+func (c Configuration) WithoutNodes(ids ...uint32) NodeListOption {
 	rmIDs := make(map[uint32]bool)
 	for _, id := range ids {
 		rmIDs[id] = true
