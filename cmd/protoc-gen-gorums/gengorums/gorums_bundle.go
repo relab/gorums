@@ -140,13 +140,7 @@ func bundle(pkgPath string) (map[string]string, []string, []byte) {
 	pkg := pkgs[0]
 	src := printFiles(pkg)
 	pkgIdentMap, reservedIdents := findIdentifiers(pkg)
-	debug("pkgIdentMap=%v", pkgIdentMap)
-	debug("reservedIdents=%v", reservedIdents)
 	return pkgIdentMap, reservedIdents, src
-}
-
-func debug(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
 // printFiles returns the source files of pkg without import statements.
