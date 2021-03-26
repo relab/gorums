@@ -149,6 +149,7 @@ func debug(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
+// printFiles returns the source files of pkg without import statements.
 func printFiles(pkg *packages.Package) []byte {
 	out := &bytes.Buffer{}
 	for _, f := range pkg.Syntax {
