@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/format"
-	"go/parser"
 	"go/printer"
 	"go/token"
 	"go/types"
@@ -18,7 +16,7 @@ import (
 	"unicode"
 
 	"github.com/google/go-cmp/cmp"
-	"golang.org/x/tools/go/loader"
+	"golang.org/x/tools/go/packages"
 )
 
 const (
@@ -93,10 +91,10 @@ func generatePkgMap(pkgs map[string]string, reservedIdents []string) string {
 // findIdentifiers examines the given package to find all imported packages,
 // and one used identifier in that imported package. These identifiers are
 // used by the Gorums protoc plugin to generate appropriate import statements.
-func findIdentifiers(fset *token.FileSet, info *loader.PackageInfo) (map[string]string, []string) {
-	packagePath := info.Pkg.Path()
+func findIdentifiers(fset *token.FileSet, info *packages.Package) (map[string]string, []string) {
+	packagePath := info.PkgPath
 	pkgIdents := make(map[string][]string)
-	for id, obj := range info.Uses {
+	for id, obj := range info.TypesInfo.Uses {
 		pos := fset.Position(id.Pos())
 		if strings.Contains(pos.Filename, "zorums") {
 			// ignore identifiers in zorums generated files
@@ -159,26 +157,27 @@ func addUniqueIdentifier(pkgIdents map[string][]string, path, name string) {
 // bundle returns a slice with the code for the given src package without imports.
 // The returned map contains packages to be imported along with one identifier
 // using the relevant import path.
-// Loosly based on x/tools/cmd/bundle
 func bundle(src string) (map[string]string, []string, []byte) {
-	conf := loader.Config{ParserMode: parser.ParseComments, Build: &build.Default}
-	conf.Import(src)
-	lprog, err := conf.Load()
-	if err != nil {
-		log.Fatalf("failed to load Go package: %v", err)
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo,
 	}
-	// Because there was a single Import call and Load succeeded,
-	// InitialPackages is guaranteed to hold the sole requested package.
-	info := lprog.InitialPackages()[0]
-
+	pkgs, err := packages.Load(cfg, src)
+	if err != nil {
+		log.Fatalf("failed to load Gorums dev package: %v", err)
+	}
+	if packages.PrintErrors(pkgs) > 0 {
+		os.Exit(1)
+	}
+	// Since Load succeeded and src is a single package, the following is safe
+	pkg := pkgs[0]
 	var out bytes.Buffer
-	printFiles(&out, lprog.Fset, info)
-	pkgIdentMap, reservedIdents := findIdentifiers(lprog.Fset, info)
+	printFiles(&out, pkg.Fset, pkg.Syntax)
+	pkgIdentMap, reservedIdents := findIdentifiers(pkg.Fset, pkg)
 	return pkgIdentMap, reservedIdents, out.Bytes()
 }
 
-func printFiles(out *bytes.Buffer, fset *token.FileSet, info *loader.PackageInfo) {
-	for _, f := range info.Files {
+func printFiles(out *bytes.Buffer, fset *token.FileSet, files []*ast.File) {
+	for _, f := range files {
 		// filter files in dev package that shouldn't be bundled in template_static.go
 		fileName := fset.File(f.Pos()).Name()
 		if ignore(fileName) {

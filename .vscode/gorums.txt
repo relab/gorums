@@ -33,6 +33,7 @@ donech
 emptypb
 errcheck
 extendee
+fset
 gengorums
 godoc
 golangci
@@ -45,6 +46,8 @@ markdownlint
 mcast
 memprofile
 multicast
+obj's
+pkgs
 proto
 protobuf
 protoc
