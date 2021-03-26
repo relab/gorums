@@ -181,7 +181,7 @@ func printFiles(pkg *packages.Package) string {
 		printLastComments(out, f.Comments, last)
 	}
 	// escape backticks
-	return strings.ReplaceAll(string(out.Bytes()), "`", "`+\"`\"+`")
+	return strings.ReplaceAll(out.String(), "`", "`+\"`\"+`")
 }
 
 // ignore files in dev folder with suffixes that shouldn't be bundled.
