@@ -38,15 +38,15 @@ func (c *Configuration) Nodes() []*Node {
 	return nodes
 }
 
-// Add returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) Add(d *Configuration) gorums.NodeListOption {
-	return c.Configuration.Add(d.Configuration)
+// With returns a NodeListOption that can be used to create a new configuration combining c and d.
+func (c Configuration) With(d *Configuration) gorums.NodeListOption {
+	return c.Configuration.With(d.Configuration)
 }
 
-// Remove returns a NodeListOption that can be used to create a new configuration
-// from configuration c without the nodes in configuration rm.
-func (c Configuration) Remove(rm *Configuration) gorums.NodeListOption {
-	return c.Configuration.Remove(rm.Configuration)
+// Without returns a NodeListOption that can be used to create a new configuration
+// from c without the nodes in rm.
+func (c Configuration) Without(rm *Configuration) gorums.NodeListOption {
+	return c.Configuration.Without(rm.Configuration)
 }
 
 func init() {

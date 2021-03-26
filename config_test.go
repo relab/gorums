@@ -128,10 +128,10 @@ func TestNewConfigurationAdd(t *testing.T) {
 		t.Errorf("c3.Size() = %d, expected %d", c3.Size(), len(nodes)+len(newNodes))
 	}
 
-	// Add c2 to c1, giving a new c4 with a total of 3+1 nodes
+	// Combine c2 to c1, giving a new c4 with a total of 3+1 nodes
 	c4, err := gorums.NewConfiguration(
 		mgr,
-		c1.Add(c2),
+		c1.With(c2),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -140,12 +140,12 @@ func TestNewConfigurationAdd(t *testing.T) {
 		t.Errorf("c4.Size() = %d, expected %d", c4.Size(), len(nodes)+len(c2Nodes))
 	}
 
-	// Add c2 to c4, giving a new c5 with a total of 4 nodes
+	// Combine c2 to c4, giving a new c5 with a total of 4 nodes
 	// c4 already contains all nodes from c2 (see above): c4 = c1+c2
 	// c5 should essentially just be a copy of c4 (ignoring duplicates from c2)
 	c5, err := gorums.NewConfiguration(
 		mgr,
-		c4.Add(c2),
+		c4.With(c2),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestNewConfigurationRemove(t *testing.T) {
 	}
 	c4, err := gorums.NewConfiguration(
 		mgr,
-		c3.Remove(c1),
+		c3.Without(c1),
 	)
 	if err != nil {
 		t.Fatal(err)

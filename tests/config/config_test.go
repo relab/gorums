@@ -93,7 +93,7 @@ func TestConfig(t *testing.T) {
 	fmt.Println("--- c2 ", c2.Nodes())
 	f(c2)
 
-	newNodeList := c1.Add(c2)
+	newNodeList := c1.With(c2)
 	c3, err := mgr.NewConfiguration(
 		newQSpec(c1.Size()+c2.Size()),
 		newNodeList,
@@ -104,7 +104,7 @@ func TestConfig(t *testing.T) {
 	fmt.Println("--- c3 ", c3.Nodes())
 	f(c3)
 
-	rmNodeList := c3.Remove(c1)
+	rmNodeList := c3.Without(c1)
 	c4, err := mgr.NewConfiguration(
 		newQSpec(c2.Size()),
 		rmNodeList,
