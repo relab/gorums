@@ -91,10 +91,9 @@ func generatePkgMap(pkgs map[string]string, reservedIdents []string) string {
 // findIdentifiers examines the given package to find all imported packages,
 // and one used identifier in that imported package. These identifiers are
 // used by the Gorums protoc plugin to generate appropriate import statements.
-func findIdentifiers(fset *token.FileSet, info *packages.Package) (map[string]string, []string) {
-	packagePath := info.PkgPath
+func findIdentifiers(fset *token.FileSet, pkgInfo *packages.Package) (map[string]string, []string) {
 	pkgIdents := make(map[string][]string)
-	for id, obj := range info.TypesInfo.Uses {
+	for id, obj := range pkgInfo.TypesInfo.Uses {
 		pos := fset.Position(id.Pos())
 		if strings.Contains(pos.Filename, "zorums") {
 			// ignore identifiers in zorums generated files
@@ -135,7 +134,7 @@ func findIdentifiers(fset *token.FileSet, info *packages.Package) (map[string]st
 	var reservedIdents []string
 	for path, idents := range pkgIdents {
 		sort.Strings(idents)
-		if path == packagePath {
+		if path == pkgInfo.PkgPath {
 			reservedIdents = idents
 			continue
 		}
