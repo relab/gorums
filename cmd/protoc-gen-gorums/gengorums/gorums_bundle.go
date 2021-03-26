@@ -10,7 +10,6 @@ import (
 	"go/printer"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -41,7 +40,7 @@ func GenerateBundleFile(dst string) {
 	if err != nil {
 		log.Fatalf("formatting failed: %v", err)
 	}
-	currentContent, err := ioutil.ReadFile(dst)
+	currentContent, err := os.ReadFile(dst)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -50,7 +49,7 @@ func GenerateBundleFile(dst string) {
 		fmt.Fprintf(os.Stderr, "\nReview changes above; to revert use:\n")
 		fmt.Fprintf(os.Stderr, "mv %s.bak %s\n", dst, dst)
 	}
-	err = ioutil.WriteFile(dst, []byte(staticContent), 0666)
+	err = os.WriteFile(dst, []byte(staticContent), 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
