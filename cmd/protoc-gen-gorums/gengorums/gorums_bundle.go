@@ -13,7 +13,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"unicode"
 
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/tools/go/packages"
@@ -95,13 +94,8 @@ func findIdentifiers(fset *token.FileSet, pkgInfo *packages.Package) (map[string
 	pkgIdents := make(map[string][]string)
 	for id, obj := range pkgInfo.TypesInfo.Uses {
 		pos := fset.Position(id.Pos())
-		if strings.Contains(pos.Filename, "zorums") {
-			// ignore identifiers in zorums generated files
-			continue
-		}
-		r := []rune(obj.Name())
-		if unicode.IsLower(r[0]) {
-			// ignore unexported identifiers
+		if ignore(pos.Filename) || !obj.Exported() {
+			// ignore identifiers in zorums generated files and unexported identifiers
 			continue
 		}
 		if pkg := obj.Pkg(); pkg != nil {
