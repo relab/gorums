@@ -62,13 +62,13 @@ func GenerateBundleFile(dst string) {
 	}
 }
 
-// findIdentifiers examines the given package to find all imported packages,
-// and one used identifier in that imported package. These identifiers are
-// used by the Gorums protoc plugin to generate appropriate import statements.
-func findIdentifiers(fset *token.FileSet, pkgInfo *packages.Package) (map[string]string, []string) {
+// findIdentifiers returns the imported packages as a map from package name to one of its identifiers,
+// and a slice of Gorums reserved identifiers that cannot be used in proto files.
+// These identifiers are used by the Gorums protoc plugin to generate import statements.
+func findIdentifiers(pkgInfo *packages.Package) (map[string]string, []string) {
 	pkgIdents := make(map[string][]string)
 	for id, obj := range pkgInfo.TypesInfo.Uses {
-		pos := fset.Position(id.Pos())
+		pos := pkgInfo.Fset.Position(id.Pos())
 		if ignore(pos.Filename) || !obj.Exported() {
 			// ignore identifiers in zorums generated files and unexported identifiers
 			continue
@@ -139,7 +139,7 @@ func bundle(pkgPath string) (map[string]string, []string, []byte) {
 	// Since Load succeeded and pkgPath is a single package, the following is safe
 	pkg := pkgs[0]
 	src := printFiles(pkg)
-	pkgIdentMap, reservedIdents := findIdentifiers(pkg.Fset, pkg)
+	pkgIdentMap, reservedIdents := findIdentifiers(pkg)
 	debug("pkgIdentMap=%v", pkgIdentMap)
 	debug("reservedIdents=%v", reservedIdents)
 	return pkgIdentMap, reservedIdents, src
