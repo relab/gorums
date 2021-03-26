@@ -69,7 +69,7 @@ func loadPackage(pkgPath string) *packages.Package {
 	}
 	pkgs, err := packages.Load(cfg, pkgPath)
 	if err != nil {
-		log.Fatalf("failed to load Gorums dev package: %v", err)
+		log.Fatalf("failed to load %s: %v", pkgPath, err)
 	}
 	if packages.PrintErrors(pkgs) > 0 {
 		os.Exit(1)
