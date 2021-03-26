@@ -4,8 +4,7 @@
 package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
-// These identifiers are used by the Gorums protoc plugin to generate
-// appropriate import statements.
+// These identifiers are used by the Gorums protoc plugin to generate import statements.
 var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "ConfigOption", "google.golang.org/grpc/encoding": "GetCodec"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
