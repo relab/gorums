@@ -147,26 +147,32 @@ func addUniqueIdentifier(pkgIdents map[string][]string, path, name string) {
 	pkgIdents[path] = append(pkgIdents[path], name)
 }
 
-// bundle returns a slice with the code for the given src package without imports.
+// bundle returns a slice with the code for the given package without imports.
 // The returned map contains packages to be imported along with one identifier
 // using the relevant import path.
-func bundle(src string) (map[string]string, []string, []byte) {
+func bundle(pkgPath string) (map[string]string, []string, []byte) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax | packages.NeedImports | packages.NeedTypes | packages.NeedTypesInfo,
 	}
-	pkgs, err := packages.Load(cfg, src)
+	pkgs, err := packages.Load(cfg, pkgPath)
 	if err != nil {
 		log.Fatalf("failed to load Gorums dev package: %v", err)
 	}
 	if packages.PrintErrors(pkgs) > 0 {
 		os.Exit(1)
 	}
-	// Since Load succeeded and src is a single package, the following is safe
+	// Since Load succeeded and pkgPath is a single package, the following is safe
 	pkg := pkgs[0]
 	var out bytes.Buffer
 	printFiles(&out, pkg.Fset, pkg.Syntax)
 	pkgIdentMap, reservedIdents := findIdentifiers(pkg.Fset, pkg)
+	debug("pkgIdentMap=%v", pkgIdentMap)
+	debug("reservedIdents=%v", reservedIdents)
 	return pkgIdentMap, reservedIdents, out.Bytes()
+}
+
+func debug(format string, args ...interface{}) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
 func printFiles(out *bytes.Buffer, fset *token.FileSet, files []*ast.File) {
