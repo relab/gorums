@@ -53,37 +53,17 @@ func GenerateBundleFile(dst string) {
 }
 
 func generatePkgMap(pkgs map[string]string, reservedIdents []string) string {
-	var keys []string
-	for k := range pkgs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
 	var buf bytes.Buffer
-	buf.WriteString(`
+	fmt.Fprintf(&buf, `
 	// pkgIdentMap maps from package name to one of the package's identifiers.
 	// These identifiers are used by the Gorums protoc plugin to generate
 	// appropriate import statements.
-	`)
-	buf.WriteString("var pkgIdentMap = map[string]string{\n")
-	for _, imp := range keys {
-		buf.WriteString("\t" + `"`)
-		buf.WriteString(imp)
-		buf.WriteString(`": "`)
-		buf.WriteString(pkgs[imp])
-		buf.WriteString(`",` + "\n")
-	}
-	buf.WriteString("}\n\n")
-	buf.WriteString(`
+	var pkgIdentMap = %#v`+"\n", pkgs)
+
+	fmt.Fprintf(&buf, `
 	// reservedIdents holds the set of Gorums reserved identifiers.
 	// These identifiers cannot be used to define message types in a proto file.
-	`)
-	buf.WriteString("var reservedIdents = []string{\n")
-	for _, ident := range reservedIdents {
-		buf.WriteString("\t" + `"`)
-		buf.WriteString(ident)
-		buf.WriteString(`",` + "\n")
-	}
-	buf.WriteString("}\n\n")
+	var reservedIdents = %#v`+"\n\n", reservedIdents)
 	return buf.String()
 }
 
