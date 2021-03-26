@@ -138,22 +138,22 @@ func bundle(pkgPath string) (map[string]string, []string, []byte) {
 	}
 	// Since Load succeeded and pkgPath is a single package, the following is safe
 	pkg := pkgs[0]
-	var out bytes.Buffer
-	printFiles(&out, pkg.Fset, pkg.Syntax)
+	src := printFiles(pkg)
 	pkgIdentMap, reservedIdents := findIdentifiers(pkg.Fset, pkg)
 	debug("pkgIdentMap=%v", pkgIdentMap)
 	debug("reservedIdents=%v", reservedIdents)
-	return pkgIdentMap, reservedIdents, out.Bytes()
+	return pkgIdentMap, reservedIdents, src
 }
 
 func debug(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 }
 
-func printFiles(out *bytes.Buffer, fset *token.FileSet, files []*ast.File) {
-	for _, f := range files {
+func printFiles(pkg *packages.Package) []byte {
+	out := &bytes.Buffer{}
+	for _, f := range pkg.Syntax {
 		// filter files in dev package that shouldn't be bundled in template_static.go
-		fileName := fset.File(f.Pos()).Name()
+		fileName := pkg.Fset.File(f.Pos()).Name()
 		if ignore(fileName) {
 			continue
 		}
@@ -180,16 +180,17 @@ func printFiles(out *bytes.Buffer, fset *token.FileSet, files []*ast.File) {
 			printComments(out, f.Comments, last, beg)
 
 			buf.Reset()
-			err := format.Node(&buf, fset, &printer.CommentedNode{Node: decl, Comments: f.Comments})
+			err := format.Node(&buf, pkg.Fset, &printer.CommentedNode{Node: decl, Comments: f.Comments})
 			if err != nil {
 				log.Fatalf("failed to format source AST node: %v", err)
 			}
 			out.Write(buf.Bytes())
-			last = printSameLineComment(out, f.Comments, fset, end)
+			last = printSameLineComment(out, f.Comments, pkg.Fset, end)
 			out.WriteString("\n\n")
 		}
 		printLastComments(out, f.Comments, last)
 	}
+	return out.Bytes()
 }
 
 // ignore files in dev folder with suffixes that shouldn't be bundled.
