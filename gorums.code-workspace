@@ -28,7 +28,8 @@
 			"qspec",
 			"relab",
 			"shlex",
-			"timestamppb"
+			"timestamppb",
+			"walkthrough"
 		]
 	}
 }
