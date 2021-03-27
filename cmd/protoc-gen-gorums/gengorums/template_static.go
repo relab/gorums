@@ -4,22 +4,12 @@
 package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
-// These identifiers are used by the Gorums protoc plugin to generate
-// appropriate import statements.
-var pkgIdentMap = map[string]string{
-	"fmt":                             "Errorf",
-	"github.com/relab/gorums":         "ConfigOption",
-	"google.golang.org/grpc/encoding": "GetCodec",
-}
+// These identifiers are used by the Gorums protoc plugin to generate import statements.
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "ConfigOption", "google.golang.org/grpc/encoding": "GetCodec"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{
-	"Configuration",
-	"Manager",
-	"Node",
-	"QuorumSpec",
-}
+var reservedIdents = []string{"Configuration", "Manager", "Node", "QuorumSpec"}
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
