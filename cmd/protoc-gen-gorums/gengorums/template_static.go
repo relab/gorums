@@ -66,7 +66,7 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 // a QuorumSpec is not needed. The QuorumSpec interface is also a ConfigOption.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
-// using the Add, AddNodes, Remove, and RemoveNodes methods.
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
 	if len(opts) < 1 || len(opts) > 2 {
 		return nil, fmt.Errorf("wrong number of options: %d", len(opts))

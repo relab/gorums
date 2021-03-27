@@ -38,6 +38,7 @@ gengorums
 godoc
 golangci
 gopls
+gorelease
 goroutines
 gorumsexample
 grpc
