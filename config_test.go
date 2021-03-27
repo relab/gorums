@@ -99,6 +99,95 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 		t.Errorf("c3.Size() = %d, expected %d", c3.Size(), len(nodes)-1)
 	}
 	if diff := cmp.Diff(c1, c3); diff == "" {
-		t.Errorf("Expected different configurations, but got not difference")
+		t.Errorf("Expected different configurations, but found no difference")
+	}
+}
+
+func TestNewConfigurationAnd(t *testing.T) {
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2Nodes := []string{"127.0.0.1:8080"}
+	c2, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(c2Nodes))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Add newNodes to c1, giving a new c3 with a total of 3+2 nodes
+	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
+	c3, err := gorums.NewConfiguration(
+		mgr,
+		c1.WithNewNodes(gorums.WithNodeList(newNodes)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c3.Size() != len(nodes)+len(newNodes) {
+		t.Errorf("c3.Size() = %d, expected %d", c3.Size(), len(nodes)+len(newNodes))
+	}
+
+	// Combine c2 to c1, giving a new c4 with a total of 3+1 nodes
+	c4, err := gorums.NewConfiguration(
+		mgr,
+		c1.And(c2),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c4.Size() != len(nodes)+len(c2Nodes) {
+		t.Errorf("c4.Size() = %d, expected %d", c4.Size(), len(nodes)+len(c2Nodes))
+	}
+
+	// Combine c2 to c4, giving a new c5 with a total of 4 nodes
+	// c4 already contains all nodes from c2 (see above): c4 = c1+c2
+	// c5 should essentially just be a copy of c4 (ignoring duplicates from c2)
+	c5, err := gorums.NewConfiguration(
+		mgr,
+		c4.And(c2),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c5.Size() != c4.Size() {
+		t.Errorf("c5.Size() = %d, expected %d", c5.Size(), c4.Size())
+	}
+}
+
+func TestNewConfigurationExcept(t *testing.T) {
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2, err := gorums.NewConfiguration(
+		mgr,
+		c1.WithoutNodes(c1[0].ID()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2.Size() != c1.Size()-1 {
+		t.Errorf("c2.Size() = %d, expected %d", c2.Size(), c1.Size()-1)
+	}
+
+	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
+	c3, err := gorums.NewConfiguration(
+		mgr,
+		c1.WithNewNodes(gorums.WithNodeList(newNodes)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c4, err := gorums.NewConfiguration(
+		mgr,
+		c3.Except(c1),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c4.Size() != c3.Size()-c1.Size() {
+		t.Errorf("c4.Size() = %d, expected %d", c4.Size(), c3.Size()-c1.Size())
 	}
 }

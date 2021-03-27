@@ -1,0 +1,16 @@
+syntax = "proto3";
+package config;
+option go_package = "github.com/relab/gorums/tests/config";
+
+import "gorums.proto";
+
+service ConfigTest {
+    rpc Config(Request) returns (Response) { option (gorums.quorumcall) = true; }
+}
+
+message Request { uint64 Num = 1; }
+
+message Response {
+    string Name = 1;
+    uint64 Num = 2;
+}
