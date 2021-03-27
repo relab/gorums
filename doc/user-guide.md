@@ -460,25 +460,25 @@ func ExampleConfigClient() {
   // Make new configuration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
   c3, _ := mgr.NewConfiguration(
     &QSpec{3},
-    c1.AddNodes(gorums.WithNodeList(newAddrs)),
+    c1.WithNewNodes(gorums.WithNodeList(newAddrs)),
   )
 
   // Make new configuration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
   c4, _ := mgr.NewConfiguration(
     &QSpec{3},
-    c1.Add(c2),
+    c1.And(c2),
   )
 
-  // Make new configuration c5 from c1 removing the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
+  // Make new configuration c5 from c1 except the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
   c5, _ := mgr.NewConfiguration(
     &QSpec{1},
-    c1.RemoveNodes(c1.NodeIDs()[0]),
+    c1.WithoutNodes(c1.NodeIDs()[0]),
   )
 
-  // Make new configuration c6 from c3 removing c1, giving |c6| = |c3| - |c1| = 5-3 = 2
+  // Make new configuration c6 from c3 except c1, giving |c6| = |c3| - |c1| = 5-3 = 2
   c6, _ := mgr.NewConfiguration(
     &QSpec{1},
-    c3.Remove(c1),
+    c3.Except(c1),
   )
 }
 ```
