@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/shlex"
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/storage/proto"
 	"golang.org/x/term"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var help = `
@@ -235,7 +235,7 @@ func (repl) writeRPC(args []string, node *proto.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := node.WriteRPC(ctx, &proto.WriteRequest{Key: args[0], Value: args[1], Time: ptypes.TimestampNow()})
+	resp, err := node.WriteRPC(ctx, &proto.WriteRequest{Key: args[0], Value: args[1], Time: timestamppb.Now()})
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -273,7 +273,7 @@ func (repl) writeQC(args []string, cfg *proto.Configuration) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.WriteQC(ctx, &proto.WriteRequest{Key: args[0], Value: args[1], Time: ptypes.TimestampNow()})
+	resp, err := cfg.WriteQC(ctx, &proto.WriteRequest{Key: args[0], Value: args[1], Time: timestamppb.Now()})
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)

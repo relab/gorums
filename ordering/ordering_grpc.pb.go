@@ -11,6 +11,7 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
+// Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
 // GorumsClient is the client API for Gorums service.
@@ -32,7 +33,7 @@ func NewGorumsClient(cc grpc.ClientConnInterface) GorumsClient {
 }
 
 func (c *gorumsClient) NodeStream(ctx context.Context, opts ...grpc.CallOption) (Gorums_NodeStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Gorums_serviceDesc.Streams[0], "/ordering.Gorums/NodeStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &Gorums_ServiceDesc.Streams[0], "/ordering.Gorums/NodeStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +91,7 @@ type UnsafeGorumsServer interface {
 }
 
 func RegisterGorumsServer(s grpc.ServiceRegistrar, srv GorumsServer) {
-	s.RegisterService(&_Gorums_serviceDesc, srv)
+	s.RegisterService(&Gorums_ServiceDesc, srv)
 }
 
 func _Gorums_NodeStream_Handler(srv interface{}, stream grpc.ServerStream) error {
@@ -119,7 +120,10 @@ func (x *gorumsNodeStreamServer) Recv() (*Metadata, error) {
 	return m, nil
 }
 
-var _Gorums_serviceDesc = grpc.ServiceDesc{
+// Gorums_ServiceDesc is the grpc.ServiceDesc for Gorums service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var Gorums_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "ordering.Gorums",
 	HandlerType: (*GorumsServer)(nil),
 	Methods:     []grpc.MethodDesc{},

@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/storage/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func startServer(address string) (*gorums.Server, string) {
@@ -110,12 +110,7 @@ func (s *storageServer) Read(req *proto.ReadRequest) (*proto.ReadResponse, error
 	if !ok {
 		return &proto.ReadResponse{OK: false}, nil
 	}
-	time, err := ptypes.TimestampProto(state.Time)
-	if err != nil {
-		s.logger.Printf("Failed to marshal time: %v\n", err)
-		return nil, err
-	}
-	return &proto.ReadResponse{OK: true, Value: state.Value, Time: time}, nil
+	return &proto.ReadResponse{OK: true, Value: state.Value, Time: timestamppb.New(state.Time)}, nil
 }
 
 // Write writes a new value to storage if it is newer than the old value

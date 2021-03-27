@@ -7,18 +7,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	status "google.golang.org/grpc/status"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type testSrv struct{}
 
-func (srv testSrv) IDFromMD(ctx context.Context, _ *empty.Empty, ret func(*NodeID, error)) {
+func (srv testSrv) IDFromMD(ctx context.Context, _ *emptypb.Empty, ret func(*NodeID, error)) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		ret(nil, status.Error(codes.NotFound, "Metadata unavailable"))
@@ -37,7 +37,7 @@ func (srv testSrv) IDFromMD(ctx context.Context, _ *empty.Empty, ret func(*NodeI
 	ret(&NodeID{ID: uint32(id)}, nil)
 }
 
-func (srv testSrv) WhatIP(ctx context.Context, _ *empty.Empty, ret func(*IPAddr, error)) {
+func (srv testSrv) WhatIP(ctx context.Context, _ *emptypb.Empty, ret func(*IPAddr, error)) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
 		ret(nil, status.Error(codes.NotFound, "Peer info unavailable"))
@@ -73,7 +73,7 @@ func TestMetadata(t *testing.T) {
 	}
 
 	node := mgr.Nodes()[0]
-	resp, err := node.IDFromMD(context.Background(), &empty.Empty{})
+	resp, err := node.IDFromMD(context.Background(), &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestPerNodeMetadata(t *testing.T) {
 	}
 
 	for _, node := range mgr.Nodes() {
-		resp, err := node.IDFromMD(context.Background(), &empty.Empty{})
+		resp, err := node.IDFromMD(context.Background(), &emptypb.Empty{})
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
@@ -129,7 +129,7 @@ func TestCanGetPeerInfo(t *testing.T) {
 	}
 
 	node := mgr.Nodes()[0]
-	ip, err := node.WhatIP(context.Background(), &empty.Empty{})
+	ip, err := node.WhatIP(context.Background(), &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}
