@@ -42,6 +42,9 @@ func (q cfgQSpec) ConfigQF(_ *Request, replies map[uint32]*Response) (*Response,
 	return reply, true
 }
 
+// setup returns a new configuration of cfgSize and a corresponding teardown function.
+// Calling setup multiple times will return a different configuration with different
+// sets of nodes.
 func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardown func()) {
 	t.Helper()
 	srvs := make([]*cfgSrv, cfgSize)
@@ -67,8 +70,10 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 	return cfg, teardown
 }
 
+// TestConfig creates and combines multiple configurations and invokes the Config RPC
+// method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	f := func(cfg *Configuration) {
+	callRPC := func(cfg *Configuration) {
 		for i := 0; i < 5; i++ {
 			resp, err := cfg.Config(context.Background(), &Request{Num: uint64(i)})
 			if err != nil {
@@ -86,12 +91,12 @@ func TestConfig(t *testing.T) {
 	c1, teardown1 := setup(t, mgr, 4)
 	defer teardown1()
 	fmt.Println("--- c1 ", c1.Nodes())
-	f(c1)
+	callRPC(c1)
 
 	c2, teardown2 := setup(t, mgr, 2)
 	defer teardown2()
 	fmt.Println("--- c2 ", c2.Nodes())
-	f(c2)
+	callRPC(c2)
 
 	newNodeList := c1.And(c2)
 	c3, err := mgr.NewConfiguration(
@@ -102,7 +107,7 @@ func TestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println("--- c3 ", c3.Nodes())
-	f(c3)
+	callRPC(c3)
 
 	rmNodeList := c3.Except(c1)
 	c4, err := mgr.NewConfiguration(
@@ -113,5 +118,5 @@ func TestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println("--- c4 ", c4.Nodes())
-	f(c4)
+	callRPC(c4)
 }
