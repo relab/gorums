@@ -151,8 +151,8 @@ func (o addConfig) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	return nodes, err
 }
 
-// With returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) With(d Configuration) NodeListOption {
+// And returns a NodeListOption that can be used to create a new configuration combining c and d.
+func (c Configuration) And(d Configuration) NodeListOption {
 	return &addConfig{old: c, add: d}
 }
 
@@ -172,9 +172,9 @@ func (c Configuration) WithoutNodes(ids ...uint32) NodeListOption {
 	return &nodeIDs{nodeIDs: keepIDs}
 }
 
-// Without returns a NodeListOption that can be used to create a new configuration
+// Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Without(rm Configuration) NodeListOption {
+func (c Configuration) Except(rm Configuration) NodeListOption {
 	rmIDs := make(map[uint32]bool)
 	for _, rmNode := range rm {
 		rmIDs[rmNode.id] = true

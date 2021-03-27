@@ -21,13 +21,13 @@ func (c *Configuration) Nodes() []*Node {
 	return nodes
 }
 
-// With returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) With(d *Configuration) gorums.NodeListOption {
-	return c.Configuration.With(d.Configuration)
+// And returns a NodeListOption that can be used to create a new configuration combining c and d.
+func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+	return c.Configuration.And(d.Configuration)
 }
 
-// Without returns a NodeListOption that can be used to create a new configuration
+// Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Without(rm *Configuration) gorums.NodeListOption {
-	return c.Configuration.Without(rm.Configuration)
+func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+	return c.Configuration.Except(rm.Configuration)
 }
