@@ -12,6 +12,7 @@ Both the client and the server are included in the same binary, and four local s
 To install:
 
 ```shell
+make tools
 make
 ```
 
