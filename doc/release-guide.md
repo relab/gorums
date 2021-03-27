@@ -72,6 +72,8 @@ Below are the steps to prepare a new release of Gorums.
    ```shell
    % git tag v0.4.0
    % git push origin v0.4.0
+   # Synchronize master branch with v0.4.0
+   % git push
    ```
 
    Now other projects can depend on `v0.4.0` of `github.com/relab/gorums`.
