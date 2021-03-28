@@ -2,6 +2,13 @@
 
 Below are the steps to prepare a new release of Gorums.
 
+To cut a release you will need additional tools:
+
+```shell
+% go install golang.org/x/exp/cmd/gorelease@latest
+% brew install gh
+```
+
 1. Check and upgrade dependencies:
 
    ```shell
@@ -65,15 +72,22 @@ Below are the steps to prepare a new release of Gorums.
    ```shell
    % git add
    % git commit -m "Gorums release v0.4.0"
+   # Synchronize master branch
+   % git push
    ```
 
-9. Tag and push the release:
+9. Publish the release with release notes:
+
+   ```shell
+   # Prepare release notes in release-notes.md
+   % gh release create v0.4.0 --prerelease -F release-notes.md --title "Main changes in release"
+   ```
+
+   Without the `gh` tool:
 
    ```shell
    % git tag v0.4.0
    % git push origin v0.4.0
-   # Synchronize master branch with v0.4.0
-   % git push
    ```
 
    Now other projects can depend on `v0.4.0` of `github.com/relab/gorums`.
