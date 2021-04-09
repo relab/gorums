@@ -130,7 +130,7 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 					}
 				}
 			case <-ctx.Done():
-				corr.set(resp, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
+				corr.set(resp, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
 				return
 			}
 			if (d.ServerStream && len(errs) == expectedReplies) || (!d.ServerStream && len(errs)+len(replies) == expectedReplies) {
