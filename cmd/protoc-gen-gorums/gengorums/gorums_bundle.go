@@ -52,9 +52,9 @@ func GenerateBundleFile(dst string) {
 		log.Fatal(err)
 	}
 	if diff := cmp.Diff(currentContent, staticContent); diff != "" {
-		fmt.Fprintf(os.Stderr, "change detected (-current +new):\n%s", diff)
-		fmt.Fprintf(os.Stderr, "\nReview changes above; to revert use:\n")
-		fmt.Fprintf(os.Stderr, "mv %s.bak %s\n", dst, dst)
+		fmt.Printf("change detected (-current +new):\n%s", diff)
+		fmt.Printf("\nReview changes above; to revert use:\n")
+		fmt.Printf("mv %s.bak %s\n", dst, dst)
 	}
 	err = os.WriteFile(dst, []byte(staticContent), 0666)
 	if err != nil {
