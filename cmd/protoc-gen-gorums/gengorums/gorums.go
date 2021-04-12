@@ -4,7 +4,6 @@ package gengorums
 import (
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"strings"
 
@@ -143,7 +142,6 @@ func genGorumsMethods(gorumsType string, data servicesData, callTypeInfo *callTy
 			}
 			callType := callTypeInfo.deriveCallType(method)
 			if callType.check(method) {
-				fmt.Fprintf(os.Stderr, "generating(%v): %s\n", gorumsType, method.GoName)
 				g.P(mustExecute(parseTemplate(gorumsType, callType.template), methodData{g, method}))
 			}
 		}

@@ -13,21 +13,30 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
-const bundleLen = len("--bundle=")
+const (
+	bundleLen       = len("--bundle=")
+	genGorumsDocURL = "https://github.com/relab/gorums/blob/master/doc/user-guide.md"
+	genGoDocURL     = "https://developers.google.com/protocol-buffers/docs/reference/go-generated"
+)
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Fprintf(os.Stderr, "%v %v\n", filepath.Base(os.Args[0]), version.String())
+		fmt.Printf("%v %v\n", filepath.Base(os.Args[0]), version.String())
+		os.Exit(0)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "--help" {
+		fmt.Printf("See %s for usage information.\n", genGorumsDocURL)
+		fmt.Printf("See %s for information about protobuf.\n", genGoDocURL)
 		os.Exit(0)
 	}
 	if len(os.Args) == 2 && strings.HasPrefix(os.Args[1], "--bundle=") {
 		bundle := os.Args[1][bundleLen:]
 		if bundle != "" {
-			fmt.Fprintf(os.Stderr, "Generating bundle file: %s\n", bundle)
+			fmt.Printf("Generating bundle file: %s\n", bundle)
 			gengorums.GenerateBundleFile(bundle)
 			os.Exit(0)
 		}
-		fmt.Fprintf(os.Stderr, "%v --bundle flag cannot be empty\n", filepath.Base(os.Args[0]))
+		fmt.Printf("%v --bundle flag cannot be empty\n", filepath.Base(os.Args[0]))
 		os.Exit(1)
 	}
 
@@ -44,7 +53,6 @@ func main() {
 			if f.Generate {
 				switch {
 				case *dev:
-					fmt.Fprintf(os.Stderr, "Generating development files in dev folder\n")
 					gengorums.GenerateDevFiles(gen, f)
 				default:
 					gengorums.GenerateFile(gen, f)
