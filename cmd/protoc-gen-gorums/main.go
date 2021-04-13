@@ -11,12 +11,14 @@ import (
 	"github.com/relab/gorums/internal/version"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/pluginpb"
 )
 
 const (
-	bundleLen       = len("--bundle=")
-	genGorumsDocURL = "https://github.com/relab/gorums/blob/master/doc/user-guide.md"
-	genGoDocURL     = "https://developers.google.com/protocol-buffers/docs/reference/go-generated"
+	bundleLen         = len("--bundle=")
+	genGorumsDocURL   = "https://github.com/relab/gorums/blob/master/doc/user-guide.md"
+	genGoDocURL       = "https://developers.google.com/protocol-buffers/docs/reference/go-generated"
+	supportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 )
 
 func main() {
@@ -59,6 +61,7 @@ func main() {
 				}
 			}
 		}
+		gen.SupportedFeatures = supportedFeatures
 		return nil
 	})
 }
