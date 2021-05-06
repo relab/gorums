@@ -94,7 +94,7 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}

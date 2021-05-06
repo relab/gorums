@@ -116,7 +116,7 @@ func (m *Manager) AddNode(node *Node) error {
 	if m.logger != nil {
 		m.logger.Printf("connecting to %s with id %d\n", node, node.id)
 	}
-	if err := node.connect(m.receiveQueue, m.opts); err != nil {
+	if err := node.connect(m); err != nil {
 		return fmt.Errorf("connection failed for %s: %w", node, err)
 	}
 

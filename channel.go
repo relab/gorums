@@ -10,7 +10,6 @@ import (
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -73,11 +72,9 @@ func (m *receiveQueue) putResult(id uint64, result *response) {
 	}
 }
 
-type orderedNodeStream struct {
-	*receiveQueue
+type channel struct {
 	sendQ        chan request
 	node         *Node // needed for ID and setLastError
-	backoff      backoff.Config
 	rand         *rand.Rand
 	gorumsClient ordering.GorumsClient
 	gorumsStream ordering.Gorums_NodeStreamClient
@@ -88,17 +85,15 @@ type orderedNodeStream struct {
 	cancelStream context.CancelFunc
 }
 
-func newNodeStream(node *Node, rq *receiveQueue, opts managerOptions) *orderedNodeStream {
-	return &orderedNodeStream{
-		receiveQueue: rq,
-		sendQ:        make(chan request, opts.sendBuffer),
-		node:         node,
-		backoff:      opts.backoff,
-		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
+func newChannel(n *Node) *channel {
+	return &channel{
+		sendQ: make(chan request, n.opts.sendBuffer),
+		node:  n,
+		rand:  rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
-func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc.ClientConn) error {
+func (s *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	var err error
 	s.parentCtx = ctx
 	s.streamCtx, s.cancelStream = context.WithCancel(s.parentCtx)
@@ -112,11 +107,11 @@ func (s *orderedNodeStream) connectOrderedStream(ctx context.Context, conn *grpc
 	return nil
 }
 
-func (s *orderedNodeStream) sendMsg(req request) (err error) {
+func (s *channel) sendMsg(req request) (err error) {
 	// unblock the waiting caller unless noSendWaiting is enabled
 	defer func() {
 		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
-			s.putResult(req.msg.Metadata.MessageID, &response{})
+			s.node.putResult(req.msg.Metadata.MessageID, &response{})
 		}
 	}()
 
@@ -150,7 +145,7 @@ func (s *orderedNodeStream) sendMsg(req request) (err error) {
 	return err
 }
 
-func (s *orderedNodeStream) sendMsgs() {
+func (s *channel) sendMsgs() {
 	var req request
 	for {
 		select {
@@ -161,19 +156,19 @@ func (s *orderedNodeStream) sendMsgs() {
 		// return error if stream is broken
 		if s.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			s.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
+			s.node.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
 			continue
 		}
 		// else try to send message
 		err := s.sendMsg(req)
 		if err != nil {
 			// return the error
-			s.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
+			s.node.putResult(req.msg.Metadata.MessageID, &response{nid: s.node.ID(), msg: nil, err: err})
 		}
 	}
 }
 
-func (s *orderedNodeStream) recvMsgs() {
+func (s *channel) recvMsgs() {
 	for {
 		resp := newMessage(responseType)
 		s.streamMut.RLock()
@@ -183,11 +178,11 @@ func (s *orderedNodeStream) recvMsgs() {
 			s.streamMut.RUnlock()
 			s.node.setLastErr(err)
 			// attempt to reconnect
-			s.reconnectStream()
+			s.reconnect()
 		} else {
 			s.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			s.putResult(resp.Metadata.MessageID, &response{nid: s.node.ID(), msg: resp.Message, err: err})
+			s.node.putResult(resp.Metadata.MessageID, &response{nid: s.node.ID(), msg: resp.Message, err: err})
 		}
 
 		select {
@@ -198,9 +193,10 @@ func (s *orderedNodeStream) recvMsgs() {
 	}
 }
 
-func (s *orderedNodeStream) reconnectStream() {
+func (s *channel) reconnect() {
 	s.streamMut.Lock()
 	defer s.streamMut.Unlock()
+	backoffCfg := s.node.opts.backoff
 
 	var retries float64
 	for {
@@ -214,13 +210,13 @@ func (s *orderedNodeStream) reconnectStream() {
 		}
 		s.cancelStream()
 		s.node.setLastErr(err)
-		delay := float64(s.backoff.BaseDelay)
-		max := float64(s.backoff.MaxDelay)
+		delay := float64(backoffCfg.BaseDelay)
+		max := float64(backoffCfg.MaxDelay)
 		for r := retries; delay < max && r > 0; r-- {
-			delay *= s.backoff.Multiplier
+			delay *= backoffCfg.Multiplier
 		}
 		delay = math.Min(delay, max)
-		delay *= 1 + s.backoff.Jitter*(rand.Float64()*2-1)
+		delay *= 1 + backoffCfg.Jitter*(rand.Float64()*2-1)
 		select {
 		case <-time.After(time.Duration(delay)):
 			retries++
