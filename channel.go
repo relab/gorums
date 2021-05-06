@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/relab/gorums/ordering"
@@ -33,7 +34,7 @@ type channel struct {
 	gorumsClient   ordering.GorumsClient
 	gorumsStream   ordering.Gorums_NodeStreamClient
 	streamMut      sync.RWMutex
-	streamBroken   bool
+	streamBroken   atomicFlag
 	parentCtx      context.Context
 	streamCtx      context.Context
 	cancelStream   context.CancelFunc
@@ -113,7 +114,7 @@ func (c *channel) sendMsg(req request) (err error) {
 	err = c.gorumsStream.SendMsg(req.msg)
 	if err != nil {
 		c.node.setLastErr(err)
-		c.streamBroken = true
+		c.streamBroken.set()
 	}
 	done <- struct{}{}
 
@@ -129,7 +130,7 @@ func (c *channel) sendMsgs() {
 		case req = <-c.sendQ:
 		}
 		// return error if stream is broken
-		if c.streamBroken {
+		if c.streamBroken.get() {
 			err := status.Errorf(codes.Unavailable, "stream is down")
 			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
 			continue
@@ -149,7 +150,7 @@ func (c *channel) recvMsgs() {
 		c.streamMut.RLock()
 		err := c.gorumsStream.RecvMsg(resp)
 		if err != nil {
-			c.streamBroken = true
+			c.streamBroken.set()
 			c.streamMut.RUnlock()
 			c.node.setLastErr(err)
 			// attempt to reconnect
@@ -180,7 +181,7 @@ func (c *channel) reconnect() {
 		c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 		c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 		if err == nil {
-			c.streamBroken = false
+			c.streamBroken.clear()
 			return
 		}
 		c.cancelStream()
@@ -200,3 +201,11 @@ func (c *channel) reconnect() {
 		}
 	}
 }
+
+type atomicFlag struct {
+	flag int32
+}
+
+func (f *atomicFlag) set()      { atomic.StoreInt32(&f.flag, 1) }
+func (f *atomicFlag) get() bool { return atomic.LoadInt32(&f.flag) == 1 }
+func (f *atomicFlag) clear()    { atomic.StoreInt32(&f.flag, 0) }
