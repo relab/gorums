@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -127,9 +128,5 @@ func (m *Manager) AddNode(node *Node) error {
 
 // getMsgID returns a unique message ID.
 func (m *Manager) getMsgID() uint64 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	id := m.nextMsgID
-	m.nextMsgID++
-	return id
+	return atomic.AddUint64(&m.nextMsgID, 1)
 }
