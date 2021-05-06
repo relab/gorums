@@ -18,8 +18,7 @@ type Manager struct {
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      managerOptions
-
-	*receiveQueue
+	nextMsgID uint64
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -28,9 +27,8 @@ type Manager struct {
 // You should use the `NewManager` function in the generated code instead.
 func NewManager(opts ...ManagerOption) *Manager {
 	m := &Manager{
-		lookup:       make(map[uint32]*Node),
-		receiveQueue: newReceiveQueue(),
-		opts:         newManagerOptions(),
+		lookup: make(map[uint32]*Node),
+		opts:   newManagerOptions(),
 	}
 	for _, opt := range opts {
 		opt(&m.opts)
@@ -125,4 +123,13 @@ func (m *Manager) AddNode(node *Node) error {
 	m.lookup[node.id] = node
 	m.nodes = append(m.nodes, node)
 	return nil
+}
+
+// getMsgID returns a unique message ID.
+func (m *Manager) getMsgID() uint64 {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	id := m.nextMsgID
+	m.nextMsgID++
+	return id
 }

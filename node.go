@@ -27,9 +27,7 @@ type Node struct {
 	mu      sync.Mutex
 	lastErr error
 	latency time.Duration
-
-	*receiveQueue
-	opts *managerOptions
+	mgr     *Manager
 
 	// the default channel
 	channel *channel
@@ -65,23 +63,21 @@ func NewNodeWithID(addr string, id uint32) (*Node, error) {
 
 // connect to this node to facilitate gRPC calls and optionally client streams.
 func (n *Node) connect(mgr *Manager) error {
-	n.opts = &mgr.opts
-	n.receiveQueue = mgr.receiveQueue
-
-	if n.opts.noConnect {
+	n.mgr = mgr
+	if n.mgr.opts.noConnect {
 		return nil
 	}
 	n.channel = newChannel(n)
 	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), n.opts.nodeDialTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
 	defer cancel()
-	n.conn, err = grpc.DialContext(ctx, n.addr, n.opts.grpcDialOpts...)
+	n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %w", err)
 	}
-	md := n.opts.metadata.Copy()
-	if n.opts.perNodeMD != nil {
-		md = metadata.Join(md, n.opts.perNodeMD(n.id))
+	md := n.mgr.opts.metadata.Copy()
+	if n.mgr.opts.perNodeMD != nil {
+		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
 	}
 	// a context for all of the streams
 	ctx, n.cancel = context.WithCancel(context.Background())

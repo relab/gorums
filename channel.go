@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/rand"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/relab/gorums/ordering"
@@ -27,69 +26,27 @@ type response struct {
 	err error
 }
 
-type receiveQueue struct {
-	msgID    uint64
-	recvQ    map[uint64]chan *response
-	recvQMut sync.RWMutex
-}
-
-func newReceiveQueue() *receiveQueue {
-	return &receiveQueue{
-		recvQ: make(map[uint64]chan *response),
-	}
-}
-
-// newCall returns unique metadata for a method call.
-func (m *receiveQueue) newCall(method string) (md *ordering.Metadata) {
-	msgID := atomic.AddUint64(&m.msgID, 1)
-	return &ordering.Metadata{
-		MessageID: msgID,
-		Method:    method,
-	}
-}
-
-// newReply returns a channel for receiving replies
-// and a done function to be called for clean up.
-func (m *receiveQueue) newReply(md *ordering.Metadata, maxReplies int) (replyChan chan *response, done func()) {
-	replyChan = make(chan *response, maxReplies)
-	m.recvQMut.Lock()
-	m.recvQ[md.MessageID] = replyChan
-	m.recvQMut.Unlock()
-	done = func() {
-		m.recvQMut.Lock()
-		delete(m.recvQ, md.MessageID)
-		m.recvQMut.Unlock()
-	}
-	return
-}
-
-func (m *receiveQueue) putResult(id uint64, result *response) {
-	m.recvQMut.RLock()
-	c, ok := m.recvQ[id]
-	m.recvQMut.RUnlock()
-	if ok {
-		c <- result
-	}
-}
-
 type channel struct {
-	sendQ        chan request
-	node         *Node // needed for ID and setLastError
-	rand         *rand.Rand
-	gorumsClient ordering.GorumsClient
-	gorumsStream ordering.Gorums_NodeStreamClient
-	streamMut    sync.RWMutex
-	streamBroken bool
-	parentCtx    context.Context
-	streamCtx    context.Context
-	cancelStream context.CancelFunc
+	sendQ          chan request
+	node           *Node // needed for ID and setLastError
+	rand           *rand.Rand
+	gorumsClient   ordering.GorumsClient
+	gorumsStream   ordering.Gorums_NodeStreamClient
+	streamMut      sync.RWMutex
+	streamBroken   bool
+	parentCtx      context.Context
+	streamCtx      context.Context
+	cancelStream   context.CancelFunc
+	responseRouter map[uint64]chan<- response
+	responseMut    sync.Mutex
 }
 
 func newChannel(n *Node) *channel {
 	return &channel{
-		sendQ: make(chan request, n.opts.sendBuffer),
-		node:  n,
-		rand:  rand.New(rand.NewSource(time.Now().UnixNano())),
+		sendQ:          make(chan request, n.mgr.opts.sendBuffer),
+		node:           n,
+		rand:           rand.New(rand.NewSource(time.Now().UnixNano())),
+		responseRouter: make(map[uint64]chan<- response),
 	}
 }
 
@@ -107,11 +64,29 @@ func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	return nil
 }
 
+func (c *channel) routeResponse(msgID uint64, resp response) {
+	c.responseMut.Lock()
+	defer c.responseMut.Unlock()
+	if ch, ok := c.responseRouter[msgID]; ok {
+		ch <- resp
+		delete(c.responseRouter, msgID)
+	}
+}
+
+func (c *channel) enqueue(req request, responseChan chan<- response) {
+	if responseChan != nil {
+		c.responseMut.Lock()
+		c.responseRouter[req.msg.Metadata.MessageID] = responseChan
+		c.responseMut.Unlock()
+	}
+	c.sendQ <- req
+}
+
 func (c *channel) sendMsg(req request) (err error) {
 	// unblock the waiting caller unless noSendWaiting is enabled
 	defer func() {
 		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
-			c.node.putResult(req.msg.Metadata.MessageID, &response{})
+			c.routeResponse(req.msg.Metadata.MessageID, response{})
 		}
 	}()
 
@@ -156,14 +131,14 @@ func (c *channel) sendMsgs() {
 		// return error if stream is broken
 		if c.streamBroken {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			c.node.putResult(req.msg.Metadata.MessageID, &response{nid: c.node.ID(), msg: nil, err: err})
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
 			// return the error
-			c.node.putResult(req.msg.Metadata.MessageID, &response{nid: c.node.ID(), msg: nil, err: err})
+			c.node.channel.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
 		}
 	}
 }
@@ -182,7 +157,7 @@ func (c *channel) recvMsgs() {
 		} else {
 			c.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			c.node.putResult(resp.Metadata.MessageID, &response{nid: c.node.ID(), msg: resp.Message, err: err})
+			c.routeResponse(resp.Metadata.MessageID, response{nid: c.node.ID(), msg: resp.Message, err: err})
 		}
 
 		select {
@@ -196,7 +171,7 @@ func (c *channel) recvMsgs() {
 func (c *channel) reconnect() {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
-	backoffCfg := c.node.opts.backoff
+	backoffCfg := c.node.mgr.opts.backoff
 
 	var retries float64
 	for {

@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 
+	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -12,11 +13,9 @@ type CallData struct {
 }
 
 func (n *Node) RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
-	md := n.newCall(d.Method)
-	replyChan, callDone := n.newReply(md, 1)
-	defer callDone()
-
-	n.channel.sendQ <- request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}
+	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
+	replyChan := make(chan response, 1)
+	n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}, replyChan)
 
 	select {
 	case r := <-replyChan:
