@@ -150,7 +150,10 @@ func RegisterTLSServer(srv *gorums.Server, impl TLS) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.TestTLS(ctx, req, f)

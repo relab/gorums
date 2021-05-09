@@ -165,7 +165,10 @@ func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTest) {
 		once := new(sync.Once)
 		f := func(resp *NodeID, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.IDFromMD(ctx, req, f)
@@ -175,7 +178,10 @@ func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTest) {
 		once := new(sync.Once)
 		f := func(resp *IPAddr, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.WhatIP(ctx, req, f)

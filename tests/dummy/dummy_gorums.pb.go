@@ -150,7 +150,10 @@ func RegisterDummyServer(srv *gorums.Server, impl Dummy) {
 		once := new(sync.Once)
 		f := func(resp *Empty, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.Test(ctx, req, f)

@@ -37,7 +37,10 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 		f := func(resp *{{out $genFile .}}, err error) {
 			{{- /* Only one response message is supported */ -}}
 			once.Do(func() {
-				finished <- {{use "gorums.WrapMessage" $genFile}}(in.Metadata, resp, err)
+				select {
+				case finished <- {{use "gorums.WrapMessage" $genFile}}(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.{{.GoName}}(ctx, req, f)

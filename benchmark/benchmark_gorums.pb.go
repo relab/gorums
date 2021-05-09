@@ -358,7 +358,10 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		once := new(sync.Once)
 		f := func(resp *StartResponse, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.StartServerBenchmark(ctx, req, f)
@@ -368,7 +371,10 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		once := new(sync.Once)
 		f := func(resp *Result, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.StopServerBenchmark(ctx, req, f)
@@ -378,7 +384,10 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		once := new(sync.Once)
 		f := func(resp *StartResponse, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.StartBenchmark(ctx, req, f)
@@ -388,7 +397,10 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		once := new(sync.Once)
 		f := func(resp *MemoryStat, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.StopBenchmark(ctx, req, f)
@@ -398,7 +410,10 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		once := new(sync.Once)
 		f := func(resp *Echo, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCall(ctx, req, f)
@@ -408,7 +423,10 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		once := new(sync.Once)
 		f := func(resp *Echo, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.AsyncQuorumCall(ctx, req, f)
@@ -418,7 +436,10 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 		once := new(sync.Once)
 		f := func(resp *Echo, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.SlowServer(ctx, req, f)

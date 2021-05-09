@@ -63,7 +63,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.GRPCCall(ctx, req, f)
@@ -73,7 +76,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCall(ctx, req, f)
@@ -83,7 +89,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallPerNodeArg(ctx, req, f)
@@ -93,7 +102,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallCustomReturnType(ctx, req, f)
@@ -103,7 +115,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallCombo(ctx, req, f)
@@ -113,7 +128,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallEmpty(ctx, req, f)
@@ -123,7 +141,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *emptypb.Empty, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallEmpty2(ctx, req, f)
@@ -153,7 +174,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallAsync(ctx, req, f)
@@ -163,7 +187,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallAsyncPerNodeArg(ctx, req, f)
@@ -173,7 +200,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallAsyncCustomReturnType(ctx, req, f)
@@ -183,7 +213,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallAsyncCombo(ctx, req, f)
@@ -193,7 +226,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallAsync2(ctx, req, f)
@@ -203,7 +239,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *emptypb.Empty, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallAsyncEmpty(ctx, req, f)
@@ -213,7 +252,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QuorumCallAsyncEmpty2(ctx, req, f)
@@ -223,7 +265,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.Correctable(ctx, req, f)
@@ -233,7 +278,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectablePerNodeArg(ctx, req, f)
@@ -243,7 +291,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableCustomReturnType(ctx, req, f)
@@ -253,7 +304,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableCombo(ctx, req, f)
@@ -263,7 +317,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *emptypb.Empty, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableEmpty(ctx, req, f)
@@ -273,7 +330,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableEmpty2(ctx, req, f)
@@ -283,7 +343,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableStream(ctx, req, f)
@@ -293,7 +356,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableStreamPerNodeArg(ctx, req, f)
@@ -303,7 +369,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableStreamCustomReturnType(ctx, req, f)
@@ -313,7 +382,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableStreamCombo(ctx, req, f)
@@ -323,7 +395,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *emptypb.Empty, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableStreamEmpty(ctx, req, f)
@@ -333,7 +408,10 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.CorrectableStreamEmpty2(ctx, req, f)

@@ -165,7 +165,10 @@ func RegisterConfigTestServer(srv *gorums.Server, impl ConfigTest) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.Config(ctx, req, f)

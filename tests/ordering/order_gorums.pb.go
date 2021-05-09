@@ -209,7 +209,10 @@ func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTest) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QC(ctx, req, f)
@@ -219,7 +222,10 @@ func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTest) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.QCAsync(ctx, req, f)
@@ -229,7 +235,10 @@ func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTest) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.UnaryRPC(ctx, req, f)
