@@ -7,7 +7,6 @@ import (
 	"net"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -20,14 +19,11 @@ const nilAngleString = "<nil>"
 // can be performed.
 type Node struct {
 	// Only assigned at creation.
-	id      uint32
-	addr    string
-	conn    *grpc.ClientConn
-	cancel  func()
-	mu      sync.Mutex
-	lastErr error
-	latency time.Duration
-	mgr     *Manager
+	id     uint32
+	addr   string
+	conn   *grpc.ClientConn
+	cancel func()
+	mgr    *Manager
 
 	// the default channel
 	channel *channel
@@ -42,9 +38,8 @@ func NewNode(addr string) (*Node, error) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
 	return &Node{
-		id:      h.Sum32(),
-		addr:    tcpAddr.String(),
-		latency: -1 * time.Second,
+		id:   h.Sum32(),
+		addr: tcpAddr.String(),
 	}, nil
 }
 
@@ -55,9 +50,8 @@ func NewNodeWithID(addr string, id uint32) (*Node, error) {
 		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
 	}
 	return &Node{
-		id:      id,
-		addr:    tcpAddr.String(),
-		latency: -1 * time.Second,
+		id:   id,
+		addr: tcpAddr.String(),
 	}, nil
 }
 
@@ -136,28 +130,19 @@ func (n *Node) String() string {
 // includes id, network address and latency information.
 func (n *Node) FullString() string {
 	if n != nil {
-		n.mu.Lock()
-		defer n.mu.Unlock()
-		return fmt.Sprintf(
-			"node %d | addr: %s | latency: %v",
-			n.id, n.addr, n.latency,
-		)
+		return fmt.Sprintf("node %d | addr: %s", n.id, n.addr)
 	}
 	return nilAngleString
 }
 
-func (n *Node) setLastErr(err error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.lastErr = err
+// LastErr returns the last error encountered (if any) for this node.
+func (n *Node) LastErr() error {
+	return n.channel.lastErr()
 }
 
-// LastErr returns the last error encountered (if any) when invoking a remote
-// procedure call on this node.
-func (n *Node) LastErr() error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	return n.lastErr
+// Latency returns the latency between the client and this node.
+func (n *Node) Latency() time.Duration {
+	return n.channel.channelLatency()
 }
 
 type lessFunc func(n1, n2 *Node) bool
@@ -194,8 +179,8 @@ func (ms *MultiSorter) Swap(i, j int) {
 }
 
 // Less is part of sort.Interface. It is implemented by looping along the
-// less functions until it finds a comparison that is either Less or
-// !Less. Note that it can call the less functions twice per call. We
+// less functions until it finds a comparison that is either Less or not
+// Less. Note that it can call the less functions twice per call. We
 // could change the functions to return -1, 0, 1 and reduce the
 // number of calls for greater efficiency: an exercise for the reader.
 func (ms *MultiSorter) Less(i, j int) bool {
@@ -235,7 +220,7 @@ var Port = func(n1, n2 *Node) bool {
 // LastNodeError sorts nodes by their LastErr() status in increasing order. A
 // node with LastErr() != nil is larger than a node with LastErr() == nil.
 var LastNodeError = func(n1, n2 *Node) bool {
-	if n1.lastErr != nil && n2.lastErr == nil {
+	if n1.channel.lastErr() != nil && n2.channel.lastErr() == nil {
 		return false
 	}
 	return true

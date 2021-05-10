@@ -10,6 +10,7 @@ import (
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -29,7 +30,11 @@ type response struct {
 
 type channel struct {
 	sendQ          chan request
-	node           *Node // needed for ID and setLastError
+	nodeID         uint32
+	mu             sync.Mutex
+	lastError      error
+	latency        time.Duration
+	backoffCfg     backoff.Config
 	rand           *rand.Rand
 	gorumsClient   ordering.GorumsClient
 	gorumsStream   ordering.Gorums_NodeStreamClient
@@ -45,7 +50,9 @@ type channel struct {
 func newChannel(n *Node) *channel {
 	return &channel{
 		sendQ:          make(chan request, n.mgr.opts.sendBuffer),
-		node:           n,
+		backoffCfg:     n.mgr.opts.backoff,
+		nodeID:         n.ID(),
+		latency:        -1 * time.Second,
 		rand:           rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouter: make(map[uint64]chan<- response),
 	}
@@ -113,7 +120,7 @@ func (c *channel) sendMsg(req request) (err error) {
 
 	err = c.gorumsStream.SendMsg(req.msg)
 	if err != nil {
-		c.node.setLastErr(err)
+		c.setLastErr(err)
 		c.streamBroken.set()
 	}
 	done <- struct{}{}
@@ -132,14 +139,14 @@ func (c *channel) sendMsgs() {
 		// return error if stream is broken
 		if c.streamBroken.get() {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.nodeID, msg: nil, err: err})
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
 			// return the error
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.nodeID, msg: nil, err: err})
 		}
 	}
 }
@@ -152,13 +159,13 @@ func (c *channel) recvMsgs() {
 		if err != nil {
 			c.streamBroken.set()
 			c.streamMut.RUnlock()
-			c.node.setLastErr(err)
+			c.setLastErr(err)
 			// attempt to reconnect
 			c.reconnect()
 		} else {
 			c.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			c.routeResponse(resp.Metadata.MessageID, response{nid: c.node.ID(), msg: resp.Message, err: err})
+			c.routeResponse(resp.Metadata.MessageID, response{nid: c.nodeID, msg: resp.Message, err: err})
 		}
 
 		select {
@@ -172,7 +179,7 @@ func (c *channel) recvMsgs() {
 func (c *channel) reconnect() {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
-	backoffCfg := c.node.mgr.opts.backoff
+	backoffCfg := c.backoffCfg
 
 	var retries float64
 	for {
@@ -185,7 +192,7 @@ func (c *channel) reconnect() {
 			return
 		}
 		c.cancelStream()
-		c.node.setLastErr(err)
+		c.setLastErr(err)
 		delay := float64(backoffCfg.BaseDelay)
 		max := float64(backoffCfg.MaxDelay)
 		for r := retries; delay < max && r > 0; r-- {
@@ -200,6 +207,26 @@ func (c *channel) reconnect() {
 			return
 		}
 	}
+}
+
+func (c *channel) setLastErr(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastError = err
+}
+
+// lastErr returns the last error encountered (if any) when using this channel.
+func (c *channel) lastErr() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastError
+}
+
+// channelLatency returns the latency between the client and this channel.
+func (c *channel) channelLatency() time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.latency
 }
 
 type atomicFlag struct {
