@@ -32,7 +32,7 @@ type channel struct {
 	sendQ          chan request
 	nodeID         uint32
 	mu             sync.Mutex
-	lastErr        error
+	lastError      error
 	latency        time.Duration
 	backoffCfg     backoff.Config
 	rand           *rand.Rand
@@ -212,18 +212,18 @@ func (c *channel) reconnect() {
 func (c *channel) setLastErr(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.lastErr = err
+	c.lastError = err
 }
 
-// LastErr returns the last error encountered (if any) when using this channel.
-func (c *channel) LastErr() error {
+// lastErr returns the last error encountered (if any) when using this channel.
+func (c *channel) lastErr() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.lastErr
+	return c.lastError
 }
 
-// Latency returns the latency between the client and this channel.
-func (c *channel) Latency() time.Duration {
+// channelLatency returns the latency between the client and this channel.
+func (c *channel) channelLatency() time.Duration {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.latency

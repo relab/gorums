@@ -137,12 +137,12 @@ func (n *Node) FullString() string {
 
 // LastErr returns the last error encountered (if any) for this node.
 func (n *Node) LastErr() error {
-	return n.channel.LastErr()
+	return n.channel.lastErr()
 }
 
 // Latency returns the latency between the client and this node.
 func (n *Node) Latency() time.Duration {
-	return n.channel.Latency()
+	return n.channel.channelLatency()
 }
 
 type lessFunc func(n1, n2 *Node) bool
@@ -220,7 +220,7 @@ var Port = func(n1, n2 *Node) bool {
 // LastNodeError sorts nodes by their LastErr() status in increasing order. A
 // node with LastErr() != nil is larger than a node with LastErr() == nil.
 var LastNodeError = func(n1, n2 *Node) bool {
-	if n1.channel.LastErr() != nil && n2.channel.LastErr() == nil {
+	if n1.channel.lastErr() != nil && n2.channel.lastErr() == nil {
 		return false
 	}
 	return true

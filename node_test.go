@@ -12,29 +12,29 @@ func TestNodeSort(t *testing.T) {
 		{
 			id: 100,
 			channel: &channel{
-				lastErr: nil,
-				latency: time.Second,
+				lastError: nil,
+				latency:   time.Second,
 			},
 		},
 		{
 			id: 101,
 			channel: &channel{
-				lastErr: errors.New("some error"),
-				latency: 250 * time.Millisecond,
+				lastError: errors.New("some error"),
+				latency:   250 * time.Millisecond,
 			},
 		},
 		{
 			id: 42,
 			channel: &channel{
-				lastErr: nil,
-				latency: 300 * time.Millisecond,
+				lastError: nil,
+				latency:   300 * time.Millisecond,
 			},
 		},
 		{
 			id: 99,
 			channel: &channel{
-				lastErr: errors.New("some error"),
-				latency: 500 * time.Millisecond,
+				lastError: errors.New("some error"),
+				latency:   500 * time.Millisecond,
 			},
 		},
 	}
