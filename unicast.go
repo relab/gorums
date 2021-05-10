@@ -2,6 +2,8 @@ package gorums
 
 import (
 	"context"
+
+	"github.com/relab/gorums/ordering"
 )
 
 // Unicast is a one-way call; no replies are processed.
@@ -11,19 +13,18 @@ import (
 func (n *Node) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
-	md := n.newCall(d.Method)
-	req := gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
+	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
+	req := request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	if o.noSendWaiting {
-		n.sendQ <- req
+		n.channel.enqueue(req, nil)
 		return // don't wait for message to be sent
 	}
 
 	// newReply must be called before adding req to sendQ
-	replyChan, callDone := n.newReply(md, 1)
-	n.sendQ <- req
-	// nodeStream sends an empty reply on replyChan when the message has been sent
+	replyChan := make(chan response, 1)
+	n.channel.enqueue(req, replyChan)
+	// channel sends an empty reply on replyChan when the message has been sent
 	// wait until the message has been sent
 	<-replyChan
-	callDone()
 }

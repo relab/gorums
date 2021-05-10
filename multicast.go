@@ -2,6 +2,8 @@ package gorums
 
 import (
 	"context"
+
+	"github.com/relab/gorums/ordering"
 )
 
 // Multicast is a one-way call; no replies are processed.
@@ -10,30 +12,29 @@ import (
 // before the message has been sent.
 func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-
-	md := c.newCall(d.Method)
+	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 	sentMsgs := 0
-	send := func() {
-		for _, n := range c {
-			msg := d.Message
-			if d.PerNodeArgFn != nil {
-				msg = d.PerNodeArgFn(d.Message, n.id)
-				if !msg.ProtoReflect().IsValid() {
-					continue // don't send if no msg
-				}
+
+	var replyChan chan response
+	if !o.noSendWaiting {
+		replyChan = make(chan response, len(c))
+	}
+	for _, n := range c {
+		msg := d.Message
+		if d.PerNodeArgFn != nil {
+			msg = d.PerNodeArgFn(d.Message, n.id)
+			if !msg.ProtoReflect().IsValid() {
+				continue // don't send if no msg
 			}
-			n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}
-			sentMsgs++
 		}
+		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan)
+		sentMsgs++
 	}
 
+	// if noSendWaiting is set, we will not wait for confirmation from the channel before returning.
 	if o.noSendWaiting {
-		send()
-		return // don't wait for messages to be sent
+		return
 	}
-
-	replyChan, callDone := c.newReply(md, sentMsgs)
-	send()
 
 	// nodeStream sends an empty reply on replyChan when the message has been sent
 	// wait until the message has been sent
@@ -41,5 +42,4 @@ func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...
 		<-replyChan
 		sentMsgs--
 	}
-	callDone()
 }

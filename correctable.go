@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -82,9 +83,9 @@ type CorrectableCallData struct {
 
 func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(c)
-	md := c.newCall(d.Method)
-	replyChan, callDone := c.newReply(md, expectedReplies)
+	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 
+	replyChan := make(chan response, expectedReplies)
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
@@ -94,14 +95,12 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan)
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
 
 	go func() {
-		defer callDone()
-
 		var (
 			resp    protoreflect.ProtoMessage
 			errs    []Error
@@ -118,15 +117,15 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 					errs = append(errs, Error{r.nid, r.err})
 					break
 				}
-				replies[r.nid] = r.reply
+				replies[r.nid] = r.msg
 				if resp, rlevel, quorum = d.QuorumFunction(d.Message, replies); quorum {
 					if quorum {
-						corr.set(r.reply, rlevel, nil, true)
+						corr.set(r.msg, rlevel, nil, true)
 						return
 					}
 					if rlevel > clevel {
 						clevel = rlevel
-						corr.set(r.reply, rlevel, nil, false)
+						corr.set(r.msg, rlevel, nil, false)
 					}
 				}
 			case <-ctx.Done():

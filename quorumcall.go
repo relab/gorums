@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 
+	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -18,10 +19,9 @@ type QuorumCallData struct {
 
 func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(c)
-	md := c.newCall(d.Method)
-	replyChan, callDone := c.newReply(md, expectedReplies)
-	defer callDone()
+	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 
+	replyChan := make(chan response, expectedReplies)
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
@@ -31,7 +31,7 @@ func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp p
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan)
 	}
 
 	var (
@@ -47,7 +47,7 @@ func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp p
 				errs = append(errs, Error{r.nid, r.err})
 				break
 			}
-			replies[r.nid] = r.reply
+			replies[r.nid] = r.msg
 			if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
 				return resp, nil
 			}

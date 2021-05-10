@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -18,8 +19,7 @@ type Manager struct {
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      managerOptions
-
-	*receiveQueue
+	nextMsgID uint64
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -28,9 +28,8 @@ type Manager struct {
 // You should use the `NewManager` function in the generated code instead.
 func NewManager(opts ...ManagerOption) *Manager {
 	m := &Manager{
-		lookup:       make(map[uint32]*Node),
-		receiveQueue: newReceiveQueue(),
-		opts:         newManagerOptions(),
+		lookup: make(map[uint32]*Node),
+		opts:   newManagerOptions(),
 	}
 	for _, opt := range opts {
 		opt(&m.opts)
@@ -116,7 +115,7 @@ func (m *Manager) AddNode(node *Node) error {
 	if m.logger != nil {
 		m.logger.Printf("connecting to %s with id %d\n", node, node.id)
 	}
-	if err := node.connect(m.receiveQueue, m.opts); err != nil {
+	if err := node.connect(m); err != nil {
 		return fmt.Errorf("connection failed for %s: %w", node, err)
 	}
 
@@ -125,4 +124,9 @@ func (m *Manager) AddNode(node *Node) error {
 	m.lookup[node.id] = node
 	m.nodes = append(m.nodes, node)
 	return nil
+}
+
+// getMsgID returns a unique message ID.
+func (m *Manager) getMsgID() uint64 {
+	return atomic.AddUint64(&m.nextMsgID, 1)
 }

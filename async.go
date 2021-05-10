@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 
+	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -31,8 +32,8 @@ func (f *Async) Done() bool {
 
 func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 	expectedReplies := len(c)
-	md := c.newCall(d.Method)
-	replyChan, callDone := c.newReply(md, expectedReplies)
+	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
+	replyChan := make(chan response, expectedReplies)
 
 	for _, n := range c {
 		msg := d.Message
@@ -43,13 +44,12 @@ func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 				continue // don't send if no msg
 			}
 		}
-		n.sendQ <- gorumsStreamRequest{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}
+		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan)
 	}
 
 	fut := &Async{c: make(chan struct{}, 1)}
 
 	go func() {
-		defer callDone()
 		defer close(fut.c)
 
 		var (
@@ -66,7 +66,7 @@ func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 					errs = append(errs, Error{r.nid, r.err})
 					break
 				}
-				replies[r.nid] = r.reply
+				replies[r.nid] = r.msg
 				if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
 					fut.reply, fut.err = resp, nil
 					return

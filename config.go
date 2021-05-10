@@ -2,8 +2,6 @@ package gorums
 
 import (
 	"fmt"
-
-	"github.com/relab/gorums/ordering"
 )
 
 // Configuration represents a static set of nodes on which quorum calls may be invoked.
@@ -52,17 +50,6 @@ func (c Configuration) Equal(b Configuration) bool {
 	return true
 }
 
-// newCall returns unique metadata for a method call.
-func (c Configuration) newCall(method string) (md *ordering.Metadata) {
-	// Note that we just use the first node's newCall method since all nodes
-	// associated with the same manager use the same receiveQueue instance.
-	return c[0].newCall(method)
-}
-
-// newReply returns a channel for receiving replies
-// and a done function to be called for clean up.
-func (c Configuration) newReply(md *ordering.Metadata, maxReplies int) (replyChan chan *gorumsStreamResult, done func()) {
-	// Note that we just use the first node's newReply method since all nodes
-	// associated with the same manager use the same receiveQueue instance.
-	return c[0].newReply(md, maxReplies)
+func (c Configuration) getMsgID() uint64 {
+	return c[0].mgr.getMsgID()
 }
