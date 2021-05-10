@@ -195,7 +195,10 @@ func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunction) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.UseReq(ctx, req, f)
@@ -205,7 +208,10 @@ func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunction) {
 		once := new(sync.Once)
 		f := func(resp *Response, err error) {
 			once.Do(func() {
-				finished <- gorums.WrapMessage(in.Metadata, resp, err)
+				select {
+				case finished <- gorums.WrapMessage(in.Metadata, resp, err):
+				case <-ctx.Done():
+				}
 			})
 		}
 		impl.IgnoreReq(ctx, req, f)
