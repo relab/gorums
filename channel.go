@@ -139,7 +139,7 @@ func (c *channel) sendMsgs() {
 		err := c.sendMsg(req)
 		if err != nil {
 			// return the error
-			c.node.channel.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
 		}
 	}
 }
