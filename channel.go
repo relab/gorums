@@ -47,6 +47,17 @@ type channel struct {
 	responseMut    sync.Mutex
 }
 
+func newChannel2(nodeID, sendBuffer uint32, backoff backoff.Config) *channel {
+	return &channel{
+		sendQ:          make(chan request, sendBuffer),
+		backoffCfg:     backoff,
+		nodeID:         nodeID,
+		latency:        -1 * time.Second,
+		rand:           rand.New(rand.NewSource(time.Now().UnixNano())),
+		responseRouter: make(map[uint64]chan<- response),
+	}
+}
+
 func newChannel(n *Node) *channel {
 	return &channel{
 		sendQ:          make(chan request, n.mgr.opts.sendBuffer),
