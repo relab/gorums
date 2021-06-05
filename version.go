@@ -10,7 +10,7 @@ const (
 	// GenVersion is the runtime version required by generated .pb.go files.
 	// This is incremented when generated code relies on new functionality
 	// in the runtime.
-	GenVersion = 4
+	GenVersion = 5
 
 	// MinVersion is the minimum supported version for generated .pb.go files.
 	// This is incremented when the runtime drops support for old code.
