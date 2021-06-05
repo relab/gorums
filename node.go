@@ -110,6 +110,15 @@ func (n *Node) Address() string {
 	return nilAngleString
 }
 
+// Host returns the network host of n.
+func (n *Node) Host() string {
+	if n == nil {
+		return nilAngleString
+	}
+	host, _, _ := net.SplitHostPort(n.addr)
+	return host
+}
+
 // Port returns network port of n.
 func (n *Node) Port() string {
 	if n != nil {
