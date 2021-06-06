@@ -12,7 +12,6 @@ import (
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	sync "sync"
 )
 
 const (
@@ -198,40 +197,34 @@ func (n *Node) UnaryRPC(ctx context.Context, in *Request) (resp *Response, err e
 
 // GorumsTest is the server-side API for the GorumsTest Service
 type GorumsTest interface {
-	QC(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QCAsync(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	UnaryRPC(ctx context.Context, request *Request, release func()) (response *Response, err error)
+	QC(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QCAsync(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	UnaryRPC(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
 func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTest) {
-	srv.RegisterHandler("ordering.GorumsTest.QC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("ordering.GorumsTest.QC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QC(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QC(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("ordering.GorumsTest.QCAsync", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("ordering.GorumsTest.QCAsync", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QCAsync(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QCAsync(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("ordering.GorumsTest.UnaryRPC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("ordering.GorumsTest.UnaryRPC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.UnaryRPC(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.UnaryRPC(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():

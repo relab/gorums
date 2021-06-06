@@ -12,7 +12,6 @@ import (
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	sync "sync"
 )
 
 const (
@@ -156,16 +155,14 @@ func (c *Configuration) Config(ctx context.Context, in *Request) (resp *Response
 
 // ConfigTest is the server-side API for the ConfigTest Service
 type ConfigTest interface {
-	Config(ctx context.Context, request *Request, release func()) (response *Response, err error)
+	Config(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
 func RegisterConfigTestServer(srv *gorums.Server, impl ConfigTest) {
-	srv.RegisterHandler("config.ConfigTest.Config", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("config.ConfigTest.Config", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.Config(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.Config(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():

@@ -19,7 +19,7 @@ type (
 	}
 )
 
-func (srv cfgSrv) Config(ctx context.Context, req *Request, release func()) (resp *Response, err error) {
+func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return &Response{
 		Name: srv.name,
 		Num:  req.GetNum(),

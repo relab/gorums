@@ -12,7 +12,6 @@ import (
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	sync "sync"
 )
 
 const (
@@ -156,32 +155,26 @@ type QuorumSpec interface {
 
 // OnewayTest is the server-side API for the OnewayTest Service
 type OnewayTest interface {
-	Unicast(ctx context.Context, request *Request, release func())
-	Multicast(ctx context.Context, request *Request, release func())
-	MulticastPerNode(ctx context.Context, request *Request, release func())
+	Unicast(ctx gorums.ServerCtx, request *Request)
+	Multicast(ctx gorums.ServerCtx, request *Request)
+	MulticastPerNode(ctx gorums.ServerCtx, request *Request)
 }
 
 func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTest) {
-	srv.RegisterHandler("oneway.OnewayTest.Unicast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("oneway.OnewayTest.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Unicast(ctx, req, release)
+		defer ctx.Release()
+		impl.Unicast(ctx, req)
 	})
-	srv.RegisterHandler("oneway.OnewayTest.Multicast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("oneway.OnewayTest.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Multicast(ctx, req, release)
+		defer ctx.Release()
+		impl.Multicast(ctx, req)
 	})
-	srv.RegisterHandler("oneway.OnewayTest.MulticastPerNode", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("oneway.OnewayTest.MulticastPerNode", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.MulticastPerNode(ctx, req, release)
+		defer ctx.Release()
+		impl.MulticastPerNode(ctx, req)
 	})
 }
 

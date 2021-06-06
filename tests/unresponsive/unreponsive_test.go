@@ -12,7 +12,7 @@ import (
 
 type testSrv struct{}
 
-func (srv testSrv) TestUnresponsive(ctx context.Context, _ *Empty, release func()) (resp *Empty, err error) {
+func (srv testSrv) TestUnresponsive(ctx gorums.ServerCtx, _ *Empty) (resp *Empty, err error) {
 	<-ctx.Done()
 	return nil, nil
 }

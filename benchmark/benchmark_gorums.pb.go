@@ -13,7 +13,6 @@ import (
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	sync "sync"
 )
 
 const (
@@ -342,100 +341,84 @@ func (c *Configuration) SlowServer(ctx context.Context, in *Echo) (resp *Echo, e
 
 // Benchmark is the server-side API for the Benchmark Service
 type Benchmark interface {
-	StartServerBenchmark(ctx context.Context, request *StartRequest, release func()) (response *StartResponse, err error)
-	StopServerBenchmark(ctx context.Context, request *StopRequest, release func()) (response *Result, err error)
-	StartBenchmark(ctx context.Context, request *StartRequest, release func()) (response *StartResponse, err error)
-	StopBenchmark(ctx context.Context, request *StopRequest, release func()) (response *MemoryStat, err error)
-	QuorumCall(ctx context.Context, request *Echo, release func()) (response *Echo, err error)
-	AsyncQuorumCall(ctx context.Context, request *Echo, release func()) (response *Echo, err error)
-	SlowServer(ctx context.Context, request *Echo, release func()) (response *Echo, err error)
-	Multicast(ctx context.Context, request *TimedMsg, release func())
+	StartServerBenchmark(ctx gorums.ServerCtx, request *StartRequest) (response *StartResponse, err error)
+	StopServerBenchmark(ctx gorums.ServerCtx, request *StopRequest) (response *Result, err error)
+	StartBenchmark(ctx gorums.ServerCtx, request *StartRequest) (response *StartResponse, err error)
+	StopBenchmark(ctx gorums.ServerCtx, request *StopRequest) (response *MemoryStat, err error)
+	QuorumCall(ctx gorums.ServerCtx, request *Echo) (response *Echo, err error)
+	AsyncQuorumCall(ctx gorums.ServerCtx, request *Echo) (response *Echo, err error)
+	SlowServer(ctx gorums.ServerCtx, request *Echo) (response *Echo, err error)
+	Multicast(ctx gorums.ServerCtx, request *TimedMsg)
 }
 
 func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
-	srv.RegisterHandler("benchmark.Benchmark.StartServerBenchmark", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("benchmark.Benchmark.StartServerBenchmark", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*StartRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.StartServerBenchmark(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.StartServerBenchmark(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("benchmark.Benchmark.StopServerBenchmark", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("benchmark.Benchmark.StopServerBenchmark", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*StopRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.StopServerBenchmark(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.StopServerBenchmark(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("benchmark.Benchmark.StartBenchmark", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("benchmark.Benchmark.StartBenchmark", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*StartRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.StartBenchmark(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.StartBenchmark(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("benchmark.Benchmark.StopBenchmark", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("benchmark.Benchmark.StopBenchmark", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*StopRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.StopBenchmark(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.StopBenchmark(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("benchmark.Benchmark.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Echo)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCall(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCall(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("benchmark.Benchmark.AsyncQuorumCall", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("benchmark.Benchmark.AsyncQuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Echo)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.AsyncQuorumCall(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.AsyncQuorumCall(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("benchmark.Benchmark.SlowServer", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("benchmark.Benchmark.SlowServer", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Echo)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.SlowServer(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.SlowServer(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("benchmark.Benchmark.Multicast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("benchmark.Benchmark.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*TimedMsg)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Multicast(ctx, req, release)
+		defer ctx.Release()
+		impl.Multicast(ctx, req)
 	})
 }
 

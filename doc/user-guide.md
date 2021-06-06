@@ -117,8 +117,8 @@ And this is our server interface:
 
 ```go
 type Storage interface {
-  Read(context.Context, *ReadRequest, func(*State, error))
-  Write(context.Context, *State, func(*WriteResponse, error))
+  Read(gorums.ServerCtx, *ReadRequest) (*State, error)
+  Write(gorums.ServerCtx, *State) (*WriteResponse, error)
 }
 ```
 
@@ -136,45 +136,46 @@ type storageSrv struct {
   state *State
 }
 
-func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, release func()) (resp *State, err error) {
+func (srv *storageSrv) Read(_ gorums.ServerCtx, req *ReadRequest) (resp *State, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   fmt.Println("Got Read()")
-  ret(srv.state, nil)
+  return srv.state, nil
 }
 
-func (srv *storageSrv) Write(_ context.Context, req *State, release func()) (resp *WriteResponse, err error) {
+func (srv *storageSrv) Write(_ gorums.ServerCtx, req *State) (resp *WriteResponse, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if srv.state.Timestamp < req.Timestamp {
     srv.state = req
     fmt.Println("Got Write(", req.Value, ")")
-    ret(&WriteResponse{New: true}, nil)
-    return
+    return &WriteResponse{New: true}, nil
   }
-  ret(&WriteResponse{New: false}, nil)
+  return &WriteResponse{New: false}, nil
 }
 ```
 
 There are some important things to note about implementing the server interfaces:
 
-* Reply messages must be returned using the `ret` function.
 * The handlers run in the order messages are received.
 * Messages from the same sender are executed in FIFO order at all servers.
 * Messages from different senders may be received in a different order at the different servers.
   To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
 * Handlers run synchronously, and hence a long-running handler will prevent other messages from being handled.
-  However, you can start additional goroutines within each handler, provided that they return a result using the `ret` function.
-  For example, the `Read` handler could be made asynchronous as shown below.
+  To help solve this problem, our `ServerCtx` objects have a `Release()` function that releases the handler's lock on the server,
+  which allows the next request to be processed. After `ctx.Release()` has been called, the handler may run concurrently
+  with the handlers for the next requests. The handler automatically calls `ctx.Release()` after returning.
 
   ```go
-  func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, release func()) (resp *State), err error {
-    go func() {
-      srv.mut.Lock()
-      defer srv.mut.Unlock()
-      fmt.Println("Got Read()")
-      ret(srv.state, nil)
-    }()
+  func (srv *storageSrv) Read(ctx gorums.ServerCtx, req *ReadRequest) (resp *State), err error {
+    // any code running before this will be executed in-order
+    ctx.Release()
+    // after Release() has been called, a new request handler may be started,
+    // and thus it is not guaranteed that the replies will be sent back the same order.
+    srv.mut.Lock()
+    defer srv.mut.Unlock()
+    fmt.Println("Got Read()")
+    return srv.state, nil
   }
   ```
 

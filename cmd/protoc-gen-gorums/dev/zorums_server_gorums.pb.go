@@ -7,10 +7,8 @@
 package dev
 
 import (
-	context "context"
 	gorums "github.com/relab/gorums"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	sync "sync"
 )
 
 const (
@@ -22,375 +20,309 @@ const (
 
 // ZorumsService is the server-side API for the ZorumsService Service
 type ZorumsService interface {
-	GRPCCall(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCall(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallPerNodeArg(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallCustomReturnType(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallCombo(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallEmpty(ctx context.Context, request *emptypb.Empty, release func()) (response *Response, err error)
-	QuorumCallEmpty2(ctx context.Context, request *Request, release func()) (response *emptypb.Empty, err error)
-	Multicast(ctx context.Context, request *Request, release func())
-	MulticastPerNodeArg(ctx context.Context, request *Request, release func())
-	Multicast2(ctx context.Context, request *Request, release func())
-	Multicast3(ctx context.Context, request *Request, release func())
-	Multicast4(ctx context.Context, request *emptypb.Empty, release func())
-	QuorumCallAsync(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallAsyncPerNodeArg(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallAsyncCustomReturnType(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallAsyncCombo(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallAsync2(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	QuorumCallAsyncEmpty(ctx context.Context, request *Request, release func()) (response *emptypb.Empty, err error)
-	QuorumCallAsyncEmpty2(ctx context.Context, request *emptypb.Empty, release func()) (response *Response, err error)
-	Correctable(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	CorrectablePerNodeArg(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	CorrectableCustomReturnType(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	CorrectableCombo(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	CorrectableEmpty(ctx context.Context, request *Request, release func()) (response *emptypb.Empty, err error)
-	CorrectableEmpty2(ctx context.Context, request *emptypb.Empty, release func()) (response *Response, err error)
-	CorrectableStream(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	CorrectableStreamPerNodeArg(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	CorrectableStreamCustomReturnType(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	CorrectableStreamCombo(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	CorrectableStreamEmpty(ctx context.Context, request *Request, release func()) (response *emptypb.Empty, err error)
-	CorrectableStreamEmpty2(ctx context.Context, request *emptypb.Empty, release func()) (response *Response, err error)
-	Unicast(ctx context.Context, request *Request, release func())
-	Unicast2(ctx context.Context, request *Request, release func())
+	GRPCCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallPerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallEmpty(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
+	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
+	Multicast(ctx gorums.ServerCtx, request *Request)
+	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
+	Multicast2(ctx gorums.ServerCtx, request *Request)
+	Multicast3(ctx gorums.ServerCtx, request *Request)
+	Multicast4(ctx gorums.ServerCtx, request *emptypb.Empty)
+	QuorumCallAsync(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallAsyncPerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallAsyncCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallAsyncCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallAsync2(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallAsyncEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
+	QuorumCallAsyncEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
+	Correctable(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectablePerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectableCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectableCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectableEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
+	CorrectableEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
+	CorrectableStream(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectableStreamPerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectableStreamCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectableStreamCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectableStreamEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
+	CorrectableStreamEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
+	Unicast(ctx gorums.ServerCtx, request *Request)
+	Unicast2(ctx gorums.ServerCtx, request *Request)
 }
 
 func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
-	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.GRPCCall(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.GRPCCall(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCall", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCall(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCall(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallPerNodeArg", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallPerNodeArg(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallPerNodeArg(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallCustomReturnType", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallCustomReturnType(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallCustomReturnType(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallCombo", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallCombo(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallCombo(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallEmpty(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallEmpty(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallEmpty2(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallEmpty2(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Multicast(ctx, req, release)
+		defer ctx.Release()
+		impl.Multicast(ctx, req)
 	})
-	srv.RegisterHandler("dev.ZorumsService.MulticastPerNodeArg", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.MulticastPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.MulticastPerNodeArg(ctx, req, release)
+		defer ctx.Release()
+		impl.MulticastPerNodeArg(ctx, req)
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multicast2", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast2", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Multicast2(ctx, req, release)
+		defer ctx.Release()
+		impl.Multicast2(ctx, req)
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multicast3", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast3", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Multicast3(ctx, req, release)
+		defer ctx.Release()
+		impl.Multicast3(ctx, req)
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multicast4", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast4", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Multicast4(ctx, req, release)
+		defer ctx.Release()
+		impl.Multicast4(ctx, req)
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallAsync(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallAsync(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncPerNodeArg", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallAsyncPerNodeArg(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallAsyncPerNodeArg(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncCustomReturnType", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallAsyncCustomReturnType(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallAsyncCustomReturnType(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncCombo", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallAsyncCombo(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallAsyncCombo(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallAsync2(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallAsync2(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallAsyncEmpty(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallAsyncEmpty(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.QuorumCallAsyncEmpty2(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallAsyncEmpty2(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.Correctable", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.Correctable(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.Correctable(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectablePerNodeArg", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectablePerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectablePerNodeArg(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectablePerNodeArg(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableCustomReturnType", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableCustomReturnType(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableCustomReturnType(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableCombo", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableCombo(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableCombo(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableEmpty(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableEmpty(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableEmpty2(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableEmpty2(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStream", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableStream(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableStream(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamPerNodeArg", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableStreamPerNodeArg(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableStreamPerNodeArg(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCustomReturnType", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableStreamCustomReturnType(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableStreamCustomReturnType(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCombo", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableStreamCombo(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableStreamCombo(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableStreamEmpty(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableStreamEmpty(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty2", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.CorrectableStreamEmpty2(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.CorrectableStreamEmpty2(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("dev.ZorumsService.Unicast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Unicast(ctx, req, release)
+		defer ctx.Release()
+		impl.Unicast(ctx, req)
 	})
-	srv.RegisterHandler("dev.ZorumsService.Unicast2", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("dev.ZorumsService.Unicast2", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.Unicast2(ctx, req, release)
+		defer ctx.Release()
+		impl.Unicast2(ctx, req)
 	})
 }

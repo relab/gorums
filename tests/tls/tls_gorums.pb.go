@@ -11,7 +11,6 @@ import (
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
-	sync "sync"
 )
 
 const (
@@ -141,16 +140,14 @@ func (n *Node) TestTLS(ctx context.Context, in *Request) (resp *Response, err er
 
 // TLS is the server-side API for the TLS Service
 type TLS interface {
-	TestTLS(ctx context.Context, request *Request, release func()) (response *Response, err error)
+	TestTLS(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
 func RegisterTLSServer(srv *gorums.Server, impl TLS) {
-	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.TestTLS(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.TestTLS(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():

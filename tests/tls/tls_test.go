@@ -15,7 +15,7 @@ import (
 
 type testSrv struct{}
 
-func (t testSrv) TestTLS(ctx context.Context, in *Request, release func()) (resp *Response, err error) {
+func (t testSrv) TestTLS(ctx gorums.ServerCtx, in *Request) (resp *Response, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok || peerInfo.AuthInfo.AuthType() != "tls" {
 		return &Response{OK: false}, nil

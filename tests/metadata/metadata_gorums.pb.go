@@ -12,7 +12,6 @@ import (
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	sync "sync"
 )
 
 const (
@@ -155,28 +154,24 @@ func (n *Node) WhatIP(ctx context.Context, in *emptypb.Empty) (resp *IPAddr, err
 
 // MetadataTest is the server-side API for the MetadataTest Service
 type MetadataTest interface {
-	IDFromMD(ctx context.Context, request *emptypb.Empty, release func()) (response *NodeID, err error)
-	WhatIP(ctx context.Context, request *emptypb.Empty, release func()) (response *IPAddr, err error)
+	IDFromMD(ctx gorums.ServerCtx, request *emptypb.Empty) (response *NodeID, err error)
+	WhatIP(ctx gorums.ServerCtx, request *emptypb.Empty) (response *IPAddr, err error)
 }
 
 func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTest) {
-	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.IDFromMD(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.IDFromMD(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.WhatIP(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.WhatIP(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():

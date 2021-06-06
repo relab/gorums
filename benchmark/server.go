@@ -14,43 +14,43 @@ type server struct {
 	stats *Stats
 }
 
-func (srv *server) QuorumCall(_ context.Context, in *Echo, release func()) (resp *Echo, err error) {
+func (srv *server) QuorumCall(_ gorums.ServerCtx, in *Echo) (resp *Echo, err error) {
 	return in, nil
 }
 
-func (srv *server) AsyncQuorumCall(_ context.Context, in *Echo, release func()) (resp *Echo, err error) {
+func (srv *server) AsyncQuorumCall(_ gorums.ServerCtx, in *Echo) (resp *Echo, err error) {
 	return in, nil
 }
 
-func (srv *server) SlowServer(_ context.Context, in *Echo, release func()) (resp *Echo, err error) {
-	release()
+func (srv *server) SlowServer(ctx gorums.ServerCtx, in *Echo) (resp *Echo, err error) {
+	ctx.Release()
 	time.Sleep(10 * time.Millisecond)
 	return in, nil
 }
 
-func (srv *server) Multicast(_ context.Context, msg *TimedMsg, release func()) {
+func (srv *server) Multicast(_ gorums.ServerCtx, msg *TimedMsg) {
 	latency := time.Now().UnixNano() - msg.SendTime
 	srv.stats.AddLatency(time.Duration(latency))
 }
 
-func (srv *server) StartServerBenchmark(_ context.Context, _ *StartRequest, release func()) (resp *StartResponse, err error) {
+func (srv *server) StartServerBenchmark(_ gorums.ServerCtx, _ *StartRequest) (resp *StartResponse, err error) {
 	srv.stats.Clear()
 	srv.stats.Start()
 	return &StartResponse{}, nil
 }
 
-func (srv *server) StopServerBenchmark(_ context.Context, _ *StopRequest, release func()) (resp *Result, err error) {
+func (srv *server) StopServerBenchmark(_ gorums.ServerCtx, _ *StopRequest) (resp *Result, err error) {
 	srv.stats.End()
 	return srv.stats.GetResult(), nil
 }
 
-func (srv *server) StartBenchmark(_ context.Context, _ *StartRequest, release func()) (resp *StartResponse, err error) {
+func (srv *server) StartBenchmark(_ gorums.ServerCtx, _ *StartRequest) (resp *StartResponse, err error) {
 	srv.stats.Clear()
 	srv.stats.Start()
 	return &StartResponse{}, nil
 }
 
-func (srv *server) StopBenchmark(_ context.Context, _ *StopRequest, release func()) (resp *MemoryStat, err error) {
+func (srv *server) StopBenchmark(_ gorums.ServerCtx, _ *StopRequest) (resp *MemoryStat, err error) {
 	srv.stats.End()
 	return &MemoryStat{
 		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,

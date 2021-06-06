@@ -18,7 +18,7 @@ import (
 
 type testSrv struct{}
 
-func (srv testSrv) IDFromMD(ctx context.Context, _ *emptypb.Empty, release func()) (resp *NodeID, err error) {
+func (srv testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeID, err error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.NotFound, "Metadata unavailable")
@@ -34,7 +34,7 @@ func (srv testSrv) IDFromMD(ctx context.Context, _ *emptypb.Empty, release func(
 	return &NodeID{ID: uint32(id)}, nil
 }
 
-func (srv testSrv) WhatIP(ctx context.Context, _ *emptypb.Empty, release func()) (resp *IPAddr, err error) {
+func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.NotFound, "Peer info unavailable")

@@ -12,7 +12,6 @@ import (
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	sync "sync"
 )
 
 const (
@@ -185,28 +184,24 @@ func (c *Configuration) IgnoreReq(ctx context.Context, in *Request) (resp *Respo
 
 // QuorumFunction is the server-side API for the QuorumFunction Service
 type QuorumFunction interface {
-	UseReq(ctx context.Context, request *Request, release func()) (response *Response, err error)
-	IgnoreReq(ctx context.Context, request *Request, release func()) (response *Response, err error)
+	UseReq(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	IgnoreReq(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
 func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunction) {
-	srv.RegisterHandler("qf.QuorumFunction.UseReq", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("qf.QuorumFunction.UseReq", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.UseReq(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.UseReq(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("qf.QuorumFunction.IgnoreReq", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("qf.QuorumFunction.IgnoreReq", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.IgnoreReq(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.IgnoreReq(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():

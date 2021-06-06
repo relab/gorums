@@ -13,7 +13,6 @@ import (
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	sync "sync"
 )
 
 const (
@@ -228,64 +227,54 @@ func (n *Node) WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteRespo
 
 // Storage is the server-side API for the Storage Service
 type Storage interface {
-	ReadRPC(ctx context.Context, request *ReadRequest, release func()) (response *ReadResponse, err error)
-	WriteRPC(ctx context.Context, request *WriteRequest, release func()) (response *WriteResponse, err error)
-	ReadQC(ctx context.Context, request *ReadRequest, release func()) (response *ReadResponse, err error)
-	WriteQC(ctx context.Context, request *WriteRequest, release func()) (response *WriteResponse, err error)
-	WriteMulticast(ctx context.Context, request *WriteRequest, release func())
+	ReadRPC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
+	WriteRPC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
+	ReadQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
+	WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
+	WriteMulticast(ctx gorums.ServerCtx, request *WriteRequest)
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl Storage) {
-	srv.RegisterHandler("storage.Storage.ReadRPC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("storage.Storage.ReadRPC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*ReadRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.ReadRPC(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.ReadRPC(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("storage.Storage.WriteRPC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("storage.Storage.WriteRPC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*WriteRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.WriteRPC(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.WriteRPC(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("storage.Storage.ReadQC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("storage.Storage.ReadQC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*ReadRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.ReadQC(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.ReadQC(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("storage.Storage.WriteQC", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("storage.Storage.WriteQC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*WriteRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.WriteQC(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.WriteQC(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
 		}
 	})
-	srv.RegisterHandler("storage.Storage.WriteMulticast", func(ctx context.Context, in *gorums.Message, _ chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("storage.Storage.WriteMulticast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*WriteRequest)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		impl.WriteMulticast(ctx, req, release)
+		defer ctx.Release()
+		impl.WriteMulticast(ctx, req)
 	})
 }
 

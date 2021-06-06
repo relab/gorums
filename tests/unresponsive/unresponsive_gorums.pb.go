@@ -11,7 +11,6 @@ import (
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
-	sync "sync"
 )
 
 const (
@@ -141,16 +140,14 @@ func (n *Node) TestUnresponsive(ctx context.Context, in *Empty) (resp *Empty, er
 
 // Unresponsive is the server-side API for the Unresponsive Service
 type Unresponsive interface {
-	TestUnresponsive(ctx context.Context, request *Empty, release func()) (response *Empty, err error)
+	TestUnresponsive(ctx gorums.ServerCtx, request *Empty) (response *Empty, err error)
 }
 
 func RegisterUnresponsiveServer(srv *gorums.Server, impl Unresponsive) {
-	srv.RegisterHandler("unresponsive.Unresponsive.TestUnresponsive", func(ctx context.Context, in *gorums.Message, finished chan<- *gorums.Message, mut *sync.Mutex) {
+	srv.RegisterHandler("unresponsive.Unresponsive.TestUnresponsive", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Empty)
-		once := new(sync.Once)
-		release := func() { once.Do(mut.Unlock) }
-		defer release()
-		resp, err := impl.TestUnresponsive(ctx, req, release)
+		defer ctx.Release()
+		resp, err := impl.TestUnresponsive(ctx, req)
 		select {
 		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
 		case <-ctx.Done():
