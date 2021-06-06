@@ -61,7 +61,8 @@ func TestManagerAddNode(t *testing.T) {
 // Proto definition in tests/dummy/dummy.proto
 type dummySrv struct{}
 
-func (_ dummySrv) Test(ctx context.Context, _ *dummy.Empty, _ func(*dummy.Empty, error)) {
+func (_ dummySrv) Test(ctx context.Context, _ *dummy.Empty, release func()) (resp *dummy.Empty, err error) {
+	return nil, nil
 }
 
 func TestManagerAddNodeWithConn(t *testing.T) {

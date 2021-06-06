@@ -75,26 +75,26 @@ func newStorageServer() *storageServer {
 }
 
 // ReadRPC is an RPC handler
-func (s *storageServer) ReadRPC(_ context.Context, req *proto.ReadRequest, ret func(*proto.ReadResponse, error)) {
-	ret(s.Read(req))
+func (s *storageServer) ReadRPC(_ context.Context, req *proto.ReadRequest, release func()) (resp *proto.ReadResponse, err error) {
+	return s.Read(req)
 }
 
 // WriteRPC is an RPC handler
-func (s *storageServer) WriteRPC(_ context.Context, req *proto.WriteRequest, ret func(*proto.WriteResponse, error)) {
-	ret(s.Write(req))
+func (s *storageServer) WriteRPC(_ context.Context, req *proto.WriteRequest, release func()) (resp *proto.WriteResponse, err error) {
+	return s.Write(req)
 }
 
 // ReadQC is an RPC handler for a quorum call
-func (s *storageServer) ReadQC(_ context.Context, req *proto.ReadRequest, ret func(*proto.ReadResponse, error)) {
-	ret(s.Read(req))
+func (s *storageServer) ReadQC(_ context.Context, req *proto.ReadRequest, release func()) (resp *proto.ReadResponse, err error) {
+	return s.Read(req)
 }
 
 // WriteQC is an RPC handler for a quorum call
-func (s *storageServer) WriteQC(_ context.Context, req *proto.WriteRequest, ret func(*proto.WriteResponse, error)) {
-	ret(s.Write(req))
+func (s *storageServer) WriteQC(_ context.Context, req *proto.WriteRequest, release func()) (resp *proto.WriteResponse, err error) {
+	return s.Write(req)
 }
 
-func (s *storageServer) WriteMulticast(_ context.Context, req *proto.WriteRequest) {
+func (s *storageServer) WriteMulticast(_ context.Context, req *proto.WriteRequest, release func()) {
 	_, err := s.Write(req)
 	if err != nil {
 		s.logger.Printf("Write error: %v", err)

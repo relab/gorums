@@ -136,14 +136,14 @@ type storageSrv struct {
   state *State
 }
 
-func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, ret func(*State, error)) {
+func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, release func()) (resp *State, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   fmt.Println("Got Read()")
   ret(srv.state, nil)
 }
 
-func (srv *storageSrv) Write(_ context.Context, req *State, ret func(*WriteResponse, error)) {
+func (srv *storageSrv) Write(_ context.Context, req *State, release func()) (resp *WriteResponse, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
   if srv.state.Timestamp < req.Timestamp {
@@ -168,7 +168,7 @@ There are some important things to note about implementing the server interfaces
   For example, the `Read` handler could be made asynchronous as shown below.
 
   ```go
-  func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, ret func(*State), error) {
+  func (srv *storageSrv) Read(_ context.Context, req *ReadRequest, release func()) (resp *State), err error {
     go func() {
       srv.mut.Lock()
       defer srv.mut.Unlock()

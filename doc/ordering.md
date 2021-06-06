@@ -77,7 +77,7 @@ Hence, the penalty for running server handlers synchronously is reduced while st
 Below is an example of how such a handler could be written:
 
 ```go
-func (s *testSrv) AsyncHandler(_ context.Context, req *Request, ret func(*Response, error)) {
+func (s *testSrv) AsyncHandler(_ context.Context, req *Request, release func()) (resp *Response, err error) {
   // do synchronous work
   response := &Response{
     InOrder: s.isInOrder(req.GetNum()),

@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"net"
+	"sync"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -15,9 +16,10 @@ import (
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(context.Context, *Message, chan<- *Message)
+type requestHandler func(context.Context, *Message, chan<- *Message, *sync.Mutex)
 
 type orderingServer struct {
+	mut      sync.Mutex // used to achieve mutex between request handlers
 	handlers map[string]requestHandler
 	opts     *serverOptions
 	ordering.UnimplementedGorumsServer
@@ -61,6 +63,10 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
+	// Start with a locked mutex
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
 	for {
 		req := newMessage(requestType)
 		err := srv.RecvMsg(req)
@@ -68,7 +74,12 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			return err
 		}
 		if handler, ok := s.handlers[req.Metadata.Method]; ok {
-			handler(ctx, req, finished)
+			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
+			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
+			// finished, or when it is safe to start processing the next request.
+			go handler(ctx, req, finished, &s.mut)
+			// Wait until the handler releases the mutex.
+			s.mut.Lock()
 		}
 	}
 }

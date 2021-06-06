@@ -18,7 +18,7 @@ type onewaySrv struct {
 	received  chan *oneway.Request
 }
 
-func (s *onewaySrv) Unicast(ctx context.Context, r *oneway.Request) {
+func (s *onewaySrv) Unicast(ctx context.Context, r *oneway.Request, release func()) {
 	if s.benchmark {
 		return
 	}
@@ -26,7 +26,7 @@ func (s *onewaySrv) Unicast(ctx context.Context, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func (s *onewaySrv) Multicast(ctx context.Context, r *oneway.Request) {
+func (s *onewaySrv) Multicast(ctx context.Context, r *oneway.Request, release func()) {
 	if s.benchmark {
 		return
 	}
@@ -34,7 +34,7 @@ func (s *onewaySrv) Multicast(ctx context.Context, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func (s *onewaySrv) MulticastPerNode(ctx context.Context, r *oneway.Request) {
+func (s *onewaySrv) MulticastPerNode(ctx context.Context, r *oneway.Request, release func()) {
 	if s.benchmark {
 		return
 	}
