@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"net"
+	"sync"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -15,9 +16,10 @@ import (
 // A requestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(context.Context, *Message, chan<- *Message)
+type requestHandler func(ServerCtx, *Message, chan<- *Message)
 
 type orderingServer struct {
+	mut      sync.Mutex // used to achieve mutex between request handlers
 	handlers map[string]requestHandler
 	opts     *serverOptions
 	ordering.UnimplementedGorumsServer
@@ -61,6 +63,10 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		}
 	}()
 
+	// Start with a locked mutex
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
 	for {
 		req := newMessage(requestType)
 		err := srv.RecvMsg(req)
@@ -68,7 +74,12 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			return err
 		}
 		if handler, ok := s.handlers[req.Metadata.Method]; ok {
-			handler(ctx, req, finished)
+			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
+			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
+			// finished, or when it is safe to start processing the next request.
+			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &s.mut}, req, finished)
+			// Wait until the handler releases the mutex.
+			s.mut.Lock()
 		}
 	}
 }
@@ -135,4 +146,18 @@ func (s *Server) GracefulStop() {
 // Stop stops the server immediately.
 func (s *Server) Stop() {
 	s.grpcServer.Stop()
+}
+
+// ServerCtx is a context that is passed from the Gorums server to the handler.
+// It allows the handler to release its lock on the server, allowing the next request to be processed.
+// This happens automatically when the handler returns.
+type ServerCtx struct {
+	context.Context
+	once *sync.Once // must be a pointer to avoid passing ctx by value
+	mut  *sync.Mutex
+}
+
+// Release releases this handler's lock on the server, which allows the next request to be processed.
+func (ctx *ServerCtx) Release() {
+	ctx.once.Do(ctx.mut.Unlock)
 }

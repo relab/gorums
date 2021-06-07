@@ -18,32 +18,28 @@ import (
 
 type testSrv struct{}
 
-func (srv testSrv) IDFromMD(ctx context.Context, _ *emptypb.Empty, ret func(*NodeID, error)) {
+func (srv testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeID, err error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		ret(nil, status.Error(codes.NotFound, "Metadata unavailable"))
-		return
+		return nil, status.Error(codes.NotFound, "Metadata unavailable")
 	}
 	v := md.Get("id")
 	if len(v) < 1 {
-		ret(nil, status.Error(codes.NotFound, "ID field missing"))
-		return
+		return nil, status.Error(codes.NotFound, "ID field missing")
 	}
 	id, err := strconv.Atoi(v[0])
 	if err != nil {
-		ret(nil, status.Errorf(codes.InvalidArgument, "Got '%s', but could not convert to integer", v[0]))
-		return
+		return nil, status.Errorf(codes.InvalidArgument, "Got '%s', but could not convert to integer", v[0])
 	}
-	ret(&NodeID{ID: uint32(id)}, nil)
+	return &NodeID{ID: uint32(id)}, nil
 }
 
-func (srv testSrv) WhatIP(ctx context.Context, _ *emptypb.Empty, ret func(*IPAddr, error)) {
+func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
-		ret(nil, status.Error(codes.NotFound, "Peer info unavailable"))
-		return
+		return nil, status.Error(codes.NotFound, "Peer info unavailable")
 	}
-	ret(&IPAddr{Addr: peerInfo.Addr.String()}, nil)
+	return &IPAddr{Addr: peerInfo.Addr.String()}, nil
 }
 
 func initServer(t *testing.T) *gorums.Server {

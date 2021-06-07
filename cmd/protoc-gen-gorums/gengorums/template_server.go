@@ -1,7 +1,7 @@
 package gengorums
 
 var serverVariables = `
-{{$context := use "context.Context" .GenFile}}
+{{$context := use "gorums.ServerCtx" .GenFile}}
 `
 
 var serverInterface = `
@@ -12,9 +12,9 @@ var serverInterface = `
 type {{$service}} interface {
 	{{- range .Methods}}
 	{{- if isOneway .}}
-	{{.GoName}}({{$context}}, *{{in $genFile .}})
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
 	{{- else}}
-	{{.GoName}}({{$context}}, *{{in $genFile .}}, func(*{{out $genFile .}}, error))
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
 	{{- end}}
 }
@@ -30,20 +30,15 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 	{{- range .Methods}}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})
+		defer ctx.Release()
 		{{- if isOneway .}}
 		impl.{{.GoName}}(ctx, req)
 		{{- else }}
-		once := new({{use "sync.Once" $genFile}})
-		f := func(resp *{{out $genFile .}}, err error) {
-			{{- /* Only one response message is supported */ -}}
-			once.Do(func() {
-				select {
-				case finished <- {{use "gorums.WrapMessage" $genFile}}(in.Metadata, resp, err):
-				case <-ctx.Done():
-				}
-			})
+		resp, err := impl.{{.GoName}}(ctx, req)
+		select {
+		case finished <- {{use "gorums.WrapMessage" $genFile}}(in.Metadata, resp, err):
+		case <-ctx.Done():
 		}
-		impl.{{.GoName}}(ctx, req, f)
 		{{- end}}
 	})
 	{{- end}}

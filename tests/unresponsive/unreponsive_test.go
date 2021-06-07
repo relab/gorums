@@ -12,8 +12,9 @@ import (
 
 type testSrv struct{}
 
-func (srv testSrv) TestUnresponsive(ctx context.Context, _ *Empty, _ func(*Empty, error)) {
+func (srv testSrv) TestUnresponsive(ctx gorums.ServerCtx, _ *Empty) (resp *Empty, err error) {
 	<-ctx.Done()
+	return nil, nil
 }
 
 // TestUnresponsive checks that the client is not blocked when the server is not receiving messages

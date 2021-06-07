@@ -43,54 +43,47 @@ The use of a function to return messages from the RPC handler makes the handlers
 ```go
 // the unary gRPC-style server API
 type Server interface {
-  // Handler takes a request and returns a response.
-  // Runs synchronously.
+  // Runs in one of multiple worker goroutines,
+  // and requests may be handled in a different order.
   RPC(context.Context, *Request) (*Response, error)
 }
 
 // the Gorums server API
 type Server interface {
-  // Handler takes a request and a func to return the response.
-  // Runs synchronously, but may spawn goroutines and return early.
-  // This allows the server to start processing the next request.
-  // Goroutines can then asynchronously send response back using the func.
-  RPC(context.Context, *Request, func(*Response, error))
+  // Handler receives a special server context object.
+  // Runs in its own goroutine.
+  // Server waits until the handler returns
+  // or until the handler calls Release() on the context object.
+  RPC(gorums.ServerCtx, *Request) (*Response, error)
 }
 ```
 
-In earlier versions of Gorums, our API was similar to that of gRPC.
-However, as we tried to implement message ordering in Gorums, we recognized that we needed a more flexible API to offer good performance.
-Specifically, we decided to use a function instead of the `return` statement when passing response messages back from server handlers.
-Thus, to preserve message ordering, the server must receive and process messages synchronously, i.e., one at a time.
-Hence, the server handler should ideally process requests as quickly as possible.
-
+Our server handlers are executed synchronously by default, in the order that requests are received in.
+This allows us to support use cases where message ordering is important.
 However, the application may only need to worry about message ordering up to a certain point.
 For example, consider an application that needs to send requests to servers in-order, but can receive responses in any order.
 For this application, the handler may place the request in a queue, wait for it to be processed before returning a response.
-With a vanilla gRPC-style handler, where a function takes a request and returns a response,
-it is not possible to start any goroutines without also waiting for them to return.
-In other words, the handler must **block** the server until the response is ready.
-However, with our API, the handler can simply add the request to the queue, start a goroutine, and then return.
-While the goroutine started by the handler is waiting, another request can be processed by the server.
-At some point later, the goroutine has finished waiting or processing the reply, and it can be sent back to Gorums using the `ret` function.
+With our API, the handler can simply add the request to the queue, call `Release()` on the server context,
+and then return the response once it is ready.
 Hence, the penalty for running server handlers synchronously is reduced while still preserving ordering.
 Below is an example of how such a handler could be written:
 
 ```go
-func (s *testSrv) AsyncHandler(_ context.Context, req *Request, ret func(*Response, error)) {
+func (s *testSrv) AsyncHandler(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
   // do synchronous work
   response := &Response{
     InOrder: s.isInOrder(req.GetNum()),
   }
-  // start a goroutine and return
-  go func() {
-    // this code will run concurrently with other handlers
-    // perform slow / async work here
-    time.Sleep(10 * time.Millisecond)
-    // at some point later, the response passed back to Gorums through the `ret` function,
-    // and gets sent back to the client.
-    ret(response, nil)
-  }()
+
+  // allow the server to start processing the next request.
+  ctx.Release()
+
+  // this code will run concurrently with other handlers
+  // perform slow / async work here
+  time.Sleep(10 * time.Millisecond)
+  // at some point later, the response passed back to Gorums through the `ret` function,
+  // and gets sent back to the client.
+  return response, nil
 }
 ```
 

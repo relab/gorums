@@ -19,11 +19,11 @@ type (
 	}
 )
 
-func (srv cfgSrv) Config(ctx context.Context, req *Request, out func(*Response, error)) {
-	out(&Response{
+func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
+	return &Response{
 		Name: srv.name,
 		Num:  req.GetNum(),
-	}, nil)
+	}, nil
 }
 
 func newQSpec(cfgSize int) *cfgQSpec {
