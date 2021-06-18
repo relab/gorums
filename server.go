@@ -19,7 +19,6 @@ import (
 type requestHandler func(ServerCtx, *Message, chan<- *Message)
 
 type orderingServer struct {
-	mut      sync.Mutex // used to achieve mutex between request handlers
 	handlers map[string]requestHandler
 	opts     *serverOptions
 	ordering.UnimplementedGorumsServer
@@ -46,6 +45,7 @@ func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err erro
 // NodeStream handles a connection to a single client. The stream is aborted if there
 // is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+	var mut sync.Mutex // used to achieve mutex between request handlers
 	finished := make(chan *Message, s.opts.buffer)
 	ctx := srv.Context()
 
@@ -64,8 +64,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	}()
 
 	// Start with a locked mutex
-	s.mut.Lock()
-	defer s.mut.Unlock()
+	mut.Lock()
+	defer mut.Unlock()
 
 	for {
 		req := newMessage(requestType)
@@ -77,9 +77,9 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &s.mut}, req, finished)
+			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &mut}, req, finished)
 			// Wait until the handler releases the mutex.
-			s.mut.Lock()
+			mut.Lock()
 		}
 	}
 }
