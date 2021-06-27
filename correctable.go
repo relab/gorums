@@ -41,7 +41,7 @@ func (c *Correctable) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if level < c.level {
+	if level <= c.level {
 		close(ch)
 		return ch
 	}
