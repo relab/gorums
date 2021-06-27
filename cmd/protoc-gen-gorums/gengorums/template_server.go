@@ -13,6 +13,8 @@ type {{$service}} interface {
 	{{- range .Methods}}
 	{{- if isOneway .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
+	{{- else if correctableStream .}}
+	{{.GoName}}(request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
@@ -24,6 +26,8 @@ type {{$service}} interface {
 var registerInterface = `
 {{$genFile := .GenFile}}
 {{$gorumsMessage := use "gorums.Message" .GenFile}}
+{{$wrapMessage := use "gorums.WrapMessage" $genFile}}
+{{$sendMessage := use "gorums.SendMessage" $genFile}}
 {{range .Services -}}
 {{$service := .GoName}}
 func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}) {
@@ -33,12 +37,16 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 		defer ctx.Release()
 		{{- if isOneway .}}
 		impl.{{.GoName}}(ctx, req)
+		{{- else if correctableStream .}}
+		err := impl.{{.GoName}}(req, func(resp *{{out $genFile .}}) error {
+			return {{$sendMessage}}(ctx, finished, {{$wrapMessage}}(in.Metadata, resp, nil))
+		})
+		if err != nil {
+			{{$sendMessage}}(ctx, finished, {{$wrapMessage}}(in.Metadata, nil, err))
+		}
 		{{- else }}
 		resp, err := impl.{{.GoName}}(ctx, req)
-		select {
-		case finished <- {{use "gorums.WrapMessage" $genFile}}(in.Metadata, resp, err):
-		case <-ctx.Done():
-		}
+		{{$sendMessage}}(ctx, finished, {{$wrapMessage}}(in.Metadata, resp, err))
 		{{- end}}
 	})
 	{{- end}}

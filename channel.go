@@ -28,33 +28,38 @@ type response struct {
 	err error
 }
 
+type responseRouter struct {
+	c         chan<- response
+	streaming bool
+}
+
 type channel struct {
-	sendQ          chan request
-	nodeID         uint32
-	mu             sync.Mutex
-	lastError      error
-	latency        time.Duration
-	backoffCfg     backoff.Config
-	rand           *rand.Rand
-	gorumsClient   ordering.GorumsClient
-	gorumsStream   ordering.Gorums_NodeStreamClient
-	streamMut      sync.RWMutex
-	streamBroken   atomicFlag
-	parentCtx      context.Context
-	streamCtx      context.Context
-	cancelStream   context.CancelFunc
-	responseRouter map[uint64]chan<- response
-	responseMut    sync.Mutex
+	sendQ           chan request
+	nodeID          uint32
+	mu              sync.Mutex
+	lastError       error
+	latency         time.Duration
+	backoffCfg      backoff.Config
+	rand            *rand.Rand
+	gorumsClient    ordering.GorumsClient
+	gorumsStream    ordering.Gorums_NodeStreamClient
+	streamMut       sync.RWMutex
+	streamBroken    atomicFlag
+	parentCtx       context.Context
+	streamCtx       context.Context
+	cancelStream    context.CancelFunc
+	responseRouters map[uint64]responseRouter
+	responseMut     sync.Mutex
 }
 
 func newChannel(n *Node) *channel {
 	return &channel{
-		sendQ:          make(chan request, n.mgr.opts.sendBuffer),
-		backoffCfg:     n.mgr.opts.backoff,
-		nodeID:         n.ID(),
-		latency:        -1 * time.Second,
-		rand:           rand.New(rand.NewSource(time.Now().UnixNano())),
-		responseRouter: make(map[uint64]chan<- response),
+		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
+		backoffCfg:      n.mgr.opts.backoff,
+		nodeID:          n.ID(),
+		latency:         -1 * time.Second,
+		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
+		responseRouters: make(map[uint64]responseRouter),
 	}
 }
 
@@ -75,19 +80,26 @@ func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 func (c *channel) routeResponse(msgID uint64, resp response) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
-	if ch, ok := c.responseRouter[msgID]; ok {
-		ch <- resp
-		delete(c.responseRouter, msgID)
+	if router, ok := c.responseRouters[msgID]; ok {
+		router.c <- resp
+		// delete the router if we are only expecting a single message
+		if !router.streaming {
+			delete(c.responseRouters, msgID)
+		}
 	}
 }
 
-func (c *channel) enqueue(req request, responseChan chan<- response) {
+func (c *channel) enqueue(req request, responseChan chan<- response, streaming bool) {
 	if responseChan != nil {
 		c.responseMut.Lock()
-		c.responseRouter[req.msg.Metadata.MessageID] = responseChan
+		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, streaming}
 		c.responseMut.Unlock()
 	}
 	c.sendQ <- req
+}
+
+func (c *channel) deleteRouter(msgID uint64) {
+	delete(c.responseRouters, msgID)
 }
 
 func (c *channel) sendMsg(req request) (err error) {
