@@ -1,7 +1,7 @@
 # Tests that should be run each time
-RUNTESTS := qf ordering metadata tls unresponsive dummy oneway config
+RUNTESTS := qf ordering metadata tls unresponsive dummy oneway config correctable
 
-.PHONY: all qf ordering metadata tls unresponsive dummy oneway config
+.PHONY: all qf ordering metadata tls unresponsive dummy oneway config correctable
 
 all: $(RUNTESTS)
 
@@ -20,6 +20,8 @@ dummy: dummy/dummy.pb.go dummy/dummy_gorums.pb.go
 oneway: oneway/oneway.pb.go oneway/oneway_gorums.pb.go
 
 config: config/config.pb.go config/config_gorums.pb.go
+
+correctable: correctable/correctable.pb.go correctable/correctable_gorums.pb.go
 
 %.pb.go : %.proto
 	@protoc -I=..:. --go_out=paths=source_relative:. $<
