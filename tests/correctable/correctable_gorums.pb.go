@@ -184,7 +184,7 @@ type QuorumSpec interface {
 // CorrectableTest is the server-side API for the CorrectableTest Service
 type CorrectableTest interface {
 	Correctable(ctx gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error)
-	CorrectableStream(request *CorrectableRequest, send func(response *CorrectableResponse) error) error
+	CorrectableStream(ctx gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error
 }
 
 func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTest) {
@@ -197,7 +197,7 @@ func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTest) {
 	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*CorrectableRequest)
 		defer ctx.Release()
-		err := impl.CorrectableStream(req, func(resp *CorrectableResponse) error {
+		err := impl.CorrectableStream(ctx, req, func(resp *CorrectableResponse) error {
 			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
 		})
 		if err != nil {

@@ -14,7 +14,7 @@ type {{$service}} interface {
 	{{- if isOneway .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
 	{{- else if correctableStream .}}
-	{{.GoName}}(request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
@@ -38,7 +38,7 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 		{{- if isOneway .}}
 		impl.{{.GoName}}(ctx, req)
 		{{- else if correctableStream .}}
-		err := impl.{{.GoName}}(req, func(resp *{{out $genFile .}}) error {
+		err := impl.{{.GoName}}(ctx, req, func(resp *{{out $genFile .}}) error {
 			return {{$sendMessage}}(ctx, finished, {{$wrapMessage}}(in.Metadata, resp, nil))
 		})
 		if err != nil {

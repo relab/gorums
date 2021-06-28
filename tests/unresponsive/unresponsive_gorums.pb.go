@@ -148,9 +148,6 @@ func RegisterUnresponsiveServer(srv *gorums.Server, impl Unresponsive) {
 		req := in.Message.(*Empty)
 		defer ctx.Release()
 		resp, err := impl.TestUnresponsive(ctx, req)
-		select {
-		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
-		case <-ctx.Done():
-		}
+		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
 }

@@ -45,12 +45,12 @@ type ZorumsService interface {
 	CorrectableCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	CorrectableEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
 	CorrectableEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
-	CorrectableStream(request *Request, send func(response *Response) error) error
-	CorrectableStreamPerNodeArg(request *Request, send func(response *Response) error) error
-	CorrectableStreamCustomReturnType(request *Request, send func(response *Response) error) error
-	CorrectableStreamCombo(request *Request, send func(response *Response) error) error
-	CorrectableStreamEmpty(request *Request, send func(response *emptypb.Empty) error) error
-	CorrectableStreamEmpty2(request *emptypb.Empty, send func(response *Response) error) error
+	CorrectableStream(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error
+	CorrectableStreamPerNodeArg(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error
+	CorrectableStreamCustomReturnType(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error
+	CorrectableStreamCombo(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error
+	CorrectableStreamEmpty(ctx gorums.ServerCtx, request *Request, send func(response *emptypb.Empty) error) error
+	CorrectableStreamEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty, send func(response *Response) error) error
 	Unicast(ctx gorums.ServerCtx, request *Request)
 	Unicast2(ctx gorums.ServerCtx, request *Request)
 }
@@ -204,7 +204,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
-		err := impl.CorrectableStream(req, func(resp *Response) error {
+		err := impl.CorrectableStream(ctx, req, func(resp *Response) error {
 			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
 		})
 		if err != nil {
@@ -214,7 +214,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
-		err := impl.CorrectableStreamPerNodeArg(req, func(resp *Response) error {
+		err := impl.CorrectableStreamPerNodeArg(ctx, req, func(resp *Response) error {
 			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
 		})
 		if err != nil {
@@ -224,7 +224,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
-		err := impl.CorrectableStreamCustomReturnType(req, func(resp *Response) error {
+		err := impl.CorrectableStreamCustomReturnType(ctx, req, func(resp *Response) error {
 			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
 		})
 		if err != nil {
@@ -234,7 +234,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
-		err := impl.CorrectableStreamCombo(req, func(resp *Response) error {
+		err := impl.CorrectableStreamCombo(ctx, req, func(resp *Response) error {
 			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
 		})
 		if err != nil {
@@ -244,7 +244,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
-		err := impl.CorrectableStreamEmpty(req, func(resp *emptypb.Empty) error {
+		err := impl.CorrectableStreamEmpty(ctx, req, func(resp *emptypb.Empty) error {
 			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
 		})
 		if err != nil {
@@ -254,7 +254,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
 		defer ctx.Release()
-		err := impl.CorrectableStreamEmpty2(req, func(resp *Response) error {
+		err := impl.CorrectableStreamEmpty2(ctx, req, func(resp *Response) error {
 			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
 		})
 		if err != nil {

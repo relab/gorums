@@ -89,7 +89,7 @@ type testSrv struct {
 	n int
 }
 
-func (srv testSrv) CorrectableStream(request *CorrectableRequest, send func(response *CorrectableResponse) error) error {
+func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error {
 	for i := 0; i < srv.n; i++ {
 		err := send(&CorrectableResponse{Level: int32(i + 1)})
 		if err != nil {
@@ -99,6 +99,6 @@ func (srv testSrv) CorrectableStream(request *CorrectableRequest, send func(resp
 	return nil
 }
 
-func (srv testSrv) Correctable(ctx gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error) {
+func (srv testSrv) Correctable(_ gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error) {
 	return &CorrectableResponse{Level: 1}, nil
 }
