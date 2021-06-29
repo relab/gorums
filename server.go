@@ -32,7 +32,21 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
+// SendMessage attempts to send a message on a channel.
+//
+// This function should be used by generated code only.
+func SendMessage(ctx context.Context, c chan<- *Message, msg *Message) error {
+	select {
+	case c <- msg:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
+}
+
 // WrapMessage wraps the metadata, response and error status in a gorumsMessage
+//
+// This function should be used by generated code only.
 func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *Message {
 	errStatus, ok := status.FromError(err)
 	if !ok {

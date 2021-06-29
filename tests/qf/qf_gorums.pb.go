@@ -193,19 +193,13 @@ func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunction) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		resp, err := impl.UseReq(ctx, req)
-		select {
-		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
-		case <-ctx.Done():
-		}
+		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
 	srv.RegisterHandler("qf.QuorumFunction.IgnoreReq", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		resp, err := impl.IgnoreReq(ctx, req)
-		select {
-		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
-		case <-ctx.Done():
-		}
+		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
 }
 

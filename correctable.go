@@ -41,7 +41,7 @@ func (c *Correctable) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if level < c.level {
+	if level <= c.level {
 		close(ch)
 		return ch
 	}
@@ -95,7 +95,7 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan)
+		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan, d.ServerStream)
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
@@ -109,6 +109,12 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 			quorum  bool
 			replies = make(map[uint32]protoreflect.ProtoMessage)
 		)
+
+		if d.ServerStream {
+			for _, n := range c {
+				defer n.channel.deleteRouter(md.MessageID)
+			}
+		}
 
 		for {
 			select {

@@ -148,9 +148,6 @@ func RegisterDummyServer(srv *gorums.Server, impl Dummy) {
 		req := in.Message.(*Empty)
 		defer ctx.Release()
 		resp, err := impl.Test(ctx, req)
-		select {
-		case finished <- gorums.WrapMessage(in.Metadata, resp, err):
-		case <-ctx.Done():
-		}
+		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
 }
