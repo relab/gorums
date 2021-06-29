@@ -8,6 +8,8 @@ package dev
 
 import (
 	gorums "github.com/relab/gorums"
+	ordering "github.com/relab/gorums/ordering"
+	proto "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -205,7 +207,9 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		err := impl.CorrectableStream(ctx, req, func(resp *Response) error {
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
+			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
+			md := proto.Clone(in.Metadata)
+			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
 			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
@@ -215,7 +219,9 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		err := impl.CorrectableStreamPerNodeArg(ctx, req, func(resp *Response) error {
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
+			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
+			md := proto.Clone(in.Metadata)
+			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
 			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
@@ -225,7 +231,9 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		err := impl.CorrectableStreamCustomReturnType(ctx, req, func(resp *Response) error {
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
+			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
+			md := proto.Clone(in.Metadata)
+			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
 			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
@@ -235,7 +243,9 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		err := impl.CorrectableStreamCombo(ctx, req, func(resp *Response) error {
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
+			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
+			md := proto.Clone(in.Metadata)
+			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
 			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
@@ -245,7 +255,9 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		err := impl.CorrectableStreamEmpty(ctx, req, func(resp *emptypb.Empty) error {
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
+			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
+			md := proto.Clone(in.Metadata)
+			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
 			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
@@ -255,7 +267,9 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		req := in.Message.(*emptypb.Empty)
 		defer ctx.Release()
 		err := impl.CorrectableStreamEmpty2(ctx, req, func(resp *Response) error {
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
+			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
+			md := proto.Clone(in.Metadata)
+			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
 			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))

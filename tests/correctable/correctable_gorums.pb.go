@@ -10,7 +10,9 @@ import (
 	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
+	ordering "github.com/relab/gorums/ordering"
 	encoding "google.golang.org/grpc/encoding"
+	proto "google.golang.org/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -198,7 +200,9 @@ func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTest) {
 		req := in.Message.(*CorrectableRequest)
 		defer ctx.Release()
 		err := impl.CorrectableStream(ctx, req, func(resp *CorrectableResponse) error {
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, nil))
+			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
+			md := proto.Clone(in.Metadata)
+			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
 			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
