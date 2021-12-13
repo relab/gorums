@@ -10,12 +10,10 @@ import (
 	"github.com/relab/gorums/internal/protoc"
 )
 
-var (
-	skipDirs = map[string]struct{}{
-		"failing": {},
-		"zorums":  {},
-	}
-)
+var skipDirs = map[string]struct{}{
+	"failing": {},
+	"zorums":  {},
+}
 
 // TestGenerateProtoFiles generates single RPC calls for different call types.
 func TestGenerateProtoFiles(t *testing.T) {
@@ -38,7 +36,7 @@ func TestGenerateProtoFiles(t *testing.T) {
 			return os.Remove(path)
 		}))
 	if err != nil {
-		t.Errorf("error walking the path %q: %w", ".", err)
+		t.Errorf("error walking the path %q: %v", ".", err)
 	}
 
 	err = filepath.Walk(".",
@@ -47,7 +45,7 @@ func TestGenerateProtoFiles(t *testing.T) {
 			return err
 		}))
 	if err != nil {
-		t.Errorf("error walking the path %q: %w", ".", err)
+		t.Errorf("error walking the path %q: %v", ".", err)
 	}
 
 	// build the packages with .pb.go files to check they compile
@@ -62,7 +60,7 @@ func TestGenerateProtoFiles(t *testing.T) {
 			return build(t, dir)
 		}))
 	if err != nil {
-		t.Errorf("error walking the path %q: %w", ".", err)
+		t.Errorf("error walking the path %q: %v", ".", err)
 	}
 
 	err = filepath.Walk(".",
@@ -70,7 +68,7 @@ func TestGenerateProtoFiles(t *testing.T) {
 			return os.Remove(path)
 		}))
 	if err != nil {
-		t.Errorf("error walking the path %q: %w", ".", err)
+		t.Errorf("error walking the path %q: %v", ".", err)
 	}
 }
 
