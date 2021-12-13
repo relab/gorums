@@ -55,9 +55,11 @@ To cut a release you will need additional tools:
 
    ```shell
    % make -B
+   % go mod tidy
    % cd examples
    % make -B
    % go mod tidy
+   % cd ..
    ```
 
 7. Run tests:
@@ -67,7 +69,13 @@ To cut a release you will need additional tools:
    % make testrace
    ```
 
-8. Add and commit changes due to upgrades and recompilation:
+8. Edit gorums dependency to be v0.4.0 in example/go.mod:
+
+   ```shell
+   % vim examples/go.mod
+   ```
+
+9. Add and commit changes due to upgrades and recompilation:
 
    ```shell
    % git add
@@ -76,7 +84,7 @@ To cut a release you will need additional tools:
    % git push
    ```
 
-9. Publish the release with release notes:
+10. Publish the release with release notes:
 
    ```shell
    # Prepare release notes in release-notes.md
@@ -92,7 +100,7 @@ To cut a release you will need additional tools:
 
    Now other projects can depend on `v0.4.0` of `github.com/relab/gorums`.
 
-10. To check that the new version is available (after a bit of time):
+11. To check that the new version is available (after a bit of time):
 
     ```shell
     % go list -m github.com/relab/gorums@v0.4.0
