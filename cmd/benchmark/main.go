@@ -4,14 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
 	"regexp"
-	"runtime"
-	"runtime/pprof"
-	"runtime/trace"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -59,29 +55,12 @@ func (f *listFlag) Get() []string {
 	return f.val
 }
 
-type durationFlag struct {
-	val time.Duration
-}
-
-func (f *durationFlag) String() string {
-	return f.val.String()
-}
-
-func (f *durationFlag) Set(v string) (err error) {
-	f.val, err = time.ParseDuration(v)
-	return err
-}
-
-func (f *durationFlag) Get() time.Duration {
-	return f.val
-}
-
 func main() {
 	var (
 		benchmarksFlag = regexpFlag{val: regexp.MustCompile(".*")}
 		remotesFlag    = listFlag{}
-		warmupFlag     = durationFlag{val: 100 * time.Millisecond}
-		benchTimeFlag  = durationFlag{val: 1 * time.Second}
+		warmupFlag     = flag.Duration("warmup", 100*time.Millisecond, "Warmup duration.")
+		benchTimeFlag  = flag.Duration("time", 1*time.Second, "The duration of each benchmark.")
 		traceFile      = flag.String("trace", "", "A `file` to write trace to.")
 		cpuprofile     = flag.String("cpuprofile", "", "A `file` to write cpu profile to.")
 		memprofile     = flag.String("memprofile", "", "A `file` to write memory profile to.")
@@ -98,14 +77,10 @@ func main() {
 	)
 	flag.Var(&benchmarksFlag, "benchmarks", "A `regexp` matching the benchmarks to run.")
 	flag.Var(&remotesFlag, "remotes", "A comma separated `list` of remote addresses to connect to.")
-	flag.Var(&warmupFlag, "warmup", "Warmup `duration`.")
-	flag.Var(&benchTimeFlag, "time", "The `duration` of each benchmark.")
 	flag.Parse()
 
 	benchReg := benchmarksFlag.Get()
 	remotes := remotesFlag.Get()
-	warmup := warmupFlag.Get()
-	benchTime := benchTimeFlag.Get()
 
 	if *list {
 		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
@@ -117,43 +92,10 @@ func main() {
 		return
 	}
 
-	// set up profiling and tracing
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal("Could not create CPU profile: ", err)
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("Could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
-	if *traceFile != "" {
-		f, err := os.Create(*traceFile)
-		if err != nil {
-			log.Fatal("Could not create trace file: ", err)
-		}
-		defer f.Close()
-		if err := trace.Start(f); err != nil {
-			log.Fatal("Failed to start trace: ", err)
-		}
-		defer trace.Stop()
-	}
-
+	stopProfilers, err := StartProfilers(*cpuprofile, *memprofile, *traceFile)
+	checkf("Failed to start profiling: %v", err)
 	defer func() {
-		if *memprofile != "" {
-			f, err := os.Create(*memprofile)
-			if err != nil {
-				log.Fatal("Could not create memory profile: ", err)
-			}
-			defer f.Close()
-			runtime.GC()
-			if err := pprof.WriteHeapProfile(f); err != nil {
-				log.Fatal("Could not write memory profile: ", err)
-			}
-		}
+		checkf("Failed to stop profiling: %v", stopProfilers())
 	}()
 
 	if *server != "" {
@@ -161,12 +103,10 @@ func main() {
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
 		lis, err := net.Listen("tcp", *server)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to listen on '%s': %v\n", *server, err)
-			os.Exit(1)
-		}
+		checkf("Failed to listen on '%s': %v", *server, err)
+
 		srv := gorums.NewServer(gorums.WithReceiveBufferSize(*serverBuffer))
-		go func() { _ = srv.Serve(lis) }()
+		go func() { checkf("serve failed: %v", srv.Serve(lis)) }()
 
 		fmt.Printf("Running benchmark server on '%s'\n", *server)
 
@@ -196,8 +136,8 @@ func main() {
 	options.Concurrent = *concurrent
 	options.MaxAsync = *maxAsync
 	options.Payload = *payload
-	options.Warmup = warmup
-	options.Duration = benchTime
+	options.Warmup = *warmupFlag
+	options.Duration = *benchTimeFlag
 	options.Remote = remote
 
 	numNodes := len(remotes)
@@ -222,14 +162,10 @@ func main() {
 		CfgSize: options.NumNodes,
 	}
 	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(remotes[:options.NumNodes]))
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkf("Failed to create configuration: %v", err)
 
 	results, err := benchmark.RunBenchmarks(benchReg, options, cfg)
-	if err != nil {
-		log.Fatalf("Error running benchmarks: %v\n", err)
-	}
+	checkf("Error running benchmarks: %v", err)
 
 	resultWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
 	fmt.Fprint(resultWriter, "Benchmark\tThroughput\tLatency\tStd.dev\tClient")
@@ -258,4 +194,13 @@ func main() {
 		fmt.Fprintln(resultWriter)
 	}
 	resultWriter.Flush()
+}
+
+func checkf(format string, args ...interface{}) {
+	for _, arg := range args {
+		if err, _ := arg.(error); err != nil {
+			fmt.Fprintf(os.Stderr, format, args...)
+			os.Exit(1)
+		}
+	}
 }
