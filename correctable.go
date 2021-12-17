@@ -81,6 +81,13 @@ type CorrectableCallData struct {
 	ServerStream   bool
 }
 
+type correctableCallState struct {
+	md              *ordering.Metadata
+	data            CorrectableCallData
+	replyChan       <-chan response
+	expectedReplies int
+}
+
 func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
@@ -100,50 +107,58 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
 
-	go func() {
-		var (
-			resp    protoreflect.ProtoMessage
-			errs    []Error
-			rlevel  int
-			clevel  = LevelNotSet
-			quorum  bool
-			replies = make(map[uint32]protoreflect.ProtoMessage)
-		)
-
-		if d.ServerStream {
-			for _, n := range c {
-				defer n.channel.deleteRouter(md.MessageID)
-			}
-		}
-
-		for {
-			select {
-			case r := <-replyChan:
-				if r.err != nil {
-					errs = append(errs, Error{r.nid, r.err})
-					break
-				}
-				replies[r.nid] = r.msg
-				if resp, rlevel, quorum = d.QuorumFunction(d.Message, replies); quorum {
-					if quorum {
-						corr.set(r.msg, rlevel, nil, true)
-						return
-					}
-					if rlevel > clevel {
-						clevel = rlevel
-						corr.set(r.msg, rlevel, nil, false)
-					}
-				}
-			case <-ctx.Done():
-				corr.set(resp, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
-				return
-			}
-			if (d.ServerStream && len(errs) == expectedReplies) || (!d.ServerStream && len(errs)+len(replies) == expectedReplies) {
-				corr.set(resp, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
-				return
-			}
-		}
-	}()
+	go c.handleCorrectableCall(ctx, corr, correctableCallState{
+		md:              md,
+		data:            d,
+		replyChan:       replyChan,
+		expectedReplies: expectedReplies,
+	})
 
 	return corr
+}
+
+func (c Configuration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
+	var (
+		resp    protoreflect.ProtoMessage
+		errs    []Error
+		rlevel  int
+		clevel  = LevelNotSet
+		quorum  bool
+		replies = make(map[uint32]protoreflect.ProtoMessage)
+	)
+
+	if state.data.ServerStream {
+		for _, n := range c {
+			defer n.channel.deleteRouter(state.md.MessageID)
+		}
+	}
+
+	for {
+		select {
+		case r := <-state.replyChan:
+			if r.err != nil {
+				errs = append(errs, Error{r.nid, r.err})
+				break
+			}
+			replies[r.nid] = r.msg
+			if resp, rlevel, quorum = state.data.QuorumFunction(state.data.Message, replies); quorum {
+				if quorum {
+					corr.set(r.msg, rlevel, nil, true)
+					return
+				}
+				if rlevel > clevel {
+					clevel = rlevel
+					corr.set(r.msg, rlevel, nil, false)
+				}
+			}
+		case <-ctx.Done():
+			corr.set(resp, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
+			return
+		}
+		if (state.data.ServerStream && len(errs) == state.expectedReplies) ||
+			(!state.data.ServerStream && len(errs)+len(replies) == state.expectedReplies) {
+			corr.set(resp, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
+			return
+		}
+	}
 }
