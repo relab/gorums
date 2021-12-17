@@ -17,6 +17,9 @@ type watcher struct {
 	ch    chan struct{}
 }
 
+// Correctable encapsulates the state of a correctable quorum call.
+//
+// This struct should be used by generated code only.
 type Correctable struct {
 	mu       sync.Mutex
 	reply    protoreflect.ProtoMessage
@@ -27,16 +30,19 @@ type Correctable struct {
 	donech   chan struct{}
 }
 
+// Get returns the latest response, the current level, and the last error.
 func (c *Correctable) Get() (protoreflect.ProtoMessage, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
 }
 
+// Done returns a channel that will close when the correctable call is completed.
 func (c *Correctable) Done() <-chan struct{} {
 	return c.donech
 }
 
+// Watch returns a channel that will close when the correctable call has reached a specified level.
 func (c *Correctable) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
@@ -73,6 +79,7 @@ func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error,
 	}
 }
 
+// CorrectableCallData contains data for making a correctable quorum call.
 type CorrectableCallData struct {
 	Message        protoreflect.ProtoMessage
 	Method         string
@@ -88,6 +95,9 @@ type correctableCallState struct {
 	expectedReplies int
 }
 
+// CorrectableCall starts a new correctable quorum call and returns a new Correctable object.
+//
+// This method should only be used by generated code.
 func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}

@@ -143,6 +143,9 @@ func NewServer(opts ...ServerOption) *Server {
 	return s
 }
 
+// RegisterHandler registers a request handler for the specified method name.
+//
+// This function should only be used by generated code.
 func (s *Server) RegisterHandler(method string, handler requestHandler) {
 	s.srv.handlers[method] = handler
 }

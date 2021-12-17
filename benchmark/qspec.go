@@ -93,17 +93,17 @@ func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies map[uint32]*MemorySt
 	return &MemoryStatList{MemoryStats: replyList}, true
 }
 
-// OrderedQCQF is the quorum function for the OrderedQC quorumcall
+// QuorumCallQF is the quorum function for the QuorumCall quorumcall
 func (qspec *QSpec) QuorumCallQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }
 
-// OrderedAsyncQF is the quorum function for the OrderedAsync quorumcall
+// AsyncQuorumCallQF is the quorum function for the AsyncQuorumCall quorumcall
 func (qspec *QSpec) AsyncQuorumCallQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }
 
-// OrderedSlowServerQF is the quorum function for the OrderedSlowServer quorumcall
+// SlowServerQF is the quorum function for the SlowServer quorumcall
 func (qspec *QSpec) SlowServerQF(_ *Echo, replies map[uint32]*Echo) (*Echo, bool) {
 	return qspec.qf(replies)
 }

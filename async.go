@@ -7,6 +7,10 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// Async encapsulates the state of an asynchronous quorum call,
+// and has methods for checking the status of the call or waiting for it to complete.
+//
+// This struct should only be used by generated code.
 type Async struct {
 	reply protoreflect.ProtoMessage
 	err   error
@@ -37,6 +41,9 @@ type asyncCallState struct {
 	expectedReplies int
 }
 
+// AsyncCall starts an asynchronous quorum call, returning an Async object that can be used to retreive the results.
+//
+// This function should only be used by generated code.
 func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}

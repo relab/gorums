@@ -65,7 +65,7 @@ type Server struct {
 	stats  Stats
 }
 
-// NewServer returns a new Server
+// NewBenchServer returns a new benchmark server
 func NewBenchServer(opts ...gorums.ServerOption) *Server {
 	srv := &Server{}
 	srv.server.stats = &srv.stats
