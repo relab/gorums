@@ -114,6 +114,8 @@ func (m *Manager) Nodes() []*Node {
 	return nodes
 }
 
+// Node encapsulates the state of a node on which a remote procedure call
+// can be performed.
 type Node struct {
 	*gorums.Node
 }
