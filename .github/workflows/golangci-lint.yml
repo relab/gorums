@@ -16,24 +16,34 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go-version }}
+
       - name: Install Protoc
         uses: arduino/setup-protoc@master
         with:
           version: '3.x'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/cache@v2
+
+      - name: Cache Go modules
+        uses: actions/cache@v2
         with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-${{ matrix.go-version }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ runner.os }}-go-
-      - uses: actions/checkout@v2
+            ${{ runner.os }}-${{ matrix.go-version }}-go-
+
+      - name: Checkout 
+        uses: actions/checkout@v2
+
       - name: Run Make
         run: make
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
-          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-          version: v1.29
-          # Optional: golangci-lint command line arguments.
+          version: latest
+          skip-go-installation: true
+          skip-pkg-cache: true
+          skip-build-cache: true
           args: --disable errcheck
