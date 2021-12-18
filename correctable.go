@@ -80,6 +80,8 @@ func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error,
 }
 
 // CorrectableCallData contains data for making a correctable quorum call.
+//
+// This struct should only be used by generated code.
 type CorrectableCallData struct {
 	Message        protoreflect.ProtoMessage
 	Method         string

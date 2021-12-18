@@ -18,7 +18,6 @@ func StartCPUProfile(cpuProfilePath string) (stop func() error, err error) {
 		return nil, err
 	}
 	return func() error {
-		// stop cpu profile
 		pprof.StopCPUProfile()
 		err = cpuProfile.Close()
 		if err != nil {
@@ -53,7 +52,6 @@ func StartTrace(tracePath string) (stop func() error, err error) {
 		return nil, err
 	}
 	return func() error {
-		// stop trace
 		trace.Stop()
 		err = traceFile.Close()
 		if err != nil {

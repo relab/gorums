@@ -20,7 +20,9 @@ const (
 	responseType
 )
 
-// Message encapsulates a request message and metadata.
+// Message encapsulates a protobuf message and metadata.
+//
+// This struct should be used by generated code only.
 type Message struct {
 	Metadata *ordering.Metadata
 	Message  protoreflect.ProtoMessage
