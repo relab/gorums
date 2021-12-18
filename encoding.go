@@ -58,7 +58,7 @@ func (c Codec) String() string {
 	return ContentSubtype
 }
 
-// Marchal marshals the message m into a byte slice.
+// Marshal marshals the message m into a byte slice.
 func (c Codec) Marshal(m interface{}) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *Message:

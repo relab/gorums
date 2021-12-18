@@ -41,7 +41,7 @@ type asyncCallState struct {
 	expectedReplies int
 }
 
-// AsyncCall starts an asynchronous quorum call, returning an Async object that can be used to retreive the results.
+// AsyncCall starts an asynchronous quorum call, returning an Async object that can be used to retrieve the results.
 //
 // This function should only be used by generated code.
 func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
