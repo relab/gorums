@@ -2,6 +2,7 @@
 
 [![license](http://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/relab/gorums/raw/master/LICENSE)
 [![go reference](https://pkg.go.dev/badge/github.com/relab/gorums.svg)](https://pkg.go.dev/github.com/relab/gorums)
+[![GoReportCard](https://goreportcard.com/badge/github.com/relab/gorums)](https://goreportcard.com/report/github.com/relab/gorums)
 [![build](https://github.com/relab/gorums/workflows/Test/badge.svg)](https://github.com/relab/gorums/actions)
 [![golangci-lint](https://github.com/relab/gorums/workflows/golangci-lint/badge.svg)](https://github.com/relab/gorums/actions)
 

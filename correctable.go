@@ -17,6 +17,9 @@ type watcher struct {
 	ch    chan struct{}
 }
 
+// Correctable encapsulates the state of a correctable quorum call.
+//
+// This struct should be used by generated code only.
 type Correctable struct {
 	mu       sync.Mutex
 	reply    protoreflect.ProtoMessage
@@ -27,16 +30,19 @@ type Correctable struct {
 	donech   chan struct{}
 }
 
+// Get returns the latest response, the current level, and the last error.
 func (c *Correctable) Get() (protoreflect.ProtoMessage, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
 }
 
+// Done returns a channel that will close when the correctable call is completed.
 func (c *Correctable) Done() <-chan struct{} {
 	return c.donech
 }
 
+// Watch returns a channel that will close when the correctable call has reached a specified level.
 func (c *Correctable) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
@@ -73,6 +79,9 @@ func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error,
 	}
 }
 
+// CorrectableCallData contains data for making a correctable quorum call.
+//
+// This struct should only be used by generated code.
 type CorrectableCallData struct {
 	Message        protoreflect.ProtoMessage
 	Method         string
@@ -81,6 +90,16 @@ type CorrectableCallData struct {
 	ServerStream   bool
 }
 
+type correctableCallState struct {
+	md              *ordering.Metadata
+	data            CorrectableCallData
+	replyChan       <-chan response
+	expectedReplies int
+}
+
+// CorrectableCall starts a new correctable quorum call and returns a new Correctable object.
+//
+// This method should only be used by generated code.
 func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
@@ -100,50 +119,58 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
 
-	go func() {
-		var (
-			resp    protoreflect.ProtoMessage
-			errs    []Error
-			rlevel  int
-			clevel  = LevelNotSet
-			quorum  bool
-			replies = make(map[uint32]protoreflect.ProtoMessage)
-		)
-
-		if d.ServerStream {
-			for _, n := range c {
-				defer n.channel.deleteRouter(md.MessageID)
-			}
-		}
-
-		for {
-			select {
-			case r := <-replyChan:
-				if r.err != nil {
-					errs = append(errs, Error{r.nid, r.err})
-					break
-				}
-				replies[r.nid] = r.msg
-				if resp, rlevel, quorum = d.QuorumFunction(d.Message, replies); quorum {
-					if quorum {
-						corr.set(r.msg, rlevel, nil, true)
-						return
-					}
-					if rlevel > clevel {
-						clevel = rlevel
-						corr.set(r.msg, rlevel, nil, false)
-					}
-				}
-			case <-ctx.Done():
-				corr.set(resp, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
-				return
-			}
-			if (d.ServerStream && len(errs) == expectedReplies) || (!d.ServerStream && len(errs)+len(replies) == expectedReplies) {
-				corr.set(resp, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
-				return
-			}
-		}
-	}()
+	go c.handleCorrectableCall(ctx, corr, correctableCallState{
+		md:              md,
+		data:            d,
+		replyChan:       replyChan,
+		expectedReplies: expectedReplies,
+	})
 
 	return corr
+}
+
+func (c Configuration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
+	var (
+		resp    protoreflect.ProtoMessage
+		errs    []Error
+		rlevel  int
+		clevel  = LevelNotSet
+		quorum  bool
+		replies = make(map[uint32]protoreflect.ProtoMessage)
+	)
+
+	if state.data.ServerStream {
+		for _, n := range c {
+			defer n.channel.deleteRouter(state.md.MessageID)
+		}
+	}
+
+	for {
+		select {
+		case r := <-state.replyChan:
+			if r.err != nil {
+				errs = append(errs, Error{r.nid, r.err})
+				break
+			}
+			replies[r.nid] = r.msg
+			if resp, rlevel, quorum = state.data.QuorumFunction(state.data.Message, replies); quorum {
+				if quorum {
+					corr.set(r.msg, rlevel, nil, true)
+					return
+				}
+				if rlevel > clevel {
+					clevel = rlevel
+					corr.set(r.msg, rlevel, nil, false)
+				}
+			}
+		case <-ctx.Done():
+			corr.set(resp, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
+			return
+		}
+		if (state.data.ServerStream && len(errs) == state.expectedReplies) ||
+			(!state.data.ServerStream && len(errs)+len(replies) == state.expectedReplies) {
+			corr.set(resp, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
+			return
+		}
+	}
 }

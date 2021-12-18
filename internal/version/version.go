@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// Semantic version number parts.
 const (
 	Major      = 0
 	Minor      = 6

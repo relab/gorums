@@ -10,6 +10,8 @@ import (
 // QuorumCallData holds the message, destination nodes, method identifier,
 // and other information necessary to perform the various quorum call types
 // supported by Gorums.
+//
+// This struct should be used by generated code only.
 type QuorumCallData struct {
 	Message        protoreflect.ProtoMessage
 	Method         string
@@ -17,6 +19,9 @@ type QuorumCallData struct {
 	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
 }
 
+// QuorumCall performs a quorum call on the configuration.
+//
+// This method should be used by generated code only.
 func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}

@@ -7,11 +7,17 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// CallData contains data needed to make a remote procedure call.
+//
+// This struct should be used by generated code only.
 type CallData struct {
 	Message protoreflect.ProtoMessage
 	Method  string
 }
 
+// RPCCall executes a remote procedure call on the node.
+//
+// This method should be used by generated code only.
 func (n *Node) RPCCall(ctx context.Context, d CallData) (resp protoreflect.ProtoMessage, err error) {
 	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
 	replyChan := make(chan response, 1)

@@ -4,14 +4,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
 	"regexp"
-	"runtime"
-	"runtime/pprof"
-	"runtime/trace"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -59,29 +55,67 @@ func (f *listFlag) Get() []string {
 	return f.val
 }
 
-type durationFlag struct {
-	val time.Duration
+func listBenchmarks() {
+	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
+	benchmarks := benchmark.GetBenchmarks(nil)
+	for _, b := range benchmarks {
+		fmt.Fprintf(tw, "%s:\t%s\n", b.Name, b.Description)
+	}
+	tw.Flush()
 }
 
-func (f *durationFlag) String() string {
-	return f.val.String()
+func runServer(server string, serverBuffer uint) {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
+	lis, err := net.Listen("tcp", server)
+	checkf("Failed to listen on '%s': %v", server, err)
+
+	srv := gorums.NewServer(gorums.WithReceiveBufferSize(serverBuffer))
+	go func() { checkf("serve failed: %v", srv.Serve(lis)) }()
+
+	fmt.Printf("Running benchmark server on '%s'\n", server)
+
+	<-signals
+	srv.Stop()
 }
 
-func (f *durationFlag) Set(v string) (err error) {
-	f.val, err = time.ParseDuration(v)
-	return err
-}
-
-func (f *durationFlag) Get() time.Duration {
-	return f.val
+func printResults(results []*benchmark.Result, options benchmark.Options, serverStats bool) {
+	resultWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
+	fmt.Fprint(resultWriter, "Benchmark\tThroughput\tLatency\tStd.dev\tClient")
+	if !serverStats || !options.Remote {
+		fmt.Fprint(resultWriter, "+Servers\t\t")
+	} else if serverStats {
+		fmt.Fprint(resultWriter, "\t\t")
+		for i := 1; i <= options.NumNodes; i++ {
+			fmt.Fprintf(resultWriter, "Server %d\t\t", i)
+		}
+	}
+	fmt.Fprintln(resultWriter)
+	for _, r := range results {
+		if !serverStats && options.Remote {
+			for _, s := range r.ServerStats {
+				r.MemPerOp += s.Memory / r.TotalOps
+				r.AllocsPerOp += s.Allocs / r.TotalOps
+			}
+		}
+		fmt.Fprint(resultWriter, r.Format())
+		if serverStats && options.Remote {
+			for _, s := range r.ServerStats {
+				fmt.Fprintf(resultWriter, "%d B/op\t%d allocs/op\t", s.Memory/r.TotalOps, s.Allocs/r.TotalOps)
+			}
+		}
+		fmt.Fprintln(resultWriter)
+	}
+	resultWriter.Flush()
 }
 
 func main() {
 	var (
 		benchmarksFlag = regexpFlag{val: regexp.MustCompile(".*")}
 		remotesFlag    = listFlag{}
-		warmupFlag     = durationFlag{val: 100 * time.Millisecond}
-		benchTimeFlag  = durationFlag{val: 1 * time.Second}
+		warmupFlag     = flag.Duration("warmup", 100*time.Millisecond, "Warmup duration.")
+		benchTimeFlag  = flag.Duration("time", 1*time.Second, "The duration of each benchmark.")
 		traceFile      = flag.String("trace", "", "A `file` to write trace to.")
 		cpuprofile     = flag.String("cpuprofile", "", "A `file` to write cpu profile to.")
 		memprofile     = flag.String("memprofile", "", "A `file` to write memory profile to.")
@@ -98,86 +132,57 @@ func main() {
 	)
 	flag.Var(&benchmarksFlag, "benchmarks", "A `regexp` matching the benchmarks to run.")
 	flag.Var(&remotesFlag, "remotes", "A comma separated `list` of remote addresses to connect to.")
-	flag.Var(&warmupFlag, "warmup", "Warmup `duration`.")
-	flag.Var(&benchTimeFlag, "time", "The `duration` of each benchmark.")
 	flag.Parse()
 
 	benchReg := benchmarksFlag.Get()
 	remotes := remotesFlag.Get()
-	warmup := warmupFlag.Get()
-	benchTime := benchTimeFlag.Get()
+
+	var options benchmark.Options
+	options.Concurrent = *concurrent
+	options.MaxAsync = *maxAsync
+	options.Payload = *payload
+	options.Warmup = *warmupFlag
+	options.Duration = *benchTimeFlag
+	options.Remote = true
+
+	numNodes := len(remotes)
+	if *cfgSize < 1 || *cfgSize > numNodes {
+		options.NumNodes = numNodes
+	} else {
+		options.NumNodes = *cfgSize
+	}
+
+	// find a valid value for QuorumSize
+	switch {
+	case options.NumNodes == 1:
+		options.QuorumSize = 1
+	case *qSize < 1:
+		options.QuorumSize = options.NumNodes / 2 // the default value
+	case *qSize > options.NumNodes:
+		options.QuorumSize = options.NumNodes
+	default:
+		options.QuorumSize = *qSize
+	}
 
 	if *list {
-		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-		benchmarks := benchmark.GetBenchmarks(nil)
-		for _, b := range benchmarks {
-			fmt.Fprintf(tw, "%s:\t%s\n", b.Name, b.Description)
-		}
-		tw.Flush()
+		listBenchmarks()
 		return
 	}
 
-	// set up profiling and tracing
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal("Could not create CPU profile: ", err)
-		}
-		defer f.Close()
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("Could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
-	if *traceFile != "" {
-		f, err := os.Create(*traceFile)
-		if err != nil {
-			log.Fatal("Could not create trace file: ", err)
-		}
-		defer f.Close()
-		if err := trace.Start(f); err != nil {
-			log.Fatal("Failed to start trace: ", err)
-		}
-		defer trace.Stop()
-	}
-
+	stopProfilers, err := StartProfilers(*cpuprofile, *memprofile, *traceFile)
+	checkf("Failed to start profiling: %v", err)
 	defer func() {
-		if *memprofile != "" {
-			f, err := os.Create(*memprofile)
-			if err != nil {
-				log.Fatal("Could not create memory profile: ", err)
-			}
-			defer f.Close()
-			runtime.GC()
-			if err := pprof.WriteHeapProfile(f); err != nil {
-				log.Fatal("Could not write memory profile: ", err)
-			}
-		}
+		checkf("Failed to stop profiling: %v", stopProfilers())
 	}()
 
 	if *server != "" {
-		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
-
-		lis, err := net.Listen("tcp", *server)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to listen on '%s': %v\n", *server, err)
-			os.Exit(1)
-		}
-		srv := gorums.NewServer(gorums.WithReceiveBufferSize(*serverBuffer))
-		go func() { _ = srv.Serve(lis) }()
-
-		fmt.Printf("Running benchmark server on '%s'\n", *server)
-
-		<-signals
-		srv.Stop()
+		runServer(*server, *serverBuffer)
 		return
 	}
 
-	remote := true
+	// start local servers if needed
 	if len(remotes) < 1 {
-		remote = false
+		options.Remote = false
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithReceiveBufferSize(*serverBuffer))
@@ -192,70 +197,25 @@ func main() {
 	mgr := benchmark.NewManager(mgrOpts...)
 	defer mgr.Close()
 
-	var options benchmark.Options
-	options.Concurrent = *concurrent
-	options.MaxAsync = *maxAsync
-	options.Payload = *payload
-	options.Warmup = warmup
-	options.Duration = benchTime
-	options.Remote = remote
-
-	numNodes := len(remotes)
-	if *cfgSize < 1 || *cfgSize > numNodes {
-		options.NumNodes = numNodes
-	} else {
-		options.NumNodes = *cfgSize
-	}
-
-	if options.NumNodes == 1 {
-		options.QuorumSize = 1
-	} else if *qSize < 1 {
-		options.QuorumSize = options.NumNodes / 2
-	} else if *qSize > options.NumNodes {
-		options.QuorumSize = options.NumNodes
-	} else {
-		options.QuorumSize = *qSize
-	}
-
 	qspec := &benchmark.QSpec{
 		QSize:   options.QuorumSize,
 		CfgSize: options.NumNodes,
 	}
+
 	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(remotes[:options.NumNodes]))
-	if err != nil {
-		log.Fatal(err)
-	}
+	checkf("Failed to create configuration: %v", err)
 
 	results, err := benchmark.RunBenchmarks(benchReg, options, cfg)
-	if err != nil {
-		log.Fatalf("Error running benchmarks: %v\n", err)
-	}
+	checkf("Error running benchmarks: %v", err)
 
-	resultWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-	fmt.Fprint(resultWriter, "Benchmark\tThroughput\tLatency\tStd.dev\tClient")
-	if !*serverStats || !remote {
-		fmt.Fprint(resultWriter, "+Servers\t\t")
-	} else if *serverStats {
-		fmt.Fprint(resultWriter, "\t\t")
-		for i := 1; i <= options.NumNodes; i++ {
-			fmt.Fprintf(resultWriter, "Server %d\t\t", i)
+	printResults(results, options, *serverStats)
+}
+
+func checkf(format string, args ...interface{}) {
+	for _, arg := range args {
+		if err, _ := arg.(error); err != nil {
+			fmt.Fprintf(os.Stderr, format, args...)
+			os.Exit(1)
 		}
 	}
-	fmt.Fprintln(resultWriter)
-	for _, r := range results {
-		if !*serverStats && remote {
-			for _, s := range r.ServerStats {
-				r.MemPerOp += s.Memory / r.TotalOps
-				r.AllocsPerOp += s.Allocs / r.TotalOps
-			}
-		}
-		fmt.Fprint(resultWriter, r.Format())
-		if *serverStats && remote {
-			for _, s := range r.ServerStats {
-				fmt.Fprintf(resultWriter, "%d B/op\t%d allocs/op\t", s.Memory/r.TotalOps, s.Allocs/r.TotalOps)
-			}
-		}
-		fmt.Fprintln(resultWriter)
-	}
-	resultWriter.Flush()
 }

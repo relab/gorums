@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
 type ServerIface interface {
 	Serve(net.Listener) error
 	Stop()

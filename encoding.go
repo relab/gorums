@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
+// ContentSubtype is the subtype used by gorums when sending messages via gRPC.
 const ContentSubtype = "gorums"
 
 type gorumsMsgType uint8
@@ -19,6 +20,9 @@ const (
 	responseType
 )
 
+// Message encapsulates a protobuf message and metadata.
+//
+// This struct should be used by generated code only.
 type Message struct {
 	Metadata *ordering.Metadata
 	Message  protoreflect.ProtoMessage
@@ -31,11 +35,13 @@ func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
+// Codec is the gRPC codec used by gorums.
 type Codec struct {
 	marshaler   proto.MarshalOptions
 	unmarshaler proto.UnmarshalOptions
 }
 
+// NewCodec returns a new Codec.
 func NewCodec() *Codec {
 	return &Codec{
 		marshaler:   proto.MarshalOptions{AllowPartial: true},
@@ -43,6 +49,7 @@ func NewCodec() *Codec {
 	}
 }
 
+// Name returns the name of the Codec.
 func (c Codec) Name() string {
 	return ContentSubtype
 }
@@ -51,6 +58,7 @@ func (c Codec) String() string {
 	return ContentSubtype
 }
 
+// Marchal marshals the message m into a byte slice.
 func (c Codec) Marshal(m interface{}) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *Message:
@@ -80,6 +88,7 @@ func (c Codec) gorumsMarshal(msg *Message) (b []byte, err error) {
 	return b, nil
 }
 
+// Unmarshal unmarshals a byte slice into m.
 func (c Codec) Unmarshal(b []byte, m interface{}) (err error) {
 	switch msg := m.(type) {
 	case *Message:
