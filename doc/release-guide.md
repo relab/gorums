@@ -12,16 +12,13 @@ To cut a release you will need additional tools:
 1. Check and upgrade dependencies:
 
    ```shell
+   % make tools
    % protoc --version
    libprotoc 3.15.6
    # v3.15.6 is current; but if new version available run:
    % brew upgrade protobuf
    % protoc-gen-go-grpc --version
    protoc-gen-go-grpc 1.1.0
-   % protoc-gen-go --version
-   protoc-gen-go v1.25.0
-   # v1.25.0 is old; run make tools to upgrade
-   % make tools
    % protoc-gen-go --version
    protoc-gen-go v1.26.0
    # Upgrade module dependencies
@@ -46,7 +43,7 @@ To cut a release you will need additional tools:
 5. Install new version of `protoc-gen-gorums`:
 
    ```shell
-   % go install github.com/relab/gorums/cmd/protoc-gen-gorums
+   % make dev
    % protoc-gen-gorums --version
    protoc-gen-gorums v0.4.0-devel
    ```

@@ -1,3 +1,4 @@
+// Package version records versioning information about this module.
 package version
 
 import (
@@ -5,7 +6,9 @@ import (
 	"strings"
 )
 
-// Semantic version number parts.
+// These constants determine the current version of this module.
+//
+// Steps for cutting a new release is described in doc/release-guide.md.
 const (
 	Major      = 0
 	Minor      = 6
