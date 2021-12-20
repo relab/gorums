@@ -138,6 +138,22 @@ func main() {
 	benchReg := benchmarksFlag.Get()
 	remotes := remotesFlag.Get()
 
+	if *list {
+		listBenchmarks()
+		return
+	}
+
+	stopProfilers, err := StartProfilers(*cpuprofile, *memprofile, *traceFile)
+	checkf("Failed to start profiling: %v", err)
+	defer func() {
+		checkf("Failed to stop profiling: %v", stopProfilers())
+	}()
+
+	if *server != "" {
+		runServer(*server, *serverBuffer)
+		return
+	}
+
 	var options benchmark.Options
 	options.Concurrent = *concurrent
 	options.MaxAsync = *maxAsync
@@ -145,6 +161,14 @@ func main() {
 	options.Warmup = *warmupFlag
 	options.Duration = *benchTimeFlag
 	options.Remote = true
+
+	// start local servers if needed
+	if len(remotes) < 1 {
+		options.Remote = false
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithReceiveBufferSize(*serverBuffer))
+	}
 
 	numNodes := len(remotes)
 	if *cfgSize < 1 || *cfgSize > numNodes {
@@ -163,30 +187,6 @@ func main() {
 		options.QuorumSize = options.NumNodes
 	default:
 		options.QuorumSize = *qSize
-	}
-
-	if *list {
-		listBenchmarks()
-		return
-	}
-
-	stopProfilers, err := StartProfilers(*cpuprofile, *memprofile, *traceFile)
-	checkf("Failed to start profiling: %v", err)
-	defer func() {
-		checkf("Failed to stop profiling: %v", stopProfilers())
-	}()
-
-	if *server != "" {
-		runServer(*server, *serverBuffer)
-		return
-	}
-
-	// start local servers if needed
-	if len(remotes) < 1 {
-		options.Remote = false
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithReceiveBufferSize(*serverBuffer))
 	}
 
 	mgrOpts := []gorums.ManagerOption{
