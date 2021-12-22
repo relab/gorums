@@ -16,6 +16,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/benchmark"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type regexpFlag struct {
@@ -189,7 +190,10 @@ func main() {
 	}
 
 	mgrOpts := []gorums.ManagerOption{
-		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
 		gorums.WithDialTimeout(10 * time.Second),
 		gorums.WithSendBufferSize(*sendBuffer),
 	}

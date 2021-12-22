@@ -7,6 +7,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/storage/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func runClient(addresses []string) {
@@ -18,8 +19,8 @@ func runClient(addresses []string) {
 	mgr := proto.NewManager(
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithInsecure(), // disable TLS
-			grpc.WithBlock(),    // block until connections are made
+			grpc.WithBlock(), // block until connections are made
+			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)
 	// create configuration containing all nodes

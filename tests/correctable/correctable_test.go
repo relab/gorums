@@ -7,6 +7,7 @@ import (
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // run a test on a correctable call.
@@ -21,9 +22,13 @@ func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration
 	})
 	defer teardown()
 
-	mgr := NewManager(gorums.WithDialTimeout(time.Second), gorums.WithGrpcDialOptions(
-		grpc.WithInsecure(), grpc.WithBlock(),
-	))
+	mgr := NewManager(
+		gorums.WithDialTimeout(time.Second),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	)
 
 	cfg, err := mgr.NewConfiguration(qspec{div, n}, gorums.WithNodeList(addrs))
 	if err != nil {

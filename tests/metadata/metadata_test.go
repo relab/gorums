@@ -10,6 +10,7 @@ import (
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -60,8 +61,11 @@ func TestMetadata(t *testing.T) {
 
 	mgr := NewManager(
 		gorums.WithMetadata(md),
-		gorums.WithDialTimeout(1*time.Second),
-		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+		gorums.WithDialTimeout(time.Second),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
 	)
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
@@ -91,8 +95,11 @@ func TestPerNodeMetadata(t *testing.T) {
 
 	mgr := NewManager(
 		gorums.WithPerNodeMetadata(perNodeMD),
-		gorums.WithDialTimeout(1*time.Second),
-		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+		gorums.WithDialTimeout(time.Second),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
 	)
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
@@ -116,8 +123,11 @@ func TestCanGetPeerInfo(t *testing.T) {
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithDialTimeout(1*time.Second),
-		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+		gorums.WithDialTimeout(time.Second),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
 	)
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/tests/dummy"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var (
@@ -73,7 +74,10 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	defer teardown()
 	mgr := gorums.NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
-		gorums.WithGrpcDialOptions(grpc.WithInsecure(), grpc.WithBlock()),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
 	)
 	defer mgr.Close()
 
