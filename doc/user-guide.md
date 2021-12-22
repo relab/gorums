@@ -223,6 +223,7 @@ import (
   "time"
 
   "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func ExampleStorageClient() {
@@ -230,7 +231,7 @@ func ExampleStorageClient() {
     gorums.WithDialTimeout(500*time.Millisecond),
     gorums.WithGrpcDialOptions(
       grpc.WithBlock(),
-      grpc.WithInsecure(),
+      grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
 ```
@@ -405,8 +406,9 @@ func ExampleStorageClient() {
     gorums.WithDialTimeout(50*time.Millisecond),
     gorums.WithGrpcDialOptions(
       grpc.WithBlock(),
-      grpc.WithInsecure(),
-  ))
+      grpc.WithTransportCredentials(insecure.NewCredentials()),
+    ),
+  )
   // Create a configuration including all nodes
   allNodesConfig, err := mgr.NewConfiguration(
     &QSpec{2},

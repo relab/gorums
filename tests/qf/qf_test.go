@@ -8,6 +8,7 @@ import (
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const requestValue = 0x1001_1001
@@ -195,8 +196,10 @@ func BenchmarkFullStackQF(b *testing.B) {
 			return srv
 		})
 		mgr := NewManager(
-			gorums.WithGrpcDialOptions(grpc.WithInsecure()),
 			gorums.WithDialTimeout(10*time.Second),
+			gorums.WithGrpcDialOptions(
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			),
 		)
 		c, err := mgr.NewConfiguration(
 			&testQSpec{quorum: n / 2},

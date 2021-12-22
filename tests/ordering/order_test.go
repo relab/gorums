@@ -9,6 +9,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/leakcheck"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type testSrv struct {
@@ -86,7 +87,10 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 	})
 	mgr := NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
-		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
 	)
 	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList(addrs))
 	if err != nil {

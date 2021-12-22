@@ -10,6 +10,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/tests/oneway"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type onewaySrv struct {
@@ -63,7 +64,10 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 
 	mgr := oneway.NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
-		gorums.WithGrpcDialOptions(grpc.WithBlock(), grpc.WithInsecure()),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
 	)
 	cfg, err := mgr.NewConfiguration(&testQSpec{}, gorums.WithNodeMap(nodeMap))
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type testSrv struct{}
@@ -29,7 +30,10 @@ func TestUnresponsive(t *testing.T) {
 
 	mgr := NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
-		gorums.WithGrpcDialOptions(grpc.WithInsecure(), grpc.WithBlock()),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
 	)
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
