@@ -24,7 +24,7 @@ const (
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	gorums.Configuration
+	gorums.RawConfiguration
 	qspec QuorumSpec
 }
 
@@ -32,7 +32,7 @@ type Configuration struct {
 // order as they were provided in the creation of the Manager.
 func (c *Configuration) Nodes() []*Node {
 	nodes := make([]*Node, 0, c.Size())
-	for _, n := range c.Configuration {
+	for _, n := range c.RawConfiguration {
 		nodes = append(nodes, &Node{n})
 	}
 	return nodes
@@ -40,13 +40,13 @@ func (c *Configuration) Nodes() []*Node {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c Configuration) And(d *Configuration) gorums.NodeListOption {
-	return c.Configuration.And(d.Configuration)
+	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
-	return c.Configuration.Except(rm.Configuration)
+	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
 
 func init() {
@@ -58,7 +58,7 @@ func init() {
 // Manager maintains a connection pool of nodes on
 // which quorum calls can be performed.
 type Manager struct {
-	*gorums.Manager
+	*gorums.RawManager
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -66,7 +66,7 @@ type Manager struct {
 // various aspects of the manager.
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 	mgr = &Manager{}
-	mgr.Manager = gorums.NewManager(opts...)
+	mgr.RawManager = gorums.NewRawManager(opts...)
 	return mgr
 }
 
@@ -85,7 +85,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	for _, opt := range opts {
 		switch v := opt.(type) {
 		case gorums.NodeListOption:
-			c.Configuration, err = gorums.NewConfiguration(m.Manager, v)
+			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
 			if err != nil {
 				return nil, err
 			}
@@ -107,7 +107,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 // Nodes returns a slice of available nodes on this manager.
 // IDs are returned in the order they were added at creation of the manager.
 func (m *Manager) Nodes() []*Node {
-	gorumsNodes := m.Manager.Nodes()
+	gorumsNodes := m.RawManager.Nodes()
 	nodes := make([]*Node, 0, len(gorumsNodes))
 	for _, n := range gorumsNodes {
 		nodes = append(nodes, &Node{n})
@@ -118,7 +118,7 @@ func (m *Manager) Nodes() []*Node {
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
 type Node struct {
-	*gorums.Node
+	*gorums.RawNode
 }
 
 // QuorumSpec is the interface of quorum functions for QuorumFunction.
@@ -155,7 +155,7 @@ func (c *Configuration) UseReq(ctx context.Context, in *Request) (resp *Response
 		return c.qspec.UseReqQF(req.(*Request), r)
 	}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,7 @@ func (c *Configuration) IgnoreReq(ctx context.Context, in *Request) (resp *Respo
 		return c.qspec.IgnoreReqQF(req.(*Request), r)
 	}
 
-	res, err := c.Configuration.QuorumCall(ctx, cd)
+	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

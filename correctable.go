@@ -100,7 +100,7 @@ type correctableCallState struct {
 // CorrectableCall starts a new correctable quorum call and returns a new Correctable object.
 //
 // This method should only be used by generated code.
-func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
+func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 
@@ -129,7 +129,7 @@ func (c Configuration) CorrectableCall(ctx context.Context, d CorrectableCallDat
 	return corr
 }
 
-func (c Configuration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
+func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
 	var (
 		resp    protoreflect.ProtoMessage
 		errs    []Error

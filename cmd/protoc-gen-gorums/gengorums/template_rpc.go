@@ -23,7 +23,7 @@ var rpcBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	res, err := n.Node.RPCCall(ctx, cd)
+	res, err := n.RawNode.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

@@ -23,7 +23,7 @@ func TestManagerLogging(t *testing.T) {
 		logger = log.New(&buf, "logger: ", log.Lshortfile)
 	)
 	buf.WriteString("\n")
-	_ = gorums.NewManager(
+	_ = gorums.NewRawManager(
 		gorums.WithNoConnect(),
 		gorums.WithLogger(logger),
 	)
@@ -31,8 +31,8 @@ func TestManagerLogging(t *testing.T) {
 }
 
 func TestManagerAddNode(t *testing.T) {
-	mgr := gorums.NewManager(gorums.WithNoConnect())
-	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
+	mgr := gorums.NewRawManager(gorums.WithNoConnect())
+	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestManagerAddNode(t *testing.T) {
 		{"127.0.1.1:1234", 2, "node ID 2 already exists (127.0.1.1:1234)"},
 	}
 	for _, test := range tests {
-		node, err := gorums.NewNodeWithID(test.addr, test.id)
+		node, err := gorums.NewRawNodeWithID(test.addr, test.id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -72,7 +72,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		return srv
 	})
 	defer teardown()
-	mgr := gorums.NewManager(
+	mgr := gorums.NewRawManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
 			grpc.WithBlock(),
@@ -81,7 +81,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	)
 	defer mgr.Close()
 
-	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs[:2]))
+	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs[:2]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs)-1)
 	}
 
-	node, err := gorums.NewNode(addrs[2])
+	node, err := gorums.NewRawNode(addrs[2])
 	if err != nil {
 		t.Fatal(err)
 	}

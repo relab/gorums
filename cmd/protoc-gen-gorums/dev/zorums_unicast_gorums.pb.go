@@ -27,7 +27,7 @@ func (n *Node) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOpti
 		Method:  "dev.ZorumsService.Unicast",
 	}
 
-	n.Node.Unicast(ctx, cd, opts...)
+	n.RawNode.Unicast(ctx, cd, opts...)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -41,5 +41,5 @@ func (n *Node) Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOpt
 		Method:  "dev.ZorumsService.Unicast2",
 	}
 
-	n.Node.Unicast(ctx, cd, opts...)
+	n.RawNode.Unicast(ctx, cd, opts...)
 }

@@ -22,7 +22,7 @@ type QuorumCallData struct {
 // QuorumCall performs a quorum call on the configuration.
 //
 // This method should be used by generated code only.
-func (c Configuration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
+func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 
