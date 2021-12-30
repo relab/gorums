@@ -50,6 +50,16 @@ func (c Configuration) Equal(b Configuration) bool {
 	return true
 }
 
+// Contains returns true if nodeID is in configuration c.
+func (c Configuration) Contains(nodeID uint32) bool {
+	for i := range c {
+		if c[i].ID() == nodeID {
+			return true
+		}
+	}
+	return false
+}
+
 func (c Configuration) getMsgID() uint64 {
 	return c[0].mgr.getMsgID()
 }
