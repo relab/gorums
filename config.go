@@ -6,6 +6,8 @@ import (
 
 // RawConfiguration represents a static set of nodes on which quorum calls may be invoked.
 //
+// NOTE: mutating the configuration is not supported.
+//
 // This type is intended to be used by generated code.
 // You should use the generated `Configuration` type instead.
 type RawConfiguration []*RawNode
@@ -31,6 +33,8 @@ func (c RawConfiguration) NodeIDs() []uint32 {
 }
 
 // Nodes returns the nodes in this configuration.
+//
+// NOTE: mutating the returned slice is not supported.
 func (c RawConfiguration) Nodes() []*RawNode {
 	return c
 }
