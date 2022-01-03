@@ -26,7 +26,7 @@ func (n *Node) GRPCCall(ctx context.Context, in *Request) (resp *Response, err e
 		Method:  "dev.ZorumsService.GRPCCall",
 	}
 
-	res, err := n.Node.RPCCall(ctx, cd)
+	res, err := n.RawNode.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

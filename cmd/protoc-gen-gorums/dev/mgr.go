@@ -16,7 +16,7 @@ func init() {
 // Manager maintains a connection pool of nodes on
 // which quorum calls can be performed.
 type Manager struct {
-	*gorums.Manager
+	*gorums.RawManager
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -24,7 +24,7 @@ type Manager struct {
 // various aspects of the manager.
 func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 	mgr = &Manager{}
-	mgr.Manager = gorums.NewManager(opts...)
+	mgr.RawManager = gorums.NewRawManager(opts...)
 	return mgr
 }
 
@@ -43,7 +43,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	for _, opt := range opts {
 		switch v := opt.(type) {
 		case gorums.NodeListOption:
-			c.Configuration, err = gorums.NewConfiguration(m.Manager, v)
+			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
 			if err != nil {
 				return nil, err
 			}
@@ -65,7 +65,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 // Nodes returns a slice of available nodes on this manager.
 // IDs are returned in the order they were added at creation of the manager.
 func (m *Manager) Nodes() []*Node {
-	gorumsNodes := m.Manager.Nodes()
+	gorumsNodes := m.RawManager.Nodes()
 	nodes := make([]*Node, 0, len(gorumsNodes))
 	for _, n := range gorumsNodes {
 		nodes = append(nodes, &Node{n})

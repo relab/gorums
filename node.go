@@ -15,48 +15,51 @@ import (
 
 const nilAngleString = "<nil>"
 
-// Node encapsulates the state of a node on which a remote procedure call
+// RawNode encapsulates the state of a node on which a remote procedure call
 // can be performed.
-type Node struct {
+//
+// This struct is intended to be used by generated code.
+// You should use the generated `Node` struct instead.
+type RawNode struct {
 	// Only assigned at creation.
 	id     uint32
 	addr   string
 	conn   *grpc.ClientConn
 	cancel func()
-	mgr    *Manager
+	mgr    *RawManager
 
 	// the default channel
 	channel *channel
 }
 
-// NewNode returns a new node for the provided address.
-func NewNode(addr string) (*Node, error) {
+// NewRawNode returns a new node for the provided address.
+func NewRawNode(addr string) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
-	return &Node{
+	return &RawNode{
 		id:   h.Sum32(),
 		addr: tcpAddr.String(),
 	}, nil
 }
 
-// NewNodeWithID returns a new node for the provided address and id.
-func NewNodeWithID(addr string, id uint32) (*Node, error) {
+// NewRawNodeWithID returns a new node for the provided address and id.
+func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
 	}
-	return &Node{
+	return &RawNode{
 		id:   id,
 		addr: tcpAddr.String(),
 	}, nil
 }
 
-// connect to this node to facilitate gRPC calls and optionally client streams.
-func (n *Node) connect(mgr *Manager) error {
+// connect to this node and associate it with the manager.
+func (n *RawNode) connect(mgr *RawManager) error {
 	n.mgr = mgr
 	if n.mgr.opts.noConnect {
 		return nil
@@ -82,8 +85,8 @@ func (n *Node) connect(mgr *Manager) error {
 	return nil
 }
 
-// close this node for further calls and optionally stream.
-func (n *Node) close() error {
+// close this node.
+func (n *RawNode) close() error {
 	if n.conn == nil {
 		return nil
 	}
@@ -95,7 +98,7 @@ func (n *Node) close() error {
 }
 
 // ID returns the ID of n.
-func (n *Node) ID() uint32 {
+func (n *RawNode) ID() uint32 {
 	if n != nil {
 		return n.id
 	}
@@ -103,7 +106,7 @@ func (n *Node) ID() uint32 {
 }
 
 // Address returns network address of n.
-func (n *Node) Address() string {
+func (n *RawNode) Address() string {
 	if n != nil {
 		return n.addr
 	}
@@ -111,7 +114,7 @@ func (n *Node) Address() string {
 }
 
 // Host returns the network host of n.
-func (n *Node) Host() string {
+func (n *RawNode) Host() string {
 	if n == nil {
 		return nilAngleString
 	}
@@ -120,7 +123,7 @@ func (n *Node) Host() string {
 }
 
 // Port returns network port of n.
-func (n *Node) Port() string {
+func (n *RawNode) Port() string {
 	if n != nil {
 		_, port, _ := net.SplitHostPort(n.addr)
 		return port
@@ -128,7 +131,7 @@ func (n *Node) Port() string {
 	return nilAngleString
 }
 
-func (n *Node) String() string {
+func (n *RawNode) String() string {
 	if n != nil {
 		return fmt.Sprintf("addr: %s", n.addr)
 	}
@@ -137,7 +140,7 @@ func (n *Node) String() string {
 
 // FullString returns a more descriptive string representation of n that
 // includes id, network address and latency information.
-func (n *Node) FullString() string {
+func (n *RawNode) FullString() string {
 	if n != nil {
 		return fmt.Sprintf("node %d | addr: %s", n.id, n.addr)
 	}
@@ -145,26 +148,26 @@ func (n *Node) FullString() string {
 }
 
 // LastErr returns the last error encountered (if any) for this node.
-func (n *Node) LastErr() error {
+func (n *RawNode) LastErr() error {
 	return n.channel.lastErr()
 }
 
 // Latency returns the latency between the client and this node.
-func (n *Node) Latency() time.Duration {
+func (n *RawNode) Latency() time.Duration {
 	return n.channel.channelLatency()
 }
 
-type lessFunc func(n1, n2 *Node) bool
+type lessFunc func(n1, n2 *RawNode) bool
 
 // MultiSorter implements the Sort interface, sorting the nodes within.
 type MultiSorter struct {
-	nodes []*Node
+	nodes []*RawNode
 	less  []lessFunc
 }
 
 // Sort sorts the argument slice according to the less functions passed to
 // OrderedBy.
-func (ms *MultiSorter) Sort(nodes []*Node) {
+func (ms *MultiSorter) Sort(nodes []*RawNode) {
 	ms.nodes = nodes
 	sort.Sort(ms)
 }
@@ -214,13 +217,13 @@ func (ms *MultiSorter) Less(i, j int) bool {
 }
 
 // ID sorts nodes by their identifier in increasing order.
-var ID = func(n1, n2 *Node) bool {
+var ID = func(n1, n2 *RawNode) bool {
 	return n1.id < n2.id
 }
 
 // Port sorts nodes by their port number in increasing order.
 // Warning: This function may be removed in the future.
-var Port = func(n1, n2 *Node) bool {
+var Port = func(n1, n2 *RawNode) bool {
 	p1, _ := strconv.Atoi(n1.Port())
 	p2, _ := strconv.Atoi(n2.Port())
 	return p1 < p2
@@ -228,7 +231,7 @@ var Port = func(n1, n2 *Node) bool {
 
 // LastNodeError sorts nodes by their LastErr() status in increasing order. A
 // node with LastErr() != nil is larger than a node with LastErr() == nil.
-var LastNodeError = func(n1, n2 *Node) bool {
+var LastNodeError = func(n1, n2 *RawNode) bool {
 	if n1.channel.lastErr() != nil && n2.channel.lastErr() == nil {
 		return false
 	}

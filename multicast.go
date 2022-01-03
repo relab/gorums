@@ -10,7 +10,7 @@ import (
 // By default this function returns once the message has been sent to all nodes.
 // Providing the call option WithNoSendWaiting, the function may return
 // before the message has been sent.
-func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
+func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 	sentMsgs := 0

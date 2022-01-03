@@ -56,7 +56,7 @@ var correctableBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	corr := c.Configuration.CorrectableCall(ctx, cd)
+	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
 	return &{{$correctableOut}}{corr}
 }
 `
