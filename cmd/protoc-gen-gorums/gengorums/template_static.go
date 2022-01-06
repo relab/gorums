@@ -15,6 +15,7 @@ var staticCode = `// A Configuration represents a static set of nodes on which q
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
+	nodes []*Node
 	qspec QuorumSpec
 }
 
@@ -37,12 +38,16 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) *Con
 
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
+//
+// NOTE: mutating the returned slice is not supported.
 func (c *Configuration) Nodes() []*Node {
-	nodes := make([]*Node, 0, c.Size())
-	for _, n := range c.RawConfiguration {
-		nodes = append(nodes, &Node{n})
+	if c.nodes == nil {
+		c.nodes = make([]*Node, 0, c.Size())
+		for _, n := range c.RawConfiguration {
+			c.nodes = append(c.nodes, &Node{n})
+		}
 	}
-	return nodes
+	return c.nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
