@@ -60,7 +60,7 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 	for i := range srvs {
 		srvs[i].name = addrs[i]
 	}
-	cfg, err := mgr.NewConfiguration(newQSpec(cfgSize), gorums.WithNodeList(addrs))
+	cfg, err := mgr.NewConfiguration(newQSpec(cfgSize), gorums.WithNodeList[Node](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

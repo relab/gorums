@@ -10,7 +10,7 @@ import (
 // By default this function returns once the message has been sent to all nodes.
 // Providing the call option WithNoSendWaiting, the function may return
 // before the message has been sent.
-func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
+func (c RawConfiguration[NODES]) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 	sentMsgs := 0
@@ -22,12 +22,12 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
+			msg = d.PerNodeArgFn(d.Message, n.AsRaw().id)
 			if !msg.ProtoReflect().IsValid() {
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
+		n.AsRaw().channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
 		sentMsgs++
 	}
 

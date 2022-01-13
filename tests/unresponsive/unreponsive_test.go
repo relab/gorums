@@ -35,7 +35,7 @@ func TestUnresponsive(t *testing.T) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList[Node](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

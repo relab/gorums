@@ -69,7 +69,7 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{}, gorums.WithNodeMap(nodeMap))
+	cfg, err := mgr.NewConfiguration(&testQSpec{}, gorums.WithNodeMap[oneway.Node](nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}

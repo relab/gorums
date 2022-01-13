@@ -17,6 +17,14 @@ var (
 	nodeMap = map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
 )
 
+type dummyNode struct {
+	*gorums.RawNode
+}
+
+func (n dummyNode) AsRaw() *gorums.RawNode {
+	return n.RawNode
+}
+
 func TestManagerLogging(t *testing.T) {
 	var (
 		buf    bytes.Buffer
@@ -32,7 +40,7 @@ func TestManagerLogging(t *testing.T) {
 
 func TestManagerAddNode(t *testing.T) {
 	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap(nodeMap))
+	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap[dummyNode](nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +89,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	)
 	defer mgr.Close()
 
-	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs[:2]))
+	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[dummyNode](addrs[:2]))
 	if err != nil {
 		t.Fatal(err)
 	}

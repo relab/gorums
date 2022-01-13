@@ -100,7 +100,7 @@ type correctableCallState struct {
 // CorrectableCall starts a new correctable quorum call and returns a new Correctable object.
 //
 // This method should only be used by generated code.
-func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
+func (c RawConfiguration[NODE]) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 
@@ -108,13 +108,13 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
+			msg = d.PerNodeArgFn(d.Message, n.AsRaw().id)
 			if !msg.ProtoReflect().IsValid() {
 				expectedReplies--
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan, d.ServerStream)
+		n.AsRaw().channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan, d.ServerStream)
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
@@ -129,7 +129,7 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 	return corr
 }
 
-func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
+func (c RawConfiguration[NODE]) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
 	var (
 		resp    protoreflect.ProtoMessage
 		errs    []Error
@@ -141,7 +141,7 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 
 	if state.data.ServerStream {
 		for _, n := range c {
-			defer n.channel.deleteRouter(state.md.MessageID)
+			defer n.AsRaw().channel.deleteRouter(state.md.MessageID)
 		}
 	}
 

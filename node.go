@@ -32,6 +32,11 @@ type RawNode struct {
 	channel *channel
 }
 
+type AsRawNode interface {
+	~struct{ *RawNode }
+	AsRaw() *RawNode
+}
+
 // NewRawNode returns a new node for the provided address.
 func NewRawNode(addr string) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
@@ -157,36 +162,36 @@ func (n *RawNode) Latency() time.Duration {
 	return n.channel.channelLatency()
 }
 
-type lessFunc func(n1, n2 *RawNode) bool
+type lessFunc[NODE AsRawNode] func(n1, n2 NODE) bool
 
 // MultiSorter implements the Sort interface, sorting the nodes within.
-type MultiSorter struct {
-	nodes []*RawNode
-	less  []lessFunc
+type MultiSorter[NODE AsRawNode] struct {
+	nodes []NODE
+	less  []lessFunc[NODE]
 }
 
 // Sort sorts the argument slice according to the less functions passed to
 // OrderedBy.
-func (ms *MultiSorter) Sort(nodes []*RawNode) {
+func (ms *MultiSorter[NODE]) Sort(nodes []NODE) {
 	ms.nodes = nodes
 	sort.Sort(ms)
 }
 
 // OrderedBy returns a Sorter that sorts using the less functions, in order.
 // Call its Sort method to sort the data.
-func OrderedBy(less ...lessFunc) *MultiSorter {
-	return &MultiSorter{
+func OrderedBy[NODE AsRawNode](less ...lessFunc[NODE]) *MultiSorter[NODE] {
+	return &MultiSorter[NODE]{
 		less: less,
 	}
 }
 
 // Len is part of sort.Interface.
-func (ms *MultiSorter) Len() int {
+func (ms *MultiSorter[NODE]) Len() int {
 	return len(ms.nodes)
 }
 
 // Swap is part of sort.Interface.
-func (ms *MultiSorter) Swap(i, j int) {
+func (ms *MultiSorter[NODE]) Swap(i, j int) {
 	ms.nodes[i], ms.nodes[j] = ms.nodes[j], ms.nodes[i]
 }
 
@@ -195,7 +200,7 @@ func (ms *MultiSorter) Swap(i, j int) {
 // Less. Note that it can call the less functions twice per call. We
 // could change the functions to return -1, 0, 1 and reduce the
 // number of calls for greater efficiency: an exercise for the reader.
-func (ms *MultiSorter) Less(i, j int) bool {
+func (ms *MultiSorter[NODE]) Less(i, j int) bool {
 	p, q := ms.nodes[i], ms.nodes[j]
 	// Try all but the last comparison.
 	var k int
@@ -217,22 +222,22 @@ func (ms *MultiSorter) Less(i, j int) bool {
 }
 
 // ID sorts nodes by their identifier in increasing order.
-var ID = func(n1, n2 *RawNode) bool {
-	return n1.id < n2.id
+func ID[NODE AsRawNode](n1, n2 NODE) bool {
+	return n1.AsRaw().id < n2.AsRaw().id
 }
 
 // Port sorts nodes by their port number in increasing order.
 // Warning: This function may be removed in the future.
-var Port = func(n1, n2 *RawNode) bool {
-	p1, _ := strconv.Atoi(n1.Port())
-	p2, _ := strconv.Atoi(n2.Port())
+func Port[NODE AsRawNode](n1, n2 NODE) bool {
+	p1, _ := strconv.Atoi(n1.AsRaw().Port())
+	p2, _ := strconv.Atoi(n2.AsRaw().Port())
 	return p1 < p2
 }
 
 // LastNodeError sorts nodes by their LastErr() status in increasing order. A
 // node with LastErr() != nil is larger than a node with LastErr() == nil.
-var LastNodeError = func(n1, n2 *RawNode) bool {
-	if n1.channel.lastErr() != nil && n2.channel.lastErr() == nil {
+func LastNodeError[NODE AsRawNode](n1, n2 NODE) bool {
+	if n1.AsRaw().channel.lastErr() != nil && n2.AsRaw().channel.lastErr() == nil {
 		return false
 	}
 	return true

@@ -42,7 +42,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	c = &Configuration{}
 	for _, opt := range opts {
 		switch v := opt.(type) {
-		case gorums.NodeListOption:
+		case gorums.NodeListOption[Node]:
 			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
 			if err != nil {
 				return nil, err

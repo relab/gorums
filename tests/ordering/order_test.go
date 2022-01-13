@@ -92,7 +92,7 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList(addrs))
+	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList[Node](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(len(nodes))
 		for _, node := range nodes {
-			go func(node *Node) {
+			go func(node Node) {
 				defer wg.Done()
 				resp, err := node.UnaryRPC(context.Background(), &Request{Num: uint64(i)})
 				if err != nil {

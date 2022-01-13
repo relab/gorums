@@ -7,3 +7,7 @@ import "github.com/relab/gorums"
 type Node struct {
 	*gorums.RawNode
 }
+
+func (n Node) AsRaw() *gorums.RawNode {
+	return n.RawNode
+}

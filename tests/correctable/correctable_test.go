@@ -30,7 +30,7 @@ func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration
 		),
 	)
 
-	cfg, err := mgr.NewConfiguration(qspec{div, n}, gorums.WithNodeList(addrs))
+	cfg, err := mgr.NewConfiguration(qspec{div, n}, gorums.WithNodeList[Node](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
