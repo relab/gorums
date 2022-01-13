@@ -24,7 +24,7 @@ func runClient(addresses []string) {
 		),
 	)
 	// create configuration containing all nodes
-	cfg, err := mgr.NewConfiguration(&qspec{cfgSize: len(addresses)}, gorums.WithNodeList(addresses))
+	cfg, err := mgr.NewConfiguration(&qspec{cfgSize: len(addresses)}, gorums.WithNodeList[proto.Node](addresses))
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -210,7 +210,7 @@ func (r repl) qcCfg(args []string) {
 	}
 }
 
-func (repl) readRPC(args []string, node *proto.Node) {
+func (repl) readRPC(args []string, node proto.Node) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -229,7 +229,7 @@ func (repl) readRPC(args []string, node *proto.Node) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeRPC(args []string, node *proto.Node) {
+func (repl) writeRPC(args []string, node proto.Node) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
@@ -318,7 +318,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 		for _, node := range r.mgr.Nodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
+		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList[proto.Node](nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -341,7 +341,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
+		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList[proto.Node](selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

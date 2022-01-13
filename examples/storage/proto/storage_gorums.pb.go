@@ -25,8 +25,7 @@ const (
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
-	gorums.RawConfiguration
-	nodes []*Node
+	gorums.RawConfiguration[Node]
 	qspec QuorumSpec
 }
 
@@ -35,40 +34,34 @@ type Configuration struct {
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
 //  cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //  cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) *Configuration {
+func ConfigurationFromRaw[NODE gorums.AsRawNode](rawCfg gorums.RawConfiguration[NODE], qspec QuorumSpec) Configuration {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
 	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
 		panic("QuorumSpec may not be nil")
 	}
-	return &Configuration{
-		RawConfiguration: rawCfg,
+
+	otherNodes := rawCfg.Nodes()
+	ourNodes := make([]Node, rawCfg.Size())
+
+	for i, node := range otherNodes {
+		ourNodes[i] = Node{node.AsRaw()}
+	}
+
+	return Configuration{
+		RawConfiguration: gorums.NewRawConfigurationFromNodeSlice(ourNodes),
 		qspec:            qspec,
 	}
 }
 
-// Nodes returns a slice of each available node. IDs are returned in the same
-// order as they were provided in the creation of the Manager.
-//
-// NOTE: mutating the returned slice is not supported.
-func (c *Configuration) Nodes() []*Node {
-	if c.nodes == nil {
-		c.nodes = make([]*Node, 0, c.Size())
-		for _, n := range c.RawConfiguration {
-			c.nodes = append(c.nodes, &Node{n})
-		}
-	}
-	return c.nodes
-}
-
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+func (c Configuration) And(d *Configuration) gorums.NodeListOption[Node] {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+func (c Configuration) Except(rm *Configuration) gorums.NodeListOption[Node] {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
 
@@ -107,7 +100,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	c = &Configuration{}
 	for _, opt := range opts {
 		switch v := opt.(type) {
-		case gorums.NodeListOption:
+		case gorums.NodeListOption[Node]:
 			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
 			if err != nil {
 				return nil, err
@@ -142,6 +135,10 @@ func (m *Manager) Nodes() []*Node {
 // can be performed.
 type Node struct {
 	*gorums.RawNode
+}
+
+func (n Node) AsRaw() *gorums.RawNode {
+	return n.RawNode
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
