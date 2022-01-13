@@ -45,7 +45,7 @@ func TestTreeConfiguration(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%d", len(test.nodeIDs)), func(t *testing.T) {
-			mgr := gorums.NewManager(gorums.WithNoConnect())
+			mgr := gorums.NewRawManager(gorums.WithNoConnect())
 			cfgs, err := gorums.SubConfigurations(mgr,
 				gorums.WithTreeConfigurations(branchFactor, test.id, gorums.WithNodeMap(test.nodeIDs)))
 			if err != nil {

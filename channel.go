@@ -52,7 +52,7 @@ type channel struct {
 	responseMut     sync.Mutex
 }
 
-func newChannel(n *Node) *channel {
+func newChannel(n *RawNode) *channel {
 	return &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,

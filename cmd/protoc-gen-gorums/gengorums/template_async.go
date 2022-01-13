@@ -47,7 +47,7 @@ var asyncBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	fut := c.Configuration.AsyncCall(ctx, cd)
+	fut := c.RawConfiguration.AsyncCall(ctx, cd)
 	return &{{$asyncOut}}{fut}
 }
 `

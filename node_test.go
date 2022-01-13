@@ -8,7 +8,7 @@ import (
 )
 
 func TestNodeSort(t *testing.T) {
-	nodes := []*Node{
+	nodes := []*RawNode{
 		{
 			id: 100,
 			channel: &channel{
@@ -58,7 +58,7 @@ func TestNodeSort(t *testing.T) {
 	}
 }
 
-func printNodes(t *testing.T, nodes []*Node) {
+func printNodes(t *testing.T, nodes []*RawNode) {
 	t.Helper()
 	for i, n := range nodes {
 		nodeStr := fmt.Sprintf(

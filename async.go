@@ -44,7 +44,7 @@ type asyncCallState struct {
 // AsyncCall starts an asynchronous quorum call, returning an Async object that can be used to retrieve the results.
 //
 // This function should only be used by generated code.
-func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
+func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 	replyChan := make(chan response, expectedReplies)
@@ -73,7 +73,7 @@ func (c Configuration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 	return fut
 }
 
-func (c Configuration) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
+func (c RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
 	defer close(fut.c)
 
 	var (
