@@ -92,7 +92,7 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList[Node](addrs))
+	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

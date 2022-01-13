@@ -40,7 +40,7 @@ func TestManagerLogging(t *testing.T) {
 
 func TestManagerAddNode(t *testing.T) {
 	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap[dummyNode](nodeMap))
+	_, err := gorums.NewRawConfiguration[dummyNode](mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	)
 	defer mgr.Close()
 
-	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[dummyNode](addrs[:2]))
+	_, err := gorums.NewRawConfiguration[dummyNode](mgr, gorums.WithNodeList(addrs[:2]))
 	if err != nil {
 		t.Fatal(err)
 	}

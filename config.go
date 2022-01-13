@@ -10,20 +10,28 @@ import (
 //
 // This type is intended to be used by generated code.
 // You should use the generated `Configuration` type instead.
-type RawConfiguration[NODE AsRawNode] []NODE
+type RawConfiguration[NODE RawNodeConstraint] []NODE
 
 // NewRawConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func NewRawConfiguration[NODE AsRawNode](mgr *RawManager, opt NodeListOption[NODE]) (nodes RawConfiguration[NODE], err error) {
+func NewRawConfiguration[NODE RawNodeConstraint](mgr *RawManager, opt NodeListOption) (nodes RawConfiguration[NODE], err error) {
 	if opt == nil {
 		return nil, ConfigCreationError(fmt.Errorf("missing required node list"))
 	}
-	return opt.newConfig(mgr)
+	rawNodes, err := opt.newConfig(mgr)
+	if err != nil {
+		return nil, ConfigCreationError(err)
+	}
+	genNodes := make([]NODE, 0, len(rawNodes))
+	for _, n := range rawNodes {
+		genNodes = append(genNodes, NODE{n})
+	}
+	return NewRawConfigurationFromNodeSlice(genNodes), nil
 }
 
-func NewRawConfigurationFromNodeSlice[NODE AsRawNode](nodes []NODE) RawConfiguration[NODE] {
+func NewRawConfigurationFromNodeSlice[NODE RawNodeConstraint](nodes []NODE) RawConfiguration[NODE] {
 	return nodes
 }
 
@@ -64,4 +72,12 @@ func (c RawConfiguration[NODES]) Equal(b RawConfiguration[NODES]) bool {
 // shortcut to the manager through one of the nodes
 func (c RawConfiguration[NODES]) getMsgID() uint64 {
 	return c[0].AsRaw().mgr.getMsgID()
+}
+
+func (c RawConfiguration[NODES]) rawNodes() (nodes []*RawNode) {
+	nodes = make([]*RawNode, 0, len(c))
+	for _, n := range c {
+		nodes = append(nodes, n.AsRaw())
+	}
+	return nodes
 }

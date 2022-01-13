@@ -16,7 +16,7 @@ type Configuration struct {
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
 //  cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //  cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw[NODE gorums.AsRawNode](rawCfg gorums.RawConfiguration[NODE], qspec QuorumSpec) Configuration {
+func ConfigurationFromRaw[NODE gorums.RawNodeConstraint](rawCfg gorums.RawConfiguration[NODE], qspec QuorumSpec) Configuration {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
 	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
@@ -37,12 +37,12 @@ func ConfigurationFromRaw[NODE gorums.AsRawNode](rawCfg gorums.RawConfiguration[
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption[Node] {
+func (c Configuration) And(d *Configuration) gorums.NodeListOption {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption[Node] {
+func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
