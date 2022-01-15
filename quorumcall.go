@@ -22,12 +22,12 @@ type QuorumCallData struct {
 // QuorumCall performs a quorum call on the configuration.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration[NODES]) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
-	expectedReplies := len(c)
+func (c RawConfiguration[NODES, QSPEC]) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
+	expectedReplies := len(c.nodes)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 
 	replyChan := make(chan response, expectedReplies)
-	for _, n := range c {
+	for _, n := range c.nodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.AsRaw().id)

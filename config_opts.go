@@ -124,7 +124,7 @@ func (o addNodes[NODE]) newConfig(mgr *RawManager) (nodes []*RawNode, err error)
 
 // WithNewNodes returns a NodeListOption that can be used to create a new configuration
 // combining c and the new nodes.
-func (c RawConfiguration[NODE]) WithNewNodes(new NodeListOption) NodeListOption {
+func (c RawConfiguration[NODE, QSPEC]) WithNewNodes(new NodeListOption) NodeListOption {
 	return &addNodes[NODE]{old: c.rawNodes(), new: new}
 }
 
@@ -148,19 +148,19 @@ func (o addConfig) newConfig(mgr *RawManager) (nodes []*RawNode, err error) {
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c RawConfiguration[NODE]) And(d RawConfiguration[NODE]) NodeListOption {
+func (c RawConfiguration[NODE, QSPEC]) And(d RawConfiguration[NODE, QSPEC]) NodeListOption {
 	return &addConfig{old: c.rawNodes(), add: d.rawNodes()}
 }
 
 // WithoutNodes returns a NodeListOption that can be used to create a new configuration
 // from c without the given node IDs.
-func (c RawConfiguration[NODE]) WithoutNodes(ids ...uint32) NodeListOption {
+func (c RawConfiguration[NODE, QSPEC]) WithoutNodes(ids ...uint32) NodeListOption {
 	rmIDs := make(map[uint32]bool)
 	for _, id := range ids {
 		rmIDs[id] = true
 	}
-	keepIDs := make([]uint32, 0, len(c))
-	for _, cNode := range c {
+	keepIDs := make([]uint32, 0, len(c.nodes))
+	for _, cNode := range c.nodes {
 		if !rmIDs[cNode.AsRaw().id] {
 			keepIDs = append(keepIDs, cNode.AsRaw().id)
 		}
@@ -170,13 +170,13 @@ func (c RawConfiguration[NODE]) WithoutNodes(ids ...uint32) NodeListOption {
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c RawConfiguration[NODE]) Except(rm RawConfiguration[NODE]) NodeListOption {
+func (c RawConfiguration[NODE, QSPEC]) Except(rm RawConfiguration[NODE, QSPEC]) NodeListOption {
 	rmIDs := make(map[uint32]bool)
-	for _, rmNode := range rm {
+	for _, rmNode := range rm.nodes {
 		rmIDs[rmNode.AsRaw().id] = true
 	}
-	keepIDs := make([]uint32, 0, len(c))
-	for _, cNode := range c {
+	keepIDs := make([]uint32, 0, len(c.nodes))
+	for _, cNode := range c.nodes {
 		if !rmIDs[cNode.AsRaw().id] {
 			keepIDs = append(keepIDs, cNode.AsRaw().id)
 		}

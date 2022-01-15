@@ -53,11 +53,11 @@ The command performs the write quorum call on node 0 and 2
 
 type repl struct {
 	mgr  *proto.Manager
-	cfg  *proto.Configuration
+	cfg  proto.Configuration
 	term *term.Terminal
 }
 
-func newRepl(mgr *proto.Manager, cfg *proto.Configuration) *repl {
+func newRepl(mgr *proto.Manager, cfg proto.Configuration) *repl {
 	return &repl{
 		mgr: mgr,
 		cfg: cfg,
@@ -90,7 +90,7 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the manager and configuration.
-func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
+func Repl(mgr *proto.Manager, defaultCfg proto.Configuration) {
 	r := newRepl(mgr, defaultCfg)
 
 	fmt.Println(help)
@@ -198,8 +198,8 @@ func (r repl) qcCfg(args []string) {
 		fmt.Println("'cfg' requires a configuration and an operation.")
 		return
 	}
-	cfg := r.parseConfiguration(args[0])
-	if cfg == nil {
+	cfg, ok := r.parseConfiguration(args[0])
+	if !ok {
 		return
 	}
 	switch args[1] {
@@ -248,7 +248,7 @@ func (repl) writeRPC(args []string, node proto.Node) {
 	fmt.Println("Write OK")
 }
 
-func (repl) readQC(args []string, cfg *proto.Configuration) {
+func (repl) readQC(args []string, cfg proto.Configuration) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -267,7 +267,7 @@ func (repl) readQC(args []string, cfg *proto.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeQC(args []string, cfg *proto.Configuration) {
+func (repl) writeQC(args []string, cfg proto.Configuration) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
@@ -286,7 +286,7 @@ func (repl) writeQC(args []string, cfg *proto.Configuration) {
 	fmt.Println("Write OK")
 }
 
-func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
+func (r repl) parseConfiguration(cfgStr string) (cfg proto.Configuration, ok bool) {
 	// configuration using range syntax
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
@@ -298,7 +298,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 			start, err = strconv.Atoi(cfgStr[:i])
 			if err != nil {
 				fmt.Printf("Failed to parse configuration: %v\n", err)
-				return nil
+				return cfg, false
 			}
 		}
 		if i == len(cfgStr)-1 {
@@ -307,12 +307,12 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 			stop, err = strconv.Atoi(cfgStr[i+1:])
 			if err != nil {
 				fmt.Printf("Failed to parse configuration: %v\n", err)
-				return nil
+				return cfg, false
 			}
 		}
 		if start >= stop || start < 0 || stop >= numNodes {
 			fmt.Println("Invalid configuration.")
-			return nil
+			return cfg, false
 		}
 		nodes := make([]string, 0)
 		for _, node := range r.mgr.Nodes()[start:stop] {
@@ -321,9 +321,9 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
-			return nil
+			return cfg, false
 		}
-		return cfg
+		return cfg, true
 	}
 	// configuration using list of indices
 	if indices := strings.Split(cfgStr, ","); len(indices) > 0 {
@@ -333,21 +333,21 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
 			i, err := strconv.Atoi(index)
 			if err != nil {
 				fmt.Printf("Failed to parse configuration: %v\n", err)
-				return nil
+				return cfg, false
 			}
 			if i < 0 || i >= len(nodes) {
 				fmt.Println("Invalid configuration.")
-				return nil
+				return cfg, false
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
 		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
-			return nil
+			return cfg, false
 		}
-		return cfg
+		return cfg, true
 	}
 	fmt.Println("Invalid configuration.")
-	return nil
+	return cfg, false
 }

@@ -35,31 +35,30 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
+func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c Configuration, err error) {
 	if len(opts) < 1 || len(opts) > 2 {
-		return nil, fmt.Errorf("wrong number of options: %d", len(opts))
+		return c, gorums.ConfigCreationError(fmt.Errorf("wrong number of options: %d", len(opts)))
 	}
-	c = &Configuration{}
+	var (
+		qspec QuorumSpec
+		nodes gorums.NodeListOption
+	)
 	for _, opt := range opts {
 		switch v := opt.(type) {
 		case gorums.NodeListOption:
-			c.RawConfiguration, err = gorums.NewRawConfiguration[Node](m.RawManager, v)
-			if err != nil {
-				return nil, err
-			}
+			nodes = v
 		case QuorumSpec:
 			// Must be last since v may match QuorumSpec if it is interface{}
-			c.qspec = v
+			qspec = v
 		default:
-			return nil, fmt.Errorf("unknown option type: %v", v)
+			return c, gorums.ConfigCreationError(fmt.Errorf("unknown option type: %v", v))
 		}
 	}
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("missing required QuorumSpec")
+	rawCfg, err := gorums.NewRawConfiguration[Node](m.RawManager, qspec, nodes)
+	if err != nil {
+		return c, gorums.ConfigCreationError(err)
 	}
-	return c, nil
+	return ConfigurationFromRaw(rawCfg, qspec), nil
 }
 
 // Nodes returns a slice of available nodes on this manager.

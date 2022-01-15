@@ -53,7 +53,7 @@ var quorumCallBody = `	cd := {{$callData}}{
 		for k, v := range replies {
 			r[k] = v.(*{{$out}})
 		}
-		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
+		return c.AsRaw().QSpec().{{$method}}QF(req.(*{{$in}}), r)
 	}
 {{- if hasPerNodeArg .Method}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
@@ -61,7 +61,7 @@ var quorumCallBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
+	res, err := c.AsRaw().QuorumCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

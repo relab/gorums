@@ -100,12 +100,12 @@ type correctableCallState struct {
 // CorrectableCall starts a new correctable quorum call and returns a new Correctable object.
 //
 // This method should only be used by generated code.
-func (c RawConfiguration[NODE]) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
-	expectedReplies := len(c)
+func (c RawConfiguration[NODE, QSPEC]) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
+	expectedReplies := len(c.nodes)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 
 	replyChan := make(chan response, expectedReplies)
-	for _, n := range c {
+	for _, n := range c.nodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.AsRaw().id)
@@ -129,7 +129,7 @@ func (c RawConfiguration[NODE]) CorrectableCall(ctx context.Context, d Correctab
 	return corr
 }
 
-func (c RawConfiguration[NODE]) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
+func (c RawConfiguration[NODE, QSPEC]) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
 	var (
 		resp    protoreflect.ProtoMessage
 		errs    []Error
@@ -140,7 +140,7 @@ func (c RawConfiguration[NODE]) handleCorrectableCall(ctx context.Context, corr 
 	)
 
 	if state.data.ServerStream {
-		for _, n := range c {
+		for _, n := range c.nodes {
 			defer n.AsRaw().channel.deleteRouter(state.md.MessageID)
 		}
 	}

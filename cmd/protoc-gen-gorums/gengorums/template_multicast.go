@@ -32,7 +32,7 @@ var multicastBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+	c.AsRaw().Multicast(ctx, cd, opts...)
 }
 `
 

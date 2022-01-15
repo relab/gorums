@@ -46,7 +46,7 @@ func (q cfgQSpec) ConfigQF(_ *Request, replies map[uint32]*Response) (*Response,
 // setup returns a new configuration of cfgSize and a corresponding teardown function.
 // Calling setup multiple times will return a different configuration with different
 // sets of nodes.
-func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg Configuration, teardown func()) {
 	t.Helper()
 	srvs := make([]*cfgSrv, cfgSize)
 	for i := range srvs {
@@ -74,7 +74,7 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	callRPC := func(cfg *Configuration) {
+	callRPC := func(cfg Configuration) {
 		for i := 0; i < 5; i++ {
 			resp, err := cfg.Config(context.Background(), &Request{Num: uint64(i)})
 			if err != nil {

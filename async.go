@@ -44,12 +44,12 @@ type asyncCallState struct {
 // AsyncCall starts an asynchronous quorum call, returning an Async object that can be used to retrieve the results.
 //
 // This function should only be used by generated code.
-func (c RawConfiguration[NODE]) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
-	expectedReplies := len(c)
+func (c RawConfiguration[NODE, QSPEC]) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
+	expectedReplies := len(c.nodes)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
 	replyChan := make(chan response, expectedReplies)
 
-	for _, n := range c {
+	for _, n := range c.nodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.AsRaw().id)
@@ -73,7 +73,7 @@ func (c RawConfiguration[NODE]) AsyncCall(ctx context.Context, d QuorumCallData)
 	return fut
 }
 
-func (c RawConfiguration[NODE]) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
+func (c RawConfiguration[NODE, QSPEC]) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
 	defer close(fut.c)
 
 	var (

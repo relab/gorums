@@ -45,7 +45,7 @@ func (s *onewaySrv) MulticastPerNode(ctx gorums.ServerCtx, r *oneway.Request) {
 
 type testQSpec struct{}
 
-func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*onewaySrv, teardown func()) {
+func setup(t testing.TB, cfgSize int) (cfg oneway.Configuration, srvs []*onewaySrv, teardown func()) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := 0; i < cfgSize; i++ {
@@ -99,7 +99,7 @@ func TestOnewayCalls(t *testing.T) {
 		{name: "MulticastNoSendWaiting", calls: numCalls, servers: 9, sendWait: false},
 	}
 
-	f := func(c *oneway.Configuration) func(context.Context, *oneway.Request, ...gorums.CallOption) {
+	f := func(c oneway.Configuration) func(context.Context, *oneway.Request, ...gorums.CallOption) {
 		if c.Size() == 1 {
 			return c.Nodes()[0].Unicast
 		}

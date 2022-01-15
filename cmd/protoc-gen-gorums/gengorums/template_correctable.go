@@ -48,7 +48,7 @@ var correctableBody = `	cd := {{$callData}}{
 		for k, v := range replies {
 			r[k] = v.(*{{$out}})
 		}
-		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
+		return c.AsRaw().QSpec().{{$method}}QF(req.(*{{$in}}), r)
 	}
 {{- if hasPerNodeArg .Method}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
@@ -56,7 +56,7 @@ var correctableBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
+	corr := c.AsRaw().CorrectableCall(ctx, cd)
 	return &{{$correctableOut}}{corr}
 }
 `
