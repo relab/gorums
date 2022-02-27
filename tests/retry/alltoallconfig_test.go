@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
-	sync "sync"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,11 +14,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-var replicaCount = flag.Int("replicaCount", 80, "number of replicas to create all-to-all communication")
-var waitTime = flag.Int("waitTime", 2, "Seconds to wait before forming the configuration")
-var wg sync.WaitGroup
+var (
+	replicaCount = flag.Int("replicaCount", 80, "number of replicas to create all-to-all communication")
+	waitTime     = flag.Int("waitTime", 2, "Seconds to wait before forming the configuration")
+	wg           sync.WaitGroup
+)
 
-func TestAlltoAllConfigurationStyle1(t *testing.T) {
+func TestAllToAllConfigurationStyle1(t *testing.T) {
 	nodeMap := make(map[string]uint32)
 	replicaList := make([]*replica, 0)
 	for i := 1; i <= *replicaCount; i++ {
@@ -35,13 +37,12 @@ func TestAlltoAllConfigurationStyle1(t *testing.T) {
 		go replica.startServerAndCreateConfig(nodeMap, t)
 	}
 	wg.Wait()
-	log.Println("TestAlltoAllConfigurationStyle1 test completed")
+	log.Println("TestAllToAllConfigurationStyle1 test completed")
 }
 
-func TestAlltoAllConfigurationStyle2(t *testing.T) {
+func TestAllToAllConfigurationStyle2(t *testing.T) {
 	replicas := createReplicas()
 	nodeMap := make(map[string]uint32)
-
 	for _, replica := range replicas {
 		nodeMap[replica.address] = replica.id
 	}
@@ -50,8 +51,7 @@ func TestAlltoAllConfigurationStyle2(t *testing.T) {
 		go replica.createConfiguration(nodeMap, t)
 	}
 	wg.Wait()
-	log.Println("TestAlltoAllConfigurationStyle2 test completed")
-
+	log.Println("TestAllToAllConfigurationStyle2 test completed")
 }
 
 func createReplicas() []*replica {
@@ -93,9 +93,8 @@ func (r *replica) createConfiguration(nodeMap map[string]uint32, t *testing.T) {
 	r.server = srv
 	RegisterSampleServer(srv, r)
 	go func() {
-		err := srv.Serve(r.lis)
-		if err != nil {
-			log.Printf("Node %s failed to serve\n", r.address)
+		if err := srv.Serve(r.lis); err != nil {
+			log.Printf("Node %s failed to serve: %v\n", r.address, err)
 			t.Fail()
 		}
 	}()
@@ -109,18 +108,16 @@ func (r *replica) createConfiguration(nodeMap map[string]uint32, t *testing.T) {
 	qspec := qspec{}
 	_, err := mgr.NewConfiguration(qspec, gorums.WithNodeMap(nodeMap))
 	if err != nil {
-		log.Printf("unable to create the configuration Error: %v\n", err)
-		t.Fail()
+		t.Fatalf("Failed to create the configuration: %v", err)
 	}
 	wg.Done()
-
 }
 
 func (r *replica) startListener(t *testing.T) {
+	t.Helper()
 	lis, err := net.Listen("tcp", r.address)
 	if err != nil {
-		log.Fatalf("Failed to listen on '%s': %v\n", r.address, err)
-		t.Fail()
+		t.Fatalf("Failed to listen on '%s': %v", r.address, err)
 	}
 	r.lis = lis
 }
