@@ -3,13 +3,12 @@ package retry
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
 	gorums "github.com/relab/gorums"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -17,7 +16,6 @@ import (
 var (
 	replicaCount = flag.Int("replicaCount", 80, "number of replicas to create all-to-all communication")
 	waitTime     = flag.Int("waitTime", 2, "Seconds to wait before forming the configuration")
-	wg           sync.WaitGroup
 )
 
 func TestAllToAllConfigurationStyle1(t *testing.T) {
@@ -32,12 +30,21 @@ func TestAllToAllConfigurationStyle1(t *testing.T) {
 		}
 		replicaList = append(replicaList, &replica)
 	}
-	wg.Add(*replicaCount)
+	g := new(errgroup.Group)
 	for _, replica := range replicaList {
-		go replica.startServerAndCreateConfig(nodeMap, t)
+		replica := replica
+		g.Go(func() error {
+			err := replica.startListener()
+			if err != nil {
+				return err
+			}
+			return replica.createConfiguration(nodeMap)
+		})
 	}
-	wg.Wait()
-	log.Println("TestAllToAllConfigurationStyle1 test completed")
+	if err := g.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Successful TestAllToAllConfigurationStyle1 completion")
 }
 
 func TestAllToAllConfigurationStyle2(t *testing.T) {
@@ -46,12 +53,15 @@ func TestAllToAllConfigurationStyle2(t *testing.T) {
 	for _, replica := range replicas {
 		nodeMap[replica.address] = replica.id
 	}
-	wg.Add(*replicaCount)
+	g := new(errgroup.Group)
 	for _, replica := range replicas {
-		go replica.createConfiguration(nodeMap, t)
+		replica := replica
+		g.Go(func() error { return replica.createConfiguration(nodeMap) })
 	}
-	wg.Wait()
-	log.Println("TestAllToAllConfigurationStyle2 test completed")
+	if err := g.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Successful TestAllToAllConfigurationStyle2 completion")
 }
 
 func createReplicas() []*replica {
@@ -88,14 +98,14 @@ func (r replica) WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response 
 	return &WriteResponse{New: true}, nil
 }
 
-func (r *replica) createConfiguration(nodeMap map[string]uint32, t *testing.T) {
+func (r *replica) createConfiguration(nodeMap map[string]uint32) error {
 	srv := gorums.NewServer()
 	r.server = srv
 	RegisterSampleServer(srv, r)
+	errChan := make(chan error)
 	go func() {
 		if err := srv.Serve(r.lis); err != nil {
-			log.Printf("Node %s failed to serve: %v\n", r.address, err)
-			t.Fail()
+			errChan <- fmt.Errorf("failed to serve at %q: %w", r.address, err)
 		}
 	}()
 	time.Sleep(time.Duration(*waitTime) * time.Second)
@@ -108,23 +118,20 @@ func (r *replica) createConfiguration(nodeMap map[string]uint32, t *testing.T) {
 	qspec := qspec{}
 	_, err := mgr.NewConfiguration(qspec, gorums.WithNodeMap(nodeMap))
 	if err != nil {
-		t.Fatalf("Failed to create the configuration: %v", err)
+		return err
 	}
-	wg.Done()
+	close(errChan)
+	// since errChan is closed, this should either return an error or nil
+	return <-errChan
 }
 
-func (r *replica) startListener(t *testing.T) {
-	t.Helper()
+func (r *replica) startListener() error {
 	lis, err := net.Listen("tcp", r.address)
 	if err != nil {
-		t.Fatalf("Failed to listen on '%s': %v", r.address, err)
+		return fmt.Errorf("failed to listen at %q: %w", r.address, err)
 	}
 	r.lis = lis
-}
-
-func (r *replica) startServerAndCreateConfig(nodeMap map[string]uint32, t *testing.T) {
-	r.startListener(t)
-	r.createConfiguration(nodeMap, t)
+	return nil
 }
 
 func (r *replica) stopServer() {
