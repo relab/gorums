@@ -20,7 +20,7 @@ var (
 
 func TestAllToAllConfigurationStyle1(t *testing.T) {
 	nodeMap := make(map[string]uint32)
-	replicaList := make([]*replica, 0)
+	replicas := make([]*replica, 0)
 	for i := 1; i <= *replicaCount; i++ {
 		address := fmt.Sprintf("%s:%d", "127.0.0.1", 50000+i)
 		nodeMap[address] = uint32(i)
@@ -28,10 +28,15 @@ func TestAllToAllConfigurationStyle1(t *testing.T) {
 			address: address,
 			id:      uint32(i),
 		}
-		replicaList = append(replicaList, &replica)
+		replicas = append(replicas, &replica)
 	}
+	defer func() {
+		for _, replica := range replicas {
+			replica.stopServer()
+		}
+	}()
 	g := new(errgroup.Group)
-	for _, replica := range replicaList {
+	for _, replica := range replicas {
 		replica := replica
 		g.Go(func() error {
 			err := replica.startListener()
@@ -52,6 +57,11 @@ func TestAllToAllConfigurationStyle2(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		for _, replica := range replicas {
+			replica.stopServer()
+		}
+	}()
 	nodeMap := make(map[string]uint32)
 	for _, replica := range replicas {
 		nodeMap[replica.address] = replica.id
