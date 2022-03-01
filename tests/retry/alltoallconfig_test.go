@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gorums "github.com/relab/gorums"
+	"github.com/relab/gorums"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -48,7 +48,10 @@ func TestAllToAllConfigurationStyle1(t *testing.T) {
 }
 
 func TestAllToAllConfigurationStyle2(t *testing.T) {
-	replicas := createReplicas()
+	replicas, err := createReplicas()
+	if err != nil {
+		t.Fatal(err)
+	}
 	nodeMap := make(map[string]uint32)
 	for _, replica := range replicas {
 		nodeMap[replica.address] = replica.id
@@ -64,12 +67,12 @@ func TestAllToAllConfigurationStyle2(t *testing.T) {
 	t.Log("Successful TestAllToAllConfigurationStyle2 completion")
 }
 
-func createReplicas() []*replica {
+func createReplicas() ([]*replica, error) {
 	replicas := make([]*replica, 0)
 	for i := 1; i <= *replicaCount; i++ {
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
-			return nil
+			return nil, err
 		}
 		replica := replica{
 			address: lis.Addr().String(),
@@ -78,7 +81,7 @@ func createReplicas() []*replica {
 		}
 		replicas = append(replicas, &replica)
 	}
-	return replicas
+	return replicas, nil
 }
 
 type qspec struct{}
