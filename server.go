@@ -8,6 +8,7 @@ import (
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -63,6 +64,11 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	finished := make(chan *Message, s.opts.buffer)
 	ctx := srv.Context()
 
+	if s.opts.connectCallback != nil {
+		md, _ := metadata.FromIncomingContext(ctx)
+		s.opts.connectCallback(md)
+	}
+
 	go func() {
 		for {
 			select {
@@ -99,8 +105,9 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 }
 
 type serverOptions struct {
-	buffer   uint
-	grpcOpts []grpc.ServerOption
+	buffer          uint
+	grpcOpts        []grpc.ServerOption
+	connectCallback func(metadata.MD)
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -118,6 +125,17 @@ func WithReceiveBufferSize(size uint) ServerOption {
 func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 	return func(o *serverOptions) {
 		o.grpcOpts = append(o.grpcOpts, opts...)
+	}
+}
+
+// WithConnectCallback registers a callback function that will be called by the server
+// whenever a node connects or reconnects to the server. This allows access to the node's
+// connection metadata, which is passed to the callback function.
+//
+// NOTE: if there is no metadata present, the metadata parameter will be nil.
+func WithConnectCallback(callback func(metadata.MD)) ServerOption {
+	return func(so *serverOptions) {
+		so.connectCallback = callback
 	}
 }
 
