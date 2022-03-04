@@ -1,6 +1,7 @@
 package gorums_test
 
 import (
+	"context"
 	"net"
 	"testing"
 	"time"
@@ -15,7 +16,11 @@ func TestServerCallback(t *testing.T) {
 	var message string
 	signal := make(chan struct{})
 
-	srv := gorums.NewServer(gorums.WithConnectCallback(func(m metadata.MD) {
+	srv := gorums.NewServer(gorums.WithConnectCallback(func(ctx context.Context) {
+		m, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return
+		}
 		message = m.Get("message")[0]
 		signal <- struct{}{}
 	}))
