@@ -50,8 +50,7 @@ func TestServerCallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = mgr.AddNode(node)
-	if err != nil {
+	if err = mgr.AddNode(node); err != nil {
 		t.Fatal(err)
 	}
 
