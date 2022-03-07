@@ -124,15 +124,6 @@ func (r *replica) createConfiguration(nodeMap map[string]uint32) error {
 	return err
 }
 
-func (r *replica) startListener() error {
-	lis, err := net.Listen("tcp", r.address)
-	if err != nil {
-		return fmt.Errorf("failed to listen at %q: %w", r.address, err)
-	}
-	r.lis = lis
-	return nil
-}
-
 func (r *replica) serve() error {
 	return r.server.Serve(r.lis)
 }
