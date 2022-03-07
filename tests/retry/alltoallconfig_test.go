@@ -65,6 +65,8 @@ func TestAllToAllConfigurationStyle3(t *testing.T) {
 func createReplicas() ([]*replica, error) {
 	replicas := make([]*replica, 0)
 	errChan := make(chan error, *replicaCount)
+	startedChan := make(chan struct{}, *replicaCount)
+	startedCnt := 0
 	defer close(errChan)
 	for i := 1; i <= *replicaCount; i++ {
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -80,11 +82,17 @@ func createReplicas() ([]*replica, error) {
 		RegisterSampleServer(replica.server, replica)
 		replicas = append(replicas, &replica)
 		go func() {
+			startedChan <- struct{}{}
 			if err := replica.serve(); err != nil {
 				errChan <- fmt.Errorf("failed to serve at %q: %w", replica.address, err)
 			}
 		}()
 	}
+	for startedCnt < *replicaCount {
+		<-startedChan
+		startedCnt++
+	}
+	close(startedChan)
 
 	select {
 	case err := <-errChan:
