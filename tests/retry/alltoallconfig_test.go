@@ -52,7 +52,7 @@ func disabledTestAllToAllConfigurationStyle1(t *testing.T) {
 	t.Log("Successful TestAllToAllConfigurationStyle1 completion")
 }
 
-func disabledTestAllToAllConfigurationStyle2(t *testing.T) {
+func TestAllToAllConfigurationStyle2(t *testing.T) {
 	replicas, err := createReplicas()
 	if err != nil {
 		t.Fatal(err)
@@ -66,15 +66,9 @@ func disabledTestAllToAllConfigurationStyle2(t *testing.T) {
 	for _, replica := range replicas {
 		nodeMap[replica.address] = replica.id
 	}
-	g := new(errgroup.Group)
 	for _, replica := range replicas {
-		replica := replica
-		g.Go(func() error { return replica.createConfiguration(nodeMap) })
+		replica.createConfiguration(nodeMap)
 	}
-	if err := g.Wait(); err != nil {
-		t.Fatal(err)
-	}
-	t.Log("Successful TestAllToAllConfigurationStyle2 completion")
 }
 
 func TestAllToAllConfigurationStyle3(t *testing.T) {
@@ -87,12 +81,10 @@ func TestAllToAllConfigurationStyle3(t *testing.T) {
 		RegisterSampleServer(srv, srvs[i])
 		return srv
 	})
-	for i := range srvs {
+	nodeMap := make(map[string]uint32)
+	for i, replica := range srvs {
 		srvs[i].address = addrs[i]
 		srvs[i].id = uint32(i)
-	}
-	nodeMap := make(map[string]uint32)
-	for _, replica := range srvs {
 		nodeMap[replica.address] = replica.id
 	}
 	for _, replica := range srvs {
@@ -101,13 +93,11 @@ func TestAllToAllConfigurationStyle3(t *testing.T) {
 
 	teardown := func() {
 		for _, replica := range srvs {
-			// replica.stopServer()
 			replica.mgr.Close()
 		}
 		closeServers()
 	}
 	teardown()
-	t.Log("Successful TestAllToAllConfigurationStyle3 completion")
 }
 
 func createReplicas() ([]*replica, error) {
@@ -127,10 +117,6 @@ func createReplicas() ([]*replica, error) {
 		}
 		RegisterSampleServer(replica.server, replica)
 		replicas = append(replicas, &replica)
-	}
-
-	for _, replica := range replicas {
-		replica := replica
 		go func() {
 			if err := replica.serve(); err != nil {
 				errChan <- fmt.Errorf("failed to serve at %q: %w", replica.address, err)
@@ -190,5 +176,6 @@ func (r *replica) serve() error {
 }
 
 func (r *replica) stopServer() {
+	r.mgr.Close()
 	r.server.Stop()
 }
