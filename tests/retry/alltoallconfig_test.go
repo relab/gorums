@@ -14,8 +14,8 @@ import (
 
 var replicaCount = flag.Int("replicas", 20, "number of replicas to create all-to-all communication")
 
-func TestAllToAllConfigurationStyle2(t *testing.T) {
-	replicas, err := createReplicas()
+func TestAllToAllConfiguration(t *testing.T) {
+	replicas, err := createReplicas(*replicaCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,42 +33,16 @@ func TestAllToAllConfigurationStyle2(t *testing.T) {
 	}
 }
 
-func TestAllToAllConfigurationStyle3(t *testing.T) {
-	srvs := make([]*replica, *replicaCount)
-	for i := range srvs {
-		srvs[i] = &replica{}
-	}
-	addrs, closeServers := gorums.TestSetup(t, *replicaCount, func(i int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		RegisterSampleServer(srv, srvs[i])
-		return srv
-	})
-	nodeMap := make(map[string]uint32)
-	for i, replica := range srvs {
-		srvs[i].address = addrs[i]
-		srvs[i].id = uint32(i)
-		nodeMap[replica.address] = replica.id
-	}
-	for _, replica := range srvs {
-		replica.createConfiguration(nodeMap)
-	}
-
-	teardown := func() {
-		for _, replica := range srvs {
-			replica.mgr.Close()
-		}
-		closeServers()
-	}
-	teardown()
-}
-
-func createReplicas() ([]*replica, error) {
+// createReplicas returns a slice of replicas.
+// The function waits for all serve goroutines to start and one additional
+// second to allow the servers to start before returning.
+func createReplicas(numReplicas int) ([]*replica, error) {
 	replicas := make([]*replica, 0)
-	errChan := make(chan error, *replicaCount)
-	startedChan := make(chan struct{}, *replicaCount)
+	errChan := make(chan error, numReplicas)
+	startedChan := make(chan struct{}, numReplicas)
 	startedCnt := 0
 	defer close(errChan)
-	for i := 1; i <= *replicaCount; i++ {
+	for i := 1; i <= numReplicas; i++ {
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			return nil, err
@@ -88,7 +62,7 @@ func createReplicas() ([]*replica, error) {
 			}
 		}()
 	}
-	for startedCnt < *replicaCount {
+	for startedCnt < numReplicas {
 		<-startedChan
 		startedCnt++
 	}
@@ -113,14 +87,16 @@ type replica struct {
 	address string
 	lis     net.Listener
 	id      uint32
-	server  *gorums.Server
-	mgr     *Manager
+	server  *gorums.Server // the replica's gRPC server
+	mgr     *Manager       // the replica's Gorums manager (used as a client)
 }
 
 func (r replica) WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error) {
 	return &WriteResponse{New: true}, nil
 }
 
+// createConfiguration creates a configuration for the replica, allowing
+// this replica to communicate with the other replicas in the configuration.
 func (r *replica) createConfiguration(nodeMap map[string]uint32) error {
 	r.mgr = NewManager(gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
