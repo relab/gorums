@@ -8,49 +8,11 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 var replicaCount = flag.Int("replicas", 20, "number of replicas to create all-to-all communication")
-
-// waitTime     = flag.Int("wait", 100, "milliseconds to wait before dialing the configuration replicas")
-// timeout      = flag.Duration("timeout", 100*time.Millisecond, "duration to wait before dialing the configuration replicas")
-
-func disabledTestAllToAllConfigurationStyle1(t *testing.T) {
-	nodeMap := make(map[string]uint32)
-	replicas := make([]*replica, 0)
-	for i := 1; i <= *replicaCount; i++ {
-		address := fmt.Sprintf("%s:%d", "127.0.0.1", 50000+i)
-		nodeMap[address] = uint32(i)
-		replica := replica{
-			address: address,
-			id:      uint32(i),
-		}
-		replicas = append(replicas, &replica)
-	}
-	defer func() {
-		for _, replica := range replicas {
-			replica.stopServer()
-		}
-	}()
-	g := new(errgroup.Group)
-	for _, replica := range replicas {
-		replica := replica
-		g.Go(func() error {
-			err := replica.startListener()
-			if err != nil {
-				return err
-			}
-			return replica.createConfiguration(nodeMap)
-		})
-	}
-	if err := g.Wait(); err != nil {
-		t.Fatal(err)
-	}
-	t.Log("Successful TestAllToAllConfigurationStyle1 completion")
-}
 
 func TestAllToAllConfigurationStyle2(t *testing.T) {
 	replicas, err := createReplicas()
