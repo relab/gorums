@@ -1,4 +1,4 @@
-package retry
+package all2all
 
 import (
 	"flag"

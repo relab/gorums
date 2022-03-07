@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package retry;
+package all2all;
 
-option go_package = "github.com/relab/gorums/tests/retry";
+option go_package = "github.com/relab/gorums/tests/all2all";
 
 import "gorums.proto";
 
@@ -12,8 +12,10 @@ service Sample {
     }
 }
 
-message WriteResponse { bool New = 1; }
+message WriteResponse {
+    bool New = 1;
+}
 message WriteRequest {
-    string Key = 1;
+    string Key   = 1;
     string Value = 2;
 }
