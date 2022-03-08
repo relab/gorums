@@ -37,7 +37,7 @@ func TestAllToAllConfiguration(t *testing.T) {
 // The function waits for all serve goroutines to start and one additional
 // second to allow the servers to start before returning.
 func createReplicas(numReplicas int) ([]*replica, error) {
-	replicas := make([]*replica, 0)
+	replicas := make([]*replica, numReplicas)
 	errChan := make(chan error, numReplicas)
 	startedChan := make(chan struct{}, numReplicas)
 	for i := 1; i <= numReplicas; i++ {
@@ -52,7 +52,7 @@ func createReplicas(numReplicas int) ([]*replica, error) {
 			server:  gorums.NewServer(),
 		}
 		RegisterSampleServer(replica.server, replica)
-		replicas = append(replicas, &replica)
+		replicas[i-1] = &replica
 		go func() {
 			startedChan <- struct{}{}
 			if err := replica.serve(); err != nil {
