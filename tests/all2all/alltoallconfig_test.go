@@ -40,8 +40,6 @@ func createReplicas(numReplicas int) ([]*replica, error) {
 	replicas := make([]*replica, 0)
 	errChan := make(chan error, numReplicas)
 	startedChan := make(chan struct{}, numReplicas)
-	startedCnt := 0
-	defer close(errChan)
 	for i := 1; i <= numReplicas; i++ {
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
@@ -62,11 +60,9 @@ func createReplicas(numReplicas int) ([]*replica, error) {
 			}
 		}()
 	}
-	for startedCnt < numReplicas {
+	for range replicas {
 		<-startedChan
-		startedCnt++
 	}
-	close(startedChan)
 
 	select {
 	case err := <-errChan:
