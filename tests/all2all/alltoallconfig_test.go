@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-var replicaCount = flag.Int("replicas", 20, "number of replicas to create all-to-all communication")
+var replicaCount = flag.Int("replicas", 10, "number of replicas to create all-to-all communication")
 
 func TestAllToAllConfiguration(t *testing.T) {
 	replicas, err := createReplicas(*replicaCount)
@@ -29,7 +29,9 @@ func TestAllToAllConfiguration(t *testing.T) {
 		nodeMap[replica.address] = replica.id
 	}
 	for _, replica := range replicas {
-		replica.createConfiguration(nodeMap)
+		if err := replica.createConfiguration(nodeMap); err != nil {
+			t.Error(err)
+		}
 	}
 }
 
