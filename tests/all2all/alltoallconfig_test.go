@@ -1,6 +1,7 @@
 package all2all
 
 import (
+	context "context"
 	"flag"
 	"fmt"
 	"net"
@@ -87,6 +88,7 @@ type replica struct {
 	id      uint32
 	server  *gorums.Server // the replica's gRPC server
 	mgr     *Manager       // the replica's Gorums manager (used as a client)
+	conn    *grpc.ClientConn
 }
 
 func (r replica) WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error) {
@@ -113,4 +115,22 @@ func (r *replica) serve() error {
 func (r *replica) stopServer() {
 	r.mgr.Close()
 	r.server.Stop()
+}
+
+func TestGrpcDial(t *testing.T) {
+	replicas, err := createReplicas(*replicaCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, replica := range replicas {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(1000)*time.Millisecond)
+		defer cancel()
+		replica.conn, err = grpc.DialContext(ctx, replica.address,
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
