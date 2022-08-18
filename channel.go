@@ -118,15 +118,26 @@ func (c *channel) sendMsg(req request) (err error) {
 	c.streamMut.RLock()
 	defer c.streamMut.RUnlock()
 
-	done := make(chan struct{}, 1)
+	done := make(chan struct{})
 
-	// wait for either the message to be sent, or the request context being cancelled.
-	// if the request context was cancelled, then we most likely have a blocked stream.
+	// This goroutine waits for either 'done' to be closed, or the request context to be cancelled.
+	// If the request context was cancelled, we have two possibilities:
+	// The stream could be blocked, or the caller could be impatient.
+	// We cannot know which is the case, but it seems wiser to cancel the stream as a precaution,
+	// because reconnection is quite fast and cheap.
 	go func() {
 		select {
 		case <-done:
+			// all is good
 		case <-req.ctx.Done():
-			c.cancelStream()
+			// Both channels could be ready at the same time, so we should check 'done' again.
+			select {
+			case <-done:
+				// false alarm
+			default:
+				// cause reconnect
+				c.cancelStream()
+			}
 		}
 	}()
 
@@ -135,7 +146,8 @@ func (c *channel) sendMsg(req request) (err error) {
 		c.setLastErr(err)
 		c.streamBroken.set()
 	}
-	done <- struct{}{}
+
+	close(done)
 
 	return err
 }
