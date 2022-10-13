@@ -277,11 +277,11 @@ We can now invoke the Write RPC on each `node` in the configuration:
   }
 ```
 
-While Gorums allows us to call RPCs on individual nodes as we did above, Gorums also provides a call type _quorum call_ that allows us to invoke an RPC on all nodes in a configuration with a single invocation, as we show in the next section.
+While Gorums allows us to call RPCs on individual nodes as we did above, Gorums also provides a call type *quorum call* that allows us to invoke an RPC on all nodes in a configuration with a single invocation, as we show in the next section.
 
 ## Quorum Calls
 
-Instead of invoking an RPC explicitly on all nodes in a configuration, Gorums allows users to invoke a _quorum call_ via a method on the `Configuration` type.
+Instead of invoking an RPC explicitly on all nodes in a configuration, Gorums allows users to invoke a *quorum call* via a method on the `Configuration` type.
 If an RPC is invoked as a quorum call, Gorums will invoke the RPCs on all nodes in parallel and collect and process the replies.
 
 For the Gorums plugin to generate quorum calls we need to specify the `quorumcall` option for our RPC methods in the proto file, as shown below:
