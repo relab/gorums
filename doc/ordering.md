@@ -5,9 +5,9 @@
 Many of the use cases for a framework like Gorums depend on messages arriving in the correct order.
 Unfortunately, gRPC does not guarantee that unary RPCs invoked in order, will be received by the server in the same order.
 That is, according to the [gRPC docs](https://grpc.io/docs/what-is-grpc/core-concepts/):
-"_gRPC guarantees message ordering within an individual RPC call._"
+"*gRPC guarantees message ordering within an individual RPC call.*"
 Further, as explained [here](https://github.com/grpc/grpc/issues/10853#issuecomment-297478862):
-"_Separate requests are independent of each other, and there is no guarantee that they will be handled in any particular order. If you want to preserve the order of a set of messages between a single client and a single server, I would recommend using a streaming call. Messages within a single stream are guaranteed to be received in the order in which they are sent._"
+"*Separate requests are independent of each other, and there is no guarantee that they will be handled in any particular order. If you want to preserve the order of a set of messages between a single client and a single server, I would recommend using a streaming call. Messages within a single stream are guaranteed to be received in the order in which they are sent.*"
 This was a source of [problems](https://github.com/relab/gorums/issues/16) in early versions of Gorums.
 
 ## Implementation of Message Ordering
