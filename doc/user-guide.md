@@ -87,6 +87,7 @@ The `Read` method in this example, therefore, takes an empty `ReadRequest` as in
 
 **Note:** Gorums offers one-way communication through the `unicast` and `multicast` call types.
 For these call types, the response message type will be unused by Gorums.
+For a detailed overview of the available method options to control the call types, see the [method options](method-options.md) document.
 
 Next, we compile our service definition into Go code which includes:
 
