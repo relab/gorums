@@ -78,7 +78,7 @@ func (q testQSpec) AsyncHandlerQF(_ *Request, replies map[uint32]*Response) (*Re
 	return q.qf(replies)
 }
 
-func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, cfgSize int) (cfg Configuration, teardown func()) {
 	t.Helper()
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
@@ -207,7 +207,7 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(len(nodes))
 		for _, node := range nodes {
-			go func(node *Node) {
+			go func(node Node) {
 				defer wg.Done()
 				resp, err := node.UnaryRPC(context.Background(), &Request{Num: uint64(i)})
 				if err != nil {

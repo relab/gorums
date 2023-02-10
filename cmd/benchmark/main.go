@@ -58,7 +58,7 @@ func (f *listFlag) Get() []string {
 
 func listBenchmarks() {
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-	benchmarks := benchmark.GetBenchmarks(nil)
+	benchmarks := benchmark.GetBenchmarks(benchmark.Configuration{})
 	for _, b := range benchmarks {
 		fmt.Fprintf(tw, "%s:\t%s\n", b.Name, b.Description)
 	}

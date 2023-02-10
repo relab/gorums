@@ -39,7 +39,7 @@ var asyncBody = `	cd := {{$callData}}{
 		for k, v := range replies {
 			r[k] = v.(*{{$out}})
 		}
-		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
+		return c.AsRaw().QSpec().{{$method}}QF(req.(*{{$in}}), r)
 	}
 {{- if hasPerNodeArg .Method}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
@@ -47,7 +47,7 @@ var asyncBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	fut := c.RawConfiguration.AsyncCall(ctx, cd)
+	fut := c.AsRaw().AsyncCall(ctx, cd)
 	return &{{$asyncOut}}{fut}
 }
 `

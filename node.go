@@ -32,6 +32,17 @@ type RawNode struct {
 	channel *channel
 }
 
+// RawNodeConstraint is a type constraint on types that can be converted to RawNodes.
+type RawNodeConstraint interface {
+	~struct{ *RawNode }
+	AsRaw() *RawNode
+}
+
+// AsRawNode is an interface that all generated Node structures should implement.
+type AsRawNode interface {
+	AsRaw() *RawNode
+}
+
 // NewRawNode returns a new node for the provided address.
 func NewRawNode(addr string) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)

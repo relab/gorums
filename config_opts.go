@@ -8,18 +8,18 @@ type ConfigOption interface{}
 // NodeListOption must be implemented by node providers.
 type NodeListOption interface {
 	ConfigOption
-	newConfig(*RawManager) (RawConfiguration, error)
+	newConfig(*RawManager) ([]*RawNode, error)
 }
 
 type nodeIDMap struct {
 	idMap map[string]uint32
 }
 
-func (o nodeIDMap) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
+func (o nodeIDMap) newConfig(mgr *RawManager) (nodes []*RawNode, err error) {
 	if len(o.idMap) == 0 {
 		return nil, ConfigCreationError(fmt.Errorf("node-to-ID map required: WithNodeMap"))
 	}
-	nodes = make(RawConfiguration, 0, len(o.idMap))
+	nodes = make([]*RawNode, 0, len(o.idMap))
 	for naddr, id := range o.idMap {
 		node, found := mgr.Node(id)
 		if !found {
@@ -35,7 +35,6 @@ func (o nodeIDMap) newConfig(mgr *RawManager) (nodes RawConfiguration, err error
 		nodes = append(nodes, node)
 	}
 	// Sort nodes to ensure deterministic iteration.
-	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
 	return nodes, nil
 }
@@ -50,11 +49,11 @@ type nodeList struct {
 	addrsList []string
 }
 
-func (o nodeList) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
+func (o nodeList) newConfig(mgr *RawManager) (nodes []*RawNode, err error) {
 	if len(o.addrsList) == 0 {
 		return nil, ConfigCreationError(fmt.Errorf("node addresses required: WithNodeList"))
 	}
-	nodes = make(RawConfiguration, 0, len(o.addrsList))
+	nodes = make([]*RawNode, 0, len(o.addrsList))
 	for _, naddr := range o.addrsList {
 		node, err := NewRawNode(naddr)
 		if err != nil {
@@ -71,7 +70,6 @@ func (o nodeList) newConfig(mgr *RawManager) (nodes RawConfiguration, err error)
 		nodes = append(nodes, node)
 	}
 	// Sort nodes to ensure deterministic iteration.
-	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
 	return nodes, nil
 }
@@ -86,11 +84,11 @@ type nodeIDs struct {
 	nodeIDs []uint32
 }
 
-func (o nodeIDs) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
+func (o nodeIDs) newConfig(mgr *RawManager) (nodes []*RawNode, err error) {
 	if len(o.nodeIDs) == 0 {
 		return nil, ConfigCreationError(fmt.Errorf("node IDs required: WithNodeIDs"))
 	}
-	nodes = make(RawConfiguration, 0, len(o.nodeIDs))
+	nodes = make([]*RawNode, 0, len(o.nodeIDs))
 	for _, id := range o.nodeIDs {
 		node, found := mgr.Node(id)
 		if !found {
@@ -100,7 +98,6 @@ func (o nodeIDs) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) 
 		nodes = append(nodes, node)
 	}
 	// Sort nodes to ensure deterministic iteration.
-	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
 	return nodes, nil
 }
@@ -111,12 +108,12 @@ func WithNodeIDs(ids []uint32) NodeListOption {
 	return &nodeIDs{nodeIDs: ids}
 }
 
-type addNodes struct {
-	old RawConfiguration
+type addNodes[NODE RawNodeConstraint] struct {
+	old []*RawNode
 	new NodeListOption
 }
 
-func (o addNodes) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
+func (o addNodes[NODE]) newConfig(mgr *RawManager) (nodes []*RawNode, err error) {
 	newNodes, err := o.new.newConfig(mgr)
 	if err != nil {
 		return nil, err
@@ -127,17 +124,17 @@ func (o addNodes) newConfig(mgr *RawManager) (nodes RawConfiguration, err error)
 
 // WithNewNodes returns a NodeListOption that can be used to create a new configuration
 // combining c and the new nodes.
-func (c RawConfiguration) WithNewNodes(new NodeListOption) NodeListOption {
-	return &addNodes{old: c, new: new}
+func (c RawConfiguration[NODE, QSPEC]) WithNewNodes(new NodeListOption) NodeListOption {
+	return &addNodes[NODE]{old: c.rawNodes(), new: new}
 }
 
 type addConfig struct {
-	old RawConfiguration
-	add RawConfiguration
+	old []*RawNode
+	add []*RawNode
 }
 
-func (o addConfig) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
-	nodes = make(RawConfiguration, 0, len(o.old)+len(o.add))
+func (o addConfig) newConfig(mgr *RawManager) (nodes []*RawNode, err error) {
+	nodes = make([]*RawNode, 0, len(o.old)+len(o.add))
 	m := make(map[uint32]bool)
 	for _, n := range append(o.old, o.add...) {
 		if !m[n.id] {
@@ -146,27 +143,26 @@ func (o addConfig) newConfig(mgr *RawManager) (nodes RawConfiguration, err error
 		}
 	}
 	// Sort nodes to ensure deterministic iteration.
-	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
 	return nodes, err
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c RawConfiguration) And(d RawConfiguration) NodeListOption {
-	return &addConfig{old: c, add: d}
+func (c RawConfiguration[NODE, QSPEC]) And(d RawConfiguration[NODE, QSPEC]) NodeListOption {
+	return &addConfig{old: c.rawNodes(), add: d.rawNodes()}
 }
 
 // WithoutNodes returns a NodeListOption that can be used to create a new configuration
 // from c without the given node IDs.
-func (c RawConfiguration) WithoutNodes(ids ...uint32) NodeListOption {
+func (c RawConfiguration[NODE, QSPEC]) WithoutNodes(ids ...uint32) NodeListOption {
 	rmIDs := make(map[uint32]bool)
 	for _, id := range ids {
 		rmIDs[id] = true
 	}
-	keepIDs := make([]uint32, 0, len(c))
-	for _, cNode := range c {
-		if !rmIDs[cNode.id] {
-			keepIDs = append(keepIDs, cNode.id)
+	keepIDs := make([]uint32, 0, len(c.nodes))
+	for _, cNode := range c.nodes {
+		if !rmIDs[cNode.AsRaw().id] {
+			keepIDs = append(keepIDs, cNode.AsRaw().id)
 		}
 	}
 	return &nodeIDs{nodeIDs: keepIDs}
@@ -174,15 +170,15 @@ func (c RawConfiguration) WithoutNodes(ids ...uint32) NodeListOption {
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c RawConfiguration) Except(rm RawConfiguration) NodeListOption {
+func (c RawConfiguration[NODE, QSPEC]) Except(rm RawConfiguration[NODE, QSPEC]) NodeListOption {
 	rmIDs := make(map[uint32]bool)
-	for _, rmNode := range rm {
-		rmIDs[rmNode.id] = true
+	for _, rmNode := range rm.nodes {
+		rmIDs[rmNode.AsRaw().id] = true
 	}
-	keepIDs := make([]uint32, 0, len(c))
-	for _, cNode := range c {
-		if !rmIDs[cNode.id] {
-			keepIDs = append(keepIDs, cNode.id)
+	keepIDs := make([]uint32, 0, len(c.nodes))
+	for _, cNode := range c.nodes {
+		if !rmIDs[cNode.AsRaw().id] {
+			keepIDs = append(keepIDs, cNode.AsRaw().id)
 		}
 	}
 	return &nodeIDs{nodeIDs: keepIDs}

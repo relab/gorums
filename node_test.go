@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+type dummyNode struct {
+	*RawNode
+}
+
+func (n dummyNode) AsRaw() *RawNode {
+	return n.RawNode
+}
+
 func TestNodeSort(t *testing.T) {
 	nodes := []*RawNode{
 		{
