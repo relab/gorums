@@ -9,7 +9,7 @@ jobs:
   golangci:
     strategy:
       matrix:
-        go-version: [1.16]
+        go-version: [1.17]
     runs-on: ubuntu-latest
     steps:
       - name: Install Go
@@ -33,7 +33,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.go-version }}-go-
 
-      - name: Checkout 
+      - name: Checkout
         uses: actions/checkout@v2
 
       - name: Run Make
