@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	reflect "reflect"
+	"sync/atomic"
 
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -19,9 +20,10 @@ type responseTypes interface {
 type BroadcastFunc func(ctx context.Context, req any) (resp any, err error)
 type ConversionFunc func(ctx context.Context, req any) any
 
-type implementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
+type defaultImplementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
+type implementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error, bool)
 
-func DefaultHandler[T requestTypes, V responseTypes](impl implementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func DefaultHandler[T requestTypes, V responseTypes](impl defaultImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		req := in.Message.(T)
 		defer ctx.Release()
@@ -35,6 +37,7 @@ type broadcastMsg interface {
 	GetRequest() requestTypes
 	GetMethod() string
 	GetContext() ServerCtx
+	GetRound() uint64
 }
 
 type broadcastMessage[T requestTypes, V responseTypes] struct {
@@ -43,6 +46,7 @@ type broadcastMessage[T requestTypes, V responseTypes] struct {
 	implementation implementationFunc[T, V]
 	method         string
 	context        ServerCtx
+	round          uint64
 }
 
 func (b *broadcastMessage[T, V]) GetFrom() string {
@@ -65,7 +69,11 @@ func (b *broadcastMessage[T, V]) GetContext() ServerCtx {
 	return b.context
 }
 
-func newBroadcastMessage[T requestTypes, V responseTypes](ctx ServerCtx, req T, impl implementationFunc[T, V], method string) *broadcastMessage[T, V] {
+func (b *broadcastMessage[T, V]) GetRound() uint64 {
+	return b.round
+}
+
+func newBroadcastMessage[T requestTypes, V responseTypes](ctx ServerCtx, req T, impl implementationFunc[T, V], method string, round uint64) *broadcastMessage[T, V] {
 	p, _ := peer.FromContext(ctx)
 	addr := p.Addr.String()
 	return &broadcastMessage[T, V]{
@@ -74,6 +82,7 @@ func newBroadcastMessage[T requestTypes, V responseTypes](ctx ServerCtx, req T, 
 		implementation: impl,
 		method:         method,
 		context:        ctx,
+		round:          round,
 	}
 }
 
@@ -85,45 +94,72 @@ func BestEffortBroadcastHandler[T requestTypes, V responseTypes](impl implementa
 		defer srv.Unlock()
 		req := in.Message.(T)
 		defer ctx.Release()
-		if srv.shouldBroadcast(in.Metadata.MessageID) {
+		/*if srv.shouldBroadcast(in.Metadata.MessageID) {
 			// need to know:
 			//	- which method to call on the other servers
 			//	- who sent the message
 			//	- the type of the message
 			//broadcastChan <- newBroadcastMessage[T, V](ctx, req, impl)
-			go srv.broadcast(newBroadcastMessage[T, V](ctx, req, impl, in.Metadata.Method))
-		}
+			//go srv.broadcast(newBroadcastMessage[T, V](ctx, req, impl, in.Metadata.Method))
+		}*/
 		var resp responseTypes
 		var err error
-		if !srv.alreadyReceivedFromPeer(ctx, in.Metadata.MessageID) {
-			resp, err = impl(ctx, req)
+		var broadcast bool
+		resp, err, broadcast = impl(ctx, req)
+		if broadcast && !srv.alreadyBroadcasted(in.Metadata.Round, in.Metadata.Method) {
+			go srv.broadcast(newBroadcastMessage[T, V](ctx, req, impl, in.Metadata.Method, in.Metadata.Round))
 		}
+		/*if !srv.alreadyReceivedFromPeer(ctx, in.Metadata.MessageID, in.Metadata.Round, in.Metadata.Method, in.Metadata.Sender) {
+			resp, err, broadcast = impl(ctx, req)
+			if broadcast && !srv.alreadyBroadcasted(in.Metadata.MessageID) {
+				srv.broadcastedMsgs[in.Metadata.MessageID] = true
+				go srv.broadcast(newBroadcastMessage[T, V](ctx, req, impl, in.Metadata.Method, in.Metadata.Round))
+			}
+		}*/
 		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
 	}
 }
 
-func (srv *Server) shouldBroadcast(msgId uint64) bool {
+func (srv *Server) alreadyBroadcasted(msgId uint64, method string) bool {
+	_, ok := srv.broadcastedMsgs[msgId]
+	if !ok {
+		srv.broadcastedMsgs[msgId] = make(map[string]bool)
+	}
+	broadcasted, ok := srv.broadcastedMsgs[msgId][method]
+	if !ok {
+		srv.broadcastedMsgs[msgId][method] = true
+	}
+	return ok && broadcasted
+}
+
+func (srv *Server) alreadyReceivedFromPeer(ctx ServerCtx, msgId, round uint64, method, sender string) bool {
+	_, ok := srv.recievedFrom[msgId]
+	if !ok {
+		srv.recievedFrom[msgId] = make(map[string]map[string]bool)
+	}
+	_, ok = srv.recievedFrom[msgId][method]
+	if !ok {
+		srv.recievedFrom[msgId][method] = make(map[string]bool)
+	}
+	p, _ := peer.FromContext(ctx)
+	addr := p.Addr.String()
+	receivedMsgFromNode, ok := srv.recievedFrom[msgId][method][addr]
+	if !ok && !receivedMsgFromNode {
+		srv.recievedFrom[msgId][method][addr] = true
+		return false
+	}
+	return true
+
+}
+
+/*func (srv *Server) shouldBroadcast(msgId uint64) bool {
 	_, ok := srv.recievedFrom[msgId]
 	if !ok {
 		srv.recievedFrom[msgId] = make(map[string]bool)
 		return true
 	}
 	return false
-}
-
-func (srv *Server) alreadyReceivedFromPeer(ctx ServerCtx, msgId uint64) bool {
-	p, _ := peer.FromContext(ctx)
-	addr := p.Addr.String()
-	receivedMsgFromNode, ok := srv.recievedFrom[msgId][addr]
-	if !ok {
-		if !receivedMsgFromNode {
-			srv.recievedFrom[msgId][addr] = true
-			return false
-		}
-	}
-	return true
-
-}
+}*/
 
 func (srv *Server) broadcast(broadcastMessage broadcastMsg) {
 	srv.BroadcastChan <- broadcastMessage
@@ -156,4 +192,12 @@ func SetDefaultValues[T any](m *T, prefix string) {
 			field.SetString(prefix + tag)
 		}
 	}
+}
+
+func (c RawConfiguration) StoreID(val uint64) {
+	c[0].mgr.storeID(val)
+}
+
+func (m *RawManager) storeID(val uint64) {
+	atomic.StoreUint64(&m.nextMsgID, val)
 }

@@ -29,6 +29,7 @@ type ZorumsService interface {
 	QuorumCallCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	QuorumCallEmpty(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
 	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
+	QuorumCallAllToAll(ctx gorums.ServerCtx, request *Request) (response *Response, err error, broadcast bool)
 	Multicast(ctx gorums.ServerCtx, request *Request)
 	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
 	Multicast2(ctx gorums.ServerCtx, request *Request)
@@ -64,12 +65,13 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		resp, err := impl.GRPCCall(ctx, req)
 		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCall", gorums.DefaultHandler(impl.QuorumCall))
+	/*srv.RegisterHandler("dev.ZorumsService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		resp, err := impl.QuorumCall(ctx, req)
 		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
-	})
+	})*/
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
