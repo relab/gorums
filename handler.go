@@ -2,22 +2,26 @@ package gorums
 
 import (
 	"context"
+	reflect "reflect"
 
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type RequestTypes interface {
+type requestTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type ResponseTypes interface {
+type responseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type implementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
+type BroadcastFunc func(ctx context.Context, req any) (resp any, err error)
+type ConversionFunc func(ctx context.Context, req any) any
 
-func DefaultHandler[T RequestTypes, V ResponseTypes](impl implementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+type implementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
+
+func DefaultHandler[T requestTypes, V responseTypes](impl implementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		req := in.Message.(T)
 		defer ctx.Release()
@@ -28,12 +32,12 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl implementationFunc[T, 
 
 type broadcastMsg interface {
 	GetFrom() string
-	GetRequest() RequestTypes
+	GetRequest() requestTypes
 	GetMethod() string
 	GetContext() ServerCtx
 }
 
-type broadcastMessage[T RequestTypes, V ResponseTypes] struct {
+type broadcastMessage[T requestTypes, V responseTypes] struct {
 	from           string
 	request        T
 	implementation implementationFunc[T, V]
@@ -45,7 +49,7 @@ func (b *broadcastMessage[T, V]) GetFrom() string {
 	return b.from
 }
 
-func (b *broadcastMessage[T, V]) GetRequest() RequestTypes {
+func (b *broadcastMessage[T, V]) GetRequest() requestTypes {
 	return b.request
 }
 
@@ -61,7 +65,7 @@ func (b *broadcastMessage[T, V]) GetContext() ServerCtx {
 	return b.context
 }
 
-func newBroadcastMessage[T RequestTypes, V ResponseTypes](ctx ServerCtx, req T, impl implementationFunc[T, V], method string) *broadcastMessage[T, V] {
+func newBroadcastMessage[T requestTypes, V responseTypes](ctx ServerCtx, req T, impl implementationFunc[T, V], method string) *broadcastMessage[T, V] {
 	p, _ := peer.FromContext(ctx)
 	addr := p.Addr.String()
 	return &broadcastMessage[T, V]{
@@ -73,7 +77,7 @@ func newBroadcastMessage[T RequestTypes, V ResponseTypes](ctx ServerCtx, req T, 
 	}
 }
 
-func BestEffortBroadcastHandler[T RequestTypes, V ResponseTypes](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BestEffortBroadcastHandler[T requestTypes, V responseTypes](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
@@ -89,7 +93,7 @@ func BestEffortBroadcastHandler[T RequestTypes, V ResponseTypes](impl implementa
 			//broadcastChan <- newBroadcastMessage[T, V](ctx, req, impl)
 			go srv.broadcast(newBroadcastMessage[T, V](ctx, req, impl, in.Metadata.Method))
 		}
-		var resp ResponseTypes
+		var resp responseTypes
 		var err error
 		if !srv.alreadyReceivedFromPeer(ctx, in.Metadata.MessageID) {
 			resp, err = impl(ctx, req)
@@ -125,8 +129,31 @@ func (srv *Server) broadcast(broadcastMessage broadcastMsg) {
 	srv.BroadcastChan <- broadcastMessage
 }
 
-func RegisterBroadcastFunc[T RequestTypes, V ResponseTypes](impl func(context.Context, T) (V, error)) func(context.Context, any) (any, error) {
+func RegisterBroadcastFunc[T requestTypes, V responseTypes](impl func(context.Context, T) (V, error)) func(context.Context, any) (any, error) {
 	return func(ctx context.Context, req any) (resp any, err error) {
 		return impl(ctx, req.(T))
+	}
+}
+
+func RegisterConversionFunc[T requestTypes, V responseTypes](impl func(context.Context, T) V) func(context.Context, any) any {
+	return func(ctx context.Context, req any) any {
+		return impl(ctx, req.(T))
+	}
+}
+
+func SetDefaultValues[T any](m *T, prefix string) {
+	t := reflect.TypeOf(m)
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		name := f.Name
+		tag := f.Tag.Get("method")
+		s := reflect.ValueOf(m).Elem()
+		if s.Kind() != reflect.Struct {
+			panic("mapping must be a struct")
+		}
+		field := s.FieldByName(name)
+		if field.IsValid() && field.CanSet() && field.Kind() == reflect.String {
+			field.SetString(prefix + tag)
+		}
 	}
 }
