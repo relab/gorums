@@ -15,9 +15,9 @@ type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type implementationFuncT[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
+type implementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
-func DefaultHandler[T RequestTypes, V ResponseTypes](impl implementationFuncT[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func DefaultHandler[T RequestTypes, V ResponseTypes](impl implementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		req := in.Message.(T)
 		defer ctx.Release()
@@ -36,7 +36,7 @@ type broadcastMsg interface {
 type broadcastMessage[T RequestTypes, V ResponseTypes] struct {
 	from           string
 	request        T
-	implementation implementationFuncT[T, V]
+	implementation implementationFunc[T, V]
 	method         string
 	context        ServerCtx
 }
@@ -49,7 +49,7 @@ func (b *broadcastMessage[T, V]) GetRequest() RequestTypes {
 	return b.request
 }
 
-func (b *broadcastMessage[T, V]) GetImplementation() implementationFuncT[T, V] {
+func (b *broadcastMessage[T, V]) GetImplementation() implementationFunc[T, V] {
 	return b.implementation
 }
 
@@ -61,7 +61,7 @@ func (b *broadcastMessage[T, V]) GetContext() ServerCtx {
 	return b.context
 }
 
-func newBroadcastMessage[T RequestTypes, V ResponseTypes](ctx ServerCtx, req T, impl implementationFuncT[T, V], method string) *broadcastMessage[T, V] {
+func newBroadcastMessage[T RequestTypes, V ResponseTypes](ctx ServerCtx, req T, impl implementationFunc[T, V], method string) *broadcastMessage[T, V] {
 	p, _ := peer.FromContext(ctx)
 	addr := p.Addr.String()
 	return &broadcastMessage[T, V]{
@@ -73,7 +73,7 @@ func newBroadcastMessage[T RequestTypes, V ResponseTypes](ctx ServerCtx, req T, 
 	}
 }
 
-func BestEffortBroadcastHandler[T RequestTypes, V ResponseTypes](impl implementationFuncT[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BestEffortBroadcastHandler[T RequestTypes, V ResponseTypes](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
