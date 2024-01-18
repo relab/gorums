@@ -18,4 +18,6 @@ message Metadata {
   uint64 MessageID = 1;
   string Method = 2;
   google.rpc.Status Status = 3;
+  string Sender = 4;
+  uint64 Round = 5;
 }

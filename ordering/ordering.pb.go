@@ -31,6 +31,8 @@ type Metadata struct {
 	MessageID uint64         `protobuf:"varint,1,opt,name=MessageID,proto3" json:"MessageID,omitempty"`
 	Method    string         `protobuf:"bytes,2,opt,name=Method,proto3" json:"Method,omitempty"`
 	Status    *status.Status `protobuf:"bytes,3,opt,name=Status,proto3" json:"Status,omitempty"`
+	Sender    string 		 `protobuf:"bytes,4,opt,name=Sender,proto3" json:"Sender,omitempty"`
+	Round     uint64 		 `protobuf:"varint,5,opt,name=Round,proto3" json:"Round,omitempty"`
 }
 
 func (x *Metadata) Reset() {
@@ -84,6 +86,20 @@ func (x *Metadata) GetStatus() *status.Status {
 		return x.Status
 	}
 	return nil
+}
+
+func (x *Metadata) GetSender() string {
+	if x != nil {
+		return x.Sender
+	}
+	return ""
+}
+
+func (x *Metadata) GetRound() uint64 {
+	if x != nil {
+		return x.Round
+	}
+	return 0
 }
 
 var File_ordering_ordering_proto protoreflect.FileDescriptor

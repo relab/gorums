@@ -22,7 +22,7 @@ func NewServer() *Server {
 
 func RegisterQCStorageServer(srv *Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.QuorumCall", gorums.DefaultHandler(impl.QuorumCall))
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAllToAll", gorums.BestEffortBroadcastHandler(impl.QuorumCall, srv.Server))
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAllToAll", gorums.BestEffortBroadcastHandler(impl.QuorumCallAllToAll, srv.Server))
 
 	//srv.conversions["dev.ZorumsService.QuorumCallAllToAll"] = gorums.RegisterConversionFunc(impl.QuorumCall)
 }
