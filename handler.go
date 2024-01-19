@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"fmt"
 	reflect "reflect"
 	"sync/atomic"
 
@@ -86,7 +87,7 @@ func newBroadcastMessage[T requestTypes, V responseTypes](ctx ServerCtx, req T, 
 	}
 }
 
-func BestEffortBroadcastHandler[T requestTypes, V responseTypes](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BroadcastHandler[T requestTypes, V responseTypes](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
@@ -102,10 +103,11 @@ func BestEffortBroadcastHandler[T requestTypes, V responseTypes](impl implementa
 			//broadcastChan <- newBroadcastMessage[T, V](ctx, req, impl)
 			//go srv.broadcast(newBroadcastMessage[T, V](ctx, req, impl, in.Metadata.Method))
 		}*/
-		var resp responseTypes
+		/*var resp responseTypes
 		var err error
-		var broadcast bool
-		resp, err, broadcast = impl(ctx, req)
+		var broadcast bool*/
+		fmt.Println("sender:", in.Metadata.Sender, in.Metadata.Method, "round:", in.Metadata.Round)
+		resp, err, broadcast := impl(ctx, req)
 		if broadcast && !srv.alreadyBroadcasted(in.Metadata.Round, in.Metadata.Method) {
 			go srv.broadcast(newBroadcastMessage[T, V](ctx, req, impl, in.Metadata.Method, in.Metadata.Round))
 		}
