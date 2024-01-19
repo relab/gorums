@@ -165,6 +165,27 @@ func (srv *Server) broadcast(broadcastMessage broadcastMsg) {
 	srv.BroadcastChan <- broadcastMessage
 }
 
+func (srv *Server) ListenForBroadcast() {
+	go srv.run()
+}
+
+func (srv *Server) run() {
+	for msg := range srv.BroadcastChan {
+		*srv.Round = msg.GetRound()
+		//srv.c.StoreID(msgID-1)
+		req := msg.GetRequest()
+		method := msg.GetMethod()
+		ctx := context.Background()
+		// if another function is called in broadcast, the request needs to be converted
+		if convertFunc, ok := srv.conversions[method]; ok {
+			convertedReq := convertFunc(ctx, req)
+			srv.methods[method](ctx, convertedReq)
+			continue
+		}
+		srv.methods[method](ctx, req)
+	}
+}
+
 func RegisterBroadcastFunc[T requestTypes, V responseTypes](impl func(context.Context, T) (V, error)) func(context.Context, any) (any, error) {
 	return func(ctx context.Context, req any) (resp any, err error) {
 		return impl(ctx, req.(T))
@@ -175,6 +196,14 @@ func RegisterConversionFunc[T requestTypes, V responseTypes](impl func(context.C
 	return func(ctx context.Context, req any) any {
 		return impl(ctx, req.(T))
 	}
+}
+
+func (srv *Server) RegisterConversion(method string, conversion func(context.Context, any) any) {
+	srv.conversions[method] = conversion
+}
+
+func (srv *Server) RegisterBroadcastFunc(method string, broadcastFunc func(context.Context, any) (any, error)) {
+	srv.methods[method] = broadcastFunc
 }
 
 func SetDefaultValues[T any](m *T, prefix string) {
