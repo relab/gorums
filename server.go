@@ -165,6 +165,7 @@ func NewServer(opts ...ServerOption) *Server {
 		BroadcastChan:   make(chan broadcastMsg, 1000),
 		methods:         make(map[string]BroadcastFunc),
 		conversions:     make(map[string]ConversionFunc),
+		Round:           new(uint64),
 	}
 	*s.Round = 1000
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
