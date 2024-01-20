@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"fmt"
 	reflect "reflect"
 	"sync/atomic"
 
@@ -23,6 +22,7 @@ type ConversionFunc func(ctx context.Context, req any) any
 
 type defaultImplementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
 type implementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error, bool)
+type implementationFunc2[T requestTypes, V responseTypes, U requestTypes] func(ServerCtx, T, func(U)) (V, error)
 
 func DefaultHandler[T requestTypes, V responseTypes](impl defaultImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
@@ -74,16 +74,15 @@ func (b *broadcastMessage[T, V]) GetRound() uint64 {
 	return b.round
 }
 
-func newBroadcastMessage[T requestTypes, V responseTypes](ctx ServerCtx, req T, impl implementationFunc[T, V], method string, round uint64) *broadcastMessage[T, V] {
+func newBroadcastMessage[T requestTypes, V responseTypes](ctx ServerCtx, req T, method string, round uint64) *broadcastMessage[T, V] {
 	p, _ := peer.FromContext(ctx)
 	addr := p.Addr.String()
 	return &broadcastMessage[T, V]{
-		from:           addr,
-		request:        req,
-		implementation: impl,
-		method:         method,
-		context:        ctx,
-		round:          round,
+		from:    addr,
+		request: req,
+		method:  method,
+		context: ctx,
+		round:   round,
 	}
 }
 
@@ -106,10 +105,10 @@ func BroadcastHandler[T requestTypes, V responseTypes](impl implementationFunc[T
 		/*var resp responseTypes
 		var err error
 		var broadcast bool*/
-		fmt.Println("sender:", in.Metadata.Sender, in.Metadata.Method, "round:", in.Metadata.Round)
+		//fmt.Println("sender:", in.Metadata.Sender, in.Metadata.Method, "round:", in.Metadata.Round)
 		resp, err, broadcast := impl(ctx, req)
 		if broadcast && !srv.alreadyBroadcasted(in.Metadata.Round, in.Metadata.Method) {
-			go srv.broadcast(newBroadcastMessage[T, V](ctx, req, impl, in.Metadata.Method, in.Metadata.Round))
+			go srv.broadcast(newBroadcastMessage[T, V](ctx, req, in.Metadata.Method, in.Metadata.Round))
 		}
 		/*if !srv.alreadyReceivedFromPeer(ctx, in.Metadata.MessageID, in.Metadata.Round, in.Metadata.Method, in.Metadata.Sender) {
 			resp, err, broadcast = impl(ctx, req)
@@ -119,6 +118,32 @@ func BroadcastHandler[T requestTypes, V responseTypes](impl implementationFunc[T
 			}
 		}*/
 		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
+	}
+}
+
+func BroadcastHandler2[T requestTypes, V responseTypes, U requestTypes](impl implementationFunc2[T, V, U], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
+		// Maybe implement a per function lock?
+		srv.Lock()
+		defer srv.Unlock()
+		req := in.Message.(T)
+		defer ctx.Release()
+		var broadcast *bool = new(bool)
+		*broadcast = false
+		request := new(U)
+		resp, err := impl(ctx, req, determineBroadcast[U](broadcast, request))
+		if *broadcast && !srv.alreadyBroadcasted(in.Metadata.Round, in.Metadata.Method) {
+			go srv.broadcast(newBroadcastMessage[U, V](ctx, *request, in.Metadata.Method, in.Metadata.Round))
+		}
+		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
+	}
+}
+
+func determineBroadcast[T requestTypes](shouldBroadcast *bool, request *T) func(T) {
+	return func(req T) {
+		*shouldBroadcast = true
+		*request = req
 	}
 }
 
