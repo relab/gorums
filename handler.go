@@ -17,7 +17,7 @@ type responseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastFunc func(ctx context.Context, req any) (resp any, err error)
+type BroadcastFunc func(ctx context.Context, req requestTypes) (resp responseTypes, err error)
 type ConversionFunc func(ctx context.Context, req any) any
 
 type defaultImplementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
@@ -134,6 +134,8 @@ func BroadcastHandler2[T requestTypes, V responseTypes, U requestTypes](impl imp
 		request := new(U)
 		resp, err := impl(ctx, req, determineBroadcast[U](broadcast, request))
 		if *broadcast && !srv.alreadyBroadcasted(in.Metadata.Round, in.Metadata.Method) {
+			// how to define individual request message to each node?
+			//	- maybe create one request for each node and send a list of requests?
 			go srv.broadcast(newBroadcastMessage[U, V](ctx, *request, in.Metadata.Method, in.Metadata.Round))
 		}
 		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
@@ -204,17 +206,17 @@ func (srv *Server) run() {
 		method := msg.GetMethod()
 		ctx := context.Background()
 		// if another function is called in broadcast, the request needs to be converted
-		if convertFunc, ok := srv.conversions[method]; ok {
-			convertedReq := convertFunc(ctx, req)
-			srv.methods[method](ctx, convertedReq)
-			continue
-		}
+		//if convertFunc, ok := srv.conversions[method]; ok {
+		//	convertedReq := convertFunc(ctx, req)
+		//	srv.methods[method](ctx, convertedReq)
+		//	continue
+		//}
 		srv.methods[method](ctx, req)
 	}
 }
 
-func RegisterBroadcastFunc[T requestTypes, V responseTypes](impl func(context.Context, T) (V, error)) func(context.Context, any) (any, error) {
-	return func(ctx context.Context, req any) (resp any, err error) {
+func RegisterBroadcastFunc[T requestTypes, V responseTypes](impl func(context.Context, T) (V, error)) func(context.Context, requestTypes) (responseTypes, error) {
+	return func(ctx context.Context, req requestTypes) (resp responseTypes, err error) {
 		return impl(ctx, req.(T))
 	}
 }
@@ -225,11 +227,11 @@ func RegisterConversionFunc[T requestTypes, V responseTypes](impl func(context.C
 	}
 }
 
-func (srv *Server) RegisterConversion(method string, conversion func(context.Context, any) any) {
-	srv.conversions[method] = conversion
-}
+//func (srv *Server) RegisterConversion(method string, conversion func(context.Context, any) any) {
+//	srv.conversions[method] = conversion
+//}
 
-func (srv *Server) RegisterBroadcastFunc(method string, broadcastFunc func(context.Context, any) (any, error)) {
+func (srv *Server) RegisterBroadcastFunc(method string, broadcastFunc func(context.Context, requestTypes) (responseTypes, error)) {
 	srv.methods[method] = broadcastFunc
 }
 

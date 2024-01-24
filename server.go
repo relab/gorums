@@ -145,8 +145,8 @@ type Server struct {
 	broadcastedMsgs map[uint64]map[string]bool
 	BroadcastChan   chan broadcastMsg
 	methods         map[string]BroadcastFunc
-	conversions     map[string]ConversionFunc
-	Round           *uint64
+	//conversions     map[string]ConversionFunc
+	Round *uint64
 }
 
 // NewServer returns a new instance of GorumsServer.
@@ -164,8 +164,8 @@ func NewServer(opts ...ServerOption) *Server {
 		broadcastedMsgs: make(map[uint64]map[string]bool),
 		BroadcastChan:   make(chan broadcastMsg, 1000),
 		methods:         make(map[string]BroadcastFunc),
-		conversions:     make(map[string]ConversionFunc),
-		Round:           new(uint64),
+		//conversions:     make(map[string]ConversionFunc),
+		Round: new(uint64),
 	}
 	*s.Round = 1000
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
