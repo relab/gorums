@@ -18,7 +18,7 @@ type responseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastFunc func(ctx context.Context, req any) (resp any, err error)
+type BroadcastFunc func(ctx context.Context, req requestTypes) (resp responseTypes, err error)
 type ConversionFunc func(ctx context.Context, req any) any
 
 type defaultImplementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
@@ -314,8 +314,8 @@ func (srv *Server) run() {
 	}
 }
 
-func RegisterBroadcastFunc[T requestTypes, V responseTypes](impl func(context.Context, T) (V, error)) func(context.Context, any) (any, error) {
-	return func(ctx context.Context, req any) (resp any, err error) {
+func RegisterBroadcastFunc[T requestTypes, V responseTypes](impl func(context.Context, T) (V, error)) func(context.Context, requestTypes) (responseTypes, error) {
+	return func(ctx context.Context, req requestTypes) (resp responseTypes, err error) {
 		return impl(ctx, req.(T))
 	}
 }
@@ -326,11 +326,11 @@ func RegisterConversionFunc[T requestTypes, V responseTypes](impl func(context.C
 	}
 }
 
-func (srv *Server) RegisterConversion(method string, conversion func(context.Context, any) any) {
-	srv.conversions[method] = conversion
-}
+//func (srv *Server) RegisterConversion(method string, conversion func(context.Context, any) any) {
+//	srv.conversions[method] = conversion
+//}
 
-func (srv *Server) RegisterBroadcastFunc(method string, broadcastFunc func(context.Context, any) (any, error)) {
+func (srv *Server) RegisterBroadcastFunc(method string, broadcastFunc func(context.Context, requestTypes) (responseTypes, error)) {
 	srv.methods[method] = broadcastFunc
 }
 
