@@ -4,6 +4,7 @@ import (
 	"context"
 	reflect "reflect"
 	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -23,6 +24,7 @@ type ConversionFunc func(ctx context.Context, req any) any
 type defaultImplementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
 type implementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error, bool)
 type implementationFunc2[T requestTypes, V responseTypes, U requestTypes] func(ServerCtx, T, func(U)) (V, error)
+type implementationFunc3[T requestTypes, V responseTypes] func(ServerCtx, T, func(V)) (V, error)
 
 func DefaultHandler[T requestTypes, V responseTypes](impl defaultImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
@@ -121,6 +123,62 @@ func BroadcastHandler[T requestTypes, V responseTypes](impl implementationFunc[T
 	}
 }
 
+type responseMsg interface {
+	GetResponse() responseTypes
+	GetError() error
+}
+
+type responseMessage[V responseTypes] struct {
+	response V
+	err      error
+}
+
+func newResponseMessage[V responseTypes](response V, err error) *responseMessage[V] {
+	return &responseMessage[V]{
+		response: response,
+		err:      err,
+	}
+}
+
+func (r *responseMessage[V]) GetResponse() responseTypes {
+	return r.response
+}
+
+func (r *responseMessage[V]) GetError() error {
+	return r.err
+}
+
+func ReturnToClientHandler[T requestTypes, V responseTypes](impl implementationFunc3[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
+		// Maybe implement a per function lock?
+		srv.Lock()
+		defer srv.Unlock()
+		req := in.Message.(T)
+		defer ctx.Release()
+		var returnToClient *bool = new(bool)
+		*returnToClient = false
+		response := new(V)
+		resp, err := impl(ctx, req, determineReturnToClient[V](returnToClient, response))
+		if *returnToClient && !srv.alreadyReturnedToClient(in.Metadata.Round, in.Metadata.Method) {
+			srv.setReturnedToClient(in.Metadata.Round, true)
+			go func() {
+				// err must be sent to user similar to response?
+				srv.responseChan <- newResponseMessage[V](*response, err)
+			}()
+		}
+		// server to server communication does not need response?
+		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
+	}
+}
+
+func determineReturnToClient[V responseTypes](shouldReturnToClient *bool, response *V) func(V) {
+	return func(resp V) {
+		*shouldReturnToClient = true
+		*response = resp
+	}
+}
+
 func BroadcastHandler2[T requestTypes, V responseTypes, U requestTypes](impl implementationFunc2[T, V, U], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
@@ -134,10 +192,35 @@ func BroadcastHandler2[T requestTypes, V responseTypes, U requestTypes](impl imp
 		request := new(U)
 		resp, err := impl(ctx, req, determineBroadcast[U](broadcast, request))
 		if *broadcast && !srv.alreadyBroadcasted(in.Metadata.Round, in.Metadata.Method) {
+			// how to define individual request message to each node?
+			//	- maybe create one request for each node and send a list of requests?
 			go srv.broadcast(newBroadcastMessage[U, V](ctx, *request, in.Metadata.Method, in.Metadata.Round))
 		}
+		// verify whether a server or a client sent the request
+		if in.Metadata.Sender == "client" {
+			go determineClientResponse[V](srv, ctx, in, finished, resp, err)
+		} else {
+			// server to server communication does not need response?
+			SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
+		}
+	}
+}
+
+func determineClientResponse[V requestTypes](srv *Server, ctx ServerCtx, in *Message, finished chan<- *Message, resp V, err error) {
+	srv.setReturnedToClient(in.Metadata.GetRound(), false)
+	select {
+	case response := <-srv.getResponseToReturnToClient():
+		// success
+		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(response.GetResponse()), err))
+	case <-time.After(5 * time.Second):
+		// fail
+		srv.setReturnedToClient(in.Metadata.GetRound(), true)
 		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
 	}
+}
+
+func (srv *Server) getResponseToReturnToClient() <-chan responseMsg {
+	return srv.responseChan
 }
 
 func determineBroadcast[T requestTypes](shouldBroadcast *bool, request *T) func(T) {
@@ -145,6 +228,22 @@ func determineBroadcast[T requestTypes](shouldBroadcast *bool, request *T) func(
 		*shouldBroadcast = true
 		*request = req
 	}
+}
+
+func (srv *Server) alreadyReturnedToClient(msgId uint64, method string) bool {
+	srv.mutex.Lock()
+	defer srv.mutex.Unlock()
+	returned, ok := srv.returnedToClientMsgs[msgId]
+	if !ok {
+		return true
+	}
+	return ok && returned
+}
+
+func (srv *Server) setReturnedToClient(msgID uint64, val bool) {
+	srv.mutex.Lock()
+	defer srv.mutex.Unlock()
+	srv.returnedToClientMsgs[msgID] = val
 }
 
 func (srv *Server) alreadyBroadcasted(msgId uint64, method string) bool {
@@ -159,20 +258,21 @@ func (srv *Server) alreadyBroadcasted(msgId uint64, method string) bool {
 	return ok && broadcasted
 }
 
-func (srv *Server) alreadyReceivedFromPeer(ctx ServerCtx, msgId, round uint64, method, sender string) bool {
-	_, ok := srv.recievedFrom[msgId]
+func (srv *Server) alreadyReceivedFromPeer(ctx ServerCtx, broadcastID, round uint64, method, sender string) bool {
+	_, ok := srv.recievedFrom[broadcastID]
 	if !ok {
-		srv.recievedFrom[msgId] = make(map[string]map[string]bool)
+		srv.recievedFrom[broadcastID] = make(map[string]map[string]bool)
 	}
-	_, ok = srv.recievedFrom[msgId][method]
+	_, ok = srv.recievedFrom[broadcastID][method]
 	if !ok {
-		srv.recievedFrom[msgId][method] = make(map[string]bool)
+		srv.recievedFrom[broadcastID][method] = make(map[string]bool)
 	}
+	// include an addr field in the metadata instead because the ctx address is unreliable in docker networks
 	p, _ := peer.FromContext(ctx)
 	addr := p.Addr.String()
-	receivedMsgFromNode, ok := srv.recievedFrom[msgId][method][addr]
+	receivedMsgFromNode, ok := srv.recievedFrom[broadcastID][method][addr]
 	if !ok && !receivedMsgFromNode {
-		srv.recievedFrom[msgId][method][addr] = true
+		srv.recievedFrom[broadcastID][method][addr] = true
 		return false
 	}
 	return true
@@ -189,6 +289,7 @@ func (srv *Server) alreadyReceivedFromPeer(ctx ServerCtx, msgId, round uint64, m
 }*/
 
 func (srv *Server) broadcast(broadcastMessage broadcastMsg) {
+	//time.Sleep(5 * time.Second)
 	srv.BroadcastChan <- broadcastMessage
 }
 
@@ -204,11 +305,11 @@ func (srv *Server) run() {
 		method := msg.GetMethod()
 		ctx := context.Background()
 		// if another function is called in broadcast, the request needs to be converted
-		if convertFunc, ok := srv.conversions[method]; ok {
-			convertedReq := convertFunc(ctx, req)
-			srv.methods[method](ctx, convertedReq)
-			continue
-		}
+		//if convertFunc, ok := srv.conversions[method]; ok {
+		//	convertedReq := convertFunc(ctx, req)
+		//	srv.methods[method](ctx, convertedReq)
+		//	continue
+		//}
 		srv.methods[method](ctx, req)
 	}
 }
