@@ -290,6 +290,7 @@ func (srv *Server) alreadyReceivedFromPeer(ctx ServerCtx, broadcastID, round uin
 
 func (srv *Server) broadcast(broadcastMessage broadcastMsg) {
 	//time.Sleep(5 * time.Second)
+	// drop if ctx is cancelled? Or in run method?
 	srv.BroadcastChan <- broadcastMessage
 }
 
@@ -304,6 +305,8 @@ func (srv *Server) run() {
 		req := msg.GetRequest()
 		method := msg.GetMethod()
 		ctx := context.Background()
+		// reqCtx := msg.GetContext()
+		// drop if ctx is cancelled? Or in broadcast method?
 		// if another function is called in broadcast, the request needs to be converted
 		//if convertFunc, ok := srv.conversions[method]; ok {
 		//	convertedReq := convertFunc(ctx, req)
