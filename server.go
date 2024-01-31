@@ -150,6 +150,7 @@ type Server struct {
 	Round        *uint64
 	responseChan chan responseMsg
 	mutex        sync.RWMutex
+	b            broadcastStruct
 }
 
 // NewServer returns a new instance of GorumsServer.

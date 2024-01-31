@@ -14,15 +14,13 @@ type Server struct {
 
 func NewServer() *Server {
 	return &Server{
-		Server:      gorums.NewServer(),
-		methods:     make(map[string]gorums.BroadcastFunc),
-		conversions: make(map[string]gorums.ConversionFunc),
+		Server: gorums.NewServer(),
 	}
 }
 
 func RegisterQCStorageServer(srv *Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.QuorumCall", gorums.DefaultHandler(impl.QuorumCall))
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAllToAll", gorums.BestEffortBroadcastHandler(impl.QuorumCallAllToAll, srv.Server))
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAllToAll", gorums.BroadcastHandler(impl.QuorumCallAllToAll, srv.Server))
 
 	//srv.conversions["dev.ZorumsService.QuorumCallAllToAll"] = gorums.RegisterConversionFunc(impl.QuorumCall)
 }
@@ -38,11 +36,11 @@ func (srv *Server) run() {
 		method := msg.GetMethod()
 		ctx := context.Background()
 		// if another function is called in broadcast, the request needs to be converted
-		if convertFunc, ok := srv.conversions[method]; ok {
-			convertedReq := convertFunc(ctx, req)
-			srv.methods[method](ctx, convertedReq)
-			continue
-		}
+		//if convertFunc, ok := srv.conversions[method]; ok {
+		//	convertedReq := convertFunc(ctx, req)
+		//	srv.methods[method](ctx, convertedReq)
+		//	continue
+		//}
 		srv.methods[method](ctx, req)
 	}
 }
