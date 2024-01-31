@@ -147,6 +147,7 @@ type Server struct {
 	returnedToClientMsgs map[uint64]bool
 	BroadcastChan        chan broadcastMsg
 	methods              map[string]BroadcastFunc
+<<<<<<< HEAD
 	conversions          map[string]ConversionFunc
 	Round                *uint64
 	responseChan         chan responseMsg
@@ -161,6 +162,13 @@ type Server struct {
 	//conversions     map[string]ConversionFunc
 	Round *uint64
 >>>>>>> d11bb8fd (refactor type safety)
+=======
+	//conversions          map[string]ConversionFunc
+	Round        *uint64
+	responseChan chan responseMsg
+	mutex        sync.RWMutex
+	b            broadcastStruct
+>>>>>>> 7790c885 (removed coupling)
 }
 
 // NewServer returns a new instance of GorumsServer.
