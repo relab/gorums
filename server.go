@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -164,11 +165,21 @@ type Server struct {
 >>>>>>> d11bb8fd (refactor type safety)
 =======
 	//conversions          map[string]ConversionFunc
+<<<<<<< HEAD
 	Round        *uint64
 	responseChan chan responseMsg
 	mutex        sync.RWMutex
 	b            broadcastStruct
 >>>>>>> 7790c885 (removed coupling)
+=======
+	Round                  *uint64
+	responseChan           chan responseMsg
+	mutex                  sync.RWMutex
+	b                      broadcastStruct
+	pendingClientResponses map[string]respType
+	timeout                time.Duration
+	clientReqs             map[string]*clientRequest
+>>>>>>> 333b929c (refactor client response)
 }
 
 // NewServer returns a new instance of GorumsServer.
@@ -188,6 +199,7 @@ func NewServer(opts ...ServerOption) *Server {
 		returnedToClientMsgs: make(map[string]bool),
 		BroadcastChan:        make(chan broadcastMsg, 1000),
 		methods:              make(map[string]BroadcastFunc),
+<<<<<<< HEAD
 		conversions:          make(map[string]ConversionFunc),
 		Round:                new(uint64),
 		responseChan:         make(chan responseMsg),
@@ -201,6 +213,14 @@ func NewServer(opts ...ServerOption) *Server {
 		//conversions:     make(map[string]ConversionFunc),
 		Round: new(uint64),
 >>>>>>> d11bb8fd (refactor type safety)
+=======
+		//conversions:          make(map[string]ConversionFunc),
+		Round:                  new(uint64),
+		responseChan:           make(chan responseMsg),
+		pendingClientResponses: make(map[string]respType),
+		timeout:                5 * time.Second,
+		clientReqs:             make(map[string]*clientRequest),
+>>>>>>> 333b929c (refactor client response)
 	}
 	*s.Round = 1000
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
