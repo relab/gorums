@@ -61,7 +61,6 @@ service ZorumsService {
 
   // Multiparty.
   rpc Multiparty(Request) returns (google.protobuf.Empty) {
-    option (gorums.quorumcall) = true;
     option (gorums.broadcast) = true;
   }
 

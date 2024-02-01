@@ -256,7 +256,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		docName:  "quorum",
 		template: quorumCall,
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Async)
+			return hasMethodOption(m, gorums.E_Quorumcall, gorums.E_Broadcast) && !hasMethodOption(m, gorums.E_Async)
 		},
 	},
 	callTypeName(gorums.E_Async): {
@@ -310,14 +310,14 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Unicast)
 		},
 	},
-	/*callTypeName(gorums.E_Broadcast): {
+	callTypeName(gorums.E_Broadcast): {
 		extInfo:  gorums.E_Broadcast,
 		docName:  "broadcast",
 		template: broadcastCall,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Broadcast)
 		},
-	},*/
+	},
 }
 
 // gorumsCallTypes should list all available call types supported by Gorums.
@@ -328,6 +328,7 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Correctable,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
+	gorums.E_Broadcast,
 }
 
 // callTypesWithInternal should list all available call types that
