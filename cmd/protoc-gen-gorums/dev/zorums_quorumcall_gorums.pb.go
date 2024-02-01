@@ -11,6 +11,7 @@ import (
 	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	uuid "github.com/google/uuid"
 )
 
 const (
@@ -157,6 +158,9 @@ func (c *Configuration) Multiparty(ctx context.Context, in *Request) (resp *empt
 	cd := gorums.QuorumCallData{
 		Message: in,
 		Method:  "dev.ZorumsService.Multiparty",
+
+		BroadcastID: uuid.New().String(),
+		Sender:      "client",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*empty.Empty, len(replies))

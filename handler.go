@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"errors"
-	"log"
 	reflect "reflect"
 	"sync/atomic"
 	"time"
@@ -299,7 +298,7 @@ func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
-		log.Println("BroadcastID:", in.Metadata.BroadcastMsg.BroadcastID, "Method:", in.Metadata.Method)
+		//log.Println("BroadcastID:", in.Metadata.BroadcastMsg.BroadcastID, "Method:", in.Metadata.Method)
 		srv.Lock()
 		defer srv.Unlock()
 		req := in.Message.(T)
