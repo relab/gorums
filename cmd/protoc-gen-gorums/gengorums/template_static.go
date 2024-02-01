@@ -5,11 +5,11 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "ConfigOption", "google.golang.org/grpc/encoding": "GetCodec"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastStruct", "google.golang.org/grpc/encoding": "GetCodec"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Configuration", "Manager", "Node", "QuorumSpec"}
+var reservedIdents = []string{"Broadcast", "Configuration", "Manager", "Node", "QuorumSpec", "Server"}
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
@@ -22,8 +22,9 @@ type Configuration struct {
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
 //
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
-//  cfg1, err := mgr.NewConfiguration(qspec1, opts...)
-//  cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
+//
+//	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
+//	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
 func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) *Configuration {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
@@ -132,5 +133,28 @@ func (m *Manager) Nodes() []*Node {
 type Node struct {
 	*gorums.RawNode
 }
+
+type Server struct {
+	*gorums.Server
+}
+
+func NewServer() *Server {
+	srv := &Server{
+		gorums.NewServer(),
+	}
+	srv.RegisterBroadcastStruct(&Broadcast{gorums.NewBroadcastStruct()})
+	srv.ListenForBroadcast()
+	return srv
+}
+
+type Broadcast struct {
+	*gorums.BroadcastStruct
+}
+
+//
+//func (b *Broadcast) PrePrepare(req *Request) {
+//	b.SetBroadcastValues("protos.PBFTNode.PrePrepare", req)
+//}
+//
 
 `

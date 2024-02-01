@@ -10,6 +10,7 @@ import "google/protobuf/empty.proto";
 message Request { string Value = 1; }
 message Response { int64 Result = 1; }
 message MyResponse { string Value = 1; }
+message ClientResponse { int64 Result = 1; }
 
 // ZorumsService is not meant to be implemented.
 // The zorums generated code is placed alongside Gorums static code files
@@ -56,6 +57,12 @@ service ZorumsService {
   // QuorumCallEmpty2 for testing imported message type.
   rpc QuorumCallEmpty2(Request) returns (google.protobuf.Empty) {
     option (gorums.quorumcall) = true;
+  }
+
+  // Multiparty.
+  rpc Multiparty(Request) returns (google.protobuf.Empty) {
+    option (gorums.quorumcall) = true;
+    option (gorums.broadcast) = true;
   }
 
   // ------------------------------------------------------------------

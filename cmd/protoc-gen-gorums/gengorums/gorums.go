@@ -310,6 +310,14 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Unicast)
 		},
 	},
+	/*callTypeName(gorums.E_Broadcast): {
+		extInfo:  gorums.E_Broadcast,
+		docName:  "broadcast",
+		template: broadcastCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Broadcast)
+		},
+	},*/
 }
 
 // gorumsCallTypes should list all available call types supported by Gorums.
