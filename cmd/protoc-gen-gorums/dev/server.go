@@ -13,7 +13,6 @@ func NewServer() *Server {
 		gorums.NewServer(),
 	}
 	srv.RegisterBroadcastStruct(&Broadcast{gorums.NewBroadcastStruct()})
-	srv.ListenForBroadcast()
 	return srv
 }
 

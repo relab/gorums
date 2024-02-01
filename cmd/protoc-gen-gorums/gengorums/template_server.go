@@ -72,6 +72,7 @@ func (srv *Server) RegisterConfiguration(c *Configuration) {
 	srv.RegisterBroadcastFunc("{{.Desc.FullName}}", gorums.RegisterBroadcastFunc(c.{{.GoName}}))
 	{{- end}}
 	{{- end}}
+	srv.ListenForBroadcast()
 }
 {{- end}}
 `
