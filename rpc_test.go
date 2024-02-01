@@ -18,13 +18,8 @@ func TestRPCCallSuccess(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := dummy.NewManager(
-		gorums.WithDialTimeout(time.Second),
-		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
+	mgr := rpcTestMgr()
+
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
@@ -49,14 +44,8 @@ func TestRPCCallDownedNode(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
 		return initServer()
 	})
+	mgr := rpcTestMgr()
 
-	mgr := dummy.NewManager(
-		gorums.WithDialTimeout(time.Second),
-		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
@@ -85,13 +74,8 @@ func TestRPCCallTimedOut(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := dummy.NewManager(
-		gorums.WithDialTimeout(time.Second),
-		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
+	mgr := rpcTestMgr()
+
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +90,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 		Method:  "dummy.Dummy.Test",
 	})
 	if err == nil {
-		t.Fatalf("Unexpected error, got: %v, want: %v", err, "context deadline exceeded error")
+		t.Fatalf("Unexpected error, got: %v, want: %v", err, fmt.Errorf("context deadline exceeded"))
 	}
 	if response != nil {
 		t.Fatalf("Unexpected response, got: %v, want: %v", response, nil)
@@ -117,6 +101,17 @@ func initServer() *gorums.Server {
 	srv := gorums.NewServer()
 	dummy.RegisterDummyServer(srv, &testSrv{})
 	return srv
+}
+
+func rpcTestMgr() *dummy.Manager {
+	mgr := dummy.NewManager(
+		gorums.WithDialTimeout(time.Second),
+		gorums.WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	)
+	return mgr
 }
 
 type testSrv struct{}
