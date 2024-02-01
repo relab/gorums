@@ -62,7 +62,7 @@ type ZorumsService interface {
 	Unicast2(ctx gorums.ServerCtx, request *Request)
 }
 
-func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
+func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
@@ -105,7 +105,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 		resp, err := impl.QuorumCallEmpty2(ctx, req)
 		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multiparty", gorums.BroadcastHandler3(impl.Multiparty, srv))
+	srv.RegisterHandler("dev.ZorumsService.Multiparty", gorums.BroadcastHandler3(impl.Multiparty, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
@@ -295,6 +295,7 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
 
 func (srv *Server) RegisterConfiguration(c *Configuration) {
 	srv.RegisterBroadcastFunc("dev.ZorumsService.Multiparty", gorums.RegisterBroadcastFunc(c.Multiparty))
+	srv.ListenForBroadcast()
 }
 
 func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
