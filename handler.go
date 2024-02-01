@@ -308,7 +308,7 @@ func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc
 		//request := new(U)
 		//resp, err := impl(ctx, req, determineBroadcast2[U](broadcast, request, srv))
 		srv.b.Reset()
-		err := impl(ctx, req, srv.b.(V))
+		_ = impl(ctx, req, srv.b.(V))
 		//if *broadcast && !srv.alreadyBroadcasted(in.Metadata.BroadcastID, in.Metadata.Method) {
 		if srv.b.ShouldBroadcast() && !srv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, srv.b.GetMethod()) {
 			// how to define individual request message to each node?
@@ -326,10 +326,10 @@ func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc
 			srv.addClientRequest(in.Metadata, ctx, finished)
 			go srv.timeoutClientResponse(ctx, in, finished)
 			//go determineClientResponse2(srv, ctx, in, finished)
-		} else {
+		} /*else {
 			// server to server communication does not need response?
 			SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), err))
-		}
+		}*/
 	}
 }
 
@@ -644,7 +644,13 @@ func (srv *Server) RegisterConfig(c RawConfiguration) {
 
 func RegisterServerCommunication(srv *Server, method string) func(ctx context.Context, in RequestTypes, broadcastID string) {
 	return func(ctx context.Context, in RequestTypes, broadcastID string) {
-		cd := QuorumCallData{
+		cd := BroadcastCallData{
+			Message:     in,
+			Method:      method,
+			BroadcastID: broadcastID,
+		}
+		srv.config.BroadcastCall(ctx, cd)
+		/*cd := QuorumCallData{
 			Message:     in,
 			Method:      method,
 			BroadcastID: broadcastID,
@@ -652,7 +658,7 @@ func RegisterServerCommunication(srv *Server, method string) func(ctx context.Co
 		cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 			return nil, len(replies) >= 3
 		}
-		srv.config.QuorumCall(ctx, cd)
+		srv.config.QuorumCall(ctx, cd)*/
 	}
 }
 
