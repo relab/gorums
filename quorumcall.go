@@ -18,7 +18,7 @@ type QuorumCallData struct {
 	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
 	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
 	Sender         string
-	Round          uint64 // a unique identifier for the current message
+	BroadcastID    string // a unique identifier for the current message
 }
 
 // QuorumCall performs a quorum call on the configuration.
@@ -26,7 +26,7 @@ type QuorumCallData struct {
 // This method should be used by generated code only.
 func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(c)
-	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, Sender: d.Sender, Round: d.Round}
+	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, Sender: d.Sender, BroadcastID: d.BroadcastID}
 
 	replyChan := make(chan response, expectedReplies)
 	for _, n := range c {

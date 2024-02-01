@@ -19,5 +19,5 @@ message Metadata {
   string Method = 2;
   google.rpc.Status Status = 3;
   string Sender = 4;
-  uint64 Round = 5;
+  string BroadcastID = 5;
 }

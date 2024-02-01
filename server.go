@@ -142,8 +142,8 @@ type Server struct {
 	srv                  *orderingServer
 	grpcServer           *grpc.Server
 	recievedFrom         map[uint64]map[string]map[string]bool
-	broadcastedMsgs      map[uint64]map[string]bool
-	returnedToClientMsgs map[uint64]bool
+	broadcastedMsgs      map[string]map[string]bool
+	returnedToClientMsgs map[string]bool
 	BroadcastChan        chan broadcastMsg
 	methods              map[string]BroadcastFunc
 	//conversions          map[string]ConversionFunc
@@ -165,8 +165,8 @@ func NewServer(opts ...ServerOption) *Server {
 		srv:                  newOrderingServer(&serverOpts),
 		grpcServer:           grpc.NewServer(serverOpts.grpcOpts...),
 		recievedFrom:         make(map[uint64]map[string]map[string]bool),
-		broadcastedMsgs:      make(map[uint64]map[string]bool),
-		returnedToClientMsgs: make(map[uint64]bool),
+		broadcastedMsgs:      make(map[string]map[string]bool),
+		returnedToClientMsgs: make(map[string]bool),
 		BroadcastChan:        make(chan broadcastMsg, 1000),
 		methods:              make(map[string]BroadcastFunc),
 		//conversions:          make(map[string]ConversionFunc),
