@@ -16,7 +16,7 @@ type {{$service}} interface {
 	{{- else if correctableStream .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
 	{{- else if isBroadcast .}}
-	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) (response *{{out $genFile .}}, err error)
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) (err error)
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
@@ -24,6 +24,8 @@ type {{$service}} interface {
 }
 {{- end}}
 `
+
+// {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) (response *{{out $genFile .}}, err error)
 
 var registerInterface = `
 {{$genFile := .GenFile}}
@@ -35,7 +37,7 @@ var registerInterface = `
 func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 	{{- range .Methods}}
 	{{- if isBroadcast .}}
-	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler3(impl.{{.GoName}}, srv.Server))
+	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler(impl.{{.GoName}}, srv.Server))
 	{{- else }}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})
