@@ -1,12 +1,8 @@
 package gengorums
 
-/*var broadcastSignature = `func (b *Broadcast) {{$method}}(req *{{$in}}) {`
+var broadcastSignature = `func (b *Broadcast) {{.Method.GoName}}(req *{{in .GenFile .Method}}) {`
 
-var broadcastBody = `	b.SetBroadcastValues("{{.Desc.FullName}}", req)
+var broadcastBody = `	b.SetBroadcastValues("{{.Method.Desc.FullName}}", req)
 }`
 
-var broadcastCall = commonVariables +
-	quorumCallComment +
-	broadcastSignature +
-	broadcastBody
-*/
+var broadcastCall = broadcastSignature + broadcastBody
