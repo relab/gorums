@@ -323,7 +323,8 @@ func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc
 		// verify whether a server or a client sent the request
 		if in.Metadata.Sender == "client" {
 			srv.addClientRequest(in.Metadata, ctx, finished)
-			go determineClientResponse2(srv, ctx, in, finished)
+			go srv.timeoutClientResponse(ctx, in, finished)
+			//go determineClientResponse2(srv, ctx, in, finished)
 		} else {
 			// server to server communication does not need response?
 			SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), err))
@@ -473,13 +474,15 @@ func (srv *Server) handleClientResponses() {
 			continue
 		}
 		if !response.Valid() {
+			// the response is old and should have timed out, but may not due to scheduling.
+			// the timeout msg should arrive soon.
 			continue
 		}
 		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.GetResponse()), response.GetError()))
 	}
 }
 
-func timeoutClientResponse(srv *Server, ctx ServerCtx, in *Message, finished chan<- *Message) {
+func (srv *Server) timeoutClientResponse(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	time.After(srv.timeout)
 	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.GetBroadcastID(), timeout, srv.timeout)
 }
@@ -587,6 +590,7 @@ func (srv *Server) broadcast(broadcastMessage broadcastMsg) {
 
 func (srv *Server) ListenForBroadcast() {
 	go srv.run()
+	go srv.handleClientResponses()
 }
 
 func (srv *Server) run() {
