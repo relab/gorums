@@ -32,10 +32,10 @@ var registerInterface = `
 {{$sendMessage := use "gorums.SendMessage" $genFile}}
 {{range .Services -}}
 {{$service := .GoName}}
-func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}) {
+func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 	{{- range .Methods}}
 	{{- if isBroadcast .}}
-	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler3(impl.{{.GoName}}, srv))
+	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler3(impl.{{.GoName}}, srv.Server))
 	{{- else }}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})
