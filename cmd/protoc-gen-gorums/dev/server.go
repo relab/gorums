@@ -20,9 +20,3 @@ func NewServer() *Server {
 type Broadcast struct {
 	*gorums.BroadcastStruct
 }
-
-//
-//func (b *Broadcast) PrePrepare(req *Request) {
-//	b.SetBroadcastValues("protos.PBFTNode.PrePrepare", req)
-//}
-//
