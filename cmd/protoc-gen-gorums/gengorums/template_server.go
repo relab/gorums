@@ -71,9 +71,10 @@ var registerInterfaceTest = `
 func (srv *Server) RegisterConfiguration(c *Configuration) {
 	{{- range .Methods}}
 	{{- if isBroadcast .}}
-	srv.RegisterBroadcastFunc("{{.Desc.FullName}}", gorums.RegisterBroadcastFunc(c.{{.GoName}}))
+	srv.RegisterBroadcastFunc("{{.Desc.FullName}}")
 	{{- end}}
 	{{- end}}
+	srv.RegisterConfig(c.RawConfiguration)
 	srv.ListenForBroadcast()
 }
 {{- end}}

@@ -294,7 +294,8 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 }
 
 func (srv *Server) RegisterConfiguration(c *Configuration) {
-	srv.RegisterBroadcastFunc("dev.ZorumsService.Multiparty", gorums.RegisterBroadcastFunc(c.Multiparty))
+	srv.RegisterBroadcastFunc("dev.ZorumsService.Multiparty")
+	srv.RegisterConfig(c.RawConfiguration)
 	srv.ListenForBroadcast()
 }
 

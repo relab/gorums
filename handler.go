@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"errors"
+	"log"
 	reflect "reflect"
 	"sync/atomic"
 	"time"
@@ -21,7 +22,8 @@ type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastFunc func(ctx context.Context, req RequestTypes) (resp ResponseTypes, err error)
+type BroadcastFunc2 func(ctx context.Context, req RequestTypes) (resp ResponseTypes, err error)
+type BroadcastFunc func(ctx context.Context, req RequestTypes, broadcastID string)
 type ConversionFunc func(ctx context.Context, req any) any
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
@@ -154,8 +156,8 @@ func BroadcastHandler3[T RequestTypes, V ResponseTypes](impl implementationFunc[
 		var broadcast bool*/
 		//fmt.Println("sender:", in.Metadata.Sender, in.Metadata.Method, "round:", in.Metadata.BroadcastID)
 		resp, err, broadcast := impl(ctx, req)
-		if broadcast && !srv.alreadyBroadcasted(in.Metadata.BroadcastID, in.Metadata.Method) {
-			go srv.broadcast(newBroadcastMessage[T, V](ctx, req, in.Metadata.Method, in.Metadata.BroadcastID))
+		if broadcast && !srv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, in.Metadata.Method) {
+			go srv.broadcast(newBroadcastMessage[T, V](ctx, req, in.Metadata.Method, in.Metadata.BroadcastMsg.BroadcastID))
 		}
 		/*if !srv.alreadyReceivedFromPeer(ctx, in.Metadata.MessageID, in.Metadata.BroadcastID, in.Metadata.Method, in.Metadata.Sender) {
 			resp, err, broadcast = impl(ctx, req)
@@ -237,11 +239,11 @@ func ReturnToClientHandler[T RequestTypes, V ResponseTypes](impl implementationF
 		*returnToClient = false
 		response := new(V)
 		resp, err := impl(ctx, req, determineReturnToClient[V](returnToClient, response))
-		if *returnToClient && !srv.alreadyReturnedToClient(in.Metadata.BroadcastID, in.Metadata.Method) {
-			srv.setReturnedToClient(in.Metadata.BroadcastID, true)
+		if *returnToClient && !srv.alreadyReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, in.Metadata.Method) {
+			srv.setReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, true)
 			go func() {
 				// err must be sent to user similar to response?
-				srv.responseChan <- newResponseMessage(*response, err, in.Metadata.BroadcastID, clientResponse, srv.timeout)
+				srv.responseChan <- newResponseMessage(*response, err, in.Metadata.BroadcastMsg.BroadcastID, clientResponse, srv.timeout)
 			}()
 		}
 		// server to server communication does not need response?
@@ -271,20 +273,20 @@ func BroadcastHandler4[T RequestTypes, V ResponseTypes, U broadcastStruct](impl 
 		srv.b.Reset()
 		resp, err := impl(ctx, req, srv.b.(U))
 		//if *broadcast && !srv.alreadyBroadcasted(in.Metadata.BroadcastID, in.Metadata.Method) {
-		if srv.b.ShouldBroadcast() && !srv.alreadyBroadcasted(in.Metadata.BroadcastID, srv.b.GetMethod()) {
+		if srv.b.ShouldBroadcast() && !srv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, srv.b.GetMethod()) {
 			// how to define individual request message to each node?
 			//	- maybe create one request for each node and send a list of requests?
-			go srv.broadcast(newBroadcastMessage2(ctx, srv.b.GetRequest(), srv.b.GetMethod(), in.Metadata.BroadcastID))
+			go srv.broadcast(newBroadcastMessage2(ctx, srv.b.GetRequest(), srv.b.GetMethod(), in.Metadata.BroadcastMsg.BroadcastID))
 		}
-		if srv.b.ShouldReturnToClient() && !srv.alreadyReturnedToClient(in.Metadata.BroadcastID, srv.b.GetMethod()) {
-			srv.setReturnedToClient(in.Metadata.BroadcastID, true)
+		if srv.b.ShouldReturnToClient() && !srv.alreadyReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, srv.b.GetMethod()) {
+			srv.setReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, true)
 			go func() {
 				// err must be sent to user similar to response?
-				srv.responseChan <- newResponseMessage(srv.b.GetResponse(), srv.b.GetError(), in.Metadata.BroadcastID, clientResponse, srv.timeout)
+				srv.responseChan <- newResponseMessage(srv.b.GetResponse(), srv.b.GetError(), in.Metadata.BroadcastMsg.BroadcastID, clientResponse, srv.timeout)
 			}()
 		}
 		// verify whether a server or a client sent the request
-		if in.Metadata.Sender == "client" {
+		if in.Metadata.BroadcastMsg.Sender == "client" {
 			go determineClientResponse[V](srv, ctx, in, finished, resp, err)
 		} else {
 			// server to server communication does not need response?
@@ -297,7 +299,7 @@ func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
-		//log.Println("broadcastID:", in.Metadata.BroadcastID)
+		log.Println("BroadcastID:", in.Metadata.BroadcastMsg.BroadcastID, "Method:", in.Metadata.Method)
 		srv.Lock()
 		defer srv.Unlock()
 		req := in.Message.(T)
@@ -309,19 +311,19 @@ func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc
 		srv.b.Reset()
 		err := impl(ctx, req, srv.b.(V))
 		//if *broadcast && !srv.alreadyBroadcasted(in.Metadata.BroadcastID, in.Metadata.Method) {
-		if srv.b.ShouldBroadcast() && !srv.alreadyBroadcasted(in.Metadata.BroadcastID, srv.b.GetMethod()) {
+		if srv.b.ShouldBroadcast() && !srv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, srv.b.GetMethod()) {
 			// how to define individual request message to each node?
 			//	- maybe create one request for each node and send a list of requests?
-			go srv.broadcast(newBroadcastMessage2(ctx, srv.b.GetRequest(), srv.b.GetMethod(), in.Metadata.BroadcastID))
+			go srv.broadcast(newBroadcastMessage2(ctx, srv.b.GetRequest(), srv.b.GetMethod(), in.Metadata.BroadcastMsg.BroadcastID))
 		}
-		if srv.b.ShouldReturnToClient() && !srv.alreadyReturnedToClient(in.Metadata.BroadcastID, srv.b.GetMethod()) {
-			srv.setReturnedToClient(in.Metadata.BroadcastID, true)
+		if srv.b.ShouldReturnToClient() && !srv.alreadyReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, srv.b.GetMethod()) {
+			srv.setReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, true)
 			go func() {
-				srv.responseChan <- newResponseMessage(srv.b.GetResponse(), srv.b.GetError(), in.Metadata.BroadcastID, clientResponse, srv.timeout)
+				srv.responseChan <- newResponseMessage(srv.b.GetResponse(), srv.b.GetError(), in.Metadata.BroadcastMsg.BroadcastID, clientResponse, srv.timeout)
 			}()
 		}
 		// verify whether a server or a client sent the request
-		if in.Metadata.Sender == "client" {
+		if in.Metadata.BroadcastMsg.Sender == "client" {
 			srv.addClientRequest(in.Metadata, ctx, finished)
 			go srv.timeoutClientResponse(ctx, in, finished)
 			//go determineClientResponse2(srv, ctx, in, finished)
@@ -419,13 +421,13 @@ func BroadcastHandler2[T RequestTypes, V ResponseTypes, U RequestTypes](impl imp
 		*broadcast = false
 		request := new(U)
 		resp, err := impl(ctx, req, determineBroadcast[U](broadcast, request))
-		if *broadcast && !srv.alreadyBroadcasted(in.Metadata.BroadcastID, in.Metadata.Method) {
+		if *broadcast && !srv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, in.Metadata.Method) {
 			// how to define individual request message to each node?
 			//	- maybe create one request for each node and send a list of requests?
-			go srv.broadcast(newBroadcastMessage[U, V](ctx, *request, in.Metadata.Method, in.Metadata.BroadcastID))
+			go srv.broadcast(newBroadcastMessage[U, V](ctx, *request, in.Metadata.Method, in.Metadata.BroadcastMsg.BroadcastID))
 		}
 		// verify whether a server or a client sent the request
-		if in.Metadata.Sender == "client" {
+		if in.Metadata.BroadcastMsg.Sender == "client" {
 			go determineClientResponse[V](srv, ctx, in, finished, resp, err)
 		} else {
 			// server to server communication does not need response?
@@ -442,14 +444,14 @@ func determineBroadcast[T RequestTypes](shouldBroadcast *bool, request *T) func(
 }
 
 func determineClientResponse2(srv *Server, ctx ServerCtx, in *Message, finished chan<- *Message) {
-	srv.setReturnedToClient(in.Metadata.GetBroadcastID(), false)
+	srv.setReturnedToClient(in.Metadata.BroadcastMsg.GetBroadcastID(), false)
 	select {
 	case response := <-srv.getResponseToReturnToClient():
 		// success
 		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(response.GetResponse()), response.GetError()))
 	case <-time.After(5 * time.Second):
 		// fail
-		srv.setReturnedToClient(in.Metadata.GetBroadcastID(), true)
+		srv.setReturnedToClient(in.Metadata.BroadcastMsg.GetBroadcastID(), true)
 		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), errors.New("server timed out")))
 	}
 }
@@ -484,18 +486,18 @@ func (srv *Server) handleClientResponses() {
 
 func (srv *Server) timeoutClientResponse(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	time.After(srv.timeout)
-	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.GetBroadcastID(), timeout, srv.timeout)
+	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.BroadcastMsg.GetBroadcastID(), timeout, srv.timeout)
 }
 
 func determineClientResponse[V RequestTypes](srv *Server, ctx ServerCtx, in *Message, finished chan<- *Message, resp V, err error) {
-	srv.setReturnedToClient(in.Metadata.GetBroadcastID(), false)
+	srv.setReturnedToClient(in.Metadata.BroadcastMsg.GetBroadcastID(), false)
 	select {
 	case response := <-srv.getResponseToReturnToClient():
 		// success
 		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(response.GetResponse()), err))
 	case <-time.After(5 * time.Second):
 		// fail
-		srv.setReturnedToClient(in.Metadata.GetBroadcastID(), true)
+		srv.setReturnedToClient(in.Metadata.BroadcastMsg.GetBroadcastID(), true)
 		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
 	}
 }
@@ -521,11 +523,11 @@ func (srv *Server) setReturnedToClient(broadcastID string, val bool) {
 }
 
 func (srv *Server) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
-	srv.setPendingClientResponse(metadata.GetBroadcastID())
-	srv.setReturnedToClient(metadata.GetBroadcastID(), false)
+	srv.setPendingClientResponse(metadata.BroadcastMsg.GetBroadcastID())
+	srv.setReturnedToClient(metadata.BroadcastMsg.GetBroadcastID(), false)
 	srv.mutex.Lock()
 	defer srv.mutex.Unlock()
-	srv.clientReqs[metadata.GetBroadcastID()] = &clientRequest{
+	srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()] = &clientRequest{
 		id:       uuid.New().String(),
 		ctx:      ctx,
 		finished: finished,
@@ -599,6 +601,7 @@ func (srv *Server) run() {
 		//srv.c.StoreID(msgID-1)
 		req := msg.GetRequest()
 		method := msg.GetMethod()
+		broadcastID := msg.GetBroadcastID()
 		ctx := context.Background()
 		// reqCtx := msg.GetContext()
 		// drop if ctx is cancelled? Or in broadcast method?
@@ -608,7 +611,7 @@ func (srv *Server) run() {
 		//	srv.methods[method](ctx, convertedReq)
 		//	continue
 		//}
-		srv.methods[method](ctx, req)
+		srv.methods[method](ctx, req, broadcastID)
 	}
 }
 
@@ -628,8 +631,30 @@ func RegisterConversionFunc[T RequestTypes, V ResponseTypes](impl func(context.C
 //	srv.conversions[method] = conversion
 //}
 
-func (srv *Server) RegisterBroadcastFunc(method string, broadcastFunc func(context.Context, RequestTypes) (ResponseTypes, error)) {
-	srv.methods[method] = broadcastFunc
+func (srv *Server) RegisterBroadcastFunc2(method string, broadcastFunc BroadcastFunc2) {
+	srv.methods2[method] = broadcastFunc
+}
+
+func (srv *Server) RegisterBroadcastFunc(method string) {
+	srv.methods[method] = RegisterServerCommunication(srv, method)
+}
+
+func (srv *Server) RegisterConfig(c RawConfiguration) {
+	srv.config = c
+}
+
+func RegisterServerCommunication(srv *Server, method string) func(ctx context.Context, in RequestTypes, broadcastID string) {
+	return func(ctx context.Context, in RequestTypes, broadcastID string) {
+		cd := QuorumCallData{
+			Message:     in,
+			Method:      method,
+			BroadcastID: broadcastID,
+		}
+		cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+			return nil, len(replies) >= 3
+		}
+		srv.config.QuorumCall(ctx, cd)
+	}
 }
 
 func SetDefaultValues[T any](m *T, prefix string) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -140,46 +139,8 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	sync.RWMutex
-<<<<<<< HEAD
-	srv                  *orderingServer
-	grpcServer           *grpc.Server
-	recievedFrom         map[uint64]map[string]map[string]bool
-	broadcastedMsgs      map[string]map[string]bool
-	returnedToClientMsgs map[string]bool
-	BroadcastChan        chan broadcastMsg
-	methods              map[string]BroadcastFunc
-<<<<<<< HEAD
-	conversions          map[string]ConversionFunc
-	Round                *uint64
-	responseChan         chan responseMsg
-	mutex                sync.RWMutex
-=======
-	srv             *orderingServer
-	grpcServer      *grpc.Server
-	recievedFrom    map[uint64]map[string]map[string]bool
-	broadcastedMsgs map[uint64]map[string]bool
-	BroadcastChan   chan broadcastMsg
-	methods         map[string]BroadcastFunc
-	//conversions     map[string]ConversionFunc
-	Round *uint64
->>>>>>> d11bb8fd (refactor type safety)
-=======
-	//conversions          map[string]ConversionFunc
-<<<<<<< HEAD
-	Round        *uint64
-	responseChan chan responseMsg
-	mutex        sync.RWMutex
-	b            broadcastStruct
->>>>>>> 7790c885 (removed coupling)
-=======
-	Round                  *uint64
-	responseChan           chan responseMsg
-	mutex                  sync.RWMutex
-	b                      broadcastStruct
-	pendingClientResponses map[string]respType
-	timeout                time.Duration
-	clientReqs             map[string]*clientRequest
->>>>>>> 333b929c (refactor client response)
+	srv        *orderingServer
+	grpcServer *grpc.Server
 }
 
 // NewServer returns a new instance of GorumsServer.
@@ -191,38 +152,9 @@ func NewServer(opts ...ServerOption) *Server {
 		opt(&serverOpts)
 	}
 	s := &Server{
-<<<<<<< HEAD
-		srv:                  newOrderingServer(&serverOpts),
-		grpcServer:           grpc.NewServer(serverOpts.grpcOpts...),
-		recievedFrom:         make(map[uint64]map[string]map[string]bool),
-		broadcastedMsgs:      make(map[string]map[string]bool),
-		returnedToClientMsgs: make(map[string]bool),
-		BroadcastChan:        make(chan broadcastMsg, 1000),
-		methods:              make(map[string]BroadcastFunc),
-<<<<<<< HEAD
-		conversions:          make(map[string]ConversionFunc),
-		Round:                new(uint64),
-		responseChan:         make(chan responseMsg),
-=======
-		srv:             newOrderingServer(&serverOpts),
-		grpcServer:      grpc.NewServer(serverOpts.grpcOpts...),
-		recievedFrom:    make(map[uint64]map[string]map[string]bool),
-		broadcastedMsgs: make(map[uint64]map[string]bool),
-		BroadcastChan:   make(chan broadcastMsg, 1000),
-		methods:         make(map[string]BroadcastFunc),
-		//conversions:     make(map[string]ConversionFunc),
-		Round: new(uint64),
->>>>>>> d11bb8fd (refactor type safety)
-=======
-		//conversions:          make(map[string]ConversionFunc),
-		Round:                  new(uint64),
-		responseChan:           make(chan responseMsg),
-		pendingClientResponses: make(map[string]respType),
-		timeout:                5 * time.Second,
-		clientReqs:             make(map[string]*clientRequest),
->>>>>>> 333b929c (refactor client response)
+		srv:        newOrderingServer(&serverOpts),
+		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
 	}
-	*s.Round = 1000
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }
