@@ -15,4 +15,5 @@ extend google.protobuf.MethodOptions {
   bool async = 50010;
   bool per_node_arg = 50020;
   string custom_return_type = 50030;
+  bool broadcast = 50040;
 }

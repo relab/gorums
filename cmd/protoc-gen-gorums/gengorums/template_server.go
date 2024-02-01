@@ -15,6 +15,8 @@ type {{$service}} interface {
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
 	{{- else if correctableStream .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
+	{{- else if isBroadcast .}}
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) (response *{{out $genFile .}}, err error)
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
@@ -32,6 +34,9 @@ var registerInterface = `
 {{$service := .GoName}}
 func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}) {
 	{{- range .Methods}}
+	{{- if isBroadcast .}}
+	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler3(impl.{{.GoName}}, srv))
+	{{- else }}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})
 		defer ctx.Release()
@@ -52,8 +57,45 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 		{{- end}}
 	})
 	{{- end}}
+	{{- end}}
 }
 {{- end}}
 `
 
-var server = serverVariables + serverInterface + registerInterface
+var registerInterfaceTest = `
+{{$genFile := .GenFile}}
+{{range .Services -}}
+{{$service := .GoName}}
+func (srv *Server) RegisterConfiguration(c *Configuration) {
+	{{- range .Methods}}
+	{{- if isBroadcast .}}
+	srv.RegisterBroadcastFunc("{{.Desc.FullName}}", gorums.RegisterBroadcastFunc(c.{{.GoName}}))
+	{{- end}}
+	{{- end}}
+}
+{{- end}}
+`
+
+var registerInterfaceTest2 = `
+{{$genFile := .GenFile}}
+func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
+	b.SetReturnToClient(resp, err)
+}
+`
+
+/*
+func (srv *Server) RegisterConfiguration(c *Configuration) {
+	srv.RegisterBroadcastFunc("dev.ZourmsService.QuorumCall", gorums.RegisterBroadcastFunc(c.QuorumCall))
+	srv.ListenForBroadcast()
+}
+
+func (b *Broadcast) ReturnToClient(resp *Response, err error) {
+	b.SetReturnToClient(resp, err)
+}
+
+func (b *Broadcast) PrePrepare(req *Request) {
+	b.SetBroadcastValues("protos.PBFTNode.PrePrepare", req)
+}
+*/
+
+var server = serverVariables + serverInterface + registerInterface + registerInterfaceTest + registerInterfaceTest2

@@ -267,6 +267,59 @@ type broadcastStruct interface {
 	GetError() error
 }
 
+type BroadcastStruct struct {
+	Method                  string // could make this a slice to support multiple broadcasts in one gRPC method
+	ShouldBroadcastVal      bool
+	ShouldReturnToClientVal bool
+	Req                     RequestTypes // could make this a slice to support multiple broadcasts in one gRPC method
+	Resp                    ResponseTypes
+	Err                     error // part of client response
+}
+
+func NewBroadcastStruct() *BroadcastStruct {
+	return &BroadcastStruct{}
+}
+
+func (b *BroadcastStruct) SetBroadcastValues(method string, req RequestTypes) {
+	b.Method = method
+	b.ShouldBroadcastVal = true
+	b.Req = req
+}
+
+func (b *BroadcastStruct) SetReturnToClient(resp ResponseTypes, err error) {
+	b.Method = "client"
+	b.ShouldReturnToClientVal = true
+	b.Resp = resp
+	b.Err = err
+}
+
+func (b *BroadcastStruct) GetMethod() string {
+	return b.Method
+}
+func (b *BroadcastStruct) GetRequest() RequestTypes {
+	return b.Req
+}
+func (b *BroadcastStruct) GetResponse() ResponseTypes {
+	return b.Resp
+}
+func (b *BroadcastStruct) ShouldBroadcast() bool {
+	return b.ShouldBroadcastVal
+}
+func (b *BroadcastStruct) ShouldReturnToClient() bool {
+	return b.ShouldReturnToClientVal
+}
+func (b *BroadcastStruct) GetError() error {
+	return b.Err
+}
+func (b *BroadcastStruct) Reset() {
+	b.Method = ""
+	b.ShouldBroadcastVal = false
+	b.ShouldReturnToClientVal = false
+	b.Req = nil
+	b.Resp = nil
+	b.Err = nil
+}
+
 func (srv *Server) RegisterBroadcastStruct(b broadcastStruct) {
 	srv.b = b
 }
