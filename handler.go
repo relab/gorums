@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -169,17 +171,37 @@ func BroadcastHandler3[T RequestTypes, V ResponseTypes](impl implementationFunc[
 type responseMsg interface {
 	GetResponse() ResponseTypes
 	GetError() error
+	GetBroadcastID() string
+	Valid() bool
+	GetType() respType
 }
+
+type respType int
+
+const (
+	unhandled respType = iota
+	clientResponse
+	timeout
+	done
+)
 
 type responseMessage struct {
-	response ResponseTypes
-	err      error
+	response    ResponseTypes
+	err         error
+	broadcastID string
+	timestamp   time.Time
+	ttl         time.Duration
+	respType    respType
 }
 
-func newResponseMessage(response ResponseTypes, err error) *responseMessage {
+func newResponseMessage(response ResponseTypes, err error, broadcastID string, respType respType, ttl time.Duration) *responseMessage {
 	return &responseMessage{
-		response: response,
-		err:      err,
+		response:    response,
+		err:         err,
+		broadcastID: broadcastID,
+		timestamp:   time.Now(),
+		ttl:         ttl,
+		respType:    respType,
 	}
 }
 
@@ -189,6 +211,18 @@ func (r *responseMessage) GetResponse() ResponseTypes {
 
 func (r *responseMessage) GetError() error {
 	return r.err
+}
+
+func (r *responseMessage) GetBroadcastID() string {
+	return r.broadcastID
+}
+
+func (r *responseMessage) Valid() bool {
+	return r.respType == clientResponse && time.Since(r.timestamp) <= r.ttl
+}
+
+func (r *responseMessage) GetType() respType {
+	return r.respType
 }
 
 func ReturnToClientHandler[T RequestTypes, V ResponseTypes](impl implementationFunc3[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
@@ -207,7 +241,7 @@ func ReturnToClientHandler[T RequestTypes, V ResponseTypes](impl implementationF
 			srv.setReturnedToClient(in.Metadata.BroadcastID, true)
 			go func() {
 				// err must be sent to user similar to response?
-				srv.responseChan <- newResponseMessage(*response, err)
+				srv.responseChan <- newResponseMessage(*response, err, in.Metadata.BroadcastID, clientResponse, srv.timeout)
 			}()
 		}
 		// server to server communication does not need response?
@@ -246,7 +280,7 @@ func BroadcastHandler4[T RequestTypes, V ResponseTypes, U broadcastStruct](impl 
 			srv.setReturnedToClient(in.Metadata.BroadcastID, true)
 			go func() {
 				// err must be sent to user similar to response?
-				srv.responseChan <- newResponseMessage(srv.b.GetResponse(), srv.b.GetError())
+				srv.responseChan <- newResponseMessage(srv.b.GetResponse(), srv.b.GetError(), in.Metadata.BroadcastID, clientResponse, srv.timeout)
 			}()
 		}
 		// verify whether a server or a client sent the request
@@ -283,18 +317,26 @@ func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc
 		if srv.b.ShouldReturnToClient() && !srv.alreadyReturnedToClient(in.Metadata.BroadcastID, srv.b.GetMethod()) {
 			srv.setReturnedToClient(in.Metadata.BroadcastID, true)
 			go func() {
-				// err must be sent to user similar to response?
-				srv.responseChan <- newResponseMessage(srv.b.GetResponse(), srv.b.GetError())
+				srv.responseChan <- newResponseMessage(srv.b.GetResponse(), srv.b.GetError(), in.Metadata.BroadcastID, clientResponse, srv.timeout)
 			}()
 		}
 		// verify whether a server or a client sent the request
 		if in.Metadata.Sender == "client" {
+			srv.addClientRequest(in.Metadata, ctx, finished)
 			go determineClientResponse2(srv, ctx, in, finished)
 		} else {
 			// server to server communication does not need response?
 			SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), err))
 		}
 	}
+}
+
+type clientRequest struct {
+	id       string
+	ctx      ServerCtx
+	finished chan<- *Message
+	metadata *ordering.Metadata
+	status   respType
 }
 
 type broadcastStruct interface {
@@ -411,6 +453,37 @@ func determineClientResponse2(srv *Server, ctx ServerCtx, in *Message, finished 
 	}
 }
 
+func (srv *Server) handleClientResponses() {
+	// can be either: timeout, clientResponse or both
+	//handledResponses := make(map[string]respType)
+	for response := range srv.responseChan {
+		req, ok := srv.clientReqs[response.GetBroadcastID()]
+		if !ok {
+			// this server has not received a request directly from a client
+			// hence, the response should be ignored
+			continue
+		} else if req.status == unhandled {
+			// first time it is handled
+			req.status = response.GetType()
+		} else if req.status != done {
+			// already handled, but got the other response type in the pair: clientResponse & timeout
+			req.status = done
+		} else {
+			// already handled and can be removed
+			continue
+		}
+		if !response.Valid() {
+			continue
+		}
+		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.GetResponse()), response.GetError()))
+	}
+}
+
+func timeoutClientResponse(srv *Server, ctx ServerCtx, in *Message, finished chan<- *Message) {
+	time.After(srv.timeout)
+	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.GetBroadcastID(), timeout, srv.timeout)
+}
+
 func determineClientResponse[V RequestTypes](srv *Server, ctx ServerCtx, in *Message, finished chan<- *Message, resp V, err error) {
 	srv.setReturnedToClient(in.Metadata.GetBroadcastID(), false)
 	select {
@@ -442,6 +515,26 @@ func (srv *Server) setReturnedToClient(broadcastID string, val bool) {
 	srv.mutex.Lock()
 	defer srv.mutex.Unlock()
 	srv.returnedToClientMsgs[broadcastID] = val
+}
+
+func (srv *Server) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
+	srv.setPendingClientResponse(metadata.GetBroadcastID())
+	srv.setReturnedToClient(metadata.GetBroadcastID(), false)
+	srv.mutex.Lock()
+	defer srv.mutex.Unlock()
+	srv.clientReqs[metadata.GetBroadcastID()] = &clientRequest{
+		id:       uuid.New().String(),
+		ctx:      ctx,
+		finished: finished,
+		metadata: metadata,
+		status:   unhandled,
+	}
+}
+
+func (srv *Server) setPendingClientResponse(broadcastID string) {
+	srv.mutex.Lock()
+	defer srv.mutex.Unlock()
+	srv.pendingClientResponses[broadcastID] = unhandled
 }
 
 func (srv *Server) alreadyBroadcasted(broadcastID string, method string) bool {
