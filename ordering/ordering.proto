@@ -18,6 +18,10 @@ message Metadata {
   uint64 MessageID = 1;
   string Method = 2;
   google.rpc.Status Status = 3;
-  string Sender = 4;
-  string BroadcastID = 5;
+  BroadcastMsg BroadcastMsg = 4;
+}
+
+message BroadcastMsg {
+  string Sender = 1;
+  string BroadcastID = 2;
 }

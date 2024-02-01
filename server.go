@@ -146,15 +146,16 @@ type Server struct {
 	broadcastedMsgs      map[string]map[string]bool
 	returnedToClientMsgs map[string]bool
 	BroadcastChan        chan broadcastMsg
+	methods2             map[string]BroadcastFunc2
 	methods              map[string]BroadcastFunc
 	//conversions          map[string]ConversionFunc
-	Round                  *uint64
 	responseChan           chan responseMsg
 	mutex                  sync.RWMutex
 	b                      broadcastStruct
 	pendingClientResponses map[string]respType
 	timeout                time.Duration
 	clientReqs             map[string]*clientRequest
+	config                 RawConfiguration
 }
 
 // NewServer returns a new instance of GorumsServer.
@@ -172,15 +173,14 @@ func NewServer(opts ...ServerOption) *Server {
 		broadcastedMsgs:      make(map[string]map[string]bool),
 		returnedToClientMsgs: make(map[string]bool),
 		BroadcastChan:        make(chan broadcastMsg, 1000),
+		methods2:             make(map[string]BroadcastFunc2),
 		methods:              make(map[string]BroadcastFunc),
 		//conversions:          make(map[string]ConversionFunc),
-		Round:                  new(uint64),
 		responseChan:           make(chan responseMsg),
 		pendingClientResponses: make(map[string]respType),
 		timeout:                5 * time.Second,
 		clientReqs:             make(map[string]*clientRequest),
 	}
-	*s.Round = 1000
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
 }
