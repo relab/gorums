@@ -56,7 +56,7 @@ func GenerateBundleFile(dst string) {
 		fmt.Printf("\nReview changes above; to revert use:\n")
 		fmt.Printf("mv %s.bak %s\n", dst, dst)
 	}
-	err = os.WriteFile(dst, []byte(staticContent), 0666)
+	err = os.WriteFile(dst, []byte(staticContent), 0o666)
 	if err != nil {
 		log.Fatal(err)
 	}
