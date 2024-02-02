@@ -25,10 +25,7 @@ func (n *RawNode) RPCCall(ctx context.Context, d CallData) (protoreflect.ProtoMe
 
 	select {
 	case r := <-replyChan:
-		if r.err != nil {
-			return nil, r.err
-		}
-		return r.msg, nil
+		return r.msg, r.err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

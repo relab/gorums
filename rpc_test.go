@@ -18,7 +18,7 @@ func TestRPCCallSuccess(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := rpcTestMgr()
+	mgr := gorumsTestMgr()
 
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
@@ -44,7 +44,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
 		return initServer()
 	})
-	mgr := rpcTestMgr()
+	mgr := gorumsTestMgr()
 
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
@@ -74,7 +74,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := rpcTestMgr()
+	mgr := gorumsTestMgr()
 
 	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
@@ -103,7 +103,7 @@ func initServer() *gorums.Server {
 	return srv
 }
 
-func rpcTestMgr() *dummy.Manager {
+func gorumsTestMgr() *dummy.Manager {
 	mgr := dummy.NewManager(
 		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
