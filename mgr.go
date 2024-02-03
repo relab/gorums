@@ -129,6 +129,25 @@ func (m *RawManager) AddNode(node *RawNode) error {
 	return nil
 }
 
+func (m *RawManager) tryAddNode(node *RawNode) error {
+	if _, found := m.Node(node.ID()); found {
+		// Node IDs must be unique
+		return fmt.Errorf("node ID %d already exists (%s)", node.ID(), node.Address())
+	}
+	if m.logger != nil {
+		m.logger.Printf("connecting to %s with id %d\n", node, node.id)
+	}
+	if err := node.connect(m); err != nil {
+		return fmt.Errorf("connection failed for %s: %w", node, err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lookup[node.id] = node
+	m.nodes = append(m.nodes, node)
+	return nil
+}
+
 // getMsgID returns a unique message ID.
 func (m *RawManager) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)

@@ -66,17 +66,6 @@ func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 
 var registerInterfaceTest = `
 {{$genFile := .GenFile}}
-{{range .Services -}}
-{{$service := .GoName}}
-func (srv *Server) RegisterConfiguration(c *Configuration) {
-	srv.RegisterConfig(c.RawConfiguration)
-	srv.ListenForBroadcast()
-}
-{{- end}}
-`
-
-var registerInterfaceTest2 = `
-{{$genFile := .GenFile}}
 func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
 	b.SetReturnToClient(resp, err)
 }
@@ -101,4 +90,4 @@ func (b *Broadcast) PrePrepare(req *Request) {
 }
 */
 
-var server = serverVariables + serverInterface + registerInterface + registerInterfaceTest + registerInterfaceTest2
+var server = serverVariables + serverInterface + registerInterface + registerInterfaceTest

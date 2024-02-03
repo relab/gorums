@@ -293,11 +293,6 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	})
 }
 
-func (srv *Server) RegisterConfiguration(c *Configuration) {
-	srv.RegisterConfig(c.RawConfiguration)
-	srv.ListenForBroadcast()
-}
-
 func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
 	b.SetReturnToClient(resp, err)
 }
