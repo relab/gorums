@@ -165,6 +165,7 @@ func NewServer(opts ...ServerOption) *Server {
 //
 // This function should only be used by generated code.
 func (s *Server) RegisterHandler(method string, handler requestHandler) {
+	s.broadcastSrv.registerBroadcastFunc(method)
 	s.srv.handlers[method] = handler
 }
 
