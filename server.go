@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -140,23 +139,9 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	sync.RWMutex
-	srv                  *orderingServer
-	grpcServer           *grpc.Server
-	recievedFrom         map[uint64]map[string]map[string]bool
-	broadcastedMsgs      map[string]map[string]bool
-	returnedToClientMsgs map[string]bool
-	BroadcastChan        chan broadcastMsg
-	methods2             map[string]BroadcastFunc2
-	methods              map[string]BroadcastFunc
-	//conversions          map[string]ConversionFunc
-	responseChan           chan responseMsg
-	mutex                  sync.RWMutex
-	b                      broadcastStruct
-	pendingClientResponses map[string]respType
-	timeout                time.Duration
-	clientReqs             map[string]*clientRequest
-	config                 RawConfiguration
-	middlewares            []func()
+	srv          *orderingServer
+	grpcServer   *grpc.Server
+	broadcastSrv *broadcastServer
 }
 
 // NewServer returns a new instance of GorumsServer.
@@ -168,19 +153,9 @@ func NewServer(opts ...ServerOption) *Server {
 		opt(&serverOpts)
 	}
 	s := &Server{
-		srv:                  newOrderingServer(&serverOpts),
-		grpcServer:           grpc.NewServer(serverOpts.grpcOpts...),
-		recievedFrom:         make(map[uint64]map[string]map[string]bool),
-		broadcastedMsgs:      make(map[string]map[string]bool),
-		returnedToClientMsgs: make(map[string]bool),
-		BroadcastChan:        make(chan broadcastMsg, 1000),
-		methods2:             make(map[string]BroadcastFunc2),
-		methods:              make(map[string]BroadcastFunc),
-		//conversions:          make(map[string]ConversionFunc),
-		responseChan:           make(chan responseMsg),
-		pendingClientResponses: make(map[string]respType),
-		timeout:                5 * time.Second,
-		clientReqs:             make(map[string]*clientRequest),
+		srv:          newOrderingServer(&serverOpts),
+		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
+		broadcastSrv: newBroadcastServer(),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s

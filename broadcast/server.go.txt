@@ -1,0 +1,22 @@
+package broadcast
+
+import (
+	"sync"
+	"time"
+)
+
+type broadcastServer struct {
+	recievedFrom           map[uint64]map[string]map[string]bool
+	broadcastedMsgs        map[string]map[string]bool
+	returnedToClientMsgs   map[string]bool
+	BroadcastChan          chan broadcastMsg
+	methods                map[string]BroadcastFunc
+	responseChan           chan responseMsg
+	mutex                  sync.RWMutex
+	b                      broadcastStruct
+	pendingClientResponses map[string]respType
+	timeout                time.Duration
+	clientReqs             map[string]*clientRequest
+	config                 RawConfiguration
+	middlewares            []func()
+}
