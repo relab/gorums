@@ -294,6 +294,16 @@ func BroadcastHandler4[T RequestTypes, V ResponseTypes, U broadcastStruct](impl 
 	}
 }
 
+func (srv *Server) RegisterMiddlewares(middlewares ...func()) {
+	srv.middlewares = middlewares
+}
+
+func (srv *Server) runMiddleware() {
+	for _, middleware := range srv.middlewares {
+		middleware()
+	}
+}
+
 func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc5[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
@@ -307,7 +317,8 @@ func BroadcastHandler[T RequestTypes, V broadcastStruct](impl implementationFunc
 		//*broadcast = false
 		//request := new(U)
 		//resp, err := impl(ctx, req, determineBroadcast2[U](broadcast, request, srv))
-		srv.b.Reset()
+		srv.runMiddleware()
+		srv.b.Reset(in.Metadata.BroadcastMsg.BroadcastID)
 		_ = impl(ctx, req, srv.b.(V))
 		//if *broadcast && !srv.alreadyBroadcasted(in.Metadata.BroadcastID, in.Metadata.Method) {
 		if srv.b.ShouldBroadcast() && !srv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, srv.b.GetMethod()) {
@@ -345,10 +356,11 @@ type broadcastStruct interface {
 	GetMethod() string
 	ShouldBroadcast() bool
 	ShouldReturnToClient() bool
-	Reset()
+	Reset(...string)
 	GetRequest() RequestTypes
 	GetResponse() ResponseTypes
 	GetError() error
+	GetBroadcastID() string
 }
 
 type BroadcastStruct struct {
@@ -358,6 +370,7 @@ type BroadcastStruct struct {
 	Req                     RequestTypes // could make this a slice to support multiple broadcasts in one gRPC method
 	Resp                    ResponseTypes
 	Err                     error // part of client response
+	BroadcastID             string
 }
 
 func NewBroadcastStruct() *BroadcastStruct {
@@ -395,13 +408,21 @@ func (b *BroadcastStruct) ShouldReturnToClient() bool {
 func (b *BroadcastStruct) GetError() error {
 	return b.Err
 }
-func (b *BroadcastStruct) Reset() {
+func (b *BroadcastStruct) GetBroadcastID() string {
+	return b.BroadcastID
+}
+func (b *BroadcastStruct) Reset(broadcastID ...string) {
 	b.Method = ""
 	b.ShouldBroadcastVal = false
 	b.ShouldReturnToClientVal = false
 	b.Req = nil
 	b.Resp = nil
 	b.Err = nil
+	if len(broadcastID) >= 1 {
+		b.BroadcastID = broadcastID[0]
+	} else {
+		b.BroadcastID = ""
+	}
 }
 
 func (srv *Server) RegisterBroadcastStruct(b broadcastStruct) {
@@ -442,6 +463,15 @@ func determineBroadcast[T RequestTypes](shouldBroadcast *bool, request *T) func(
 	}
 }
 
+func (srv *Server) RetToClient(resp ResponseTypes, err error, broadcastID string) {
+	srv.Lock()
+	defer srv.Unlock()
+	if !srv.alreadyReturnedToClient(broadcastID, "") {
+		srv.setReturnedToClient(broadcastID, true)
+		srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
+	}
+}
+
 func determineClientResponse2(srv *Server, ctx ServerCtx, in *Message, finished chan<- *Message) {
 	srv.setReturnedToClient(in.Metadata.BroadcastMsg.GetBroadcastID(), false)
 	select {
@@ -456,8 +486,6 @@ func determineClientResponse2(srv *Server, ctx ServerCtx, in *Message, finished 
 }
 
 func (srv *Server) handleClientResponses() {
-	// can be either: timeout, clientResponse or both
-	//handledResponses := make(map[string]respType)
 	for response := range srv.responseChan {
 		req, ok := srv.clientReqs[response.GetBroadcastID()]
 		if !ok {
