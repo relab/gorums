@@ -139,8 +139,9 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	sync.RWMutex
-	srv        *orderingServer
-	grpcServer *grpc.Server
+	srv          *orderingServer
+	grpcServer   *grpc.Server
+	broadcastSrv *broadcastServer
 }
 
 // NewServer returns a new instance of GorumsServer.
@@ -152,8 +153,9 @@ func NewServer(opts ...ServerOption) *Server {
 		opt(&serverOpts)
 	}
 	s := &Server{
-		srv:        newOrderingServer(&serverOpts),
-		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
+		srv:          newOrderingServer(&serverOpts),
+		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
+		broadcastSrv: newBroadcastServer(),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
