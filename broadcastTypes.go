@@ -86,14 +86,18 @@ type clientRequest struct {
 	status   respType
 }
 
+type BStruct struct {
+	b broadcastStruct
+}
+
 type broadcastStruct interface {
-	GetMethod() string
-	ShouldBroadcast() bool
-	ShouldReturnToClient() bool
-	Reset(...string)
-	GetRequest() requestTypes
-	GetResponse() responseTypes
-	GetError() error
+	getMethod() string
+	shouldBroadcast() bool
+	shouldReturnToClient() bool
+	reset(...string)
+	getRequest() requestTypes
+	getResponse() responseTypes
+	getError() error
 	GetBroadcastID() string
 }
 
@@ -124,28 +128,28 @@ func (b *BroadcastStruct) SetReturnToClient(resp responseTypes, err error) {
 	b.err = err
 }
 
-func (b *BroadcastStruct) GetMethod() string {
+func (b *BroadcastStruct) getMethod() string {
 	return b.method
 }
-func (b *BroadcastStruct) GetRequest() requestTypes {
+func (b *BroadcastStruct) getRequest() requestTypes {
 	return b.req
 }
-func (b *BroadcastStruct) GetResponse() responseTypes {
+func (b *BroadcastStruct) getResponse() responseTypes {
 	return b.resp
 }
-func (b *BroadcastStruct) ShouldBroadcast() bool {
+func (b *BroadcastStruct) shouldBroadcast() bool {
 	return b.shouldBroadcastVal
 }
-func (b *BroadcastStruct) ShouldReturnToClient() bool {
+func (b *BroadcastStruct) shouldReturnToClient() bool {
 	return b.shouldReturnToClientVal
 }
-func (b *BroadcastStruct) GetError() error {
+func (b *BroadcastStruct) getError() error {
 	return b.err
 }
 func (b *BroadcastStruct) GetBroadcastID() string {
 	return b.broadcastID
 }
-func (b *BroadcastStruct) Reset(broadcastID ...string) {
+func (b *BroadcastStruct) reset(broadcastID ...string) {
 	b.method = ""
 	b.shouldBroadcastVal = false
 	b.shouldReturnToClientVal = false

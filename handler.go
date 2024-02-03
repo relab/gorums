@@ -29,17 +29,17 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 		//request := new(U)
 		//resp, err := impl(ctx, req, determineBroadcast2[U](broadcast, request, srv))
 		srv.broadcastSrv.runMiddleware()
-		srv.broadcastSrv.b.Reset(in.Metadata.BroadcastMsg.BroadcastID)
+		srv.broadcastSrv.b.reset(in.Metadata.BroadcastMsg.BroadcastID)
 		_ = impl(ctx, req, srv.broadcastSrv.b.(V))
-		if srv.broadcastSrv.b.ShouldBroadcast() && !srv.broadcastSrv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, srv.broadcastSrv.b.GetMethod()) {
+		if srv.broadcastSrv.b.shouldBroadcast() && !srv.broadcastSrv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, srv.broadcastSrv.b.getMethod()) {
 			// how to define individual request message to each node?
 			//	- maybe create one request for each node and send a list of requests?
-			go srv.broadcastSrv.broadcast(newBroadcastMessage(ctx, srv.broadcastSrv.b.GetRequest(), srv.broadcastSrv.b.GetMethod(), in.Metadata.BroadcastMsg.BroadcastID))
+			go srv.broadcastSrv.broadcast(newBroadcastMessage(ctx, srv.broadcastSrv.b.getRequest(), srv.broadcastSrv.b.getMethod(), in.Metadata.BroadcastMsg.BroadcastID))
 		}
-		if srv.broadcastSrv.b.ShouldReturnToClient() && !srv.broadcastSrv.alreadyReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, srv.broadcastSrv.b.GetMethod()) {
+		if srv.broadcastSrv.b.shouldReturnToClient() && !srv.broadcastSrv.alreadyReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, srv.broadcastSrv.b.getMethod()) {
 			srv.broadcastSrv.setReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, true)
 			go func() {
-				srv.broadcastSrv.responseChan <- newResponseMessage(srv.broadcastSrv.b.GetResponse(), srv.broadcastSrv.b.GetError(), in.Metadata.BroadcastMsg.BroadcastID, clientResponse, srv.broadcastSrv.timeout)
+				srv.broadcastSrv.responseChan <- newResponseMessage(srv.broadcastSrv.b.getResponse(), srv.broadcastSrv.b.getError(), in.Metadata.BroadcastMsg.BroadcastID, clientResponse, srv.broadcastSrv.timeout)
 			}()
 		}
 		// verify whether a server or a client sent the request
@@ -73,12 +73,6 @@ func (srv *Server) RetToClient(resp responseTypes, err error, broadcastID string
 func (srv *Server) ListenForBroadcast() {
 	go srv.broadcastSrv.run()
 	go srv.broadcastSrv.handleClientResponses()
-}
-
-func RegisterBroadcastFunc[T requestTypes, V responseTypes](impl func(context.Context, T) (V, error)) func(context.Context, requestTypes) (responseTypes, error) {
-	return func(ctx context.Context, req requestTypes) (resp responseTypes, err error) {
-		return impl(ctx, req.(T))
-	}
 }
 
 func (srv *Server) RegisterBroadcastFunc(method string) {
