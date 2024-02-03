@@ -85,6 +85,10 @@ var registerInterfaceTest2 = `
 func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
 	b.SetReturnToClient(resp, err)
 }
+
+func (srv *Server) ReturnToClient(resp *ClientResponse, err error, broadcastID string) {
+	go srv.RetToClient(resp, err, broadcastID)
+}
 `
 
 /*

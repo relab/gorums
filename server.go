@@ -156,6 +156,7 @@ type Server struct {
 	timeout                time.Duration
 	clientReqs             map[string]*clientRequest
 	config                 RawConfiguration
+	middlewares            []func()
 }
 
 // NewServer returns a new instance of GorumsServer.
