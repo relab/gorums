@@ -19,29 +19,19 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
-		//log.Println("BroadcastID:", in.Metadata.BroadcastMsg.BroadcastID, "Method:", in.Metadata.Method)
 		srv.broadcastSrv.Lock()
 		defer srv.broadcastSrv.Unlock()
 		req := in.Message.(T)
 		defer ctx.Release()
-		//var broadcast *bool = new(bool)
-		//*broadcast = false
-		//request := new(U)
-		//resp, err := impl(ctx, req, determineBroadcast2[U](broadcast, request, srv))
-		srv.broadcastSrv.runMiddleware()
+		// the client can specify middleware, e.g. authentication, to return early.
+		err := srv.broadcastSrv.runMiddleware()
+		if err != nil {
+			// return if any of the middlewares return an error
+			return
+		}
 		srv.broadcastSrv.b.reset(in.Metadata.BroadcastMsg.BroadcastID)
 		_ = impl(ctx, req, srv.broadcastSrv.b.(V))
-		if srv.broadcastSrv.b.shouldBroadcast() && !srv.broadcastSrv.alreadyBroadcasted(in.Metadata.BroadcastMsg.BroadcastID, srv.broadcastSrv.b.getMethod()) {
-			// how to define individual request message to each node?
-			//	- maybe create one request for each node and send a list of requests?
-			go srv.broadcastSrv.broadcast(newBroadcastMessage(ctx, srv.broadcastSrv.b.getRequest(), srv.broadcastSrv.b.getMethod(), in.Metadata.BroadcastMsg.BroadcastID))
-		}
-		if srv.broadcastSrv.b.shouldReturnToClient() && !srv.broadcastSrv.alreadyReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, srv.broadcastSrv.b.getMethod()) {
-			srv.broadcastSrv.setReturnedToClient(in.Metadata.BroadcastMsg.BroadcastID, true)
-			go func() {
-				srv.broadcastSrv.responseChan <- newResponseMessage(srv.broadcastSrv.b.getResponse(), srv.broadcastSrv.b.getError(), in.Metadata.BroadcastMsg.BroadcastID, clientResponse, srv.broadcastSrv.timeout)
-			}()
-		}
+		srv.broadcastSrv.determineBroadcast(ctx, in.Metadata.BroadcastMsg.GetBroadcastID(), srv.getOwnAddr())
 		// verify whether a server or a client sent the request
 		if in.Metadata.BroadcastMsg.Sender == "client" {
 			srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
@@ -50,6 +40,37 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 			// server to server communication does not need response?
 			SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), err))
 		}*/
+		srv.broadcastSrv.determineReturnToClient(ctx, in.Metadata.BroadcastMsg.GetBroadcastID())
+	}
+}
+
+func (srv *Server) getOwnAddr() string {
+	return ""
+}
+
+func (srv *broadcastServer) determineReturnToClient(ctx ServerCtx, broadcastID string) {
+	if srv.b.shouldReturnToClient() {
+		for i, resp := range srv.b.getResponses() {
+			if !srv.alreadyReturnedToClient(broadcastID) {
+				srv.setReturnedToClient(broadcastID, true)
+				go func(i int, resp responseTypes) {
+					srv.responseChan <- newResponseMessage(resp, srv.b.getError(i), broadcastID, clientResponse, srv.timeout)
+				}(i, resp)
+			}
+		}
+	}
+}
+
+func (srv *broadcastServer) determineBroadcast(ctx ServerCtx, broadcastID, from string) {
+	if srv.b.shouldBroadcast() {
+		for i, method := range srv.b.getMethods() {
+			// maybe let this be an option for the implementer?
+			if !srv.alreadyBroadcasted(broadcastID, method) {
+				// how to define individual request message to each node?
+				//	- maybe create one request for each node and send a list of requests?
+				go srv.broadcast(newBroadcastMessage(ctx, srv.b.getRequest(i), method, broadcastID, from))
+			}
+		}
 	}
 }
 
@@ -57,14 +78,14 @@ func (srv *Server) RegisterBroadcastStruct(b broadcastStruct) {
 	srv.broadcastSrv.b = b
 }
 
-func (srv *Server) RegisterMiddlewares(middlewares ...func()) {
+func (srv *Server) RegisterMiddlewares(middlewares ...func() error) {
 	srv.broadcastSrv.middlewares = middlewares
 }
 
 func (srv *Server) RetToClient(resp responseTypes, err error, broadcastID string) {
 	srv.broadcastSrv.Lock()
 	defer srv.broadcastSrv.Unlock()
-	if !srv.broadcastSrv.alreadyReturnedToClient(broadcastID, "") {
+	if !srv.broadcastSrv.alreadyReturnedToClient(broadcastID) {
 		srv.broadcastSrv.setReturnedToClient(broadcastID, true)
 		srv.broadcastSrv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.broadcastSrv.timeout)
 	}

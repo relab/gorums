@@ -87,23 +87,23 @@ type clientRequest struct {
 }
 
 type broadcastStruct interface {
-	getMethod() string
+	getMethods() []string
 	shouldBroadcast() bool
 	shouldReturnToClient() bool
-	reset(...string)
-	getRequest() requestTypes
-	getResponse() responseTypes
-	getError() error
+	reset(broadcastID string)
+	getRequest(i int) requestTypes
+	getResponses() []responseTypes
+	getError(i int) error
 	GetBroadcastID() string
 }
 
 type BroadcastStruct struct {
-	method                  string // could make this a slice to support multiple broadcasts in one gRPC method
+	methods                 []string // could make this a slice to support multiple broadcasts in one gRPC method
 	shouldBroadcastVal      bool
 	shouldReturnToClientVal bool
-	req                     requestTypes // could make this a slice to support multiple broadcasts in one gRPC method
-	resp                    responseTypes
-	err                     error // part of client response
+	reqs                    []requestTypes // could make this a slice to support multiple broadcasts in one gRPC method
+	resps                   []responseTypes
+	errs                    []error // part of client response
 	broadcastID             string
 }
 
@@ -111,29 +111,31 @@ func NewBroadcastStruct() *BroadcastStruct {
 	return &BroadcastStruct{}
 }
 
-// Only meant for internal use
+// This method should be used by generated code only.
 func (b *BroadcastStruct) SetBroadcastValues(method string, req requestTypes) {
-	b.method = method
+	b.methods = append(b.methods, method)
 	b.shouldBroadcastVal = true
-	b.req = req
+	b.reqs = append(b.reqs, req)
 }
 
-// Only meant for internal use
+// This method should be used by generated code only.
 func (b *BroadcastStruct) SetReturnToClient(resp responseTypes, err error) {
-	b.method = "client"
 	b.shouldReturnToClientVal = true
-	b.resp = resp
-	b.err = err
+	b.resps = append(b.resps, resp)
+	b.errs = append(b.errs, err)
 }
 
-func (b *BroadcastStruct) getMethod() string {
-	return b.method
+func (b *BroadcastStruct) getMethods() []string {
+	return b.methods
 }
-func (b *BroadcastStruct) getRequest() requestTypes {
-	return b.req
+func (b *BroadcastStruct) getRequest(i int) requestTypes {
+	if i >= len(b.reqs) {
+		panic("inconsistent requests and methods in broadcast")
+	}
+	return b.reqs[i]
 }
-func (b *BroadcastStruct) getResponse() responseTypes {
-	return b.resp
+func (b *BroadcastStruct) getResponses() []responseTypes {
+	return b.resps
 }
 func (b *BroadcastStruct) shouldBroadcast() bool {
 	return b.shouldBroadcastVal
@@ -141,22 +143,26 @@ func (b *BroadcastStruct) shouldBroadcast() bool {
 func (b *BroadcastStruct) shouldReturnToClient() bool {
 	return b.shouldReturnToClientVal
 }
-func (b *BroadcastStruct) getError() error {
-	return b.err
+func (b *BroadcastStruct) getError(i int) error {
+	if i >= len(b.errs) {
+		panic("inconsistent errors and responses in return to client")
+	}
+	return b.errs[i]
 }
 func (b *BroadcastStruct) GetBroadcastID() string {
 	return b.broadcastID
 }
-func (b *BroadcastStruct) reset(broadcastID ...string) {
-	b.method = ""
+func (b *BroadcastStruct) reset(broadcastID string) {
+	b.methods = make([]string, 0)
 	b.shouldBroadcastVal = false
 	b.shouldReturnToClientVal = false
-	b.req = nil
-	b.resp = nil
-	b.err = nil
-	if len(broadcastID) >= 1 {
+	b.reqs = make([]requestTypes, 0)
+	b.resps = make([]responseTypes, 0)
+	b.errs = make([]error, 0)
+	b.broadcastID = broadcastID
+	/*if len(broadcastID) >= 1 {
 		b.broadcastID = broadcastID[0]
 	} else {
 		b.broadcastID = ""
-	}
+	}*/
 }

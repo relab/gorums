@@ -8,45 +8,38 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type broadcastServer struct {
 	sync.RWMutex
-	recievedFrom           map[uint64]map[string]map[string]bool
-	broadcastedMsgs        map[string]map[string]bool
-	returnedToClientMsgs   map[string]bool
-	BroadcastChan          chan broadcastMsg
-	methods                map[string]broadcastFunc
-	responseChan           chan responseMsg
-	mutex                  sync.RWMutex
-	b                      broadcastStruct
-	pendingClientResponses map[string]respType
-	timeout                time.Duration
-	clientReqs             map[string]*clientRequest
-	config                 RawConfiguration
-	middlewares            []func()
+	recievedFrom         map[uint64]map[string]map[string]bool
+	broadcastedMsgs      map[string]map[string]bool
+	returnedToClientMsgs map[string]bool
+	BroadcastChan        chan broadcastMsg
+	methods              map[string]broadcastFunc
+	responseChan         chan responseMsg
+	mutex                sync.RWMutex
+	b                    broadcastStruct
+	timeout              time.Duration
+	clientReqs           map[string]*clientRequest
+	clientReqsMutex      sync.Mutex
+	config               RawConfiguration
+	middlewares          []func() error
 }
 
 func newBroadcastServer() *broadcastServer {
 	return &broadcastServer{
-		recievedFrom:           make(map[uint64]map[string]map[string]bool),
-		broadcastedMsgs:        make(map[string]map[string]bool),
-		returnedToClientMsgs:   make(map[string]bool),
-		BroadcastChan:          make(chan broadcastMsg, 1000),
-		methods:                make(map[string]broadcastFunc),
-		responseChan:           make(chan responseMsg),
-		pendingClientResponses: make(map[string]respType),
-		timeout:                5 * time.Second,
-		clientReqs:             make(map[string]*clientRequest),
+		recievedFrom:         make(map[uint64]map[string]map[string]bool),
+		broadcastedMsgs:      make(map[string]map[string]bool),
+		returnedToClientMsgs: make(map[string]bool),
+		BroadcastChan:        make(chan broadcastMsg, 1000),
+		methods:              make(map[string]broadcastFunc),
+		responseChan:         make(chan responseMsg),
+		timeout:              5 * time.Second,
+		clientReqs:           make(map[string]*clientRequest),
+		middlewares:          make([]func() error, 0),
 	}
-}
-
-func (srv *broadcastServer) setPendingClientResponse(broadcastID string) {
-	srv.mutex.Lock()
-	defer srv.mutex.Unlock()
-	srv.pendingClientResponses[broadcastID] = unhandled
 }
 
 func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string) bool {
@@ -89,6 +82,7 @@ func (srv *broadcastServer) run() {
 
 func (srv *broadcastServer) handleClientResponses() {
 	for response := range srv.responseChan {
+		srv.clientReqsMutex.Lock()
 		req, ok := srv.clientReqs[response.getBroadcastID()]
 		if !ok {
 			// this server has not received a request directly from a client
@@ -97,9 +91,11 @@ func (srv *broadcastServer) handleClientResponses() {
 		} else if req.status == unhandled {
 			// first time it is handled
 			req.status = response.getType()
-		} else if req.status != done {
+		} else if req.status == clientResponse || req.status == timeout {
 			// already handled, but got the other response type in the pair: clientResponse & timeout
+			// or a duplicate
 			req.status = done
+			continue
 		} else {
 			// already handled and can be removed
 			continue
@@ -109,22 +105,27 @@ func (srv *broadcastServer) handleClientResponses() {
 			// the timeout msg should arrive soon.
 			continue
 		}
+		srv.clientReqsMutex.Unlock()
 		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
 	}
 }
 
-func (srv *broadcastServer) runMiddleware() {
+func (srv *broadcastServer) runMiddleware() error {
 	for _, middleware := range srv.middlewares {
-		middleware()
+		err := middleware()
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (srv *broadcastServer) timeoutClientResponse(ctx ServerCtx, in *Message, finished chan<- *Message) {
-	time.After(srv.timeout)
+	time.Sleep(srv.timeout)
 	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.BroadcastMsg.GetBroadcastID(), timeout, srv.timeout)
 }
 
-func (srv *broadcastServer) alreadyReturnedToClient(broadcastID string, method string) bool {
+func (srv *broadcastServer) alreadyReturnedToClient(broadcastID string) bool {
 	srv.mutex.Lock()
 	defer srv.mutex.Unlock()
 	returned, ok := srv.returnedToClientMsgs[broadcastID]
@@ -141,10 +142,9 @@ func (srv *broadcastServer) setReturnedToClient(broadcastID string, val bool) {
 }
 
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
-	srv.setPendingClientResponse(metadata.BroadcastMsg.GetBroadcastID())
 	srv.setReturnedToClient(metadata.BroadcastMsg.GetBroadcastID(), false)
-	srv.mutex.Lock()
-	defer srv.mutex.Unlock()
+	srv.clientReqsMutex.Lock()
+	defer srv.clientReqsMutex.Unlock()
 	srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()] = &clientRequest{
 		id:       uuid.New().String(),
 		ctx:      ctx,
@@ -154,7 +154,7 @@ func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx Se
 	}
 }
 
-// QuorumCallData holds the message, destination nodes, method identifier,
+// BroadcastCallData holds the message, destination nodes, method identifier,
 // and other information necessary to perform the various quorum call types
 // supported by Gorums.
 //
@@ -216,11 +216,9 @@ func (b *broadcastMessage) getBroadcastID() string {
 	return b.broadcastID
 }
 
-func newBroadcastMessage(ctx ServerCtx, req requestTypes, method string, broadcastID string) *broadcastMessage {
-	p, _ := peer.FromContext(ctx)
-	addr := p.Addr.String()
+func newBroadcastMessage(ctx ServerCtx, req requestTypes, method, broadcastID, from string) *broadcastMessage {
 	return &broadcastMessage{
-		from:        addr,
+		from:        from,
 		request:     req,
 		method:      method,
 		context:     ctx,
