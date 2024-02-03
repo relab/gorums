@@ -107,6 +107,10 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 	}
 }
 
-func (srv *Server) RegisterConfig(c RawConfiguration) {
-	srv.broadcastSrv.config = c
+func (srv *Server) RegisterConfig(srvAddrs []string, opts ...ManagerOption) error {
+	mgr := NewRawManager(opts...)
+	config, err := NewRawConfiguration(mgr, WithNodeListBroadcast(srvAddrs))
+	mgr.nodes = config
+	srv.broadcastSrv.config = config
+	return err
 }
