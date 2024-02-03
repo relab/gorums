@@ -86,10 +86,6 @@ type clientRequest struct {
 	status   respType
 }
 
-type BStruct struct {
-	b broadcastStruct
-}
-
 type broadcastStruct interface {
 	getMethod() string
 	shouldBroadcast() bool

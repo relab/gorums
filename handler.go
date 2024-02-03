@@ -75,14 +75,14 @@ func (srv *Server) ListenForBroadcast() {
 	go srv.broadcastSrv.handleClientResponses()
 }
 
-func (srv *Server) RegisterBroadcastFunc(method string) {
-	srv.broadcastSrv.methods[method] = func(ctx context.Context, in requestTypes, broadcastID string) {
+func (srv *broadcastServer) registerBroadcastFunc(method string) {
+	srv.methods[method] = func(ctx context.Context, in requestTypes, broadcastID string) {
 		cd := BroadcastCallData{
 			Message:     in,
 			Method:      method,
 			BroadcastID: broadcastID,
 		}
-		srv.broadcastSrv.config.BroadcastCall(ctx, cd)
+		srv.config.BroadcastCall(ctx, cd)
 	}
 }
 
