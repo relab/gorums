@@ -111,12 +111,14 @@ func NewBroadcastStruct() *BroadcastStruct {
 	return &BroadcastStruct{}
 }
 
+// Only meant for internal use
 func (b *BroadcastStruct) SetBroadcastValues(method string, req requestTypes) {
 	b.method = method
 	b.shouldBroadcastVal = true
 	b.req = req
 }
 
+// Only meant for internal use
 func (b *BroadcastStruct) SetReturnToClient(resp responseTypes, err error) {
 	b.method = "client"
 	b.shouldReturnToClientVal = true
