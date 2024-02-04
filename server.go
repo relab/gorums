@@ -210,6 +210,7 @@ const (
 	Method      BroadcastValue = "Method"
 	PublicKey   BroadcastValue = "PublicKey"
 	Signature   BroadcastValue = "Signature"
+	MAC         BroadcastValue = "MAC"
 )
 
 type ServerCtxValues struct {
@@ -222,7 +223,7 @@ type ServerCtxValues struct {
 
 	PublicKey string
 	Signature string
-	Message   string
+	MAC       string
 }
 
 func (ctx *ServerCtx) GetBroadcastValue(name BroadcastValue) string {
@@ -239,7 +240,7 @@ func (ctx *ServerCtx) GetBroadcastValues() ServerCtxValues {
 		Method:      checkCtxValue(ctx, Method),
 		PublicKey:   checkCtxValue(ctx, PublicKey),
 		Signature:   checkCtxValue(ctx, Signature),
-		Message:     checkCtxValue(ctx, "Message"),
+		MAC:         checkCtxValue(ctx, MAC),
 	}
 }
 
@@ -255,8 +256,13 @@ func checkCtxValue(ctx *ServerCtx, name BroadcastValue) string {
 	return ""
 }
 
-func (srvCtx *ServerCtx) update(srv *Server) {
-	if md, ok := metadata.FromIncomingContext(srvCtx.Context); ok {
-		srvCtx.Context = metadata.NewOutgoingContext(srvCtx.Context, md)
-	}
+func (srvCtx *ServerCtx) update(md *ordering.Metadata) {
+	//if md, ok := metadata.FromIncomingContext(srvCtx.Context); ok {
+	//	srvCtx.Context = metadata.NewOutgoingContext(srvCtx.Context, md)
+	//}
+	srvCtx.Context = metadata.AppendToOutgoingContext(srvCtx.Context,
+		string(BroadcastID), md.BroadcastMsg.BroadcastID,
+		string(SenderID), md.BroadcastMsg.Sender,
+		string(Method), md.Method,
+	)
 }

@@ -23,6 +23,8 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 		defer srv.broadcastSrv.Unlock()
 		req := in.Message.(T)
 		defer ctx.Release()
+		// this does not work yet:
+		ctx.update(in.Metadata)
 		// the client can specify middleware, e.g. authentication, to return early.
 		err := srv.broadcastSrv.runMiddleware(ctx)
 		if err != nil {
@@ -31,7 +33,6 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 		}
 		srv.broadcastSrv.b.reset(in.Metadata.BroadcastMsg.BroadcastID)
 		_ = impl(ctx, req, srv.broadcastSrv.b.(V))
-		ctx.update(srv)
 		srv.broadcastSrv.determineBroadcast(ctx, in.Metadata.BroadcastMsg.GetBroadcastID(), srv.getOwnAddr())
 		// verify whether a server or a client sent the request
 		if in.Metadata.BroadcastMsg.Sender == "client" {
