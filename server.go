@@ -8,6 +8,7 @@ import (
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -196,4 +197,66 @@ type ServerCtx struct {
 // Release releases this handler's lock on the server, which allows the next request to be processed.
 func (ctx *ServerCtx) Release() {
 	ctx.once.Do(ctx.mut.Unlock)
+}
+
+type BroadcastValue string
+
+const (
+	BroadcastID BroadcastValue = "BroadcastID"
+	SenderID    BroadcastValue = "SenderID"
+	SenderAddr  BroadcastValue = "SenderAddr"
+	OriginID    BroadcastValue = "OriginID"
+	OriginAddr  BroadcastValue = "OriginAddr"
+	Method      BroadcastValue = "Method"
+	PublicKey   BroadcastValue = "PublicKey"
+	Signature   BroadcastValue = "Signature"
+)
+
+type ServerCtxValues struct {
+	BroadcastID string
+	SenderID    string
+	SenderAddr  string
+	OriginID    string
+	OriginAddr  string
+	Method      string
+
+	PublicKey string
+	Signature string
+	Message   string
+}
+
+func (ctx *ServerCtx) GetBroadcastValue(name BroadcastValue) string {
+	return checkCtxValue(ctx, name)
+}
+
+func (ctx *ServerCtx) GetBroadcastValues() ServerCtxValues {
+	return ServerCtxValues{
+		BroadcastID: checkCtxValue(ctx, BroadcastID),
+		SenderID:    checkCtxValue(ctx, SenderID),
+		SenderAddr:  checkCtxValue(ctx, SenderAddr),
+		OriginID:    checkCtxValue(ctx, OriginID),
+		OriginAddr:  checkCtxValue(ctx, OriginAddr),
+		Method:      checkCtxValue(ctx, Method),
+		PublicKey:   checkCtxValue(ctx, PublicKey),
+		Signature:   checkCtxValue(ctx, Signature),
+		Message:     checkCtxValue(ctx, "Message"),
+	}
+}
+
+func checkCtxValue(ctx *ServerCtx, name BroadcastValue) string {
+	if md, ok := metadata.FromIncomingContext(ctx.Context); ok {
+		if val, ok := md[string(name)]; ok {
+			if len(val) >= 1 {
+				return val[0]
+			}
+			panic(val)
+		}
+	}
+	return ""
+}
+
+func (srvCtx *ServerCtx) update(srv *Server) {
+	if md, ok := metadata.FromIncomingContext(srvCtx.Context); ok {
+		srvCtx.Context = metadata.NewOutgoingContext(srvCtx.Context, md)
+	}
 }

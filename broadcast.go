@@ -3,11 +3,13 @@ package gorums
 import (
 	"context"
 	"errors"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -25,7 +27,7 @@ type broadcastServer struct {
 	clientReqs           map[string]*clientRequest
 	clientReqsMutex      sync.Mutex
 	config               RawConfiguration
-	middlewares          []func() error
+	middlewares          []func(ServerCtx) error
 }
 
 func newBroadcastServer() *broadcastServer {
@@ -38,7 +40,7 @@ func newBroadcastServer() *broadcastServer {
 		responseChan:         make(chan responseMsg),
 		timeout:              5 * time.Second,
 		clientReqs:           make(map[string]*clientRequest),
-		middlewares:          make([]func() error, 0),
+		middlewares:          make([]func(ServerCtx) error, 0),
 	}
 }
 
@@ -67,7 +69,9 @@ func (srv *broadcastServer) run() {
 		req := msg.getRequest()
 		method := msg.getMethod()
 		broadcastID := msg.getBroadcastID()
-		ctx := context.Background()
+		//ctx := context.Background()
+		//ctx := msg.getContext()
+		ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("BroadcastID", "modified broadcast"))
 		// reqCtx := msg.GetContext()
 		// drop if ctx is cancelled? Or in broadcast method?
 		// if another function is called in broadcast, the request needs to be converted
@@ -100,6 +104,13 @@ func (srv *broadcastServer) handleClientResponses() {
 			// already handled and can be removed
 			continue
 		}
+		select {
+		case <-req.ctx.Done():
+			// client request has been cancelled by client
+			log.Println("CLIENT REQUEST HAS BEEN CANCELLED")
+			continue
+		default:
+		}
 		if !response.valid() {
 			// the response is old and should have timed out, but may not due to scheduling.
 			// the timeout msg should arrive soon.
@@ -110,9 +121,9 @@ func (srv *broadcastServer) handleClientResponses() {
 	}
 }
 
-func (srv *broadcastServer) runMiddleware() error {
+func (srv *broadcastServer) runMiddleware(ctx ServerCtx) error {
 	for _, middleware := range srv.middlewares {
-		err := middleware()
+		err := middleware(ctx)
 		if err != nil {
 			return err
 		}
