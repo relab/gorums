@@ -8,7 +8,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type broadcastFunc func(ctx context.Context, req requestTypes, broadcastID string)
+type broadcastFunc func(ctx context.Context, req requestTypes, broadcastMetadata BroadcastCtx)
 
 type requestTypes interface {
 	ProtoReflect() protoreflect.Message
@@ -19,7 +19,9 @@ type responseTypes interface {
 }
 
 type defaultImplementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
-type implementationFunc[T requestTypes, V broadcastStruct] func(ServerCtx, T, V) error
+
+// type implementationFunc[T requestTypes, V broadcastStruct] func(ServerCtx, T, V) error
+type implementationFuncB[T requestTypes, V broadcastStruct] func(BroadcastCtx, T, V) error
 
 type responseMsg interface {
 	getResponse() responseTypes

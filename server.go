@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/relab/gorums/ordering"
@@ -202,19 +203,21 @@ func (ctx *ServerCtx) Release() {
 type BroadcastValue string
 
 const (
-	BroadcastID BroadcastValue = "BroadcastID"
-	SenderID    BroadcastValue = "SenderID"
-	SenderAddr  BroadcastValue = "SenderAddr"
-	OriginID    BroadcastValue = "OriginID"
-	OriginAddr  BroadcastValue = "OriginAddr"
-	Method      BroadcastValue = "Method"
-	PublicKey   BroadcastValue = "PublicKey"
-	Signature   BroadcastValue = "Signature"
-	MAC         BroadcastValue = "MAC"
+	BroadcastID BroadcastValue = "broadcastid"
+	Sender      BroadcastValue = "sender"
+	SenderID    BroadcastValue = "senderid"
+	SenderAddr  BroadcastValue = "senderaddr"
+	OriginID    BroadcastValue = "originid"
+	OriginAddr  BroadcastValue = "originaddr"
+	Method      BroadcastValue = "method"
+	PublicKey   BroadcastValue = "publickey"
+	Signature   BroadcastValue = "signature"
+	MAC         BroadcastValue = "mac"
 )
 
 type ServerCtxValues struct {
 	BroadcastID string
+	Sender      string
 	SenderID    string
 	SenderAddr  string
 	OriginID    string
@@ -226,7 +229,7 @@ type ServerCtxValues struct {
 	MAC       string
 }
 
-func (ctx *ServerCtx) GetBroadcastValue(name BroadcastValue) string {
+/*func (ctx *ServerCtx) GetBroadcastValue(name BroadcastValue) string {
 	return checkCtxValue(ctx, name)
 }
 
@@ -265,4 +268,76 @@ func (srvCtx *ServerCtx) update(md *ordering.Metadata) {
 		string(SenderID), md.BroadcastMsg.Sender,
 		string(Method), md.Method,
 	)
+}*/
+
+type BroadcastCtx struct {
+	ctx context.Context
+}
+
+func newBroadcastCtx(ctx ServerCtx, md *ordering.Metadata) *BroadcastCtx {
+	//if md, ok := metadata.FromIncomingContext(srvCtx.Context); ok {
+	//	srvCtx.Context = metadata.NewOutgoingContext(srvCtx.Context, md)
+	//}
+	tmp := strings.Split(md.Method, ".")
+	m := ""
+	if len(tmp) >= 1 {
+		m = tmp[len(tmp)-1]
+	}
+
+	bCtx := BroadcastCtx{}
+	bCtx.ctx = metadata.NewOutgoingContext(ctx.Context, metadata.Pairs(
+		string(BroadcastID), md.BroadcastMsg.BroadcastID,
+		string(Sender), md.BroadcastMsg.Sender,
+		string(SenderID), md.BroadcastMsg.SenderID,
+		string(SenderAddr), md.BroadcastMsg.SenderAddr,
+		string(OriginID), md.BroadcastMsg.OriginID,
+		string(OriginAddr), md.BroadcastMsg.OriginAddr,
+		string(Method), m,
+		string(PublicKey), md.BroadcastMsg.PublicKey,
+		string(Signature), md.BroadcastMsg.Signature,
+		string(MAC), md.BroadcastMsg.MAC,
+	))
+	return &bCtx
+}
+
+func (ctx BroadcastCtx) GetBroadcastValues() ServerCtxValues {
+	return ServerCtxValues{
+		BroadcastID: checkBCtxValue(ctx, BroadcastID),
+		Sender:      checkBCtxValue(ctx, Sender),
+		SenderID:    checkBCtxValue(ctx, SenderID),
+		SenderAddr:  checkBCtxValue(ctx, SenderAddr),
+		OriginID:    checkBCtxValue(ctx, OriginID),
+		OriginAddr:  checkBCtxValue(ctx, OriginAddr),
+		Method:      checkBCtxValue(ctx, Method),
+		PublicKey:   checkBCtxValue(ctx, PublicKey),
+		Signature:   checkBCtxValue(ctx, Signature),
+		MAC:         checkBCtxValue(ctx, MAC),
+	}
+}
+
+func checkBCtxValue(bCtx BroadcastCtx, name BroadcastValue) string {
+	if md, ok := metadata.FromOutgoingContext(bCtx.ctx); ok {
+		if val, ok := md[string(name)]; ok {
+			if len(val) >= 1 {
+				return val[0]
+			}
+			panic(val)
+		}
+	}
+	return ""
+}
+
+func (ctxVals ServerCtxValues) String() string {
+	ret := "\nServerCtxValues:\n"
+	ret += "\t- " + string(BroadcastID) + ":\t" + ctxVals.BroadcastID + "\n"
+	ret += "\t- " + string(Sender) + ":\t" + ctxVals.Sender + "\n"
+	ret += "\t- " + string(SenderID) + ":\t" + ctxVals.SenderID + "\n"
+	ret += "\t- " + string(SenderAddr) + ":\t" + ctxVals.SenderAddr + "\n"
+	ret += "\t- " + string(OriginID) + ":\t" + ctxVals.OriginID + "\n"
+	ret += "\t- " + string(OriginAddr) + ":\t" + ctxVals.OriginAddr + "\n"
+	ret += "\t- " + string(Method) + ":\t" + ctxVals.Method + "\n"
+	ret += "\t- " + string(PublicKey) + ":\t" + ctxVals.PublicKey + "\n"
+	ret += "\t- " + string(Signature) + ":\t" + ctxVals.Signature + "\n"
+	ret += "\t- " + string(MAC) + ":\t\t" + ctxVals.MAC + "\n"
+	return ret
 }

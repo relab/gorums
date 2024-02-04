@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 
+	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -15,7 +16,7 @@ func DefaultHandler[T requestTypes, V responseTypes](impl defaultImplementationF
 	}
 }
 
-func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFuncB[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
@@ -24,16 +25,21 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 		req := in.Message.(T)
 		defer ctx.Release()
 		// this does not work yet:
-		ctx.update(in.Metadata)
+		//ctx.update(in.Metadata)
+		if in.Metadata.BroadcastMsg.Sender == "client" && in.Metadata.BroadcastMsg.OriginAddr == "" {
+			p, _ := peer.FromContext(ctx)
+			in.Metadata.BroadcastMsg.OriginAddr = p.Addr.String()
+		}
+		bCtx := newBroadcastCtx(ctx, in.Metadata)
 		// the client can specify middleware, e.g. authentication, to return early.
-		err := srv.broadcastSrv.runMiddleware(ctx)
+		err := srv.broadcastSrv.runMiddleware(*bCtx)
 		if err != nil {
 			// return if any of the middlewares return an error
 			return
 		}
 		srv.broadcastSrv.b.reset(in.Metadata.BroadcastMsg.BroadcastID)
-		_ = impl(ctx, req, srv.broadcastSrv.b.(V))
-		srv.broadcastSrv.determineBroadcast(ctx, in.Metadata.BroadcastMsg.GetBroadcastID(), srv.getOwnAddr())
+		_ = impl(*bCtx, req, srv.broadcastSrv.b.(V))
+		srv.broadcastSrv.determineBroadcast(*bCtx, in.Metadata.BroadcastMsg.GetBroadcastID(), srv.getOwnAddr())
 		// verify whether a server or a client sent the request
 		if in.Metadata.BroadcastMsg.Sender == "client" {
 			srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
@@ -63,7 +69,7 @@ func (srv *broadcastServer) determineReturnToClient(ctx ServerCtx, broadcastID s
 	}
 }
 
-func (srv *broadcastServer) determineBroadcast(ctx ServerCtx, broadcastID, from string) {
+func (srv *broadcastServer) determineBroadcast(ctx BroadcastCtx, broadcastID, from string) {
 	if srv.b.shouldBroadcast() {
 		for i, method := range srv.b.getMethods() {
 			// maybe let this be an option for the implementer?
@@ -80,7 +86,7 @@ func (srv *Server) RegisterBroadcastStruct(b broadcastStruct) {
 	srv.broadcastSrv.b = b
 }
 
-func (srv *Server) RegisterMiddlewares(middlewares ...func(ServerCtx) error) {
+func (srv *Server) RegisterMiddlewares(middlewares ...func(BroadcastCtx) error) {
 	srv.broadcastSrv.middlewares = middlewares
 }
 
@@ -99,17 +105,27 @@ func (srv *Server) ListenForBroadcast() {
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.methods[method] = func(ctx context.Context, in requestTypes, broadcastID string) {
+	srv.methods[method] = func(ctx context.Context, in requestTypes, broadcastMetadata BroadcastCtx) {
+		md := broadcastMetadata.GetBroadcastValues()
 		cd := BroadcastCallData{
 			Message:     in,
 			Method:      method,
-			BroadcastID: broadcastID,
+			BroadcastID: md.BroadcastID,
+			SenderAddr:  srv.addr,
+			SenderID:    srv.id,
+			OriginID:    md.OriginID,
+			OriginAddr:  md.OriginAddr,
+			PublicKey:   srv.publicKey,
+			Signature:   "signature",
+			MAC:         "mac",
+			Sender:      "server",
 		}
 		srv.config.BroadcastCall(ctx, cd)
 	}
 }
 
-func (srv *Server) RegisterConfig(srvAddrs []string, opts ...ManagerOption) error {
+func (srv *Server) RegisterConfig(ownAddr string, srvAddrs []string, opts ...ManagerOption) error {
+	srv.broadcastSrv.addr = ownAddr
 	mgr := NewRawManager(opts...)
 	config, err := NewRawConfiguration(mgr, WithNodeListBroadcast(srvAddrs))
 	mgr.nodes = config

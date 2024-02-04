@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -27,11 +26,16 @@ type broadcastServer struct {
 	clientReqs           map[string]*clientRequest
 	clientReqsMutex      sync.Mutex
 	config               RawConfiguration
-	middlewares          []func(ServerCtx) error
+	middlewares          []func(BroadcastCtx) error
+	addr                 string
+	id                   string
+	publicKey            string
+	privateKey           string
 }
 
 func newBroadcastServer() *broadcastServer {
 	return &broadcastServer{
+		id:                   uuid.New().String(),
 		recievedFrom:         make(map[uint64]map[string]map[string]bool),
 		broadcastedMsgs:      make(map[string]map[string]bool),
 		returnedToClientMsgs: make(map[string]bool),
@@ -40,7 +44,9 @@ func newBroadcastServer() *broadcastServer {
 		responseChan:         make(chan responseMsg),
 		timeout:              5 * time.Second,
 		clientReqs:           make(map[string]*clientRequest),
-		middlewares:          make([]func(ServerCtx) error, 0),
+		middlewares:          make([]func(BroadcastCtx) error, 0),
+		publicKey:            "publicKey",
+		privateKey:           "privateKey",
 	}
 }
 
@@ -68,10 +74,10 @@ func (srv *broadcastServer) run() {
 		//srv.c.StoreID(msgID-1)
 		req := msg.getRequest()
 		method := msg.getMethod()
-		broadcastID := msg.getBroadcastID()
+		//broadcastID := msg.getBroadcastID()
 		//ctx := context.Background()
-		//ctx := msg.getContext()
-		ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("BroadcastID", "modified broadcast"))
+		bCtx := msg.getContext()
+		ctx := context.Background()
 		// reqCtx := msg.GetContext()
 		// drop if ctx is cancelled? Or in broadcast method?
 		// if another function is called in broadcast, the request needs to be converted
@@ -80,7 +86,7 @@ func (srv *broadcastServer) run() {
 		//	srv.methods[method](ctx, convertedReq)
 		//	continue
 		//}
-		srv.methods[method](ctx, req, broadcastID)
+		srv.methods[method](ctx, req, bCtx)
 	}
 }
 
@@ -121,7 +127,7 @@ func (srv *broadcastServer) handleClientResponses() {
 	}
 }
 
-func (srv *broadcastServer) runMiddleware(ctx ServerCtx) error {
+func (srv *broadcastServer) runMiddleware(ctx BroadcastCtx) error {
 	for _, middleware := range srv.middlewares {
 		err := middleware(ctx)
 		if err != nil {
@@ -172,9 +178,16 @@ func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx Se
 // This struct should be used by generated code only.
 type BroadcastCallData struct {
 	Message     protoreflect.ProtoMessage
-	Method      string
-	Sender      string
+	Method      string // a unique identifier for the current message
 	BroadcastID string // a unique identifier for the current message
+	Sender      string // a unique identifier for the current message
+	SenderID    string // a unique identifier for the current message
+	SenderAddr  string // a unique identifier for the current message
+	OriginID    string // a unique identifier for the current message
+	OriginAddr  string // a unique identifier for the current message
+	PublicKey   string // a unique identifier for the current message
+	Signature   string // a unique identifier for the current message
+	MAC         string // a unique identifier for the current message
 }
 
 // BroadcastCall performs a multicast call on the configuration.
@@ -182,7 +195,15 @@ type BroadcastCallData struct {
 // This method should be used by generated code only.
 func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		Sender: d.Sender, BroadcastID: d.BroadcastID,
+		Sender:      d.Sender,
+		BroadcastID: d.BroadcastID,
+		SenderID:    d.SenderID,
+		SenderAddr:  d.SenderAddr,
+		OriginID:    d.OriginID,
+		OriginAddr:  d.OriginAddr,
+		PublicKey:   d.PublicKey,
+		Signature:   d.Signature,
+		MAC:         d.MAC,
 	}}
 
 	for _, n := range c {
@@ -195,7 +216,7 @@ type broadcastMsg interface {
 	getFrom() string
 	getRequest() requestTypes
 	getMethod() string
-	getContext() ServerCtx
+	getContext() BroadcastCtx
 	getBroadcastID() string
 }
 
@@ -203,7 +224,7 @@ type broadcastMessage struct {
 	from        string
 	request     requestTypes
 	method      string
-	context     ServerCtx
+	context     BroadcastCtx
 	broadcastID string
 }
 
@@ -219,7 +240,7 @@ func (b *broadcastMessage) getMethod() string {
 	return b.method
 }
 
-func (b *broadcastMessage) getContext() ServerCtx {
+func (b *broadcastMessage) getContext() BroadcastCtx {
 	return b.context
 }
 
@@ -227,7 +248,7 @@ func (b *broadcastMessage) getBroadcastID() string {
 	return b.broadcastID
 }
 
-func newBroadcastMessage(ctx ServerCtx, req requestTypes, method, broadcastID, from string) *broadcastMessage {
+func newBroadcastMessage(ctx BroadcastCtx, req requestTypes, method, broadcastID, from string) *broadcastMessage {
 	return &broadcastMessage{
 		from:        from,
 		request:     req,
