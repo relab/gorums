@@ -29,7 +29,7 @@ type ZorumsService interface {
 	QuorumCallCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	QuorumCallEmpty(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error)
 	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error)
-	Multiparty(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) (err error)
+	Multiparty(ctx gorums.BroadcastCtx, request *Request, broadcast *Broadcast) (err error)
 	Multicast(ctx gorums.ServerCtx, request *Request)
 	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
 	Multicast2(ctx gorums.ServerCtx, request *Request)

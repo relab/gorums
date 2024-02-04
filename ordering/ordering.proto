@@ -24,4 +24,11 @@ message Metadata {
 message BroadcastMsg {
   string Sender = 1;
   string BroadcastID = 2;
+  string SenderID = 3;
+  string SenderAddr = 4;
+  string OriginID = 5;
+  string OriginAddr = 6;
+  string PublicKey = 7;
+  string Signature = 8;
+  string MAC = 9;
 }

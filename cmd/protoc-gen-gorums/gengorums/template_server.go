@@ -2,6 +2,7 @@ package gengorums
 
 var serverVariables = `
 {{$context := use "gorums.ServerCtx" .GenFile}}
+{{$broadcastContext := use "gorums.BroadcastCtx" .GenFile}}
 `
 
 var serverInterface = `
@@ -16,7 +17,7 @@ type {{$service}} interface {
 	{{- else if correctableStream .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
 	{{- else if isBroadcast .}}
-	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) (err error)
+	{{.GoName}}(ctx {{$broadcastContext}}, request *{{in $genFile .}}, broadcast *Broadcast) (err error)
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
