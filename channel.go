@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"log"
 	"math"
 	"math/rand"
 	"sync"
@@ -143,6 +144,7 @@ func (c *channel) sendMsg(req request) (err error) {
 
 	err = c.gorumsStream.SendMsg(req.msg)
 	if err != nil {
+		log.Println("STREAM IS BROKEN. TRY TO RECONNECT")
 		c.setLastErr(err)
 		c.streamBroken.set()
 	}

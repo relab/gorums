@@ -171,29 +171,42 @@ func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx Se
 	}
 }
 
-// BroadcastCallData holds the message, destination nodes, method identifier,
+// broadcastCallData holds the message, destination nodes, method identifier,
 // and other information necessary to perform the various quorum call types
 // supported by Gorums.
 //
 // This struct should be used by generated code only.
-type BroadcastCallData struct {
-	Message     protoreflect.ProtoMessage
-	Method      string // a unique identifier for the current message
-	BroadcastID string // a unique identifier for the current message
-	Sender      string // a unique identifier for the current message
-	SenderID    string // a unique identifier for the current message
-	SenderAddr  string // a unique identifier for the current message
-	OriginID    string // a unique identifier for the current message
-	OriginAddr  string // a unique identifier for the current message
-	PublicKey   string // a unique identifier for the current message
-	Signature   string // a unique identifier for the current message
-	MAC         string // a unique identifier for the current message
+type broadcastCallData struct {
+	Message         protoreflect.ProtoMessage
+	Method          string
+	BroadcastID     string // a unique identifier for the current broadcast request
+	Sender          string
+	SenderID        string
+	SenderAddr      string
+	OriginID        string
+	OriginAddr      string
+	PublicKey       string
+	Signature       string
+	MAC             string
+	ServerAddresses []string
 }
 
-// BroadcastCall performs a multicast call on the configuration.
+func (bcd *broadcastCallData) inServerAddresses(addr string) bool {
+	if len(bcd.ServerAddresses) <= 0 {
+		return true
+	}
+	for _, srvAddr := range bcd.ServerAddresses {
+		if addr == srvAddr {
+			return true
+		}
+	}
+	return false
+}
+
+// broadcastCall performs a multicast call on the configuration.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData) {
+func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
 		Sender:      d.Sender,
 		BroadcastID: d.BroadcastID,
@@ -207,6 +220,9 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 	}}
 
 	for _, n := range c {
+		if !d.inServerAddresses(n.addr) {
+			continue
+		}
 		msg := d.Message
 		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, nil, false)
 	}

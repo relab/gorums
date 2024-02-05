@@ -37,7 +37,8 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 			// return if any of the middlewares return an error
 			return
 		}
-		srv.broadcastSrv.b.reset(in.Metadata.BroadcastMsg.BroadcastID)
+		srv.broadcastSrv.b.reset()
+		// error is ignored. What to do about it?
 		_ = impl(*bCtx, req, srv.broadcastSrv.b.(V))
 		srv.broadcastSrv.determineBroadcast(*bCtx, in.Metadata.BroadcastMsg.GetBroadcastID(), srv.getOwnAddr())
 		// verify whether a server or a client sent the request
@@ -61,9 +62,10 @@ func (srv *broadcastServer) determineReturnToClient(ctx ServerCtx, broadcastID s
 		for i, resp := range srv.b.getResponses() {
 			if !srv.alreadyReturnedToClient(broadcastID) {
 				srv.setReturnedToClient(broadcastID, true)
-				go func(i int, resp responseTypes) {
-					srv.responseChan <- newResponseMessage(resp, srv.b.getError(i), broadcastID, clientResponse, srv.timeout)
-				}(i, resp)
+				err := srv.b.getError(i)
+				go func(i int, resp responseTypes, err error) {
+					srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
+				}(i, resp, err)
 			}
 		}
 	}
@@ -107,7 +109,7 @@ func (srv *Server) ListenForBroadcast() {
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
 	srv.methods[method] = func(ctx context.Context, in requestTypes, broadcastMetadata BroadcastCtx) {
 		md := broadcastMetadata.GetBroadcastValues()
-		cd := BroadcastCallData{
+		cd := broadcastCallData{
 			Message:     in,
 			Method:      method,
 			BroadcastID: md.BroadcastID,
@@ -120,7 +122,7 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			MAC:         "mac",
 			Sender:      "server",
 		}
-		srv.config.BroadcastCall(ctx, cd)
+		srv.config.broadcastCall(ctx, cd)
 	}
 }
 
@@ -128,7 +130,6 @@ func (srv *Server) RegisterConfig(ownAddr string, srvAddrs []string, opts ...Man
 	srv.broadcastSrv.addr = ownAddr
 	mgr := NewRawManager(opts...)
 	config, err := NewRawConfiguration(mgr, WithNodeListBroadcast(srvAddrs))
-	mgr.nodes = config
 	srv.broadcastSrv.config = config
 	return err
 }

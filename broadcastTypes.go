@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/relab/gorums/ordering"
@@ -92,11 +93,11 @@ type broadcastStruct interface {
 	getMethods() []string
 	shouldBroadcast() bool
 	shouldReturnToClient() bool
-	reset(broadcastID string)
+	reset()
 	getRequest(i int) requestTypes
 	getResponses() []responseTypes
 	getError(i int) error
-	GetBroadcastID() string
+	getServerAddresses() []string
 }
 
 type BroadcastStruct struct {
@@ -106,7 +107,7 @@ type BroadcastStruct struct {
 	reqs                    []requestTypes // could make this a slice to support multiple broadcasts in one gRPC method
 	resps                   []responseTypes
 	errs                    []error // part of client response
-	broadcastID             string
+	serverAddresses         []string
 }
 
 func NewBroadcastStruct() *BroadcastStruct {
@@ -114,10 +115,11 @@ func NewBroadcastStruct() *BroadcastStruct {
 }
 
 // This method should be used by generated code only.
-func (b *BroadcastStruct) SetBroadcastValues(method string, req requestTypes) {
+func (b *BroadcastStruct) SetBroadcastValues(method string, req requestTypes, serverAddresses ...string) {
 	b.methods = append(b.methods, method)
 	b.shouldBroadcastVal = true
 	b.reqs = append(b.reqs, req)
+	b.serverAddresses = append(b.serverAddresses, serverAddresses...)
 }
 
 // This method should be used by generated code only.
@@ -147,21 +149,26 @@ func (b *BroadcastStruct) shouldReturnToClient() bool {
 }
 func (b *BroadcastStruct) getError(i int) error {
 	if i >= len(b.errs) {
-		panic("inconsistent errors and responses in return to client")
+		output := fmt.Sprintf("inconsistent errors and responses in return to client.\n- errors:\t%v\n- responses:\t%v", b.errs, b.resps)
+		panic(output)
 	}
 	return b.errs[i]
 }
-func (b *BroadcastStruct) GetBroadcastID() string {
-	return b.broadcastID
+func (b *BroadcastStruct) getServerAddresses() []string {
+	return b.serverAddresses
 }
-func (b *BroadcastStruct) reset(broadcastID string) {
+
+//	func (b *BroadcastStruct) GetBroadcastID() string {
+//		return b.broadcastID
+//	}
+func (b *BroadcastStruct) reset() {
 	b.methods = make([]string, 0)
 	b.shouldBroadcastVal = false
 	b.shouldReturnToClientVal = false
 	b.reqs = make([]requestTypes, 0)
 	b.resps = make([]responseTypes, 0)
 	b.errs = make([]error, 0)
-	b.broadcastID = broadcastID
+	b.serverAddresses = make([]string, 0)
 	/*if len(broadcastID) >= 1 {
 		b.broadcastID = broadcastID[0]
 	} else {

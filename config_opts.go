@@ -204,10 +204,11 @@ func (o nodeListBroadcast) newConfig(mgr *RawManager) (nodes RawConfiguration, e
 		}
 		if n, found := mgr.Node(node.ID()); !found {
 			err = mgr.tryAddNode(node)
-			if err != nil {
-				continue
-				//return nil, ConfigCreationError(err)
-			}
+			// we add the node regardless. we will try to connect to it later.
+			//if err != nil {
+			//	continue
+			//	//return nil, ConfigCreationError(err)
+			//}
 		} else {
 			node = n
 		}
@@ -216,7 +217,7 @@ func (o nodeListBroadcast) newConfig(mgr *RawManager) (nodes RawConfiguration, e
 	// Sort nodes to ensure deterministic iteration.
 	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
-	return nodes, nil
+	return nodes, err
 }
 
 // WithNodeList returns a NodeListOption containing the provided list of node addresses.
