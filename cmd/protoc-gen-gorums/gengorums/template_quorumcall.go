@@ -42,7 +42,9 @@ var qcVar = `
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
 {{$context := use "context.Context" .GenFile}}
-{{$uuid := use "uuid" .GenFile}}
+{{if isBroadcast .Method}}
+{{$uuid := use "uuid.UUID" .GenFile}}
+{{end -}}
 `
 
 var quorumCallBody = `	cd := {{$callData}}{
