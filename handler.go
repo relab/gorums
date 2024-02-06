@@ -24,8 +24,15 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 		defer srv.broadcastSrv.Unlock()
 		req := in.Message.(T)
 		defer ctx.Release()
+		// guard:
+		// - A broadcastID should be non-empty:
+		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
+		if in.Metadata.BroadcastMsg.BroadcastID == "" {
+			return
+		}
 		// this does not work yet:
 		//ctx.update(in.Metadata)
+		// it is better if the client provide this data in the request:
 		if in.Metadata.BroadcastMsg.Sender == "client" && in.Metadata.BroadcastMsg.OriginAddr == "" {
 			p, _ := peer.FromContext(ctx)
 			in.Metadata.BroadcastMsg.OriginAddr = p.Addr.String()
