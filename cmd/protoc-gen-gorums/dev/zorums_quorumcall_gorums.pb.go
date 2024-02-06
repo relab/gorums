@@ -9,9 +9,9 @@ package dev
 import (
 	context "context"
 	empty "github.com/golang/protobuf/ptypes/empty"
+	uuid "github.com/google/uuid"
 	gorums "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	uuid "github.com/google/uuid"
 )
 
 const (
