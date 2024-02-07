@@ -248,7 +248,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		docName:  "rpc",
 		template: rpcCall,
 		chkFn: func(m *protogen.Method) bool {
-			return !hasMethodOption(m, gorumsCallTypes...)
+			return !hasMethodOption(m, gorumsCallTypes...) && !hasMethodOption(m, gorums.E_Broadcast)
 		},
 	},
 	callTypeName(gorums.E_Quorumcall): {
@@ -328,7 +328,6 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Correctable,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
-	gorums.E_Broadcast,
 }
 
 // callTypesWithInternal should list all available call types that
