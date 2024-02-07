@@ -34,6 +34,7 @@ type ZorumsService interface {
 	QuorumCallEmpty(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error)
 	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error)
 	Multiparty(ctx gorums.BroadcastCtx, request *Request, broadcast *Broadcast) (err error)
+	MultipartyInternal(ctx gorums.BroadcastCtx, request *Request, broadcast *Broadcast) (err error)
 	Multicast(ctx gorums.ServerCtx, request *Request)
 	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
 	Multicast2(ctx gorums.ServerCtx, request *Request)
@@ -106,6 +107,7 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
 	srv.RegisterHandler("dev.ZorumsService.Multiparty", gorums.BroadcastHandler(impl.Multiparty, srv.Server))
+	srv.RegisterHandler("dev.ZorumsService.MultipartyInternal", gorums.BroadcastHandler(impl.MultipartyInternal, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()

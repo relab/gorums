@@ -59,8 +59,14 @@ service ZorumsService {
     option (gorums.quorumcall) = true;
   }
 
-  // Multiparty.
-  rpc Multiparty(Request) returns (google.protobuf.Empty) {
+  // Multiparty with QuorumCall.
+  rpc Multiparty(Request) returns (Response) {
+    option (gorums.quorumcall) = true;
+    option (gorums.broadcast) = true;
+  }
+
+  // Multiparty, internal handler.
+  rpc MultipartyInternal(Request) returns (google.protobuf.Empty) {
     option (gorums.broadcast) = true;
   }
 

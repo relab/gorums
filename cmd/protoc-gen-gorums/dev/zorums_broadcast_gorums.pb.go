@@ -20,3 +20,7 @@ const (
 func (b *Broadcast) Multiparty(req *Request, serverAddresses ...string) {
 	b.SetBroadcastValues("dev.ZorumsService.Multiparty", req, serverAddresses...)
 }
+
+func (b *Broadcast) MultipartyInternal(req *Request, serverAddresses ...string) {
+	b.SetBroadcastValues("dev.ZorumsService.MultipartyInternal", req, serverAddresses...)
+}
