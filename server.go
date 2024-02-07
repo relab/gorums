@@ -300,6 +300,10 @@ func newBroadcastCtx(ctx ServerCtx, md *ordering.Metadata) *BroadcastCtx {
 	return &bCtx
 }
 
+func (ctx BroadcastCtx) GetBroadcastValue(val BroadcastValue) string {
+	return checkBCtxValue(ctx, val)
+}
+
 func (ctx BroadcastCtx) GetBroadcastValues() ServerCtxValues {
 	return ServerCtxValues{
 		BroadcastID: checkBCtxValue(ctx, BroadcastID),
