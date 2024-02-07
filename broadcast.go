@@ -74,6 +74,7 @@ func (srv *broadcastServer) run() {
 		//srv.c.StoreID(msgID-1)
 		req := msg.getRequest()
 		method := msg.getMethod()
+		srvAddrs := msg.getSrvAddrs()
 		//broadcastID := msg.getBroadcastID()
 		//ctx := context.Background()
 		bCtx := msg.getContext()
@@ -86,45 +87,49 @@ func (srv *broadcastServer) run() {
 		//	srv.methods[method](ctx, convertedReq)
 		//	continue
 		//}
-		srv.methods[method](ctx, req, bCtx)
+		srv.methods[method](ctx, req, bCtx, srvAddrs)
 	}
 }
 
 func (srv *broadcastServer) handleClientResponses() {
 	for response := range srv.responseChan {
-		srv.clientReqsMutex.Lock()
-		req, ok := srv.clientReqs[response.getBroadcastID()]
-		if !ok {
-			// this server has not received a request directly from a client
-			// hence, the response should be ignored
-			continue
-		} else if req.status == unhandled {
-			// first time it is handled
-			req.status = response.getType()
-		} else if req.status == clientResponse || req.status == timeout {
-			// already handled, but got the other response type in the pair: clientResponse & timeout
-			// or a duplicate
-			req.status = done
-			continue
-		} else {
-			// already handled and can be removed
-			continue
-		}
-		select {
-		case <-req.ctx.Done():
-			// client request has been cancelled by client
-			log.Println("CLIENT REQUEST HAS BEEN CANCELLED")
-			continue
-		default:
-		}
-		if !response.valid() {
-			// the response is old and should have timed out, but may not due to scheduling.
-			// the timeout msg should arrive soon.
-			continue
-		}
-		srv.clientReqsMutex.Unlock()
-		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
+		srv.handle(response)
 	}
+}
+
+func (srv *broadcastServer) handle(response responseMsg) {
+	srv.clientReqsMutex.Lock()
+	defer srv.clientReqsMutex.Unlock()
+	req, ok := srv.clientReqs[response.getBroadcastID()]
+	if !ok {
+		// this server has not received a request directly from a client
+		// hence, the response should be ignored
+		return
+	} else if req.status == unhandled {
+		// first time it is handled
+		req.status = response.getType()
+	} else if req.status == clientResponse || req.status == timeout {
+		// already handled, but got the other response type in the pair: clientResponse & timeout
+		// or a duplicate
+		req.status = done
+		return
+	} else {
+		// already handled and can be removed
+		return
+	}
+	select {
+	case <-req.ctx.Done():
+		// client request has been cancelled by client
+		log.Println("CLIENT REQUEST HAS BEEN CANCELLED")
+		return
+	default:
+	}
+	if !response.valid() {
+		// the response is old and should have timed out, but may not due to scheduling.
+		// the timeout msg should arrive soon.
+		return
+	}
+	SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
 }
 
 func (srv *broadcastServer) runMiddleware(ctx BroadcastCtx) error {
@@ -223,8 +228,16 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 		if !d.inServerAddresses(n.addr) {
 			continue
 		}
+		if !n.connected {
+			if n.connect(n.mgr) != nil {
+				log.Println("FAILED TO CONNECT TO NODE", n.addr)
+				continue
+			} else {
+				n.connected = true
+			}
+		}
 		msg := d.Message
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, nil, false)
+		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, nil, false)
 	}
 }
 
@@ -234,6 +247,7 @@ type broadcastMsg interface {
 	getMethod() string
 	getContext() BroadcastCtx
 	getBroadcastID() string
+	getSrvAddrs() []string
 }
 
 type broadcastMessage struct {
@@ -242,6 +256,7 @@ type broadcastMessage struct {
 	method      string
 	context     BroadcastCtx
 	broadcastID string
+	srvAddrs    []string
 }
 
 func (b *broadcastMessage) getFrom() string {
@@ -264,12 +279,17 @@ func (b *broadcastMessage) getBroadcastID() string {
 	return b.broadcastID
 }
 
-func newBroadcastMessage(ctx BroadcastCtx, req requestTypes, method, broadcastID, from string) *broadcastMessage {
+func (b *broadcastMessage) getSrvAddrs() []string {
+	return b.srvAddrs
+}
+
+func newBroadcastMessage(ctx BroadcastCtx, req requestTypes, method, broadcastID, from string, srvAddrs []string) *broadcastMessage {
 	return &broadcastMessage{
 		from:        from,
 		request:     req,
 		method:      method,
 		context:     ctx,
 		broadcastID: broadcastID,
+		srvAddrs:    srvAddrs,
 	}
 }

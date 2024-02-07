@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type broadcastFunc func(ctx context.Context, req requestTypes, broadcastMetadata BroadcastCtx)
+type broadcastFunc func(ctx context.Context, req requestTypes, broadcastMetadata BroadcastCtx, srvAddrs []string)
 
 type requestTypes interface {
 	ProtoReflect() protoreflect.Message
