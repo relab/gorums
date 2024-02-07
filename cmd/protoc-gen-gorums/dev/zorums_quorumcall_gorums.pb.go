@@ -153,8 +153,8 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp
 	return res.(*empty.Empty), err
 }
 
-// Multiparty.
-func (c *Configuration) Multiparty(ctx context.Context, in *Request) (resp *empty.Empty, err error) {
+// Multiparty with QuorumCall.
+func (c *Configuration) Multiparty(ctx context.Context, in *Request) (resp *Response, err error) {
 	cd := gorums.QuorumCallData{
 		Message: in,
 		Method:  "dev.ZorumsService.Multiparty",
@@ -163,9 +163,9 @@ func (c *Configuration) Multiparty(ctx context.Context, in *Request) (resp *empt
 		Sender:      "client",
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*empty.Empty, len(replies))
+		r := make(map[uint32]*Response, len(replies))
 		for k, v := range replies {
-			r[k] = v.(*empty.Empty)
+			r[k] = v.(*Response)
 		}
 		return c.qspec.MultipartyQF(req.(*Request), r)
 	}
@@ -174,5 +174,5 @@ func (c *Configuration) Multiparty(ctx context.Context, in *Request) (resp *empt
 	if err != nil {
 		return nil, err
 	}
-	return res.(*empty.Empty), err
+	return res.(*Response), err
 }
