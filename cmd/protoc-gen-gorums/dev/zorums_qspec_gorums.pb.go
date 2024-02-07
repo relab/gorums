@@ -69,18 +69,11 @@ type QuorumSpec interface {
 	QuorumCallEmpty2QF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, bool)
 
 	// MultipartyQF is the quorum function for the Multiparty
-	// broadcast call method. The in parameter is the request object
+	// quorum call method. The in parameter is the request object
 	// supplied to the Multiparty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
 	MultipartyQF(in *Request, replies map[uint32]*Response) (*Response, bool)
-
-	// MultipartyInternalQF is the quorum function for the MultipartyInternal
-	// broadcast call method. The in parameter is the request object
-	// supplied to the MultipartyInternal method at call time, and may or may not
-	// be used by the quorum function. If the in parameter is not needed
-	// you should implement your quorum function with '_ *Request'.
-	MultipartyInternalQF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, bool)
 
 	// QuorumCallAsyncQF is the quorum function for the QuorumCallAsync
 	// asynchronous quorum call method. The in parameter is the request object
