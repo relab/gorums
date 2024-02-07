@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 
-	"google.golang.org/grpc/peer"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -33,10 +32,10 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 		// this does not work yet:
 		//ctx.update(in.Metadata)
 		// it is better if the client provide this data in the request:
-		if in.Metadata.BroadcastMsg.Sender == "client" && in.Metadata.BroadcastMsg.OriginAddr == "" {
-			p, _ := peer.FromContext(ctx)
-			in.Metadata.BroadcastMsg.OriginAddr = p.Addr.String()
-		}
+		//if in.Metadata.BroadcastMsg.Sender == "client" && in.Metadata.BroadcastMsg.OriginAddr == "" {
+		//	p, _ := peer.FromContext(ctx)
+		//	in.Metadata.BroadcastMsg.OriginAddr = p.Addr.String()
+		//}
 		bCtx := newBroadcastCtx(ctx, in.Metadata)
 		// the client can specify middleware, e.g. authentication, to return early.
 		err := srv.broadcastSrv.runMiddleware(*bCtx)
@@ -85,7 +84,7 @@ func (srv *broadcastServer) determineBroadcast(ctx BroadcastCtx, broadcastID, fr
 			if !srv.alreadyBroadcasted(broadcastID, method) {
 				// how to define individual request message to each node?
 				//	- maybe create one request for each node and send a list of requests?
-				go srv.broadcast(newBroadcastMessage(ctx, srv.b.getRequest(i), method, broadcastID, from))
+				go srv.broadcast(newBroadcastMessage(ctx, srv.b.getRequest(i), method, broadcastID, from, srv.b.getServerAddresses()))
 			}
 		}
 	}
@@ -114,20 +113,21 @@ func (srv *Server) ListenForBroadcast() {
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.methods[method] = func(ctx context.Context, in requestTypes, broadcastMetadata BroadcastCtx) {
+	srv.methods[method] = func(ctx context.Context, in requestTypes, broadcastMetadata BroadcastCtx, srvAddrs []string) {
 		md := broadcastMetadata.GetBroadcastValues()
 		cd := broadcastCallData{
-			Message:     in,
-			Method:      method,
-			BroadcastID: md.BroadcastID,
-			SenderAddr:  srv.addr,
-			SenderID:    srv.id,
-			OriginID:    md.OriginID,
-			OriginAddr:  md.OriginAddr,
-			PublicKey:   srv.publicKey,
-			Signature:   "signature",
-			MAC:         "mac",
-			Sender:      "server",
+			Message:         in,
+			Method:          method,
+			BroadcastID:     md.BroadcastID,
+			SenderAddr:      srv.addr,
+			SenderID:        srv.id,
+			OriginID:        md.OriginID,
+			OriginAddr:      md.OriginAddr,
+			PublicKey:       srv.publicKey,
+			Signature:       "signature",
+			MAC:             "mac",
+			Sender:          "server",
+			ServerAddresses: srvAddrs,
 		}
 		srv.config.broadcastCall(ctx, cd)
 	}

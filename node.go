@@ -22,11 +22,12 @@ const nilAngleString = "<nil>"
 // You should use the generated `Node` struct instead.
 type RawNode struct {
 	// Only assigned at creation.
-	id     uint32
-	addr   string
-	conn   *grpc.ClientConn
-	cancel func()
-	mgr    *RawManager
+	id        uint32
+	addr      string
+	conn      *grpc.ClientConn
+	cancel    func()
+	mgr       *RawManager
+	connected bool
 
 	// the default channel
 	channel *channel
@@ -41,8 +42,9 @@ func NewRawNode(addr string) (*RawNode, error) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
 	return &RawNode{
-		id:   h.Sum32(),
-		addr: tcpAddr.String(),
+		id:        h.Sum32(),
+		addr:      tcpAddr.String(),
+		connected: false,
 	}, nil
 }
 
