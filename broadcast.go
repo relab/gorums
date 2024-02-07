@@ -230,7 +230,6 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 		}
 		if !n.connected {
 			if n.connect(n.mgr) != nil {
-				log.Println("FAILED TO CONNECT TO NODE", n.addr)
 				continue
 			} else {
 				n.connected = true
