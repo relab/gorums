@@ -138,5 +138,6 @@ func (srv *Server) RegisterConfig(ownAddr string, srvAddrs []string, opts ...Man
 	mgr := NewRawManager(opts...)
 	config, err := NewRawConfiguration(mgr, WithNodeListBroadcast(srvAddrs))
 	srv.broadcastSrv.config = config
+	srv.broadcastSrv.timeout = mgr.opts.nodeDialTimeout
 	return err
 }

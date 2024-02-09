@@ -42,7 +42,6 @@ func newBroadcastServer() *broadcastServer {
 		BroadcastChan:        make(chan broadcastMsg, 1000),
 		methods:              make(map[string]broadcastFunc),
 		responseChan:         make(chan responseMsg),
-		timeout:              5 * time.Second,
 		clientReqs:           make(map[string]*clientRequest),
 		middlewares:          make([]func(BroadcastCtx) error, 0),
 		publicKey:            "publicKey",
