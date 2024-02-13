@@ -30,6 +30,7 @@ type response struct {
 
 type responseRouter struct {
 	c         chan<- response
+	ts        time.Time
 	streaming bool
 }
 
@@ -81,6 +82,7 @@ func (c *channel) routeResponse(msgID uint64, resp response) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	if router, ok := c.responseRouters[msgID]; ok {
+		c.latency = time.Since(router.ts)
 		router.c <- resp
 		// delete the router if we are only expecting a single message
 		if !router.streaming {
@@ -92,7 +94,7 @@ func (c *channel) routeResponse(msgID uint64, resp response) {
 func (c *channel) enqueue(req request, responseChan chan<- response, streaming bool) {
 	if responseChan != nil {
 		c.responseMut.Lock()
-		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, streaming}
+		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, time.Now(), streaming}
 		c.responseMut.Unlock()
 	}
 	c.sendQ <- req
