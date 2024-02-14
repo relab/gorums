@@ -25,7 +25,7 @@ type {{$service}} interface {
 {{- end}}
 `
 
-var registerInterfaceTest2 = `
+var registerServerMethods = `
 {{$genFile := .GenFile}}
 
 {{range .Services -}}
@@ -100,4 +100,4 @@ func (srv *Server) ReturnToClient(resp *ClientResponse, err error, broadcastID s
 }
 `
 
-var server = serverVariables + serverInterface + registerInterfaceTest2 + registerInterface + registerReturnToClientHandlers
+var server = serverVariables + serverInterface + registerServerMethods + registerInterface + registerReturnToClientHandlers
