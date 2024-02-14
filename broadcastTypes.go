@@ -2,30 +2,32 @@ package gorums
 
 import (
 	"context"
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type broadcastFunc func(ctx context.Context, req requestTypes, broadcastMetadata BroadcastCtx, srvAddrs []string)
+type broadcastFunc func(ctx context.Context, req RequestTypes, broadcastMetadata BroadcastMetadata, srvAddrs []string)
 
-type requestTypes interface {
+type RequestTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type responseTypes interface {
+type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type defaultImplementationFunc[T requestTypes, V responseTypes] func(ServerCtx, T) (V, error)
+type BroadcastHandlerFunc func(method string, req RequestTypes, metadata BroadcastMetadata, srvAddrs []string)
+type BroadcastReturnToClientHandlerFunc func(resp ResponseTypes, err error, metadata BroadcastMetadata)
 
-// type implementationFunc[T requestTypes, V broadcastStruct] func(ServerCtx, T, V) error
-type implementationFuncB[T requestTypes, V broadcastStruct] func(BroadcastCtx, T, V) error
+type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
+
+type implementationFuncB[T RequestTypes, V IBroadcastStruct] func(ServerCtx, T, V)
 
 type responseMsg interface {
-	getResponse() responseTypes
+	getResponse() ResponseTypes
 	getError() error
 	getBroadcastID() string
 	valid() bool
@@ -42,7 +44,7 @@ const (
 )
 
 type responseMessage struct {
-	response    responseTypes
+	response    ResponseTypes
 	err         error
 	broadcastID string
 	timestamp   time.Time
@@ -50,7 +52,7 @@ type responseMessage struct {
 	respType    respType
 }
 
-func newResponseMessage(response responseTypes, err error, broadcastID string, respType respType, ttl time.Duration) *responseMessage {
+func newResponseMessage(response ResponseTypes, err error, broadcastID string, respType respType, ttl time.Duration) *responseMessage {
 	return &responseMessage{
 		response:    response,
 		err:         err,
@@ -61,7 +63,7 @@ func newResponseMessage(response responseTypes, err error, broadcastID string, r
 	}
 }
 
-func (r *responseMessage) getResponse() responseTypes {
+func (r *responseMessage) getResponse() ResponseTypes {
 	return r.response
 }
 
@@ -89,89 +91,67 @@ type clientRequest struct {
 	status   respType
 }
 
-type broadcastStruct interface {
-	getMethods() []string
-	shouldBroadcast() bool
-	shouldReturnToClient() bool
-	reset()
-	getRequest(i int) requestTypes
-	getResponses() []responseTypes
-	getError(i int) error
-	getServerAddresses() []string
+type SpBroadcast struct {
+	BroadcastHandler      BroadcastHandlerFunc
+	ReturnToClientHandler BroadcastReturnToClientHandlerFunc
+}
+
+func NewSpBroadcastStruct() *SpBroadcast {
+	return &SpBroadcast{}
+}
+
+type IBroadcastStruct interface {
+	setMetadataHandler(func(metadata BroadcastMetadata))
+	setMetadata(metadata BroadcastMetadata)
 }
 
 type BroadcastStruct struct {
-	methods                 []string // could make this a slice to support multiple broadcasts in one gRPC method
-	shouldBroadcastVal      bool
-	shouldReturnToClientVal bool
-	reqs                    []requestTypes // could make this a slice to support multiple broadcasts in one gRPC method
-	resps                   []responseTypes
-	errs                    []error // part of client response
-	serverAddresses         []string
+	metadataHandler func(metadata BroadcastMetadata)
+}
+
+func (b *BroadcastStruct) setMetadataHandler(handler func(metadata BroadcastMetadata)) {
+	b.metadataHandler = handler
+}
+
+func (b *BroadcastStruct) setMetadata(metadata BroadcastMetadata) {
+	b.metadataHandler(metadata)
 }
 
 func NewBroadcastStruct() *BroadcastStruct {
 	return &BroadcastStruct{}
 }
 
-// This method should be used by generated code only.
-func (b *BroadcastStruct) SetBroadcastValues(method string, req requestTypes, serverAddresses ...string) {
-	b.methods = append(b.methods, method)
-	b.shouldBroadcastVal = true
-	b.reqs = append(b.reqs, req)
-	b.serverAddresses = append(b.serverAddresses, serverAddresses...)
+type BroadcastMetadata struct {
+	BroadcastID string
+	Sender      string
+	SenderID    string
+	SenderAddr  string
+	OriginID    string
+	OriginAddr  string
+	Method      string
+
+	PublicKey string
+	Signature string
+	MAC       string
 }
 
-// This method should be used by generated code only.
-func (b *BroadcastStruct) SetReturnToClient(resp responseTypes, err error) {
-	b.shouldReturnToClientVal = true
-	b.resps = append(b.resps, resp)
-	b.errs = append(b.errs, err)
-}
-
-func (b *BroadcastStruct) getMethods() []string {
-	return b.methods
-}
-func (b *BroadcastStruct) getRequest(i int) requestTypes {
-	if i >= len(b.reqs) {
-		panic("inconsistent requests and methods in broadcast")
+func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
+	tmp := strings.Split(md.Method, ".")
+	m := ""
+	if len(tmp) >= 1 {
+		m = tmp[len(tmp)-1]
 	}
-	return b.reqs[i]
-}
-func (b *BroadcastStruct) getResponses() []responseTypes {
-	return b.resps
-}
-func (b *BroadcastStruct) shouldBroadcast() bool {
-	return b.shouldBroadcastVal
-}
-func (b *BroadcastStruct) shouldReturnToClient() bool {
-	return b.shouldReturnToClientVal
-}
-func (b *BroadcastStruct) getError(i int) error {
-	if i >= len(b.errs) {
-		output := fmt.Sprintf("inconsistent errors and responses in return to client.\n- errors:\t%v\n- responses:\t%v", b.errs, b.resps)
-		panic(output)
-	}
-	return b.errs[i]
-}
-func (b *BroadcastStruct) getServerAddresses() []string {
-	return b.serverAddresses
-}
 
-//	func (b *BroadcastStruct) GetBroadcastID() string {
-//		return b.broadcastID
-//	}
-func (b *BroadcastStruct) reset() {
-	b.methods = make([]string, 0)
-	b.shouldBroadcastVal = false
-	b.shouldReturnToClientVal = false
-	b.reqs = make([]requestTypes, 0)
-	b.resps = make([]responseTypes, 0)
-	b.errs = make([]error, 0)
-	b.serverAddresses = make([]string, 0)
-	/*if len(broadcastID) >= 1 {
-		b.broadcastID = broadcastID[0]
-	} else {
-		b.broadcastID = ""
-	}*/
+	return BroadcastMetadata{
+		BroadcastID: md.BroadcastMsg.BroadcastID,
+		Sender:      md.BroadcastMsg.Sender,
+		SenderID:    md.BroadcastMsg.SenderID,
+		SenderAddr:  md.BroadcastMsg.SenderAddr,
+		OriginID:    md.BroadcastMsg.OriginID,
+		OriginAddr:  md.BroadcastMsg.OriginAddr,
+		Method:      m,
+		PublicKey:   md.BroadcastMsg.PublicKey,
+		Signature:   md.BroadcastMsg.Signature,
+		MAC:         md.BroadcastMsg.MAC,
+	}
 }

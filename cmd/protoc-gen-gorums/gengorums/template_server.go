@@ -2,7 +2,6 @@ package gengorums
 
 var serverVariables = `
 {{$context := use "gorums.ServerCtx" .GenFile}}
-{{$broadcastContext := use "gorums.BroadcastCtx" .GenFile}}
 `
 
 var serverInterface = `
@@ -17,7 +16,7 @@ type {{$service}} interface {
 	{{- else if correctableStream .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
 	{{- else if isBroadcast .}}
-	{{.GoName}}(ctx {{$broadcastContext}}, request *{{in $genFile .}}, broadcast *Broadcast) (err error)
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast)
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
@@ -67,28 +66,25 @@ func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 
 var registerInterfaceTest = `
 {{$genFile := .GenFile}}
+{{range .Services -}}
+{{- if isBroadcast .}}
+{{- range .Methods}}
+func (b *Server) {{.GoName}}(ctx gorums.ServerCtx, request *{{in .GenFile .Method}}, broadcast *Broadcast) {
+	panic("{{.Desc.FullName}} is not implemented")
+}
+{{- end}}
+{{- end}}
+`
+
+var registerReturnToClientHandlers = `
+{{$genFile := .GenFile}}
 func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
-	b.SetReturnToClient(resp, err)
+	b.sp.ReturnToClientHandler(resp, err, b.metadata)
 }
 
 func (srv *Server) ReturnToClient(resp *ClientResponse, err error, broadcastID string) {
-	go srv.RetToClient(resp, err, broadcastID)
+	srv.RetToClient(resp, err, broadcastID)
 }
 `
 
-/*
-func (srv *Server) RegisterConfiguration(c *Configuration) {
-	srv.RegisterBroadcastFunc("dev.ZourmsService.QuorumCall", gorums.RegisterBroadcastFunc(c.QuorumCall))
-	srv.ListenForBroadcast()
-}
-
-func (b *Broadcast) ReturnToClient(resp *Response, err error) {
-	b.SetReturnToClient(resp, err)
-}
-
-func (b *Broadcast) PrePrepare(req *Request) {
-	b.SetBroadcastValues("protos.PBFTNode.PrePrepare", req)
-}
-*/
-
-var server = serverVariables + serverInterface + registerInterface + registerInterfaceTest
+var server = serverVariables + serverInterface + registerInterface + registerReturnToClientHandlers

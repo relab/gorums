@@ -2,11 +2,14 @@ package gorums
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func DefaultHandler[T requestTypes, V responseTypes](impl defaultImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		req := in.Message.(T)
 		defer ctx.Release()
@@ -15,7 +18,7 @@ func DefaultHandler[T requestTypes, V responseTypes](impl defaultImplementationF
 	}
 }
 
-func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFuncB[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BroadcastHandler[T RequestTypes, V IBroadcastStruct](impl implementationFuncB[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
@@ -26,7 +29,7 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
-		if in.Metadata.BroadcastMsg.BroadcastID == "" {
+		if err := srv.broadcastSrv.validateMessage(in); err != nil {
 			return
 		}
 		// this does not work yet:
@@ -36,75 +39,87 @@ func BroadcastHandler[T requestTypes, V broadcastStruct](impl implementationFunc
 		//	p, _ := peer.FromContext(ctx)
 		//	in.Metadata.BroadcastMsg.OriginAddr = p.Addr.String()
 		//}
-		bCtx := newBroadcastCtx(ctx, in.Metadata)
+		broadcastMetadata := newBroadcastMetadata(in.Metadata)
 		// the client can specify middleware, e.g. authentication, to return early.
-		err := srv.broadcastSrv.runMiddleware(*bCtx)
-		if err != nil {
+		if err := srv.broadcastSrv.runMiddleware(broadcastMetadata); err != nil {
 			// return if any of the middlewares return an error
 			return
 		}
-		srv.broadcastSrv.b.reset()
-		// error is ignored. What to do about it?
-		_ = impl(*bCtx, req, srv.broadcastSrv.b.(V))
-		srv.broadcastSrv.determineBroadcast(*bCtx, in.Metadata.BroadcastMsg.GetBroadcastID(), srv.getOwnAddr())
-		// verify whether a server or a client sent the request
+		//srv.broadcastSrv.b.reset()
+		//srv.broadcastSrv.b.setMetadata(broadcastMetadata)
+		// add the request as a client request
+		srv.broadcastSrv.bNew.setMetadata(broadcastMetadata)
+		srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
+		impl(ctx, req, srv.broadcastSrv.bNew.(V))
+		//srv.broadcastSrv.determineBroadcast(broadcastMetadata)
+		//// verify whether a server or a client sent the request
 		if in.Metadata.BroadcastMsg.Sender == "client" {
-			srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
 			go srv.broadcastSrv.timeoutClientResponse(ctx, in, finished)
+			//	//SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), nil))
 		} /*else {
-			// server to server communication does not need response?
-			SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), err))
-		}*/
-		srv.broadcastSrv.determineReturnToClient(ctx, in.Metadata.BroadcastMsg.GetBroadcastID())
+		//	// server to server communication does not need response?
+		//	SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), err))
+		//}*/
+		//srv.broadcastSrv.determineReturnToClient(ctx, in.Metadata.BroadcastMsg.GetBroadcastID())
 	}
 }
 
-func (srv *Server) getOwnAddr() string {
-	return ""
+func (srv *broadcastServer) validateMessage(in *Message) error {
+	if in.Metadata.BroadcastMsg.BroadcastID == "" {
+		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.BroadcastMsg.BroadcastID)
+	}
+	return nil
 }
 
-func (srv *broadcastServer) determineReturnToClient(ctx ServerCtx, broadcastID string) {
-	if srv.b.shouldReturnToClient() {
-		for i, resp := range srv.b.getResponses() {
-			if !srv.alreadyReturnedToClient(broadcastID) {
-				srv.setReturnedToClient(broadcastID, true)
-				err := srv.b.getError(i)
-				go func(i int, resp responseTypes, err error) {
-					srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
-				}(i, resp, err)
-			}
-		}
+//func (srv *broadcastServer) determineReturnToClient(ctx ServerCtx, broadcastID string) {
+//	if srv.b.shouldReturnToClient() {
+//		for i, resp := range srv.b.getResponses() {
+//			if !srv.alreadyReturnedToClient(broadcastID) {
+//				srv.setReturnedToClient(broadcastID, true)
+//				err := srv.b.getError(i)
+//				go func(i int, resp responseTypes, err error) {
+//					srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
+//				}(i, resp, err)
+//			}
+//		}
+//	}
+//}
+
+func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTypes, metadata BroadcastMetadata, srvAddrs []string) {
+	// maybe let this be an option for the implementer?
+	if !srv.alreadyBroadcasted(metadata.BroadcastID, method) {
+		// how to define individual request message to each node?
+		//	- maybe create one request for each node and send a list of requests?
+		srv.broadcast(newBroadcastMessage(metadata, req, method, metadata.BroadcastID, srvAddrs))
 	}
 }
 
-func (srv *broadcastServer) determineBroadcast(ctx BroadcastCtx, broadcastID, from string) {
-	if srv.b.shouldBroadcast() {
-		for i, method := range srv.b.getMethods() {
-			// maybe let this be an option for the implementer?
-			if !srv.alreadyBroadcasted(broadcastID, method) {
-				// how to define individual request message to each node?
-				//	- maybe create one request for each node and send a list of requests?
-				go srv.broadcast(newBroadcastMessage(ctx, srv.b.getRequest(i), method, broadcastID, from, srv.b.getServerAddresses()))
-			}
-		}
-	}
+//func (srv *broadcastServer) determineBroadcast(metadata BroadcastMetadata) {
+//	if srv.b.shouldBroadcast() {
+//		for i, method := range srv.b.getMethods() {
+//			// maybe let this be an option for the implementer?
+//			if !srv.alreadyBroadcasted(metadata.BroadcastID, method) {
+//				// how to define individual request message to each node?
+//				//	- maybe create one request for each node and send a list of requests?
+//				go srv.broadcast(newBroadcastMessage(metadata, srv.b.getRequest(i), method, metadata.BroadcastID, srv.b.getServerAddresses()))
+//			}
+//		}
+//	}
+//}
+
+func (srv *Server) RegisterBroadcastStruct(b IBroadcastStruct, assign func(bh BroadcastHandlerFunc, ch BroadcastReturnToClientHandlerFunc), m func(metadata BroadcastMetadata)) {
+	//srv.broadcastSrv.b = b
+	srv.broadcastSrv.bNew = b
+	srv.broadcastSrv.bNew.setMetadataHandler(m)
+	assign(srv.broadcastSrv.broadcastStructHandler, srv.broadcastSrv.clientReturn)
 }
 
-func (srv *Server) RegisterBroadcastStruct(b broadcastStruct) {
-	srv.broadcastSrv.b = b
-}
-
-func (srv *Server) RegisterMiddlewares(middlewares ...func(BroadcastCtx) error) {
+func (srv *Server) RegisterMiddlewares(middlewares ...func(BroadcastMetadata) error) {
 	srv.broadcastSrv.middlewares = middlewares
 }
 
-func (srv *Server) RetToClient(resp responseTypes, err error, broadcastID string) {
-	srv.broadcastSrv.Lock()
-	defer srv.broadcastSrv.Unlock()
-	if !srv.broadcastSrv.alreadyReturnedToClient(broadcastID) {
-		srv.broadcastSrv.setReturnedToClient(broadcastID, true)
-		srv.broadcastSrv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.broadcastSrv.timeout)
-	}
+func (srv *Server) RetToClient(resp ResponseTypes, err error, broadcastID string) {
+	srv.broadcastSrv.returnToClient(broadcastID, resp, err)
 }
 
 func (srv *Server) ListenForBroadcast() {
@@ -112,9 +127,12 @@ func (srv *Server) ListenForBroadcast() {
 	go srv.broadcastSrv.handleClientResponses()
 }
 
+func (srv *broadcastServer) registerReturnToClientHandler(handler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
+	srv.returnToClientHandler = handler
+}
+
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.methods[method] = func(ctx context.Context, in requestTypes, broadcastMetadata BroadcastCtx, srvAddrs []string) {
-		md := broadcastMetadata.GetBroadcastValues()
+	srv.methods[method] = func(ctx context.Context, in RequestTypes, md BroadcastMetadata, srvAddrs []string) {
 		cd := broadcastCallData{
 			Message:         in,
 			Method:          method,
@@ -138,6 +156,7 @@ func (srv *Server) RegisterConfig(ownAddr string, srvAddrs []string, opts ...Man
 	mgr := NewRawManager(opts...)
 	config, err := NewRawConfiguration(mgr, WithNodeListBroadcast(srvAddrs))
 	srv.broadcastSrv.config = config
-	srv.broadcastSrv.timeout = mgr.opts.nodeDialTimeout
+	//srv.broadcastSrv.timeout = mgr.opts.nodeDialTimeout
+	srv.broadcastSrv.timeout = 5 * time.Second
 	return err
 }

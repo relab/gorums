@@ -33,8 +33,8 @@ type ZorumsService interface {
 	QuorumCallCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	QuorumCallEmpty(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error)
 	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error)
-	Multiparty(ctx gorums.BroadcastCtx, request *Request, broadcast *Broadcast) (err error)
-	MultipartyInternal(ctx gorums.BroadcastCtx, request *Request, broadcast *Broadcast) (err error)
+	Multiparty(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	MultipartyInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Multicast(ctx gorums.ServerCtx, request *Request)
 	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
 	Multicast2(ctx gorums.ServerCtx, request *Request)
@@ -296,9 +296,9 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 }
 
 func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
-	b.SetReturnToClient(resp, err)
+	b.sp.ReturnToClientHandler(resp, err, b.metadata)
 }
 
 func (srv *Server) ReturnToClient(resp *ClientResponse, err error, broadcastID string) {
-	go srv.RetToClient(resp, err, broadcastID)
+	srv.RetToClient(resp, err, broadcastID)
 }
