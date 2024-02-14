@@ -25,7 +25,32 @@ type {{$service}} interface {
 {{- end}}
 `
 
-// {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) (response *{{out $genFile .}}, err error)
+var registerInterfaceTest2 = `
+{{$genFile := .GenFile}}
+
+{{range .Services -}}
+{{$service := .GoName}}
+{{- range .Methods}}
+{{- if isOneway .}}
+func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) {
+	panic("{{.GoName}} not implemented")
+}
+{{- else if correctableStream .}}
+func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error {
+	panic("{{.GoName}} not implemented")
+}
+{{- else if isBroadcast .}}
+func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) {
+	panic("{{.GoName}} not implemented")
+}
+{{- else}}
+func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error) {
+	panic("{{.GoName}} not implemented")
+}
+{{- end}}
+{{- end}}
+{{- end}}
+`
 
 var registerInterface = `
 {{$genFile := .GenFile}}
@@ -64,18 +89,6 @@ func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 {{- end}}
 `
 
-var registerInterfaceTest = `
-{{$genFile := .GenFile}}
-{{range .Services -}}
-{{- if isBroadcast .}}
-{{- range .Methods}}
-func (b *Server) {{.GoName}}(ctx gorums.ServerCtx, request *{{in .GenFile .Method}}, broadcast *Broadcast) {
-	panic("{{.Desc.FullName}} is not implemented")
-}
-{{- end}}
-{{- end}}
-`
-
 var registerReturnToClientHandlers = `
 {{$genFile := .GenFile}}
 func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
@@ -87,4 +100,4 @@ func (srv *Server) ReturnToClient(resp *ClientResponse, err error, broadcastID s
 }
 `
 
-var server = serverVariables + serverInterface + registerInterface + registerReturnToClientHandlers
+var server = serverVariables + serverInterface + registerInterfaceTest2 + registerInterface + registerReturnToClientHandlers

@@ -59,6 +59,112 @@ type ZorumsService interface {
 	Unicast2(ctx gorums.ServerCtx, request *Request)
 }
 
+func (srv *Server) GRPCCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("GRPCCall not implemented")
+}
+func (srv *Server) QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCall not implemented")
+}
+func (srv *Server) QuorumCallPerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCallPerNodeArg not implemented")
+}
+func (srv *Server) QuorumCallCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCallCustomReturnType not implemented")
+}
+func (srv *Server) QuorumCallCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCallCombo not implemented")
+}
+func (srv *Server) QuorumCallEmpty(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error) {
+	panic("QuorumCallEmpty not implemented")
+}
+func (srv *Server) QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error) {
+	panic("QuorumCallEmpty2 not implemented")
+}
+func (srv *Server) Multiparty(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic("Multiparty not implemented")
+}
+func (srv *Server) MultipartyInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic("MultipartyInternal not implemented")
+}
+func (srv *Server) Multicast(ctx gorums.ServerCtx, request *Request) {
+	panic("Multicast not implemented")
+}
+func (srv *Server) MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request) {
+	panic("MulticastPerNodeArg not implemented")
+}
+func (srv *Server) Multicast2(ctx gorums.ServerCtx, request *Request) {
+	panic("Multicast2 not implemented")
+}
+func (srv *Server) Multicast3(ctx gorums.ServerCtx, request *Request) {
+	panic("Multicast3 not implemented")
+}
+func (srv *Server) Multicast4(ctx gorums.ServerCtx, request *empty.Empty) {
+	panic("Multicast4 not implemented")
+}
+func (srv *Server) QuorumCallAsync(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCallAsync not implemented")
+}
+func (srv *Server) QuorumCallAsyncPerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCallAsyncPerNodeArg not implemented")
+}
+func (srv *Server) QuorumCallAsyncCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCallAsyncCustomReturnType not implemented")
+}
+func (srv *Server) QuorumCallAsyncCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCallAsyncCombo not implemented")
+}
+func (srv *Server) QuorumCallAsync2(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("QuorumCallAsync2 not implemented")
+}
+func (srv *Server) QuorumCallAsyncEmpty(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error) {
+	panic("QuorumCallAsyncEmpty not implemented")
+}
+func (srv *Server) QuorumCallAsyncEmpty2(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error) {
+	panic("QuorumCallAsyncEmpty2 not implemented")
+}
+func (srv *Server) Correctable(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("Correctable not implemented")
+}
+func (srv *Server) CorrectablePerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("CorrectablePerNodeArg not implemented")
+}
+func (srv *Server) CorrectableCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("CorrectableCustomReturnType not implemented")
+}
+func (srv *Server) CorrectableCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic("CorrectableCombo not implemented")
+}
+func (srv *Server) CorrectableEmpty(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error) {
+	panic("CorrectableEmpty not implemented")
+}
+func (srv *Server) CorrectableEmpty2(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error) {
+	panic("CorrectableEmpty2 not implemented")
+}
+func (srv *Server) CorrectableStream(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error {
+	panic("CorrectableStream not implemented")
+}
+func (srv *Server) CorrectableStreamPerNodeArg(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error {
+	panic("CorrectableStreamPerNodeArg not implemented")
+}
+func (srv *Server) CorrectableStreamCustomReturnType(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error {
+	panic("CorrectableStreamCustomReturnType not implemented")
+}
+func (srv *Server) CorrectableStreamCombo(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error {
+	panic("CorrectableStreamCombo not implemented")
+}
+func (srv *Server) CorrectableStreamEmpty(ctx gorums.ServerCtx, request *Request, send func(response *empty.Empty) error) error {
+	panic("CorrectableStreamEmpty not implemented")
+}
+func (srv *Server) CorrectableStreamEmpty2(ctx gorums.ServerCtx, request *empty.Empty, send func(response *Response) error) error {
+	panic("CorrectableStreamEmpty2 not implemented")
+}
+func (srv *Server) Unicast(ctx gorums.ServerCtx, request *Request) {
+	panic("Unicast not implemented")
+}
+func (srv *Server) Unicast2(ctx gorums.ServerCtx, request *Request) {
+	panic("Unicast2 not implemented")
+}
+
 func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
