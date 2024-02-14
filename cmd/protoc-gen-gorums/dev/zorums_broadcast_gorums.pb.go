@@ -17,10 +17,10 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 7)
 )
 
-func (b *Broadcast) Multiparty(req *Request, serverAddresses ...string) {
-	b.SetBroadcastValues("dev.ZorumsService.Multiparty", req, serverAddresses...)
+func (b *Broadcast) Multiparty(req *Request) {
+	b.sp.BroadcastHandler("dev.ZorumsService.Multiparty", req, b.metadata, b.serverAddresses)
 }
 
-func (b *Broadcast) MultipartyInternal(req *Request, serverAddresses ...string) {
-	b.SetBroadcastValues("dev.ZorumsService.MultipartyInternal", req, serverAddresses...)
+func (b *Broadcast) MultipartyInternal(req *Request) {
+	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyInternal", req, b.metadata, b.serverAddresses)
 }

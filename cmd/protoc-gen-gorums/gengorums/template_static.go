@@ -5,7 +5,7 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastStruct", "google.golang.org/grpc/encoding": "GetCodec"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc/encoding": "GetCodec"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
@@ -142,7 +142,11 @@ func NewServer() *Server {
 	srv := &Server{
 		gorums.NewServer(),
 	}
-	srv.RegisterBroadcastStruct(&Broadcast{gorums.NewBroadcastStruct()})
+	b := &Broadcast{
+		BroadcastStruct: gorums.NewBroadcastStruct(),
+		sp:              gorums.NewSpBroadcastStruct(),
+	}
+	srv.RegisterBroadcastStruct(b, assign(b), assignValues(b))
 	return srv
 }
 
@@ -154,6 +158,39 @@ func (srv *Server) RegisterConfiguration(ownAddr string, srvAddrs []string, opts
 
 type Broadcast struct {
 	*gorums.BroadcastStruct
+	sp              *gorums.SpBroadcast
+	serverAddresses []string
+	metadata        gorums.BroadcastMetadata
+}
+
+func assign(b *Broadcast) func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastReturnToClientHandlerFunc) {
+	return func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastReturnToClientHandlerFunc) {
+		b.sp.BroadcastHandler = bh
+		b.sp.ReturnToClientHandler = ch
+	}
+}
+
+func assignValues(b *Broadcast) func(metadata gorums.BroadcastMetadata) {
+	return func(metadata gorums.BroadcastMetadata) {
+		b.metadata = metadata
+	}
+}
+
+func (b *Broadcast) To(srvAddrs ...string) *Broadcast {
+	b.serverAddresses = append(b.serverAddresses, srvAddrs...)
+	return b
+}
+
+func (b *Broadcast) OmitUniquenessChecks() *Broadcast {
+	return b
+}
+
+func (b *Broadcast) Gossip(percentage float32) *Broadcast {
+	return b
+}
+
+func (b *Broadcast) GetMetadata() gorums.BroadcastMetadata {
+	return b.metadata
 }
 
 `

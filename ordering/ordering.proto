@@ -31,4 +31,5 @@ message BroadcastMsg {
   string PublicKey = 7;
   string Signature = 8;
   string MAC = 9;
+  uint32 NumPeers = 10;
 }

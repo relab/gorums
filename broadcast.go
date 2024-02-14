@@ -9,28 +9,30 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type broadcastServer struct {
 	sync.RWMutex
-	recievedFrom         map[uint64]map[string]map[string]bool
-	broadcastedMsgs      map[string]map[string]bool
-	returnedToClientMsgs map[string]bool
-	BroadcastChan        chan broadcastMsg
-	methods              map[string]broadcastFunc
-	responseChan         chan responseMsg
-	mutex                sync.RWMutex
-	b                    broadcastStruct
-	timeout              time.Duration
-	clientReqs           map[string]*clientRequest
-	clientReqsMutex      sync.Mutex
-	config               RawConfiguration
-	middlewares          []func(BroadcastCtx) error
-	addr                 string
-	id                   string
-	publicKey            string
-	privateKey           string
+	recievedFrom          map[uint64]map[string]map[string]bool
+	broadcastedMsgs       map[string]map[string]bool
+	returnedToClientMsgs  map[string]bool
+	BroadcastChan         chan broadcastMsg
+	methods               map[string]broadcastFunc
+	responseChan          chan responseMsg
+	returnToClientHandler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
+	mutex                 sync.RWMutex
+	bNew                  IBroadcastStruct
+	timeout               time.Duration
+	clientReqs            map[string]*clientRequest
+	clientReqsMutex       sync.Mutex
+	config                RawConfiguration
+	middlewares           []func(BroadcastMetadata) error
+	addr                  string
+	id                    string
+	publicKey             string
+	privateKey            string
 }
 
 func newBroadcastServer() *broadcastServer {
@@ -43,7 +45,7 @@ func newBroadcastServer() *broadcastServer {
 		methods:              make(map[string]broadcastFunc),
 		responseChan:         make(chan responseMsg),
 		clientReqs:           make(map[string]*clientRequest),
-		middlewares:          make([]func(BroadcastCtx) error, 0),
+		middlewares:          make([]func(BroadcastMetadata) error, 0),
 		publicKey:            "publicKey",
 		privateKey:           "privateKey",
 	}
@@ -62,8 +64,6 @@ func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string
 }
 
 func (srv *broadcastServer) broadcast(broadcastMessage broadcastMsg) {
-	//time.Sleep(5 * time.Second)
-	// drop if ctx is cancelled? Or in run method?
 	srv.BroadcastChan <- broadcastMessage
 }
 
@@ -76,7 +76,7 @@ func (srv *broadcastServer) run() {
 		srvAddrs := msg.getSrvAddrs()
 		//broadcastID := msg.getBroadcastID()
 		//ctx := context.Background()
-		bCtx := msg.getContext()
+		metadata := msg.getMetadata()
 		ctx := context.Background()
 		// reqCtx := msg.GetContext()
 		// drop if ctx is cancelled? Or in broadcast method?
@@ -86,7 +86,7 @@ func (srv *broadcastServer) run() {
 		//	srv.methods[method](ctx, convertedReq)
 		//	continue
 		//}
-		srv.methods[method](ctx, req, bCtx, srvAddrs)
+		srv.methods[method](ctx, req, metadata, srvAddrs)
 	}
 }
 
@@ -128,17 +128,37 @@ func (srv *broadcastServer) handle(response responseMsg) {
 		// the timeout msg should arrive soon.
 		return
 	}
-	SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
+	if req.metadata.BroadcastMsg.Sender == "client" {
+		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
+	} else {
+		if req.metadata.BroadcastMsg.OriginAddr == "" {
+			return
+		}
+		srv.returnToClientHandler(req.metadata.BroadcastMsg.OriginAddr, response.getResponse())
+	}
 }
 
-func (srv *broadcastServer) runMiddleware(ctx BroadcastCtx) error {
+func (srv *broadcastServer) runMiddleware(metadata BroadcastMetadata) error {
 	for _, middleware := range srv.middlewares {
-		err := middleware(ctx)
+		err := middleware(metadata)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (srv *broadcastServer) clientReturn(resp ResponseTypes, err error, metadata BroadcastMetadata) {
+	srv.returnToClient(metadata.BroadcastID, resp, err)
+}
+
+func (srv *broadcastServer) returnToClient(broadcastID string, resp ResponseTypes, err error) {
+	srv.Lock()
+	defer srv.Unlock()
+	if !srv.alreadyReturnedToClient(broadcastID) {
+		srv.setReturnedToClient(broadcastID, true)
+		srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
+	}
 }
 
 func (srv *broadcastServer) timeoutClientResponse(ctx ServerCtx, in *Message, finished chan<- *Message) {
@@ -163,9 +183,14 @@ func (srv *broadcastServer) setReturnedToClient(broadcastID string, val bool) {
 }
 
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
-	srv.setReturnedToClient(metadata.BroadcastMsg.GetBroadcastID(), false)
 	srv.clientReqsMutex.Lock()
 	defer srv.clientReqsMutex.Unlock()
+	// do nothing if the request is already added
+	_, ok := srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()]
+	if ok {
+		return
+	}
+	srv.setReturnedToClient(metadata.BroadcastMsg.GetBroadcastID(), false)
 	srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()] = &clientRequest{
 		id:       uuid.New().String(),
 		ctx:      ctx,
@@ -241,18 +266,18 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 
 type broadcastMsg interface {
 	getFrom() string
-	getRequest() requestTypes
+	getRequest() RequestTypes
+	getMetadata() BroadcastMetadata
 	getMethod() string
-	getContext() BroadcastCtx
 	getBroadcastID() string
 	getSrvAddrs() []string
 }
 
 type broadcastMessage struct {
 	from        string
-	request     requestTypes
+	request     RequestTypes
 	method      string
-	context     BroadcastCtx
+	metadata    BroadcastMetadata
 	broadcastID string
 	srvAddrs    []string
 }
@@ -261,16 +286,15 @@ func (b *broadcastMessage) getFrom() string {
 	return b.from
 }
 
-func (b *broadcastMessage) getRequest() requestTypes {
+func (b *broadcastMessage) getRequest() RequestTypes {
 	return b.request
 }
 
+func (b *broadcastMessage) getMetadata() BroadcastMetadata {
+	return b.metadata
+}
 func (b *broadcastMessage) getMethod() string {
 	return b.method
-}
-
-func (b *broadcastMessage) getContext() BroadcastCtx {
-	return b.context
 }
 
 func (b *broadcastMessage) getBroadcastID() string {
@@ -281,12 +305,11 @@ func (b *broadcastMessage) getSrvAddrs() []string {
 	return b.srvAddrs
 }
 
-func newBroadcastMessage(ctx BroadcastCtx, req requestTypes, method, broadcastID, from string, srvAddrs []string) *broadcastMessage {
+func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string) *broadcastMessage {
 	return &broadcastMessage{
-		from:        from,
 		request:     req,
 		method:      method,
-		context:     ctx,
+		metadata:    metadata,
 		broadcastID: broadcastID,
 		srvAddrs:    srvAddrs,
 	}

@@ -3,13 +3,11 @@ package gorums
 import (
 	"context"
 	"net"
-	"strings"
 	"sync"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -171,6 +169,10 @@ func (s *Server) RegisterHandler(method string, handler requestHandler) {
 	s.srv.handlers[method] = handler
 }
 
+func (s *Server) RegisterReturnToClientHandler(handler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
+	s.broadcastSrv.registerReturnToClientHandler(handler)
+}
+
 // Serve starts serving on the listener.
 func (s *Server) Serve(listener net.Listener) error {
 	return s.grpcServer.Serve(listener)
@@ -198,150 +200,4 @@ type ServerCtx struct {
 // Release releases this handler's lock on the server, which allows the next request to be processed.
 func (ctx *ServerCtx) Release() {
 	ctx.once.Do(ctx.mut.Unlock)
-}
-
-type BroadcastValue string
-
-const (
-	BroadcastID BroadcastValue = "broadcastid"
-	Sender      BroadcastValue = "sender"
-	SenderID    BroadcastValue = "senderid"
-	SenderAddr  BroadcastValue = "senderaddr"
-	OriginID    BroadcastValue = "originid"
-	OriginAddr  BroadcastValue = "originaddr"
-	Method      BroadcastValue = "method"
-	PublicKey   BroadcastValue = "publickey"
-	Signature   BroadcastValue = "signature"
-	MAC         BroadcastValue = "mac"
-)
-
-type ServerCtxValues struct {
-	BroadcastID string
-	Sender      string
-	SenderID    string
-	SenderAddr  string
-	OriginID    string
-	OriginAddr  string
-	Method      string
-
-	PublicKey string
-	Signature string
-	MAC       string
-}
-
-/*func (ctx *ServerCtx) GetBroadcastValue(name BroadcastValue) string {
-	return checkCtxValue(ctx, name)
-}
-
-func (ctx *ServerCtx) GetBroadcastValues() ServerCtxValues {
-	return ServerCtxValues{
-		BroadcastID: checkCtxValue(ctx, BroadcastID),
-		SenderID:    checkCtxValue(ctx, SenderID),
-		SenderAddr:  checkCtxValue(ctx, SenderAddr),
-		OriginID:    checkCtxValue(ctx, OriginID),
-		OriginAddr:  checkCtxValue(ctx, OriginAddr),
-		Method:      checkCtxValue(ctx, Method),
-		PublicKey:   checkCtxValue(ctx, PublicKey),
-		Signature:   checkCtxValue(ctx, Signature),
-		MAC:         checkCtxValue(ctx, MAC),
-	}
-}
-
-func checkCtxValue(ctx *ServerCtx, name BroadcastValue) string {
-	if md, ok := metadata.FromIncomingContext(ctx.Context); ok {
-		if val, ok := md[string(name)]; ok {
-			if len(val) >= 1 {
-				return val[0]
-			}
-			panic(val)
-		}
-	}
-	return ""
-}
-
-func (srvCtx *ServerCtx) update(md *ordering.Metadata) {
-	//if md, ok := metadata.FromIncomingContext(srvCtx.Context); ok {
-	//	srvCtx.Context = metadata.NewOutgoingContext(srvCtx.Context, md)
-	//}
-	srvCtx.Context = metadata.AppendToOutgoingContext(srvCtx.Context,
-		string(BroadcastID), md.BroadcastMsg.BroadcastID,
-		string(SenderID), md.BroadcastMsg.Sender,
-		string(Method), md.Method,
-	)
-}*/
-
-type BroadcastCtx struct {
-	ctx context.Context
-}
-
-func newBroadcastCtx(ctx ServerCtx, md *ordering.Metadata) *BroadcastCtx {
-	//if md, ok := metadata.FromIncomingContext(srvCtx.Context); ok {
-	//	srvCtx.Context = metadata.NewOutgoingContext(srvCtx.Context, md)
-	//}
-	tmp := strings.Split(md.Method, ".")
-	m := ""
-	if len(tmp) >= 1 {
-		m = tmp[len(tmp)-1]
-	}
-
-	bCtx := BroadcastCtx{}
-	bCtx.ctx = metadata.NewOutgoingContext(ctx.Context, metadata.Pairs(
-		string(BroadcastID), md.BroadcastMsg.BroadcastID,
-		string(Sender), md.BroadcastMsg.Sender,
-		string(SenderID), md.BroadcastMsg.SenderID,
-		string(SenderAddr), md.BroadcastMsg.SenderAddr,
-		string(OriginID), md.BroadcastMsg.OriginID,
-		string(OriginAddr), md.BroadcastMsg.OriginAddr,
-		string(Method), m,
-		string(PublicKey), md.BroadcastMsg.PublicKey,
-		string(Signature), md.BroadcastMsg.Signature,
-		string(MAC), md.BroadcastMsg.MAC,
-	))
-	return &bCtx
-}
-
-func (ctx BroadcastCtx) GetBroadcastValue(val BroadcastValue) string {
-	return checkBCtxValue(ctx, val)
-}
-
-func (ctx BroadcastCtx) GetBroadcastValues() ServerCtxValues {
-	return ServerCtxValues{
-		BroadcastID: checkBCtxValue(ctx, BroadcastID),
-		Sender:      checkBCtxValue(ctx, Sender),
-		SenderID:    checkBCtxValue(ctx, SenderID),
-		SenderAddr:  checkBCtxValue(ctx, SenderAddr),
-		OriginID:    checkBCtxValue(ctx, OriginID),
-		OriginAddr:  checkBCtxValue(ctx, OriginAddr),
-		Method:      checkBCtxValue(ctx, Method),
-		PublicKey:   checkBCtxValue(ctx, PublicKey),
-		Signature:   checkBCtxValue(ctx, Signature),
-		MAC:         checkBCtxValue(ctx, MAC),
-	}
-}
-
-func checkBCtxValue(bCtx BroadcastCtx, name BroadcastValue) string {
-	if md, ok := metadata.FromOutgoingContext(bCtx.ctx); ok {
-		if val, ok := md[string(name)]; ok {
-			if len(val) >= 1 {
-				return val[0]
-			}
-			panic(val)
-		}
-	}
-	return ""
-}
-
-func (ctxVals ServerCtxValues) String() string {
-	ret := "\nServerCtxValues:\n"
-	ret += "\t- " + string(BroadcastID) + ":\t" + ctxVals.BroadcastID + "\n"
-	ret += "\t- " + string(Sender) + ":\t" + ctxVals.Sender + "\n"
-	ret += "\t- " + string(SenderID) + ":\t" + ctxVals.SenderID + "\n"
-	ret += "\t- " + string(SenderAddr) + ":\t" + ctxVals.SenderAddr + "\n"
-	ret += "\t- " + string(OriginID) + ":\t" + ctxVals.OriginID + "\n"
-	ret += "\t- " + string(OriginAddr) + ":\t" + ctxVals.OriginAddr + "\n"
-	ret += "\t- " + string(Method) + ":\t" + ctxVals.Method + "\n"
-	ret += "\t- " + string(PublicKey) + ":\t" + ctxVals.PublicKey + "\n"
-	ret += "\t- " + string(Signature) + ":\t" + ctxVals.Signature + "\n"
-	ret += "\t- " + string(MAC) + ":\t\t" + ctxVals.MAC + "\n"
-	return ret
 }
