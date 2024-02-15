@@ -106,7 +106,7 @@ func (c *channel) deleteRouter(msgID uint64) {
 func (c *channel) sendMsg(req request) (err error) {
 	// unblock the waiting caller unless noSendWaiting is enabled
 	defer func() {
-		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
+		if req.opts.callType == E_Multicast || req.opts.callType == E_Broadcast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
 			c.routeResponse(req.msg.Metadata.MessageID, response{})
 		}
 	}()

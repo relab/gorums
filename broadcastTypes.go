@@ -19,7 +19,7 @@ type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastHandlerFunc func(method string, req RequestTypes, metadata BroadcastMetadata, srvAddrs []string)
+type BroadcastHandlerFunc func(method string, req RequestTypes, metadata BroadcastMetadata, data ...BroadcastOptions)
 type BroadcastReturnToClientHandlerFunc func(resp ResponseTypes, err error, metadata BroadcastMetadata)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
@@ -98,6 +98,13 @@ type SpBroadcast struct {
 
 func NewSpBroadcastStruct() *SpBroadcast {
 	return &SpBroadcast{}
+}
+
+type BroadcastOptions struct {
+	ServerAddresses      []string
+	GossipPercentage     float32
+	OmitUniquenessChecks bool
+	SkipSelf             bool
 }
 
 type IBroadcastStruct interface {
