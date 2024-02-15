@@ -87,6 +87,7 @@ func (srv *broadcastServer) run() {
 		//	continue
 		//}
 		srv.methods[method](ctx, req, metadata, srvAddrs)
+		msg.setFinished()
 	}
 }
 
@@ -247,7 +248,10 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 		Signature:   d.Signature,
 		MAC:         d.MAC,
 	}}
+	o := getCallOptions(E_Broadcast, nil)
 
+	respChan := make(chan response, len(c))
+	maxReplies := 0
 	for _, n := range c {
 		if !d.inServerAddresses(n.addr) {
 			continue
@@ -259,8 +263,16 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 				n.connected = true
 			}
 		}
+		maxReplies++
 		msg := d.Message
-		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, nil, false)
+		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, respChan, false)
+	}
+	count := 0
+	for range respChan {
+		count++
+		if count >= maxReplies {
+			return
+		}
 	}
 }
 
@@ -271,6 +283,7 @@ type broadcastMsg interface {
 	getMethod() string
 	getBroadcastID() string
 	getSrvAddrs() []string
+	setFinished()
 }
 
 type broadcastMessage struct {
@@ -280,6 +293,7 @@ type broadcastMessage struct {
 	metadata    BroadcastMetadata
 	broadcastID string
 	srvAddrs    []string
+	finished    chan<- struct{}
 }
 
 func (b *broadcastMessage) getFrom() string {
@@ -301,16 +315,21 @@ func (b *broadcastMessage) getBroadcastID() string {
 	return b.broadcastID
 }
 
+func (b *broadcastMessage) setFinished() {
+	close(b.finished)
+}
+
 func (b *broadcastMessage) getSrvAddrs() []string {
 	return b.srvAddrs
 }
 
-func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string) *broadcastMessage {
+func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string, finished chan<- struct{}) *broadcastMessage {
 	return &broadcastMessage{
 		request:     req,
 		method:      method,
 		metadata:    metadata,
 		broadcastID: broadcastID,
 		srvAddrs:    srvAddrs,
+		finished:    finished,
 	}
 }

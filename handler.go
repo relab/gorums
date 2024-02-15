@@ -85,12 +85,19 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 //	}
 //}
 
-func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTypes, metadata BroadcastMetadata, srvAddrs []string) {
+func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTypes, metadata BroadcastMetadata, opts ...BroadcastOptions) {
 	// maybe let this be an option for the implementer?
 	if !srv.alreadyBroadcasted(metadata.BroadcastID, method) {
+		finished := make(chan struct{})
+
+		options := BroadcastOptions{}
+		if len(opts) > 0 {
+			options = opts[0]
+		}
 		// how to define individual request message to each node?
 		//	- maybe create one request for each node and send a list of requests?
-		srv.broadcast(newBroadcastMessage(metadata, req, method, metadata.BroadcastID, srvAddrs))
+		srv.broadcast(newBroadcastMessage(metadata, req, method, metadata.BroadcastID, options.ServerAddresses, finished))
+		<-finished
 	}
 }
 
