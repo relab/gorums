@@ -5,13 +5,18 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc/encoding": "GetCodec", "sync": "Mutex"}
+var pkgIdentMap = map[string]string{"github.com/relab/gorums": "BroadcastHandlerFunc", "sync": "Mutex"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Broadcast", "Configuration", "Manager", "Node", "QuorumSpec", "Server"}
+var reservedIdents = []string{"Broadcast", "Server"}
 
-var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
+var staticCode = `/*
+import (
+	"github.com/relab/gorums"
+)
+
+// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
@@ -61,6 +66,14 @@ func (c Configuration) And(d *Configuration) gorums.NodeListOption {
 func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
+*/
+
+/*import (
+	"fmt"
+
+	"github.com/relab/gorums"
+	"google.golang.org/grpc/encoding"
+)
 
 func init() {
 	if encoding.GetCodec(gorums.ContentSubtype) == nil {
@@ -127,6 +140,7 @@ func (m *Manager) Nodes() []*Node {
 	}
 	return nodes
 }
+*/
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
