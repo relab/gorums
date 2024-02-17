@@ -71,29 +71,15 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	return nil
 }
 
-//func (srv *broadcastServer) determineReturnToClient(ctx ServerCtx, broadcastID string) {
-//	if srv.b.shouldReturnToClient() {
-//		for i, resp := range srv.b.getResponses() {
-//			if !srv.alreadyReturnedToClient(broadcastID) {
-//				srv.setReturnedToClient(broadcastID, true)
-//				err := srv.b.getError(i)
-//				go func(i int, resp responseTypes, err error) {
-//					srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
-//				}(i, resp, err)
-//			}
-//		}
-//	}
-//}
-
 func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTypes, metadata BroadcastMetadata, opts ...BroadcastOptions) {
+	options := BroadcastOptions{}
+	if len(opts) > 0 {
+		options = opts[0]
+	}
 	// maybe let this be an option for the implementer?
-	if !srv.alreadyBroadcasted(metadata.BroadcastID, method) {
+	if !srv.alreadyBroadcasted(metadata.BroadcastID, method) || options.OmitUniquenessChecks {
 		finished := make(chan struct{})
 
-		options := BroadcastOptions{}
-		if len(opts) > 0 {
-			options = opts[0]
-		}
 		// how to define individual request message to each node?
 		//	- maybe create one request for each node and send a list of requests?
 		srv.broadcast(newBroadcastMessage(metadata, req, method, metadata.BroadcastID, options.ServerAddresses, finished))
@@ -101,24 +87,10 @@ func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTyp
 	}
 }
 
-//func (srv *broadcastServer) determineBroadcast(metadata BroadcastMetadata) {
-//	if srv.b.shouldBroadcast() {
-//		for i, method := range srv.b.getMethods() {
-//			// maybe let this be an option for the implementer?
-//			if !srv.alreadyBroadcasted(metadata.BroadcastID, method) {
-//				// how to define individual request message to each node?
-//				//	- maybe create one request for each node and send a list of requests?
-//				go srv.broadcast(newBroadcastMessage(metadata, srv.b.getRequest(i), method, metadata.BroadcastID, srv.b.getServerAddresses()))
-//			}
-//		}
-//	}
-//}
-
-func (srv *Server) RegisterBroadcastStruct(b IBroadcastStruct, assign func(bh BroadcastHandlerFunc, ch BroadcastReturnToClientHandlerFunc), m func(metadata BroadcastMetadata)) {
-	//srv.broadcastSrv.b = b
+func (srv *Server) RegisterBroadcastStruct(b IBroadcastStruct, configureHandlers func(bh BroadcastHandlerFunc, ch BroadcastReturnToClientHandlerFunc), configureMetadata func(metadata BroadcastMetadata)) {
 	srv.broadcastSrv.bNew = b
-	srv.broadcastSrv.bNew.setMetadataHandler(m)
-	assign(srv.broadcastSrv.broadcastStructHandler, srv.broadcastSrv.clientReturn)
+	srv.broadcastSrv.bNew.setMetadataHandler(configureMetadata)
+	configureHandlers(srv.broadcastSrv.broadcastStructHandler, srv.broadcastSrv.clientReturn)
 }
 
 func (srv *Server) RegisterMiddlewares(middlewares ...func(BroadcastMetadata) error) {
