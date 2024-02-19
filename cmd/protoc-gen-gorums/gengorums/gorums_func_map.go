@@ -110,6 +110,9 @@ var funcMap = template.FuncMap{
 	"isBroadcast": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Broadcast)
 	},
+	"broadcastType": func(method *protogen.Method, out string) string {
+		return fmt.Sprintf("%s%s", callType(method).outPrefix, field(out))
+	},
 	"methods": func(services []*protogen.Service) (methods []*protogen.Method) {
 		for _, s := range services {
 			methods = append(methods, s.Methods...)

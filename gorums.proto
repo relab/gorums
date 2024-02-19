@@ -16,4 +16,11 @@ extend google.protobuf.MethodOptions {
   bool per_node_arg = 50020;
   string custom_return_type = 50030;
   bool broadcast = 50040;
+  BroadcastType broadcast2 = 50050;
+}
+
+enum BroadcastType {
+  BROADCASTTYPE_INTERNAL = 0;
+  BROADCASTTYPE_CLIENT = 1;
+  BROADCASTTYPE_RESPONSE = 2;
 }

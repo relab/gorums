@@ -1,4 +1,4 @@
-package gorums
+package broadcast
 
 import (
 	"context"
@@ -13,22 +13,61 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+type respType int
+
+type clientRequest struct {
+	id       string
+	ctx      any
+	finished chan<- any
+	metadata *ordering.Metadata
+	status   respType
+}
+
+type serverView interface {
+	broadcastCall(ctx context.Context, d broadcastCallData)
+}
+
+type iBroadcastStruct[T iBroadcastMetadata] interface {
+	setMetadataHandler(func(metadata T))
+	setMetadata(metadata T)
+}
+
+type RequestTypes interface {
+	ProtoReflect() protoreflect.Message
+}
+
+type ResponseTypes interface {
+	ProtoReflect() protoreflect.Message
+}
+
+type responseMsg interface {
+	getResponse() ResponseTypes
+	getError() error
+	getBroadcastID() string
+	valid() bool
+	getType() respType
+}
+
+type iBroadcastMetadata interface{}
+
+type broadcastFunc[T iBroadcastMetadata] func(ctx context.Context, req RequestTypes, broadcastMetadata T, srvAddrs []string)
+
 type broadcastServer struct {
 	sync.RWMutex
 	recievedFrom          map[uint64]map[string]map[string]bool
 	broadcastedMsgs       map[string]map[string]bool
 	returnedToClientMsgs  map[string]bool
 	broadcastChan         chan broadcastMsg
-	methods               map[string]broadcastFunc
+	methods               map[string]broadcastFunc[iBroadcastMetadata]
 	responseChan          chan responseMsg
 	returnToClientHandler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
 	mutex                 sync.RWMutex
-	bNew                  iBroadcastStruct
+	bNew                  iBroadcastStruct[iBroadcastMetadata]
 	timeout               time.Duration
 	clientReqs            map[string]*clientRequest
 	clientReqsMutex       sync.Mutex
 	view                  serverView
-	middlewares           []func(BroadcastMetadata) error
+	middlewares           []func(iBroadcastMetadata) error
 	addr                  string
 	id                    string
 	publicKey             string
@@ -42,10 +81,10 @@ func newBroadcastServer() *broadcastServer {
 		broadcastedMsgs:      make(map[string]map[string]bool),
 		returnedToClientMsgs: make(map[string]bool),
 		broadcastChan:        make(chan broadcastMsg, 1000),
-		methods:              make(map[string]broadcastFunc),
+		methods:              make(map[string]broadcastFunc[iBroadcastMetadata]),
 		responseChan:         make(chan responseMsg),
 		clientReqs:           make(map[string]*clientRequest),
-		middlewares:          make([]func(BroadcastMetadata) error, 0),
+		middlewares:          make([]func(iBroadcastMetadata) error, 0),
 		publicKey:            "publicKey",
 		privateKey:           "privateKey",
 	}
@@ -96,6 +135,13 @@ func (srv *broadcastServer) handleClientResponses() {
 		srv.handle(response)
 	}
 }
+
+const (
+	unhandled respType = iota
+	clientResponse
+	timeout
+	done
+)
 
 func (srv *broadcastServer) handle(response responseMsg) {
 	srv.clientReqsMutex.Lock()
@@ -162,7 +208,7 @@ func (srv *broadcastServer) returnToClient(broadcastID string, resp ResponseType
 	}
 }
 
-func (srv *broadcastServer) timeoutClientResponse(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func (srv *broadcastServer) timeoutClientResponse(ctx context.Context, in any, finished chan<- any) {
 	time.Sleep(srv.timeout)
 	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.BroadcastMsg.GetBroadcastID(), timeout, srv.timeout)
 }
@@ -183,7 +229,7 @@ func (srv *broadcastServer) setReturnedToClient(broadcastID string, val bool) {
 	srv.returnedToClientMsgs[broadcastID] = val
 }
 
-func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
+func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx any, finished chan<- any) {
 	srv.clientReqsMutex.Lock()
 	defer srv.clientReqsMutex.Unlock()
 	// do nothing if the request is already added
@@ -233,53 +279,10 @@ func (bcd *broadcastCallData) inServerAddresses(addr string) bool {
 	return false
 }
 
-// broadcastCall performs a multicast call on the configuration.
-//
-// This method should be used by generated code only.
-func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData) {
-	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		Sender:      d.Sender,
-		BroadcastID: d.BroadcastID,
-		SenderID:    d.SenderID,
-		SenderAddr:  d.SenderAddr,
-		OriginID:    d.OriginID,
-		OriginAddr:  d.OriginAddr,
-		PublicKey:   d.PublicKey,
-		Signature:   d.Signature,
-		MAC:         d.MAC,
-	}}
-	o := getCallOptions(E_Broadcast, nil)
-
-	respChan := make(chan response, len(c))
-	maxReplies := 0
-	for _, n := range c {
-		if !d.inServerAddresses(n.addr) {
-			continue
-		}
-		if !n.connected {
-			if n.connect(n.mgr) != nil {
-				continue
-			} else {
-				n.connected = true
-			}
-		}
-		maxReplies++
-		msg := d.Message
-		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, respChan, false)
-	}
-	count := 0
-	for range respChan {
-		count++
-		if count >= maxReplies {
-			return
-		}
-	}
-}
-
 type broadcastMsg interface {
 	getFrom() string
 	getRequest() RequestTypes
-	getMetadata() BroadcastMetadata
+	getMetadata() iBroadcastMetadata
 	getMethod() string
 	getBroadcastID() string
 	getSrvAddrs() []string
@@ -290,7 +293,7 @@ type broadcastMessage struct {
 	from        string
 	request     RequestTypes
 	method      string
-	metadata    BroadcastMetadata
+	metadata    iBroadcastMetadata
 	broadcastID string
 	srvAddrs    []string
 	finished    chan<- struct{}
@@ -304,7 +307,7 @@ func (b *broadcastMessage) getRequest() RequestTypes {
 	return b.request
 }
 
-func (b *broadcastMessage) getMetadata() BroadcastMetadata {
+func (b *broadcastMessage) getMetadata() iBroadcastMetadata {
 	return b.metadata
 }
 func (b *broadcastMessage) getMethod() string {
@@ -323,7 +326,7 @@ func (b *broadcastMessage) getSrvAddrs() []string {
 	return b.srvAddrs
 }
 
-func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string, finished chan<- struct{}) *broadcastMessage {
+func newBroadcastMessage(metadata iBroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string, finished chan<- struct{}) *broadcastMessage {
 	return &broadcastMessage{
 		request:     req,
 		method:      method,

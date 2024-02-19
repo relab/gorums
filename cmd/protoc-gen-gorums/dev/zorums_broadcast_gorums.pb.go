@@ -36,3 +36,13 @@ func (bd *broadcastData) MultipartyInternal(req *Request) {
 	bd.mu.Unlock()
 	bd.b.sp.BroadcastHandler("dev.ZorumsService.MultipartyInternal", req, bd.b.metadata, data)
 }
+
+func (b *Broadcast) MultipartyClientHandler(req *Request) {
+	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyClientHandler", req, b.metadata)
+}
+
+func (bd *broadcastData) MultipartyClientHandler(req *Request) {
+	data := bd.data
+	bd.mu.Unlock()
+	bd.b.sp.BroadcastHandler("dev.ZorumsService.MultipartyClientHandler", req, bd.b.metadata, data)
+}

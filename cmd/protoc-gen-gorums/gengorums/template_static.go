@@ -5,18 +5,13 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"github.com/relab/gorums": "BroadcastHandlerFunc", "sync": "Mutex"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc/encoding": "GetCodec", "sync": "Mutex"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Broadcast", "Server"}
+var reservedIdents = []string{"Broadcast", "Configuration", "Manager", "Node", "QuorumSpec", "Server"}
 
-var staticCode = `/*
-import (
-	"github.com/relab/gorums"
-)
-
-// A Configuration represents a static set of nodes on which quorum remote
+var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
@@ -66,14 +61,6 @@ func (c Configuration) And(d *Configuration) gorums.NodeListOption {
 func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
-*/
-
-/*import (
-	"fmt"
-
-	"github.com/relab/gorums"
-	"google.golang.org/grpc/encoding"
-)
 
 func init() {
 	if encoding.GetCodec(gorums.ContentSubtype) == nil {
@@ -140,7 +127,6 @@ func (m *Manager) Nodes() []*Node {
 	}
 	return nodes
 }
-*/
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
@@ -165,12 +151,12 @@ func NewServer() *Server {
 		bd:              bd,
 	}
 	bd.b = b
-	srv.RegisterBroadcastStruct(b, assign(b), assignValues(b))
+	srv.RegisterBroadcastStruct(b, configureHandlers(b), configureMetadata(b))
 	return srv
 }
 
-func (srv *Server) RegisterConfiguration(ownAddr string, srvAddrs []string, opts ...gorums.ManagerOption) error {
-	err := srv.RegisterConfig(ownAddr, srvAddrs, opts...)
+func (srv *Server) SetView(ownAddr string, srvAddrs []string, opts ...gorums.ManagerOption) error {
+	err := srv.RegisterView(ownAddr, srvAddrs, opts...)
 	srv.ListenForBroadcast()
 	return err
 }
@@ -188,43 +174,62 @@ type broadcastData struct {
 	b    *Broadcast
 }
 
-func assign(b *Broadcast) func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastReturnToClientHandlerFunc) {
+func configureHandlers(b *Broadcast) func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastReturnToClientHandlerFunc) {
 	return func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastReturnToClientHandlerFunc) {
 		b.sp.BroadcastHandler = bh
 		b.sp.ReturnToClientHandler = ch
 	}
 }
 
-func assignValues(b *Broadcast) func(metadata gorums.BroadcastMetadata) {
+func configureMetadata(b *Broadcast) func(metadata gorums.BroadcastMetadata) {
 	return func(metadata gorums.BroadcastMetadata) {
 		b.metadata = metadata
 	}
 }
 
+// Returns a readonly struct of the metadata used in the broadcast.
+//
+// Note: Some of the data are equal across the cluster, such as BroadcastID.
+// Other fields are local, such as SenderAddr.
 func (b *Broadcast) GetMetadata() gorums.BroadcastMetadata {
 	return b.metadata
 }
 
+// Allows to configure the broadcast request.
+// A broadcast method must be called before specifying this option again.
 func (b *Broadcast) Opts() *broadcastData {
 	b.bd.mu.Lock()
 	b.bd.data = gorums.BroadcastOptions{}
 	return b.bd
 }
 
+// The broadcast call will only be sent to the specified addresses.
+//
+// Note: It will only broadcast to addresses that are a subset of
+// the servers in the server configuration.
 func (b *broadcastData) To(srvAddrs ...string) *broadcastData {
 	b.data.ServerAddresses = append(b.data.ServerAddresses, srvAddrs...)
 	return b
 }
 
+// Will remove all uniqueness checks done before broadcasting.
+//
+// Note: This could result in infinite recursion/loops. Be careful when using this.
 func (b *broadcastData) OmitUniquenessChecks() *broadcastData {
+	b.data.OmitUniquenessChecks = true
 	return b
 }
 
+// The broadcast will not be sent to itself.
 func (b *broadcastData) SkipSelf() *broadcastData {
+	b.data.SkipSelf = true
 	return b
 }
 
+// A subset of the nodes in the configuration corresponding to the given
+// percentage will be selected at random.
 func (b *broadcastData) Gossip(percentage float32) *broadcastData {
+	b.data.GossipPercentage = percentage
 	return b
 }
 

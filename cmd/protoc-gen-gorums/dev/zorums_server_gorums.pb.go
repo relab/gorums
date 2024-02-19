@@ -11,6 +11,7 @@ import (
 	gorums "github.com/relab/gorums"
 	ordering "github.com/relab/gorums/ordering"
 	proto "google.golang.org/protobuf/proto"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
@@ -31,6 +32,7 @@ type ZorumsService interface {
 	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error)
 	Multiparty(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	MultipartyInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	MultipartyClientHandler(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Multicast(ctx gorums.ServerCtx, request *Request)
 	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
 	Multicast2(ctx gorums.ServerCtx, request *Request)
@@ -85,6 +87,9 @@ func (srv *Server) Multiparty(ctx gorums.ServerCtx, request *Request, broadcast 
 }
 func (srv *Server) MultipartyInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic("MultipartyInternal not implemented")
+}
+func (srv *Server) MultipartyClientHandler(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic("MultipartyClientHandler not implemented")
 }
 func (srv *Server) Multicast(ctx gorums.ServerCtx, request *Request) {
 	panic("Multicast not implemented")
@@ -210,6 +215,7 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	})
 	srv.RegisterHandler("dev.ZorumsService.Multiparty", gorums.BroadcastHandler(impl.Multiparty, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.MultipartyInternal", gorums.BroadcastHandler(impl.MultipartyInternal, srv.Server))
+	srv.RegisterHandler("dev.ZorumsService.MultipartyClientHandler", gorums.BroadcastHandler(impl.MultipartyClientHandler, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
@@ -397,10 +403,18 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	})
 }
 
-func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
+func (b *Broadcast) Reply(resp protoreflect.ProtoMessage, err error) {
 	b.sp.ReturnToClientHandler(resp, err, b.metadata)
 }
 
-func (srv *Server) ReturnToClient(resp *ClientResponse, err error, broadcastID string) {
+func (srv *Server) ReplyToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
+	srv.RetToClient(resp, err, broadcastID)
+}
+
+func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
+	b.sp.ReturnToClientHandler(resp, err, b.metadata)
+}
+
+func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
 	srv.RetToClient(resp, err, broadcastID)
 }

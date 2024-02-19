@@ -91,11 +91,20 @@ func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 
 var registerReturnToClientHandlers = `
 {{$genFile := .GenFile}}
-func (b *Broadcast) ReturnToClient(resp *ClientResponse, err error) {
+{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
+func (b *Broadcast) Reply(resp protoreflect.ProtoMessage, err error) {
 	b.sp.ReturnToClientHandler(resp, err, b.metadata)
 }
 
-func (srv *Server) ReturnToClient(resp *ClientResponse, err error, broadcastID string) {
+func (srv *Server) ReplyToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
+	srv.RetToClient(resp, err, broadcastID)
+}
+
+func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
+	b.sp.ReturnToClientHandler(resp, err, b.metadata)
+}
+
+func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
 	srv.RetToClient(resp, err, broadcastID)
 }
 `

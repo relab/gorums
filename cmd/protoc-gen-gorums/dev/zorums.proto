@@ -70,6 +70,11 @@ service ZorumsService {
     option (gorums.broadcast) = true;
   }
 
+  // Multiparty, send to client handler.
+  rpc MultipartyClientHandler(Request) returns (google.protobuf.Empty) {
+    option (gorums.broadcast2) = BROADCASTTYPE_INTERNAL;
+  }
+
   // ------------------------------------------------------------------
   // Multicast variants
   // The multicast call type does not support the 'custom_return_type'

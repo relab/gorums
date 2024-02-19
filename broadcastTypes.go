@@ -9,6 +9,10 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+type serverView interface {
+	broadcastCall(ctx context.Context, d broadcastCallData)
+}
+
 type broadcastFunc func(ctx context.Context, req RequestTypes, broadcastMetadata BroadcastMetadata, srvAddrs []string)
 
 type RequestTypes interface {
@@ -24,7 +28,7 @@ type BroadcastReturnToClientHandlerFunc func(resp ResponseTypes, err error, meta
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
-type implementationFuncB[T RequestTypes, V IBroadcastStruct] func(ServerCtx, T, V)
+type implementationFuncB[T RequestTypes, V iBroadcastStruct] func(ServerCtx, T, V)
 
 type responseMsg interface {
 	getResponse() ResponseTypes
@@ -107,7 +111,7 @@ type BroadcastOptions struct {
 	SkipSelf             bool
 }
 
-type IBroadcastStruct interface {
+type iBroadcastStruct interface {
 	setMetadataHandler(func(metadata BroadcastMetadata))
 	setMetadata(metadata BroadcastMetadata)
 }

@@ -27,8 +27,8 @@ func NewServer() *Server {
 	return srv
 }
 
-func (srv *Server) RegisterConfiguration(ownAddr string, srvAddrs []string, opts ...gorums.ManagerOption) error {
-	err := srv.RegisterConfig(ownAddr, srvAddrs, opts...)
+func (srv *Server) SetView(ownAddr string, srvAddrs []string, opts ...gorums.ManagerOption) error {
+	err := srv.RegisterView(ownAddr, srvAddrs, opts...)
 	srv.ListenForBroadcast()
 	return err
 }

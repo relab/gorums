@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -18,7 +19,7 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 	}
 }
 
-func BroadcastHandler[T RequestTypes, V IBroadcastStruct](impl implementationFuncB[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFuncB[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
@@ -87,7 +88,7 @@ func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTyp
 	}
 }
 
-func (srv *Server) RegisterBroadcastStruct(b IBroadcastStruct, configureHandlers func(bh BroadcastHandlerFunc, ch BroadcastReturnToClientHandlerFunc), configureMetadata func(metadata BroadcastMetadata)) {
+func (srv *Server) RegisterBroadcastStruct(b iBroadcastStruct, configureHandlers func(bh BroadcastHandlerFunc, ch BroadcastReturnToClientHandlerFunc), configureMetadata func(metadata BroadcastMetadata)) {
 	srv.broadcastSrv.bNew = b
 	srv.broadcastSrv.bNew.setMetadataHandler(configureMetadata)
 	configureHandlers(srv.broadcastSrv.broadcastStructHandler, srv.broadcastSrv.clientReturn)
@@ -126,15 +127,23 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			Sender:          "server",
 			ServerAddresses: srvAddrs,
 		}
-		srv.config.broadcastCall(ctx, cd)
+		srv.view.broadcastCall(ctx, cd)
 	}
 }
 
-func (srv *Server) RegisterConfig(ownAddr string, srvAddrs []string, opts ...ManagerOption) error {
+func (srv *Server) RegisterView(ownAddr string, srvAddrs []string, opts ...ManagerOption) error {
+	if len(opts) <= 0 {
+		opts = make([]ManagerOption, 2)
+		opts[0] = WithDialTimeout(50 * time.Millisecond)
+		opts[1] = WithGrpcDialOptions(
+			grpc.WithBlock(),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+	}
 	srv.broadcastSrv.addr = ownAddr
 	mgr := NewRawManager(opts...)
 	config, err := NewRawConfiguration(mgr, WithNodeListBroadcast(srvAddrs))
-	srv.broadcastSrv.config = config
+	srv.broadcastSrv.view = config
 	//srv.broadcastSrv.timeout = mgr.opts.nodeDialTimeout
 	srv.broadcastSrv.timeout = 5 * time.Second
 	return err
