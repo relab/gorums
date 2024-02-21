@@ -17,32 +17,26 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 7)
 )
 
-func (b *Broadcast) Multiparty(req *Request) {
-	b.sp.BroadcastHandler("dev.ZorumsService.Multiparty", req, b.metadata)
+func (b *Broadcast) Multiparty(req *Request, opts ...gorums.BroadcastOption) {
+	data := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&data)
+	}
+	b.sp.BroadcastHandler("dev.ZorumsService.Multiparty", req, b.metadata, data)
 }
 
-func (bd *broadcastData) Multiparty(req *Request) {
-	data := bd.data
-	bd.mu.Unlock()
-	bd.b.sp.BroadcastHandler("dev.ZorumsService.Multiparty", req, bd.b.metadata, data)
+func (b *Broadcast) MultipartyInternal(req *Request, opts ...gorums.BroadcastOption) {
+	data := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&data)
+	}
+	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyInternal", req, b.metadata, data)
 }
 
-func (b *Broadcast) MultipartyInternal(req *Request) {
-	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyInternal", req, b.metadata)
-}
-
-func (bd *broadcastData) MultipartyInternal(req *Request) {
-	data := bd.data
-	bd.mu.Unlock()
-	bd.b.sp.BroadcastHandler("dev.ZorumsService.MultipartyInternal", req, bd.b.metadata, data)
-}
-
-func (b *Broadcast) MultipartyClientHandler(req *Request) {
-	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyClientHandler", req, b.metadata)
-}
-
-func (bd *broadcastData) MultipartyClientHandler(req *Request) {
-	data := bd.data
-	bd.mu.Unlock()
-	bd.b.sp.BroadcastHandler("dev.ZorumsService.MultipartyClientHandler", req, bd.b.metadata, data)
+func (b *Broadcast) MultipartyClientHandler(req *Request, opts ...gorums.BroadcastOption) {
+	data := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&data)
+	}
+	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyClientHandler", req, b.metadata, data)
 }

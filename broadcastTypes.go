@@ -104,11 +104,29 @@ func NewSpBroadcastStruct() *SpBroadcast {
 	return &SpBroadcast{}
 }
 
+type BroadcastOption func(*BroadcastOptions)
+
+func WithSubset(srvAddrs ...string) BroadcastOption {
+	return func(b *BroadcastOptions) {
+		b.ServerAddresses = srvAddrs
+	}
+}
+
+func WithGossip(percentage float32) BroadcastOption {
+	return func(b *BroadcastOptions) {
+		b.GossipPercentage = percentage
+	}
+}
+
 type BroadcastOptions struct {
 	ServerAddresses      []string
 	GossipPercentage     float32
 	OmitUniquenessChecks bool
 	SkipSelf             bool
+}
+
+func NewBroadcastOptions() BroadcastOptions {
+	return BroadcastOptions{}
 }
 
 type iBroadcastStruct interface {

@@ -4,20 +4,16 @@ var broadcastVar = `
 {{$callData := use "gorums.CallData" .GenFile}}
 `
 
-var broadcastSignature = `func (b *Broadcast) {{.Method.GoName}}(req *{{in .GenFile .Method}}) {`
+var broadcastSignature = `func (b *Broadcast) {{.Method.GoName}}(req *{{in .GenFile .Method}}, opts... gorums.BroadcastOption) {`
 
-var broadcastBody = `	b.sp.BroadcastHandler("{{.Method.Desc.FullName}}", req, b.metadata)
+var broadcastBody = `
+	data := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&data)
+	}
+	b.sp.BroadcastHandler("{{.Method.Desc.FullName}}", req, b.metadata, data)
 }
-
 `
 
-var optSignature = `func (bd *broadcastData) {{.Method.GoName}}(req *{{in .GenFile .Method}}) {`
-
-var optBody = `
-	data := bd.data
-	bd.mu.Unlock()
-	bd.b.sp.BroadcastHandler("{{.Method.Desc.FullName}}", req, bd.b.metadata, data)
-}`
-
 var broadcastCall = broadcastVar +
-	broadcastSignature + broadcastBody + optSignature + optBody
+	broadcastSignature + broadcastBody

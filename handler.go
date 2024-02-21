@@ -98,7 +98,7 @@ func (srv *Server) RegisterMiddlewares(middlewares ...func(BroadcastMetadata) er
 	srv.broadcastSrv.middlewares = middlewares
 }
 
-func (srv *Server) RetToClient(resp ResponseTypes, err error, broadcastID string) {
+func (srv *Server) RetToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
 	srv.broadcastSrv.returnToClient(broadcastID, resp, err)
 }
 
