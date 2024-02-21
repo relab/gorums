@@ -250,8 +250,8 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 	}}
 	o := getCallOptions(E_Broadcast, nil)
 
-	respChan := make(chan response, len(c))
-	maxReplies := 0
+	replyChan := make(chan response, len(c))
+	sentMsgs := 0
 	for _, n := range c {
 		if !d.inServerAddresses(n.addr) {
 			continue
@@ -263,16 +263,15 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 				n.connected = true
 			}
 		}
-		maxReplies++
+		sentMsgs++
 		msg := d.Message
-		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, respChan, false)
+		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
 	}
-	count := 0
-	for range respChan {
-		count++
-		if count >= maxReplies {
-			return
-		}
+
+	// wait until all have requests have been sent
+	for sentMsgs > 0 {
+		<-replyChan
+		sentMsgs--
 	}
 }
 

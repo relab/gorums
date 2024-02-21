@@ -32,11 +32,3 @@ func (b *Broadcast) MultipartyInternal(req *Request, opts ...gorums.BroadcastOpt
 	}
 	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyInternal", req, b.metadata, data)
 }
-
-func (b *Broadcast) MultipartyClientHandler(req *Request, opts ...gorums.BroadcastOption) {
-	data := gorums.NewBroadcastOptions()
-	for _, opt := range opts {
-		opt(&data)
-	}
-	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyClientHandler", req, b.metadata, data)
-}

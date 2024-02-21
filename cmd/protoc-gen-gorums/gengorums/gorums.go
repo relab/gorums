@@ -239,9 +239,10 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 // The entries in this map is used to generate dev/zorums_{type}.pb.go
 // files for the different keys.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
-	"qspec":  {template: qspecInterface},
-	"types":  {template: dataTypes},
-	"server": {template: server},
+	"qspec":        {template: qspecInterface},
+	"types":        {template: dataTypes},
+	"server":       {template: server},
+	"clientserver": {template: clientServer},
 
 	callTypeName(gorums.E_Rpc): {
 		extInfo:  gorums.E_Rpc,
@@ -318,6 +319,14 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Broadcast)
 		},
 	},
+	callTypeName(gorums.E_Broadcastrequest): {
+		extInfo:  gorums.E_Broadcastrequest,
+		docName:  "clientservermethods",
+		template: clientServerCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Broadcastrequest)
+		},
+	},
 }
 
 // gorumsCallTypes should list all available call types supported by Gorums.
@@ -328,6 +337,7 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Correctable,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
+	gorums.E_Broadcastrequest,
 }
 
 // callTypesWithInternal should list all available call types that

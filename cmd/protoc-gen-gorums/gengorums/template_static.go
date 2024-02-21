@@ -5,7 +5,7 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc/encoding": "GetCodec"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
@@ -15,8 +15,10 @@ var staticCode = `// A Configuration represents a static set of nodes on which q
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	nodes []*Node
-	qspec QuorumSpec
+	nodes      []*Node
+	qspec      QuorumSpec
+	srv        *clientServerImpl
+	listenAddr string
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -181,6 +183,11 @@ func configureMetadata(b *Broadcast) func(metadata gorums.BroadcastMetadata) {
 // Other fields are local, such as SenderAddr.
 func (b *Broadcast) GetMetadata() gorums.BroadcastMetadata {
 	return b.metadata
+}
+
+type clientResponse struct {
+	broadcastID string
+	data        protoreflect.ProtoMessage
 }
 
 `

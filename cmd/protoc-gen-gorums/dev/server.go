@@ -2,6 +2,7 @@ package dev
 
 import (
 	"github.com/relab/gorums"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type Server struct {
@@ -51,4 +52,9 @@ func configureMetadata(b *Broadcast) func(metadata gorums.BroadcastMetadata) {
 // Other fields are local, such as SenderAddr.
 func (b *Broadcast) GetMetadata() gorums.BroadcastMetadata {
 	return b.metadata
+}
+
+type clientResponse struct {
+	broadcastID string
+	data        protoreflect.ProtoMessage
 }

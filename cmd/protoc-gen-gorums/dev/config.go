@@ -8,8 +8,10 @@ import (
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	nodes []*Node
-	qspec QuorumSpec
+	nodes      []*Node
+	qspec      QuorumSpec
+	srv        *clientServerImpl
+	listenAddr string
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.

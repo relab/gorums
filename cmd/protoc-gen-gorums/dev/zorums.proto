@@ -71,8 +71,8 @@ service ZorumsService {
   }
 
   // Multiparty, send to client handler.
-  rpc MultipartyClientHandler(Request) returns (google.protobuf.Empty) {
-    option (gorums.broadcast) = true;
+  rpc MultipartyClientHandler(Request) returns (Response) {
+    option (gorums.broadcastrequest) = true;
   }
 
   // ------------------------------------------------------------------
