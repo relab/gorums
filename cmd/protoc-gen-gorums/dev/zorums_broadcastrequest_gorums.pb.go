@@ -12,6 +12,7 @@ import (
 	uuid "github.com/google/uuid"
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
@@ -39,7 +40,10 @@ func (srv *clientServerImpl) clientMultipartyClientHandler(ctx context.Context, 
 
 func (c *Configuration) MultipartyClientHandler(ctx context.Context, in *Request) (resp *Response, err error) {
 	if c.srv == nil {
-		return nil, fmt.Errorf("a client handler is not defined. Use configuration.RegisterClientHandler() to define a handler")
+		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
+	}
+	if c.replySpec == nil {
+		return nil, fmt.Errorf("a reply spec is not defined. Use configuration.RegisterClientServer() to define a reply spec")
 	}
 	broadcastID := uuid.New().String()
 	cd := gorums.QuorumCallData{
@@ -50,8 +54,62 @@ func (c *Configuration) MultipartyClientHandler(ctx context.Context, in *Request
 		Sender:      "client",
 		OriginAddr:  c.listenAddr,
 	}
-	c.srv.reqChan <- broadcastID
+	doneChan := make(chan protoreflect.ProtoMessage)
+	c.srv.reqChan <- &clientRequest{
+		broadcastID: broadcastID,
+		doneChan:    doneChan,
+		handler:     convertToType[*Response](c.replySpec.MultipartyClientHandler),
+	}
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	resp = <-c.srv.doneChanMultipartyClientHandler
-	return resp, err
+	response, ok := <-doneChan
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	return response.(*Response), err
+}
+
+func _clientMultipartyClientHandler2(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientResponse)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	return srv.(clientServer).clientMultipartyClientHandler2(ctx, in)
+}
+
+func (srv *clientServerImpl) clientMultipartyClientHandler2(ctx context.Context, resp *ClientResponse) (any, error) {
+	srv.respChan <- &clientResponse{
+		broadcastID: ctx.Value("broadcastID").(string),
+		data:        resp,
+	}
+	return nil, nil
+}
+
+func (c *Configuration) MultipartyClientHandler2(ctx context.Context, in *Request) (resp *ClientResponse, err error) {
+	if c.srv == nil {
+		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
+	}
+	if c.replySpec == nil {
+		return nil, fmt.Errorf("a reply spec is not defined. Use configuration.RegisterClientServer() to define a reply spec")
+	}
+	broadcastID := uuid.New().String()
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "protos.UniformBroadcast.Broadcast",
+
+		BroadcastID: broadcastID,
+		Sender:      "client",
+		OriginAddr:  c.listenAddr,
+	}
+	doneChan := make(chan protoreflect.ProtoMessage)
+	c.srv.reqChan <- &clientRequest{
+		broadcastID: broadcastID,
+		doneChan:    doneChan,
+		handler:     convertToType[*ClientResponse](c.replySpec.MultipartyClientHandler2),
+	}
+	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	response, ok := <-doneChan
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	return response.(*ClientResponse), err
 }

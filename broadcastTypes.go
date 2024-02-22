@@ -9,6 +9,11 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+const (
+	BROADCASTCLIENT string = "client"
+	BROADCASTSERVER string = "server"
+)
+
 type serverView interface {
 	broadcastCall(ctx context.Context, d broadcastCallData)
 }
@@ -151,13 +156,14 @@ func NewBroadcastStruct() *BroadcastStruct {
 }
 
 type BroadcastMetadata struct {
-	BroadcastID string
-	Sender      string
-	SenderID    string
-	SenderAddr  string
-	OriginID    string
-	OriginAddr  string
-	Method      string
+	BroadcastID  string
+	Sender       string
+	SenderID     string
+	SenderAddr   string
+	OriginID     string
+	OriginAddr   string
+	OriginMethod string
+	Method       string
 
 	PublicKey string
 	Signature string
@@ -172,15 +178,16 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	}
 
 	return BroadcastMetadata{
-		BroadcastID: md.BroadcastMsg.BroadcastID,
-		Sender:      md.BroadcastMsg.Sender,
-		SenderID:    md.BroadcastMsg.SenderID,
-		SenderAddr:  md.BroadcastMsg.SenderAddr,
-		OriginID:    md.BroadcastMsg.OriginID,
-		OriginAddr:  md.BroadcastMsg.OriginAddr,
-		Method:      m,
-		PublicKey:   md.BroadcastMsg.PublicKey,
-		Signature:   md.BroadcastMsg.Signature,
-		MAC:         md.BroadcastMsg.MAC,
+		BroadcastID:  md.BroadcastMsg.BroadcastID,
+		Sender:       md.BroadcastMsg.Sender,
+		SenderID:     md.BroadcastMsg.SenderID,
+		SenderAddr:   md.BroadcastMsg.SenderAddr,
+		OriginID:     md.BroadcastMsg.OriginID,
+		OriginAddr:   md.BroadcastMsg.OriginAddr,
+		OriginMethod: md.BroadcastMsg.OriginMethod,
+		Method:       m,
+		PublicKey:    md.BroadcastMsg.PublicKey,
+		Signature:    md.BroadcastMsg.Signature,
+		MAC:          md.BroadcastMsg.MAC,
 	}
 }

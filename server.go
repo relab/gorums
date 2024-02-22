@@ -169,8 +169,8 @@ func (s *Server) RegisterHandler(method string, handler requestHandler) {
 	s.srv.handlers[method] = handler
 }
 
-func (s *Server) RegisterReturnToClientHandler(handler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
-	s.broadcastSrv.registerReturnToClientHandler(handler)
+func (s *Server) RegisterReturnToClientHandler(method string, handler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
+	s.broadcastSrv.registerReturnToClientHandler(method, handler)
 }
 
 // Serve starts serving on the listener.

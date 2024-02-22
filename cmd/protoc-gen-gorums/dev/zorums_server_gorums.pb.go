@@ -33,6 +33,7 @@ type ZorumsService interface {
 	Multiparty(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	MultipartyInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	MultipartyClientHandler(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	MultipartyClientHandler2(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Multicast(ctx gorums.ServerCtx, request *Request)
 	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
 	Multicast2(ctx gorums.ServerCtx, request *Request)
@@ -90,6 +91,9 @@ func (srv *Server) MultipartyInternal(ctx gorums.ServerCtx, request *Request, br
 }
 func (srv *Server) MultipartyClientHandler(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic("MultipartyClientHandler not implemented")
+}
+func (srv *Server) MultipartyClientHandler2(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic("MultipartyClientHandler2 not implemented")
 }
 func (srv *Server) Multicast(ctx gorums.ServerCtx, request *Request) {
 	panic("Multicast not implemented")
@@ -216,6 +220,9 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.Multiparty", gorums.BroadcastHandler(impl.Multiparty, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.MultipartyInternal", gorums.BroadcastHandler(impl.MultipartyInternal, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.MultipartyClientHandler", gorums.BroadcastHandler(impl.MultipartyClientHandler, srv.Server))
+	srv.RegisterReturnToClientHandler("dev.ZorumsService.MultipartyClientHandler", _serverClientRPC("dev.ZorumsService.MultipartyClientHandler"))
+	srv.RegisterHandler("dev.ZorumsService.MultipartyClientHandler2", gorums.BroadcastHandler(impl.MultipartyClientHandler2, srv.Server))
+	srv.RegisterReturnToClientHandler("dev.ZorumsService.MultipartyClientHandler2", _serverClientRPC("dev.ZorumsService.MultipartyClientHandler2"))
 	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
@@ -429,6 +436,7 @@ func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broad
 // ZorumsService, Multiparty
 // ZorumsService, MultipartyInternal
 // ZorumsService, MultipartyClientHandler
+// ZorumsService, MultipartyClientHandler2
 // ZorumsService, Multicast
 // ZorumsService, MulticastPerNodeArg
 // ZorumsService, Multicast2

@@ -15,39 +15,40 @@ import (
 
 type broadcastServer struct {
 	sync.RWMutex
-	recievedFrom          map[uint64]map[string]map[string]bool
-	broadcastedMsgs       map[string]map[string]bool
-	returnedToClientMsgs  map[string]bool
-	broadcastChan         chan broadcastMsg
-	methods               map[string]broadcastFunc
-	responseChan          chan responseMsg
-	returnToClientHandler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
-	mutex                 sync.RWMutex
-	bNew                  iBroadcastStruct
-	timeout               time.Duration
-	clientReqs            map[string]*clientRequest
-	clientReqsMutex       sync.Mutex
-	view                  serverView
-	middlewares           []func(BroadcastMetadata) error
-	addr                  string
-	id                    string
-	publicKey             string
-	privateKey            string
+	recievedFrom           map[uint64]map[string]map[string]bool
+	broadcastedMsgs        map[string]map[string]bool
+	returnedToClientMsgs   map[string]bool
+	broadcastChan          chan broadcastMsg
+	methods                map[string]broadcastFunc
+	responseChan           chan responseMsg
+	returnToClientHandlers map[string]func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
+	mutex                  sync.RWMutex
+	bNew                   iBroadcastStruct
+	timeout                time.Duration
+	clientReqs             map[string]*clientRequest
+	clientReqsMutex        sync.Mutex
+	view                   serverView
+	middlewares            []func(BroadcastMetadata) error
+	addr                   string
+	id                     string
+	publicKey              string
+	privateKey             string
 }
 
 func newBroadcastServer() *broadcastServer {
 	return &broadcastServer{
-		id:                   uuid.New().String(),
-		recievedFrom:         make(map[uint64]map[string]map[string]bool),
-		broadcastedMsgs:      make(map[string]map[string]bool),
-		returnedToClientMsgs: make(map[string]bool),
-		broadcastChan:        make(chan broadcastMsg, 1000),
-		methods:              make(map[string]broadcastFunc),
-		responseChan:         make(chan responseMsg),
-		clientReqs:           make(map[string]*clientRequest),
-		middlewares:          make([]func(BroadcastMetadata) error, 0),
-		publicKey:            "publicKey",
-		privateKey:           "privateKey",
+		id:                     uuid.New().String(),
+		recievedFrom:           make(map[uint64]map[string]map[string]bool),
+		broadcastedMsgs:        make(map[string]map[string]bool),
+		returnToClientHandlers: make(map[string]func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
+		returnedToClientMsgs:   make(map[string]bool),
+		broadcastChan:          make(chan broadcastMsg, 1000),
+		methods:                make(map[string]broadcastFunc),
+		responseChan:           make(chan responseMsg),
+		clientReqs:             make(map[string]*clientRequest),
+		middlewares:            make([]func(BroadcastMetadata) error, 0),
+		publicKey:              "publicKey",
+		privateKey:             "privateKey",
 	}
 }
 
@@ -129,13 +130,13 @@ func (srv *broadcastServer) handle(response responseMsg) {
 		// the timeout msg should arrive soon.
 		return
 	}
-	if req.metadata.BroadcastMsg.Sender == "client" {
+	if req.metadata.BroadcastMsg.Sender == BROADCASTCLIENT {
 		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
 	} else {
 		if req.metadata.BroadcastMsg.OriginAddr == "" {
 			return
 		}
-		srv.returnToClientHandler(req.metadata.BroadcastMsg.OriginAddr, response.getResponse())
+		srv.returnToClientHandlers[req.metadata.BroadcastMsg.OriginMethod](req.metadata.BroadcastMsg.OriginAddr, response.getResponse())
 	}
 }
 
@@ -215,6 +216,7 @@ type broadcastCallData struct {
 	SenderAddr      string
 	OriginID        string
 	OriginAddr      string
+	OriginMethod    string
 	PublicKey       string
 	Signature       string
 	MAC             string
@@ -238,15 +240,16 @@ func (bcd *broadcastCallData) inServerAddresses(addr string) bool {
 // This method should be used by generated code only.
 func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		Sender:      d.Sender,
-		BroadcastID: d.BroadcastID,
-		SenderID:    d.SenderID,
-		SenderAddr:  d.SenderAddr,
-		OriginID:    d.OriginID,
-		OriginAddr:  d.OriginAddr,
-		PublicKey:   d.PublicKey,
-		Signature:   d.Signature,
-		MAC:         d.MAC,
+		Sender:       d.Sender,
+		BroadcastID:  d.BroadcastID,
+		SenderID:     d.SenderID,
+		SenderAddr:   d.SenderAddr,
+		OriginID:     d.OriginID,
+		OriginAddr:   d.OriginAddr,
+		OriginMethod: d.OriginMethod,
+		PublicKey:    d.PublicKey,
+		Signature:    d.Signature,
+		MAC:          d.MAC,
 	}}
 	o := getCallOptions(E_Broadcast, nil)
 

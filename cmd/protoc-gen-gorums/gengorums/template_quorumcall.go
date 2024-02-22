@@ -52,7 +52,7 @@ var quorumCallBody = `	cd := {{$callData}}{
 		Method:  "{{$fullName}}",
 		{{if isBroadcast .Method}}
 		BroadcastID: uuid.New().String(),
-		Sender: "client",
+		Sender: gorums.BROADCASTCLIENT,
 		{{end -}}
 	}
 	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {

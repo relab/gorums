@@ -78,6 +78,13 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Request'.
 	MultipartyClientHandlerQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
+	// MultipartyClientHandler2QF is the quorum function for the MultipartyClientHandler2
+	// clientservermethods call method. The in parameter is the request object
+	// supplied to the MultipartyClientHandler2 method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	MultipartyClientHandler2QF(in *Request, replies map[uint32]*ClientResponse) (*ClientResponse, bool)
+
 	// QuorumCallAsyncQF is the quorum function for the QuorumCallAsync
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallAsync method at call time, and may or may not

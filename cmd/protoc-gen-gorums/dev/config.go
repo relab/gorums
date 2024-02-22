@@ -12,6 +12,7 @@ type Configuration struct {
 	qspec      QuorumSpec
 	srv        *clientServerImpl
 	listenAddr string
+	replySpec  ReplySpec
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.

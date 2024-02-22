@@ -28,8 +28,9 @@ message BroadcastMsg {
   string SenderAddr = 4;
   string OriginID = 5;
   string OriginAddr = 6;
-  string PublicKey = 7;
-  string Signature = 8;
-  string MAC = 9;
-  uint32 NumPeers = 10;
+  string OriginMethod = 7;
+  string PublicKey = 8;
+  string Signature = 9;
+  string MAC = 10;
+  uint32 NumPeers = 11;
 }

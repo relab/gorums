@@ -3,8 +3,10 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -40,6 +42,7 @@ func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFun
 		//	p, _ := peer.FromContext(ctx)
 		//	in.Metadata.BroadcastMsg.OriginAddr = p.Addr.String()
 		//}
+		addOriginMethod(in.Metadata)
 		broadcastMetadata := newBroadcastMetadata(in.Metadata)
 		// the client can specify middleware, e.g. authentication, to return early.
 		if err := srv.broadcastSrv.runMiddleware(broadcastMetadata); err != nil {
@@ -54,7 +57,7 @@ func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFun
 		impl(ctx, req, srv.broadcastSrv.bNew.(V))
 		//srv.broadcastSrv.determineBroadcast(broadcastMetadata)
 		//// verify whether a server or a client sent the request
-		if in.Metadata.BroadcastMsg.Sender == "client" {
+		if in.Metadata.BroadcastMsg.Sender == BROADCASTCLIENT {
 			go srv.broadcastSrv.timeoutClientResponse(ctx, in, finished)
 			//	//SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), nil))
 		} /*else {
@@ -63,6 +66,18 @@ func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFun
 		//}*/
 		//srv.broadcastSrv.determineReturnToClient(ctx, in.Metadata.BroadcastMsg.GetBroadcastID())
 	}
+}
+
+func addOriginMethod(md *ordering.Metadata) {
+	if md.BroadcastMsg.Sender != BROADCASTCLIENT {
+		return
+	}
+	tmp := strings.Split(md.Method, ".")
+	m := ""
+	if len(tmp) >= 1 {
+		m = tmp[len(tmp)-1]
+	}
+	md.BroadcastMsg.OriginMethod = "Client" + m
 }
 
 func (srv *broadcastServer) validateMessage(in *Message) error {
@@ -107,8 +122,8 @@ func (srv *Server) ListenForBroadcast() {
 	go srv.broadcastSrv.handleClientResponses()
 }
 
-func (srv *broadcastServer) registerReturnToClientHandler(handler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
-	srv.returnToClientHandler = handler
+func (srv *broadcastServer) registerReturnToClientHandler(method string, handler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
+	srv.returnToClientHandlers[method] = handler
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
@@ -117,14 +132,15 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			Message:         in,
 			Method:          method,
 			BroadcastID:     md.BroadcastID,
+			Sender:          BROADCASTSERVER,
 			SenderAddr:      srv.addr,
 			SenderID:        srv.id,
 			OriginID:        md.OriginID,
 			OriginAddr:      md.OriginAddr,
+			OriginMethod:    md.OriginMethod,
 			PublicKey:       srv.publicKey,
 			Signature:       "signature",
 			MAC:             "mac",
-			Sender:          "server",
 			ServerAddresses: srvAddrs,
 		}
 		srv.view.broadcastCall(ctx, cd)

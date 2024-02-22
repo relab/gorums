@@ -75,6 +75,11 @@ service ZorumsService {
     option (gorums.broadcastrequest) = true;
   }
 
+  // Multiparty, send to client handler.
+  rpc MultipartyClientHandler2(Request) returns (ClientResponse) {
+    option (gorums.broadcastrequest) = true;
+  }
+
   // ------------------------------------------------------------------
   // Multicast variants
   // The multicast call type does not support the 'custom_return_type'

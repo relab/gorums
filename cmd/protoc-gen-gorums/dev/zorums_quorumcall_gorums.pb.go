@@ -160,7 +160,7 @@ func (c *Configuration) Multiparty(ctx context.Context, in *Request) (resp *Resp
 		Method:  "dev.ZorumsService.Multiparty",
 
 		BroadcastID: uuid.New().String(),
-		Sender:      "client",
+		Sender:      gorums.BROADCASTCLIENT,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))

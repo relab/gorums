@@ -63,6 +63,9 @@ func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 	{{- range .Methods}}
 	{{- if isBroadcast .}}
 	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler(impl.{{.GoName}}, srv.Server))
+	{{- if isBroadcastCall .}}
+	srv.RegisterReturnToClientHandler("{{.Desc.FullName}}", _serverClientRPC("{{.Desc.FullName}}"))
+	{{- end}}
 	{{- else }}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})

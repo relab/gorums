@@ -5,11 +5,11 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage"}
+var pkgIdentMap = map[string]string{"context": "Background", "fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc": "CallOption", "google.golang.org/grpc/credentials/insecure": "NewCredentials", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listen"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Broadcast", "Configuration", "Manager", "Node", "QuorumSpec", "Server"}
+var reservedIdents = []string{"Broadcast", "Configuration", "Manager", "Node", "QuorumSpec", "ReplySpec", "Server", "T"}
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
@@ -19,6 +19,7 @@ type Configuration struct {
 	qspec      QuorumSpec
 	srv        *clientServerImpl
 	listenAddr string
+	replySpec  ReplySpec
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -188,6 +189,91 @@ func (b *Broadcast) GetMetadata() gorums.BroadcastMetadata {
 type clientResponse struct {
 	broadcastID string
 	data        protoreflect.ProtoMessage
+}
+
+type clientRequest struct {
+	broadcastID string
+	doneChan    chan protoreflect.ProtoMessage
+	handler     func([]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, error)
+}
+
+type clientServerImpl struct {
+	grpcServer *grpc.Server
+	respChan   chan *clientResponse
+	reqChan    chan *clientRequest
+	resps      map[string][]protoreflect.ProtoMessage
+	doneChans  map[string]chan protoreflect.ProtoMessage
+	handlers   map[string]func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, error)
+}
+
+func (c *Configuration) RegisterClientServer(listenAddr string, replySpec ReplySpec) {
+	var opts []grpc.ServerOption
+	srv := clientServerImpl{
+		grpcServer: grpc.NewServer(opts...),
+		respChan:   make(chan *clientResponse, 10),
+		reqChan:    make(chan *clientRequest),
+		resps:      make(map[string][]protoreflect.ProtoMessage),
+		doneChans:  make(map[string]chan protoreflect.ProtoMessage),
+		handlers:   make(map[string]func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, error)),
+	}
+	lis, err := net.Listen("tcp", listenAddr)
+	for err != nil {
+		return
+	}
+	srv.grpcServer.RegisterService(&clientServer_ServiceDesc, srv)
+	go srv.grpcServer.Serve(lis)
+	go srv.handle()
+	c.srv = &srv
+	c.replySpec = replySpec
+}
+
+func (srv *clientServerImpl) handle() {
+	for {
+		select {
+		case resp := <-srv.respChan:
+			if _, ok := srv.resps[resp.broadcastID]; !ok {
+				continue
+			}
+			srv.resps[resp.broadcastID] = append(srv.resps[resp.broadcastID], resp.data)
+			response, err := srv.handlers[resp.broadcastID](srv.resps[resp.broadcastID])
+			if err != nil {
+				srv.doneChans[resp.broadcastID] <- response
+				close(srv.doneChans[resp.broadcastID])
+				delete(srv.resps, resp.broadcastID)
+				delete(srv.doneChans, resp.broadcastID)
+				delete(srv.handlers, resp.broadcastID)
+			}
+		case req := <-srv.reqChan:
+			srv.resps[req.broadcastID] = make([]protoreflect.ProtoMessage, 0)
+			srv.doneChans[req.broadcastID] = req.doneChan
+			srv.handlers[req.broadcastID] = req.handler
+		}
+	}
+}
+
+func convertToType[T protoreflect.ProtoMessage](handler func([]T) (T, error)) func(d []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, error) {
+	return func(d []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, error) {
+		data := make([]T, len(d))
+		for i, elem := range d {
+			data[i] = elem.(T)
+		}
+		return handler(data)
+	}
+}
+
+func _serverClientRPC(method string) func(addr string, in protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error) {
+	return func(addr string, in protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error) {
+		cc, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			return nil, err
+		}
+		out := new(any)
+		err = cc.Invoke(context.Background(), method, in, out)
+		if err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
 }
 
 `

@@ -22,33 +22,28 @@ const (
 // clientServer is the client server API for the ZorumsService Service
 type clientServer interface {
 	clientMultipartyClientHandler(ctx context.Context, request *Response) (any, error)
+	clientMultipartyClientHandler2(ctx context.Context, request *ClientResponse) (any, error)
 }
 
 var clientServer_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "protos.ClientServer",
 	HandlerType: (*clientServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
 
+		{
 			MethodName: "ClientMultipartyClientHandler",
 			Handler:    _clientMultipartyClientHandler,
+		},
+		{
+			MethodName: "ClientMultipartyClientHandler2",
+			Handler:    _clientMultipartyClientHandler2,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "",
 }
 
-// clientServer is the client server API for the ZorumsService Service
-type clientServerImpl struct {
-	grpcServer                      *grpc.Server
-	respChan                        chan *clientResponse
-	reqChan                         chan string
-	handlerMultipartyClientHandler  func(resps []*Response) error
-	respsMultipartyClientHandler    map[string][]*Response
-	doneChanMultipartyClientHandler chan *Response
-}
-
-// clientServer is the client server API for the ZorumsService Service
 type ReplySpec interface {
 	MultipartyClientHandler(reqs []*Response) (*Response, error)
+	MultipartyClientHandler2(reqs []*ClientResponse) (*ClientResponse, error)
 }
