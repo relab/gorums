@@ -110,12 +110,6 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
 	srv.RetToClient(resp, err, broadcastID)
 }
-{{range .Services -}}
-{{$service := .GoName}}
-{{- range .Methods}}
-// {{$service}}, {{.GoName}}
-{{- end}}
-{{- end}}
 `
 
 var server = serverVariables + serverInterface + registerServerMethods + registerInterface + registerReplyToClientHandlers
