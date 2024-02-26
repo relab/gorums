@@ -188,9 +188,6 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 		OriginAddr:   md.BroadcastMsg.OriginAddr,
 		OriginMethod: md.BroadcastMsg.OriginMethod,
 		Method:       m,
-		PublicKey:    md.BroadcastMsg.PublicKey,
-		Signature:    md.BroadcastMsg.Signature,
-		MAC:          md.BroadcastMsg.MAC,
 	}
 }
 
