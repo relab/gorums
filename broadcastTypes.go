@@ -166,10 +166,6 @@ type BroadcastMetadata struct {
 	OriginAddr   string
 	OriginMethod string
 	Method       string
-
-	PublicKey string
-	Signature string
-	MAC       string
 }
 
 func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
