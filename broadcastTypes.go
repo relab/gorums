@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/relab/gorums/ordering"
@@ -98,6 +99,7 @@ type clientRequest struct {
 	finished chan<- *Message
 	metadata *ordering.Metadata
 	status   respType
+	handled  bool
 }
 
 type SpBroadcast struct {
@@ -190,4 +192,56 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 		Signature:    md.BroadcastMsg.Signature,
 		MAC:          md.BroadcastMsg.MAC,
 	}
+}
+
+type RequestMap struct {
+	data  map[string]clientRequest
+	mutex sync.RWMutex
+}
+
+func NewRequestMap() *RequestMap {
+	return &RequestMap{
+		data: make(map[string]clientRequest),
+	}
+}
+
+func (list *RequestMap) Add(identifier string, element clientRequest) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	// do nothing if element already exists
+	if _, ok := list.data[identifier]; ok {
+		return
+	}
+	list.data[identifier] = element
+}
+
+func (list *RequestMap) Get(identifier string) (clientRequest, bool) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	elem, ok := list.data[identifier]
+	return elem, ok
+}
+
+func (list *RequestMap) Set(identifier string, elem clientRequest) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	list.data[identifier] = elem
+}
+
+func (list *RequestMap) GetSet(identifier string) (clientRequest, bool) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	elem, ok := list.data[identifier]
+	if !ok {
+		// this server has not received a request directly from a client
+		// hence, the response should be ignored
+		// already handled and can be removed?
+		return elem, true
+	}
+	if elem.handled {
+		return elem, true
+	}
+	elem.handled = true
+	list.data[identifier] = elem
+	return elem, false
 }

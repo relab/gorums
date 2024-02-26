@@ -123,7 +123,7 @@ func (srv *Server) ListenForBroadcast() {
 }
 
 func (srv *broadcastServer) registerReturnToClientHandler(method string, handler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
-	srv.returnToClientHandlers[method] = handler
+	srv.clientHandlers[method] = handler
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
@@ -138,9 +138,6 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			OriginID:        md.OriginID,
 			OriginAddr:      md.OriginAddr,
 			OriginMethod:    md.OriginMethod,
-			PublicKey:       srv.publicKey,
-			Signature:       "signature",
-			MAC:             "mac",
 			ServerAddresses: srvAddrs,
 		}
 		srv.view.broadcastCall(ctx, cd)

@@ -15,40 +15,36 @@ import (
 
 type broadcastServer struct {
 	sync.RWMutex
-	recievedFrom           map[uint64]map[string]map[string]bool
-	broadcastedMsgs        map[string]map[string]bool
-	returnedToClientMsgs   map[string]bool
-	broadcastChan          chan broadcastMsg
-	methods                map[string]broadcastFunc
-	responseChan           chan responseMsg
-	returnToClientHandlers map[string]func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
-	mutex                  sync.RWMutex
-	bNew                   iBroadcastStruct
-	timeout                time.Duration
-	clientReqs             map[string]*clientRequest
-	clientReqsMutex        sync.Mutex
-	view                   serverView
-	middlewares            []func(BroadcastMetadata) error
-	addr                   string
-	id                     string
-	publicKey              string
-	privateKey             string
+	id              string
+	addr            string
+	broadcastedMsgs map[string]map[string]bool
+	methods         map[string]broadcastFunc
+	broadcastChan   chan broadcastMsg
+	responseChan    chan responseMsg
+	clientHandlers  map[string]func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
+	bNew            iBroadcastStruct
+	timeout         time.Duration
+	clientReqs      *RequestMap
+	view            serverView
+	middlewares     []func(BroadcastMetadata) error
+	//mutex          sync.RWMutex
+	//returnedToClientMsgs map[string]bool
+	//clientReqs      map[string]*clientRequest
+	//clientReqsMutex sync.Mutex
 }
 
 func newBroadcastServer() *broadcastServer {
 	return &broadcastServer{
-		id:                     uuid.New().String(),
-		recievedFrom:           make(map[uint64]map[string]map[string]bool),
-		broadcastedMsgs:        make(map[string]map[string]bool),
-		returnToClientHandlers: make(map[string]func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
-		returnedToClientMsgs:   make(map[string]bool),
-		broadcastChan:          make(chan broadcastMsg, 1000),
-		methods:                make(map[string]broadcastFunc),
-		responseChan:           make(chan responseMsg),
-		clientReqs:             make(map[string]*clientRequest),
-		middlewares:            make([]func(BroadcastMetadata) error, 0),
-		publicKey:              "publicKey",
-		privateKey:             "privateKey",
+		id:              uuid.New().String(),
+		broadcastedMsgs: make(map[string]map[string]bool),
+		clientHandlers:  make(map[string]func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
+		broadcastChan:   make(chan broadcastMsg, 1000),
+		methods:         make(map[string]broadcastFunc),
+		responseChan:    make(chan responseMsg),
+		clientReqs:      NewRequestMap(),
+		middlewares:     make([]func(BroadcastMetadata) error, 0),
+		//returnedToClientMsgs: make(map[string]bool),
+		//clientReqs:    make(map[string]*clientRequest),
 	}
 }
 
@@ -78,7 +74,7 @@ func (srv *broadcastServer) run() {
 		//broadcastID := msg.getBroadcastID()
 		//ctx := context.Background()
 		metadata := msg.getMetadata()
-		ctx := context.Background()
+		ctx := context.WithValue(context.Background(), "broadcastID", metadata.BroadcastID)
 		// reqCtx := msg.GetContext()
 		// drop if ctx is cancelled? Or in broadcast method?
 		// if another function is called in broadcast, the request needs to be converted
@@ -99,23 +95,31 @@ func (srv *broadcastServer) handleClientResponses() {
 }
 
 func (srv *broadcastServer) handle(response responseMsg) {
-	srv.clientReqsMutex.Lock()
-	defer srv.clientReqsMutex.Unlock()
-	req, ok := srv.clientReqs[response.getBroadcastID()]
-	if !ok {
+	broadcastID := response.getBroadcastID()
+	req, handled := srv.clientReqs.GetSet(broadcastID)
+	//srv.clientReqsMutex.Lock()
+	//defer srv.clientReqsMutex.Unlock()
+	//req, ok := srv.clientReqs[response.getBroadcastID()]
+	//if !ok {
+	//	// this server has not received a request directly from a client
+	//	// hence, the response should be ignored
+	//	return
+	//} else if req.status == unhandled {
+	//	// first time it is handled
+	//	req.status = response.getType()
+	//} else if req.status == clientResponse || req.status == timeout {
+	//	// already handled, but got the other response type in the pair: clientResponse & timeout
+	//	// or a duplicate
+	//	req.status = done
+	//	return
+	//} else {
+	//	// already handled and can be removed
+	//	return
+	//}
+	if handled {
 		// this server has not received a request directly from a client
 		// hence, the response should be ignored
-		return
-	} else if req.status == unhandled {
-		// first time it is handled
-		req.status = response.getType()
-	} else if req.status == clientResponse || req.status == timeout {
-		// already handled, but got the other response type in the pair: clientResponse & timeout
-		// or a duplicate
-		req.status = done
-		return
-	} else {
-		// already handled and can be removed
+		// already handled and can not be removed yet. It is possible to get duplicates.
 		return
 	}
 	select {
@@ -136,7 +140,9 @@ func (srv *broadcastServer) handle(response responseMsg) {
 		if req.metadata.BroadcastMsg.OriginAddr == "" {
 			return
 		}
-		srv.returnToClientHandlers[req.metadata.BroadcastMsg.OriginMethod](req.metadata.BroadcastMsg.OriginAddr, response.getResponse())
+		if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok {
+			handler(req.metadata.BroadcastMsg.OriginAddr, response.getResponse())
+		}
 	}
 }
 
@@ -158,7 +164,7 @@ func (srv *broadcastServer) returnToClient(broadcastID string, resp ResponseType
 	srv.Lock()
 	defer srv.Unlock()
 	if !srv.alreadyReturnedToClient(broadcastID) {
-		srv.setReturnedToClient(broadcastID, true)
+		//srv.setReturnedToClient(broadcastID, true)
 		srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
 	}
 }
@@ -169,37 +175,48 @@ func (srv *broadcastServer) timeoutClientResponse(ctx ServerCtx, in *Message, fi
 }
 
 func (srv *broadcastServer) alreadyReturnedToClient(broadcastID string) bool {
-	srv.mutex.Lock()
-	defer srv.mutex.Unlock()
-	returned, ok := srv.returnedToClientMsgs[broadcastID]
-	if !ok {
-		return true
-	}
-	return ok && returned
+	req, ok := srv.clientReqs.Get(broadcastID)
+	return ok && req.handled
+	//srv.mutex.Lock()
+	//defer srv.mutex.Unlock()
+	//returned, ok := srv.returnedToClientMsgs[broadcastID]
+	//if !ok {
+	//	return true
+	//}
+	//return ok && returned
 }
 
-func (srv *broadcastServer) setReturnedToClient(broadcastID string, val bool) {
-	srv.mutex.Lock()
-	defer srv.mutex.Unlock()
-	srv.returnedToClientMsgs[broadcastID] = val
-}
+//func (srv *broadcastServer) setReturnedToClient(broadcastID string, val bool) {
+//	srv.mutex.Lock()
+//	defer srv.mutex.Unlock()
+//	srv.returnedToClientMsgs[broadcastID] = val
+//}
 
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
-	srv.clientReqsMutex.Lock()
-	defer srv.clientReqsMutex.Unlock()
-	// do nothing if the request is already added
-	_, ok := srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()]
-	if ok {
-		return
-	}
-	srv.setReturnedToClient(metadata.BroadcastMsg.GetBroadcastID(), false)
-	srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()] = &clientRequest{
+	//srv.clientReqsMutex.Lock()
+	//defer srv.clientReqsMutex.Unlock()
+	//// do nothing if the request is already added
+	//_, ok := srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()]
+	//if ok {
+	//	return
+	//}
+	//srv.setReturnedToClient(metadata.BroadcastMsg.GetBroadcastID(), false)
+	//srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()] = &clientRequest{
+	//	id:       uuid.New().String(),
+	//	ctx:      ctx,
+	//	finished: finished,
+	//	metadata: metadata,
+	//	status:   unhandled,
+	//	handled:  false,
+	//}
+	srv.clientReqs.Add(metadata.BroadcastMsg.GetBroadcastID(), clientRequest{
 		id:       uuid.New().String(),
 		ctx:      ctx,
 		finished: finished,
 		metadata: metadata,
 		status:   unhandled,
-	}
+		handled:  false,
+	})
 }
 
 // broadcastCallData holds the message, destination nodes, method identifier,
@@ -217,9 +234,6 @@ type broadcastCallData struct {
 	OriginID        string
 	OriginAddr      string
 	OriginMethod    string
-	PublicKey       string
-	Signature       string
-	MAC             string
 	ServerAddresses []string
 }
 
@@ -247,9 +261,6 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 		OriginID:     d.OriginID,
 		OriginAddr:   d.OriginAddr,
 		OriginMethod: d.OriginMethod,
-		PublicKey:    d.PublicKey,
-		Signature:    d.Signature,
-		MAC:          d.MAC,
 	}}
 	o := getCallOptions(E_Broadcast, nil)
 
