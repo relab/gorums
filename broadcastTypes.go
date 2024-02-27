@@ -119,15 +119,42 @@ func WithSubset(srvAddrs ...string) BroadcastOption {
 	}
 }
 
-func WithGossip(percentage float32) BroadcastOption {
+func WithGossip(percentage float32, ttl int) BroadcastOption {
 	return func(b *BroadcastOptions) {
 		b.GossipPercentage = percentage
+		b.TTL = ttl
+	}
+}
+
+func WithTTL(ttl int) BroadcastOption {
+	return func(b *BroadcastOptions) {
+		b.TTL = ttl
+	}
+}
+
+func WithDeadline(deadline time.Time) BroadcastOption {
+	return func(b *BroadcastOptions) {
+		b.Deadline = deadline
+	}
+}
+
+func WithoutSelf() BroadcastOption {
+	return func(b *BroadcastOptions) {
+		b.SkipSelf = true
+	}
+}
+
+func WithoutUniquenessChecks() BroadcastOption {
+	return func(b *BroadcastOptions) {
+		b.OmitUniquenessChecks = true
 	}
 }
 
 type BroadcastOptions struct {
 	ServerAddresses      []string
 	GossipPercentage     float32
+	TTL                  int
+	Deadline             time.Time
 	OmitUniquenessChecks bool
 	SkipSelf             bool
 }

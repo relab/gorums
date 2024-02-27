@@ -95,6 +95,8 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	if in.Metadata.BroadcastMsg.BroadcastID == "" {
 		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.BroadcastMsg.BroadcastID)
 	}
+	// check and update TTL
+	// check deadline
 	return nil
 }
 

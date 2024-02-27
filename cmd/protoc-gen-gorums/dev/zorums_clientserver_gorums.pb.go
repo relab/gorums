@@ -21,8 +21,9 @@ const (
 
 // clientServer is the client server API for the ZorumsService Service
 type clientServer interface {
-	clientMultipartyClientHandler(ctx context.Context, request *Response) (*Response, error)
-	clientMultipartyClientHandler2(ctx context.Context, request *ClientResponse) (*ClientResponse, error)
+	clientBroadcastWithClientHandler1(ctx context.Context, request *Response) (*Response, error)
+	clientBroadcastWithClientHandler2(ctx context.Context, request *ClientResponse) (*ClientResponse, error)
+	clientBroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, request *ClientResponse) (*ClientResponse, error)
 }
 
 var clientServer_ServiceDesc = grpc.ServiceDesc{
@@ -31,12 +32,16 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 	Methods: []grpc.MethodDesc{
 
 		{
-			MethodName: "ClientMultipartyClientHandler",
-			Handler:    _clientMultipartyClientHandler,
+			MethodName: "ClientBroadcastWithClientHandler1",
+			Handler:    _clientBroadcastWithClientHandler1,
 		},
 		{
-			MethodName: "ClientMultipartyClientHandler2",
-			Handler:    _clientMultipartyClientHandler2,
+			MethodName: "ClientBroadcastWithClientHandler2",
+			Handler:    _clientBroadcastWithClientHandler2,
+		},
+		{
+			MethodName: "ClientBroadcastWithClientHandlerAndBroadcastOption",
+			Handler:    _clientBroadcastWithClientHandlerAndBroadcastOption,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -44,6 +49,7 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 }
 
 type ReplySpec interface {
-	MultipartyClientHandler(reqs []*Response) (*Response, error)
-	MultipartyClientHandler2(reqs []*ClientResponse) (*ClientResponse, error)
+	BroadcastWithClientHandler1(reqs []*Response) (*Response, error)
+	BroadcastWithClientHandler2(reqs []*ClientResponse) (*ClientResponse, error)
+	BroadcastWithClientHandlerAndBroadcastOption(reqs []*ClientResponse) (*ClientResponse, error)
 }

@@ -17,18 +17,26 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 7)
 )
 
-func (b *Broadcast) Multiparty(req *Request, opts ...gorums.BroadcastOption) {
+func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
 	data := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&data)
 	}
-	b.sp.BroadcastHandler("dev.ZorumsService.Multiparty", req, b.metadata, data)
+	b.sp.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, b.metadata, data)
 }
 
-func (b *Broadcast) MultipartyInternal(req *Request, opts ...gorums.BroadcastOption) {
+func (b *Broadcast) BroadcastInternal(req *Request, opts ...gorums.BroadcastOption) {
 	data := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&data)
 	}
-	b.sp.BroadcastHandler("dev.ZorumsService.MultipartyInternal", req, b.metadata, data)
+	b.sp.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, b.metadata, data)
+}
+
+func (b *Broadcast) BroadcastWithClientHandlerAndBroadcastOption(req *Request, opts ...gorums.BroadcastOption) {
+	data := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&data)
+	}
+	b.sp.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, b.metadata, data)
 }

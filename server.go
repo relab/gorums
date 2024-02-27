@@ -138,7 +138,6 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	sync.RWMutex
 	srv          *orderingServer
 	grpcServer   *grpc.Server
 	broadcastSrv *broadcastServer

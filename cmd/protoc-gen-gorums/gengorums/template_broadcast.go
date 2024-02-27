@@ -15,5 +15,5 @@ var broadcastBody = `
 }
 `
 
-var broadcastCall = broadcastVar +
+var broadcastMethod = broadcastVar +
 	broadcastSignature + broadcastBody

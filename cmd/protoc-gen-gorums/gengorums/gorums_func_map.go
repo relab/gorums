@@ -109,13 +109,13 @@ var funcMap = template.FuncMap{
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
 	"isBroadcast": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Broadcast, gorums.E_Broadcastrequest)
+		return hasMethodOption(method, gorums.E_Broadcast, gorums.E_Broadcastcall)
 	},
 	"isBroadcastOption": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Broadcast)
 	},
 	"isBroadcastCall": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Broadcastrequest)
+		return hasMethodOption(method, gorums.E_Broadcastcall)
 	},
 	"methods": func(services []*protogen.Service) (methods []*protogen.Method) {
 		for _, s := range services {

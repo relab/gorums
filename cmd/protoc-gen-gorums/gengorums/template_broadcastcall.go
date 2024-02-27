@@ -77,5 +77,5 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 }
 `
 
-var clientServerCall = clientServerVar +
+var broadcastCall = clientServerVar +
 	clientServerSignature + clientServerBody + clientServerMethodImpl + clientServerImplMethod

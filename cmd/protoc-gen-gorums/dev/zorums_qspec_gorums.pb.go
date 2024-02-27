@@ -64,12 +64,12 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Request'.
 	QuorumCallEmpty2QF(in *Request, replies map[uint32]*empty.Empty) (*empty.Empty, bool)
 
-	// MultipartyQF is the quorum function for the Multiparty
+	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
 	// quorum call method. The in parameter is the request object
-	// supplied to the Multiparty method at call time, and may or may not
+	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	MultipartyQF(in *Request, replies map[uint32]*Response) (*Response, bool)
+	QuorumCallWithBroadcastQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallAsyncQF is the quorum function for the QuorumCallAsync
 	// asynchronous quorum call method. The in parameter is the request object

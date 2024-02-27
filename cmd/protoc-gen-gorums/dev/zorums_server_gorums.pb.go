@@ -32,10 +32,11 @@ type ZorumsService interface {
 	QuorumCallCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	QuorumCallEmpty(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error)
 	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error)
-	Multiparty(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
-	MultipartyInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
-	MultipartyClientHandler(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
-	MultipartyClientHandler2(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	BroadcastInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	BroadcastWithClientHandler1(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	BroadcastWithClientHandler2(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	BroadcastWithClientHandlerAndBroadcastOption(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Multicast(ctx gorums.ServerCtx, request *Request)
 	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
 	Multicast2(ctx gorums.ServerCtx, request *Request)
@@ -85,17 +86,20 @@ func (srv *Server) QuorumCallEmpty(ctx gorums.ServerCtx, request *empty.Empty) (
 func (srv *Server) QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error) {
 	panic(status.Errorf(codes.Unimplemented, "method QuorumCallEmpty2 not implemented"))
 }
-func (srv *Server) Multiparty(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
-	panic(status.Errorf(codes.Unimplemented, "method Multiparty not implemented"))
+func (srv *Server) QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallWithBroadcast not implemented"))
 }
-func (srv *Server) MultipartyInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
-	panic(status.Errorf(codes.Unimplemented, "method MultipartyInternal not implemented"))
+func (srv *Server) BroadcastInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method BroadcastInternal not implemented"))
 }
-func (srv *Server) MultipartyClientHandler(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
-	panic(status.Errorf(codes.Unimplemented, "method MultipartyClientHandler not implemented"))
+func (srv *Server) BroadcastWithClientHandler1(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method BroadcastWithClientHandler1 not implemented"))
 }
-func (srv *Server) MultipartyClientHandler2(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
-	panic(status.Errorf(codes.Unimplemented, "method MultipartyClientHandler2 not implemented"))
+func (srv *Server) BroadcastWithClientHandler2(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method BroadcastWithClientHandler2 not implemented"))
+}
+func (srv *Server) BroadcastWithClientHandlerAndBroadcastOption(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method BroadcastWithClientHandlerAndBroadcastOption not implemented"))
 }
 func (srv *Server) Multicast(ctx gorums.ServerCtx, request *Request) {
 	panic(status.Errorf(codes.Unimplemented, "method Multicast not implemented"))
@@ -219,12 +223,14 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 		resp, err := impl.QuorumCallEmpty2(ctx, req)
 		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multiparty", gorums.BroadcastHandler(impl.Multiparty, srv.Server))
-	srv.RegisterHandler("dev.ZorumsService.MultipartyInternal", gorums.BroadcastHandler(impl.MultipartyInternal, srv.Server))
-	srv.RegisterHandler("dev.ZorumsService.MultipartyClientHandler", gorums.BroadcastHandler(impl.MultipartyClientHandler, srv.Server))
-	srv.RegisterClientHandler("dev.ZorumsService.MultipartyClientHandler", _serverClientRPC("dev.ZorumsService.MultipartyClientHandler"))
-	srv.RegisterHandler("dev.ZorumsService.MultipartyClientHandler2", gorums.BroadcastHandler(impl.MultipartyClientHandler2, srv.Server))
-	srv.RegisterClientHandler("dev.ZorumsService.MultipartyClientHandler2", _serverClientRPC("dev.ZorumsService.MultipartyClientHandler2"))
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallWithBroadcast", gorums.BroadcastHandler(impl.QuorumCallWithBroadcast, srv.Server))
+	srv.RegisterHandler("dev.ZorumsService.BroadcastInternal", gorums.BroadcastHandler(impl.BroadcastInternal, srv.Server))
+	srv.RegisterHandler("dev.ZorumsService.BroadcastWithClientHandler1", gorums.BroadcastHandler(impl.BroadcastWithClientHandler1, srv.Server))
+	srv.RegisterClientHandler("dev.ZorumsService.BroadcastWithClientHandler1", _serverClientRPC("dev.ZorumsService.BroadcastWithClientHandler1"))
+	srv.RegisterHandler("dev.ZorumsService.BroadcastWithClientHandler2", gorums.BroadcastHandler(impl.BroadcastWithClientHandler2, srv.Server))
+	srv.RegisterClientHandler("dev.ZorumsService.BroadcastWithClientHandler2", _serverClientRPC("dev.ZorumsService.BroadcastWithClientHandler2"))
+	srv.RegisterHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", gorums.BroadcastHandler(impl.BroadcastWithClientHandlerAndBroadcastOption, srv.Server))
+	srv.RegisterClientHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", _serverClientRPC("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption"))
 	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()

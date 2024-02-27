@@ -314,17 +314,17 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	callTypeName(gorums.E_Broadcast): {
 		extInfo:  gorums.E_Broadcast,
 		docName:  "broadcast",
-		template: broadcastCall,
+		template: broadcastMethod,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Broadcast)
 		},
 	},
-	callTypeName(gorums.E_Broadcastrequest): {
-		extInfo:  gorums.E_Broadcastrequest,
-		docName:  "clientservermethods",
-		template: clientServerCall,
+	callTypeName(gorums.E_Broadcastcall): {
+		extInfo:  gorums.E_Broadcastcall,
+		docName:  "broadcastcall",
+		template: broadcastCall,
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Broadcastrequest)
+			return hasMethodOption(m, gorums.E_Broadcastcall)
 		},
 	},
 }
@@ -337,7 +337,7 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Correctable,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
-	gorums.E_Broadcastrequest,
+	gorums.E_Broadcastcall,
 }
 
 // callTypesWithInternal should list all available call types that

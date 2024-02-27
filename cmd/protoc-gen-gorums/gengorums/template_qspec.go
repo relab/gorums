@@ -34,7 +34,7 @@ type QuorumSpec interface {
 // a quorum function; that is, all except multicast and plain gRPC methods.
 func qspecMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	for _, method := range methods {
-		if hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast, gorums.E_Broadcastrequest) || !hasGorumsCallType(method) {
+		if hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast, gorums.E_Broadcastcall) || !hasGorumsCallType(method) {
 			// ignore multicast, broadcast and non-Gorums methods
 			continue
 		}

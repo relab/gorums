@@ -153,11 +153,13 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request) (resp
 	return res.(*empty.Empty), err
 }
 
-// Multiparty with QuorumCall.
-func (c *Configuration) Multiparty(ctx context.Context, in *Request) (resp *Response, err error) {
+// QuorumCall with broadcast option enables the server handler to broadcast.
+// The handler still works like a regular QuorumCall from the client's
+// perpective.
+func (c *Configuration) QuorumCallWithBroadcast(ctx context.Context, in *Request) (resp *Response, err error) {
 	cd := gorums.QuorumCallData{
 		Message: in,
-		Method:  "dev.ZorumsService.Multiparty",
+		Method:  "dev.ZorumsService.QuorumCallWithBroadcast",
 
 		BroadcastID: uuid.New().String(),
 		Sender:      gorums.BROADCASTCLIENT,
@@ -167,7 +169,7 @@ func (c *Configuration) Multiparty(ctx context.Context, in *Request) (resp *Resp
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
-		return c.qspec.MultipartyQF(req.(*Request), r)
+		return c.qspec.QuorumCallWithBroadcastQF(req.(*Request), r)
 	}
 
 	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
