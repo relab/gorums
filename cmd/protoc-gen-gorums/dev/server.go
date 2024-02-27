@@ -144,7 +144,7 @@ func _serverClientRPC(method string) func(addr, broadcastID string, in protorefl
 		if len(tmp) >= 1 {
 			m = tmp[len(tmp)-1]
 		}
-		method = "protos.ClientServer." + m
+		method = "/protos.ClientServer/Client" + m
 		cc, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, err
@@ -156,6 +156,6 @@ func _serverClientRPC(method string) func(addr, broadcastID string, in protorefl
 		if err != nil {
 			return nil, err
 		}
-		return out, nil
+		return nil, nil
 	}
 }
