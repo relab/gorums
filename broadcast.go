@@ -135,7 +135,7 @@ func (srv *broadcastServer) handle(response responseMsg) {
 		log.Println("NOT VALID")
 		return
 	}
-	if req.metadata.BroadcastMsg.Sender == BROADCASTCLIENT {
+	if req.metadata.BroadcastMsg.Sender == BroadcastClient {
 		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
 	}
 	if req.metadata.BroadcastMsg.OriginAddr == "" {

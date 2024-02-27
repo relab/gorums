@@ -58,7 +58,7 @@ func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFun
 		impl(ctx, req, srv.broadcastSrv.bNew.(V))
 		//srv.broadcastSrv.determineBroadcast(broadcastMetadata)
 		//// verify whether a server or a client sent the request
-		if in.Metadata.BroadcastMsg.Sender == BROADCASTCLIENT {
+		if in.Metadata.BroadcastMsg.Sender == BroadcastClient {
 			go srv.broadcastSrv.timeoutClientResponse(ctx, in, finished)
 			//	//SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), nil))
 		} /*else {
@@ -70,7 +70,7 @@ func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFun
 }
 
 func addOriginMethod(md *ordering.Metadata) {
-	if md.BroadcastMsg.Sender != BROADCASTCLIENT {
+	if md.BroadcastMsg.Sender != BroadcastClient {
 		return
 	}
 	md.BroadcastMsg.OriginMethod = md.Method
@@ -145,7 +145,7 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			Message:         in,
 			Method:          method,
 			BroadcastID:     md.BroadcastID,
-			Sender:          BROADCASTSERVER,
+			Sender:          BroadcastServer,
 			SenderAddr:      srv.addr,
 			SenderID:        srv.id,
 			OriginID:        md.OriginID,

@@ -150,7 +150,7 @@ func _serverClientRPC(method string) func(addr, broadcastID string, in protorefl
 			return nil, err
 		}
 		out := new(any)
-		md := metadata.Pairs("broadcastID", broadcastID)
+		md := metadata.Pairs(gorums.BroadcastID, broadcastID)
 		ctx := metadata.NewOutgoingContext(context.Background(), md)
 		err = cc.Invoke(ctx, method, in, out, opts...)
 		if err != nil {

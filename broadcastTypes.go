@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	BROADCASTCLIENT string = "client"
-	BROADCASTSERVER string = "server"
+	BroadcastClient string = "client"
+	BroadcastServer string = "server"
+	BroadcastID     string = "broadcastID"
 )
 
 type serverView interface {

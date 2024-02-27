@@ -59,7 +59,7 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 		Method:  "{{.Method.Desc.FullName}}",
 
 		BroadcastID: broadcastID,
-		Sender:      gorums.BROADCASTCLIENT,
+		Sender:      gorums.BroadcastClient,
 		OriginAddr: c.listenAddr,
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)

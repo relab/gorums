@@ -64,7 +64,7 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 		Method:  "dev.ZorumsService.BroadcastWithClientHandler1",
 
 		BroadcastID: broadcastID,
-		Sender:      gorums.BROADCASTCLIENT,
+		Sender:      gorums.BroadcastClient,
 		OriginAddr:  c.listenAddr,
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)
@@ -122,7 +122,7 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 		Method:  "dev.ZorumsService.BroadcastWithClientHandler2",
 
 		BroadcastID: broadcastID,
-		Sender:      gorums.BROADCASTCLIENT,
+		Sender:      gorums.BroadcastClient,
 		OriginAddr:  c.listenAddr,
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)
@@ -180,7 +180,7 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 		Method:  "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption",
 
 		BroadcastID: broadcastID,
-		Sender:      gorums.BROADCASTCLIENT,
+		Sender:      gorums.BroadcastClient,
 		OriginAddr:  c.listenAddr,
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)
