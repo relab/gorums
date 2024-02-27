@@ -3,7 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"strings"
+	"log"
 	"time"
 
 	"github.com/relab/gorums/ordering"
@@ -33,6 +33,7 @@ func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFun
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
 		if err := srv.broadcastSrv.validateMessage(in); err != nil {
+			log.Fatalln(err, in.Metadata)
 			return
 		}
 		// this does not work yet:
@@ -72,15 +73,25 @@ func addOriginMethod(md *ordering.Metadata) {
 	if md.BroadcastMsg.Sender != BROADCASTCLIENT {
 		return
 	}
-	tmp := strings.Split(md.Method, ".")
-	m := ""
-	if len(tmp) >= 1 {
-		m = tmp[len(tmp)-1]
-	}
-	md.BroadcastMsg.OriginMethod = "Client" + m
+	md.BroadcastMsg.OriginMethod = md.Method
+	//tmp := strings.Split(md.Method, ".")
+	//m := ""
+	//if len(tmp) >= 1 {
+	//	m = tmp[len(tmp)-1]
+	//}
+	//md.BroadcastMsg.OriginMethod = "Client" + m
 }
 
 func (srv *broadcastServer) validateMessage(in *Message) error {
+	if in == nil {
+		return fmt.Errorf("message cannot be empty. got: %v", in)
+	}
+	if in.Metadata == nil {
+		return fmt.Errorf("metadata cannot be empty. got: %v", in.Metadata)
+	}
+	if in.Metadata.BroadcastMsg == nil {
+		return fmt.Errorf("broadcastMsg cannot be empty. got: %v", in.Metadata.BroadcastMsg)
+	}
 	if in.Metadata.BroadcastMsg.BroadcastID == "" {
 		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.BroadcastMsg.BroadcastID)
 	}
@@ -122,7 +133,7 @@ func (srv *Server) ListenForBroadcast() {
 	go srv.broadcastSrv.handleClientResponses()
 }
 
-func (srv *broadcastServer) registerReturnToClientHandler(method string, handler func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
+func (srv *broadcastServer) registerReturnToClientHandler(method string, handler func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
 	srv.clientHandlers[method] = handler
 }
 

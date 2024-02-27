@@ -14,7 +14,7 @@ var clientServerInterface = `
 type clientServer interface {
 	{{- range .Methods}}
 	{{- if isBroadcastCall .}}
-	client{{.GoName}}(ctx {{$context}}, request *{{out $genFile .}}) (any, error)
+	client{{.GoName}}(ctx {{$context}}, request *{{out $genFile .}}) (*{{out $genFile .}}, error)
 	{{- end}}
 	{{- end}}
 }

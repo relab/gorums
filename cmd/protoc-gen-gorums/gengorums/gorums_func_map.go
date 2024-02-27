@@ -34,6 +34,7 @@ var importMap = map[string]protogen.GoImportPath{
 	"ordering":     protogen.GoImportPath("github.com/relab/gorums/ordering"),
 	"protoreflect": protogen.GoImportPath("google.golang.org/protobuf/reflect/protoreflect"),
 	"uuid":         protogen.GoImportPath("github.com/google/uuid"),
+	"metadata":     protogen.GoImportPath("google.golang.org/grpc/metadata"),
 }
 
 func addImport(path, ident string, g *protogen.GeneratedFile) string {

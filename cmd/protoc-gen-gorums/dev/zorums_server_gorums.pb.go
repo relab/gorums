@@ -10,6 +10,8 @@ import (
 	empty "github.com/golang/protobuf/ptypes/empty"
 	gorums "github.com/relab/gorums"
 	ordering "github.com/relab/gorums/ordering"
+	codes "google.golang.org/grpc/codes"
+	status "google.golang.org/grpc/status"
 	proto "google.golang.org/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -63,115 +65,115 @@ type ZorumsService interface {
 }
 
 func (srv *Server) GRPCCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("GRPCCall not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method GRPCCall not implemented"))
 }
 func (srv *Server) QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCall not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCall not implemented"))
 }
 func (srv *Server) QuorumCallPerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCallPerNodeArg not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallPerNodeArg not implemented"))
 }
 func (srv *Server) QuorumCallCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCallCustomReturnType not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallCustomReturnType not implemented"))
 }
 func (srv *Server) QuorumCallCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCallCombo not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallCombo not implemented"))
 }
 func (srv *Server) QuorumCallEmpty(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error) {
-	panic("QuorumCallEmpty not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallEmpty not implemented"))
 }
 func (srv *Server) QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error) {
-	panic("QuorumCallEmpty2 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallEmpty2 not implemented"))
 }
 func (srv *Server) Multiparty(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
-	panic("Multiparty not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method Multiparty not implemented"))
 }
 func (srv *Server) MultipartyInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
-	panic("MultipartyInternal not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method MultipartyInternal not implemented"))
 }
 func (srv *Server) MultipartyClientHandler(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
-	panic("MultipartyClientHandler not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method MultipartyClientHandler not implemented"))
 }
 func (srv *Server) MultipartyClientHandler2(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
-	panic("MultipartyClientHandler2 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method MultipartyClientHandler2 not implemented"))
 }
 func (srv *Server) Multicast(ctx gorums.ServerCtx, request *Request) {
-	panic("Multicast not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method Multicast not implemented"))
 }
 func (srv *Server) MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request) {
-	panic("MulticastPerNodeArg not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method MulticastPerNodeArg not implemented"))
 }
 func (srv *Server) Multicast2(ctx gorums.ServerCtx, request *Request) {
-	panic("Multicast2 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method Multicast2 not implemented"))
 }
 func (srv *Server) Multicast3(ctx gorums.ServerCtx, request *Request) {
-	panic("Multicast3 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method Multicast3 not implemented"))
 }
 func (srv *Server) Multicast4(ctx gorums.ServerCtx, request *empty.Empty) {
-	panic("Multicast4 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method Multicast4 not implemented"))
 }
 func (srv *Server) QuorumCallAsync(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCallAsync not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallAsync not implemented"))
 }
 func (srv *Server) QuorumCallAsyncPerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCallAsyncPerNodeArg not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallAsyncPerNodeArg not implemented"))
 }
 func (srv *Server) QuorumCallAsyncCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCallAsyncCustomReturnType not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallAsyncCustomReturnType not implemented"))
 }
 func (srv *Server) QuorumCallAsyncCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCallAsyncCombo not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallAsyncCombo not implemented"))
 }
 func (srv *Server) QuorumCallAsync2(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("QuorumCallAsync2 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallAsync2 not implemented"))
 }
 func (srv *Server) QuorumCallAsyncEmpty(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error) {
-	panic("QuorumCallAsyncEmpty not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallAsyncEmpty not implemented"))
 }
 func (srv *Server) QuorumCallAsyncEmpty2(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error) {
-	panic("QuorumCallAsyncEmpty2 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallAsyncEmpty2 not implemented"))
 }
 func (srv *Server) Correctable(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("Correctable not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method Correctable not implemented"))
 }
 func (srv *Server) CorrectablePerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("CorrectablePerNodeArg not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectablePerNodeArg not implemented"))
 }
 func (srv *Server) CorrectableCustomReturnType(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("CorrectableCustomReturnType not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableCustomReturnType not implemented"))
 }
 func (srv *Server) CorrectableCombo(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
-	panic("CorrectableCombo not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableCombo not implemented"))
 }
 func (srv *Server) CorrectableEmpty(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error) {
-	panic("CorrectableEmpty not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableEmpty not implemented"))
 }
 func (srv *Server) CorrectableEmpty2(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error) {
-	panic("CorrectableEmpty2 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableEmpty2 not implemented"))
 }
 func (srv *Server) CorrectableStream(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error {
-	panic("CorrectableStream not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableStream not implemented"))
 }
 func (srv *Server) CorrectableStreamPerNodeArg(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error {
-	panic("CorrectableStreamPerNodeArg not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableStreamPerNodeArg not implemented"))
 }
 func (srv *Server) CorrectableStreamCustomReturnType(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error {
-	panic("CorrectableStreamCustomReturnType not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableStreamCustomReturnType not implemented"))
 }
 func (srv *Server) CorrectableStreamCombo(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error {
-	panic("CorrectableStreamCombo not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableStreamCombo not implemented"))
 }
 func (srv *Server) CorrectableStreamEmpty(ctx gorums.ServerCtx, request *Request, send func(response *empty.Empty) error) error {
-	panic("CorrectableStreamEmpty not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableStreamEmpty not implemented"))
 }
 func (srv *Server) CorrectableStreamEmpty2(ctx gorums.ServerCtx, request *empty.Empty, send func(response *Response) error) error {
-	panic("CorrectableStreamEmpty2 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method CorrectableStreamEmpty2 not implemented"))
 }
 func (srv *Server) Unicast(ctx gorums.ServerCtx, request *Request) {
-	panic("Unicast not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method Unicast not implemented"))
 }
 func (srv *Server) Unicast2(ctx gorums.ServerCtx, request *Request) {
-	panic("Unicast2 not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method Unicast2 not implemented"))
 }
 
 func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
@@ -220,9 +222,9 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	srv.RegisterHandler("dev.ZorumsService.Multiparty", gorums.BroadcastHandler(impl.Multiparty, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.MultipartyInternal", gorums.BroadcastHandler(impl.MultipartyInternal, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.MultipartyClientHandler", gorums.BroadcastHandler(impl.MultipartyClientHandler, srv.Server))
-	srv.RegisterReturnToClientHandler("dev.ZorumsService.MultipartyClientHandler", _serverClientRPC("dev.ZorumsService.MultipartyClientHandler"))
+	srv.RegisterClientHandler("dev.ZorumsService.MultipartyClientHandler", _serverClientRPC("dev.ZorumsService.MultipartyClientHandler"))
 	srv.RegisterHandler("dev.ZorumsService.MultipartyClientHandler2", gorums.BroadcastHandler(impl.MultipartyClientHandler2, srv.Server))
-	srv.RegisterReturnToClientHandler("dev.ZorumsService.MultipartyClientHandler2", _serverClientRPC("dev.ZorumsService.MultipartyClientHandler2"))
+	srv.RegisterClientHandler("dev.ZorumsService.MultipartyClientHandler2", _serverClientRPC("dev.ZorumsService.MultipartyClientHandler2"))
 	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()

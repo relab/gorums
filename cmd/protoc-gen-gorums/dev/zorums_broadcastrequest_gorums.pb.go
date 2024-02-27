@@ -12,6 +12,7 @@ import (
 	uuid "github.com/google/uuid"
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
+	metadata "google.golang.org/grpc/metadata"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -30,12 +31,24 @@ func _clientMultipartyClientHandler(srv interface{}, ctx context.Context, dec fu
 	return srv.(clientServer).clientMultipartyClientHandler(ctx, in)
 }
 
-func (srv *clientServerImpl) clientMultipartyClientHandler(ctx context.Context, resp *Response) (any, error) {
+func (srv *clientServerImpl) clientMultipartyClientHandler(ctx context.Context, resp *Response) (*Response, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return resp, fmt.Errorf("no metadata")
+	}
+	broadcastID := ""
+	val := md.Get("broadcastID")
+	if val != nil && len(val) >= 1 {
+		broadcastID = val[0]
+	}
+	if broadcastID == "" {
+		return resp, fmt.Errorf("no broadcastID")
+	}
 	srv.respChan <- &clientResponse{
-		broadcastID: ctx.Value("broadcastID").(string),
+		broadcastID: broadcastID,
 		data:        resp,
 	}
-	return nil, nil
+	return resp, nil
 }
 
 func (c *Configuration) MultipartyClientHandler(ctx context.Context, in *Request) (resp *Response, err error) {
@@ -48,10 +61,10 @@ func (c *Configuration) MultipartyClientHandler(ctx context.Context, in *Request
 	broadcastID := uuid.New().String()
 	cd := gorums.QuorumCallData{
 		Message: in,
-		Method:  "protos.UniformBroadcast.Broadcast",
+		Method:  "dev.ZorumsService.MultipartyClientHandler",
 
 		BroadcastID: broadcastID,
-		Sender:      "client",
+		Sender:      gorums.BROADCASTCLIENT,
 		OriginAddr:  c.listenAddr,
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)
@@ -76,12 +89,24 @@ func _clientMultipartyClientHandler2(srv interface{}, ctx context.Context, dec f
 	return srv.(clientServer).clientMultipartyClientHandler2(ctx, in)
 }
 
-func (srv *clientServerImpl) clientMultipartyClientHandler2(ctx context.Context, resp *ClientResponse) (any, error) {
+func (srv *clientServerImpl) clientMultipartyClientHandler2(ctx context.Context, resp *ClientResponse) (*ClientResponse, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return resp, fmt.Errorf("no metadata")
+	}
+	broadcastID := ""
+	val := md.Get("broadcastID")
+	if val != nil && len(val) >= 1 {
+		broadcastID = val[0]
+	}
+	if broadcastID == "" {
+		return resp, fmt.Errorf("no broadcastID")
+	}
 	srv.respChan <- &clientResponse{
-		broadcastID: ctx.Value("broadcastID").(string),
+		broadcastID: broadcastID,
 		data:        resp,
 	}
-	return nil, nil
+	return resp, nil
 }
 
 func (c *Configuration) MultipartyClientHandler2(ctx context.Context, in *Request) (resp *ClientResponse, err error) {
@@ -94,10 +119,10 @@ func (c *Configuration) MultipartyClientHandler2(ctx context.Context, in *Reques
 	broadcastID := uuid.New().String()
 	cd := gorums.QuorumCallData{
 		Message: in,
-		Method:  "protos.UniformBroadcast.Broadcast",
+		Method:  "dev.ZorumsService.MultipartyClientHandler2",
 
 		BroadcastID: broadcastID,
-		Sender:      "client",
+		Sender:      gorums.BROADCASTCLIENT,
 		OriginAddr:  c.listenAddr,
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)

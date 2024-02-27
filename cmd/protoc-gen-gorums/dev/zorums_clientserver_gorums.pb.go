@@ -21,8 +21,8 @@ const (
 
 // clientServer is the client server API for the ZorumsService Service
 type clientServer interface {
-	clientMultipartyClientHandler(ctx context.Context, request *Response) (any, error)
-	clientMultipartyClientHandler2(ctx context.Context, request *ClientResponse) (any, error)
+	clientMultipartyClientHandler(ctx context.Context, request *Response) (*Response, error)
+	clientMultipartyClientHandler2(ctx context.Context, request *ClientResponse) (*ClientResponse, error)
 }
 
 var clientServer_ServiceDesc = grpc.ServiceDesc{

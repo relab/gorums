@@ -2,6 +2,8 @@ package gengorums
 
 var serverVariables = `
 {{$context := use "gorums.ServerCtx" .GenFile}}
+{{$codes := use "codes.Code" .GenFile}}
+{{$status := use "status.Status" .GenFile}}
 `
 
 var serverInterface = `
@@ -33,19 +35,19 @@ var registerServerMethods = `
 {{- range .Methods}}
 {{- if isOneway .}}
 func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) {
-	panic("{{.GoName}} not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method {{.GoName}} not implemented"))
 }
 {{- else if correctableStream .}}
 func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error {
-	panic("{{.GoName}} not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method {{.GoName}} not implemented"))
 }
 {{- else if isBroadcast .}}
 func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) {
-	panic("{{.GoName}} not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method {{.GoName}} not implemented"))
 }
 {{- else}}
 func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error) {
-	panic("{{.GoName}} not implemented")
+	panic(status.Errorf(codes.Unimplemented, "method {{.GoName}} not implemented"))
 }
 {{- end}}
 {{- end}}
@@ -64,7 +66,7 @@ func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 	{{- if isBroadcast .}}
 	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler(impl.{{.GoName}}, srv.Server))
 	{{- if isBroadcastCall .}}
-	srv.RegisterReturnToClientHandler("{{.Desc.FullName}}", _serverClientRPC("{{.Desc.FullName}}"))
+	srv.RegisterClientHandler("{{.Desc.FullName}}", _serverClientRPC("{{.Desc.FullName}}"))
 	{{- end}}
 	{{- else }}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {

@@ -3,10 +3,12 @@ package dev
 import (
 	context "context"
 	"net"
+	"strings"
 
 	"github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -81,7 +83,7 @@ type clientServerImpl struct {
 
 func (c *Configuration) RegisterClientServer(listenAddr string, replySpec ReplySpec) {
 	var opts []grpc.ServerOption
-	srv := clientServerImpl{
+	srv := &clientServerImpl{
 		grpcServer: grpc.NewServer(opts...),
 		respChan:   make(chan *clientResponse, 10),
 		reqChan:    make(chan *clientRequest),
@@ -93,10 +95,11 @@ func (c *Configuration) RegisterClientServer(listenAddr string, replySpec ReplyS
 	for err != nil {
 		return
 	}
+	c.listenAddr = lis.Addr().String()
 	srv.grpcServer.RegisterService(&clientServer_ServiceDesc, srv)
 	go srv.grpcServer.Serve(lis)
 	go srv.handle()
-	c.srv = &srv
+	c.srv = srv
 	c.replySpec = replySpec
 }
 
@@ -109,7 +112,7 @@ func (srv *clientServerImpl) handle() {
 			}
 			srv.resps[resp.broadcastID] = append(srv.resps[resp.broadcastID], resp.data)
 			response, err := srv.handlers[resp.broadcastID](srv.resps[resp.broadcastID])
-			if err != nil {
+			if err == nil {
 				srv.doneChans[resp.broadcastID] <- response
 				close(srv.doneChans[resp.broadcastID])
 				delete(srv.resps, resp.broadcastID)
@@ -134,14 +137,22 @@ func convertToType[T protoreflect.ProtoMessage](handler func([]T) (T, error)) fu
 	}
 }
 
-func _serverClientRPC(method string) func(addr string, in protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error) {
-	return func(addr string, in protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error) {
+func _serverClientRPC(method string) func(addr, broadcastID string, in protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error) {
+	return func(addr, broadcastID string, in protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error) {
+		tmp := strings.Split(method, ".")
+		m := ""
+		if len(tmp) >= 1 {
+			m = tmp[len(tmp)-1]
+		}
+		method = "protos.ClientServer." + m
 		cc, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, err
 		}
 		out := new(any)
-		err = cc.Invoke(context.Background(), method, in, out)
+		md := metadata.Pairs("broadcastID", broadcastID)
+		ctx := metadata.NewOutgoingContext(context.Background(), md)
+		err = cc.Invoke(ctx, method, in, out, opts...)
 		if err != nil {
 			return nil, err
 		}

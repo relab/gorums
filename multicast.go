@@ -12,7 +12,9 @@ import (
 // before the message has been sent.
 func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
+	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
+		Sender: d.Sender, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
+	}}
 	sentMsgs := 0
 
 	var replyChan chan response

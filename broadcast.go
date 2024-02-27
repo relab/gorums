@@ -21,7 +21,7 @@ type broadcastServer struct {
 	methods         map[string]broadcastFunc
 	broadcastChan   chan broadcastMsg
 	responseChan    chan responseMsg
-	clientHandlers  map[string]func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
+	clientHandlers  map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
 	bNew            iBroadcastStruct
 	timeout         time.Duration
 	clientReqs      *RequestMap
@@ -37,7 +37,7 @@ func newBroadcastServer() *broadcastServer {
 	return &broadcastServer{
 		id:              uuid.New().String(),
 		broadcastedMsgs: make(map[string]map[string]bool),
-		clientHandlers:  make(map[string]func(addr string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
+		clientHandlers:  make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
 		broadcastChan:   make(chan broadcastMsg, 1000),
 		methods:         make(map[string]broadcastFunc),
 		responseChan:    make(chan responseMsg),
@@ -132,17 +132,17 @@ func (srv *broadcastServer) handle(response responseMsg) {
 	if !response.valid() {
 		// the response is old and should have timed out, but may not due to scheduling.
 		// the timeout msg should arrive soon.
+		log.Println("NOT VALID")
 		return
 	}
 	if req.metadata.BroadcastMsg.Sender == BROADCASTCLIENT {
 		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
-	} else {
-		if req.metadata.BroadcastMsg.OriginAddr == "" {
-			return
-		}
-		if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok {
-			handler(req.metadata.BroadcastMsg.OriginAddr, response.getResponse())
-		}
+	}
+	if req.metadata.BroadcastMsg.OriginAddr == "" {
+		return
+	}
+	if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok {
+		handler(req.metadata.BroadcastMsg.OriginAddr, broadcastID, response.getResponse())
 	}
 }
 
