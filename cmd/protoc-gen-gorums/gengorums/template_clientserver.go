@@ -50,7 +50,7 @@ var clientServerImplInterface = `
 type ReplySpec interface {
 	{{- range .Methods}}
 	{{- if isBroadcastCall .}}
-	{{.GoName}}(reqs []*{{out $genFile .}}) (*{{out $genFile .}}, error)
+	{{.GoName}}(reqs []*{{out $genFile .}}) (*{{out $genFile .}}, bool)
 	{{- end}}
 	{{- end}}
 }

@@ -9,11 +9,8 @@ package dev
 import (
 	context "context"
 	fmt "fmt"
-	uuid "github.com/google/uuid"
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
-	metadata "google.golang.org/grpc/metadata"
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
@@ -32,23 +29,8 @@ func _clientBroadcastWithClientHandler1(srv interface{}, ctx context.Context, de
 }
 
 func (srv *clientServerImpl) clientBroadcastWithClientHandler1(ctx context.Context, resp *Response) (*Response, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return resp, fmt.Errorf("no metadata")
-	}
-	broadcastID := ""
-	val := md.Get("broadcastID")
-	if val != nil && len(val) >= 1 {
-		broadcastID = val[0]
-	}
-	if broadcastID == "" {
-		return resp, fmt.Errorf("no broadcastID")
-	}
-	srv.respChan <- &clientResponse{
-		broadcastID: broadcastID,
-		data:        resp,
-	}
-	return resp, nil
+	err := srv.AddResponse(ctx, resp)
+	return resp, err
 }
 
 func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Request) (resp *Response, err error) {
@@ -58,21 +40,7 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	if c.replySpec == nil {
 		return nil, fmt.Errorf("a reply spec is not defined. Use configuration.RegisterClientServer() to define a reply spec")
 	}
-	broadcastID := uuid.New().String()
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "dev.ZorumsService.BroadcastWithClientHandler1",
-
-		BroadcastID: broadcastID,
-		Sender:      gorums.BroadcastClient,
-		OriginAddr:  c.listenAddr,
-	}
-	doneChan := make(chan protoreflect.ProtoMessage)
-	c.srv.reqChan <- &clientRequest{
-		broadcastID: broadcastID,
-		doneChan:    doneChan,
-		handler:     convertToType[*Response](c.replySpec.BroadcastWithClientHandler1),
-	}
+	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.replySpec.BroadcastWithClientHandler1))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {
@@ -90,23 +58,8 @@ func _clientBroadcastWithClientHandler2(srv interface{}, ctx context.Context, de
 }
 
 func (srv *clientServerImpl) clientBroadcastWithClientHandler2(ctx context.Context, resp *ClientResponse) (*ClientResponse, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return resp, fmt.Errorf("no metadata")
-	}
-	broadcastID := ""
-	val := md.Get("broadcastID")
-	if val != nil && len(val) >= 1 {
-		broadcastID = val[0]
-	}
-	if broadcastID == "" {
-		return resp, fmt.Errorf("no broadcastID")
-	}
-	srv.respChan <- &clientResponse{
-		broadcastID: broadcastID,
-		data:        resp,
-	}
-	return resp, nil
+	err := srv.AddResponse(ctx, resp)
+	return resp, err
 }
 
 func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Request) (resp *ClientResponse, err error) {
@@ -116,21 +69,7 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	if c.replySpec == nil {
 		return nil, fmt.Errorf("a reply spec is not defined. Use configuration.RegisterClientServer() to define a reply spec")
 	}
-	broadcastID := uuid.New().String()
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "dev.ZorumsService.BroadcastWithClientHandler2",
-
-		BroadcastID: broadcastID,
-		Sender:      gorums.BroadcastClient,
-		OriginAddr:  c.listenAddr,
-	}
-	doneChan := make(chan protoreflect.ProtoMessage)
-	c.srv.reqChan <- &clientRequest{
-		broadcastID: broadcastID,
-		doneChan:    doneChan,
-		handler:     convertToType[*ClientResponse](c.replySpec.BroadcastWithClientHandler2),
-	}
+	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.replySpec.BroadcastWithClientHandler2))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {
@@ -148,23 +87,8 @@ func _clientBroadcastWithClientHandlerAndBroadcastOption(srv interface{}, ctx co
 }
 
 func (srv *clientServerImpl) clientBroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, resp *ClientResponse) (*ClientResponse, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return resp, fmt.Errorf("no metadata")
-	}
-	broadcastID := ""
-	val := md.Get("broadcastID")
-	if val != nil && len(val) >= 1 {
-		broadcastID = val[0]
-	}
-	if broadcastID == "" {
-		return resp, fmt.Errorf("no broadcastID")
-	}
-	srv.respChan <- &clientResponse{
-		broadcastID: broadcastID,
-		data:        resp,
-	}
-	return resp, nil
+	err := srv.AddResponse(ctx, resp)
+	return resp, err
 }
 
 func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, in *Request) (resp *ClientResponse, err error) {
@@ -174,21 +98,7 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	if c.replySpec == nil {
 		return nil, fmt.Errorf("a reply spec is not defined. Use configuration.RegisterClientServer() to define a reply spec")
 	}
-	broadcastID := uuid.New().String()
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption",
-
-		BroadcastID: broadcastID,
-		Sender:      gorums.BroadcastClient,
-		OriginAddr:  c.listenAddr,
-	}
-	doneChan := make(chan protoreflect.ProtoMessage)
-	c.srv.reqChan <- &clientRequest{
-		broadcastID: broadcastID,
-		doneChan:    doneChan,
-		handler:     convertToType[*ClientResponse](c.replySpec.BroadcastWithClientHandlerAndBroadcastOption),
-	}
+	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.replySpec.BroadcastWithClientHandlerAndBroadcastOption))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {

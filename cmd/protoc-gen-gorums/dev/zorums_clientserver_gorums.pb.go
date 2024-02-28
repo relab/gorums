@@ -49,7 +49,7 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 }
 
 type ReplySpec interface {
-	BroadcastWithClientHandler1(reqs []*Response) (*Response, error)
-	BroadcastWithClientHandler2(reqs []*ClientResponse) (*ClientResponse, error)
-	BroadcastWithClientHandlerAndBroadcastOption(reqs []*ClientResponse) (*ClientResponse, error)
+	BroadcastWithClientHandler1(reqs []*Response) (*Response, bool)
+	BroadcastWithClientHandler2(reqs []*ClientResponse) (*ClientResponse, bool)
+	BroadcastWithClientHandlerAndBroadcastOption(reqs []*ClientResponse) (*ClientResponse, bool)
 }
