@@ -86,7 +86,7 @@ type QuorumSpec interface {
 	BroadcastWithClientHandler2QF(replies []*ClientResponse) (*ClientResponse, bool)
 
 	// BroadcastWithClientHandlerAndBroadcastOptionQF is the quorum function for the BroadcastWithClientHandlerAndBroadcastOption
-	// broadcastcall call method. The in parameter is the request object
+	// broadcast call method. The in parameter is the request object
 	// supplied to the BroadcastWithClientHandlerAndBroadcastOption method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.

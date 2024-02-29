@@ -418,14 +418,6 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	})
 }
 
-func (b *Broadcast) Reply(resp protoreflect.ProtoMessage, err error) {
-	b.sp.ReturnToClientHandler(resp, err, b.metadata)
-}
-
-func (srv *Server) ReplyToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
-	srv.RetToClient(resp, err, broadcastID)
-}
-
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.sp.ReturnToClientHandler(resp, err, b.metadata)
 }

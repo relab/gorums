@@ -43,18 +43,4 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 }
 `
 
-var clientServerImplInterface = `
-{{$genFile := .GenFile}}
-{{range .Services -}}
-{{$service := .GoName}}
-type ReplySpec interface {
-	{{- range .Methods}}
-	{{- if isBroadcastCall .}}
-	{{.GoName}}(reqs []*{{out $genFile .}}) (*{{out $genFile .}}, bool)
-	{{- end}}
-	{{- end}}
-}
-{{- end}}
-`
-
 var clientServer = clientServerVariables + clientServerInterface + clientServerDesc
