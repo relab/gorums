@@ -5,7 +5,7 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec", "net": "Listener"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
@@ -118,6 +118,22 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	return c, nil
 }
 
+// NewBroadcastConfiguration returns a configuration based on the provided list of nodes (required)
+// and an optional quorum specification. The QuorumSpec is necessary for call types that
+// must process replies. For configurations only used for unicast or multicast call types,
+// a QuorumSpec is not needed. The QuorumSpec interface is also a ConfigOption.
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
+func (m *Manager) NewBroadcastConfiguration(nodeOpt gorums.NodeListOption, qSpec QuorumSpec, lis net.Listener) (c *Configuration, err error) {
+	c, err = m.NewConfiguration(nodeOpt, qSpec)
+	if err != nil {
+		return nil, err
+	}
+	c.RegisterClientServer(lis)
+	return c, nil
+}
+
 // Nodes returns a slice of available nodes on this manager.
 // IDs are returned in the order they were added at creation of the manager.
 func (m *Manager) Nodes() []*Node {
@@ -189,11 +205,11 @@ type clientServerImpl struct {
 	grpcServer *grpc.Server
 }
 
-func (c *Configuration) RegisterClientServer(listenAddr string, opts ...grpc.ServerOption) error {
+func (c *Configuration) RegisterClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
 	srvImpl := &clientServerImpl{
 		grpcServer: grpc.NewServer(opts...),
 	}
-	srv, lis, err := gorums.NewClientServer(listenAddr)
+	srv, err := gorums.NewClientServer(lis)
 	if err != nil {
 		return err
 	}

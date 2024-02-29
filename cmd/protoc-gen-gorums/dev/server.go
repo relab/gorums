@@ -1,6 +1,8 @@
 package dev
 
 import (
+	"net"
+
 	"github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
 )
@@ -59,11 +61,11 @@ type clientServerImpl struct {
 	grpcServer *grpc.Server
 }
 
-func (c *Configuration) RegisterClientServer(listenAddr string, opts ...grpc.ServerOption) error {
+func (c *Configuration) RegisterClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
 	srvImpl := &clientServerImpl{
 		grpcServer: grpc.NewServer(opts...),
 	}
-	srv, lis, err := gorums.NewClientServer(listenAddr)
+	srv, err := gorums.NewClientServer(lis)
 	if err != nil {
 		return err
 	}

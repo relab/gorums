@@ -35,7 +35,7 @@ type ClientServer struct {
 	listenAddr string
 }
 
-func NewClientServer(listenAddr string) (*ClientServer, net.Listener, error) {
+func NewClientServer(lis net.Listener) (*ClientServer, error) {
 	srv := &ClientServer{
 		respChan:  make(chan *ClientResponse, 10),
 		reqChan:   make(chan *ClientRequest),
@@ -43,13 +43,9 @@ func NewClientServer(listenAddr string) (*ClientServer, net.Listener, error) {
 		doneChans: make(map[string]chan protoreflect.ProtoMessage),
 		handlers:  make(map[string]func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)),
 	}
-	lis, err := net.Listen("tcp", listenAddr)
-	for err != nil {
-		return nil, nil, err
-	}
 	srv.listenAddr = lis.Addr().String()
 	go srv.handle()
-	return srv, lis, nil
+	return srv, nil
 }
 
 func (srv *ClientServer) AddRequest(ctx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler) (chan protoreflect.ProtoMessage, QuorumCallData) {

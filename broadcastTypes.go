@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -155,6 +156,16 @@ func WithoutUniquenessChecks() BroadcastOption {
 // can decide to run the broadcast in a go routine.
 func WithoutWaiting() BroadcastOption {
 	return func(b *BroadcastOptions) {}
+}
+
+// returns a listener for the given address.
+// panics upon errors.
+func WithListener(listenAddr string) net.Listener {
+	lis, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		panic(err)
+	}
+	return lis
 }
 
 type BroadcastOptions struct {
