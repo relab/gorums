@@ -128,7 +128,7 @@ func ServerClientRPC(method string) func(addr, broadcastID string, in protorefle
 		if len(tmp) >= 1 {
 			m = tmp[len(tmp)-1]
 		}
-		method = "/protos.ClientServer/Client" + m
+		clientMethod := "/protos.ClientServer/Client" + m
 		cc, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return nil, err
@@ -136,7 +136,7 @@ func ServerClientRPC(method string) func(addr, broadcastID string, in protorefle
 		out := new(any)
 		md := metadata.Pairs(BroadcastID, broadcastID)
 		ctx := metadata.NewOutgoingContext(context.Background(), md)
-		err = cc.Invoke(ctx, method, in, out, opts...)
+		err = cc.Invoke(ctx, clientMethod, in, out, opts...)
 		if err != nil {
 			return nil, err
 		}

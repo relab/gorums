@@ -97,25 +97,6 @@ func (srv *broadcastServer) handleClientResponses() {
 func (srv *broadcastServer) handle(response responseMsg) {
 	broadcastID := response.getBroadcastID()
 	req, handled := srv.clientReqs.GetSet(broadcastID)
-	//srv.clientReqsMutex.Lock()
-	//defer srv.clientReqsMutex.Unlock()
-	//req, ok := srv.clientReqs[response.getBroadcastID()]
-	//if !ok {
-	//	// this server has not received a request directly from a client
-	//	// hence, the response should be ignored
-	//	return
-	//} else if req.status == unhandled {
-	//	// first time it is handled
-	//	req.status = response.getType()
-	//} else if req.status == clientResponse || req.status == timeout {
-	//	// already handled, but got the other response type in the pair: clientResponse & timeout
-	//	// or a duplicate
-	//	req.status = done
-	//	return
-	//} else {
-	//	// already handled and can be removed
-	//	return
-	//}
 	if handled {
 		// this server has not received a request directly from a client
 		// hence, the response should be ignored
@@ -135,14 +116,10 @@ func (srv *broadcastServer) handle(response responseMsg) {
 		log.Println("NOT VALID")
 		return
 	}
-	if req.metadata.BroadcastMsg.Sender == BroadcastClient {
-		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
-	}
-	if req.metadata.BroadcastMsg.OriginAddr == "" {
-		return
-	}
-	if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok {
+	if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok && req.metadata.BroadcastMsg.OriginAddr != "" {
 		handler(req.metadata.BroadcastMsg.OriginAddr, broadcastID, response.getResponse())
+	} else if req.metadata.BroadcastMsg.Sender == BroadcastClient {
+		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
 	}
 }
 

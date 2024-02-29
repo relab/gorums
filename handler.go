@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/relab/gorums/ordering"
@@ -29,43 +28,32 @@ func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFun
 		defer srv.broadcastSrv.Unlock()
 		req := in.Message.(T)
 		defer ctx.Release()
-		// guard:
-		// - A broadcastID should be non-empty:
-		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
-		if err := srv.broadcastSrv.validateMessage(in); err != nil {
-			log.Fatalln(err, in.Metadata)
-			return
-		}
-		// this does not work yet:
-		//ctx.update(in.Metadata)
-		// it is better if the client provide this data in the request:
-		//if in.Metadata.BroadcastMsg.Sender == "client" && in.Metadata.BroadcastMsg.OriginAddr == "" {
-		//	p, _ := peer.FromContext(ctx)
-		//	in.Metadata.BroadcastMsg.OriginAddr = p.Addr.String()
-		//}
-		addOriginMethod(in.Metadata)
-		broadcastMetadata := newBroadcastMetadata(in.Metadata)
-		// the client can specify middleware, e.g. authentication, to return early.
-		if err := srv.broadcastSrv.runMiddleware(broadcastMetadata); err != nil {
-			// return if any of the middlewares return an error
-			return
-		}
-		//srv.broadcastSrv.b.reset()
-		//srv.broadcastSrv.b.setMetadata(broadcastMetadata)
-		// add the request as a client request
-		srv.broadcastSrv.bNew.setMetadata(broadcastMetadata)
-		srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
-		impl(ctx, req, srv.broadcastSrv.bNew.(V))
-		//srv.broadcastSrv.determineBroadcast(broadcastMetadata)
-		//// verify whether a server or a client sent the request
-		if in.Metadata.BroadcastMsg.Sender == BroadcastClient {
-			go srv.broadcastSrv.timeoutClientResponse(ctx, in, finished)
-			//	//SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), nil))
-		} /*else {
-		//	// server to server communication does not need response?
-		//	SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(nil), err))
-		//}*/
-		//srv.broadcastSrv.determineReturnToClient(ctx, in.Metadata.BroadcastMsg.GetBroadcastID())
+		doneChan := make(chan struct{})
+		go func() {
+			defer func() { close(doneChan) }()
+			// guard:
+			// - A broadcastID should be non-empty:
+			// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
+			if err := srv.broadcastSrv.validateMessage(in); err != nil {
+				return
+			}
+			addOriginMethod(in.Metadata)
+			broadcastMetadata := newBroadcastMetadata(in.Metadata)
+			// the client can specify middleware, e.g. authentication, to return early.
+			if err := srv.broadcastSrv.runMiddleware(broadcastMetadata); err != nil {
+				// return if any of the middlewares return an error
+				return
+			}
+			srv.broadcastSrv.bNew.setMetadata(broadcastMetadata)
+			// add the request as a client request
+			srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
+			impl(ctx, req, srv.broadcastSrv.bNew.(V))
+			//// verify whether a server or a client sent the request
+			//if in.Metadata.BroadcastMsg.Sender == BroadcastClient {
+			//	go srv.broadcastSrv.timeoutClientResponse(ctx, in, finished)
+			//}
+		}()
+		<-doneChan
 	}
 }
 
