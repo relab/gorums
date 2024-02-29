@@ -24,7 +24,11 @@ type QuorumSpec interface {
 	// supplied to the {{$method}} method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *{{$in}}'.
+	{{- if isBroadcastCall .}}
+	{{.GoName}}QF(replies []*{{$out}}) (*{{$out}}, bool)
+	{{- else}}
 	{{$method}}QF(in *{{$in}}, replies map[uint32]*{{$out}}) (*{{$customOut}}{{withCorrectable . ", int"}}, bool)
+	{{- end}}
 {{end}}
 }
 {{end}}
@@ -34,8 +38,8 @@ type QuorumSpec interface {
 // a quorum function; that is, all except multicast and plain gRPC methods.
 func qspecMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	for _, method := range methods {
-		if hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast, gorums.E_Broadcastcall) || !hasGorumsCallType(method) {
-			// ignore multicast, broadcast and non-Gorums methods
+		if hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast) || !hasGorumsCallType(method) {
+			// ignore multicast and non-Gorums methods
 			continue
 		}
 		s = append(s, method)

@@ -9,16 +9,15 @@ var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": 
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Broadcast", "Configuration", "Manager", "Node", "QuorumSpec", "ReplySpec", "Server"}
+var reservedIdents = []string{"Broadcast", "Configuration", "Manager", "Node", "QuorumSpec", "Server"}
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	nodes     []*Node
-	qspec     QuorumSpec
-	srv       *clientServerImpl
-	replySpec ReplySpec
+	nodes []*Node
+	qspec QuorumSpec
+	srv   *clientServerImpl
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -190,7 +189,7 @@ type clientServerImpl struct {
 	grpcServer *grpc.Server
 }
 
-func (c *Configuration) RegisterClientServer(listenAddr string, replySpec ReplySpec, opts ...grpc.ServerOption) error {
+func (c *Configuration) RegisterClientServer(listenAddr string, opts ...grpc.ServerOption) error {
 	srvImpl := &clientServerImpl{
 		grpcServer: grpc.NewServer(opts...),
 	}
@@ -202,7 +201,6 @@ func (c *Configuration) RegisterClientServer(listenAddr string, replySpec ReplyS
 	go srvImpl.grpcServer.Serve(lis)
 	srvImpl.ClientServer = srv
 	c.srv = srvImpl
-	c.replySpec = replySpec
 	return nil
 }
 

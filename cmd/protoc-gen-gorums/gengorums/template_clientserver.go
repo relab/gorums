@@ -57,4 +57,4 @@ type ReplySpec interface {
 {{- end}}
 `
 
-var clientServer = clientServerVariables + clientServerInterface + clientServerDesc + clientServerImplInterface
+var clientServer = clientServerVariables + clientServerInterface + clientServerDesc

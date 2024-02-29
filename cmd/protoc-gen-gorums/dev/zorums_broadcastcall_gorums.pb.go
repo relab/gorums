@@ -37,10 +37,10 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	if c.srv == nil {
 		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
 	}
-	if c.replySpec == nil {
-		return nil, fmt.Errorf("a reply spec is not defined. Use configuration.RegisterClientServer() to define a reply spec")
+	if c.qspec == nil {
+		return nil, fmt.Errorf("a qspec is not defined.")
 	}
-	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.replySpec.BroadcastWithClientHandler1))
+	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {
@@ -66,10 +66,10 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	if c.srv == nil {
 		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
 	}
-	if c.replySpec == nil {
-		return nil, fmt.Errorf("a reply spec is not defined. Use configuration.RegisterClientServer() to define a reply spec")
+	if c.qspec == nil {
+		return nil, fmt.Errorf("a qspec is not defined.")
 	}
-	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.replySpec.BroadcastWithClientHandler2))
+	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {
@@ -95,10 +95,10 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	if c.srv == nil {
 		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
 	}
-	if c.replySpec == nil {
-		return nil, fmt.Errorf("a reply spec is not defined. Use configuration.RegisterClientServer() to define a reply spec")
+	if c.qspec == nil {
+		return nil, fmt.Errorf("a qspec is not defined.")
 	}
-	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.replySpec.BroadcastWithClientHandlerAndBroadcastOption))
+	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {

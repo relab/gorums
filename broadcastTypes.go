@@ -151,6 +151,12 @@ func WithoutUniquenessChecks() BroadcastOption {
 	}
 }
 
+// not sure if this is necessary because the implementer
+// can decide to run the broadcast in a go routine.
+func WithoutWaiting() BroadcastOption {
+	return func(b *BroadcastOptions) {}
+}
+
 type BroadcastOptions struct {
 	ServerAddresses      []string
 	GossipPercentage     float32

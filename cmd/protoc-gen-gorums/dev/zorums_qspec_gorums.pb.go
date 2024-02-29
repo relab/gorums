@@ -71,6 +71,27 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Request'.
 	QuorumCallWithBroadcastQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
+	// BroadcastWithClientHandler1QF is the quorum function for the BroadcastWithClientHandler1
+	// broadcastcall call method. The in parameter is the request object
+	// supplied to the BroadcastWithClientHandler1 method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	BroadcastWithClientHandler1QF(replies []*Response) (*Response, bool)
+
+	// BroadcastWithClientHandler2QF is the quorum function for the BroadcastWithClientHandler2
+	// broadcastcall call method. The in parameter is the request object
+	// supplied to the BroadcastWithClientHandler2 method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	BroadcastWithClientHandler2QF(replies []*ClientResponse) (*ClientResponse, bool)
+
+	// BroadcastWithClientHandlerAndBroadcastOptionQF is the quorum function for the BroadcastWithClientHandlerAndBroadcastOption
+	// broadcast call method. The in parameter is the request object
+	// supplied to the BroadcastWithClientHandlerAndBroadcastOption method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	BroadcastWithClientHandlerAndBroadcastOptionQF(replies []*ClientResponse) (*ClientResponse, bool)
+
 	// QuorumCallAsyncQF is the quorum function for the QuorumCallAsync
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallAsync method at call time, and may or may not

@@ -59,7 +59,7 @@ type clientServerImpl struct {
 	grpcServer *grpc.Server
 }
 
-func (c *Configuration) RegisterClientServer(listenAddr string, replySpec ReplySpec, opts ...grpc.ServerOption) error {
+func (c *Configuration) RegisterClientServer(listenAddr string, opts ...grpc.ServerOption) error {
 	srvImpl := &clientServerImpl{
 		grpcServer: grpc.NewServer(opts...),
 	}
@@ -71,6 +71,5 @@ func (c *Configuration) RegisterClientServer(listenAddr string, replySpec ReplyS
 	go srvImpl.grpcServer.Serve(lis)
 	srvImpl.ClientServer = srv
 	c.srv = srvImpl
-	c.replySpec = replySpec
 	return nil
 }

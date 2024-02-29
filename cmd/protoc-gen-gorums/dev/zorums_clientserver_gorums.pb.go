@@ -47,9 +47,3 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "",
 }
-
-type ReplySpec interface {
-	BroadcastWithClientHandler1(reqs []*Response) (*Response, bool)
-	BroadcastWithClientHandler2(reqs []*ClientResponse) (*ClientResponse, bool)
-	BroadcastWithClientHandlerAndBroadcastOption(reqs []*ClientResponse) (*ClientResponse, bool)
-}
