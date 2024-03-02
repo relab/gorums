@@ -19,7 +19,7 @@ type broadcastServer struct {
 	addr            string
 	broadcastedMsgs map[string]map[string]bool
 	methods         map[string]broadcastFunc
-	broadcastChan   chan broadcastMsg
+	broadcastChan   chan *broadcastMsg
 	responseChan    chan responseMsg
 	clientHandlers  map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
 	bNew            iBroadcastStruct
@@ -27,6 +27,7 @@ type broadcastServer struct {
 	clientReqs      *RequestMap
 	view            serverView
 	middlewares     []func(BroadcastMetadata) error
+	stopChan        chan struct{}
 	//mutex          sync.RWMutex
 	//returnedToClientMsgs map[string]bool
 	//clientReqs      map[string]*clientRequest
@@ -38,11 +39,12 @@ func newBroadcastServer() *broadcastServer {
 		id:              uuid.New().String(),
 		broadcastedMsgs: make(map[string]map[string]bool),
 		clientHandlers:  make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
-		broadcastChan:   make(chan broadcastMsg, 1000),
+		broadcastChan:   make(chan *broadcastMsg, 1000),
 		methods:         make(map[string]broadcastFunc),
 		responseChan:    make(chan responseMsg),
 		clientReqs:      NewRequestMap(),
 		middlewares:     make([]func(BroadcastMetadata) error, 0),
+		stopChan:        make(chan struct{}, 0),
 		//returnedToClientMsgs: make(map[string]bool),
 		//clientReqs:    make(map[string]*clientRequest),
 	}
@@ -60,30 +62,11 @@ func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string
 	return ok && broadcasted
 }
 
-func (srv *broadcastServer) broadcast(broadcastMessage broadcastMsg) {
-	srv.broadcastChan <- broadcastMessage
-}
-
 func (srv *broadcastServer) run() {
 	for msg := range srv.broadcastChan {
-		//*srv.BroadcastID = msg.GetBroadcastID()
-		//srv.c.StoreID(msgID-1)
-		req := msg.getRequest()
-		method := msg.getMethod()
-		srvAddrs := msg.getSrvAddrs()
-		//broadcastID := msg.getBroadcastID()
-		//ctx := context.Background()
-		metadata := msg.getMetadata()
-		ctx := context.WithValue(context.Background(), "broadcastID", metadata.BroadcastID)
-		// reqCtx := msg.GetContext()
-		// drop if ctx is cancelled? Or in broadcast method?
-		// if another function is called in broadcast, the request needs to be converted
-		//if convertFunc, ok := srv.conversions[method]; ok {
-		//	convertedReq := convertFunc(ctx, req)
-		//	srv.methods[method](ctx, convertedReq)
-		//	continue
-		//}
-		srv.methods[method](ctx, req, metadata, srvAddrs)
+		if handler, ok := srv.methods[msg.method]; ok {
+			handler(msg.ctx, msg.request, msg.metadata, msg.srvAddrs)
+		}
 		msg.setFinished()
 	}
 }
@@ -141,7 +124,6 @@ func (srv *broadcastServer) returnToClient(broadcastID string, resp ResponseType
 	srv.Lock()
 	defer srv.Unlock()
 	if !srv.alreadyReturnedToClient(broadcastID) {
-		//srv.setReturnedToClient(broadcastID, true)
 		srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
 	}
 }
@@ -154,38 +136,9 @@ func (srv *broadcastServer) timeoutClientResponse(ctx ServerCtx, in *Message, fi
 func (srv *broadcastServer) alreadyReturnedToClient(broadcastID string) bool {
 	req, ok := srv.clientReqs.Get(broadcastID)
 	return ok && req.handled
-	//srv.mutex.Lock()
-	//defer srv.mutex.Unlock()
-	//returned, ok := srv.returnedToClientMsgs[broadcastID]
-	//if !ok {
-	//	return true
-	//}
-	//return ok && returned
 }
 
-//func (srv *broadcastServer) setReturnedToClient(broadcastID string, val bool) {
-//	srv.mutex.Lock()
-//	defer srv.mutex.Unlock()
-//	srv.returnedToClientMsgs[broadcastID] = val
-//}
-
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
-	//srv.clientReqsMutex.Lock()
-	//defer srv.clientReqsMutex.Unlock()
-	//// do nothing if the request is already added
-	//_, ok := srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()]
-	//if ok {
-	//	return
-	//}
-	//srv.setReturnedToClient(metadata.BroadcastMsg.GetBroadcastID(), false)
-	//srv.clientReqs[metadata.BroadcastMsg.GetBroadcastID()] = &clientRequest{
-	//	id:       uuid.New().String(),
-	//	ctx:      ctx,
-	//	finished: finished,
-	//	metadata: metadata,
-	//	status:   unhandled,
-	//	handled:  false,
-	//}
 	srv.clientReqs.Add(metadata.BroadcastMsg.GetBroadcastID(), clientRequest{
 		id:       uuid.New().String(),
 		ctx:      ctx,
@@ -266,17 +219,7 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 	}
 }
 
-type broadcastMsg interface {
-	getFrom() string
-	getRequest() RequestTypes
-	getMetadata() BroadcastMetadata
-	getMethod() string
-	getBroadcastID() string
-	getSrvAddrs() []string
-	setFinished()
-}
-
-type broadcastMessage struct {
+type broadcastMsg struct {
 	from        string
 	request     RequestTypes
 	method      string
@@ -284,42 +227,21 @@ type broadcastMessage struct {
 	broadcastID string
 	srvAddrs    []string
 	finished    chan<- struct{}
+	ctx         context.Context
 }
 
-func (b *broadcastMessage) getFrom() string {
-	return b.from
-}
-
-func (b *broadcastMessage) getRequest() RequestTypes {
-	return b.request
-}
-
-func (b *broadcastMessage) getMetadata() BroadcastMetadata {
-	return b.metadata
-}
-func (b *broadcastMessage) getMethod() string {
-	return b.method
-}
-
-func (b *broadcastMessage) getBroadcastID() string {
-	return b.broadcastID
-}
-
-func (b *broadcastMessage) setFinished() {
+func (b *broadcastMsg) setFinished() {
 	close(b.finished)
 }
 
-func (b *broadcastMessage) getSrvAddrs() []string {
-	return b.srvAddrs
-}
-
-func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string, finished chan<- struct{}) *broadcastMessage {
-	return &broadcastMessage{
+func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string, finished chan<- struct{}) *broadcastMsg {
+	return &broadcastMsg{
 		request:     req,
 		method:      method,
 		metadata:    metadata,
 		broadcastID: broadcastID,
 		srvAddrs:    srvAddrs,
 		finished:    finished,
+		ctx:         context.WithValue(context.Background(), BroadcastID, metadata.BroadcastID),
 	}
 }

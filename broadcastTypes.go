@@ -36,7 +36,7 @@ type BroadcastReturnToClientHandlerFunc func(resp ResponseTypes, err error, meta
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
-type implementationFuncB[T RequestTypes, V iBroadcastStruct] func(ServerCtx, T, V)
+type implementationFunc[T RequestTypes, V iBroadcastStruct] func(ServerCtx, T, V)
 
 type responseMsg interface {
 	getResponse() ResponseTypes

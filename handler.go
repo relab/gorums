@@ -20,7 +20,7 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 	}
 }
 
-func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFuncB[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
 		// Maybe implement a per function lock?
@@ -99,7 +99,7 @@ func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTyp
 
 		// how to define individual request message to each node?
 		//	- maybe create one request for each node and send a list of requests?
-		srv.broadcast(newBroadcastMessage(metadata, req, method, metadata.BroadcastID, options.ServerAddresses, finished))
+		srv.broadcastChan <- newBroadcastMessage(metadata, req, method, metadata.BroadcastID, options.ServerAddresses, finished)
 		<-finished
 	}
 }
