@@ -128,7 +128,7 @@ func (srv *broadcastServer) registerReturnToClientHandler(method string, handler
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.methods[method] = func(ctx context.Context, in RequestTypes, md BroadcastMetadata, srvAddrs []string) {
+	srv.handlers[method] = func(ctx context.Context, in RequestTypes, md BroadcastMetadata, srvAddrs []string) {
 		cd := broadcastCallData{
 			Message:         in,
 			Method:          method,

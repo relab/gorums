@@ -18,7 +18,7 @@ type broadcastServer struct {
 	id              string
 	addr            string
 	broadcastedMsgs map[string]map[string]bool
-	methods         map[string]broadcastFunc
+	handlers        map[string]broadcastFunc
 	broadcastChan   chan *broadcastMsg
 	responseChan    chan responseMsg
 	clientHandlers  map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
@@ -40,7 +40,7 @@ func newBroadcastServer() *broadcastServer {
 		broadcastedMsgs: make(map[string]map[string]bool),
 		clientHandlers:  make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
 		broadcastChan:   make(chan *broadcastMsg, 1000),
-		methods:         make(map[string]broadcastFunc),
+		handlers:        make(map[string]broadcastFunc),
 		responseChan:    make(chan responseMsg),
 		clientReqs:      NewRequestMap(),
 		middlewares:     make([]func(BroadcastMetadata) error, 0),
@@ -64,7 +64,7 @@ func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string
 
 func (srv *broadcastServer) run() {
 	for msg := range srv.broadcastChan {
-		if handler, ok := srv.methods[msg.method]; ok {
+		if handler, ok := srv.handlers[msg.method]; ok {
 			handler(msg.ctx, msg.request, msg.metadata, msg.srvAddrs)
 		}
 		msg.setFinished()
