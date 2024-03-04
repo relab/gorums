@@ -18,25 +18,25 @@ const (
 )
 
 func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
-	data := gorums.NewBroadcastOptions()
+	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
-		opt(&data)
+		opt(&options)
 	}
-	b.sp.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, b.metadata, data)
+	b.sp.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, b.metadata, options)
 }
 
 func (b *Broadcast) BroadcastInternal(req *Request, opts ...gorums.BroadcastOption) {
-	data := gorums.NewBroadcastOptions()
+	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
-		opt(&data)
+		opt(&options)
 	}
-	b.sp.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, b.metadata, data)
+	b.sp.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, b.metadata, options)
 }
 
 func (b *Broadcast) BroadcastWithClientHandlerAndBroadcastOption(req *Request, opts ...gorums.BroadcastOption) {
-	data := gorums.NewBroadcastOptions()
+	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
-		opt(&data)
+		opt(&options)
 	}
-	b.sp.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, b.metadata, data)
+	b.sp.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, b.metadata, options)
 }

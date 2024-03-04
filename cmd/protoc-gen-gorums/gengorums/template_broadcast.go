@@ -7,11 +7,11 @@ var broadcastVar = `
 var broadcastSignature = `func (b *Broadcast) {{.Method.GoName}}(req *{{in .GenFile .Method}}, opts... gorums.BroadcastOption) {`
 
 var broadcastBody = `
-	data := gorums.NewBroadcastOptions()
+	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
-		opt(&data)
+		opt(&options)
 	}
-	b.sp.BroadcastHandler("{{.Method.Desc.FullName}}", req, b.metadata, data)
+	b.sp.BroadcastHandler("{{.Method.Desc.FullName}}", req, b.metadata, options)
 }
 `
 

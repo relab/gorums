@@ -62,7 +62,19 @@ func (b *testBroadcast) Broadcast(req *testBroadcastRequest, opts ...BroadcastOp
 	for _, opt := range opts {
 		opt(&data)
 	}
-	b.sp.BroadcastHandler("broadcast", req, b.metadata, data)
+	b.sp.BroadcastHandler("Broadcast", req, b.metadata, data)
+}
+
+func (b *testBroadcast) CanBroadcast(req *testBroadcastRequest, opts ...BroadcastOption) {
+	data := NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&data)
+	}
+	b.sp.BroadcastHandler("CanBroadcast", req, b.metadata, data)
+}
+
+func (b *testBroadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
+	b.sp.ReturnToClientHandler(resp, err, b.metadata)
 }
 
 //
@@ -175,6 +187,10 @@ type testBroadcastServer struct {
 	req     *testBroadcastRequest
 }
 
+func (srv *testBroadcastServer) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
+	srv.RetToClient(resp, err, broadcastID)
+}
+
 func newTestBroadcastServer() *testBroadcastServer {
 	srv := &testBroadcastServer{
 		Server: NewServer(),
@@ -192,6 +208,18 @@ func (srv *testBroadcastServer) Broadcast(ctx ServerCtx, request *testBroadcastR
 	srv.numMsgs++
 	srv.req = request
 	//broadcast.Broadcast(&testBroadcastRequest{})
+}
+
+func (srv *testBroadcastServer) CanBroadcast(ctx ServerCtx, request *testBroadcastRequest, broadcast *testBroadcast) {
+	srv.numMsgs++
+	srv.req = request
+	go broadcast.Broadcast(&testBroadcastRequest{})
+}
+
+func (srv *testBroadcastServer) SendToClientBroadcast(ctx ServerCtx, request *testBroadcastRequest, broadcast *testBroadcast) {
+	srv.numMsgs++
+	srv.req = request
+	go broadcast.SendToClient(&testBroadcastRequest{}, nil)
 }
 
 func createReq(val string) (ServerCtx, *Message, chan<- *Message) {
@@ -216,22 +244,74 @@ func createReq(val string) (ServerCtx, *Message, chan<- *Message) {
 }
 
 func TestBroadcastHandler(t *testing.T) {
-	handlerName := "broadcast"
+	handlerName := "Broadcast"
 
 	// create a server
 	srv := newTestBroadcastServer()
 	// register the broadcast handler. Similar to proto option: broadcast
 	srv.RegisterHandler(handlerName, BroadcastHandler(srv.Broadcast, srv.Server))
 
-	// create a request
 	vals := []string{"test1", "test2", "test3"}
 	for _, val := range vals {
+		// create the request
 		srvCtx, req, finished := createReq(val)
 		// call the server handler
 		srv.srv.handlers[handlerName](srvCtx, req, finished)
 
 		if srv.req.value != val {
 			t.Errorf("request.value = %s, expected %s", srv.req.value, val)
+		}
+	}
+}
+
+func TestCanBroadcastHandler(t *testing.T) {
+	handlerName := "CanBroadcast"
+
+	// create a server
+	srv := newTestBroadcastServer()
+	// register the broadcast handler. Similar to proto option: broadcast
+	srv.RegisterHandler(handlerName, BroadcastHandler(srv.CanBroadcast, srv.Server))
+
+	vals := []string{"test1", "test2", "test3"}
+	for _, val := range vals {
+		// create the request
+		srvCtx, req, finished := createReq(val)
+		// call the server handler
+		srv.srv.handlers[handlerName](srvCtx, req, finished)
+		broadcastMsg := <-srv.broadcastSrv.broadcastChan
+
+		if broadcastMsg == nil {
+			t.Errorf("broadcastMsg should not be nil")
+			continue
+		}
+		if broadcastMsg.broadcastID != req.Metadata.BroadcastMsg.BroadcastID {
+			t.Errorf("broadcastID = %v, expected %s", broadcastMsg.broadcastID, req.Metadata.BroadcastMsg.BroadcastID)
+		}
+	}
+}
+
+func TestBroadcastSendToClient(t *testing.T) {
+	handlerName := "SendToClientBroadcast"
+
+	// create a server
+	srv := newTestBroadcastServer()
+	// register the broadcast handler. Similar to proto option: broadcast
+	srv.RegisterHandler(handlerName, BroadcastHandler(srv.SendToClientBroadcast, srv.Server))
+
+	vals := []string{"test1", "test2", "test3"}
+	for _, val := range vals {
+		// create the request
+		srvCtx, req, finished := createReq(val)
+		// call the server handler
+		srv.srv.handlers[handlerName](srvCtx, req, finished)
+		responseMsg := <-srv.broadcastSrv.responseChan
+
+		if responseMsg == nil {
+			t.Errorf("responseMsg should not be nil")
+			continue
+		}
+		if responseMsg.getBroadcastID() != req.Metadata.BroadcastMsg.BroadcastID {
+			t.Errorf("broadcastID = %v, expected %s", responseMsg.getBroadcastID(), req.Metadata.BroadcastMsg.BroadcastID)
 		}
 	}
 }

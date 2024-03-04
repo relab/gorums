@@ -38,14 +38,6 @@ type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, 
 
 type implementationFunc[T RequestTypes, V iBroadcastStruct] func(ServerCtx, T, V)
 
-type responseMsg interface {
-	getResponse() ResponseTypes
-	getError() error
-	getBroadcastID() string
-	valid() bool
-	getType() respType
-}
-
 type respType int
 
 const (
@@ -55,7 +47,7 @@ const (
 	done
 )
 
-type responseMessage struct {
+type responseMsg struct {
 	response    ResponseTypes
 	err         error
 	broadcastID string
@@ -64,8 +56,8 @@ type responseMessage struct {
 	respType    respType
 }
 
-func newResponseMessage(response ResponseTypes, err error, broadcastID string, respType respType, ttl time.Duration) *responseMessage {
-	return &responseMessage{
+func newResponseMessage(response ResponseTypes, err error, broadcastID string, respType respType, ttl time.Duration) *responseMsg {
+	return &responseMsg{
 		response:    response,
 		err:         err,
 		broadcastID: broadcastID,
@@ -75,23 +67,23 @@ func newResponseMessage(response ResponseTypes, err error, broadcastID string, r
 	}
 }
 
-func (r *responseMessage) getResponse() ResponseTypes {
+func (r *responseMsg) getResponse() ResponseTypes {
 	return r.response
 }
 
-func (r *responseMessage) getError() error {
+func (r *responseMsg) getError() error {
 	return r.err
 }
 
-func (r *responseMessage) getBroadcastID() string {
+func (r *responseMsg) getBroadcastID() string {
 	return r.broadcastID
 }
 
-func (r *responseMessage) valid() bool {
+func (r *responseMsg) valid() bool {
 	return r.respType == clientResponse && time.Since(r.timestamp) <= r.ttl
 }
 
-func (r *responseMessage) getType() respType {
+func (r *responseMsg) getType() respType {
 	return r.respType
 }
 
@@ -260,13 +252,13 @@ func (list *RequestMap) Get(identifier string) (clientRequest, bool) {
 	return elem, ok
 }
 
-func (list *RequestMap) Set(identifier string, elem clientRequest) {
-	list.mutex.Lock()
-	defer list.mutex.Unlock()
-	list.data[identifier] = elem
-}
+//func (list *RequestMap) Set(identifier string, elem clientRequest) {
+//	list.mutex.Lock()
+//	defer list.mutex.Unlock()
+//	list.data[identifier] = elem
+//}
 
-func (list *RequestMap) GetSet(identifier string) (clientRequest, bool) {
+func (list *RequestMap) GetAndSetHandled(identifier string) (clientRequest, bool) {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 	elem, ok := list.data[identifier]

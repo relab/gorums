@@ -22,10 +22,6 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 
 func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
-		// this will block all broadcast gRPC functions. E.g. if Write and Read are both broadcast gRPC functions. Only one Read or Write can be executed at a time.
-		// Maybe implement a per function lock?
-		srv.broadcastSrv.Lock()
-		defer srv.broadcastSrv.Unlock()
 		req := in.Message.(T)
 		defer ctx.Release()
 		doneChan := make(chan struct{})
@@ -53,7 +49,9 @@ func BroadcastHandler[T RequestTypes, V iBroadcastStruct](impl implementationFun
 			//	go srv.broadcastSrv.timeoutClientResponse(ctx, in, finished)
 			//}
 		}()
-		<-doneChan
+		if !srv.broadcastSrv.async {
+			<-doneChan
+		}
 	}
 }
 
@@ -62,12 +60,6 @@ func addOriginMethod(md *ordering.Metadata) {
 		return
 	}
 	md.BroadcastMsg.OriginMethod = md.Method
-	//tmp := strings.Split(md.Method, ".")
-	//m := ""
-	//if len(tmp) >= 1 {
-	//	m = tmp[len(tmp)-1]
-	//}
-	//md.BroadcastMsg.OriginMethod = "Client" + m
 }
 
 func (srv *broadcastServer) validateMessage(in *Message) error {
@@ -93,14 +85,17 @@ func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTyp
 	if len(opts) > 0 {
 		options = opts[0]
 	}
-	// maybe let this be an option for the implementer?
 	if !srv.alreadyBroadcasted(metadata.BroadcastID, method) || options.OmitUniquenessChecks {
 		finished := make(chan struct{})
-
-		// how to define individual request message to each node?
-		//	- maybe create one request for each node and send a list of requests?
 		srv.broadcastChan <- newBroadcastMessage(metadata, req, method, metadata.BroadcastID, options.ServerAddresses, finished)
-		<-finished
+
+		// not broadcasting in a go routine can lead to deadlock. All handlers are run sync
+		// and thus the server have to return from the handler in order to process the next
+		// request. However, the async option lets each handler run in separate go routines
+		// and thus can enable broadcasting in a synchronous manner.
+		if srv.async {
+			<-finished
+		}
 	}
 }
 

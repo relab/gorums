@@ -2,9 +2,6 @@ package gorums
 
 import (
 	"context"
-	"errors"
-	"log"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,13 +11,12 @@ import (
 )
 
 type broadcastServer struct {
-	sync.RWMutex
 	id              string
 	addr            string
 	broadcastedMsgs map[string]map[string]bool
 	handlers        map[string]broadcastFunc
 	broadcastChan   chan *broadcastMsg
-	responseChan    chan responseMsg
+	responseChan    chan *responseMsg
 	clientHandlers  map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
 	bNew            iBroadcastStruct
 	timeout         time.Duration
@@ -28,10 +24,7 @@ type broadcastServer struct {
 	view            serverView
 	middlewares     []func(BroadcastMetadata) error
 	stopChan        chan struct{}
-	//mutex          sync.RWMutex
-	//returnedToClientMsgs map[string]bool
-	//clientReqs      map[string]*clientRequest
-	//clientReqsMutex sync.Mutex
+	async           bool
 }
 
 func newBroadcastServer() *broadcastServer {
@@ -41,12 +34,10 @@ func newBroadcastServer() *broadcastServer {
 		clientHandlers:  make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
 		broadcastChan:   make(chan *broadcastMsg, 1000),
 		handlers:        make(map[string]broadcastFunc),
-		responseChan:    make(chan responseMsg),
+		responseChan:    make(chan *responseMsg),
 		clientReqs:      NewRequestMap(),
 		middlewares:     make([]func(BroadcastMetadata) error, 0),
 		stopChan:        make(chan struct{}, 0),
-		//returnedToClientMsgs: make(map[string]bool),
-		//clientReqs:    make(map[string]*clientRequest),
 	}
 }
 
@@ -77,26 +68,25 @@ func (srv *broadcastServer) handleClientResponses() {
 	}
 }
 
-func (srv *broadcastServer) handle(response responseMsg) {
+func (srv *broadcastServer) handle(response *responseMsg) {
 	broadcastID := response.getBroadcastID()
-	req, handled := srv.clientReqs.GetSet(broadcastID)
+	req, handled := srv.clientReqs.GetAndSetHandled(broadcastID)
 	if handled {
 		// this server has not received a request directly from a client
 		// hence, the response should be ignored
 		// already handled and can not be removed yet. It is possible to get duplicates.
 		return
 	}
-	select {
-	case <-req.ctx.Done():
-		// client request has been cancelled by client
-		log.Println("CLIENT REQUEST HAS BEEN CANCELLED")
-		return
-	default:
-	}
+	//select {
+	//case <-req.ctx.Done():
+	//	// client request has been cancelled by client
+	//	log.Println("CLIENT REQUEST HAS BEEN CANCELLED")
+	//	return
+	//default:
+	//}
 	if !response.valid() {
 		// the response is old and should have timed out, but may not due to scheduling.
 		// the timeout msg should arrive soon.
-		log.Println("NOT VALID")
 		return
 	}
 	if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok && req.metadata.BroadcastMsg.OriginAddr != "" {
@@ -121,17 +111,17 @@ func (srv *broadcastServer) clientReturn(resp ResponseTypes, err error, metadata
 }
 
 func (srv *broadcastServer) returnToClient(broadcastID string, resp ResponseTypes, err error) {
-	srv.Lock()
-	defer srv.Unlock()
+	//srv.Lock()
+	//defer srv.Unlock()
 	if !srv.alreadyReturnedToClient(broadcastID) {
 		srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
 	}
 }
 
-func (srv *broadcastServer) timeoutClientResponse(ctx ServerCtx, in *Message, finished chan<- *Message) {
-	time.Sleep(srv.timeout)
-	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.BroadcastMsg.GetBroadcastID(), timeout, srv.timeout)
-}
+//func (srv *broadcastServer) timeoutClientResponse(ctx ServerCtx, in *Message, finished chan<- *Message) {
+//	time.Sleep(srv.timeout)
+//	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.BroadcastMsg.GetBroadcastID(), timeout, srv.timeout)
+//}
 
 func (srv *broadcastServer) alreadyReturnedToClient(broadcastID string) bool {
 	req, ok := srv.clientReqs.Get(broadcastID)
