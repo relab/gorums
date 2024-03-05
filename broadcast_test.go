@@ -39,7 +39,7 @@ func (t *testBroadcastResponse) ProtoReflect() protoreflect.Message {
 //		}
 //	}
 type testBroadcast struct {
-	*BroadcastStruct
+	*Broadcaster
 	sp       *SpBroadcast
 	metadata BroadcastMetadata
 }
@@ -197,8 +197,8 @@ func newTestBroadcastServer() *testBroadcastServer {
 		req:    &testBroadcastRequest{},
 	}
 	b := &testBroadcast{
-		BroadcastStruct: NewBroadcastStruct(),
-		sp:              NewSpBroadcastStruct(),
+		Broadcaster: NewBroadcaster(),
+		sp:          NewSpBroadcastStruct(),
 	}
 	srv.RegisterBroadcastStruct(b, configureHandlers(b), configureMetadata(b))
 	return srv

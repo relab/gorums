@@ -203,11 +203,7 @@ func (o nodeListBroadcast) newConfig(mgr *RawManager) (nodes RawConfiguration, e
 			return nil, ConfigCreationError(err)
 		}
 		if n, found := mgr.Node(node.ID()); !found {
-			if mgr.tryAddNode(node) != nil {
-				node.connected = false
-			} else {
-				node.connected = true
-			}
+			mgr.tryAddNode(node)
 			// we add the node regardless. we will try to connect to it later.
 			//if err != nil {
 			//	continue

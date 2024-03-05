@@ -7,6 +7,7 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -22,12 +23,12 @@ const nilAngleString = "<nil>"
 // You should use the generated `Node` struct instead.
 type RawNode struct {
 	// Only assigned at creation.
-	id        uint32
-	addr      string
-	conn      *grpc.ClientConn
-	cancel    func()
-	mgr       *RawManager
-	connected bool
+	id     uint32
+	addr   string
+	conn   *grpc.ClientConn
+	cancel func()
+	mgr    *RawManager
+	mu     sync.RWMutex
 
 	// the default channel
 	channel *channel
@@ -42,9 +43,8 @@ func NewRawNode(addr string) (*RawNode, error) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
 	return &RawNode{
-		id:        h.Sum32(),
-		addr:      tcpAddr.String(),
-		connected: false,
+		id:   h.Sum32(),
+		addr: tcpAddr.String(),
 	}, nil
 }
 
@@ -73,6 +73,30 @@ func (n *RawNode) connect(mgr *RawManager) error {
 	n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
 	if err != nil {
 		return fmt.Errorf("dialing node failed: %w", err)
+	}
+	md := n.mgr.opts.metadata.Copy()
+	if n.mgr.opts.perNodeMD != nil {
+		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
+	}
+	// a context for all of the streams
+	ctx, n.cancel = context.WithCancel(context.Background())
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	if err = n.channel.connect(ctx, n.conn); err != nil {
+		return fmt.Errorf("starting stream failed: %w", err)
+	}
+	return nil
+}
+
+// reconnect to this node and associate it with the manager.
+func (n *RawNode) reconnect() error {
+	var err error
+	ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
+	defer cancel()
+	if n.conn == nil {
+		n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
+		if err != nil {
+			return fmt.Errorf("dialing node failed: %w", err)
+		}
 	}
 	md := n.mgr.opts.metadata.Copy()
 	if n.mgr.opts.perNodeMD != nil {

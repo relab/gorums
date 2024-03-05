@@ -1,7 +1,7 @@
 package gorums
 
 import (
-	"context"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,31 +13,34 @@ import (
 type broadcastServer struct {
 	id              string
 	addr            string
+	peers           []string
+	view            serverView
+	mgr             *RawManager
 	broadcastedMsgs map[string]map[string]bool
 	handlers        map[string]broadcastFunc
 	broadcastChan   chan *broadcastMsg
 	responseChan    chan *responseMsg
 	clientHandlers  map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
-	bNew            iBroadcastStruct
+	broadcaster     broadcaster
 	timeout         time.Duration
 	clientReqs      *RequestMap
-	view            serverView
-	middlewares     []func(BroadcastMetadata) error
 	stopChan        chan struct{}
 	async           bool
+	logger          *slog.Logger
 }
 
-func newBroadcastServer() *broadcastServer {
+func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 	return &broadcastServer{
 		id:              uuid.New().String(),
+		peers:           make([]string, 0),
 		broadcastedMsgs: make(map[string]map[string]bool),
 		clientHandlers:  make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
 		broadcastChan:   make(chan *broadcastMsg, 1000),
 		handlers:        make(map[string]broadcastFunc),
 		responseChan:    make(chan *responseMsg),
 		clientReqs:      NewRequestMap(),
-		middlewares:     make([]func(BroadcastMetadata) error, 0),
 		stopChan:        make(chan struct{}, 0),
+		logger:          logger,
 	}
 }
 
@@ -69,6 +72,14 @@ func (srv *broadcastServer) handleClientResponses() {
 }
 
 func (srv *broadcastServer) handle(response *responseMsg) {
+	// REEVALUATE THIS:
+	// If it is used in gossiping, then ok.
+	// Otherwise, not ok. (e.g. when timeout)
+	if !response.valid() {
+		// the response is old and should have timed out, but may not due to scheduling.
+		// the timeout msg should arrive soon.
+		return
+	}
 	broadcastID := response.getBroadcastID()
 	req, handled := srv.clientReqs.GetAndSetHandled(broadcastID)
 	if handled {
@@ -84,11 +95,6 @@ func (srv *broadcastServer) handle(response *responseMsg) {
 	//	return
 	//default:
 	//}
-	if !response.valid() {
-		// the response is old and should have timed out, but may not due to scheduling.
-		// the timeout msg should arrive soon.
-		return
-	}
 	if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok && req.metadata.BroadcastMsg.OriginAddr != "" {
 		handler(req.metadata.BroadcastMsg.OriginAddr, broadcastID, response.getResponse())
 	} else if req.metadata.BroadcastMsg.Sender == BroadcastClient {
@@ -96,23 +102,11 @@ func (srv *broadcastServer) handle(response *responseMsg) {
 	}
 }
 
-func (srv *broadcastServer) runMiddleware(metadata BroadcastMetadata) error {
-	for _, middleware := range srv.middlewares {
-		err := middleware(metadata)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (srv *broadcastServer) clientReturn(resp ResponseTypes, err error, metadata BroadcastMetadata) {
 	srv.returnToClient(metadata.BroadcastID, resp, err)
 }
 
 func (srv *broadcastServer) returnToClient(broadcastID string, resp ResponseTypes, err error) {
-	//srv.Lock()
-	//defer srv.Unlock()
 	if !srv.alreadyReturnedToClient(broadcastID) {
 		srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
 	}
@@ -137,101 +131,4 @@ func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx Se
 		status:   unhandled,
 		handled:  false,
 	})
-}
-
-// broadcastCallData holds the message, destination nodes, method identifier,
-// and other information necessary to perform the various quorum call types
-// supported by Gorums.
-//
-// This struct should be used by generated code only.
-type broadcastCallData struct {
-	Message         protoreflect.ProtoMessage
-	Method          string
-	BroadcastID     string // a unique identifier for the current broadcast request
-	Sender          string
-	SenderID        string
-	SenderAddr      string
-	OriginID        string
-	OriginAddr      string
-	OriginMethod    string
-	ServerAddresses []string
-}
-
-func (bcd *broadcastCallData) inServerAddresses(addr string) bool {
-	if len(bcd.ServerAddresses) <= 0 {
-		return true
-	}
-	for _, srvAddr := range bcd.ServerAddresses {
-		if addr == srvAddr {
-			return true
-		}
-	}
-	return false
-}
-
-// broadcastCall performs a multicast call on the configuration.
-//
-// This method should be used by generated code only.
-func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData) {
-	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		Sender:       d.Sender,
-		BroadcastID:  d.BroadcastID,
-		SenderID:     d.SenderID,
-		SenderAddr:   d.SenderAddr,
-		OriginID:     d.OriginID,
-		OriginAddr:   d.OriginAddr,
-		OriginMethod: d.OriginMethod,
-	}}
-	o := getCallOptions(E_Broadcast, nil)
-
-	replyChan := make(chan response, len(c))
-	sentMsgs := 0
-	for _, n := range c {
-		if !d.inServerAddresses(n.addr) {
-			continue
-		}
-		if !n.connected {
-			if n.connect(n.mgr) != nil {
-				continue
-			} else {
-				n.connected = true
-			}
-		}
-		sentMsgs++
-		msg := d.Message
-		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
-	}
-
-	// wait until all have requests have been sent
-	for sentMsgs > 0 {
-		<-replyChan
-		sentMsgs--
-	}
-}
-
-type broadcastMsg struct {
-	from        string
-	request     RequestTypes
-	method      string
-	metadata    BroadcastMetadata
-	broadcastID string
-	srvAddrs    []string
-	finished    chan<- struct{}
-	ctx         context.Context
-}
-
-func (b *broadcastMsg) setFinished() {
-	close(b.finished)
-}
-
-func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string, finished chan<- struct{}) *broadcastMsg {
-	return &broadcastMsg{
-		request:     req,
-		method:      method,
-		metadata:    metadata,
-		broadcastID: broadcastID,
-		srvAddrs:    srvAddrs,
-		finished:    finished,
-		ctx:         context.WithValue(context.Background(), BroadcastID, metadata.BroadcastID),
-	}
 }

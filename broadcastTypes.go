@@ -36,7 +36,7 @@ type BroadcastReturnToClientHandlerFunc func(resp ResponseTypes, err error, meta
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
-type implementationFunc[T RequestTypes, V iBroadcastStruct] func(ServerCtx, T, V)
+type implementationFunc[T RequestTypes, V broadcaster] func(ServerCtx, T, V)
 
 type respType int
 
@@ -173,25 +173,25 @@ func NewBroadcastOptions() BroadcastOptions {
 	return BroadcastOptions{}
 }
 
-type iBroadcastStruct interface {
+type broadcaster interface {
 	setMetadataHandler(func(metadata BroadcastMetadata))
 	setMetadata(metadata BroadcastMetadata)
 }
 
-type BroadcastStruct struct {
+type Broadcaster struct {
 	metadataHandler func(metadata BroadcastMetadata)
 }
 
-func (b *BroadcastStruct) setMetadataHandler(handler func(metadata BroadcastMetadata)) {
+func (b *Broadcaster) setMetadataHandler(handler func(metadata BroadcastMetadata)) {
 	b.metadataHandler = handler
 }
 
-func (b *BroadcastStruct) setMetadata(metadata BroadcastMetadata) {
+func (b *Broadcaster) setMetadata(metadata BroadcastMetadata) {
 	b.metadataHandler(metadata)
 }
 
-func NewBroadcastStruct() *BroadcastStruct {
-	return &BroadcastStruct{}
+func NewBroadcaster() *Broadcaster {
+	return &Broadcaster{}
 }
 
 type BroadcastMetadata struct {
@@ -211,7 +211,6 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	if len(tmp) >= 1 {
 		m = tmp[len(tmp)-1]
 	}
-
 	return BroadcastMetadata{
 		BroadcastID:  md.BroadcastMsg.BroadcastID,
 		Sender:       md.BroadcastMsg.Sender,
@@ -274,4 +273,31 @@ func (list *RequestMap) GetAndSetHandled(identifier string) (clientRequest, bool
 	elem.handled = true
 	list.data[identifier] = elem
 	return elem, false
+}
+
+type broadcastMsg struct {
+	from        string
+	request     RequestTypes
+	method      string
+	metadata    BroadcastMetadata
+	broadcastID string
+	srvAddrs    []string
+	finished    chan<- struct{}
+	ctx         context.Context
+}
+
+func (b *broadcastMsg) setFinished() {
+	close(b.finished)
+}
+
+func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string, finished chan<- struct{}) *broadcastMsg {
+	return &broadcastMsg{
+		request:     req,
+		method:      method,
+		metadata:    metadata,
+		broadcastID: broadcastID,
+		srvAddrs:    srvAddrs,
+		finished:    finished,
+		ctx:         context.WithValue(context.Background(), BroadcastID, metadata.BroadcastID),
+	}
 }

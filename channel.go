@@ -51,6 +51,7 @@ type channel struct {
 	cancelStream    context.CancelFunc
 	responseRouters map[uint64]responseRouter
 	responseMut     sync.Mutex
+	connected       bool
 }
 
 func newChannel(n *RawNode) *channel {
@@ -61,6 +62,7 @@ func newChannel(n *RawNode) *channel {
 		latency:         -1 * time.Second,
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouters: make(map[uint64]responseRouter),
+		connected:       false,
 	}
 }
 
@@ -75,6 +77,7 @@ func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	}
 	go c.sendMsgs()
 	go c.recvMsgs()
+	c.setConnected(true)
 	return nil
 }
 
@@ -258,6 +261,18 @@ func (c *channel) channelLatency() time.Duration {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.latency
+}
+
+func (c *channel) setConnected(connected bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.connected = connected
+}
+
+func (c *channel) isConnected() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.connected && !c.streamBroken.get()
 }
 
 type atomicFlag struct {

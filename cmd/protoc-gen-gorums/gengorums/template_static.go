@@ -160,21 +160,21 @@ func NewServer() *Server {
 		gorums.NewServer(),
 	}
 	b := &Broadcast{
-		BroadcastStruct: gorums.NewBroadcastStruct(),
-		sp:              gorums.NewSpBroadcastStruct(),
+		Broadcaster: gorums.NewBroadcaster(),
+		sp:          gorums.NewSpBroadcastStruct(),
 	}
 	srv.RegisterBroadcastStruct(b, configureHandlers(b), configureMetadata(b))
 	return srv
 }
 
-func (srv *Server) SetView(ownAddr string, srvAddrs []string, opts ...gorums.ManagerOption) error {
-	err := srv.RegisterView(ownAddr, srvAddrs, opts...)
+func (srv *Server) SetView(srvAddrs []string, opts ...gorums.ManagerOption) error {
+	err := srv.RegisterView(srvAddrs, opts...)
 	srv.ListenForBroadcast()
 	return err
 }
 
 type Broadcast struct {
-	*gorums.BroadcastStruct
+	*gorums.Broadcaster
 	sp       *gorums.SpBroadcast
 	metadata gorums.BroadcastMetadata
 }

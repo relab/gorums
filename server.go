@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"sync"
 
@@ -151,10 +152,11 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
+	logger := slog.Default()
 	s := &Server{
 		srv:          newOrderingServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
-		broadcastSrv: newBroadcastServer(),
+		broadcastSrv: newBroadcastServer(logger),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
@@ -174,6 +176,8 @@ func (s *Server) RegisterClientHandler(method string, handler func(addr, broadca
 
 // Serve starts serving on the listener.
 func (s *Server) Serve(listener net.Listener) error {
+	s.broadcastSrv.addr = listener.Addr().String()
+	s.configureView()
 	return s.grpcServer.Serve(listener)
 }
 
