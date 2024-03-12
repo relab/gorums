@@ -17,7 +17,7 @@ type QuorumCallData struct {
 	Method         string
 	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
 	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
-	Sender         string
+	SenderType     string
 	OriginAddr     string
 	BroadcastID    string // a unique identifier for the current message
 }
@@ -28,7 +28,7 @@ type QuorumCallData struct {
 func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		Sender: d.Sender, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
+		SenderType: d.SenderType, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
 	}}
 
 	replyChan := make(chan response, expectedReplies)

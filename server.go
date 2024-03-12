@@ -177,7 +177,6 @@ func (s *Server) RegisterClientHandler(method string, handler func(addr, broadca
 // Serve starts serving on the listener.
 func (s *Server) Serve(listener net.Listener) error {
 	s.broadcastSrv.addr = listener.Addr().String()
-	s.configureView()
 	return s.grpcServer.Serve(listener)
 }
 

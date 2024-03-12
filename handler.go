@@ -3,12 +3,10 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -42,10 +40,6 @@ func BroadcastHandler[T RequestTypes, V broadcaster](impl implementationFunc[T, 
 			// add the request as a client request
 			srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
 			impl(ctx, req, srv.broadcastSrv.broadcaster.(V))
-			//// verify whether a server or a client sent the request
-			//if in.Metadata.BroadcastMsg.Sender == BroadcastClient {
-			//	go srv.broadcastSrv.timeoutClientResponse(ctx, in, finished)
-			//}
 		}()
 		if !srv.broadcastSrv.async {
 			<-doneChan
@@ -54,7 +48,7 @@ func BroadcastHandler[T RequestTypes, V broadcaster](impl implementationFunc[T, 
 }
 
 func addOriginMethod(md *ordering.Metadata) {
-	if md.BroadcastMsg.Sender != BroadcastClient {
+	if md.BroadcastMsg.SenderType != BroadcastClient {
 		return
 	}
 	md.BroadcastMsg.OriginMethod = md.Method
@@ -122,10 +116,8 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			Message:         in,
 			Method:          method,
 			BroadcastID:     md.BroadcastID,
-			Sender:          BroadcastServer,
+			SenderType:      BroadcastServer,
 			SenderAddr:      srv.addr,
-			SenderID:        srv.id,
-			OriginID:        md.OriginID,
 			OriginAddr:      md.OriginAddr,
 			OriginMethod:    md.OriginMethod,
 			ServerAddresses: srvAddrs,
@@ -134,44 +126,73 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 	}
 }
 
-func (srv *Server) RegisterView(srvAddrs []string, opts ...ManagerOption) error {
-	if len(opts) <= 0 {
-		opts = make([]ManagerOption, 2)
-		opts[0] = WithDialTimeout(50 * time.Millisecond)
-		opts[1] = WithGrpcDialOptions(
-			grpc.WithBlock(),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-	}
-	srv.broadcastSrv.mgr = NewRawManager(opts...)
-	srv.broadcastSrv.peers = srvAddrs
-	if srv.broadcastSrv.addr == "" {
-		slog.Debug("no listenAddr specified")
-		return fmt.Errorf("no listenAddr specified")
-	}
-	return srv.configureView()
-}
+//func (srv *Server) View() serverView {
+//	return srv.broadcastSrv.view
+//}
 
-func (srv *Server) configureView() error {
-	if srv.broadcastSrv.mgr == nil {
-		slog.Debug("manager not created yet")
-		return fmt.Errorf("manager not created yet")
+func (srv *Server) RegisterConfig(config RawConfiguration) {
+	srvAddrs := make([]string, 0, len(config))
+	for _, node := range config.Nodes() {
+		srvAddrs = append(srvAddrs, node.Address())
 	}
-	srvAddrs := make([]string, len(srv.broadcastSrv.peers))
-	copy(srvAddrs, srv.broadcastSrv.peers)
-	ownAddrIncluded := false
-	for _, addr := range srvAddrs {
-		if addr == srv.broadcastSrv.addr {
-			ownAddrIncluded = true
-			break
-		}
-	}
-	if !ownAddrIncluded {
-		srvAddrs = append(srvAddrs, srv.broadcastSrv.addr)
-	}
-	config, err := NewRawConfiguration(srv.broadcastSrv.mgr, WithNodeListBroadcast(srvAddrs))
+	srv.broadcastSrv.peers = srvAddrs
+	//srvAddrs := make([]string, len(srv.broadcastSrv.peers))
+	//copy(srvAddrs, srv.broadcastSrv.peers)
+	//ownAddrIncluded := false
+	//for _, addr := range srvAddrs {
+	//	if addr == srv.broadcastSrv.addr {
+	//		ownAddrIncluded = true
+	//		break
+	//	}
+	//}
+	//if !ownAddrIncluded {
+	//	srvAddrs = append(srvAddrs, srv.broadcastSrv.addr)
+	//}
+	//config, err := NewRawConfiguration(srv.broadcastSrv.mgr, WithNodeListBroadcast(srvAddrs))
 	srv.broadcastSrv.view = config
 	//srv.broadcastSrv.timeout = mgr.opts.nodeDialTimeout
 	srv.broadcastSrv.timeout = 5 * time.Second
-	return err
 }
+
+//func (srv *Server) RegisterView(listenAddr string, srvAddrs []string, opts ...ManagerOption) error {
+//	if len(opts) <= 0 {
+//		opts = make([]ManagerOption, 2)
+//		opts[0] = WithDialTimeout(50 * time.Millisecond)
+//		opts[1] = WithGrpcDialOptions(
+//			grpc.WithBlock(),
+//			grpc.WithTransportCredentials(insecure.NewCredentials()),
+//		)
+//	}
+//	srv.broadcastSrv.mgr = NewRawManager(opts...)
+//	srv.broadcastSrv.peers = srvAddrs
+//	srv.broadcastSrv.addr = listenAddr
+//	if srv.broadcastSrv.addr == "" {
+//		slog.Debug("listenAddr cannot be empty")
+//		return fmt.Errorf("listenAddr cannot be empty")
+//	}
+//	return srv.configureView()
+//}
+//
+//func (srv *Server) configureView() error {
+//	if srv.broadcastSrv.mgr == nil {
+//		slog.Debug("manager not created yet")
+//		return fmt.Errorf("manager not created yet")
+//	}
+//	srvAddrs := make([]string, len(srv.broadcastSrv.peers))
+//	copy(srvAddrs, srv.broadcastSrv.peers)
+//	ownAddrIncluded := false
+//	for _, addr := range srvAddrs {
+//		if addr == srv.broadcastSrv.addr {
+//			ownAddrIncluded = true
+//			break
+//		}
+//	}
+//	if !ownAddrIncluded {
+//		srvAddrs = append(srvAddrs, srv.broadcastSrv.addr)
+//	}
+//	config, err := NewRawConfiguration(srv.broadcastSrv.mgr, WithNodeListBroadcast(srvAddrs))
+//	srv.broadcastSrv.view = config
+//	//srv.broadcastSrv.timeout = mgr.opts.nodeDialTimeout
+//	srv.broadcastSrv.timeout = 5 * time.Second
+//	return err
+//}

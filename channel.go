@@ -2,7 +2,7 @@ package gorums
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"math"
 	"math/rand"
 	"sync"
@@ -51,19 +51,26 @@ type channel struct {
 	cancelStream    context.CancelFunc
 	responseRouters map[uint64]responseRouter
 	responseMut     sync.Mutex
-	connected       bool
+	connEstablished bool
+	started         bool
+	dequeueStarted  bool
+	stopDequeue     chan struct{}
+	doneChan        chan struct{}
 }
 
 func newChannel(n *RawNode) *channel {
-	return &channel{
+	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,
 		nodeID:          n.ID(),
 		latency:         -1 * time.Second,
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouters: make(map[uint64]responseRouter),
-		connected:       false,
+		connEstablished: false,
+		dequeueStarted:  false,
+		stopDequeue:     make(chan struct{}),
 	}
+	return c
 }
 
 func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
@@ -75,10 +82,33 @@ func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	if err != nil {
 		return err
 	}
+	c.start()
+	c.connEstablished = true
+	return nil
+}
+
+func (c *channel) start() {
+	c.started = true
+	c.doneChan = make(chan struct{})
 	go c.sendMsgs()
 	go c.recvMsgs()
-	c.setConnected(true)
-	return nil
+}
+
+func (c *channel) stop() {
+	c.started = false
+	close(c.doneChan)
+}
+
+func (c *channel) dequeue() {
+	for {
+		select {
+		case <-c.stopDequeue:
+			return
+		case req := <-c.sendQ:
+			err := status.Errorf(codes.Unavailable, "connection not established")
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.nodeID, msg: nil, err: err})
+		}
+	}
 }
 
 func (c *channel) routeResponse(msgID uint64, resp response) {
@@ -147,7 +177,6 @@ func (c *channel) sendMsg(req request) (err error) {
 
 	err = c.gorumsStream.SendMsg(req.msg)
 	if err != nil {
-		log.Println("STREAM IS BROKEN. TRY TO RECONNECT")
 		c.setLastErr(err)
 		c.streamBroken.set()
 	}
@@ -161,9 +190,15 @@ func (c *channel) sendMsgs() {
 	var req request
 	for {
 		select {
+		case <-c.doneChan:
+			return
 		case <-c.parentCtx.Done():
 			return
 		case req = <-c.sendQ:
+		}
+		if !c.isConnected() {
+			// try to connect to the node if it has disconnected
+			c.reconnect(1)
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
@@ -205,16 +240,22 @@ func (c *channel) recvMsgs() {
 		select {
 		case <-c.parentCtx.Done():
 			return
+		case <-c.doneChan:
+			return
 		default:
 		}
 	}
 }
 
-func (c *channel) reconnect() {
+func (c *channel) reconnect(maxRetries ...int) {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	backoffCfg := c.backoffCfg
 
+	var maxretries float64 = -1
+	if len(maxRetries) > 0 {
+		maxretries = float64(maxRetries[0])
+	}
 	var retries float64
 	for {
 		var err error
@@ -222,11 +263,17 @@ func (c *channel) reconnect() {
 		c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 		c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 		if err == nil {
+			slog.Info("\tok")
 			c.streamBroken.clear()
 			return
 		}
 		c.cancelStream()
 		c.setLastErr(err)
+		if retries >= maxretries && maxretries > 0 {
+			slog.Info("\tmax retries")
+			c.streamBroken.set()
+			return
+		}
 		delay := float64(backoffCfg.BaseDelay)
 		max := float64(backoffCfg.MaxDelay)
 		for r := retries; delay < max && r > 0; r-- {
@@ -263,16 +310,8 @@ func (c *channel) channelLatency() time.Duration {
 	return c.latency
 }
 
-func (c *channel) setConnected(connected bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.connected = connected
-}
-
 func (c *channel) isConnected() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.connected && !c.streamBroken.get()
+	return c.connEstablished && !c.streamBroken.get()
 }
 
 type atomicFlag struct {

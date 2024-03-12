@@ -15,7 +15,6 @@ type broadcastServer struct {
 	addr            string
 	peers           []string
 	view            serverView
-	mgr             *RawManager
 	broadcastedMsgs map[string]map[string]bool
 	handlers        map[string]broadcastFunc
 	broadcastChan   chan *broadcastMsg
@@ -72,32 +71,36 @@ func (srv *broadcastServer) handleClientResponses() {
 }
 
 func (srv *broadcastServer) handle(response *responseMsg) {
-	// REEVALUATE THIS:
-	// If it is used in gossiping, then ok.
-	// Otherwise, not ok. (e.g. when timeout)
-	if !response.valid() {
-		// the response is old and should have timed out, but may not due to scheduling.
-		// the timeout msg should arrive soon.
+	/*if !response.valid() {
+		// REEVALUATE THIS:
+		// - A response message will always be valid because it is
+		// 	 initiated by the implementer
+		// - There is no utility for this method regarding gossiping.
+		//   This method should be located in the broadcast function.
 		return
-	}
+	}*/
 	broadcastID := response.getBroadcastID()
-	req, handled := srv.clientReqs.GetAndSetHandled(broadcastID)
-	if handled {
+	req, valid := srv.clientReqs.GetStrict(broadcastID)
+	if !valid {
 		// this server has not received a request directly from a client
 		// hence, the response should be ignored
 		// already handled and can not be removed yet. It is possible to get duplicates.
 		return
 	}
-	//select {
-	//case <-req.ctx.Done():
-	//	// client request has been cancelled by client
-	//	log.Println("CLIENT REQUEST HAS BEEN CANCELLED")
-	//	return
-	//default:
-	//}
+	// the request is handled and can thus be removed from
+	// client requests when returning.
+	defer srv.clientReqs.Remove(response.broadcastID)
+	// there is no need to respond to the client if
+	// the request has been cancelled
+	select {
+	case <-req.ctx.Done():
+		// client request has been cancelled
+		return
+	default:
+	}
 	if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok && req.metadata.BroadcastMsg.OriginAddr != "" {
 		handler(req.metadata.BroadcastMsg.OriginAddr, broadcastID, response.getResponse())
-	} else if req.metadata.BroadcastMsg.Sender == BroadcastClient {
+	} else if req.metadata.BroadcastMsg.SenderType == BroadcastClient {
 		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
 	}
 }
@@ -108,27 +111,21 @@ func (srv *broadcastServer) clientReturn(resp ResponseTypes, err error, metadata
 
 func (srv *broadcastServer) returnToClient(broadcastID string, resp ResponseTypes, err error) {
 	if !srv.alreadyReturnedToClient(broadcastID) {
-		srv.responseChan <- newResponseMessage(resp, err, broadcastID, clientResponse, srv.timeout)
+		srv.responseChan <- newResponseMessage(resp, err, broadcastID)
 	}
 }
 
-//func (srv *broadcastServer) timeoutClientResponse(ctx ServerCtx, in *Message, finished chan<- *Message) {
-//	time.Sleep(srv.timeout)
-//	srv.responseChan <- newResponseMessage(protoreflect.ProtoMessage(nil), errors.New("server timed out"), in.Metadata.BroadcastMsg.GetBroadcastID(), timeout, srv.timeout)
-//}
-
 func (srv *broadcastServer) alreadyReturnedToClient(broadcastID string) bool {
-	req, ok := srv.clientReqs.Get(broadcastID)
-	return ok && req.handled
+	return srv.clientReqs.IsHandled(broadcastID)
 }
 
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
+	done := make(chan struct{})
 	srv.clientReqs.Add(metadata.BroadcastMsg.GetBroadcastID(), clientRequest{
 		id:       uuid.New().String(),
 		ctx:      ctx,
 		finished: finished,
 		metadata: metadata,
-		status:   unhandled,
-		handled:  false,
+		doneChan: done,
 	})
 }

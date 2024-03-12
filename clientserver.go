@@ -55,7 +55,7 @@ func (srv *ClientServer) AddRequest(ctx context.Context, in protoreflect.ProtoMe
 		Method:  "protos.UniformBroadcast.SaveStudent",
 
 		BroadcastID: broadcastID,
-		Sender:      BroadcastClient,
+		SenderType:  BroadcastClient,
 		OriginAddr:  srv.listenAddr,
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)

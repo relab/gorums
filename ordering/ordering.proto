@@ -22,11 +22,11 @@ message Metadata {
 }
 
 message BroadcastMsg {
-  string Sender = 1;
+  string SenderType = 1;
   string BroadcastID = 2;
-  string SenderID = 3;
+  uint32 SequenceNo = 3; // can be removed
   string SenderAddr = 4;
-  string OriginID = 5;
-  string OriginAddr = 6;
-  string OriginMethod = 7;
+  string OriginAddr = 5;
+  string OriginMethod = 6;
+  uint64 Deadline = 7;
 }

@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"log/slog"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -15,12 +14,12 @@ type broadcastCallData struct {
 	Message         protoreflect.ProtoMessage
 	Method          string
 	BroadcastID     string // a unique identifier for the current broadcast request
-	Sender          string
-	SenderID        string
+	SequenceNo      uint32 // a unique identifier for the current broadcast request
+	SenderType      string
 	SenderAddr      string
-	OriginID        string
 	OriginAddr      string
 	OriginMethod    string
+	Deadline        uint64
 	ServerAddresses []string
 }
 
@@ -41,13 +40,13 @@ func (bcd *broadcastCallData) inSubset(addr string) bool {
 // broadcastCall performs a multicast call on the configuration.
 func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		Sender:       d.Sender,
+		SenderType:   d.SenderType,
 		BroadcastID:  d.BroadcastID,
-		SenderID:     d.SenderID,
+		SequenceNo:   d.SequenceNo,
 		SenderAddr:   d.SenderAddr,
-		OriginID:     d.OriginID,
 		OriginAddr:   d.OriginAddr,
 		OriginMethod: d.OriginMethod,
+		Deadline:     d.Deadline,
 	}}
 	o := getCallOptions(E_Broadcast, nil)
 
@@ -58,17 +57,12 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 		if !d.inSubset(n.addr) {
 			continue
 		}
-		// try to reconnect to the node if prior connections have failed
-		if !n.channel.isConnected() {
-			n.mu.Lock()
-			n.reconnect()
-			n.mu.Unlock()
-			if !n.channel.isConnected() {
-				slog.Warn("could not connect to node", "nodeID", n.ID(), "nodeAddr", n.Address())
-				continue
-			} else {
-				slog.Info("connected to node", "nodeID", n.ID(), "nodeAddr", n.Address())
-			}
+		// try to establish a connection to the node if prior connections have failed
+		if !n.connEstablished() {
+			// it is important to NOT run this async (due to lack of
+			// locking mechanisms). Hence, each broadcastCall is run in
+			// a "one-by-one" manner.
+			n.tryConnect()
 		}
 		sentMsgs++
 		msg := d.Message
@@ -80,4 +74,5 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 		<-replyChan
 		sentMsgs--
 	}
+	close(replyChan)
 }

@@ -48,6 +48,12 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			if err != nil {
 				return nil, err
 			}
+		case net.Listener:
+			err = c.RegisterClientServer(v)
+			if err != nil {
+				return nil, err
+			}
+			return c, nil
 		case QuorumSpec:
 			// Must be last since v may match QuorumSpec if it is interface{}
 			c.qspec = v
@@ -60,22 +66,6 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
 		return nil, fmt.Errorf("missing required QuorumSpec")
 	}
-	return c, nil
-}
-
-// NewBroadcastConfiguration returns a configuration based on the provided list of nodes (required)
-// and an optional quorum specification. The QuorumSpec is necessary for call types that
-// must process replies. For configurations only used for unicast or multicast call types,
-// a QuorumSpec is not needed. The QuorumSpec interface is also a ConfigOption.
-// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
-// A new configuration can also be created from an existing configuration,
-// using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewBroadcastConfiguration(nodeOpt gorums.NodeListOption, qSpec QuorumSpec, lis net.Listener) (c *Configuration, err error) {
-	c, err = m.NewConfiguration(nodeOpt, qSpec)
-	if err != nil {
-		return nil, err
-	}
-	c.RegisterClientServer(lis)
 	return c, nil
 }
 

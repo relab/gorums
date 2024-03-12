@@ -9,11 +9,12 @@ import (
 
 type Server struct {
 	*gorums.Server
+	View *Configuration
 }
 
 func NewServer() *Server {
 	srv := &Server{
-		gorums.NewServer(),
+		Server: gorums.NewServer(),
 	}
 	b := &Broadcast{
 		Broadcaster: gorums.NewBroadcaster(),
@@ -23,10 +24,10 @@ func NewServer() *Server {
 	return srv
 }
 
-func (srv *Server) SetView(srvAddrs []string, opts ...gorums.ManagerOption) error {
-	err := srv.RegisterView(srvAddrs, opts...)
+func (srv *Server) SetView(config *Configuration) {
+	srv.View = config
+	srv.RegisterConfig(config.RawConfiguration)
 	srv.ListenForBroadcast()
-	return err
 }
 
 type Broadcast struct {

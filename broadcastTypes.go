@@ -38,32 +38,20 @@ type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, 
 
 type implementationFunc[T RequestTypes, V broadcaster] func(ServerCtx, T, V)
 
-type respType int
-
-const (
-	unhandled respType = iota
-	clientResponse
-	timeout
-	done
-)
-
 type responseMsg struct {
 	response    ResponseTypes
 	err         error
 	broadcastID string
 	timestamp   time.Time
 	ttl         time.Duration
-	respType    respType
 }
 
-func newResponseMessage(response ResponseTypes, err error, broadcastID string, respType respType, ttl time.Duration) *responseMsg {
+func newResponseMessage(response ResponseTypes, err error, broadcastID string) *responseMsg {
 	return &responseMsg{
 		response:    response,
 		err:         err,
 		broadcastID: broadcastID,
 		timestamp:   time.Now(),
-		ttl:         ttl,
-		respType:    respType,
 	}
 }
 
@@ -80,20 +68,20 @@ func (r *responseMsg) getBroadcastID() string {
 }
 
 func (r *responseMsg) valid() bool {
-	return r.respType == clientResponse && time.Since(r.timestamp) <= r.ttl
-}
-
-func (r *responseMsg) getType() respType {
-	return r.respType
+	if r.ttl != 0 {
+		return time.Since(r.timestamp) <= r.ttl
+	}
+	return true
 }
 
 type clientRequest struct {
-	id       string
-	ctx      ServerCtx
-	finished chan<- *Message
-	metadata *ordering.Metadata
-	status   respType
-	handled  bool
+	id        string
+	ctx       ServerCtx
+	finished  chan<- *Message
+	metadata  *ordering.Metadata
+	methods   []string
+	timestamp time.Time
+	doneChan  chan struct{}
 }
 
 type SpBroadcast struct {
@@ -196,12 +184,12 @@ func NewBroadcaster() *Broadcaster {
 
 type BroadcastMetadata struct {
 	BroadcastID  string
-	Sender       string
-	SenderID     string
+	SequenceNo   uint32
+	SenderType   string
 	SenderAddr   string
-	OriginID     string
 	OriginAddr   string
 	OriginMethod string
+	Deadline     uint64
 	Method       string
 }
 
@@ -213,24 +201,43 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	}
 	return BroadcastMetadata{
 		BroadcastID:  md.BroadcastMsg.BroadcastID,
-		Sender:       md.BroadcastMsg.Sender,
-		SenderID:     md.BroadcastMsg.SenderID,
+		SequenceNo:   md.BroadcastMsg.SequenceNo,
+		SenderType:   md.BroadcastMsg.SenderType,
 		SenderAddr:   md.BroadcastMsg.SenderAddr,
-		OriginID:     md.BroadcastMsg.OriginID,
 		OriginAddr:   md.BroadcastMsg.OriginAddr,
 		OriginMethod: md.BroadcastMsg.OriginMethod,
+		Deadline:     md.BroadcastMsg.Deadline,
 		Method:       m,
 	}
 }
 
 type RequestMap struct {
-	data  map[string]clientRequest
-	mutex sync.RWMutex
+	data        map[string]clientRequest
+	mutex       sync.RWMutex
+	handledReqs map[string]time.Time
 }
 
 func NewRequestMap() *RequestMap {
-	return &RequestMap{
-		data: make(map[string]clientRequest),
+	reqMap := &RequestMap{
+		data:        make(map[string]clientRequest),
+		handledReqs: make(map[string]time.Time),
+	}
+	go reqMap.cleanup()
+	return reqMap
+}
+
+func (list *RequestMap) cleanup() {
+	for {
+		time.Sleep(1 * time.Minute)
+		del := make([]string, 0)
+		for broadcastID, timestamp := range list.handledReqs {
+			if time.Now().Sub(timestamp) > 30*time.Minute {
+				del = append(del, broadcastID)
+			}
+		}
+		for _, broadcastID := range del {
+			delete(list.handledReqs, broadcastID)
+		}
 	}
 }
 
@@ -238,9 +245,13 @@ func (list *RequestMap) Add(identifier string, element clientRequest) {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 	// do nothing if element already exists
-	if _, ok := list.data[identifier]; ok {
+	if elem, ok := list.data[identifier]; ok {
+		elem.methods = append(elem.methods, element.metadata.Method)
 		return
 	}
+	methods := []string{element.metadata.Method}
+	element.methods = methods
+	element.timestamp = time.Now()
 	list.data[identifier] = element
 }
 
@@ -251,28 +262,51 @@ func (list *RequestMap) Get(identifier string) (clientRequest, bool) {
 	return elem, ok
 }
 
-//func (list *RequestMap) Set(identifier string, elem clientRequest) {
-//	list.mutex.Lock()
-//	defer list.mutex.Unlock()
-//	list.data[identifier] = elem
-//}
-
-func (list *RequestMap) GetAndSetHandled(identifier string) (clientRequest, bool) {
+func (list *RequestMap) IsHandled(identifier string) bool {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
+	_, ok := list.handledReqs[identifier]
+	return ok
+}
+
+func (list *RequestMap) Remove(identifier string) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	// do nothing if the element does not exists
 	elem, ok := list.data[identifier]
+	if !ok {
+		return
+	}
+	// add broadcastID to handled requests.
+	// requests added to this map will be
+	// removed after 30 minutes by default.
+	// the implementer can also provide a
+	// custom time to live for a request.
+	list.handledReqs[identifier] = elem.timestamp
+	delete(list.data, identifier)
+}
+
+// Retrieves a client requests with the given broadcastID and returns
+// a bool defining whether the request is valid or not.
+// The request is considered valid only if the request has not yet
+// been handled and it has previously been added to client requests.
+func (list *RequestMap) GetStrict(identifier string) (clientRequest, bool) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	var req clientRequest
+	_, ok := list.handledReqs[identifier]
+	if ok {
+		return req, false
+	}
+	req, ok = list.data[identifier]
 	if !ok {
 		// this server has not received a request directly from a client
 		// hence, the response should be ignored
 		// already handled and can be removed?
-		return elem, true
+		return req, false
 	}
-	if elem.handled {
-		return elem, true
-	}
-	elem.handled = true
-	list.data[identifier] = elem
-	return elem, false
+	return req, true
+
 }
 
 type broadcastMsg struct {
