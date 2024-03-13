@@ -187,13 +187,8 @@ func (c *channel) sendMsgs() {
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
-			// try to reconnect and resend the message
-			c.reconnect()
-			err := c.sendMsg(req)
-			if err != nil {
-				// return if the error persists
-				c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
-			}
+			// return the error
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
 		}
 	}
 }

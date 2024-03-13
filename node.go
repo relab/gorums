@@ -75,7 +75,7 @@ func (n *RawNode) connect(mgr *RawManager) error {
 	return nil
 }
 
-// dial will dial the node if it has not been done previously
+// dials the node if it has not been done previously
 func (n *RawNode) dial() error {
 	if n.conn == nil {
 		var err error
@@ -88,7 +88,7 @@ func (n *RawNode) dial() error {
 	return nil
 }
 
-// ctxSetup creates a context that governs the channel. It is
+// creates a context that governs the channel. It is
 // used to stop all channel goroutines and the NodeStream.
 //
 // this method should be run for each connection to ensure
