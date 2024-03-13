@@ -65,6 +65,7 @@ func (srv *broadcastServer) run() {
 }
 
 func (srv *broadcastServer) handleClientResponses() {
+	go srv.clientReqs.cleanup()
 	for response := range srv.responseChan {
 		srv.handle(response)
 	}

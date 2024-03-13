@@ -52,9 +52,6 @@ type channel struct {
 	responseRouters map[uint64]responseRouter
 	responseMut     sync.Mutex
 	connEstablished bool
-	started         bool
-	dequeueStarted  bool
-	stopDequeue     chan struct{}
 }
 
 func newChannel(n *RawNode) *channel {
@@ -66,8 +63,6 @@ func newChannel(n *RawNode) *channel {
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouters: make(map[uint64]responseRouter),
 		connEstablished: false,
-		dequeueStarted:  false,
-		stopDequeue:     make(chan struct{}),
 	}
 	return c
 }
@@ -75,7 +70,6 @@ func newChannel(n *RawNode) *channel {
 func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	c.parentCtx = ctx
 	go c.sendMsgs()
-	go c.recvMsgs()
 	if conn == nil {
 		return fmt.Errorf("connection is nil")
 	}
@@ -91,19 +85,8 @@ func (c *channel) tryConnect(conn *grpc.ClientConn) error {
 		return err
 	}
 	c.connEstablished = true
+	go c.recvMsgs()
 	return nil
-}
-
-func (c *channel) dequeue() {
-	for {
-		select {
-		case <-c.stopDequeue:
-			return
-		case req := <-c.sendQ:
-			err := status.Errorf(codes.Unavailable, "connection not established")
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
-		}
-	}
 }
 
 func (c *channel) routeResponse(msgID uint64, resp response) {

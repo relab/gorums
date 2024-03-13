@@ -222,7 +222,6 @@ func NewRequestMap() *RequestMap {
 		data:        make(map[string]clientRequest),
 		handledReqs: make(map[string]time.Time),
 	}
-	go reqMap.cleanup()
 	return reqMap
 }
 

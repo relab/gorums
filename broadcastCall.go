@@ -57,13 +57,6 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 		if !d.inSubset(n.addr) {
 			continue
 		}
-		// try to establish a connection to the node if prior connections have failed
-		if !n.connEstablished() {
-			// it is important to NOT run this async (due to lack of
-			// locking mechanisms). Hence, each broadcastCall is run in
-			// a "one-by-one" manner.
-			n.tryConnect()
-		}
 		sentMsgs++
 		msg := d.Message
 		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)

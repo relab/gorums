@@ -61,33 +61,6 @@ func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 // connect to this node and associate it with the manager.
 func (n *RawNode) connect(mgr *RawManager) error {
 	n.mgr = mgr
-	if n.mgr.opts.noConnect {
-		return nil
-	}
-	n.channel = newChannel(n)
-	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
-	defer cancel()
-	n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
-	if err != nil {
-		return fmt.Errorf("dialing node failed: %w", err)
-	}
-	md := n.mgr.opts.metadata.Copy()
-	if n.mgr.opts.perNodeMD != nil {
-		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
-	}
-	// a context for all of the streams
-	ctx, n.cancel = context.WithCancel(context.Background())
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	if err = n.channel.connect(ctx, n.conn); err != nil {
-		return fmt.Errorf("starting stream failed: %w", err)
-	}
-	return nil
-}
-
-// connect to this node and associate it with the manager.
-func (n *RawNode) connectNew(mgr *RawManager) error {
-	n.mgr = mgr
 	n.channel = newChannel(n)
 	if n.mgr.opts.noConnect {
 		return nil
@@ -106,8 +79,10 @@ func (n *RawNode) connectNew(mgr *RawManager) error {
 func (n *RawNode) dial() error {
 	if n.conn == nil {
 		var err error
+		ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
+		defer cancel()
 		// error is ignored because we will retry the dial at a later time
-		n.conn, err = grpc.DialContext(context.Background(), n.addr, n.mgr.opts.grpcDialOpts...)
+		n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
 		return err
 	}
 	return nil
@@ -128,50 +103,6 @@ func (n *RawNode) ctxSetup() context.Context {
 	ctx, n.cancel = context.WithCancel(context.Background())
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	return ctx
-}
-
-func (n *RawNode) connEstablished() bool {
-	if n.channel == nil {
-		return false
-	}
-	if n.conn == nil {
-		return false
-	}
-	return n.channel.isConnected()
-}
-
-func (n *RawNode) tryConnect() {
-	// the node should only have one channel to each peer.
-	// this channel should be reused for the entire lifetime
-	// of the node.
-	if n.channel == nil {
-		n.channel = newChannel(n)
-	}
-	if !n.channel.dequeueStarted {
-		n.channel.dequeueStarted = true
-		go n.channel.dequeue()
-	}
-	// the error is ignored until the end because
-	// it is important to populate the channel.
-	var err error
-	n.conn, err = grpc.DialContext(context.Background(), n.addr, n.mgr.opts.grpcDialOpts...)
-	if err != nil {
-		return
-	}
-	md := n.mgr.opts.metadata.Copy()
-	if n.mgr.opts.perNodeMD != nil {
-		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
-	}
-	// a context for all of the streams
-	var ctx context.Context
-	ctx, n.cancel = context.WithCancel(context.Background())
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	err = n.channel.connect(ctx, n.conn)
-	if err != nil {
-		return
-	}
-	close(n.channel.stopDequeue)
-	n.channel.dequeueStarted = false
 }
 
 // close this node.
