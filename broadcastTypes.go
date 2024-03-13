@@ -230,13 +230,21 @@ func (list *RequestMap) cleanup() {
 	for {
 		time.Sleep(1 * time.Minute)
 		del := make([]string, 0)
+		// remove handled reqs
 		for broadcastID, timestamp := range list.handledReqs {
 			if time.Now().Sub(timestamp) > 30*time.Minute {
 				del = append(del, broadcastID)
 			}
 		}
+		// remove stale reqs
+		for broadcastID, req := range list.data {
+			if time.Now().Sub(req.timestamp) > 30*time.Minute {
+				del = append(del, broadcastID)
+			}
+		}
 		for _, broadcastID := range del {
 			delete(list.handledReqs, broadcastID)
+			delete(list.data, broadcastID)
 		}
 	}
 }

@@ -22,12 +22,11 @@ const nilAngleString = "<nil>"
 // You should use the generated `Node` struct instead.
 type RawNode struct {
 	// Only assigned at creation.
-	id      uint32
-	addr    string
-	conn    *grpc.ClientConn
-	connErr error
-	cancel  func()
-	mgr     *RawManager
+	id     uint32
+	addr   string
+	conn   *grpc.ClientConn
+	cancel func()
+	mgr    *RawManager
 
 	// the default channel
 	channel *channel
@@ -83,8 +82,52 @@ func (n *RawNode) connect(mgr *RawManager) error {
 	if err = n.channel.connect(ctx, n.conn); err != nil {
 		return fmt.Errorf("starting stream failed: %w", err)
 	}
-	n.channel.start()
 	return nil
+}
+
+// connect to this node and associate it with the manager.
+func (n *RawNode) connectNew(mgr *RawManager) error {
+	n.mgr = mgr
+	n.channel = newChannel(n)
+	if n.mgr.opts.noConnect {
+		return nil
+	}
+	// ignoring the error because it will try to reconnect
+	// at a later time.
+	_ = n.dial()
+	ctx := n.ctxSetup()
+	if err := n.channel.connect(ctx, n.conn); err != nil {
+		return fmt.Errorf("starting stream failed: %w", err)
+	}
+	return nil
+}
+
+// dial will dial the node if it has not been done previously
+func (n *RawNode) dial() error {
+	if n.conn == nil {
+		var err error
+		// error is ignored because we will retry the dial at a later time
+		n.conn, err = grpc.DialContext(context.Background(), n.addr, n.mgr.opts.grpcDialOpts...)
+		return err
+	}
+	return nil
+}
+
+// ctxSetup creates a context that governs the channel. It is
+// used to stop all channel goroutines and the NodeStream.
+//
+// this method should be run for each connection to ensure
+// fresh contexts. Reusing contexts could result in reusing
+// a cancelled context.
+func (n *RawNode) ctxSetup() context.Context {
+	md := n.mgr.opts.metadata.Copy()
+	if n.mgr.opts.perNodeMD != nil {
+		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
+	}
+	var ctx context.Context
+	ctx, n.cancel = context.WithCancel(context.Background())
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	return ctx
 }
 
 func (n *RawNode) connEstablished() bool {
@@ -111,9 +154,7 @@ func (n *RawNode) tryConnect() {
 	// the error is ignored until the end because
 	// it is important to populate the channel.
 	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
-	defer cancel()
-	n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
+	n.conn, err = grpc.DialContext(context.Background(), n.addr, n.mgr.opts.grpcDialOpts...)
 	if err != nil {
 		return
 	}
@@ -122,6 +163,7 @@ func (n *RawNode) tryConnect() {
 		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
 	}
 	// a context for all of the streams
+	var ctx context.Context
 	ctx, n.cancel = context.WithCancel(context.Background())
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	err = n.channel.connect(ctx, n.conn)

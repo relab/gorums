@@ -2,7 +2,7 @@ package gorums
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 	"math"
 	"math/rand"
 	"sync"
@@ -36,7 +36,7 @@ type responseRouter struct {
 
 type channel struct {
 	sendQ           chan request
-	nodeID          uint32
+	node            *RawNode
 	mu              sync.Mutex
 	lastError       error
 	latency         time.Duration
@@ -55,14 +55,13 @@ type channel struct {
 	started         bool
 	dequeueStarted  bool
 	stopDequeue     chan struct{}
-	doneChan        chan struct{}
 }
 
 func newChannel(n *RawNode) *channel {
 	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,
-		nodeID:          n.ID(),
+		node:            n,
 		latency:         -1 * time.Second,
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouters: make(map[uint64]responseRouter),
@@ -74,29 +73,25 @@ func newChannel(n *RawNode) *channel {
 }
 
 func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
-	var err error
 	c.parentCtx = ctx
+	go c.sendMsgs()
+	go c.recvMsgs()
+	if conn == nil {
+		return fmt.Errorf("connection is nil")
+	}
+	return c.tryConnect(conn)
+}
+
+func (c *channel) tryConnect(conn *grpc.ClientConn) error {
+	var err error
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 	c.gorumsClient = ordering.NewGorumsClient(conn)
 	c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 	if err != nil {
 		return err
 	}
-	c.start()
 	c.connEstablished = true
 	return nil
-}
-
-func (c *channel) start() {
-	c.started = true
-	c.doneChan = make(chan struct{})
-	go c.sendMsgs()
-	go c.recvMsgs()
-}
-
-func (c *channel) stop() {
-	c.started = false
-	close(c.doneChan)
 }
 
 func (c *channel) dequeue() {
@@ -106,7 +101,7 @@ func (c *channel) dequeue() {
 			return
 		case req := <-c.sendQ:
 			err := status.Errorf(codes.Unavailable, "connection not established")
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.nodeID, msg: nil, err: err})
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
 		}
 	}
 }
@@ -190,20 +185,20 @@ func (c *channel) sendMsgs() {
 	var req request
 	for {
 		select {
-		case <-c.doneChan:
-			return
 		case <-c.parentCtx.Done():
 			return
 		case req = <-c.sendQ:
 		}
+		// try to connect to the node if previous attempts
+		// have failed or if the node has disconnected
 		if !c.isConnected() {
-			// try to connect to the node if it has disconnected
-			c.reconnect(1)
+			// streamBroken will be set if the connection fails
+			c.tryReconnect()
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
 			err := status.Errorf(codes.Unavailable, "stream is down")
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.nodeID, msg: nil, err: err})
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
 			continue
 		}
 		// else try to send message
@@ -214,7 +209,7 @@ func (c *channel) sendMsgs() {
 			err := c.sendMsg(req)
 			if err != nil {
 				// return if the error persists
-				c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.nodeID, msg: nil, err: err})
+				c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
 			}
 		}
 	}
@@ -234,16 +229,36 @@ func (c *channel) recvMsgs() {
 		} else {
 			c.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			c.routeResponse(resp.Metadata.MessageID, response{nid: c.nodeID, msg: resp.Message, err: err})
+			c.routeResponse(resp.Metadata.MessageID, response{nid: c.node.ID(), msg: resp.Message, err: err})
 		}
 
 		select {
 		case <-c.parentCtx.Done():
 			return
-		case <-c.doneChan:
-			return
 		default:
 		}
+	}
+}
+
+func (c *channel) tryReconnect() {
+	// a connection has never been established
+	if !c.connEstablished {
+		err := c.node.dial()
+		if err != nil {
+			c.streamBroken.set()
+			return
+		}
+		err = c.tryConnect(c.node.conn)
+		if err != nil {
+			c.streamBroken.set()
+			return
+		}
+	}
+	// the node has previously been connected
+	// but is now disconnected
+	if c.streamBroken.get() {
+		// try to reconnect only once
+		c.reconnect(1)
 	}
 }
 
@@ -263,14 +278,12 @@ func (c *channel) reconnect(maxRetries ...int) {
 		c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 		c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 		if err == nil {
-			slog.Info("\tok")
 			c.streamBroken.clear()
 			return
 		}
 		c.cancelStream()
 		c.setLastErr(err)
 		if retries >= maxretries && maxretries > 0 {
-			slog.Info("\tmax retries")
 			c.streamBroken.set()
 			return
 		}
