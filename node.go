@@ -61,28 +61,48 @@ func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 // connect to this node and associate it with the manager.
 func (n *RawNode) connect(mgr *RawManager) error {
 	n.mgr = mgr
+	n.channel = newChannel(n)
 	if n.mgr.opts.noConnect {
 		return nil
 	}
-	n.channel = newChannel(n)
-	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
-	defer cancel()
-	n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
-	if err != nil {
-		return fmt.Errorf("dialing node failed: %w", err)
+	// ignoring the error because it will try to reconnect
+	// at a later time.
+	_ = n.dial()
+	ctx := n.ctxSetup()
+	if err := n.channel.connect(ctx, n.conn); err != nil {
+		return fmt.Errorf("starting stream failed: %w", err)
 	}
+	return nil
+}
+
+// dials the node if it has not been done previously
+func (n *RawNode) dial() error {
+	if n.conn == nil {
+		var err error
+		ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
+		defer cancel()
+		// error is ignored because we will retry the dial at a later time
+		n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
+		return err
+	}
+	return nil
+}
+
+// creates a context that governs the channel. It is
+// used to stop all channel goroutines and the NodeStream.
+//
+// this method should be run for each connection to ensure
+// fresh contexts. Reusing contexts could result in reusing
+// a cancelled context.
+func (n *RawNode) ctxSetup() context.Context {
 	md := n.mgr.opts.metadata.Copy()
 	if n.mgr.opts.perNodeMD != nil {
 		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
 	}
-	// a context for all of the streams
+	var ctx context.Context
 	ctx, n.cancel = context.WithCancel(context.Background())
 	ctx = metadata.NewOutgoingContext(ctx, md)
-	if err = n.channel.connect(ctx, n.conn); err != nil {
-		return fmt.Errorf("starting stream failed: %w", err)
-	}
-	return nil
+	return ctx
 }
 
 // close this node.
