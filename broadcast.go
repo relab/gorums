@@ -24,7 +24,6 @@ type broadcastServer struct {
 	timeout         time.Duration
 	clientReqs      *RequestMap
 	stopChan        chan struct{}
-	async           bool
 	logger          *slog.Logger
 }
 
@@ -43,6 +42,8 @@ func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 	}
 }
 
+func (srv *broadcastServer) stop() {}
+
 func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string) bool {
 	_, ok := srv.broadcastedMsgs[broadcastID]
 	if !ok {
@@ -57,8 +58,9 @@ func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string
 
 func (srv *broadcastServer) run() {
 	for msg := range srv.broadcastChan {
-		if handler, ok := srv.handlers[msg.method]; ok {
-			handler(msg.ctx, msg.request, msg.metadata, msg.srvAddrs)
+		if broadcastCall, ok := srv.handlers[msg.method]; ok {
+			// it runs a interceptor prior to broadcastCall, hence a different signature.
+			broadcastCall(msg.ctx, msg.request, msg.metadata, msg.srvAddrs)
 		}
 		msg.setFinished()
 	}
@@ -106,11 +108,7 @@ func (srv *broadcastServer) handle(response *responseMsg) {
 	}
 }
 
-func (srv *broadcastServer) clientReturn(resp ResponseTypes, err error, metadata BroadcastMetadata) {
-	srv.returnToClient(metadata.BroadcastID, resp, err)
-}
-
-func (srv *broadcastServer) returnToClient(broadcastID string, resp ResponseTypes, err error) {
+func (srv *broadcastServer) sendToClient(broadcastID string, resp ResponseTypes, err error) {
 	if !srv.alreadyReturnedToClient(broadcastID) {
 		srv.responseChan <- newResponseMessage(resp, err, broadcastID)
 	}
@@ -121,12 +119,11 @@ func (srv *broadcastServer) alreadyReturnedToClient(broadcastID string) bool {
 }
 
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) {
-	done := make(chan struct{})
 	srv.clientReqs.Add(metadata.BroadcastMsg.GetBroadcastID(), clientRequest{
 		id:       uuid.New().String(),
 		ctx:      ctx,
 		finished: finished,
 		metadata: metadata,
-		doneChan: done,
+		doneChan: make(chan struct{}),
 	})
 }

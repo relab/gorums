@@ -13,7 +13,6 @@ import (
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	proto "google.golang.org/protobuf/proto"
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
@@ -33,6 +32,7 @@ type ZorumsService interface {
 	QuorumCallEmpty(ctx gorums.ServerCtx, request *empty.Empty) (response *Response, err error)
 	QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (response *empty.Empty, err error)
 	QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	MulticastWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	BroadcastInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	BroadcastWithClientHandler1(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	BroadcastWithClientHandler2(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
@@ -88,6 +88,9 @@ func (srv *Server) QuorumCallEmpty2(ctx gorums.ServerCtx, request *Request) (res
 }
 func (srv *Server) QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method QuorumCallWithBroadcast not implemented"))
+}
+func (srv *Server) MulticastWithBroadcast(ctx gorums.ServerCtx, request *Request) {
+	panic(status.Errorf(codes.Unimplemented, "method MulticastWithBroadcast not implemented"))
 }
 func (srv *Server) BroadcastInternal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method BroadcastInternal not implemented"))
@@ -224,6 +227,7 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
 	srv.RegisterHandler("dev.ZorumsService.QuorumCallWithBroadcast", gorums.BroadcastHandler(impl.QuorumCallWithBroadcast, srv.Server))
+	srv.RegisterHandler("dev.ZorumsService.MulticastWithBroadcast", gorums.BroadcastHandler(impl.MulticastWithBroadcast, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.BroadcastInternal", gorums.BroadcastHandler(impl.BroadcastInternal, srv.Server))
 	srv.RegisterHandler("dev.ZorumsService.BroadcastWithClientHandler1", gorums.BroadcastHandler(impl.BroadcastWithClientHandler1, srv.Server))
 	srv.RegisterClientHandler("dev.ZorumsService.BroadcastWithClientHandler1", gorums.ServerClientRPC("dev.ZorumsService.BroadcastWithClientHandler1"))
@@ -418,10 +422,80 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	})
 }
 
-func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
-	b.sp.ReturnToClientHandler(resp, err, b.metadata)
+func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	metadata := gorums.BroadcastMetadata{}
+	metadata.BroadcastID = broadcastID
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, metadata, options)
 }
 
-func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
-	srv.RetToClient(resp, err, broadcastID)
+func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	metadata := gorums.BroadcastMetadata{}
+	metadata.BroadcastID = broadcastID
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, metadata, options)
+}
+
+func (srv *Server) BroadcastBroadcastInternal(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	metadata := gorums.BroadcastMetadata{}
+	metadata.BroadcastID = broadcastID
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, metadata, options)
+}
+
+func (srv *Server) BroadcastBroadcastWithClientHandler1(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	metadata := gorums.BroadcastMetadata{}
+	metadata.BroadcastID = broadcastID
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandler1", req, metadata, options)
+}
+
+func (srv *Server) BroadcastBroadcastWithClientHandler2(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	metadata := gorums.BroadcastMetadata{}
+	metadata.BroadcastID = broadcastID
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandler2", req, metadata, options)
+}
+
+func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	metadata := gorums.BroadcastMetadata{}
+	metadata.BroadcastID = broadcastID
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, metadata, options)
 }

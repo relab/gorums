@@ -32,7 +32,7 @@ type ResponseTypes interface {
 }
 
 type BroadcastHandlerFunc func(method string, req RequestTypes, metadata BroadcastMetadata, data ...BroadcastOptions)
-type BroadcastReturnToClientHandlerFunc func(resp ResponseTypes, err error, metadata BroadcastMetadata)
+type BroadcastSendToClientHandlerFunc func(broadcastID string, resp ResponseTypes, err error)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
@@ -84,13 +84,23 @@ type clientRequest struct {
 	doneChan  chan struct{}
 }
 
-type SpBroadcast struct {
-	BroadcastHandler      BroadcastHandlerFunc
-	ReturnToClientHandler BroadcastReturnToClientHandlerFunc
+// The BroadcastOrchestrator is used as a container for all
+// broadcast handlers. The BroadcastHandler takes in a method
+// and schedules it for broadcasting. SendToClientHandler works
+// similarly but it sends the message to the calling client.
+//
+// It is necessary to use an orchestrator to hide certain
+// implementation details, such as internal methods on the
+// broadcaster struct. The BroadcastOrchestrator will thus
+// be an unimported field in the broadcaster struct in the
+// generated code.
+type BroadcastOrchestrator struct {
+	BroadcastHandler    BroadcastHandlerFunc
+	SendToClientHandler BroadcastSendToClientHandlerFunc
 }
 
-func NewSpBroadcastStruct() *SpBroadcast {
-	return &SpBroadcast{}
+func NewBroadcastOrchestrator() *BroadcastOrchestrator {
+	return &BroadcastOrchestrator{}
 }
 
 type BroadcastOption func(*BroadcastOptions)
@@ -132,12 +142,6 @@ func WithoutUniquenessChecks() BroadcastOption {
 	}
 }
 
-// not sure if this is necessary because the implementer
-// can decide to run the broadcast in a go routine.
-func WithoutWaiting() BroadcastOption {
-	return func(b *BroadcastOptions) {}
-}
-
 // returns a listener for the given address.
 // panics upon errors.
 func WithListener(listenAddr string) net.Listener {
@@ -162,20 +166,27 @@ func NewBroadcastOptions() BroadcastOptions {
 }
 
 type broadcaster interface {
-	setMetadataHandler(func(metadata BroadcastMetadata))
+	setMetadataHandler(func(metadata BroadcastMetadata), func())
 	setMetadata(metadata BroadcastMetadata)
+	resetMetadata()
 }
 
 type Broadcaster struct {
-	metadataHandler func(metadata BroadcastMetadata)
+	metadataHandler      func(metadata BroadcastMetadata)
+	resetMetadataHandler func()
 }
 
-func (b *Broadcaster) setMetadataHandler(handler func(metadata BroadcastMetadata)) {
+func (b *Broadcaster) setMetadataHandler(handler func(metadata BroadcastMetadata), resetHandler func()) {
 	b.metadataHandler = handler
+	b.resetMetadataHandler = resetHandler
 }
 
 func (b *Broadcaster) setMetadata(metadata BroadcastMetadata) {
 	b.metadataHandler(metadata)
+}
+
+func (b *Broadcaster) resetMetadata() {
+	b.resetMetadataHandler()
 }
 
 func NewBroadcaster() *Broadcaster {

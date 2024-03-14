@@ -23,27 +23,21 @@ func BroadcastHandler[T RequestTypes, V broadcaster](impl implementationFunc[T, 
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		defer ctx.Release()
 		req := in.Message.(T)
-		doneChan := make(chan struct{})
 		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req)
-		go func() {
-			defer func() { close(doneChan) }()
-			// guard:
-			// - A broadcastID should be non-empty:
-			// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
-			if err := srv.broadcastSrv.validateMessage(in); err != nil {
-				srv.broadcastSrv.logger.Info("broadcast request not valid", "req", req)
-				return
-			}
-			addOriginMethod(in.Metadata)
-			broadcastMetadata := newBroadcastMetadata(in.Metadata)
-			srv.broadcastSrv.broadcaster.setMetadata(broadcastMetadata)
-			// add the request as a client request
-			srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
-			impl(ctx, req, srv.broadcastSrv.broadcaster.(V))
-		}()
-		if !srv.broadcastSrv.async {
-			<-doneChan
+		addOriginMethod(in.Metadata)
+		// guard:
+		// - A broadcastID should be non-empty:
+		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
+		if err := srv.broadcastSrv.validateMessage(in); err != nil {
+			srv.broadcastSrv.logger.Info("broadcast request not valid", "req", req)
+			return
 		}
+		// add the request as a client request
+		srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
+		broadcastMetadata := newBroadcastMetadata(in.Metadata)
+		srv.broadcastSrv.broadcaster.setMetadata(broadcastMetadata)
+		impl(ctx, req, srv.broadcastSrv.broadcaster.(V))
+		srv.broadcastSrv.broadcaster.resetMetadata()
 	}
 }
 
@@ -51,6 +45,7 @@ func addOriginMethod(md *ordering.Metadata) {
 	if md.BroadcastMsg.SenderType != BroadcastClient {
 		return
 	}
+	// keep track of the method called by the user
 	md.BroadcastMsg.OriginMethod = md.Method
 }
 
@@ -72,33 +67,47 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	return nil
 }
 
-func (srv *broadcastServer) broadcastStructHandler(method string, req RequestTypes, metadata BroadcastMetadata, opts ...BroadcastOptions) {
+func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, metadata BroadcastMetadata, opts ...BroadcastOptions) {
 	options := BroadcastOptions{}
 	if len(opts) > 0 {
 		options = opts[0]
 	}
 	if !srv.alreadyBroadcasted(metadata.BroadcastID, method) || options.OmitUniquenessChecks {
+		// it is possible to broadcast outside a server handler and it is thus necessary
+		// to check whether the provided broadcastID is valid. It will also add the
+		// necessary fields to correctly route the request.
+		valid := srv.updateMetadata(&metadata)
+		if !valid {
+			return
+		}
 		finished := make(chan struct{})
 		srv.broadcastChan <- newBroadcastMessage(metadata, req, method, metadata.BroadcastID, options.ServerAddresses, finished)
 
-		// not broadcasting in a go routine can lead to deadlock. All handlers are run sync
+		// not broadcasting in a goroutine can lead to deadlock. All handlers are run sync
 		// and thus the server have to return from the handler in order to process the next
-		// request. However, the async option lets each handler run in separate go routines
-		// and thus can enable broadcasting in a synchronous manner.
-		if srv.async {
-			<-finished
-		}
+		// request.
+		<-finished
 	}
 }
 
-func (srv *Server) RegisterBroadcastStruct(b broadcaster, configureHandlers func(bh BroadcastHandlerFunc, ch BroadcastReturnToClientHandlerFunc), configureMetadata func(metadata BroadcastMetadata)) {
+func (srv *broadcastServer) updateMetadata(metadata *BroadcastMetadata) bool {
+	clientReq, ok := srv.clientReqs.Get(metadata.BroadcastID)
+	if !ok {
+		return false
+	}
+	metadata.OriginAddr = clientReq.metadata.BroadcastMsg.OriginAddr
+	metadata.OriginMethod = clientReq.metadata.BroadcastMsg.OriginMethod
+	return true
+}
+
+func (srv *Server) RegisterBroadcaster(b broadcaster, configureHandlers func(brh BroadcastHandlerFunc, ch BroadcastSendToClientHandlerFunc), configureMetadata func(metadata BroadcastMetadata), resetMetadata func()) {
 	srv.broadcastSrv.broadcaster = b
-	srv.broadcastSrv.broadcaster.setMetadataHandler(configureMetadata)
-	configureHandlers(srv.broadcastSrv.broadcastStructHandler, srv.broadcastSrv.clientReturn)
+	srv.broadcastSrv.broadcaster.setMetadataHandler(configureMetadata, resetMetadata)
+	configureHandlers(srv.broadcastSrv.broadcasterHandler, srv.broadcastSrv.sendToClient)
 }
 
 func (srv *Server) RetToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
-	srv.broadcastSrv.returnToClient(broadcastID, resp, err)
+	srv.broadcastSrv.sendToClient(broadcastID, resp, err)
 }
 
 func (srv *Server) ListenForBroadcast() {

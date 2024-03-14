@@ -20,6 +20,21 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 7)
 )
 
+// Reference imports to suppress errors if they are not otherwise used.
+var _ empty.Empty
+
+// Multicast with broadcast option enables the server handler to broadcast.
+// The handler still works like a regular QuorumCall from the client's
+// perpective.
+func (c *Configuration) MulticastWithBroadcast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "dev.ZorumsService.MulticastWithBroadcast",
+	}
+
+	c.RawConfiguration.Multicast(ctx, cd, opts...)
+}
+
 // Multicast plain. Response type is not needed here.
 func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
 	cd := gorums.QuorumCallData{

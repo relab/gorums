@@ -13,12 +13,12 @@ var serverInterface = `
 // {{$service}} is the server-side API for the {{$service}} Service
 type {{$service}} interface {
 	{{- range .Methods}}
-	{{- if isOneway .}}
-	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
+	{{- if isBroadcast  .}}
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast)
 	{{- else if correctableStream .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
-	{{- else if isBroadcast .}}
-	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast)
+	{{- else if isOneway .}}
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
@@ -94,16 +94,30 @@ func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 {{- end}}
 `
 
-var registerReplyToClientHandlers = `
+var registerServerBroadcast = `
 {{$genFile := .GenFile}}
-{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
-func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
-	b.sp.ReturnToClientHandler(resp, err, b.metadata)
+
+{{range .Services -}}
+{{$service := .GoName}}
+{{- range .Methods}}
+{{- if isBroadcast .}}
+
+func (srv *Server) Broadcast{{.GoName}}(req *{{in $genFile .}}, broadcastID string, opts... gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	metadata := gorums.BroadcastMetadata{}
+	metadata.BroadcastID = broadcastID
+	go srv.broadcast.orchestrator.BroadcastHandler("{{.Desc.FullName}}", req, metadata, options)
 }
 
-func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
-	srv.RetToClient(resp, err, broadcastID)
-}
+{{- end}}
+{{- end}}
+{{- end}}
 `
 
-var server = serverVariables + serverInterface + registerServerMethods + registerInterface + registerReplyToClientHandlers
+var server = serverVariables + serverInterface + registerServerMethods + registerInterface + registerServerBroadcast

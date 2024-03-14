@@ -18,25 +18,45 @@ const (
 )
 
 func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == "" {
+		panic("broadcastID cannot be empty. Use srv.BroadcastQuorumCallWithBroadcast instead")
+	}
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	b.sp.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, b.metadata, options)
+	go b.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, b.metadata, options)
+}
+
+func (b *Broadcast) MulticastWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == "" {
+		panic("broadcastID cannot be empty. Use srv.BroadcastMulticastWithBroadcast instead")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	go b.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, b.metadata, options)
 }
 
 func (b *Broadcast) BroadcastInternal(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == "" {
+		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcastInternal instead")
+	}
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	b.sp.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, b.metadata, options)
+	go b.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, b.metadata, options)
 }
 
 func (b *Broadcast) BroadcastWithClientHandlerAndBroadcastOption(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == "" {
+		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcastWithClientHandlerAndBroadcastOption instead")
+	}
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	b.sp.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, b.metadata, options)
+	go b.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, b.metadata, options)
 }

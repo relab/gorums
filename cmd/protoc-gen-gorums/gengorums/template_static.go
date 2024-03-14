@@ -5,7 +5,7 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec", "net": "Listener"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastHandlerFunc", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listener"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
@@ -92,7 +92,7 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	if len(opts) < 1 || len(opts) > 2 {
+	if len(opts) < 1 || len(opts) > 3 {
 		return nil, fmt.Errorf("wrong number of options: %d", len(opts))
 	}
 	c = &Configuration{}
@@ -117,10 +117,10 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 		}
 	}
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("missing required QuorumSpec")
-	}
+	//var test interface{} = struct{}{}
+	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+	//	return nil, fmt.Errorf("missing required QuorumSpec")
+	//}
 	return c, nil
 }
 
@@ -143,7 +143,8 @@ type Node struct {
 
 type Server struct {
 	*gorums.Server
-	View *Configuration
+	broadcast *Broadcast
+	View      *Configuration
 }
 
 func NewServer() *Server {
@@ -151,10 +152,13 @@ func NewServer() *Server {
 		Server: gorums.NewServer(),
 	}
 	b := &Broadcast{
-		Broadcaster: gorums.NewBroadcaster(),
-		sp:          gorums.NewSpBroadcastStruct(),
+		Broadcaster:  gorums.NewBroadcaster(),
+		orchestrator: gorums.NewBroadcastOrchestrator(),
+		metadata:     gorums.BroadcastMetadata{},
 	}
-	srv.RegisterBroadcastStruct(b, configureHandlers(b), configureMetadata(b))
+	srv.broadcast = b
+	set, reset := configureMetadata(b)
+	srv.RegisterBroadcaster(b, configureHandlers(b), set, reset)
 	return srv
 }
 
@@ -166,21 +170,23 @@ func (srv *Server) SetView(config *Configuration) {
 
 type Broadcast struct {
 	*gorums.Broadcaster
-	sp       *gorums.SpBroadcast
-	metadata gorums.BroadcastMetadata
+	orchestrator *gorums.BroadcastOrchestrator
+	metadata     gorums.BroadcastMetadata
 }
 
-func configureHandlers(b *Broadcast) func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastReturnToClientHandlerFunc) {
-	return func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastReturnToClientHandlerFunc) {
-		b.sp.BroadcastHandler = bh
-		b.sp.ReturnToClientHandler = ch
+func configureHandlers(b *Broadcast) func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastSendToClientHandlerFunc) {
+	return func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastSendToClientHandlerFunc) {
+		b.orchestrator.BroadcastHandler = bh
+		b.orchestrator.SendToClientHandler = ch
 	}
 }
 
-func configureMetadata(b *Broadcast) func(metadata gorums.BroadcastMetadata) {
+func configureMetadata(b *Broadcast) (func(metadata gorums.BroadcastMetadata), func()) {
 	return func(metadata gorums.BroadcastMetadata) {
-		b.metadata = metadata
-	}
+			b.metadata = metadata
+		}, func() {
+			b.metadata = gorums.BroadcastMetadata{}
+		}
 }
 
 // Returns a readonly struct of the metadata used in the broadcast.
@@ -209,6 +215,14 @@ func (c *Configuration) RegisterClientServer(lis net.Listener, opts ...grpc.Serv
 	srvImpl.ClientServer = srv
 	c.srv = srvImpl
 	return nil
+}
+
+func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
+	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
+}
+
+func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
+	srv.RetToClient(resp, err, broadcastID)
 }
 
 `
