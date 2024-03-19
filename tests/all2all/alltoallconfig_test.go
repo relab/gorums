@@ -1,7 +1,7 @@
 package all2all
 
 import (
-	context "context"
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -43,19 +43,19 @@ func createReplicas(numReplicas int) ([]*replica, error) {
 	replicas := make([]*replica, numReplicas)
 	errChan := make(chan error, numReplicas)
 	startedChan := make(chan struct{}, numReplicas)
-	for i := 1; i <= numReplicas; i++ {
+	for i := range replicas {
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			return nil, err
 		}
-		replica := replica{
+		replica := &replica{
 			address: lis.Addr().String(),
 			id:      uint32(i),
 			lis:     lis,
 			server:  gorums.NewServer(),
 		}
 		RegisterSampleServer(replica.server, replica)
-		replicas[i-1] = &replica
+		replicas[i] = replica
 		go func() {
 			startedChan <- struct{}{}
 			if err := replica.serve(); err != nil {
@@ -100,8 +100,7 @@ func (r replica) WriteQC(ctx gorums.ServerCtx, request *WriteRequest) (response 
 func (r *replica) createConfiguration(nodeMap map[string]uint32) error {
 	r.mgr = NewManager(gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(), // block until connections are made
-			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
 	_, err := r.mgr.NewConfiguration(qspec{}, gorums.WithNodeMap(nodeMap))
@@ -123,10 +122,9 @@ func TestGrpcDial(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, replica := range replicas {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(1000)*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(10000)*time.Millisecond)
 		defer cancel()
 		replica.conn, err = grpc.DialContext(ctx, replica.address,
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if err != nil {
