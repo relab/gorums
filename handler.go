@@ -91,12 +91,6 @@ func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, 
 	}
 }
 
-//func (srv *Server) RegisterBroadcaster(b Ibroadcaster, configureHandlers func(brh BroadcastHandlerFunc, ch BroadcastSendToClientHandlerFunc), configureMetadata func(metadata BroadcastMetadata), resetMetadata func()) {
-//	srv.broadcastSrv.broadcaster = b
-//	srv.broadcastSrv.broadcaster.setMetadataHandler(configureMetadata, resetMetadata)
-//	configureHandlers(srv.broadcastSrv.broadcasterHandler, srv.broadcastSrv.sendToClient)
-//}
-
 func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Ibroadcaster) {
 	srv.broadcastSrv.broadcaster = b
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
