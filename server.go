@@ -63,6 +63,10 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	finished := make(chan *Message, s.opts.buffer)
 	ctx := srv.Context()
 
+	if s.opts.connectCallback != nil {
+		s.opts.connectCallback(ctx)
+	}
+
 	go func() {
 		for {
 			select {
@@ -99,8 +103,9 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 }
 
 type serverOptions struct {
-	buffer   uint
-	grpcOpts []grpc.ServerOption
+	buffer          uint
+	grpcOpts        []grpc.ServerOption
+	connectCallback func(context.Context)
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -118,6 +123,16 @@ func WithReceiveBufferSize(size uint) ServerOption {
 func WithGRPCServerOptions(opts ...grpc.ServerOption) ServerOption {
 	return func(o *serverOptions) {
 		o.grpcOpts = append(o.grpcOpts, opts...)
+	}
+}
+
+// WithConnectCallback registers a callback function that will be called by the server
+// whenever a node connects or reconnects to the server. This allows access to the node's
+// stream context, which is passed to the callback function. The stream context can be
+// used to extract the metadata and peer information, if available.
+func WithConnectCallback(callback func(context.Context)) ServerOption {
+	return func(so *serverOptions) {
+		so.connectCallback = callback
 	}
 }
 

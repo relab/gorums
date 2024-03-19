@@ -83,19 +83,19 @@ To cut a release you will need additional tools:
 
 10. Publish the release with release notes:
 
-   ```shell
-   # Prepare release notes in release-notes.md
-   % gh release create v0.4.0 --prerelease -F release-notes.md --title "Main changes in release"
-   ```
+    ```shell
+    # Prepare release notes in release-notes.md
+    % gh release create v0.4.0 --prerelease -F release-notes.md --title "Main changes in release"
+    ```
 
-   Without the `gh` tool:
+    Without the `gh` tool:
 
-   ```shell
-   % git tag v0.4.0
-   % git push origin v0.4.0
-   ```
+    ```shell
+    % git tag v0.4.0
+    % git push origin v0.4.0
+    ```
 
-   Now other projects can depend on `v0.4.0` of `github.com/relab/gorums`.
+    Now other projects can depend on `v0.4.0` of `github.com/relab/gorums`.
 
 11. To check that the new version is available (after a bit of time):
 

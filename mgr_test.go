@@ -61,7 +61,7 @@ func TestManagerAddNode(t *testing.T) {
 // Proto definition in tests/dummy/dummy.proto
 type dummySrv struct{}
 
-func (_ dummySrv) Test(ctx gorums.ServerCtx, _ *dummy.Empty) (resp *dummy.Empty, err error) {
+func (dummySrv) Test(ctx gorums.ServerCtx, _ *dummy.Empty) (resp *dummy.Empty, err error) {
 	return nil, nil
 }
 

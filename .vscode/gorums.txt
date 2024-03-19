@@ -14,6 +14,7 @@ emptypb
 Erevik
 errcheck
 extendee
+Frausing's
 fset
 gengorums
 GOBIN
@@ -28,7 +29,9 @@ gorumsexample
 grpc
 Hein
 ICDCS
+Idents
 Idxs
+Iface
 Ingve
 installgorums
 Jehl
@@ -36,6 +39,7 @@ Lmsgprefix
 Mallocs
 markdownlint
 mcast
+Meland's
 Meling
 memprofile
 multicast
@@ -46,12 +50,15 @@ pkgs
 proto
 protobuf
 protoc
+protogen
 protoimpl
+protoreflect
 ptypes
 QCQF
 qcresult
 qspec
 quorumcall
+Reconf
 relab
 rlevel
 RPC's
@@ -68,6 +75,8 @@ Tormod
 unexport
 Unexported
 unicast
+unmarshal
+unmarshaled
 unmarshaling
 userguide
 Xeon

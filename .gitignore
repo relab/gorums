@@ -32,6 +32,7 @@ Session.vim
 *~
 
 *.xo
+.vscode/*.log
 
 # binary files
 cmd/benchmark/benchmark
@@ -39,3 +40,6 @@ cmd/benchmark/benchmark
 ideas.txt
 
 cmd/protoc-gen-gorums/gengorums/template_static.go.bak
+
+# jetbrains IDE files
+.idea/

@@ -61,6 +61,6 @@ func (c *{{$correctableOut}}) Get() (*{{$customOut}}, int, error) {
 {{- end -}}
 `
 
-var datatypes = internalOutDataType +
+var dataTypes = internalOutDataType +
 	asyncDataType +
 	correctableDataType

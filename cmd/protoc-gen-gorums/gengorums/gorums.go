@@ -116,7 +116,7 @@ type servicesData struct {
 	Services []*protogen.Service
 }
 
-// genGorumsType generates Gorums methods and corresponding datastructures for gorumsType.
+// genGorumsType generates Gorums methods and corresponding data structures for gorumsType.
 func genGorumsType(g *protogen.GeneratedFile, services []*protogen.Service, gorumsType string) {
 	data := servicesData{g, services}
 	if callTypeInfo := gorumsCallTypesInfo[gorumsType]; callTypeInfo.extInfo == nil {
@@ -240,7 +240,7 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 // files for the different keys.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"qspec":  {template: qspecInterface},
-	"types":  {template: datatypes},
+	"types":  {template: dataTypes},
 	"server": {template: server},
 
 	callTypeName(gorums.E_Rpc): {
