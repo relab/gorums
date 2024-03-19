@@ -61,40 +61,40 @@ func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 // connect to this node and associate it with the manager.
 func (n *RawNode) connect(mgr *RawManager) error {
 	n.mgr = mgr
-	n.channel = newChannel(n)
 	if n.mgr.opts.noConnect {
 		return nil
 	}
-	// ignoring the error because it will try to reconnect
-	// at a later time.
+	n.channel = newChannel(n)
+	// ignoring the error because it will try to reconnect later
 	_ = n.dial()
-	ctx := n.ctxSetup()
+	ctx := n.newContext()
 	if err := n.channel.connect(ctx, n.conn); err != nil {
-		return fmt.Errorf("starting stream failed: %w", err)
+		return fmt.Errorf("failed to start stream: %w", err)
 	}
 	return nil
 }
 
 // dials the node if it has not been done previously
 func (n *RawNode) dial() error {
-	if n.conn == nil {
-		var err error
-		ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
-		defer cancel()
-		// error is ignored because we will retry the dial at a later time
-		n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
-		return err
+	// dial has previously succeded so we can do nothing
+	if n.conn != nil {
+		return nil
 	}
-	return nil
+	var err error
+	ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
+	defer cancel()
+	n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
+	return err
 }
 
-// creates a context that governs the channel. It is
-// used to stop all channel goroutines and the NodeStream.
+// newContext returns a new context for this node's channel.
+// This context is used by the channel implementation to stop
+// all goroutines and the NodeStream, when the context is canceled.
 //
-// this method should be run for each connection to ensure
+// This method must be called for each connection to ensure
 // fresh contexts. Reusing contexts could result in reusing
 // a cancelled context.
-func (n *RawNode) ctxSetup() context.Context {
+func (n *RawNode) newContext() context.Context {
 	md := n.mgr.opts.metadata.Copy()
 	if n.mgr.opts.perNodeMD != nil {
 		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
@@ -107,13 +107,14 @@ func (n *RawNode) ctxSetup() context.Context {
 
 // close this node.
 func (n *RawNode) close() error {
+	// important to cancel first to stop goroutines
+	n.cancel()
 	if n.conn == nil {
 		return nil
 	}
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("%d: conn close error: %w", n.id, err)
 	}
-	n.cancel()
 	return nil
 }
 
