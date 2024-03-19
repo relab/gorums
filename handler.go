@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -19,12 +18,11 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 	}
 }
 
-func BroadcastHandler[T RequestTypes, V broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BroadcastHandler[T RequestTypes, V Ibroadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		defer ctx.Release()
 		req := in.Message.(T)
 		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req)
-		addOriginMethod(in.Metadata)
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
@@ -32,12 +30,17 @@ func BroadcastHandler[T RequestTypes, V broadcaster](impl implementationFunc[T, 
 			srv.broadcastSrv.logger.Info("broadcast request not valid", "req", req)
 			return
 		}
+		addOriginMethod(in.Metadata)
 		// add the request as a client request
-		srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
-		broadcastMetadata := newBroadcastMetadata(in.Metadata)
-		srv.broadcastSrv.broadcaster.setMetadata(broadcastMetadata)
-		impl(ctx, req, srv.broadcastSrv.broadcaster.(V))
-		srv.broadcastSrv.broadcaster.resetMetadata()
+		count, err := srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
+		if err != nil {
+			// request has been handled and is no longer valid
+			return
+		}
+		broadcastMetadata := newBroadcastMetadata(in.Metadata, count)
+		//srv.broadcastSrv.broadcaster.setMetadata(broadcastMetadata)
+		impl(ctx, req, srv.broadcastSrv.broadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V))
+		//srv.broadcastSrv.broadcaster.resetMetadata()
 	}
 }
 
@@ -67,21 +70,20 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	return nil
 }
 
-func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, metadata BroadcastMetadata, opts ...BroadcastOptions) {
+func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, broadcastID string, opts ...BroadcastOptions) {
 	options := BroadcastOptions{}
 	if len(opts) > 0 {
 		options = opts[0]
 	}
-	if !srv.alreadyBroadcasted(metadata.BroadcastID, method) || options.OmitUniquenessChecks {
+	if !srv.alreadyBroadcasted(broadcastID, method) || options.OmitUniquenessChecks {
 		// it is possible to broadcast outside a server handler and it is thus necessary
 		// to check whether the provided broadcastID is valid. It will also add the
 		// necessary fields to correctly route the request.
-		valid := srv.updateMetadata(&metadata)
-		if !valid {
+		if handled := srv.clientReqs.IsHandled(broadcastID); handled {
 			return
 		}
 		finished := make(chan struct{})
-		srv.broadcastChan <- newBroadcastMessage(metadata, req, method, metadata.BroadcastID, options.ServerAddresses, finished)
+		srv.broadcastChan <- newBroadcastMessage(broadcastID, req, method, options, finished)
 
 		// not broadcasting in a goroutine can lead to deadlock. All handlers are run sync
 		// and thus the server have to return from the handler in order to process the next
@@ -90,29 +92,19 @@ func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, 
 	}
 }
 
-func (srv *broadcastServer) updateMetadata(metadata *BroadcastMetadata) bool {
-	clientReq, ok := srv.clientReqs.Get(metadata.BroadcastID)
-	if !ok {
-		return false
-	}
-	metadata.OriginAddr = clientReq.metadata.BroadcastMsg.OriginAddr
-	metadata.OriginMethod = clientReq.metadata.BroadcastMsg.OriginMethod
-	return true
-}
+//func (srv *Server) RegisterBroadcaster(b Ibroadcaster, configureHandlers func(brh BroadcastHandlerFunc, ch BroadcastSendToClientHandlerFunc), configureMetadata func(metadata BroadcastMetadata), resetMetadata func()) {
+//	srv.broadcastSrv.broadcaster = b
+//	srv.broadcastSrv.broadcaster.setMetadataHandler(configureMetadata, resetMetadata)
+//	configureHandlers(srv.broadcastSrv.broadcasterHandler, srv.broadcastSrv.sendToClient)
+//}
 
-func (srv *Server) RegisterBroadcaster(b broadcaster, configureHandlers func(brh BroadcastHandlerFunc, ch BroadcastSendToClientHandlerFunc), configureMetadata func(metadata BroadcastMetadata), resetMetadata func()) {
+func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Ibroadcaster) {
 	srv.broadcastSrv.broadcaster = b
-	srv.broadcastSrv.broadcaster.setMetadataHandler(configureMetadata, resetMetadata)
-	configureHandlers(srv.broadcastSrv.broadcasterHandler, srv.broadcastSrv.sendToClient)
+	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
 }
 
 func (srv *Server) RetToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
 	srv.broadcastSrv.sendToClient(broadcastID, resp, err)
-}
-
-func (srv *Server) ListenForBroadcast() {
-	go srv.broadcastSrv.run()
-	go srv.broadcastSrv.handleClientResponses()
 }
 
 func (srv *broadcastServer) registerReturnToClientHandler(method string, handler func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
@@ -120,88 +112,35 @@ func (srv *broadcastServer) registerReturnToClientHandler(method string, handler
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.handlers[method] = func(ctx context.Context, in RequestTypes, md BroadcastMetadata, srvAddrs []string) {
+	srv.handlers[method] = func(ctx context.Context, in RequestTypes, req clientRequest, options BroadcastOptions) {
+		srv.propertiesMutex.Lock()
 		cd := broadcastCallData{
 			Message:         in,
 			Method:          method,
-			BroadcastID:     md.BroadcastID,
+			BroadcastID:     req.metadata.BroadcastMsg.BroadcastID,
 			SenderType:      BroadcastServer,
 			SenderAddr:      srv.addr,
-			OriginAddr:      md.OriginAddr,
-			OriginMethod:    md.OriginMethod,
-			ServerAddresses: srvAddrs,
+			OriginAddr:      req.metadata.BroadcastMsg.OriginAddr,
+			OriginMethod:    req.metadata.BroadcastMsg.OriginMethod,
+			ServerAddresses: options.ServerAddresses,
 		}
+		srv.propertiesMutex.Unlock()
 		srv.view.broadcastCall(ctx, cd)
 	}
 }
 
-//func (srv *Server) View() serverView {
-//	return srv.broadcastSrv.view
-//}
-
 func (srv *Server) RegisterConfig(config RawConfiguration) {
-	srvAddrs := make([]string, 0, len(config))
-	for _, node := range config.Nodes() {
-		srvAddrs = append(srvAddrs, node.Address())
-	}
-	srv.broadcastSrv.peers = srvAddrs
-	//srvAddrs := make([]string, len(srv.broadcastSrv.peers))
-	//copy(srvAddrs, srv.broadcastSrv.peers)
-	//ownAddrIncluded := false
-	//for _, addr := range srvAddrs {
-	//	if addr == srv.broadcastSrv.addr {
-	//		ownAddrIncluded = true
-	//		break
-	//	}
-	//}
-	//if !ownAddrIncluded {
-	//	srvAddrs = append(srvAddrs, srv.broadcastSrv.addr)
-	//}
-	//config, err := NewRawConfiguration(srv.broadcastSrv.mgr, WithNodeListBroadcast(srvAddrs))
+	// temporarily stop the broadcast server to prevent queueing
+	// broadcast messages. Otherwise, beacuse the broadcast queueing
+	// method holds a read lock and can thus prevent this method
+	// from running.
+	srv.broadcastSrv.stop()
+	// handle all queued broadcast messages before changing the view
+	srv.broadcastSrv.viewMutex.Lock()
+	// delete all client requests. This resets all broadcast requests.
+	srv.broadcastSrv.clientReqs.Reset()
 	srv.broadcastSrv.view = config
-	//srv.broadcastSrv.timeout = mgr.opts.nodeDialTimeout
-	srv.broadcastSrv.timeout = 5 * time.Second
+	srv.broadcastSrv.viewMutex.Unlock()
+	// restart the server to resume progress
+	srv.broadcastSrv.start()
 }
-
-//func (srv *Server) RegisterView(listenAddr string, srvAddrs []string, opts ...ManagerOption) error {
-//	if len(opts) <= 0 {
-//		opts = make([]ManagerOption, 2)
-//		opts[0] = WithDialTimeout(50 * time.Millisecond)
-//		opts[1] = WithGrpcDialOptions(
-//			grpc.WithBlock(),
-//			grpc.WithTransportCredentials(insecure.NewCredentials()),
-//		)
-//	}
-//	srv.broadcastSrv.mgr = NewRawManager(opts...)
-//	srv.broadcastSrv.peers = srvAddrs
-//	srv.broadcastSrv.addr = listenAddr
-//	if srv.broadcastSrv.addr == "" {
-//		slog.Debug("listenAddr cannot be empty")
-//		return fmt.Errorf("listenAddr cannot be empty")
-//	}
-//	return srv.configureView()
-//}
-//
-//func (srv *Server) configureView() error {
-//	if srv.broadcastSrv.mgr == nil {
-//		slog.Debug("manager not created yet")
-//		return fmt.Errorf("manager not created yet")
-//	}
-//	srvAddrs := make([]string, len(srv.broadcastSrv.peers))
-//	copy(srvAddrs, srv.broadcastSrv.peers)
-//	ownAddrIncluded := false
-//	for _, addr := range srvAddrs {
-//		if addr == srv.broadcastSrv.addr {
-//			ownAddrIncluded = true
-//			break
-//		}
-//	}
-//	if !ownAddrIncluded {
-//		srvAddrs = append(srvAddrs, srv.broadcastSrv.addr)
-//	}
-//	config, err := NewRawConfiguration(srv.broadcastSrv.mgr, WithNodeListBroadcast(srvAddrs))
-//	srv.broadcastSrv.view = config
-//	//srv.broadcastSrv.timeout = mgr.opts.nodeDialTimeout
-//	srv.broadcastSrv.timeout = 5 * time.Second
-//	return err
-//}

@@ -20,40 +20,29 @@ func NewServer() *Server {
 	}
 	b := &Broadcast{
 		Broadcaster:  gorums.NewBroadcaster(),
-		orchestrator: gorums.NewBroadcastOrchestrator(),
-		metadata:     gorums.BroadcastMetadata{},
+		orchestrator: gorums.NewBroadcastOrchestrator(srv.Server),
 	}
 	srv.broadcast = b
-	set, reset := configureMetadata(b)
-	srv.RegisterBroadcaster(b, configureHandlers(b), set, reset)
+	srv.RegisterBroadcaster(newBroadcaster)
 	return srv
+}
+
+func newBroadcaster(m gorums.BroadcastMetadata, o *gorums.BroadcastOrchestrator) gorums.Ibroadcaster {
+	return &Broadcast{
+		orchestrator: o,
+		metadata:     m,
+	}
 }
 
 func (srv *Server) SetView(config *Configuration) {
 	srv.View = config
 	srv.RegisterConfig(config.RawConfiguration)
-	srv.ListenForBroadcast()
 }
 
 type Broadcast struct {
 	*gorums.Broadcaster
 	orchestrator *gorums.BroadcastOrchestrator
 	metadata     gorums.BroadcastMetadata
-}
-
-func configureHandlers(b *Broadcast) func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastSendToClientHandlerFunc) {
-	return func(bh gorums.BroadcastHandlerFunc, ch gorums.BroadcastSendToClientHandlerFunc) {
-		b.orchestrator.BroadcastHandler = bh
-		b.orchestrator.SendToClientHandler = ch
-	}
-}
-
-func configureMetadata(b *Broadcast) (func(metadata gorums.BroadcastMetadata), func()) {
-	return func(metadata gorums.BroadcastMetadata) {
-			b.metadata = metadata
-		}, func() {
-			b.metadata = gorums.BroadcastMetadata{}
-		}
 }
 
 // Returns a readonly struct of the metadata used in the broadcast.

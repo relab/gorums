@@ -107,7 +107,12 @@ func (c *channel) enqueue(req request, responseChan chan<- response, streaming b
 		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, streaming}
 		c.responseMut.Unlock()
 	}
-	c.sendQ <- req
+	select {
+	case <-c.parentCtx.Done():
+		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: fmt.Errorf("channel closed")})
+		return
+	case c.sendQ <- req:
+	}
 }
 
 func (c *channel) deleteRouter(msgID uint64) {

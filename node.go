@@ -107,13 +107,13 @@ func (n *RawNode) ctxSetup() context.Context {
 
 // close this node.
 func (n *RawNode) close() error {
+	n.cancel()
 	if n.conn == nil {
 		return nil
 	}
 	if err := n.conn.Close(); err != nil {
 		return fmt.Errorf("%d: conn close error: %w", n.id, err)
 	}
-	n.cancel()
 	return nil
 }
 

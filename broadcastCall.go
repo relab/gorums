@@ -42,11 +42,9 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
 		SenderType:   d.SenderType,
 		BroadcastID:  d.BroadcastID,
-		SequenceNo:   d.SequenceNo,
 		SenderAddr:   d.SenderAddr,
 		OriginAddr:   d.OriginAddr,
 		OriginMethod: d.OriginMethod,
-		Deadline:     d.Deadline,
 	}}
 	o := getCallOptions(E_Broadcast, nil)
 

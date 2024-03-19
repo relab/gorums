@@ -110,9 +110,7 @@ func (srv *Server) Broadcast{{.GoName}}(req *{{in $genFile .}}, broadcastID stri
 	for _, opt := range opts {
 		opt(&options)
 	}
-	metadata := gorums.BroadcastMetadata{}
-	metadata.BroadcastID = broadcastID
-	go srv.broadcast.orchestrator.BroadcastHandler("{{.Desc.FullName}}", req, metadata, options)
+	go srv.broadcast.orchestrator.BroadcastHandler("{{.Desc.FullName}}", req, broadcastID, options)
 }
 
 {{- end}}

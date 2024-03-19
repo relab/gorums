@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -17,11 +18,7 @@ const (
 	BroadcastID     string = "broadcastID"
 )
 
-type serverView interface {
-	broadcastCall(ctx context.Context, d broadcastCallData)
-}
-
-type broadcastFunc func(ctx context.Context, req RequestTypes, broadcastMetadata BroadcastMetadata, srvAddrs []string)
+type broadcastFunc func(ctx context.Context, in RequestTypes, req clientRequest, options BroadcastOptions)
 
 type RequestTypes interface {
 	ProtoReflect() protoreflect.Message
@@ -31,19 +28,18 @@ type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastHandlerFunc func(method string, req RequestTypes, metadata BroadcastMetadata, data ...BroadcastOptions)
+type BroadcastHandlerFunc func(method string, req RequestTypes, broadcastID string, data ...BroadcastOptions)
 type BroadcastSendToClientHandlerFunc func(broadcastID string, resp ResponseTypes, err error)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
-type implementationFunc[T RequestTypes, V broadcaster] func(ServerCtx, T, V)
+type implementationFunc[T RequestTypes, V Ibroadcaster] func(ServerCtx, T, V)
 
 type responseMsg struct {
 	response    ResponseTypes
 	err         error
 	broadcastID string
 	timestamp   time.Time
-	ttl         time.Duration
 }
 
 func newResponseMessage(response ResponseTypes, err error, broadcastID string) *responseMsg {
@@ -67,19 +63,13 @@ func (r *responseMsg) getBroadcastID() string {
 	return r.broadcastID
 }
 
-func (r *responseMsg) valid() bool {
-	if r.ttl != 0 {
-		return time.Since(r.timestamp) <= r.ttl
-	}
-	return true
-}
-
 type clientRequest struct {
 	id        string
 	ctx       ServerCtx
 	finished  chan<- *Message
 	metadata  *ordering.Metadata
 	methods   []string
+	counts    map[string]uint64
 	timestamp time.Time
 	doneChan  chan struct{}
 }
@@ -99,8 +89,11 @@ type BroadcastOrchestrator struct {
 	SendToClientHandler BroadcastSendToClientHandlerFunc
 }
 
-func NewBroadcastOrchestrator() *BroadcastOrchestrator {
-	return &BroadcastOrchestrator{}
+func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
+	return &BroadcastOrchestrator{
+		BroadcastHandler:    srv.broadcastSrv.broadcasterHandler,
+		SendToClientHandler: srv.broadcastSrv.sendToClient,
+	}
 }
 
 type BroadcastOption func(*BroadcastOptions)
@@ -165,7 +158,7 @@ func NewBroadcastOptions() BroadcastOptions {
 	return BroadcastOptions{}
 }
 
-type broadcaster interface {
+type Ibroadcaster interface {
 	setMetadataHandler(func(metadata BroadcastMetadata), func())
 	setMetadata(metadata BroadcastMetadata)
 	resetMetadata()
@@ -195,16 +188,16 @@ func NewBroadcaster() *Broadcaster {
 
 type BroadcastMetadata struct {
 	BroadcastID  string
-	SequenceNo   uint32
-	SenderType   string
-	SenderAddr   string
-	OriginAddr   string
-	OriginMethod string
+	SenderType   string // type of sender, could be: Client or Server
+	SenderAddr   string // address of last hop
+	OriginAddr   string // address of the origin
+	OriginMethod string // the first method called by the origin
 	Deadline     uint64
-	Method       string
+	Method       string // the current method
+	Count        uint64 // number of messages received to the current method
 }
 
-func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
+func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata {
 	tmp := strings.Split(md.Method, ".")
 	m := ""
 	if len(tmp) >= 1 {
@@ -212,43 +205,76 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	}
 	return BroadcastMetadata{
 		BroadcastID:  md.BroadcastMsg.BroadcastID,
-		SequenceNo:   md.BroadcastMsg.SequenceNo,
 		SenderType:   md.BroadcastMsg.SenderType,
 		SenderAddr:   md.BroadcastMsg.SenderAddr,
 		OriginAddr:   md.BroadcastMsg.OriginAddr,
 		OriginMethod: md.BroadcastMsg.OriginMethod,
 		Deadline:     md.BroadcastMsg.Deadline,
 		Method:       m,
+		Count:        count,
 	}
 }
 
+type CacheOption int
+
+/*
+redis:
+
+  - noeviction: New values aren’t saved when memory limit is reached. When a database uses replication, this applies to the primary database
+  - allkeys-lru: Keeps most recently used keys; removes least recently used (LRU) keys
+  - allkeys-lfu: Keeps frequently used keys; removes least frequently used (LFU) keys
+  - volatile-lru: Removes least recently used keys with the expire field set to true.
+  - volatile-lfu: Removes least frequently used keys with the expire field set to true.
+  - allkeys-random: Randomly removes keys to make space for the new data added.
+  - volatile-random: Randomly removes keys with expire field set to true.
+  - volatile-ttl: Removes keys with expire field set to true and the shortest remaining time-to-live (TTL) value.
+*/
+const (
+	noeviction CacheOption = iota
+	allkeysLRU
+	allkeysLFU
+	volatileLRU
+	volatileLFU
+	allkeysRANDOM
+	volatileRANDOM
+	volatileTTL
+)
+
 type RequestMap struct {
-	data        map[string]clientRequest
-	mutex       sync.RWMutex
-	handledReqs map[string]time.Time
+	data         map[string]clientRequest
+	mutex        sync.RWMutex
+	handledReqs  map[string]time.Time
+	doneChan     chan struct{}
+	removeOption CacheOption
 }
 
 func NewRequestMap() *RequestMap {
 	reqMap := &RequestMap{
 		data:        make(map[string]clientRequest),
 		handledReqs: make(map[string]time.Time),
+		doneChan:    make(chan struct{}),
 	}
 	return reqMap
 }
 
 func (list *RequestMap) cleanup() {
 	for {
+		select {
+		case <-list.doneChan:
+			return
+		default:
+		}
 		time.Sleep(1 * time.Minute)
 		del := make([]string, 0)
 		// remove handled reqs
 		for broadcastID, timestamp := range list.handledReqs {
-			if time.Now().Sub(timestamp) > 30*time.Minute {
+			if time.Since(timestamp) > 30*time.Minute {
 				del = append(del, broadcastID)
 			}
 		}
 		// remove stale reqs
 		for broadcastID, req := range list.data {
-			if time.Now().Sub(req.timestamp) > 30*time.Minute {
+			if time.Since(req.timestamp) > 30*time.Minute {
 				del = append(del, broadcastID)
 			}
 		}
@@ -259,18 +285,35 @@ func (list *RequestMap) cleanup() {
 	}
 }
 
-func (list *RequestMap) Add(identifier string, element clientRequest) {
+func (list *RequestMap) Stop() {
+	close(list.doneChan)
+}
+
+func (list *RequestMap) Add(identifier string, element clientRequest) (count uint64, err error) {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
-	// do nothing if element already exists
+	// signal that the request has been handled and is thus completed
+	if _, ok := list.handledReqs[identifier]; ok {
+		return 0, fmt.Errorf("the request is already handled")
+	}
+	// only add method if element already exists
 	if elem, ok := list.data[identifier]; ok {
 		elem.methods = append(elem.methods, element.metadata.Method)
-		return
+		// add to count
+		if _, ok := elem.counts[element.metadata.Method]; !ok {
+			elem.counts[element.metadata.Method] = 1
+		} else {
+			elem.counts[element.metadata.Method]++
+		}
+		return elem.counts[element.metadata.Method], nil
 	}
 	methods := []string{element.metadata.Method}
 	element.methods = methods
 	element.timestamp = time.Now()
+	element.counts = make(map[string]uint64)
+	element.counts[element.metadata.Method] = 1
 	list.data[identifier] = element
+	return element.counts[element.metadata.Method], nil
 }
 
 func (list *RequestMap) Get(identifier string) (clientRequest, bool) {
@@ -283,8 +326,13 @@ func (list *RequestMap) Get(identifier string) (clientRequest, bool) {
 func (list *RequestMap) IsHandled(identifier string) bool {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
-	_, ok := list.handledReqs[identifier]
-	return ok
+	_, alive := list.data[identifier]
+	_, handled := list.handledReqs[identifier]
+	// options:
+	//	1. always true if it exists in handledReqs
+	//	2. true if it does not exists in any of the maps
+	//	3. false if it only exists in data
+	return handled || !alive
 }
 
 func (list *RequestMap) Remove(identifier string) {
@@ -304,11 +352,25 @@ func (list *RequestMap) Remove(identifier string) {
 	delete(list.data, identifier)
 }
 
+func (list *RequestMap) Reset() {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	del := make([]string, 0, len(list.data))
+	// remove client reqs
+	for broadcastID, elem := range list.data {
+		del = append(del, broadcastID)
+		list.handledReqs[broadcastID] = elem.timestamp
+	}
+	for _, broadcastID := range del {
+		delete(list.data, broadcastID)
+	}
+}
+
 // Retrieves a client requests with the given broadcastID and returns
 // a bool defining whether the request is valid or not.
 // The request is considered valid only if the request has not yet
 // been handled and it has previously been added to client requests.
-func (list *RequestMap) GetStrict(identifier string) (clientRequest, bool) {
+func (list *RequestMap) GetIfValid(identifier string) (clientRequest, bool) {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 	var req clientRequest
@@ -328,12 +390,10 @@ func (list *RequestMap) GetStrict(identifier string) (clientRequest, bool) {
 }
 
 type broadcastMsg struct {
-	from        string
 	request     RequestTypes
 	method      string
-	metadata    BroadcastMetadata
 	broadcastID string
-	srvAddrs    []string
+	options     BroadcastOptions
 	finished    chan<- struct{}
 	ctx         context.Context
 }
@@ -342,14 +402,13 @@ func (b *broadcastMsg) setFinished() {
 	close(b.finished)
 }
 
-func newBroadcastMessage(metadata BroadcastMetadata, req RequestTypes, method, broadcastID string, srvAddrs []string, finished chan<- struct{}) *broadcastMsg {
+func newBroadcastMessage(broadcastID string, req RequestTypes, method string, options BroadcastOptions, finished chan<- struct{}) *broadcastMsg {
 	return &broadcastMsg{
 		request:     req,
 		method:      method,
-		metadata:    metadata,
 		broadcastID: broadcastID,
-		srvAddrs:    srvAddrs,
+		options:     options,
 		finished:    finished,
-		ctx:         context.WithValue(context.Background(), BroadcastID, metadata.BroadcastID),
+		ctx:         context.WithValue(context.Background(), BroadcastID, broadcastID),
 	}
 }

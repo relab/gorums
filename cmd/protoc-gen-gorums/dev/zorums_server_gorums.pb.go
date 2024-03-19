@@ -430,9 +430,7 @@ func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID st
 	for _, opt := range opts {
 		opt(&options)
 	}
-	metadata := gorums.BroadcastMetadata{}
-	metadata.BroadcastID = broadcastID
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, metadata, options)
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, broadcastID, options)
 }
 
 func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
@@ -443,9 +441,7 @@ func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, broadcastID str
 	for _, opt := range opts {
 		opt(&options)
 	}
-	metadata := gorums.BroadcastMetadata{}
-	metadata.BroadcastID = broadcastID
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, metadata, options)
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, broadcastID, options)
 }
 
 func (srv *Server) BroadcastBroadcastInternal(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
@@ -456,9 +452,7 @@ func (srv *Server) BroadcastBroadcastInternal(req *Request, broadcastID string, 
 	for _, opt := range opts {
 		opt(&options)
 	}
-	metadata := gorums.BroadcastMetadata{}
-	metadata.BroadcastID = broadcastID
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, metadata, options)
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, broadcastID, options)
 }
 
 func (srv *Server) BroadcastBroadcastWithClientHandler1(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
@@ -469,9 +463,7 @@ func (srv *Server) BroadcastBroadcastWithClientHandler1(req *Request, broadcastI
 	for _, opt := range opts {
 		opt(&options)
 	}
-	metadata := gorums.BroadcastMetadata{}
-	metadata.BroadcastID = broadcastID
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandler1", req, metadata, options)
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandler1", req, broadcastID, options)
 }
 
 func (srv *Server) BroadcastBroadcastWithClientHandler2(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
@@ -482,9 +474,7 @@ func (srv *Server) BroadcastBroadcastWithClientHandler2(req *Request, broadcastI
 	for _, opt := range opts {
 		opt(&options)
 	}
-	metadata := gorums.BroadcastMetadata{}
-	metadata.BroadcastID = broadcastID
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandler2", req, metadata, options)
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandler2", req, broadcastID, options)
 }
 
 func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
@@ -495,7 +485,5 @@ func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Re
 	for _, opt := range opts {
 		opt(&options)
 	}
-	metadata := gorums.BroadcastMetadata{}
-	metadata.BroadcastID = broadcastID
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, metadata, options)
+	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, broadcastID, options)
 }
