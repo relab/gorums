@@ -18,4 +18,15 @@ message Metadata {
   uint64 MessageID = 1;
   string Method = 2;
   google.rpc.Status Status = 3;
+  BroadcastMsg BroadcastMsg = 4;
+}
+
+message BroadcastMsg {
+  string SenderType = 1;
+  string BroadcastID = 2;
+  uint32 SequenceNo = 3; // can be removed
+  string SenderAddr = 4;
+  string OriginAddr = 5;
+  string OriginMethod = 6;
+  uint64 Deadline = 7;
 }

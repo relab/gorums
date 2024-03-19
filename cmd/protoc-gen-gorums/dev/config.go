@@ -10,13 +10,15 @@ type Configuration struct {
 	gorums.RawConfiguration
 	nodes []*Node
 	qspec QuorumSpec
+	srv   *clientServerImpl
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
 //
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
-//  cfg1, err := mgr.NewConfiguration(qspec1, opts...)
-//  cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
+//
+//	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
+//	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
 func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) *Configuration {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}

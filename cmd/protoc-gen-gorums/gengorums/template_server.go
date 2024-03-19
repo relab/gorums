@@ -2,6 +2,8 @@ package gengorums
 
 var serverVariables = `
 {{$context := use "gorums.ServerCtx" .GenFile}}
+{{$codes := use "codes.Code" .GenFile}}
+{{$status := use "status.Status" .GenFile}}
 `
 
 var serverInterface = `
@@ -11,15 +13,44 @@ var serverInterface = `
 // {{$service}} is the server-side API for the {{$service}} Service
 type {{$service}} interface {
 	{{- range .Methods}}
-	{{- if isOneway .}}
-	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
+	{{- if isBroadcast  .}}
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast)
 	{{- else if correctableStream .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
+	{{- else if isOneway .}}
+	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
 	{{- end}}
 	{{- end}}
 }
+{{- end}}
+`
+
+var registerServerMethods = `
+{{$genFile := .GenFile}}
+
+{{range .Services -}}
+{{$service := .GoName}}
+{{- range .Methods}}
+{{- if isOneway .}}
+func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) {
+	panic(status.Errorf(codes.Unimplemented, "method {{.GoName}} not implemented"))
+}
+{{- else if correctableStream .}}
+func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error {
+	panic(status.Errorf(codes.Unimplemented, "method {{.GoName}} not implemented"))
+}
+{{- else if isBroadcast .}}
+func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method {{.GoName}} not implemented"))
+}
+{{- else}}
+func (srv *Server) {{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error) {
+	panic(status.Errorf(codes.Unimplemented, "method {{.GoName}} not implemented"))
+}
+{{- end}}
+{{- end}}
 {{- end}}
 `
 
@@ -30,8 +61,14 @@ var registerInterface = `
 {{$sendMessage := use "gorums.SendMessage" $genFile}}
 {{range .Services -}}
 {{$service := .GoName}}
-func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}) {
+func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 	{{- range .Methods}}
+	{{- if isBroadcast .}}
+	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler(impl.{{.GoName}}, srv.Server))
+	{{- if isBroadcastCall .}}
+	srv.RegisterClientHandler("{{.Desc.FullName}}", gorums.ServerClientRPC("{{.Desc.FullName}}"))
+	{{- end}}
+	{{- else }}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})
 		defer ctx.Release()
@@ -52,8 +89,33 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 		{{- end}}
 	})
 	{{- end}}
+	{{- end}}
 }
 {{- end}}
 `
 
-var server = serverVariables + serverInterface + registerInterface
+var registerServerBroadcast = `
+{{$genFile := .GenFile}}
+
+{{range .Services -}}
+{{$service := .GoName}}
+{{- range .Methods}}
+{{- if isBroadcast .}}
+
+func (srv *Server) Broadcast{{.GoName}}(req *{{in $genFile .}}, broadcastID string, opts... gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	go srv.broadcast.orchestrator.BroadcastHandler("{{.Desc.FullName}}", req, broadcastID, options)
+}
+
+{{- end}}
+{{- end}}
+{{- end}}
+`
+
+var server = serverVariables + serverInterface + registerServerMethods + registerInterface + registerServerBroadcast

@@ -239,16 +239,17 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 // The entries in this map is used to generate dev/zorums_{type}.pb.go
 // files for the different keys.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
-	"qspec":  {template: qspecInterface},
-	"types":  {template: dataTypes},
-	"server": {template: server},
+	"qspec":        {template: qspecInterface},
+	"types":        {template: dataTypes},
+	"server":       {template: server},
+	"clientserver": {template: clientServer},
 
 	callTypeName(gorums.E_Rpc): {
 		extInfo:  gorums.E_Rpc,
 		docName:  "rpc",
 		template: rpcCall,
 		chkFn: func(m *protogen.Method) bool {
-			return !hasMethodOption(m, gorumsCallTypes...)
+			return !hasMethodOption(m, gorumsCallTypes...) && !hasMethodOption(m, gorums.E_Broadcast)
 		},
 	},
 	callTypeName(gorums.E_Quorumcall): {
@@ -310,6 +311,22 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 			return hasMethodOption(m, gorums.E_Unicast)
 		},
 	},
+	callTypeName(gorums.E_Broadcast): {
+		extInfo:  gorums.E_Broadcast,
+		docName:  "broadcast",
+		template: broadcastMethod,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Broadcast)
+		},
+	},
+	callTypeName(gorums.E_Broadcastcall): {
+		extInfo:  gorums.E_Broadcastcall,
+		docName:  "broadcastcall",
+		template: broadcastCall,
+		chkFn: func(m *protogen.Method) bool {
+			return hasMethodOption(m, gorums.E_Broadcastcall)
+		},
+	},
 }
 
 // gorumsCallTypes should list all available call types supported by Gorums.
@@ -320,6 +337,7 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Correctable,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
+	gorums.E_Broadcastcall,
 }
 
 // callTypesWithInternal should list all available call types that

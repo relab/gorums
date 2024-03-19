@@ -2,6 +2,7 @@ package dev
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc/encoding"
@@ -36,7 +37,7 @@ func NewManager(opts ...gorums.ManagerOption) (mgr *Manager) {
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	if len(opts) < 1 || len(opts) > 2 {
+	if len(opts) < 1 || len(opts) > 3 {
 		return nil, fmt.Errorf("wrong number of options: %d", len(opts))
 	}
 	c = &Configuration{}
@@ -47,6 +48,12 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			if err != nil {
 				return nil, err
 			}
+		case net.Listener:
+			err = c.RegisterClientServer(v)
+			if err != nil {
+				return nil, err
+			}
+			return c, nil
 		case QuorumSpec:
 			// Must be last since v may match QuorumSpec if it is interface{}
 			c.qspec = v
@@ -55,10 +62,10 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 		}
 	}
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("missing required QuorumSpec")
-	}
+	//var test interface{} = struct{}{}
+	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+	//	return nil, fmt.Errorf("missing required QuorumSpec")
+	//}
 	return c, nil
 }
 

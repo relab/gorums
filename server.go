@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"sync"
 
@@ -138,8 +139,9 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	srv        *orderingServer
-	grpcServer *grpc.Server
+	srv          *orderingServer
+	grpcServer   *grpc.Server
+	broadcastSrv *broadcastServer
 }
 
 // NewServer returns a new instance of GorumsServer.
@@ -150,9 +152,11 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
+	logger := slog.Default()
 	s := &Server{
-		srv:        newOrderingServer(&serverOpts),
-		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
+		srv:          newOrderingServer(&serverOpts),
+		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
+		broadcastSrv: newBroadcastServer(logger),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
@@ -162,22 +166,30 @@ func NewServer(opts ...ServerOption) *Server {
 //
 // This function should only be used by generated code.
 func (s *Server) RegisterHandler(method string, handler requestHandler) {
+	s.broadcastSrv.registerBroadcastFunc(method)
 	s.srv.handlers[method] = handler
+}
+
+func (s *Server) RegisterClientHandler(method string, handler func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
+	s.broadcastSrv.registerReturnToClientHandler(method, handler)
 }
 
 // Serve starts serving on the listener.
 func (s *Server) Serve(listener net.Listener) error {
+	s.broadcastSrv.addAddr(listener)
 	return s.grpcServer.Serve(listener)
 }
 
 // GracefulStop waits for all RPCs to finish before stopping.
 func (s *Server) GracefulStop() {
 	s.grpcServer.GracefulStop()
+	s.broadcastSrv.stop()
 }
 
 // Stop stops the server immediately.
 func (s *Server) Stop() {
 	s.grpcServer.Stop()
+	s.broadcastSrv.stop()
 }
 
 // ServerCtx is a context that is passed from the Gorums server to the handler.

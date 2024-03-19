@@ -1,0 +1,53 @@
+package broadcast
+
+import (
+	"google.golang.org/grpc/peer"
+)
+
+type broadcastMsg interface {
+	GetFrom() string
+	GetRequest() RequestTypes
+	GetMethod() string
+	GetContext() ServerCtx
+	GetBroadcastID() string
+}
+
+type broadcastMessage struct {
+	from        string
+	request     RequestTypes
+	method      string
+	context     ServerCtx
+	broadcastID string
+}
+
+func (b *broadcastMessage) GetFrom() string {
+	return b.from
+}
+
+func (b *broadcastMessage) GetRequest() RequestTypes {
+	return b.request
+}
+
+func (b *broadcastMessage) GetMethod() string {
+	return b.method
+}
+
+func (b *broadcastMessage) GetContext() ServerCtx {
+	return b.context
+}
+
+func (b *broadcastMessage) GetBroadcastID() string {
+	return b.broadcastID
+}
+
+func newBroadcastMessage(ctx ServerCtx, req RequestTypes, method string, broadcastID string) *broadcastMessage {
+	p, _ := peer.FromContext(ctx)
+	addr := p.Addr.String()
+	return &broadcastMessage{
+		from:        addr,
+		request:     req,
+		method:      method,
+		context:     ctx,
+		broadcastID: broadcastID,
+	}
+}

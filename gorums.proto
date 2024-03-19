@@ -11,8 +11,10 @@ extend google.protobuf.MethodOptions {
   bool multicast = 50003;
   bool quorumcall = 50004;
   bool correctable = 50005;
+  bool broadcastcall = 50006;
   // options for call types
   bool async = 50010;
   bool per_node_arg = 50020;
   string custom_return_type = 50030;
+  bool broadcast = 50050;
 }
