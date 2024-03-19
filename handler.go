@@ -38,9 +38,8 @@ func BroadcastHandler[T RequestTypes, V Ibroadcaster](impl implementationFunc[T,
 			return
 		}
 		broadcastMetadata := newBroadcastMetadata(in.Metadata, count)
-		//srv.broadcastSrv.broadcaster.setMetadata(broadcastMetadata)
-		impl(ctx, req, srv.broadcastSrv.broadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V))
-		//srv.broadcastSrv.broadcaster.resetMetadata()
+		broadcaster := srv.broadcastSrv.broadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
+		impl(ctx, req, broadcaster)
 	}
 }
 
