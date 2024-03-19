@@ -46,12 +46,12 @@ type channel struct {
 	gorumsStream    ordering.Gorums_NodeStreamClient
 	streamMut       sync.RWMutex
 	streamBroken    atomicFlag
+	connEstablished atomicFlag
 	parentCtx       context.Context
 	streamCtx       context.Context
 	cancelStream    context.CancelFunc
 	responseRouters map[uint64]responseRouter
 	responseMut     sync.Mutex
-	connEstablished bool
 }
 
 func newChannel(n *RawNode) *channel {
@@ -62,19 +62,28 @@ func newChannel(n *RawNode) *channel {
 		latency:         -1 * time.Second,
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouters: make(map[uint64]responseRouter),
-		connEstablished: false,
 	}
 }
 
 func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
+	// the parentCtx governs the channel and is used to properly
+	// shut it down
 	c.parentCtx = ctx
+	// it is important to start the goroutine regardless of a
+	// successful connection to prevent a deadlock when
+	// invoking one of the call types. The method provides
+	// a listener on the sendQ and contains the retry logic
 	go c.sendMsgs()
+	// no need to proceed if dial setup failed
 	if conn == nil {
 		return fmt.Errorf("connection is nil")
 	}
 	return c.tryConnect(conn)
 }
 
+// creating a stream could fail even though conn != nil due to
+// the non-blocking dial. Hence, we need to try to connect to
+// the node before starting the receiving goroutine
 func (c *channel) tryConnect(conn *grpc.ClientConn) error {
 	var err error
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
@@ -83,7 +92,9 @@ func (c *channel) tryConnect(conn *grpc.ClientConn) error {
 	if err != nil {
 		return err
 	}
-	c.connEstablished = true
+	// connEstablished indicates whether recvMsgs have been started or not and if
+	// the dial was successful. streamBroken only reports the status of the stream.
+	c.connEstablished.set()
 	go c.recvMsgs()
 	return nil
 }
@@ -106,7 +117,14 @@ func (c *channel) enqueue(req request, responseChan chan<- response, streaming b
 		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, streaming}
 		c.responseMut.Unlock()
 	}
-	c.sendQ <- req
+	// either enqueue the request on the sendQ or respond
+	// with error if the node is closed
+	select {
+	case <-c.parentCtx.Done():
+		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: fmt.Errorf("channel closed")})
+		return
+	case c.sendQ <- req:
+	}
 }
 
 func (c *channel) deleteRouter(msgID uint64) {
@@ -202,7 +220,7 @@ func (c *channel) recvMsgs() {
 			c.streamMut.RUnlock()
 			c.setLastErr(err)
 			// attempt to reconnect
-			c.reconnect()
+			c.reconnect(-1)
 		} else {
 			c.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
@@ -219,12 +237,16 @@ func (c *channel) recvMsgs() {
 
 func (c *channel) tryReconnect() {
 	// a connection has never been established
-	if !c.connEstablished {
+	if !c.connEstablished.get() {
+		// the setup stage when dialing could have
+		// previously failed and we thus need to
+		// make a connection is up.
 		err := c.node.dial()
 		if err != nil {
 			c.streamBroken.set()
 			return
 		}
+		// try to create a stream
 		err = c.tryConnect(c.node.conn)
 		if err != nil {
 			c.streamBroken.set()
@@ -239,15 +261,12 @@ func (c *channel) tryReconnect() {
 	}
 }
 
-func (c *channel) reconnect(maxRetries ...int) {
+// maxRetries = -1 represents infinite retries
+func (c *channel) reconnect(maxRetries float64) {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	backoffCfg := c.backoffCfg
 
-	var maxretries float64 = -1
-	if len(maxRetries) > 0 {
-		maxretries = float64(maxRetries[0])
-	}
 	var retries float64
 	for {
 		var err error
@@ -260,7 +279,7 @@ func (c *channel) reconnect(maxRetries ...int) {
 		}
 		c.cancelStream()
 		c.setLastErr(err)
-		if retries >= maxretries && maxretries > 0 {
+		if retries >= maxRetries && maxRetries > 0 {
 			c.streamBroken.set()
 			return
 		}
@@ -300,12 +319,15 @@ func (c *channel) channelLatency() time.Duration {
 	return c.latency
 }
 
-type atomicFlag struct {
-	flag int32
+func (c *channel) isConnected() bool {
+	// streamBroken.get() is initially false and NodeStream could be down
+	// even though node.conn is not nil. Hence, we need connEstablished
+	// to make sure a proper connection has been made.
+	return c.connEstablished.get() && !c.streamBroken.get()
 }
 
-func (c *channel) isConnected() bool {
-	return c.connEstablished && !c.streamBroken.get()
+type atomicFlag struct {
+	flag int32
 }
 
 func (f *atomicFlag) set()      { atomic.StoreInt32(&f.flag, 1) }
