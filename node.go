@@ -74,9 +74,9 @@ func (n *RawNode) connect(mgr *RawManager) error {
 	return nil
 }
 
-// dials the node if it has not been done previously
+// dial the node unless it has already been done.
 func (n *RawNode) dial() error {
-	// dial has previously succeded so we can do nothing
+	// dial has previously succeeded so we do nothing
 	if n.conn != nil {
 		return nil
 	}

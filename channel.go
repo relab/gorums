@@ -74,10 +74,6 @@ func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	// invoking one of the call types. The method provides
 	// a listener on the sendQ and contains the retry logic
 	go c.sendMsgs()
-	// no need to proceed if dial setup failed
-	if conn == nil {
-		return fmt.Errorf("connection is nil")
-	}
 	return c.tryConnect(conn)
 }
 
@@ -85,6 +81,10 @@ func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 // the non-blocking dial. Hence, we need to try to connect to
 // the node before starting the receiving goroutine
 func (c *channel) tryConnect(conn *grpc.ClientConn) error {
+	if conn == nil {
+		// no need to proceed if dial setup failed
+		return fmt.Errorf("connection is nil")
+	}
 	var err error
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 	c.gorumsClient = ordering.NewGorumsClient(conn)
@@ -192,7 +192,7 @@ func (c *channel) sendMsgs() {
 		// try to connect to the node if previous attempts
 		// have failed or if the node has disconnected
 		if !c.isConnected() {
-			// streamBroken will be set if the connection fails
+			// streamBroken will be set if the reconnection fails
 			c.tryReconnect()
 		}
 		// return error if stream is broken
@@ -236,11 +236,10 @@ func (c *channel) recvMsgs() {
 }
 
 func (c *channel) tryReconnect() {
-	// a connection has never been established
 	if !c.connEstablished.get() {
-		// the setup stage when dialing could have
-		// previously failed and we thus need to
-		// make a connection is up.
+		// a connection has never been established; i.e.,
+		// a previous dial attempt could have failed.
+		// we need to make sure the connection is up.
 		err := c.node.dial()
 		if err != nil {
 			c.streamBroken.set()
@@ -261,7 +260,8 @@ func (c *channel) tryReconnect() {
 	}
 }
 
-// maxRetries = -1 represents infinite retries
+// reconnect tries to reconnect to the node using an exponential backoff strategy.
+// maxRetries = -1 represents infinite retries.
 func (c *channel) reconnect(maxRetries float64) {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
@@ -270,7 +270,6 @@ func (c *channel) reconnect(maxRetries float64) {
 	var retries float64
 	for {
 		var err error
-
 		c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 		c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 		if err == nil {
@@ -319,6 +318,7 @@ func (c *channel) channelLatency() time.Duration {
 	return c.latency
 }
 
+// isConnected returns true if the channel has an active connection to the node.
 func (c *channel) isConnected() bool {
 	// streamBroken.get() is initially false and NodeStream could be down
 	// even though node.conn is not nil. Hence, we need connEstablished
