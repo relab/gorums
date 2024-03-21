@@ -48,11 +48,11 @@ func NewClientServer(lis net.Listener) (*ClientServer, error) {
 	return srv, nil
 }
 
-func (srv *ClientServer) AddRequest(ctx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler) (chan protoreflect.ProtoMessage, QuorumCallData) {
+func (srv *ClientServer) AddRequest(ctx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler, method string) (chan protoreflect.ProtoMessage, QuorumCallData) {
 	broadcastID := uuid.New().String()
 	cd := QuorumCallData{
 		Message: in,
-		Method:  "protos.UniformBroadcast.SaveStudent",
+		Method:  method,
 
 		BroadcastID: broadcastID,
 		SenderType:  BroadcastClient,

@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"math/rand"
 	"sync"
@@ -190,10 +189,8 @@ func (c *channel) sendMsg(req request) (err error) {
 		}
 	}()
 
-	slog.Error("sending msg")
 	err = c.gorumsStream.SendMsg(req.msg)
 	if err != nil {
-		slog.Error("failed...")
 		c.setLastErr(err)
 		c.streamBroken.set()
 	}
