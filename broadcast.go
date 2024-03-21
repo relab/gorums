@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"hash/fnv"
 	"log/slog"
 	"net"
 	"sync"
@@ -14,7 +15,7 @@ import (
 type broadcastServer struct {
 	propertiesMutex sync.Mutex
 	viewMutex       sync.RWMutex
-	id              string
+	id              uint32
 	addr            string
 	view            RawConfiguration
 	broadcastedMsgs map[string]map[string]bool
@@ -33,7 +34,6 @@ type broadcastServer struct {
 
 func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 	return &broadcastServer{
-		id:              uuid.New().String(),
 		broadcastedMsgs: make(map[string]map[string]bool),
 		clientHandlers:  make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
 		broadcastChan:   make(chan *broadcastMsg, 1000),
@@ -76,6 +76,9 @@ func (srv *broadcastServer) addAddr(lis net.Listener) {
 	srv.propertiesMutex.Lock()
 	defer srv.propertiesMutex.Unlock()
 	srv.addr = lis.Addr().String()
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(srv.addr))
+	srv.id = h.Sum32()
 }
 
 func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string) bool {

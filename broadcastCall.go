@@ -14,7 +14,7 @@ type broadcastCallData struct {
 	Message         protoreflect.ProtoMessage
 	Method          string
 	BroadcastID     string // a unique identifier for the current broadcast request
-	SequenceNo      uint32 // a unique identifier for the current broadcast request
+	SenderID        uint32
 	SenderType      string
 	SenderAddr      string
 	OriginAddr      string
@@ -42,6 +42,7 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
 		SenderType:   d.SenderType,
 		BroadcastID:  d.BroadcastID,
+		SenderID:     d.SenderID,
 		SenderAddr:   d.SenderAddr,
 		OriginAddr:   d.OriginAddr,
 		OriginMethod: d.OriginMethod,

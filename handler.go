@@ -112,6 +112,7 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			Method:          method,
 			BroadcastID:     req.metadata.BroadcastMsg.BroadcastID,
 			SenderType:      BroadcastServer,
+			SenderID:        srv.id,
 			SenderAddr:      srv.addr,
 			OriginAddr:      req.metadata.BroadcastMsg.OriginAddr,
 			OriginMethod:    req.metadata.BroadcastMsg.OriginMethod,

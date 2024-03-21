@@ -189,10 +189,10 @@ func NewBroadcaster() *Broadcaster {
 type BroadcastMetadata struct {
 	BroadcastID  string
 	SenderType   string // type of sender, could be: Client or Server
+	SenderID     uint32 // nodeID of last hop
 	SenderAddr   string // address of last hop
 	OriginAddr   string // address of the origin
 	OriginMethod string // the first method called by the origin
-	Deadline     uint64
 	Method       string // the current method
 	Count        uint64 // number of messages received to the current method
 }
@@ -206,10 +206,10 @@ func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata
 	return BroadcastMetadata{
 		BroadcastID:  md.BroadcastMsg.BroadcastID,
 		SenderType:   md.BroadcastMsg.SenderType,
+		SenderID:     md.BroadcastMsg.SenderID,
 		SenderAddr:   md.BroadcastMsg.SenderAddr,
 		OriginAddr:   md.BroadcastMsg.OriginAddr,
 		OriginMethod: md.BroadcastMsg.OriginMethod,
-		Deadline:     md.BroadcastMsg.Deadline,
 		Method:       m,
 		Count:        count,
 	}

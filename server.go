@@ -89,7 +89,9 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	for {
 		req := newMessage(requestType)
 		err := srv.RecvMsg(req)
+		slog.Warn("got message")
 		if err != nil {
+			slog.Error("ai ai ai", "err", err)
 			return err
 		}
 		if handler, ok := s.handlers[req.Metadata.Method]; ok {

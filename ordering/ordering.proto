@@ -24,9 +24,8 @@ message Metadata {
 message BroadcastMsg {
   string SenderType = 1;
   string BroadcastID = 2;
-  uint32 SequenceNo = 3; // can be removed
+  uint32 SenderID = 3;
   string SenderAddr = 4;
   string OriginAddr = 5;
   string OriginMethod = 6;
-  uint64 Deadline = 7;
 }

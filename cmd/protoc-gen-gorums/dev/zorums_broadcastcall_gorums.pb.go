@@ -38,7 +38,7 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
 	}
 	if c.qspec == nil {
-		return nil, fmt.Errorf("a qspec is not defined.")
+		return nil, fmt.Errorf("a qspec is not defined")
 	}
 	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
@@ -67,7 +67,7 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
 	}
 	if c.qspec == nil {
-		return nil, fmt.Errorf("a qspec is not defined.")
+		return nil, fmt.Errorf("a qspec is not defined")
 	}
 	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
@@ -96,7 +96,7 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
 	}
 	if c.qspec == nil {
-		return nil, fmt.Errorf("a qspec is not defined.")
+		return nil, fmt.Errorf("a qspec is not defined")
 	}
 	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF))
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
