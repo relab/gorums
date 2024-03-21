@@ -85,10 +85,12 @@ func (c *channel) tryConnect(conn *grpc.ClientConn) error {
 		// no need to proceed if dial setup failed
 		return fmt.Errorf("connection is nil")
 	}
+	c.streamMut.Lock()
 	var err error
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 	c.gorumsClient = ordering.NewGorumsClient(conn)
 	c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
+	c.streamMut.Unlock()
 	if err != nil {
 		return err
 	}
@@ -272,8 +274,10 @@ func (c *channel) tryReconnect() {
 		// try to create a stream. Should NOT be
 		// run if a connection has previously
 		// been established because it will start
-		// a the recvMsgs goroutine. Otherwise, we
+		// a recvMsgs goroutine. Otherwise, we
 		// could suffer from leaking goroutines.
+		// a guardclause has been added in the
+		// method to prevent this.
 		err = c.tryConnect(c.node.conn)
 		if err != nil {
 			c.streamBroken.set()
