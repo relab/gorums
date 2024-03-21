@@ -3,6 +3,7 @@ package gorums
 import (
 	"net"
 	"testing"
+	"time"
 )
 
 // ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
@@ -36,4 +37,24 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 		}
 	}
 	return addrs, stopFn
+}
+
+func TestServerSetup(t testing.TB, addr string, srv ServerIface) (func(), func()) {
+	t.Helper()
+	var lis net.Listener
+	var err error
+	startFn := func() {
+		lis, err = net.Listen("tcp", addr)
+		if err != nil {
+			t.Fatalf("Failed to listen on port: %v", err)
+		}
+		go func() { _ = srv.Serve(lis) }()
+		// to ensure that the server has started
+		time.Sleep(100 * time.Millisecond)
+	}
+	stopFn := func() {
+		lis.Close()
+		srv.Stop()
+	}
+	return startFn, stopFn
 }
