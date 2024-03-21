@@ -92,11 +92,28 @@ func (c *channel) tryConnect(conn *grpc.ClientConn) error {
 	if err != nil {
 		return err
 	}
-	// connEstablished indicates whether recvMsgs have been started or not and if
-	// the dial was successful. streamBroken only reports the status of the stream.
-	c.connEstablished.set()
-	go c.recvMsgs()
+	c.streamBroken.clear()
+	// safe guard because creating more than one recvMsgs goroutine is problematic
+	if !c.connEstablished.get() {
+		// connEstablished indicates whether recvMsgs have been started or not and if
+		// the dial was successful. streamBroken only reports the status of the stream.
+		c.connEstablished.set()
+		go c.recvMsgs()
+	}
 	return nil
+}
+
+func (c *channel) cancelPendingMsgs() {
+	c.responseMut.Lock()
+	defer c.responseMut.Unlock()
+	for msgID, router := range c.responseRouters {
+		err := status.Errorf(codes.Unavailable, "stream is down")
+		router.c <- response{nid: c.node.ID(), msg: nil, err: err}
+		// delete the router if we are only expecting a single message
+		if !router.streaming {
+			delete(c.responseRouters, msgID)
+		}
+	}
 }
 
 func (c *channel) routeResponse(msgID uint64, resp response) {
@@ -219,7 +236,14 @@ func (c *channel) recvMsgs() {
 			c.streamBroken.set()
 			c.streamMut.RUnlock()
 			c.setLastErr(err)
-			// attempt to reconnect
+			// The only time we reach this point is when the
+			// stream goes down AFTER a message has been sent and the node
+			// is waiting for a reply. We thus need to respond with a stream
+			// is down error on all pending messages.
+			c.cancelPendingMsgs()
+			// attempt to reconnect. It will try to reconnect indefinitely
+			// or until the node is closed. This is necessary when streaming
+			// is enabled.
 			c.reconnect(-1)
 		} else {
 			c.streamMut.RUnlock()
@@ -246,7 +270,11 @@ func (c *channel) tryReconnect() {
 			c.streamBroken.set()
 			return
 		}
-		// try to create a stream
+		// try to create a stream. Should NOT be
+		// run if a connection has previously
+		// been established because it will start
+		// a the recvMsgs goroutine. Otherwise, we
+		// could suffer from leaking goroutines.
 		err = c.tryConnect(c.node.conn)
 		if err != nil {
 			c.streamBroken.set()
@@ -256,28 +284,36 @@ func (c *channel) tryReconnect() {
 	// the node has previously been connected
 	// but is now disconnected
 	if c.streamBroken.get() {
-		// try to reconnect only once
+		// try to reconnect only once.
+		// Maybe add this as a user option?
 		c.reconnect(1)
 	}
 }
 
 // maxRetries = -1 represents infinite retries
 func (c *channel) reconnect(maxRetries float64) {
-	c.streamMut.Lock()
-	defer c.streamMut.Unlock()
 	backoffCfg := c.backoffCfg
 
 	var retries float64
 	for {
 		var err error
 
+		c.streamMut.Lock()
+		// check if stream is already up
+		if !c.streamBroken.get() {
+			// do nothing because stream is up
+			c.streamMut.Unlock()
+			return
+		}
 		c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 		c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 		if err == nil {
 			c.streamBroken.clear()
+			c.streamMut.Unlock()
 			return
 		}
 		c.cancelStream()
+		c.streamMut.Unlock()
 		c.setLastErr(err)
 		if retries >= maxRetries && maxRetries > 0 {
 			c.streamBroken.set()
