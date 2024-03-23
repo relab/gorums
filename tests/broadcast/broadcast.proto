@@ -1,0 +1,19 @@
+// Test to benchmark quorum functions with and without the request parameter.
+syntax = "proto3";
+package broadcast;
+option go_package = "github.com/relab/gorums/tests/broadcast";
+
+import "gorums.proto";
+
+service Broadcast {
+  rpc BroadcastCall(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc Broadcast(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+}
+
+message Request { int64 Value = 1; }
+message Response { int64 Result = 1; }
+message Empty {}

@@ -33,7 +33,7 @@ type BroadcastSendToClientHandlerFunc func(broadcastID string, resp ResponseType
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
-type implementationFunc[T RequestTypes, V Ibroadcaster] func(ServerCtx, T, V)
+type implementationFunc[T RequestTypes, V Broadcaster] func(ServerCtx, T, V)
 
 type responseMsg struct {
 	response    ResponseTypes
@@ -158,33 +158,7 @@ func NewBroadcastOptions() BroadcastOptions {
 	return BroadcastOptions{}
 }
 
-type Ibroadcaster interface {
-	setMetadataHandler(func(metadata BroadcastMetadata), func())
-	setMetadata(metadata BroadcastMetadata)
-	resetMetadata()
-}
-
-type Broadcaster struct {
-	metadataHandler      func(metadata BroadcastMetadata)
-	resetMetadataHandler func()
-}
-
-func (b *Broadcaster) setMetadataHandler(handler func(metadata BroadcastMetadata), resetHandler func()) {
-	b.metadataHandler = handler
-	b.resetMetadataHandler = resetHandler
-}
-
-func (b *Broadcaster) setMetadata(metadata BroadcastMetadata) {
-	b.metadataHandler(metadata)
-}
-
-func (b *Broadcaster) resetMetadata() {
-	b.resetMetadataHandler()
-}
-
-func NewBroadcaster() *Broadcaster {
-	return &Broadcaster{}
-}
+type Broadcaster interface{}
 
 type BroadcastMetadata struct {
 	BroadcastID  string

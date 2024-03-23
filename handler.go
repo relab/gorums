@@ -18,7 +18,7 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 	}
 }
 
-func BroadcastHandler[T RequestTypes, V Ibroadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		defer ctx.Release()
 		req := in.Message.(T)
@@ -91,7 +91,7 @@ func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, 
 	}
 }
 
-func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Ibroadcaster) {
+func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster) {
 	srv.broadcastSrv.broadcaster = b
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
 }

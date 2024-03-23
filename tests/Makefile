@@ -23,6 +23,8 @@ config: config/config.pb.go config/config_gorums.pb.go
 
 correctable: correctable/correctable.pb.go correctable/correctable_gorums.pb.go
 
+broadcast: broadcast/broadcast.pb.go broadcast/broadcast_gorums.pb.go
+
 %.pb.go : %.proto
 	@protoc -I=..:. --go_out=paths=source_relative:. $<
 

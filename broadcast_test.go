@@ -2,6 +2,148 @@ package gorums
 
 /*import (
 	"context"
+	"testing"
+	"time"
+
+	"github.com/relab/gorums/ordering"
+	"github.com/relab/gorums/tests/mock"
+	"google.golang.org/grpc/encoding"
+)
+
+type broadcaster struct {
+}
+
+type orchestrator struct {
+}
+
+type mockBroadcastSrv struct{}
+
+func (mockBroadcastSrv) Test(ctx ServerCtx, _ *mock.Request, broadcast *broadcaster) {}
+
+func dummyBroadcastSrv(int) ServerIface {
+	mockSrv := &mockBroadcastSrv{}
+	srv := NewServer()
+	srv.RegisterHandler(handlerName, BroadcastHandler(mockSrv.Test, srv))
+	return srv
+}
+
+var msgs = []*mock.Request{
+	{
+		Val: "val1",
+	},
+	{
+		Val: "val2",
+	},
+	{
+		Val: "val3",
+	},
+	{
+		Val: "val4",
+	},
+	{
+		Val: "val5",
+	},
+}
+
+func TestBroadcast(t *testing.T) {
+	if encoding.GetCodec(ContentSubtype) == nil {
+		encoding.RegisterCodec(NewCodec())
+	}
+	// wait to start the server
+	addrs, stopSrvs := TestSetup(t, 3, dummyBroadcastSrv)
+	defer stopSrvs()
+
+	mgr := dummyMgr()
+	defer mgr.Close()
+	for _, addr := range addrs {
+		node, err := NewRawNode(addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// a proper connection should NOT be esablished here because server is not started
+		node.connect(mgr)
+	}
+
+	config, err := NewRawConfiguration(mgr, WithNodeList(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, msg := range msgs {
+		d := broadcastCallData{
+			Message:         in,
+			Method:          method,
+			BroadcastID:     req.metadata.BroadcastMsg.BroadcastID,
+			SenderType:      BroadcastServer,
+			SenderID:        srv.id,
+			SenderAddr:      srv.addr,
+			OriginAddr:      req.metadata.BroadcastMsg.OriginAddr,
+			OriginMethod:    req.metadata.BroadcastMsg.OriginMethod,
+			ServerAddresses: options.ServerAddresses,
+		}
+		config.broadcastCall(context.Background(), d)
+	}
+
+	// send first message when server is down
+	replyChan1 := make(chan response, 1)
+	go func() {
+		md := &ordering.Metadata{MessageID: 1, Method: handlerName}
+		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
+		node.channel.enqueue(req, replyChan1, false)
+	}()
+
+	// check response: should be error because server is down
+	select {
+	case resp := <-replyChan1:
+		if resp.err == nil {
+			t.Fatal("should have received an error")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("deadlock: impossible to enqueue messages to the node")
+	}
+
+	// send second message when server is up
+	replyChan2 := make(chan response, 1)
+	go func() {
+		md := &ordering.Metadata{MessageID: 2, Method: handlerName}
+		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
+		node.channel.enqueue(req, replyChan2, false)
+	}()
+
+	// check response: error should be nil because server is up
+	select {
+	case resp := <-replyChan2:
+		if resp.err != nil {
+			t.Fatal(resp.err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("deadlock: impossible to enqueue messages to the node")
+	}
+
+	// stop the server
+	stopServer()
+
+	// send third message when server has been previously up but is now down
+	replyChan3 := make(chan response, 1)
+	go func() {
+		md := &ordering.Metadata{MessageID: 3, Method: handlerName}
+		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
+		node.channel.enqueue(req, replyChan3, false)
+	}()
+
+	// check response: should be error because server is down
+	select {
+	case resp3 := <-replyChan3:
+		if resp3.err == nil {
+			t.Fatal("should have received an error", resp3.msg)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("deadlock: impossible to enqueue messages to the node")
+	}
+}
+
+/*import (
+	"context"
 	"sync"
 	"testing"
 

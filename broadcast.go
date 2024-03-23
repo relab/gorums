@@ -24,7 +24,7 @@ type broadcastServer struct {
 	responseChan    chan *responseMsg
 	clientHandlers  map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
 	//broadcaster     Ibroadcaster
-	broadcaster  func(m BroadcastMetadata, o *BroadcastOrchestrator) Ibroadcaster
+	broadcaster  func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
 	orchestrator *BroadcastOrchestrator
 	clientReqs   *RequestMap
 	stopChan     chan struct{}
