@@ -36,7 +36,7 @@ type RawNode struct {
 func NewRawNode(addr string) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
+		return nil, err
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
@@ -50,7 +50,7 @@ func NewRawNode(addr string) (*RawNode, error) {
 func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
+		return nil, err
 	}
 	return &RawNode{
 		id:   id,

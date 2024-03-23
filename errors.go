@@ -5,10 +5,9 @@ import (
 	"fmt"
 )
 
-// ConfigCreationError returns an error reporting that a Configuration
-// could not be created due to err.
-func ConfigCreationError(err error) error {
-	return fmt.Errorf("could not create configuration: %s", err.Error())
+// configurationError reports that a Configuration could not be created.
+func configurationError(desc string) error {
+	return fmt.Errorf("configuration: %s", desc)
 }
 
 // A QuorumCallError is used to report that a quorum call failed.

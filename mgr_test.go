@@ -41,10 +41,10 @@ func TestManagerAddNode(t *testing.T) {
 		id   uint32
 		err  string
 	}{
-		{"127.0.1.1:1234", 1, "node ID 1 already exists (127.0.1.1:1234)"},
+		{"127.0.1.1:1234", 1, "configuration: node 1 (127.0.1.1:1234) already exists"},
 		{"127.0.1.1:1234", 5, ""},
 		{"127.0.1.1:1234", 6, ""}, // TODO(meling) does it make sense to allow same addr:port for different IDs?
-		{"127.0.1.1:1234", 2, "node ID 2 already exists (127.0.1.1:1234)"},
+		{"127.0.1.1:1234", 2, "configuration: node 2 (127.0.1.1:1234) already exists"},
 	}
 	for _, test := range tests {
 		node, err := gorums.NewRawNodeWithID(test.addr, test.id)

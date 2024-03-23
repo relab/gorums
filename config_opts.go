@@ -17,7 +17,7 @@ type nodeIDMap struct {
 
 func (o nodeIDMap) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
 	if len(o.idMap) == 0 {
-		return nil, ConfigCreationError(fmt.Errorf("node-to-ID map required: WithNodeMap"))
+		return nil, configurationError("missing required node map")
 	}
 	nodes = make(RawConfiguration, 0, len(o.idMap))
 	for naddr, id := range o.idMap {
@@ -25,11 +25,10 @@ func (o nodeIDMap) newConfig(mgr *RawManager) (nodes RawConfiguration, err error
 		if !found {
 			node, err = NewRawNodeWithID(naddr, id)
 			if err != nil {
-				return nil, ConfigCreationError(err)
+				return nil, err
 			}
-			err = mgr.AddNode(node)
-			if err != nil {
-				return nil, ConfigCreationError(err)
+			if err = mgr.AddNode(node); err != nil {
+				return nil, err
 			}
 		}
 		nodes = append(nodes, node)
@@ -52,18 +51,17 @@ type nodeList struct {
 
 func (o nodeList) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
 	if len(o.addrsList) == 0 {
-		return nil, ConfigCreationError(fmt.Errorf("node addresses required: WithNodeList"))
+		return nil, configurationError("missing required node addresses")
 	}
 	nodes = make(RawConfiguration, 0, len(o.addrsList))
 	for _, naddr := range o.addrsList {
 		node, err := NewRawNode(naddr)
 		if err != nil {
-			return nil, ConfigCreationError(err)
+			return nil, err
 		}
 		if n, found := mgr.Node(node.ID()); !found {
-			err = mgr.AddNode(node)
-			if err != nil {
-				return nil, ConfigCreationError(err)
+			if err = mgr.AddNode(node); err != nil {
+				return nil, err
 			}
 		} else {
 			node = n
@@ -88,14 +86,14 @@ type nodeIDs struct {
 
 func (o nodeIDs) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
 	if len(o.nodeIDs) == 0 {
-		return nil, ConfigCreationError(fmt.Errorf("node IDs required: WithNodeIDs"))
+		return nil, configurationError("missing required node IDs")
 	}
 	nodes = make(RawConfiguration, 0, len(o.nodeIDs))
 	for _, id := range o.nodeIDs {
 		node, found := mgr.Node(id)
 		if !found {
 			// Node IDs must have been registered previously
-			return nil, ConfigCreationError(fmt.Errorf("node ID %d not found", id))
+			return nil, configurationError(fmt.Sprintf("node %d not found", id))
 		}
 		nodes = append(nodes, node)
 	}
