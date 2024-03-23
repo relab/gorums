@@ -1,40 +1,39 @@
 package gorums
 
 import (
-	"bytes"
 	"fmt"
+	"strings"
 )
 
-// A QuorumCallError is used to report that a quorum call failed.
+// QuorumCallError reports on a failed quorum call.
 type QuorumCallError struct {
-	Reason     string
-	ReplyCount int
-	Errors     []Error
+	Reason  string
+	errors  []nodeError
+	replies int
 }
 
 func (e QuorumCallError) Error() string {
-	var b bytes.Buffer
-	b.WriteString("quorum call error: ")
-	b.WriteString(e.Reason)
-	b.WriteString(fmt.Sprintf(" (errors: %d, replies: %d)", len(e.Errors), e.ReplyCount))
-	if len(e.Errors) == 0 {
+	s := fmt.Sprintf("quorum call error: %s (errors: %d, replies: %d)", e.Reason, len(e.errors), e.replies)
+	var b strings.Builder
+	b.WriteString(s)
+	if len(e.errors) == 0 {
 		return b.String()
 	}
-	b.WriteString("\ngrpc errors:\n")
-	for _, err := range e.Errors {
+	b.WriteString("\nnode errors:\n")
+	for _, err := range e.errors {
 		b.WriteByte('\t')
-		b.WriteString(fmt.Sprintf("node %d: %v", err.NodeID, err.Cause))
+		b.WriteString(err.Error())
 		b.WriteByte('\n')
 	}
 	return b.String()
 }
 
-// Error is used to report that a single gRPC call failed.
-type Error struct {
-	NodeID uint32
-	Cause  error
+// nodeError reports on a failed RPC call.
+type nodeError struct {
+	cause  error
+	nodeID uint32
 }
 
-func (e Error) Error() string {
-	return fmt.Sprintf("node %d: %v", e.NodeID, e.Cause.Error())
+func (e nodeError) Error() string {
+	return fmt.Sprintf("node %d: %v", e.nodeID, e.cause)
 }
