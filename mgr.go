@@ -113,7 +113,7 @@ func (m *RawManager) Size() (nodes int) {
 func (m *RawManager) AddNode(node *RawNode) error {
 	if _, found := m.Node(node.ID()); found {
 		// Node IDs must be unique
-		return configurationError(fmt.Sprintf("node %d (%s) already exists", node.ID(), node.Address()))
+		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
 	}
 	if m.logger != nil {
 		m.logger.Printf("Connecting to %s with id %d\n", node, node.id)

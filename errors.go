@@ -5,11 +5,6 @@ import (
 	"fmt"
 )
 
-// configurationError reports that a Configuration could not be created.
-func configurationError(desc string) error {
-	return fmt.Errorf("configuration: %s", desc)
-}
-
 // A QuorumCallError is used to report that a quorum call failed.
 type QuorumCallError struct {
 	Reason     string

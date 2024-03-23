@@ -1,6 +1,8 @@
 package gorums
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // ConfigOption is a marker interface for options to NewConfiguration.
 type ConfigOption interface{}
@@ -17,7 +19,7 @@ type nodeIDMap struct {
 
 func (o nodeIDMap) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
 	if len(o.idMap) == 0 {
-		return nil, configurationError("missing required node map")
+		return nil, fmt.Errorf("config: missing required node map")
 	}
 	nodes = make(RawConfiguration, 0, len(o.idMap))
 	for naddr, id := range o.idMap {
@@ -51,7 +53,7 @@ type nodeList struct {
 
 func (o nodeList) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
 	if len(o.addrsList) == 0 {
-		return nil, configurationError("missing required node addresses")
+		return nil, fmt.Errorf("config: missing required node addresses")
 	}
 	nodes = make(RawConfiguration, 0, len(o.addrsList))
 	for _, naddr := range o.addrsList {
@@ -86,14 +88,14 @@ type nodeIDs struct {
 
 func (o nodeIDs) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) {
 	if len(o.nodeIDs) == 0 {
-		return nil, configurationError("missing required node IDs")
+		return nil, fmt.Errorf("config: missing required node IDs")
 	}
 	nodes = make(RawConfiguration, 0, len(o.nodeIDs))
 	for _, id := range o.nodeIDs {
 		node, found := mgr.Node(id)
 		if !found {
 			// Node IDs must have been registered previously
-			return nil, configurationError(fmt.Sprintf("node %d not found", id))
+			return nil, fmt.Errorf("config: node %d not found", id)
 		}
 		nodes = append(nodes, node)
 	}

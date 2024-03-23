@@ -1,5 +1,7 @@
 package gorums
 
+import "fmt"
+
 // RawConfiguration represents a static set of nodes on which quorum calls may be invoked.
 //
 // NOTE: mutating the configuration is not supported.
@@ -14,7 +16,7 @@ type RawConfiguration []*RawNode
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func NewRawConfiguration(mgr *RawManager, opt NodeListOption) (nodes RawConfiguration, err error) {
 	if opt == nil {
-		return nil, configurationError("missing required node list")
+		return nil, fmt.Errorf("config: missing required node list")
 	}
 	return opt.newConfig(mgr)
 }
