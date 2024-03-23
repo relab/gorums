@@ -58,7 +58,7 @@ func (m *RawManager) closeNodeConns() {
 	for _, node := range m.nodes {
 		err := node.close()
 		if err != nil && m.logger != nil {
-			m.logger.Printf("node %d: error closing: %v", node.id, err)
+			m.logger.Printf("error closing: %v", err)
 		}
 	}
 }

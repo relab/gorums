@@ -91,7 +91,7 @@ func (n *RawNode) close() error {
 		return nil
 	}
 	if err := n.conn.Close(); err != nil {
-		return fmt.Errorf("%d: conn close error: %w", n.id, err)
+		return fmt.Errorf("node %d: %w", n.id, err)
 	}
 	n.cancel()
 	return nil
