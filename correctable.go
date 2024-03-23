@@ -164,12 +164,12 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 				}
 			}
 		case <-ctx.Done():
-			corr.set(resp, clevel, QuorumCallError{Reason: ctx.Err().Error(), errors: errs, replies: len(replies)}, true)
+			corr.set(resp, clevel, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}, true)
 			return
 		}
 		if (state.data.ServerStream && len(errs) == state.expectedReplies) ||
 			(!state.data.ServerStream && len(errs)+len(replies) == state.expectedReplies) {
-			corr.set(resp, clevel, QuorumCallError{Reason: "incomplete call", errors: errs, replies: len(replies)}, true)
+			corr.set(resp, clevel, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}, true)
 			return
 		}
 	}

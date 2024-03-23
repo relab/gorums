@@ -57,10 +57,10 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{Reason: ctx.Err().Error(), errors: errs, replies: len(replies)}
+			return resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
 		}
 		if len(errs)+len(replies) == expectedReplies {
-			return resp, QuorumCallError{Reason: "incomplete call", errors: errs, replies: len(replies)}
+			return resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
 		}
 	}
 }

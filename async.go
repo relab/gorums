@@ -96,11 +96,11 @@ func (c RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state
 				return
 			}
 		case <-ctx.Done():
-			fut.reply, fut.err = resp, QuorumCallError{Reason: ctx.Err().Error(), errors: errs, replies: len(replies)}
+			fut.reply, fut.err = resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
 			return
 		}
 		if len(errs)+len(replies) == state.expectedReplies {
-			fut.reply, fut.err = resp, QuorumCallError{Reason: "incomplete call", errors: errs, replies: len(replies)}
+			fut.reply, fut.err = resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
 			return
 		}
 	}
