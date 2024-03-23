@@ -76,9 +76,8 @@ func (n *RawNode) connect(mgr *RawManager) error {
 
 // dial the node and close the current connection.
 func (n *RawNode) dial() error {
-	// dial has previously succeeded but creating a stream failed
-	// so we need to close it before creating a new.
 	if n.conn != nil {
+		// close the current connection before dialing again.
 		n.conn.Close()
 	}
 	var err error

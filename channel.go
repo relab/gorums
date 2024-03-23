@@ -17,6 +17,8 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+var streamDownErr = status.Error(codes.Unavailable, "stream is down")
+
 type request struct {
 	ctx  context.Context
 	msg  *Message
@@ -66,23 +68,25 @@ func newChannel(n *RawNode) *channel {
 }
 
 func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
-	// the parentCtx governs the channel and is used to properly
-	// shut it down
+	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = ctx
-	// it is important to start the goroutine regardless of a
-	// successful connection to prevent a deadlock when
-	// invoking one of the call types. The method provides
-	// a listener on the sendQ and contains the retry logic
+	// to prevent deadlock when invoking a call type,
+	// we need to start the sendMsgs goroutine even
+	// though the connection has not yet been established.
+	// The goroutine will block on the sendQ until a
+	// connection has been established.
 	go c.sendMsgs()
 	return c.tryConnect(conn)
 }
 
-// creating a stream could fail even though conn != nil due to
-// the non-blocking dial. Hence, we need to try to connect to
-// the node before starting the receiving goroutine
+// create stream and start the receiving goroutine.
+//
+// Note that the stream could fail even though conn != nil due
+// to the non-blocking dial. Hence, we need to try to connect
+// to the node before starting the receiving goroutine.
 func (c *channel) tryConnect(conn *grpc.ClientConn) error {
 	if conn == nil {
-		// no need to proceed if dial setup failed
+		// no need to proceed if dial failed
 		return fmt.Errorf("connection is nil")
 	}
 	c.streamMut.Lock()
@@ -95,10 +99,10 @@ func (c *channel) tryConnect(conn *grpc.ClientConn) error {
 		return err
 	}
 	c.streamBroken.clear()
-	// safe guard because creating more than one recvMsgs goroutine is problematic
+	// guard against creating multiple recvMsgs goroutines
 	if !c.connEstablished.get() {
-		// connEstablished indicates whether recvMsgs have been started or not and if
-		// the dial was successful. streamBroken only reports the status of the stream.
+		// connEstablished indicates dial was successful
+		// and that recvMsgs have started
 		c.connEstablished.set()
 		go c.recvMsgs()
 	}
@@ -109,8 +113,7 @@ func (c *channel) cancelPendingMsgs() {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	for msgID, router := range c.responseRouters {
-		err := status.Errorf(codes.Unavailable, "stream is down")
-		router.c <- response{nid: c.node.ID(), msg: nil, err: err}
+		router.c <- response{nid: c.node.ID(), err: streamDownErr}
 		// delete the router if we are only expecting a single message
 		if !router.streaming {
 			delete(c.responseRouters, msgID)
@@ -140,7 +143,7 @@ func (c *channel) enqueue(req request, responseChan chan<- response, streaming b
 	// with error if the node is closed
 	select {
 	case <-c.parentCtx.Done():
-		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: fmt.Errorf("channel closed")})
+		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
 		return
 	case c.sendQ <- req:
 	}
@@ -178,12 +181,12 @@ func (c *channel) sendMsg(req request) (err error) {
 		case <-done:
 			// all is good
 		case <-req.ctx.Done():
-			// Both channels could be ready at the same time, so we should check 'done' again.
+			// Both channels could be ready at the same time, so we must check 'done' again.
 			select {
 			case <-done:
 				// false alarm
 			default:
-				// cause reconnect
+				// trigger reconnect
 				c.cancelStream()
 			}
 		}
@@ -216,15 +219,14 @@ func (c *channel) sendMsgs() {
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
-			err := status.Errorf(codes.Unavailable, "stream is down")
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: streamDownErr})
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
 			// return the error
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), msg: nil, err: err})
+			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: err})
 		}
 	}
 }
@@ -238,14 +240,12 @@ func (c *channel) recvMsgs() {
 			c.streamBroken.set()
 			c.streamMut.RUnlock()
 			c.setLastErr(err)
-			// The only time we reach this point is when the
-			// stream goes down AFTER a message has been sent and the node
-			// is waiting for a reply. We thus need to respond with a stream
-			// is down error on all pending messages.
+			// we only reach this point when the stream failed AFTER a message
+			// was sent and we are waiting for a reply. We thus need to respond
+			// with a stream is down error on all pending messages.
 			c.cancelPendingMsgs()
-			// attempt to reconnect. It will try to reconnect indefinitely
-			// or until the node is closed. This is necessary when streaming
-			// is enabled.
+			// attempt to reconnect indefinitely until the node is closed.
+			// This is necessary when streaming is enabled.
 			c.reconnect(-1)
 		} else {
 			c.streamMut.RUnlock()
@@ -263,29 +263,21 @@ func (c *channel) recvMsgs() {
 
 func (c *channel) tryReconnect() {
 	if !c.connEstablished.get() {
-		// a connection has never been established; i.e.,
+		// a connection has not yet been established; i.e.,
 		// a previous dial attempt could have failed.
-		// we need to make sure the connection is up.
+		// try dialing again.
 		err := c.node.dial()
 		if err != nil {
 			c.streamBroken.set()
 			return
 		}
-		// try to create a stream. Should NOT be
-		// run if a connection has previously
-		// been established because it will start
-		// a recvMsgs goroutine. Otherwise, we
-		// could suffer from leaking goroutines.
-		// a guardclause has been added in the
-		// method to prevent this.
 		err = c.tryConnect(c.node.conn)
 		if err != nil {
 			c.streamBroken.set()
 			return
 		}
 	}
-	// the node has previously been connected
-	// but is now disconnected
+	// the node was previously connected but is now disconnected
 	if c.streamBroken.get() {
 		// try to reconnect only once.
 		// Maybe add this as a user option?
