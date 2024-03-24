@@ -138,13 +138,12 @@ func TestChannelReconnection(t *testing.T) {
 	select {
 	case resp := <-replyChan1:
 		if resp.err == nil {
-			t.Fatal("should have received an error")
+			t.Error("response err: got <nil>, want error")
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("deadlock: impossible to enqueue messages to the node")
 	}
 
-	// start the server
 	startServer()
 
 	// send second message when server is up
@@ -159,13 +158,12 @@ func TestChannelReconnection(t *testing.T) {
 	select {
 	case resp := <-replyChan2:
 		if resp.err != nil {
-			t.Fatal(resp.err)
+			t.Errorf("response err: got %v, want <nil>", resp.err)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("deadlock: impossible to enqueue messages to the node")
 	}
 
-	// stop the server
 	stopServer()
 
 	// send third message when server has been previously up but is now down
@@ -180,7 +178,7 @@ func TestChannelReconnection(t *testing.T) {
 	select {
 	case resp3 := <-replyChan3:
 		if resp3.err == nil {
-			t.Fatal("should have received an error", resp3.msg)
+			t.Error("response err: got <nil>, want error")
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("deadlock: impossible to enqueue messages to the node")
