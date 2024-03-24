@@ -47,7 +47,7 @@ func TestChannelCreation(t *testing.T) {
 	}
 	mgr := dummyMgr()
 	defer mgr.Close()
-	// a proper connection should NOT be esablished here
+	// a proper connection should NOT be established here
 	node.connect(mgr)
 
 	replyChan := make(chan response, 1)
@@ -123,7 +123,7 @@ func TestChannelReconnection(t *testing.T) {
 	}
 	mgr := dummyMgr()
 	defer mgr.Close()
-	// a proper connection should NOT be esablished here because server is not started
+	// a proper connection should NOT be established here because server is not started
 	node.connect(mgr)
 
 	// send first message when server is down
