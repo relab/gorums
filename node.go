@@ -64,11 +64,9 @@ func (n *RawNode) connect(mgr *RawManager) error {
 	if n.mgr.opts.noConnect {
 		return nil
 	}
-	n.channel = newChannel(n)
-	// ignoring the error because it will try to reconnect later
-	_ = n.dial()
 	ctx := n.newContext()
-	if err := n.channel.connect(ctx, n.conn); err != nil {
+	n.channel = newChannel(n, ctx)
+	if err := n.channel.connect(); err != nil {
 		return fmt.Errorf("failed to start stream: %w", err)
 	}
 	return nil

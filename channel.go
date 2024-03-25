@@ -56,8 +56,8 @@ type channel struct {
 	responseMut     sync.Mutex
 }
 
-func newChannel(n *RawNode) *channel {
-	return &channel{
+func newChannel(n *RawNode, ctx context.Context) *channel {
+	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,
 		node:            n,
@@ -65,9 +65,6 @@ func newChannel(n *RawNode) *channel {
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouters: make(map[uint64]responseRouter),
 	}
-}
-
-func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = ctx
 	// to prevent deadlock when invoking a call type,
@@ -76,7 +73,7 @@ func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 	// The goroutine will block on the sendQ until a
 	// connection has been established.
 	go c.sendMsgs()
-	return c.tryConnect(conn)
+	return c
 }
 
 // create stream and start the receiving goroutine.
@@ -84,7 +81,7 @@ func (c *channel) connect(ctx context.Context, conn *grpc.ClientConn) error {
 // Note that the stream could fail even though conn != nil due
 // to the non-blocking dial. Hence, we need to try to connect
 // to the node before starting the receiving goroutine.
-func (c *channel) tryConnect(conn *grpc.ClientConn) error {
+func (c *channel) createConnection(conn *grpc.ClientConn) error {
 	if conn == nil {
 		// no need to proceed if dial failed
 		return fmt.Errorf("connection is nil")
@@ -215,7 +212,7 @@ func (c *channel) sendMsgs() {
 		// have failed or if the node has disconnected
 		if !c.isConnected() {
 			// streamBroken will be set if the reconnection fails
-			c.tryReconnect()
+			c.connect()
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
@@ -261,7 +258,7 @@ func (c *channel) recvMsgs() {
 	}
 }
 
-func (c *channel) tryReconnect() {
+func (c *channel) connect() error {
 	if !c.connEstablished.get() {
 		// a connection has not yet been established; i.e.,
 		// a previous dial attempt could have failed.
@@ -269,12 +266,12 @@ func (c *channel) tryReconnect() {
 		err := c.node.dial()
 		if err != nil {
 			c.streamBroken.set()
-			return
+			return err
 		}
-		err = c.tryConnect(c.node.conn)
+		err = c.createConnection(c.node.conn)
 		if err != nil {
 			c.streamBroken.set()
-			return
+			return err
 		}
 	}
 	// the node was previously connected but is now disconnected
@@ -283,6 +280,7 @@ func (c *channel) tryReconnect() {
 		// Maybe add this as a user option?
 		c.reconnect(1)
 	}
+	return nil
 }
 
 // reconnect tries to reconnect to the node using an exponential backoff strategy.
