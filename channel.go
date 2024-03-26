@@ -22,6 +22,11 @@ type request struct {
 	opts callOptions
 }
 
+// waitForSend returns true if the WithNoSendWaiting call option is not set.
+func (req request) waitForSend() bool {
+	return req.opts.callType != nil && !req.opts.noSendWaiting
+}
+
 type response struct {
 	nid uint32
 	msg protoreflect.ProtoMessage
@@ -106,10 +111,12 @@ func (c *channel) sendMsg(req request) (err error) {
 	defer func() {
 		// While the default is to block the caller until the message has been sent, we
 		// can provide the WithNoSendWaiting call option to more quickly unblock the caller.
-		// Hence, after sending, we unblock the waiting caller unless noSendWaiting is enabled.
-		// If noSendWaiting is enabled, the calling call type will not block on the response
-		// channel, and the receiver goroutine below will call routeResponse to delete the router.
-		if !req.opts.noSendWaiting {
+		// Hence, after sending, we unblock the waiting caller if the call option is not set;
+		// that is, waitForSend is true. Conversely, if the call option is set, the call type
+		// will not block on the response channel, and the "receiver" goroutine below will
+		// eventually clean up the responseRouter map by calling routeResponse.
+		if req.waitForSend() {
+			// unblock the caller and clean up the responseRouter map
 			c.routeResponse(req.msg.Metadata.MessageID, response{})
 		}
 	}()
