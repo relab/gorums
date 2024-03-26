@@ -56,7 +56,13 @@ type channel struct {
 	responseMut     sync.Mutex
 }
 
-func newChannel(n *RawNode, ctx context.Context) *channel {
+// newChannel creates a new channel for the given node and starts the sending goroutine.
+//
+// Note that we start the sending goroutine even though the
+// connection has not yet been established. This is to prevent
+// deadlock when invoking a call type, as the goroutine will
+// block on the sendQ until a connection has been established.
+func newChannel(ctx context.Context, n *RawNode) *channel {
 	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,
@@ -67,21 +73,16 @@ func newChannel(n *RawNode, ctx context.Context) *channel {
 	}
 	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = ctx
-	// to prevent deadlock when invoking a call type,
-	// we need to start the sendMsgs goroutine even
-	// though the connection has not yet been established.
-	// The goroutine will block on the sendQ until a
-	// connection has been established.
-	go c.sendMsgs()
+	go c.sender()
 	return c
 }
 
-// create stream and start the receiving goroutine.
+// newNodeStream creates a stream and starts the receiving goroutine.
 //
 // Note that the stream could fail even though conn != nil due
 // to the non-blocking dial. Hence, we need to try to connect
 // to the node before starting the receiving goroutine.
-func (c *channel) createConnection(conn *grpc.ClientConn) error {
+func (c *channel) newNodeStream(conn *grpc.ClientConn) error {
 	if conn == nil {
 		// no need to proceed if dial failed
 		return fmt.Errorf("connection is nil")
@@ -96,12 +97,12 @@ func (c *channel) createConnection(conn *grpc.ClientConn) error {
 		return err
 	}
 	c.streamBroken.clear()
-	// guard against creating multiple recvMsgs goroutines
+	// guard against creating multiple receiver goroutines
 	if !c.connEstablished.get() {
 		// connEstablished indicates dial was successful
-		// and that recvMsgs have started
+		// and that receiver have started
 		c.connEstablished.set()
-		go c.recvMsgs()
+		go c.receiver()
 	}
 	return nil
 }
@@ -111,7 +112,7 @@ func (c *channel) cancelPendingMsgs() {
 	defer c.responseMut.Unlock()
 	for msgID, router := range c.responseRouters {
 		router.c <- response{nid: c.node.ID(), err: streamDownErr}
-		// delete the router if we are only expecting a single message
+		// delete the router if we are only expecting a single reply message
 		if !router.streaming {
 			delete(c.responseRouters, msgID)
 		}
@@ -123,7 +124,7 @@ func (c *channel) routeResponse(msgID uint64, resp response) {
 	defer c.responseMut.Unlock()
 	if router, ok := c.responseRouters[msgID]; ok {
 		router.c <- resp
-		// delete the router if we are only expecting a single message
+		// delete the router if we are only expecting a single reply message
 		if !router.streaming {
 			delete(c.responseRouters, msgID)
 		}
@@ -200,7 +201,7 @@ func (c *channel) sendMsg(req request) (err error) {
 	return err
 }
 
-func (c *channel) sendMsgs() {
+func (c *channel) sender() {
 	var req request
 	for {
 		select {
@@ -228,7 +229,7 @@ func (c *channel) sendMsgs() {
 	}
 }
 
-func (c *channel) recvMsgs() {
+func (c *channel) receiver() {
 	for {
 		resp := newMessage(responseType)
 		c.streamMut.RLock()
@@ -268,7 +269,7 @@ func (c *channel) connect() error {
 			c.streamBroken.set()
 			return err
 		}
-		err = c.createConnection(c.node.conn)
+		err = c.newNodeStream(c.node.conn)
 		if err != nil {
 			c.streamBroken.set()
 			return err

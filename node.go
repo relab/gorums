@@ -65,7 +65,7 @@ func (n *RawNode) connect(mgr *RawManager) error {
 		return nil
 	}
 	ctx := n.newContext()
-	n.channel = newChannel(n, ctx)
+	n.channel = newChannel(ctx, n)
 	if err := n.channel.connect(); err != nil {
 		return nodeError{nodeID: n.id, cause: err}
 	}
@@ -99,8 +99,7 @@ func (n *RawNode) newContext() context.Context {
 	}
 	var ctx context.Context
 	ctx, n.cancel = context.WithCancel(context.Background())
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	return ctx
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 // close this node.
