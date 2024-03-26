@@ -5,10 +5,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/relab/gorums/tests/dummy"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/tests/dummy"
 )
 
 func TestNewConfigurationNodeList(t *testing.T) {
@@ -203,12 +202,12 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	defer teardown()
 
 	mgr := gorumsTestMgr()
-
 	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	errCh := make(chan error, 2)
 	var wg sync.WaitGroup
 	for j := 0; j < 2; j++ {
 		wg.Add(1)
@@ -216,10 +215,14 @@ func TestConfigConcurrentAccess(t *testing.T) {
 			node := cfg.Nodes()[0]
 			_, err := node.Test(context.Background(), &dummy.Empty{})
 			if err != nil {
-				panic(err.Error())
+				errCh <- err
 			}
 			wg.Done()
 		}()
 	}
 	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
+	}
 }
