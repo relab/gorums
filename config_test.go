@@ -1,10 +1,13 @@
 package gorums_test
 
 import (
+	"context"
+	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/tests/dummy"
 )
 
 func TestNewConfigurationNodeList(t *testing.T) {
@@ -189,5 +192,37 @@ func TestNewConfigurationExcept(t *testing.T) {
 	}
 	if c4.Size() != c3.Size()-c1.Size() {
 		t.Errorf("c4.Size() = %d, expected %d", c4.Size(), c3.Size()-c1.Size())
+	}
+}
+
+func TestConfigConcurrentAccess(t *testing.T) {
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
+		return initServer()
+	})
+	defer teardown()
+
+	mgr := gorumsTestMgr()
+	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	errCh := make(chan error, 2)
+	var wg sync.WaitGroup
+	for j := 0; j < 2; j++ {
+		wg.Add(1)
+		go func() {
+			node := cfg.Nodes()[0]
+			_, err := node.Test(context.Background(), &dummy.Empty{})
+			if err != nil {
+				errCh <- err
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
 	}
 }
