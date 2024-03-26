@@ -103,9 +103,13 @@ func (c *channel) deleteRouter(msgID uint64) {
 }
 
 func (c *channel) sendMsg(req request) (err error) {
-	// unblock the waiting caller unless noSendWaiting is enabled
 	defer func() {
-		if req.opts.callType == E_Multicast || req.opts.callType == E_Unicast && !req.opts.noSendWaiting {
+		// While the default is to block the caller until the message has been sent, we
+		// can provide the WithNoSendWaiting call option to more quickly unblock the caller.
+		// Hence, after sending, we unblock the waiting caller unless noSendWaiting is enabled.
+		// If noSendWaiting is enabled, the calling call type will not block on the response
+		// channel, and the receiver goroutine below will call routeResponse to delete the router.
+		if !req.opts.noSendWaiting {
 			c.routeResponse(req.msg.Metadata.MessageID, response{})
 		}
 	}()

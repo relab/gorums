@@ -38,8 +38,7 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 
 	// nodeStream sends an empty reply on replyChan when the message has been sent
 	// wait until the message has been sent
-	for sentMsgs > 0 {
+	for ; sentMsgs > 0; sentMsgs-- {
 		<-replyChan
-		sentMsgs--
 	}
 }
