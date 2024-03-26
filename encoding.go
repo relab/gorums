@@ -66,7 +66,7 @@ func (c Codec) Marshal(m interface{}) (b []byte, err error) {
 	case protoreflect.ProtoMessage:
 		return c.marshaler.Marshal(msg)
 	default:
-		return nil, fmt.Errorf("gorumsCodec: don't know how to marshal message of type '%T'", m)
+		return nil, fmt.Errorf("gorums: cannot marshal message of type '%T'", m)
 	}
 }
 
@@ -96,7 +96,7 @@ func (c Codec) Unmarshal(b []byte, m interface{}) (err error) {
 	case protoreflect.ProtoMessage:
 		return c.unmarshaler.Unmarshal(b, msg)
 	default:
-		return fmt.Errorf("gorumsCodec: don't know how to unmarshal message of type '%T'", m)
+		return fmt.Errorf("gorums: cannot unmarshal message of type '%T'", m)
 	}
 }
 
@@ -124,7 +124,7 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	case responseType:
 		messageName = methodDesc.Output().FullName()
 	default:
-		return fmt.Errorf("gorumsCodec: Unknown message type")
+		return fmt.Errorf("gorums: unknown message type %d", msg.msgType)
 	}
 
 	// now get the message type from the types registry
@@ -136,7 +136,5 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 
 	// unmarshal message
 	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
-	err = c.unmarshaler.Unmarshal(msgBuf, msg.Message)
-
-	return err
+	return c.unmarshaler.Unmarshal(msgBuf, msg.Message)
 }

@@ -43,6 +43,7 @@ Meland's
 Meling
 memprofile
 multicast
+naddr
 obj's
 Paxos
 Pedersen
@@ -53,6 +54,8 @@ protoc
 protogen
 protoimpl
 protoreflect
+protoregistry
+protowire
 ptypes
 QCQF
 qcresult
@@ -78,6 +81,7 @@ unicast
 unmarshal
 unmarshaled
 unmarshaling
+unmarshals
 userguide
 Xeon
 Zorums

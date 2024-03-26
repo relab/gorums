@@ -1,46 +1,52 @@
 package gorums
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
+	"strings"
 )
 
-// ConfigCreationError returns an error reporting that a Configuration
-// could not be created due to err.
-func ConfigCreationError(err error) error {
-	return fmt.Errorf("could not create configuration: %s", err.Error())
+// Incomplete is the error returned by a quorum call when the call cannot completed
+// due insufficient non-error replies to form a quorum according to the quorum function.
+var Incomplete = errors.New("incomplete call")
+
+// QuorumCallError reports on a failed quorum call.
+type QuorumCallError struct {
+	cause   error
+	errors  []nodeError
+	replies int
 }
 
-// A QuorumCallError is used to report that a quorum call failed.
-type QuorumCallError struct {
-	Reason     string
-	ReplyCount int
-	Errors     []Error
+// Is reports whether the target error is the same as the cause of the QuorumCallError.
+func (e QuorumCallError) Is(target error) bool {
+	if t, ok := target.(QuorumCallError); ok {
+		return e.cause == t.cause
+	}
+	return e.cause == target
 }
 
 func (e QuorumCallError) Error() string {
-	var b bytes.Buffer
-	b.WriteString("quorum call error: ")
-	b.WriteString(e.Reason)
-	b.WriteString(fmt.Sprintf(" (errors: %d, replies: %d)", len(e.Errors), e.ReplyCount))
-	if len(e.Errors) == 0 {
+	s := fmt.Sprintf("quorum call error: %s (errors: %d, replies: %d)", e.cause, len(e.errors), e.replies)
+	var b strings.Builder
+	b.WriteString(s)
+	if len(e.errors) == 0 {
 		return b.String()
 	}
-	b.WriteString("\ngrpc errors:\n")
-	for _, err := range e.Errors {
+	b.WriteString("\nnode errors:\n")
+	for _, err := range e.errors {
 		b.WriteByte('\t')
-		b.WriteString(fmt.Sprintf("node %d: %v", err.NodeID, err.Cause))
+		b.WriteString(err.Error())
 		b.WriteByte('\n')
 	}
 	return b.String()
 }
 
-// Error is used to report that a single gRPC call failed.
-type Error struct {
-	NodeID uint32
-	Cause  error
+// nodeError reports on a failed RPC call.
+type nodeError struct {
+	cause  error
+	nodeID uint32
 }
 
-func (e Error) Error() string {
-	return fmt.Sprintf("node %d: %v", e.NodeID, e.Cause.Error())
+func (e nodeError) Error() string {
+	return fmt.Sprintf("node %d: %v", e.nodeID, e.cause)
 }

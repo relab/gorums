@@ -89,7 +89,7 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
 	if len(opts) < 1 || len(opts) > 2 {
-		return nil, fmt.Errorf("wrong number of options: %d", len(opts))
+		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
 	}
 	c = &Configuration{}
 	for _, opt := range opts {
@@ -103,13 +103,13 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			// Must be last since v may match QuorumSpec if it is interface{}
 			c.qspec = v
 		default:
-			return nil, fmt.Errorf("unknown option type: %v", v)
+			return nil, fmt.Errorf("config: unknown option type: %v", v)
 		}
 	}
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
 	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("missing required QuorumSpec")
+		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
 	// initialize the nodes slice
 	c.nodes = make([]*Node, c.Size())

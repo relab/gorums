@@ -132,7 +132,7 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
 	var (
 		resp    protoreflect.ProtoMessage
-		errs    []Error
+		errs    []nodeError
 		rlevel  int
 		clevel  = LevelNotSet
 		quorum  bool
@@ -149,7 +149,7 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 		select {
 		case r := <-state.replyChan:
 			if r.err != nil {
-				errs = append(errs, Error{r.nid, r.err})
+				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
 				break
 			}
 			replies[r.nid] = r.msg
@@ -164,12 +164,12 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 				}
 			}
 		case <-ctx.Done():
-			corr.set(resp, clevel, QuorumCallError{ctx.Err().Error(), len(replies), errs}, true)
+			corr.set(resp, clevel, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}, true)
 			return
 		}
 		if (state.data.ServerStream && len(errs) == state.expectedReplies) ||
 			(!state.data.ServerStream && len(errs)+len(replies) == state.expectedReplies) {
-			corr.set(resp, clevel, QuorumCallError{"incomplete call", len(replies), errs}, true)
+			corr.set(resp, clevel, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}, true)
 			return
 		}
 	}
