@@ -19,22 +19,25 @@ type Configuration struct {
 	nodes []*Node
 }
 
-// Clone returns a new Configuration that is a copy of c with a different QuorumSpec.
-// The QuorumSpec is necessary for call types that must process replies.
-// For configurations only used for unicast or multicast call types, a QuorumSpec is not needed.
-func (c *Configuration) Clone(qspec QuorumSpec) (*Configuration, error) {
+// ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
+//
+// This function may for example be used to "clone" a configuration but install a different QuorumSpec:
+//
+//	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
+//	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
+func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
 	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
 	newCfg := &Configuration{
-		RawConfiguration: c.RawConfiguration,
+		RawConfiguration: rawCfg,
 		qspec:            qspec,
 	}
 	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, c.Size())
-	for i, n := range c.RawConfiguration {
+	newCfg.nodes = make([]*Node, newCfg.Size())
+	for i, n := range rawCfg {
 		newCfg.nodes[i] = &Node{n}
 	}
 	return newCfg, nil
