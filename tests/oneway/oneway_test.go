@@ -232,17 +232,18 @@ func BenchmarkUnicast(b *testing.B) {
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
+	node := cfg.Nodes()[0]
 	in := &oneway.Request{Num: 0}
 	b.Run("UnicastSendWaiting__", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.Num = uint64(c)
-			cfg.Nodes()[0].Unicast(context.Background(), in)
+			node.Unicast(context.Background(), in)
 		}
 	})
 	b.Run("UnicastNoSendWaiting", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.Num = uint64(c)
-			cfg.Nodes()[0].Unicast(context.Background(), in, gorums.WithNoSendWaiting())
+			node.Unicast(context.Background(), in, gorums.WithNoSendWaiting())
 		}
 	})
 	teardown()
@@ -263,7 +264,7 @@ func BenchmarkMulticast(b *testing.B) {
 	b.Run("MulticastNoSendWaiting", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.Num = uint64(c)
-			cfg.Nodes()[0].Unicast(context.Background(), in, gorums.WithNoSendWaiting())
+			cfg.Multicast(context.Background(), in, gorums.WithNoSendWaiting())
 		}
 	})
 	teardown()
