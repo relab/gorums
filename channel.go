@@ -62,7 +62,7 @@ type channel struct {
 // connection has not yet been established. This is to prevent
 // deadlock when invoking a call type, as the goroutine will
 // block on the sendQ until a connection has been established.
-func newChannel(ctx context.Context, n *RawNode) *channel {
+func newChannel(n *RawNode) *channel {
 	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,
@@ -72,7 +72,7 @@ func newChannel(ctx context.Context, n *RawNode) *channel {
 		responseRouters: make(map[uint64]responseRouter),
 	}
 	// parentCtx controls the channel and is used to shut it down
-	c.parentCtx = ctx
+	c.parentCtx = n.newContext()
 	go c.sender()
 	return c
 }

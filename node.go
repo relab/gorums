@@ -64,8 +64,7 @@ func (n *RawNode) connect(mgr *RawManager) error {
 	if n.mgr.opts.noConnect {
 		return nil
 	}
-	ctx := n.newContext()
-	n.channel = newChannel(ctx, n)
+	n.channel = newChannel(n)
 	if err := n.channel.connect(); err != nil {
 		return nodeError{nodeID: n.id, cause: err}
 	}
