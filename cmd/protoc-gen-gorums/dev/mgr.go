@@ -59,6 +59,11 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
 		return nil, fmt.Errorf("missing required QuorumSpec")
 	}
+	// initialize the nodes slice
+	c.nodes = make([]*Node, c.Size())
+	for i, n := range c.RawConfiguration {
+		c.nodes[i] = &Node{n}
+	}
 	return c, nil
 }
 

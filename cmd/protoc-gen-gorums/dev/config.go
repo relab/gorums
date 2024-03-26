@@ -34,12 +34,6 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) *Con
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *Configuration) Nodes() []*Node {
-	if c.nodes == nil {
-		c.nodes = make([]*Node, 0, c.Size())
-		for _, n := range c.RawConfiguration {
-			c.nodes = append(c.nodes, &Node{n})
-		}
-	}
 	return c.nodes
 }
 
