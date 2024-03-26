@@ -148,6 +148,8 @@ func (c *channel) enqueue(req request, responseChan chan<- response, streaming b
 }
 
 func (c *channel) deleteRouter(msgID uint64) {
+	c.responseMut.Lock()
+	defer c.responseMut.Unlock()
 	delete(c.responseRouters, msgID)
 }
 
