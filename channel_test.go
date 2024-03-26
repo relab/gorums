@@ -9,7 +9,6 @@ import (
 	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/encoding"
 )
 
 type mockSrv struct{}
@@ -111,9 +110,6 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 }
 
 func TestChannelReconnection(t *testing.T) {
-	if encoding.GetCodec(ContentSubtype) == nil {
-		encoding.RegisterCodec(NewCodec())
-	}
 	srvAddr := "127.0.0.1:5000"
 	// wait to start the server
 	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
