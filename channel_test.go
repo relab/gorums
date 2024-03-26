@@ -13,7 +13,7 @@ import (
 
 type mockSrv struct{}
 
-func (mockSrv) Test(ctx ServerCtx, _ *mock.Request) (resp *mock.Response, err error) {
+func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
 	return nil, nil
 }
 
