@@ -71,9 +71,9 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 // IDs are returned in the order they were added at creation of the manager.
 func (m *Manager) Nodes() []*Node {
 	gorumsNodes := m.RawManager.Nodes()
-	nodes := make([]*Node, 0, len(gorumsNodes))
-	for _, n := range gorumsNodes {
-		nodes = append(nodes, &Node{n})
+	nodes := make([]*Node, len(gorumsNodes))
+	for i, n := range gorumsNodes {
+		nodes[i] = &Node{n}
 	}
 	return nodes
 }
