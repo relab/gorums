@@ -39,7 +39,7 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 	return addrs, stopFn
 }
 
-func TestServerSetup(t testing.TB, addr string, srv ServerIface) (func(), func()) {
+func testServerSetup(t testing.TB, addr string, srv ServerIface) (func(), func()) {
 	t.Helper()
 	var lis net.Listener
 	var err error
