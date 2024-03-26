@@ -1,0 +1,10 @@
+syntax = "proto3";
+package mock;
+option go_package = "github.com/relab/gorums/tests/mock";
+
+message Request {
+    string val = 1;
+}
+message Response {
+    string val = 1;
+}

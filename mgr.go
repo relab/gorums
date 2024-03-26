@@ -119,7 +119,9 @@ func (m *RawManager) AddNode(node *RawNode) error {
 		m.logger.Printf("Connecting to %s with id %d\n", node, node.id)
 	}
 	if err := node.connect(m); err != nil {
-		return err
+		if m.logger != nil {
+			m.logger.Printf("Failed to connect to %s: %v (retrying)", node, err)
+		}
 	}
 
 	m.mu.Lock()
