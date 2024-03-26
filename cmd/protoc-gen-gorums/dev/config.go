@@ -1,6 +1,8 @@
 package dev
 
 import (
+	"fmt"
+
 	"github.com/relab/gorums"
 )
 
@@ -15,18 +17,25 @@ type Configuration struct {
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
 //
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
-//  cfg1, err := mgr.NewConfiguration(qspec1, opts...)
-//  cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) *Configuration {
+//
+//	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
+//	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
+func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
 	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
-		panic("QuorumSpec may not be nil")
+		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
-	return &Configuration{
+	newCfg := &Configuration{
 		RawConfiguration: rawCfg,
 		qspec:            qspec,
 	}
+	// initialize the nodes slice
+	newCfg.nodes = make([]*Node, newCfg.Size())
+	for i, n := range rawCfg {
+		newCfg.nodes[i] = &Node{n}
+	}
+	return newCfg, nil
 }
 
 // Nodes returns a slice of each available node. IDs are returned in the same
