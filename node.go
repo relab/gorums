@@ -36,7 +36,7 @@ type RawNode struct {
 func NewRawNode(addr string) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
+		return nil, err
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
@@ -50,7 +50,7 @@ func NewRawNode(addr string) (*RawNode, error) {
 func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
+		return nil, err
 	}
 	return &RawNode{
 		id:   id,
@@ -67,7 +67,7 @@ func (n *RawNode) connect(mgr *RawManager) error {
 	ctx := n.newContext()
 	n.channel = newChannel(n, ctx)
 	if err := n.channel.connect(); err != nil {
-		return fmt.Errorf("failed to start stream: %w", err)
+		return nodeError{nodeID: n.id, cause: err}
 	}
 	return nil
 }
@@ -111,7 +111,7 @@ func (n *RawNode) close() error {
 		return nil
 	}
 	if err := n.conn.Close(); err != nil {
-		return fmt.Errorf("%d: conn close error: %w", n.id, err)
+		return nodeError{nodeID: n.id, cause: err}
 	}
 	return nil
 }
