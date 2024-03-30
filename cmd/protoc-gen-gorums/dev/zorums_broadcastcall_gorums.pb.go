@@ -50,19 +50,19 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 }
 
 func _clientBroadcastWithClientHandler2(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClientResponse)
+	in := new(Response)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	return srv.(clientServer).clientBroadcastWithClientHandler2(ctx, in)
 }
 
-func (srv *clientServerImpl) clientBroadcastWithClientHandler2(ctx context.Context, resp *ClientResponse) (*ClientResponse, error) {
+func (srv *clientServerImpl) clientBroadcastWithClientHandler2(ctx context.Context, resp *Response) (*Response, error) {
 	err := srv.AddResponse(ctx, resp)
 	return resp, err
 }
 
-func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Request) (resp *ClientResponse, err error) {
+func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Request) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
 	}
@@ -75,23 +75,23 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
-	return response.(*ClientResponse), err
+	return response.(*Response), err
 }
 
 func _clientBroadcastWithClientHandlerAndBroadcastOption(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ClientResponse)
+	in := new(Response)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	return srv.(clientServer).clientBroadcastWithClientHandlerAndBroadcastOption(ctx, in)
 }
 
-func (srv *clientServerImpl) clientBroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, resp *ClientResponse) (*ClientResponse, error) {
+func (srv *clientServerImpl) clientBroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, resp *Response) (*Response, error) {
 	err := srv.AddResponse(ctx, resp)
 	return resp, err
 }
 
-func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, in *Request) (resp *ClientResponse, err error) {
+func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, in *Request) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
 	}
@@ -104,5 +104,5 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
-	return response.(*ClientResponse), err
+	return response.(*Response), err
 }

@@ -10,7 +10,6 @@ import "google/protobuf/empty.proto";
 message Request { string Value = 1; }
 message Response { int64 Result = 1; }
 message MyResponse { string Value = 1; }
-message ClientResponse { int64 Result = 1; }
 
 // ZorumsService is not meant to be implemented.
 // The zorums generated code is placed alongside Gorums static code files
@@ -98,7 +97,7 @@ service ZorumsService {
   //
   // NOTE: this will NOT create a broadcast method, meaning servers cannot
   // call this method (only clients)
-  rpc BroadcastWithClientHandler2(Request) returns (ClientResponse) {
+  rpc BroadcastWithClientHandler2(Request) returns (Response) {
     option (gorums.broadcastcall) = true;
   }
 
@@ -108,7 +107,7 @@ service ZorumsService {
   //
   // NOTE: this WILL create a broadcast method, meaning servers (and clients)
   // can call this method
-  rpc BroadcastWithClientHandlerAndBroadcastOption(Request) returns (ClientResponse) {
+  rpc BroadcastWithClientHandlerAndBroadcastOption(Request) returns (Response) {
     option (gorums.broadcastcall) = true;
     option (gorums.broadcast) = true;
   }

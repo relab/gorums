@@ -1,6 +1,8 @@
 package dev
 
 import (
+	"fmt"
+
 	"github.com/relab/gorums"
 )
 
@@ -8,9 +10,9 @@ import (
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	nodes []*Node
 	qspec QuorumSpec
 	srv   *clientServerImpl
+	nodes []*Node
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -19,16 +21,22 @@ type Configuration struct {
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) *Configuration {
+func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
 	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
-		panic("QuorumSpec may not be nil")
+		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
-	return &Configuration{
+	newCfg := &Configuration{
 		RawConfiguration: rawCfg,
 		qspec:            qspec,
 	}
+	// initialize the nodes slice
+	newCfg.nodes = make([]*Node, newCfg.Size())
+	for i, n := range rawCfg {
+		newCfg.nodes[i] = &Node{n}
+	}
+	return newCfg, nil
 }
 
 // Nodes returns a slice of each available node. IDs are returned in the same
@@ -36,12 +44,6 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) *Con
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *Configuration) Nodes() []*Node {
-	if c.nodes == nil {
-		c.nodes = make([]*Node, 0, c.Size())
-		for _, n := range c.RawConfiguration {
-			c.nodes = append(c.nodes, &Node{n})
-		}
-	}
 	return c.nodes
 }
 

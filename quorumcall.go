@@ -45,7 +45,7 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 	}
 
 	var (
-		errs    []Error
+		errs    []nodeError
 		quorum  bool
 		replies = make(map[uint32]protoreflect.ProtoMessage)
 	)
@@ -54,7 +54,7 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errs = append(errs, Error{r.nid, r.err})
+				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
 				break
 			}
 			replies[r.nid] = r.msg
@@ -62,10 +62,10 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{ctx.Err().Error(), len(replies), errs}
+			return resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
 		}
 		if len(errs)+len(replies) == expectedReplies {
-			return resp, QuorumCallError{"incomplete call", len(replies), errs}
+			return resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
 		}
 	}
 }

@@ -58,7 +58,7 @@ func (m *RawManager) closeNodeConns() {
 	for _, node := range m.nodes {
 		err := node.close()
 		if err != nil && m.logger != nil {
-			m.logger.Printf("node %d: error closing: %v", node.id, err)
+			m.logger.Printf("error closing: %v", err)
 		}
 	}
 }
@@ -113,10 +113,10 @@ func (m *RawManager) Size() (nodes int) {
 func (m *RawManager) AddNode(node *RawNode) error {
 	if _, found := m.Node(node.ID()); found {
 		// Node IDs must be unique
-		return fmt.Errorf("node ID %d already exists (%s)", node.ID(), node.Address())
+		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
 	}
 	if m.logger != nil {
-		m.logger.Printf("connecting to %s with id %d\n", node, node.id)
+		m.logger.Printf("Connecting to %s with id %d\n", node, node.id)
 	}
 	if err := node.connect(m); err != nil {
 		if m.logger != nil {

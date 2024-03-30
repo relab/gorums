@@ -9,12 +9,11 @@ import (
 	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/encoding"
 )
 
 type mockSrv struct{}
 
-func (mockSrv) Test(ctx ServerCtx, _ *mock.Request) (resp *mock.Response, err error) {
+func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
 	return nil, nil
 }
 
@@ -47,7 +46,7 @@ func TestChannelCreation(t *testing.T) {
 	}
 	mgr := dummyMgr()
 	defer mgr.Close()
-	// a proper connection should NOT be esablished here
+	// a proper connection should NOT be established here
 	node.connect(mgr)
 
 	replyChan := make(chan response, 1)
@@ -111,19 +110,16 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 }
 
 func TestChannelReconnection(t *testing.T) {
-	if encoding.GetCodec(ContentSubtype) == nil {
-		encoding.RegisterCodec(NewCodec())
-	}
 	srvAddr := "127.0.0.1:5000"
 	// wait to start the server
-	startServer, stopServer := TestServerSetup(t, srvAddr, dummySrv())
+	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
 	node, err := NewRawNode(srvAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mgr := dummyMgr()
 	defer mgr.Close()
-	// a proper connection should NOT be esablished here because server is not started
+	// a proper connection should NOT be established here because server is not started
 	node.connect(mgr)
 
 	// send first message when server is down
@@ -138,13 +134,12 @@ func TestChannelReconnection(t *testing.T) {
 	select {
 	case resp := <-replyChan1:
 		if resp.err == nil {
-			t.Fatal("should have received an error")
+			t.Error("response err: got <nil>, want error")
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("deadlock: impossible to enqueue messages to the node")
 	}
 
-	// start the server
 	startServer()
 
 	// send second message when server is up
@@ -159,13 +154,12 @@ func TestChannelReconnection(t *testing.T) {
 	select {
 	case resp := <-replyChan2:
 		if resp.err != nil {
-			t.Fatal(resp.err)
+			t.Errorf("response err: got %v, want <nil>", resp.err)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("deadlock: impossible to enqueue messages to the node")
 	}
 
-	// stop the server
 	stopServer()
 
 	// send third message when server has been previously up but is now down
@@ -180,7 +174,7 @@ func TestChannelReconnection(t *testing.T) {
 	select {
 	case resp3 := <-replyChan3:
 		if resp3.err == nil {
-			t.Fatal("should have received an error", resp3.msg)
+			t.Error("response err: got <nil>, want error")
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("deadlock: impossible to enqueue messages to the node")

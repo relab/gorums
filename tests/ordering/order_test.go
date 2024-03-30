@@ -2,6 +2,7 @@ package ordering
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -165,10 +166,8 @@ func TestQCAsyncOrdering(t *testing.T) {
 			defer wg.Done()
 			resp, err := promise.Get()
 			if err != nil {
-				if qcError, ok := err.(gorums.QuorumCallError); ok {
-					if qcError.Reason == context.Canceled.Error() {
-						return
-					}
+				if errors.Is(err, context.Canceled) {
+					return
 				}
 				t.Errorf("QC error: %v", err)
 			}

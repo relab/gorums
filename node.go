@@ -36,7 +36,7 @@ type RawNode struct {
 func NewRawNode(addr string) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
+		return nil, err
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
@@ -50,7 +50,7 @@ func NewRawNode(addr string) (*RawNode, error) {
 func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("node error: '%s' error: %v", addr, err)
+		return nil, err
 	}
 	return &RawNode{
 		id:   id,
@@ -65,20 +65,16 @@ func (n *RawNode) connect(mgr *RawManager) error {
 		return nil
 	}
 	n.channel = newChannel(n)
-	// ignoring the error because it will try to reconnect later
-	_ = n.dial()
-	ctx := n.newContext()
-	if err := n.channel.connect(ctx, n.conn); err != nil {
-		return fmt.Errorf("failed to start stream: %w", err)
+	if err := n.channel.connect(); err != nil {
+		return nodeError{nodeID: n.id, cause: err}
 	}
 	return nil
 }
 
 // dial the node and close the current connection.
 func (n *RawNode) dial() error {
-	// dial has previously succeeded but creating a stream failed
-	// so we need to close it before creating a new.
 	if n.conn != nil {
+		// close the current connection before dialing again.
 		n.conn.Close()
 	}
 	var err error
@@ -102,8 +98,7 @@ func (n *RawNode) newContext() context.Context {
 	}
 	var ctx context.Context
 	ctx, n.cancel = context.WithCancel(context.Background())
-	ctx = metadata.NewOutgoingContext(ctx, md)
-	return ctx
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 // close this node.
@@ -114,7 +109,7 @@ func (n *RawNode) close() error {
 		return nil
 	}
 	if err := n.conn.Close(); err != nil {
-		return fmt.Errorf("%d: conn close error: %w", n.id, err)
+		return nodeError{nodeID: n.id, cause: err}
 	}
 	return nil
 }
