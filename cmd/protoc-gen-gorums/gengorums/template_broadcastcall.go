@@ -30,7 +30,7 @@ func (srv *clientServerImpl) client{{.Method.GoName}}(ctx context.Context, resp 
 var clientServerImplMethod = `
 func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFile .Method}}) (resp *{{out .GenFile .Method}}, err error) {
 	if c.srv == nil {
-		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")

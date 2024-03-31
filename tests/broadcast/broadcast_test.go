@@ -1,5 +1,147 @@
 package broadcast
 
+import (
+	"context"
+	fmt "fmt"
+	net "net"
+	"testing"
+
+	gorums "github.com/relab/gorums"
+	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+)
+
+type testServer struct {
+	*Server
+	addr  string
+	peers []string
+	lis   net.Listener
+}
+
+func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	broadcast.Broadcast(req)
+}
+
+func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	broadcast.SendToClient(&Response{
+		Result: req.Value,
+	}, nil)
+}
+
+type testQSpec struct {
+	quorumSize    int
+	broadcastSize int
+}
+
+func newQSpec(qSize, broadcastSize int) QuorumSpec {
+	return &testQSpec{
+		quorumSize:    qSize,
+		broadcastSize: broadcastSize,
+	}
+}
+
+func (qs *testQSpec) BroadcastCallQF(replies []*Response) (*Response, bool) {
+	if len(replies) >= qs.quorumSize {
+		for _, resp := range replies {
+			return resp, true
+		}
+	}
+	return nil, false
+}
+
+func newtestServer(addr string, srvAddresses []string) *testServer {
+	srv := testServer{
+		Server: NewServer(),
+	}
+	RegisterBroadcastServiceServer(srv.Server, &srv)
+	srv.peers = srvAddresses
+	srv.addr = addr
+	return &srv
+}
+
+func (srv *testServer) start(lis net.Listener) {
+	mgr := NewManager(
+		gorums.WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	)
+	view, err := mgr.NewConfiguration(gorums.WithNodeList(srv.peers))
+	if err != nil {
+		panic(err)
+	}
+	srv.SetView(view)
+	srv.Serve(lis)
+}
+
+func createSrvs(b *testing.B, numSrvs int) ([]string, func()) {
+	srvs := make([]*testServer, 0, numSrvs)
+	srvAddrs := make([]string, numSrvs)
+	for i := 0; i < numSrvs; i++ {
+		srvAddrs[i] = fmt.Sprintf("127.0.0.1:500%v", i)
+	}
+	for _, addr := range srvAddrs {
+		srv := newtestServer(addr, srvAddrs)
+		lis, err := net.Listen("tcp4", srv.addr)
+		if err != nil {
+			b.Error(err)
+		}
+		srv.lis = lis
+		go srv.start(lis)
+		srvs = append(srvs, srv)
+	}
+	return srvAddrs, func() {
+		// stop the servers
+		for _, srv := range srvs {
+			srv.Stop()
+			err := srv.lis.Close()
+			if err != nil {
+				b.Error(err)
+			}
+		}
+	}
+}
+
+func createClient(b *testing.B, srvAddrs []string, listenAddr string) (*Configuration, func()) {
+	mgr := NewManager(
+		gorums.WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	)
+	lis, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		b.Error(err)
+	}
+	mgr.AddClientServer(lis)
+	config, err := mgr.NewConfiguration(
+		gorums.WithNodeList(srvAddrs),
+		newQSpec(len(srvAddrs), len(srvAddrs)),
+	)
+	if err != nil {
+		b.Error(err)
+	}
+	return config, func() {
+		mgr.Close()
+	}
+}
+
+func BenchmarkBroadcast(b *testing.B) {
+	srvAddrs, srvCleanup := createSrvs(b, 3)
+	defer srvCleanup()
+
+	config, clientCleanup := createClient(b, srvAddrs, "127.0.0.1:8080")
+	defer clientCleanup()
+
+	b.Run(fmt.Sprintf("BroadcastCall_%d", 1), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(i)})
+			if err != nil {
+				_ = resp.GetResult()
+			}
+		}
+	})
+
+}
+
 /*import (
 	"context"
 	"fmt"
@@ -11,7 +153,9 @@ package broadcast
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const requestValue = 0x1001_1001
+type testServer struct {
+	*Server
+}
 
 type testQSpec struct {
 	quorum int

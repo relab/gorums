@@ -5,7 +5,7 @@ option go_package = "github.com/relab/gorums/tests/broadcast";
 
 import "gorums.proto";
 
-service Broadcast {
+service BroadcastService {
   rpc BroadcastCall(Request) returns (Response) { 
     option (gorums.broadcastcall) = true; 
   }

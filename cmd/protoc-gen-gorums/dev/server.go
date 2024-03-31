@@ -1,8 +1,6 @@
 package dev
 
 import (
-	"net"
-
 	"github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -56,19 +54,9 @@ type clientServerImpl struct {
 	grpcServer *grpc.Server
 }
 
-func (c *Configuration) RegisterClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
-	srvImpl := &clientServerImpl{
-		grpcServer: grpc.NewServer(opts...),
-	}
-	srv, err := gorums.NewClientServer(lis)
-	if err != nil {
-		return err
-	}
-	srvImpl.grpcServer.RegisterService(&clientServer_ServiceDesc, srvImpl)
-	go srvImpl.grpcServer.Serve(lis)
-	srvImpl.ClientServer = srv
-	c.srv = srvImpl
-	return nil
+func (c *clientServerImpl) stop() {
+	c.ClientServer.Stop()
+	c.grpcServer.Stop()
 }
 
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {

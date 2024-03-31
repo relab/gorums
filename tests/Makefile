@@ -1,7 +1,7 @@
 # Tests that should be run each time
-RUNTESTS := qf ordering metadata tls unresponsive dummy oneway config correctable
+RUNTESTS := qf ordering metadata tls unresponsive dummy oneway config correctable broadcast
 
-.PHONY: all qf ordering metadata tls unresponsive dummy oneway config correctable
+.PHONY: all qf ordering metadata tls unresponsive dummy oneway config correctable broadcast
 
 all: $(RUNTESTS)
 

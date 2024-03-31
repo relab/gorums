@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/relab/gorums"
+	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 )
 
@@ -18,6 +19,7 @@ func init() {
 // which quorum calls can be performed.
 type Manager struct {
 	*gorums.RawManager
+	srv *clientServerImpl
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -29,6 +31,26 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 	}
 }
 
+func (mgr *Manager) Close() {
+	mgr.RawManager.Close()
+	mgr.srv.stop()
+}
+
+func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
+	srvImpl := &clientServerImpl{
+		grpcServer: grpc.NewServer(opts...),
+	}
+	srv, err := gorums.NewClientServer(lis)
+	if err != nil {
+		return err
+	}
+	srvImpl.grpcServer.RegisterService(&clientServer_ServiceDesc, srvImpl)
+	go srvImpl.grpcServer.Serve(lis)
+	srvImpl.ClientServer = srv
+	mgr.srv = srvImpl
+	return nil
+}
+
 // NewConfiguration returns a configuration based on the provided list of nodes (required)
 // and an optional quorum specification. The QuorumSpec is necessary for call types that
 // must process replies. For configurations only used for unicast or multicast call types,
@@ -37,7 +59,7 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	if len(opts) < 1 || len(opts) > 3 {
+	if len(opts) < 1 || len(opts) > 2 {
 		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
 	}
 	c = &Configuration{}
@@ -48,12 +70,6 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			if err != nil {
 				return nil, err
 			}
-		case net.Listener:
-			err = c.RegisterClientServer(v)
-			if err != nil {
-				return nil, err
-			}
-			return c, nil
 		case QuorumSpec:
 			// Must be last since v may match QuorumSpec if it is interface{}
 			c.qspec = v
@@ -61,10 +77,15 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			return nil, fmt.Errorf("config: unknown option type: %v", v)
 		}
 	}
-	//var test interface{} = struct{}{}
-	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-	//	return nil, fmt.Errorf("config: missing required QuorumSpec")
-	//}
+	// register the client server if it exists.
+	// used to collect responses in BroadcastCalls
+	if m.srv != nil {
+		c.srv = m.srv
+	}
+	var test interface{} = struct{}{}
+	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+		return nil, fmt.Errorf("config: missing required QuorumSpec")
+	}
 	// initialize the nodes slice
 	c.nodes = make([]*Node, c.Size())
 	for i, n := range c.RawConfiguration {

@@ -35,7 +35,7 @@ func (srv *clientServerImpl) clientBroadcastWithClientHandler1(ctx context.Conte
 
 func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Request) (resp *Response, err error) {
 	if c.srv == nil {
-		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
@@ -64,7 +64,7 @@ func (srv *clientServerImpl) clientBroadcastWithClientHandler2(ctx context.Conte
 
 func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Request) (resp *Response, err error) {
 	if c.srv == nil {
-		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
@@ -93,7 +93,7 @@ func (srv *clientServerImpl) clientBroadcastWithClientHandlerAndBroadcastOption(
 
 func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, in *Request) (resp *Response, err error) {
 	if c.srv == nil {
-		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")

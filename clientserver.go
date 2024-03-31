@@ -27,25 +27,34 @@ type ClientRequest struct {
 }
 
 type ClientServer struct {
-	respChan   chan *ClientResponse
-	reqChan    chan *ClientRequest
-	resps      map[string][]protoreflect.ProtoMessage
-	doneChans  map[string]chan protoreflect.ProtoMessage
-	handlers   map[string]func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
-	listenAddr string
+	respChan  chan *ClientResponse
+	reqChan   chan *ClientRequest
+	resps     map[string][]protoreflect.ProtoMessage
+	doneChans map[string]chan protoreflect.ProtoMessage
+	handlers  map[string]func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
+	lis       net.Listener
+	ctx       context.Context
+	cancelCtx context.CancelFunc
 }
 
 func NewClientServer(lis net.Listener) (*ClientServer, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	srv := &ClientServer{
 		respChan:  make(chan *ClientResponse, 10),
 		reqChan:   make(chan *ClientRequest),
 		resps:     make(map[string][]protoreflect.ProtoMessage),
 		doneChans: make(map[string]chan protoreflect.ProtoMessage),
 		handlers:  make(map[string]func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)),
+		ctx:       ctx,
+		cancelCtx: cancel,
 	}
-	srv.listenAddr = lis.Addr().String()
+	srv.lis = lis
 	go srv.handle()
 	return srv, nil
+}
+
+func (srv *ClientServer) Stop() {
+	srv.cancelCtx()
 }
 
 func (srv *ClientServer) AddRequest(ctx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler, method string) (chan protoreflect.ProtoMessage, QuorumCallData) {
@@ -56,7 +65,7 @@ func (srv *ClientServer) AddRequest(ctx context.Context, in protoreflect.ProtoMe
 
 		BroadcastID: broadcastID,
 		SenderType:  BroadcastClient,
-		OriginAddr:  srv.listenAddr,
+		OriginAddr:  srv.lis.Addr().String(),
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)
 	srv.reqChan <- &ClientRequest{
@@ -90,6 +99,8 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 func (srv *ClientServer) handle() {
 	for {
 		select {
+		case <-srv.ctx.Done():
+			return
 		case resp := <-srv.respChan:
 			if _, ok := srv.resps[resp.broadcastID]; !ok {
 				continue

@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -133,16 +132,6 @@ func WithoutUniquenessChecks() BroadcastOption {
 	return func(b *BroadcastOptions) {
 		b.OmitUniquenessChecks = true
 	}
-}
-
-// returns a listener for the given address.
-// panics upon errors.
-func WithListener(listenAddr string) net.Listener {
-	lis, err := net.Listen("tcp", listenAddr)
-	if err != nil {
-		panic(err)
-	}
-	return lis
 }
 
 type BroadcastOptions struct {
