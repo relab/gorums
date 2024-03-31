@@ -3,8 +3,10 @@ package broadcast
 import (
 	"context"
 	fmt "fmt"
+	"log/slog"
 	net "net"
 	"testing"
+	"time"
 
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
@@ -19,6 +21,7 @@ type testServer struct {
 }
 
 func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	slog.Warn("server received req")
 	broadcast.Broadcast(req)
 }
 
@@ -73,7 +76,7 @@ func (srv *testServer) start(lis net.Listener) {
 	srv.Serve(lis)
 }
 
-func createSrvs(b *testing.B, numSrvs int) ([]string, func()) {
+func createSrvs(numSrvs int) ([]string, func(), error) {
 	srvs := make([]*testServer, 0, numSrvs)
 	srvAddrs := make([]string, numSrvs)
 	for i := 0; i < numSrvs; i++ {
@@ -83,7 +86,7 @@ func createSrvs(b *testing.B, numSrvs int) ([]string, func()) {
 		srv := newtestServer(addr, srvAddrs)
 		lis, err := net.Listen("tcp4", srv.addr)
 		if err != nil {
-			b.Error(err)
+			return nil, nil, err
 		}
 		srv.lis = lis
 		go srv.start(lis)
@@ -93,15 +96,12 @@ func createSrvs(b *testing.B, numSrvs int) ([]string, func()) {
 		// stop the servers
 		for _, srv := range srvs {
 			srv.Stop()
-			err := srv.lis.Close()
-			if err != nil {
-				b.Error(err)
-			}
+			srv.lis.Close()
 		}
-	}
+	}, nil
 }
 
-func createClient(b *testing.B, srvAddrs []string, listenAddr string) (*Configuration, func()) {
+func createClient(srvAddrs []string, listenAddr string) (*Configuration, func(), error) {
 	mgr := NewManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -109,26 +109,60 @@ func createClient(b *testing.B, srvAddrs []string, listenAddr string) (*Configur
 	)
 	lis, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		b.Error(err)
+		return nil, nil, err
 	}
-	mgr.AddClientServer(lis)
+	err = mgr.AddClientServer(lis)
+	if err != nil {
+		return nil, nil, err
+	}
 	config, err := mgr.NewConfiguration(
 		gorums.WithNodeList(srvAddrs),
 		newQSpec(len(srvAddrs), len(srvAddrs)),
 	)
 	if err != nil {
-		b.Error(err)
+		return nil, nil, err
 	}
 	return config, func() {
 		mgr.Close()
+	}, nil
+}
+
+func TestBroadcast(t *testing.T) {
+	srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := createClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	val := int64(1)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	resp, err := config.BroadcastCall(ctx, &Request{Value: val})
+	if err != nil {
+		t.Error(err)
+	}
+	if resp.GetResult() != val {
+		t.Fatal("resp is wrong")
 	}
 }
 
 func BenchmarkBroadcast(b *testing.B) {
-	srvAddrs, srvCleanup := createSrvs(b, 3)
+	srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		b.Error(err)
+	}
 	defer srvCleanup()
 
-	config, clientCleanup := createClient(b, srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := createClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		b.Error(err)
+	}
 	defer clientCleanup()
 
 	b.Run(fmt.Sprintf("BroadcastCall_%d", 1), func(b *testing.B) {

@@ -99,6 +99,11 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 	}
 }
 
+func (mgr *Manager) Close() {
+	mgr.RawManager.Close()
+	mgr.srv.stop()
+}
+
 func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
 	srvImpl := &clientServerImpl{
 		grpcServer: grpc.NewServer(opts...),
@@ -112,11 +117,6 @@ func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption)
 	srvImpl.ClientServer = srv
 	mgr.srv = srvImpl
 	return nil
-}
-
-func (c *clientServerImpl) stop() {
-	c.ClientServer.Stop()
-	c.grpcServer.Stop()
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes (required)
@@ -138,12 +138,6 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			if err != nil {
 				return nil, err
 			}
-		//case net.Listener:
-		//	err = c.registerClientServer(v)
-		//	if err != nil {
-		//		return nil, err
-		//	}
-		//	return c, nil
 		case QuorumSpec:
 			// Must be last since v may match QuorumSpec if it is interface{}
 			c.qspec = v
@@ -158,7 +152,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	}
 	//var test interface{} = struct{}{}
 	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		//return nil, fmt.Errorf("config: missing required QuorumSpec")
+	//	return nil, fmt.Errorf("config: missing required QuorumSpec")
 	//}
 	// initialize the nodes slice
 	c.nodes = make([]*Node, c.Size())
@@ -233,6 +227,11 @@ type clientServerImpl struct {
 	grpcServer *grpc.Server
 }
 
+func (c *clientServerImpl) stop() {
+	c.ClientServer.Stop()
+	c.grpcServer.Stop()
+}
+
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
@@ -267,7 +266,7 @@ func (srv *clientServerImpl) clientBroadcastCall(ctx context.Context, resp *Resp
 
 func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *Response, err error) {
 	if c.srv == nil {
-		return nil, fmt.Errorf("a client server is not defined. Use configuration.RegisterClientServer() to define a client server")
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
