@@ -3,6 +3,7 @@ package broadcast
 import (
 	"context"
 	fmt "fmt"
+	"log/slog"
 	net "net"
 	"net/http"
 	_ "net/http/pprof"
@@ -67,6 +68,93 @@ func TestBroadcast(t *testing.T) {
 		t.Fatal("resp is wrong")
 	}
 	//slog.Info("done")
+}
+
+func TestBroadcastManyReqs(t *testing.T) {
+	//slog.Info("test")
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+	//slog.Info("started servers")
+
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+	//slog.Info("started client")
+
+	val := int64(1)
+	//slog.Info("sending req")
+	resp, err := config.BroadcastCall(context.Background(), &Request{Value: val})
+	if err != nil {
+		t.Error(err)
+	}
+	if resp.GetResult() != val {
+		t.Fatal("resp is wrong")
+	}
+	//slog.Info("done")
+	for i := 0; i < 10000; i++ {
+		if i%100 == 0 {
+			slog.Info("req", "num", i)
+		}
+		resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(i)})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != int64(i) {
+			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+		}
+		//slog.Warn("client reply", "val", resp.GetResult())
+	}
+}
+
+func TestQCBroadcastManyReqs(t *testing.T) {
+	//slog.Info("test")
+	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+	//slog.Info("started servers")
+
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+	//slog.Info("started client")
+
+	val := int64(1)
+	//slog.Info("sending req")
+	resp, err := config.QuorumCallWithBroadcast(context.Background(), &Request{Value: val})
+	if err != nil {
+		t.Error(err)
+	}
+	if resp.GetResult() != val {
+		t.Fatal("resp is wrong")
+	}
+	//slog.Info("done")
+	for i := 0; i < 10000; i++ {
+		if i%100 == 0 {
+			slog.Info("req", "num", i)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		resp, err := config.QuorumCallWithBroadcast(ctx, &Request{Value: int64(i)})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != int64(i) {
+			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+		}
+		cancel()
+		//slog.Warn("client reply", "val", resp.GetResult())
+	}
+	for _, srv := range srvs {
+		slog.Info("num msgs", "num", srv.GetMsgs())
+	}
 }
 
 func BenchmarkQuorumCall(b *testing.B) {
@@ -183,6 +271,7 @@ func BenchmarkBroadcastOption(b *testing.B) {
 
 	b.Run(fmt.Sprintf("QuorumCallWithBroadcast_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
+			slog.Info("run", "#", i)
 			resp, err := config.QuorumCallWithBroadcast(context.Background(), &Request{Value: int64(i)})
 			if err != nil {
 				b.Error(err)

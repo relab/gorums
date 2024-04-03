@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -63,10 +64,10 @@ func (r *responseMsg) getBroadcastID() string {
 }
 
 type clientRequest struct {
-	//id       string
-	ctx      ServerCtx
-	finished chan<- *Message
-	metadata *ordering.Metadata
+	ctx        ServerCtx
+	finished   chan<- *Message
+	metadata   *ordering.Metadata
+	senderType string
 	//methods   []string
 	//counts    map[string]uint64
 	timestamp time.Time
@@ -161,6 +162,9 @@ type BroadcastMetadata struct {
 }
 
 func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata {
+	if md == nil {
+		return BroadcastMetadata{}
+	}
 	tmp := strings.Split(md.Method, ".")
 	m := ""
 	if len(tmp) >= 1 {
@@ -207,6 +211,7 @@ type RequestMap struct {
 	data         map[string]clientRequest
 	mutex        sync.RWMutex
 	handledReqs  map[string]time.Time
+	pending      map[string]*responseMsg
 	doneChan     chan struct{}
 	removeOption CacheOption
 }
@@ -225,10 +230,9 @@ func (list *RequestMap) cleanup() {
 		select {
 		case <-list.doneChan:
 			return
-		default:
+		case <-time.After(1 * time.Minute):
 		}
-		//time.Sleep(1 * time.Minute)
-		time.Sleep(3 * time.Second)
+		//time.Sleep(3 * time.Second)
 		list.mutex.Lock()
 		del := make([]string, 0)
 		// remove handled reqs
@@ -263,8 +267,7 @@ func (list *RequestMap) Add(identifier string, element clientRequest) (count uin
 		return 0, fmt.Errorf("the request is already handled")
 	}
 	// only add method if element already exists
-	if _, ok := list.data[identifier]; ok {
-		//if elem, ok := list.data[identifier]; ok {
+	if elem, ok := list.data[identifier]; ok {
 		//elem.methods = append(elem.methods, element.metadata.Method)
 		// add to count
 		//if _, ok := elem.counts[element.metadata.Method]; !ok {
@@ -273,6 +276,14 @@ func (list *RequestMap) Add(identifier string, element clientRequest) (count uin
 		//	elem.counts[element.metadata.Method]++
 		//}
 		//return elem.counts[element.metadata.Method], nil
+		old := elem.senderType
+		new := element.senderType
+		// we receive the original request after is has been broadcasted by another server
+		if new == BroadcastClient && old == BroadcastServer {
+			elem.senderType = BroadcastClient
+			elem.finished = element.finished
+			list.data[identifier] = elem
+		}
 		return 0, nil
 	}
 	//methods := []string{element.metadata.Method}
@@ -318,7 +329,11 @@ func (list *RequestMap) Remove(identifier string) {
 	// the implementer can also provide a
 	// custom time to live for a request.
 	list.handledReqs[identifier] = elem.timestamp
+	processingTime := time.Since(elem.timestamp)
 	delete(list.data, identifier)
+	if processingTime > 3*time.Millisecond {
+		slog.Error("processing time", "dur", processingTime)
+	}
 }
 
 func (list *RequestMap) Reset() {
@@ -326,9 +341,10 @@ func (list *RequestMap) Reset() {
 	defer list.mutex.Unlock()
 	del := make([]string, 0, len(list.data))
 	// remove client reqs
-	for broadcastID, elem := range list.data {
+	//for broadcastID, elem := range list.data {
+	for broadcastID := range list.data {
 		del = append(del, broadcastID)
-		list.handledReqs[broadcastID] = elem.timestamp
+		//list.handledReqs[broadcastID] = elem.timestamp
 	}
 	for _, broadcastID := range del {
 		delete(list.data, broadcastID)
@@ -356,6 +372,30 @@ func (list *RequestMap) GetIfValid(identifier string) (clientRequest, bool) {
 	}
 	return req, true
 
+}
+
+func (list *RequestMap) AddToPending(identifier string, resp *responseMsg) error {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	// signal that the request has been handled and is thus completed
+	if _, ok := list.data[identifier]; ok {
+		return fmt.Errorf("request is not handled yet")
+	}
+	if _, ok := list.pending[identifier]; ok {
+		return fmt.Errorf("request already added to pending")
+	}
+	list.pending[identifier] = resp
+	return nil
+}
+
+func (list *RequestMap) GetInPending(identifier string) (*responseMsg, bool) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+	resp, ok := list.pending[identifier]
+	if ok {
+		delete(list.pending, identifier)
+	}
+	return resp, ok
 }
 
 type broadcastMsg struct {

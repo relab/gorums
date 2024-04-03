@@ -27,7 +27,11 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
 		if err := srv.broadcastSrv.validateMessage(in); err != nil {
-			srv.broadcastSrv.logger.Info("broadcast request not valid", "req", req)
+			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req)
+			return
+		}
+		if srv.broadcastSrv.inPending(ctx, in.Metadata, finished) {
+			srv.broadcastSrv.logger.Debug("server has already processed the msg", "req", req)
 			return
 		}
 		addOriginMethod(in.Metadata)
@@ -64,6 +68,9 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	if in.Metadata.BroadcastMsg.BroadcastID == "" {
 		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.BroadcastMsg.BroadcastID)
 	}
+	if in.Metadata.BroadcastMsg.SenderType == "" {
+		return fmt.Errorf("senderType cannot be empty. got: %v", in.Metadata.BroadcastMsg.SenderType)
+	}
 	// check and update TTL
 	// check deadline
 	return nil
@@ -87,12 +94,12 @@ func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, 
 	// not broadcasting in a goroutine can lead to deadlock. All handlers are run sync
 	// and thus the server have to return from the handler in order to process the next
 	// request.
-	<-finished
+	//<-finished
 	//}
 }
 
 func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster) {
-	srv.broadcastSrv.broadcaster = b
+	srv.broadcastSrv.createBroadcaster = b
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
 }
 

@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -24,12 +23,12 @@ type broadcastServer struct {
 	responseChan      chan *responseMsg
 	clientHandlers    map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
 	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
-	broadcaster       Broadcaster
-	orchestrator      *BroadcastOrchestrator
-	clientReqs        *RequestMap
-	stopChan          chan struct{}
-	logger            *slog.Logger
-	started           bool
+	//broadcaster       Broadcaster
+	orchestrator *BroadcastOrchestrator
+	clientReqs   *RequestMap
+	stopChan     chan struct{}
+	logger       *slog.Logger
+	started      bool
 }
 
 func newBroadcastServer(logger *slog.Logger) *broadcastServer {
@@ -107,11 +106,12 @@ func (srv *broadcastServer) run() {
 }
 
 func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
-	start := time.Now()
+	//start := time.Now()
 	// set the message as handled when returning from the method
 	defer msg.setFinished()
 	// lock to prevent view change mid execution of a broadcast request
 	srv.viewMutex.RLock()
+	defer srv.viewMutex.RUnlock()
 	if broadcastCall, ok := srv.handlers[msg.method]; ok {
 		// ignore if the client request is no longer valid
 		req, ok := srv.clientReqs.Get(msg.broadcastID)
@@ -122,11 +122,10 @@ func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
 		broadcastCall(msg.ctx, msg.request, req, msg.options)
 	}
-	srv.viewMutex.RUnlock()
-	end := time.Since(start)
-	if end >= 350*time.Microsecond {
-		slog.Error("handleBroadcast", "time", end)
-	}
+	//end := time.Since(start)
+	//if end >= 500*time.Microsecond {
+	//	slog.Error("handleBroadcast", "time", end)
+	//}
 }
 
 func (srv *broadcastServer) handleClientResponses() {
@@ -153,15 +152,15 @@ func (srv *broadcastServer) handle(response *responseMsg) {
 	}*/
 	broadcastID := response.getBroadcastID()
 	req, valid := srv.clientReqs.GetIfValid(broadcastID)
+	// the request is handled and can thus be removed from
+	// client requests when returning.
+	defer srv.clientReqs.Remove(broadcastID)
 	if !valid {
 		// this server has not received a request directly from a client
 		// hence, the response should be ignored
 		// already handled and can not be removed yet. It is possible to get duplicates.
 		return
 	}
-	// the request is handled and can thus be removed from
-	// client requests when returning.
-	defer srv.clientReqs.Remove(response.broadcastID)
 	// there is no need to respond to the client if
 	// the request has been cancelled
 	select {
@@ -170,10 +169,25 @@ func (srv *broadcastServer) handle(response *responseMsg) {
 		return
 	default:
 	}
+	srv.sendMsg(broadcastID, req, response)
+	//if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok && req.metadata.BroadcastMsg.OriginAddr != "" {
+	//handler(req.metadata.BroadcastMsg.OriginAddr, broadcastID, response.getResponse())
+	//} else if req.senderType == BroadcastClient {
+	//SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
+	//} else {
+	//// add response to cache. a server could have broadcasted the msg before the client.
+	//srv.clientReqs.AddToPending(broadcastID, response.getResponse())
+	//}
+}
+
+func (srv *broadcastServer) sendMsg(broadcastID string, req clientRequest, response *responseMsg) {
 	if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok && req.metadata.BroadcastMsg.OriginAddr != "" {
 		handler(req.metadata.BroadcastMsg.OriginAddr, broadcastID, response.getResponse())
-	} else if req.metadata.BroadcastMsg.SenderType == BroadcastClient {
+	} else if req.senderType == BroadcastClient {
 		SendMessage(req.ctx, req.finished, WrapMessage(req.metadata, protoreflect.ProtoMessage(response.getResponse()), response.getError()))
+	} else {
+		// add response to cache. a server could have broadcasted the msg before the client.
+		srv.clientReqs.AddToPending(broadcastID, response)
 	}
 }
 
@@ -183,10 +197,26 @@ func (srv *broadcastServer) sendToClient(broadcastID string, resp ResponseTypes,
 
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) (count uint64, err error) {
 	return srv.clientReqs.Add(metadata.BroadcastMsg.GetBroadcastID(), clientRequest{
-		//id:       uuid.New().String(),
-		ctx:      ctx,
-		finished: finished,
-		metadata: metadata,
-		doneChan: make(chan struct{}),
+		ctx:        ctx,
+		finished:   finished,
+		metadata:   metadata,
+		senderType: metadata.BroadcastMsg.SenderType,
+		doneChan:   make(chan struct{}),
 	})
+}
+
+func (srv *broadcastServer) inPending(ctx ServerCtx, metadata *ordering.Metadata, finished chan<- *Message) bool {
+	resp, ok := srv.clientReqs.GetInPending(metadata.BroadcastMsg.GetBroadcastID())
+	if ok {
+		req := clientRequest{
+			ctx:        ctx,
+			finished:   finished,
+			metadata:   metadata,
+			senderType: metadata.BroadcastMsg.SenderType,
+			doneChan:   make(chan struct{}),
+		}
+		srv.sendMsg(metadata.BroadcastMsg.BroadcastID, req, resp)
+		return true
+	}
+	return false
 }
