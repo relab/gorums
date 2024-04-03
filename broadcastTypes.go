@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -18,7 +19,8 @@ const (
 	BroadcastID     string = "broadcastID"
 )
 
-type broadcastFunc func(ctx context.Context, in RequestTypes, req clientRequest, options BroadcastOptions)
+type serverHandler func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
+type clientHandler func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
 
 type RequestTypes interface {
 	ProtoReflect() protoreflect.Message
@@ -35,15 +37,15 @@ type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, 
 
 type implementationFunc[T RequestTypes, V Broadcaster] func(ServerCtx, T, V)
 
-type responseMsg struct {
+type reply struct {
 	response    ResponseTypes
 	err         error
 	broadcastID string
 	timestamp   time.Time
 }
 
-func newResponseMessage(response ResponseTypes, err error, broadcastID string) *responseMsg {
-	return &responseMsg{
+func newResponseMessage(response ResponseTypes, err error, broadcastID string) *reply {
+	return &reply{
 		response:    response,
 		err:         err,
 		broadcastID: broadcastID,
@@ -51,15 +53,15 @@ func newResponseMessage(response ResponseTypes, err error, broadcastID string) *
 	}
 }
 
-func (r *responseMsg) getResponse() ResponseTypes {
+func (r *reply) getResponse() ResponseTypes {
 	return r.response
 }
 
-func (r *responseMsg) getError() error {
+func (r *reply) getError() error {
 	return r.err
 }
 
-func (r *responseMsg) getBroadcastID() string {
+func (r *reply) getBroadcastID() string {
 	return r.broadcastID
 }
 
@@ -81,8 +83,8 @@ type clientRequest struct {
 //
 // It is necessary to use an orchestrator to hide certain
 // implementation details, such as internal methods on the
-// broadcaster struct. The BroadcastOrchestrator will thus
-// be an unimported field in the broadcaster struct in the
+// broadcast struct. The BroadcastOrchestrator will thus
+// be an unimported field in the broadcast struct in the
 // generated code.
 type BroadcastOrchestrator struct {
 	BroadcastHandler    BroadcastHandlerFunc
@@ -211,7 +213,7 @@ type RequestMap struct {
 	data         map[string]clientRequest
 	mutex        sync.RWMutex
 	handledReqs  map[string]time.Time
-	pending      map[string]*responseMsg
+	pending      map[string]*reply
 	doneChan     chan struct{}
 	removeOption CacheOption
 }
@@ -374,7 +376,7 @@ func (list *RequestMap) GetIfValid(identifier string) (clientRequest, bool) {
 
 }
 
-func (list *RequestMap) AddToPending(identifier string, resp *responseMsg) error {
+func (list *RequestMap) AddToPending(identifier string, resp *reply) error {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 	// signal that the request has been handled and is thus completed
@@ -388,7 +390,7 @@ func (list *RequestMap) AddToPending(identifier string, resp *responseMsg) error
 	return nil
 }
 
-func (list *RequestMap) GetInPending(identifier string) (*responseMsg, bool) {
+func (list *RequestMap) GetInPending(identifier string) (*reply, bool) {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 	resp, ok := list.pending[identifier]

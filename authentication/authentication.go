@@ -4,12 +4,11 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/gob"
 	"encoding/pem"
-	"io"
 )
 
 // Elliptic Curve Cryptography (ECC) is a key-based technique for encrypting data.
@@ -80,12 +79,8 @@ func (ec *EllipticCurve) DecodePublic(pemEncodedPub string) (*ecdsa.PublicKey, e
 }
 
 func (ec *EllipticCurve) Sign(msg []byte) ([]byte, error) {
-	h := md5.New()
-	_, err := h.Write(msg)
-	if err != nil {
-		return nil, err
-	}
-	hash := h.Sum(nil)
+	h := sha256.Sum256(msg)
+	hash := h[:]
 	signature, err := ecdsa.SignASN1(rand.Reader, ec.privateKey, hash)
 	if err != nil {
 		return nil, err
@@ -95,12 +90,8 @@ func (ec *EllipticCurve) Sign(msg []byte) ([]byte, error) {
 
 // VerifySignature sign ecdsa style and verify signature
 func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []byte) (bool, error) {
-	h := md5.New()
-	_, err := h.Write(msg)
-	if err != nil {
-		return false, err
-	}
-	hash := h.Sum(nil)
+	h := sha256.Sum256(msg)
+	hash := h[:]
 	pubKey, err := ec.DecodePublic(pemEncodedPub)
 	if err != nil {
 		return false, err
@@ -111,12 +102,8 @@ func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []
 
 // VerifySignature sign ecdsa style and verify signature
 func (ec *EllipticCurve) SignAndVerify(privKey *ecdsa.PrivateKey, pubKey *ecdsa.PublicKey) ([]byte, bool, error) {
-	h := md5.New()
-	_, err := io.WriteString(h, "This is a message to be signed and verified by ECDSA!")
-	if err != nil {
-		return nil, false, err
-	}
-	hash := h.Sum(nil)
+	h := sha256.Sum256([]byte("test"))
+	hash := h[:]
 	signature, err := ecdsa.SignASN1(rand.Reader, privKey, hash)
 	if err != nil {
 		return nil, false, err

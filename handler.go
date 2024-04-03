@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -23,6 +22,20 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		defer ctx.Release()
 		req := in.Message.(T)
 		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req)
+
+		/*data, err := srv.broadcastSrv.storage.get(in.Metadata.BroadcastMsg.BroadcastID, false)
+		if data.shouldWaitForClient() {
+			srv.broadcastSrv.router.route(in.Metadata.BroadcastMsg.BroadcastID, data, data.getResponse())
+			return
+		}
+		if err != nil {
+			srv.broadcastSrv.storage.add(in.Metadata.BroadcastMsg.BroadcastID, data)
+		} else {
+			err := srv.broadcastSrv.storage.update(in.Metadata.BroadcastMsg.BroadcastID, data)
+			if err != nil {
+				return
+			}
+		}*/
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
@@ -107,27 +120,44 @@ func (srv *Server) RetToClient(resp protoreflect.ProtoMessage, err error, broadc
 	srv.broadcastSrv.sendToClient(broadcastID, resp, err)
 }
 
-func (srv *broadcastServer) registerReturnToClientHandler(method string, handler func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
+func (srv *broadcastServer) registerReturnToClientHandler(method string, handler clientHandler) {
 	srv.clientHandlers[method] = handler
+	srv.router.addClientHandler(method, handler)
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.handlers[method] = func(ctx context.Context, in RequestTypes, req clientRequest, options BroadcastOptions) {
-		srv.propertiesMutex.Lock()
+	srv.handlers[method] = func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string) {
 		cd := broadcastCallData{
 			Message:         in,
 			Method:          method,
-			BroadcastID:     req.metadata.BroadcastMsg.BroadcastID,
+			BroadcastID:     broadcastID,
 			SenderType:      BroadcastServer,
-			SenderID:        srv.id,
-			SenderAddr:      srv.addr,
-			OriginAddr:      req.metadata.BroadcastMsg.OriginAddr,
-			OriginMethod:    req.metadata.BroadcastMsg.OriginMethod,
+			SenderID:        id,
+			SenderAddr:      addr,
+			OriginAddr:      originAddr,
+			OriginMethod:    originMethod,
 			ServerAddresses: options.ServerAddresses,
 		}
-		srv.propertiesMutex.Unlock()
+		srv.viewMutex.RLock()
 		srv.view.broadcastCall(ctx, cd)
+		srv.viewMutex.RUnlock()
 	}
+	srv.router.addServerHandler(method, func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string) {
+		cd := broadcastCallData{
+			Message:         in,
+			Method:          method,
+			BroadcastID:     broadcastID,
+			SenderType:      BroadcastServer,
+			SenderID:        id,
+			SenderAddr:      addr,
+			OriginAddr:      originAddr,
+			OriginMethod:    originMethod,
+			ServerAddresses: options.ServerAddresses,
+		}
+		srv.viewMutex.RLock()
+		srv.view.broadcastCall(ctx, cd)
+		srv.viewMutex.RUnlock()
+	})
 }
 
 func (srv *Server) RegisterConfig(config RawConfiguration) {

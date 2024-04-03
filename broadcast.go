@@ -18,17 +18,18 @@ type broadcastServer struct {
 	addr            string
 	view            RawConfiguration
 	//broadcastedMsgs map[string]map[string]bool
-	handlers          map[string]broadcastFunc
+	handlers          map[string]serverHandler
 	broadcastChan     chan *broadcastMsg
-	responseChan      chan *responseMsg
+	responseChan      chan *reply
 	clientHandlers    map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
 	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
-	//broadcaster       Broadcaster
-	orchestrator *BroadcastOrchestrator
-	clientReqs   *RequestMap
-	stopChan     chan struct{}
-	logger       *slog.Logger
-	started      bool
+	orchestrator      *BroadcastOrchestrator
+	clientReqs        *RequestMap
+	storage           *BroadcastStorage
+	router            *BroadcastRouter
+	stopChan          chan struct{}
+	logger            *slog.Logger
+	started           bool
 }
 
 func newBroadcastServer(logger *slog.Logger) *broadcastServer {
@@ -36,9 +37,11 @@ func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 		//broadcastedMsgs: make(map[string]map[string]bool),
 		clientHandlers: make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
 		broadcastChan:  make(chan *broadcastMsg, 1000),
-		handlers:       make(map[string]broadcastFunc),
-		responseChan:   make(chan *responseMsg),
+		handlers:       make(map[string]serverHandler),
+		responseChan:   make(chan *reply),
 		clientReqs:     NewRequestMap(),
+		router:         newBroadcastRouter(),
+		storage:        newBroadcastStorage(),
 		stopChan:       nil,
 		logger:         logger,
 		started:        false,
@@ -78,6 +81,7 @@ func (srv *broadcastServer) addAddr(lis net.Listener) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(srv.addr))
 	srv.id = h.Sum32()
+	srv.router.addAddr(srv.id, srv.addr)
 }
 
 //func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string) bool {
@@ -105,13 +109,21 @@ func (srv *broadcastServer) run() {
 	}
 }
 
+func (srv *broadcastServer) handleBroadcast2(msg *broadcastMsg) {
+	broadcastID := msg.broadcastID
+	req, err := srv.storage.get(broadcastID, true)
+	if err != nil {
+		return
+	}
+	_ = srv.router.route(broadcastID, req, msg)
+}
+
 func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
-	//start := time.Now()
 	// set the message as handled when returning from the method
 	defer msg.setFinished()
 	// lock to prevent view change mid execution of a broadcast request
-	srv.viewMutex.RLock()
-	defer srv.viewMutex.RUnlock()
+	//srv.viewMutex.RLock()
+	//defer srv.viewMutex.RUnlock()
 	if broadcastCall, ok := srv.handlers[msg.method]; ok {
 		// ignore if the client request is no longer valid
 		req, ok := srv.clientReqs.Get(msg.broadcastID)
@@ -120,12 +132,8 @@ func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
 		}
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
-		broadcastCall(msg.ctx, msg.request, req, msg.options)
+		broadcastCall(msg.ctx, msg.request, req.metadata.BroadcastMsg.BroadcastID, req.metadata.BroadcastMsg.OriginAddr, req.metadata.BroadcastMsg.OriginMethod, msg.options, srv.id, srv.addr)
 	}
-	//end := time.Since(start)
-	//if end >= 500*time.Microsecond {
-	//	slog.Error("handleBroadcast", "time", end)
-	//}
 }
 
 func (srv *broadcastServer) handleClientResponses() {
@@ -141,7 +149,21 @@ func (srv *broadcastServer) handleClientResponses() {
 	}
 }
 
-func (srv *broadcastServer) handle(response *responseMsg) {
+func (srv *broadcastServer) handle2(response *reply) {
+	broadcastID := response.getBroadcastID()
+	req, err := srv.storage.get(broadcastID, true)
+	if err != nil {
+		return
+	}
+	err = srv.router.route(broadcastID, req, response)
+	if err != nil {
+		srv.storage.setShouldWaitForClient(broadcastID, response)
+		return
+	}
+	srv.storage.remove(broadcastID)
+}
+
+func (srv *broadcastServer) handle(response *reply) {
 	/*if !response.valid() {
 		// REEVALUATE THIS:
 		// - A response message will always be valid because it is
@@ -180,7 +202,7 @@ func (srv *broadcastServer) handle(response *responseMsg) {
 	//}
 }
 
-func (srv *broadcastServer) sendMsg(broadcastID string, req clientRequest, response *responseMsg) {
+func (srv *broadcastServer) sendMsg(broadcastID string, req clientRequest, response *reply) {
 	if handler, ok := srv.clientHandlers[req.metadata.BroadcastMsg.OriginMethod]; ok && req.metadata.BroadcastMsg.OriginAddr != "" {
 		handler(req.metadata.BroadcastMsg.OriginAddr, broadcastID, response.getResponse())
 	} else if req.senderType == BroadcastClient {
