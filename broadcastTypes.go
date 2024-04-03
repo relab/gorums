@@ -63,12 +63,12 @@ func (r *responseMsg) getBroadcastID() string {
 }
 
 type clientRequest struct {
-	id        string
-	ctx       ServerCtx
-	finished  chan<- *Message
-	metadata  *ordering.Metadata
-	methods   []string
-	counts    map[string]uint64
+	//id       string
+	ctx      ServerCtx
+	finished chan<- *Message
+	metadata *ordering.Metadata
+	//methods   []string
+	//counts    map[string]uint64
 	timestamp time.Time
 	doneChan  chan struct{}
 }
@@ -213,8 +213,8 @@ type RequestMap struct {
 
 func NewRequestMap() *RequestMap {
 	reqMap := &RequestMap{
-		data:        make(map[string]clientRequest),
-		handledReqs: make(map[string]time.Time),
+		data:        make(map[string]clientRequest, 100),
+		handledReqs: make(map[string]time.Time, 100),
 		doneChan:    make(chan struct{}),
 	}
 	return reqMap
@@ -227,7 +227,9 @@ func (list *RequestMap) cleanup() {
 			return
 		default:
 		}
-		time.Sleep(1 * time.Minute)
+		//time.Sleep(1 * time.Minute)
+		time.Sleep(3 * time.Second)
+		list.mutex.Lock()
 		del := make([]string, 0)
 		// remove handled reqs
 		for broadcastID, timestamp := range list.handledReqs {
@@ -245,6 +247,7 @@ func (list *RequestMap) cleanup() {
 			delete(list.handledReqs, broadcastID)
 			delete(list.data, broadcastID)
 		}
+		list.mutex.Unlock()
 	}
 }
 
@@ -260,23 +263,26 @@ func (list *RequestMap) Add(identifier string, element clientRequest) (count uin
 		return 0, fmt.Errorf("the request is already handled")
 	}
 	// only add method if element already exists
-	if elem, ok := list.data[identifier]; ok {
-		elem.methods = append(elem.methods, element.metadata.Method)
+	if _, ok := list.data[identifier]; ok {
+		//if elem, ok := list.data[identifier]; ok {
+		//elem.methods = append(elem.methods, element.metadata.Method)
 		// add to count
-		if _, ok := elem.counts[element.metadata.Method]; !ok {
-			elem.counts[element.metadata.Method] = 1
-		} else {
-			elem.counts[element.metadata.Method]++
-		}
-		return elem.counts[element.metadata.Method], nil
+		//if _, ok := elem.counts[element.metadata.Method]; !ok {
+		//	elem.counts[element.metadata.Method] = 1
+		//} else {
+		//	elem.counts[element.metadata.Method]++
+		//}
+		//return elem.counts[element.metadata.Method], nil
+		return 0, nil
 	}
-	methods := []string{element.metadata.Method}
-	element.methods = methods
+	//methods := []string{element.metadata.Method}
+	//element.methods = methods
 	element.timestamp = time.Now()
-	element.counts = make(map[string]uint64)
-	element.counts[element.metadata.Method] = 1
+	//element.counts = make(map[string]uint64)
+	//element.counts[element.metadata.Method] = 1
 	list.data[identifier] = element
-	return element.counts[element.metadata.Method], nil
+	//return element.counts[element.metadata.Method], nil
+	return 0, nil
 }
 
 func (list *RequestMap) Get(identifier string) (clientRequest, bool) {

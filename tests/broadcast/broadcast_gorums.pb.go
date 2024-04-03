@@ -9,6 +9,7 @@ package broadcast
 import (
 	context "context"
 	fmt "fmt"
+	uuid "github.com/google/uuid"
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -100,8 +101,12 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 }
 
 func (mgr *Manager) Close() {
-	mgr.RawManager.Close()
-	mgr.srv.stop()
+	if mgr.RawManager != nil {
+		mgr.RawManager.Close()
+	}
+	if mgr.srv != nil {
+		mgr.srv.stop()
+	}
 }
 
 func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
@@ -240,6 +245,17 @@ func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broad
 	srv.RetToClient(resp, err, broadcastID)
 }
 
+func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == "" {
+		panic("broadcastID cannot be empty. Use srv.BroadcastQuorumCallWithBroadcast instead")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	go b.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, options)
+}
+
 func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
 	if b.metadata.BroadcastID == "" {
 		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcast instead")
@@ -303,6 +319,20 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 type QuorumSpec interface {
 	gorums.ConfigOption
 
+	// QuorumCallQF is the quorum function for the QuorumCall
+	// quorum call method. The in parameter is the request object
+	// supplied to the QuorumCall method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
+
+	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
+	// quorum call method. The in parameter is the request object
+	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	QuorumCallWithBroadcastQF(in *Request, replies map[uint32]*Response) (*Response, bool)
+
 	// BroadcastCallQF is the quorum function for the BroadcastCall
 	// broadcastcall call method. The in parameter is the request object
 	// supplied to the BroadcastCall method at call time, and may or may not
@@ -311,12 +341,67 @@ type QuorumSpec interface {
 	BroadcastCallQF(replies []*Response) (*Response, bool)
 }
 
+// QuorumCall is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) QuorumCall(ctx context.Context, in *Request) (resp *Response, err error) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "broadcast.BroadcastService.QuorumCall",
+	}
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[uint32]*Response, len(replies))
+		for k, v := range replies {
+			r[k] = v.(*Response)
+		}
+		return c.qspec.QuorumCallQF(req.(*Request), r)
+	}
+
+	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
+	return res.(*Response), err
+}
+
+// QuorumCallWithBroadcast is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) QuorumCallWithBroadcast(ctx context.Context, in *Request) (resp *Response, err error) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "broadcast.BroadcastService.QuorumCallWithBroadcast",
+
+		BroadcastID: uuid.New().String(),
+		SenderType:  gorums.BroadcastClient,
+	}
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[uint32]*Response, len(replies))
+		for k, v := range replies {
+			r[k] = v.(*Response)
+		}
+		return c.qspec.QuorumCallWithBroadcastQF(req.(*Request), r)
+	}
+
+	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
+	return res.(*Response), err
+}
+
 // BroadcastService is the server-side API for the BroadcastService Service
 type BroadcastService interface {
+	QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	BroadcastCall(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 }
 
+func (srv *Server) QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCall not implemented"))
+}
+func (srv *Server) QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallWithBroadcast not implemented"))
+}
 func (srv *Server) BroadcastCall(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method BroadcastCall not implemented"))
 }
@@ -325,12 +410,19 @@ func (srv *Server) Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *
 }
 
 func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
+	srv.RegisterHandler("broadcast.BroadcastService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		resp, err := impl.QuorumCall(ctx, req)
+		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+	})
+	srv.RegisterHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", gorums.BroadcastHandler(impl.QuorumCallWithBroadcast, srv.Server))
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCall", gorums.BroadcastHandler(impl.BroadcastCall, srv.Server))
 	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCall", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCall"))
 	srv.RegisterHandler("broadcast.BroadcastService.Broadcast", gorums.BroadcastHandler(impl.Broadcast, srv.Server))
 }
 
-func (srv *Server) BroadcastBroadcastCall(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
+func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
 	if broadcastID == "" {
 		panic("broadcastID cannot be empty.")
 	}
@@ -338,7 +430,7 @@ func (srv *Server) BroadcastBroadcastCall(req *Request, broadcastID string, opts
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastCall", req, broadcastID, options)
+	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, broadcastID, options)
 }
 
 func (srv *Server) BroadcastBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
@@ -350,4 +442,10 @@ func (srv *Server) BroadcastBroadcast(req *Request, broadcastID string, opts ...
 		opt(&options)
 	}
 	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, broadcastID, options)
+}
+
+type internalResponse struct {
+	nid   uint32
+	reply *Response
+	err   error
 }

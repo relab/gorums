@@ -23,6 +23,7 @@ type RawManager struct {
 	logger    *log.Logger
 	opts      managerOptions
 	nextMsgID uint64
+	publicKey string
 }
 
 // NewRawManager returns a new RawManager for managing connection to nodes added
@@ -40,6 +41,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 	if m.opts.logger != nil {
 		m.logger = m.opts.logger
 	}
+	m.publicKey = m.opts.publicKey
 	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
 		grpc.CallContentSubtype(ContentSubtype),
 	))

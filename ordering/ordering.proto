@@ -19,6 +19,7 @@ message Metadata {
   string Method = 2;
   google.rpc.Status Status = 3;
   BroadcastMsg BroadcastMsg = 4;
+  bytes Signature = 5;
 }
 
 message BroadcastMsg {

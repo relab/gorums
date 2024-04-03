@@ -52,6 +52,7 @@ type channel struct {
 	gorumsClient    ordering.GorumsClient
 	gorumsStream    ordering.Gorums_NodeStreamClient
 	streamMut       sync.RWMutex
+	dialMut         sync.RWMutex
 	streamBroken    atomicFlag
 	connEstablished atomicFlag
 	parentCtx       context.Context
@@ -274,6 +275,8 @@ func (c *channel) receiver() {
 
 func (c *channel) connect() error {
 	if !c.connEstablished.get() {
+		c.dialMut.Lock()
+		defer c.dialMut.Unlock()
 		// a connection has not yet been established; i.e.,
 		// a previous dial attempt could have failed.
 		// try dialing again.
@@ -287,6 +290,10 @@ func (c *channel) connect() error {
 			c.streamBroken.set()
 			return err
 		}
+		// return early because streamBroken will be cleared if no error occurs.
+		// also works a preemptive measure to a deadlock since dialMut.Unlock()
+		// is deferred.
+		return nil
 	}
 	// the node was previously connected but is now disconnected
 	if c.streamBroken.get() {

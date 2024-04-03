@@ -3,146 +3,62 @@ package broadcast
 import (
 	"context"
 	fmt "fmt"
-	"log/slog"
 	net "net"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"runtime/pprof"
 	"testing"
 	"time"
-
-	gorums "github.com/relab/gorums"
-	grpc "google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-type testServer struct {
-	*Server
-	addr  string
-	peers []string
-	lis   net.Listener
-}
-
-func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	slog.Warn("server received req")
-	broadcast.Broadcast(req)
-}
-
-func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	broadcast.SendToClient(&Response{
-		Result: req.Value,
-	}, nil)
-}
-
-type testQSpec struct {
-	quorumSize    int
-	broadcastSize int
-}
-
-func newQSpec(qSize, broadcastSize int) QuorumSpec {
-	return &testQSpec{
-		quorumSize:    qSize,
-		broadcastSize: broadcastSize,
-	}
-}
-
-func (qs *testQSpec) BroadcastCallQF(replies []*Response) (*Response, bool) {
-	if len(replies) >= qs.quorumSize {
-		for _, resp := range replies {
-			return resp, true
-		}
-	}
-	return nil, false
-}
-
-func newtestServer(addr string, srvAddresses []string) *testServer {
-	srv := testServer{
-		Server: NewServer(),
-	}
-	RegisterBroadcastServiceServer(srv.Server, &srv)
-	srv.peers = srvAddresses
-	srv.addr = addr
-	return &srv
-}
-
-func (srv *testServer) start(lis net.Listener) {
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	view, err := mgr.NewConfiguration(gorums.WithNodeList(srv.peers))
-	if err != nil {
-		panic(err)
-	}
-	srv.SetView(view)
-	srv.Serve(lis)
-}
-
-func createSrvs(numSrvs int) ([]string, func(), error) {
+func createSrvs(numSrvs int) ([]*testServer, []string, func(), error) {
+	go func() {
+		http.ListenAndServe("localhost:10001", nil)
+	}()
 	srvs := make([]*testServer, 0, numSrvs)
 	srvAddrs := make([]string, numSrvs)
 	for i := 0; i < numSrvs; i++ {
 		srvAddrs[i] = fmt.Sprintf("127.0.0.1:500%v", i)
 	}
-	for _, addr := range srvAddrs {
-		srv := newtestServer(addr, srvAddrs)
+	for i, addr := range srvAddrs {
+		srv := newtestServer(addr, srvAddrs, i)
 		lis, err := net.Listen("tcp4", srv.addr)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		srv.lis = lis
 		go srv.start(lis)
 		srvs = append(srvs, srv)
 	}
-	return srvAddrs, func() {
+	return srvs, srvAddrs, func() {
 		// stop the servers
 		for _, srv := range srvs {
 			srv.Stop()
-			srv.lis.Close()
 		}
 	}, nil
 }
 
-func createClient(srvAddrs []string, listenAddr string) (*Configuration, func(), error) {
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	lis, err := net.Listen("tcp", listenAddr)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = mgr.AddClientServer(lis)
-	if err != nil {
-		return nil, nil, err
-	}
-	config, err := mgr.NewConfiguration(
-		gorums.WithNodeList(srvAddrs),
-		newQSpec(len(srvAddrs), len(srvAddrs)),
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-	return config, func() {
-		mgr.Close()
-	}, nil
-}
-
 func TestBroadcast(t *testing.T) {
-	srvAddrs, srvCleanup, err := createSrvs(3)
+	//slog.Info("test")
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		t.Error(err)
 	}
 	defer srvCleanup()
+	//slog.Info("started servers")
 
-	config, clientCleanup, err := createClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
 	if err != nil {
 		t.Error(err)
 	}
 	defer clientCleanup()
+	//slog.Info("started client")
 
 	val := int64(1)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
+	//slog.Info("sending req")
 	resp, err := config.BroadcastCall(ctx, &Request{Value: val})
 	if err != nil {
 		t.Error(err)
@@ -150,30 +66,135 @@ func TestBroadcast(t *testing.T) {
 	if resp.GetResult() != val {
 		t.Fatal("resp is wrong")
 	}
+	//slog.Info("done")
 }
 
-func BenchmarkBroadcast(b *testing.B) {
-	srvAddrs, srvCleanup, err := createSrvs(3)
+func BenchmarkQuorumCall(b *testing.B) {
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		b.Error(err)
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := createClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs, "")
 	if err != nil {
 		b.Error(err)
 	}
 	defer clientCleanup()
 
+	init := 1
+	resp, err := config.QuorumCall(context.Background(), &Request{Value: int64(init)})
+	if err != nil {
+		b.Error(err)
+	}
+	if resp.GetResult() != int64(init) {
+		b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+	}
+
+	cpuProfile, _ := os.Create("cpuprofileQF")
+	memProfile, _ := os.Create("memprofileQF")
+	pprof.StartCPUProfile(cpuProfile)
+
+	b.Run(fmt.Sprintf("BroadcastCall_%d", 1), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := config.QuorumCall(context.Background(), &Request{Value: int64(i)})
+			if err != nil {
+				b.Error(err)
+			}
+			if resp.GetResult() != int64(i) {
+				b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+			}
+			//slog.Warn("client reply", "val", resp.GetResult())
+		}
+	})
+
+	pprof.StopCPUProfile()
+	pprof.WriteHeapProfile(memProfile)
+}
+
+func BenchmarkBroadcastCall(b *testing.B) {
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		b.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		b.Error(err)
+	}
+	defer clientCleanup()
+
+	init := 1
+	resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(init)})
+	if err != nil {
+		b.Error(err)
+	}
+	if resp.GetResult() != int64(init) {
+		b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+	}
+
+	cpuProfile, _ := os.Create("cpuprofileBC")
+	memProfile, _ := os.Create("memprofileBC")
+	pprof.StartCPUProfile(cpuProfile)
+
 	b.Run(fmt.Sprintf("BroadcastCall_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(i)})
 			if err != nil {
-				_ = resp.GetResult()
+				b.Error(err)
 			}
+			if resp.GetResult() != int64(i) {
+				b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+			}
+			//slog.Warn("client reply", "val", resp.GetResult())
 		}
 	})
+	pprof.StopCPUProfile()
+	pprof.WriteHeapProfile(memProfile)
+}
 
+func BenchmarkBroadcastOption(b *testing.B) {
+	// go test -bench=BenchmarkBroadcastOption -benchmem -count=5 -run=^# -benchtime=5x
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		b.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newClient(srvAddrs, "")
+	if err != nil {
+		b.Error(err)
+	}
+	defer clientCleanup()
+
+	init := 1
+	resp, err := config.QuorumCallWithBroadcast(context.Background(), &Request{Value: int64(init)})
+	if err != nil {
+		b.Error(err)
+	}
+	if resp.GetResult() != int64(init) {
+		b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+	}
+
+	cpuProfile, _ := os.Create("cpuprofileQFwithB")
+	memProfile, _ := os.Create("memprofileQFwithB")
+	pprof.StartCPUProfile(cpuProfile)
+
+	b.Run(fmt.Sprintf("QuorumCallWithBroadcast_%d", 1), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			resp, err := config.QuorumCallWithBroadcast(context.Background(), &Request{Value: int64(i)})
+			if err != nil {
+				b.Error(err)
+			}
+			if resp.GetResult() != int64(i) {
+				b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+			}
+			//slog.Warn("client reply", "val", resp.GetResult())
+		}
+	})
+	pprof.StopCPUProfile()
+	pprof.WriteHeapProfile(memProfile)
 }
 
 /*import (

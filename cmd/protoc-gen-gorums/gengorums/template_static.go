@@ -86,8 +86,12 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 }
 
 func (mgr *Manager) Close() {
-	mgr.RawManager.Close()
-	mgr.srv.stop()
+	if mgr.RawManager != nil {
+		mgr.RawManager.Close()
+	}
+	if mgr.srv != nil {
+		mgr.srv.stop()
+	}
 }
 
 func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
@@ -136,10 +140,10 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	if m.srv != nil {
 		c.srv = m.srv
 	}
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
-	}
+	//var test interface{} = struct{}{}
+	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+	//	return nil, fmt.Errorf("config: missing required QuorumSpec")
+	//}
 	// initialize the nodes slice
 	c.nodes = make([]*Node, c.Size())
 	for i, n := range c.RawConfiguration {

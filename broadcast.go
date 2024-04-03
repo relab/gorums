@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -18,31 +18,31 @@ type broadcastServer struct {
 	id              uint32
 	addr            string
 	view            RawConfiguration
-	broadcastedMsgs map[string]map[string]bool
-	handlers        map[string]broadcastFunc
-	broadcastChan   chan *broadcastMsg
-	responseChan    chan *responseMsg
-	clientHandlers  map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
-	//broadcaster     Ibroadcaster
-	broadcaster  func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
-	orchestrator *BroadcastOrchestrator
-	clientReqs   *RequestMap
-	stopChan     chan struct{}
-	logger       *slog.Logger
-	started      bool
+	//broadcastedMsgs map[string]map[string]bool
+	handlers          map[string]broadcastFunc
+	broadcastChan     chan *broadcastMsg
+	responseChan      chan *responseMsg
+	clientHandlers    map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
+	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
+	broadcaster       Broadcaster
+	orchestrator      *BroadcastOrchestrator
+	clientReqs        *RequestMap
+	stopChan          chan struct{}
+	logger            *slog.Logger
+	started           bool
 }
 
 func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 	return &broadcastServer{
-		broadcastedMsgs: make(map[string]map[string]bool),
-		clientHandlers:  make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
-		broadcastChan:   make(chan *broadcastMsg, 1000),
-		handlers:        make(map[string]broadcastFunc),
-		responseChan:    make(chan *responseMsg),
-		clientReqs:      NewRequestMap(),
-		stopChan:        nil,
-		logger:          logger,
-		started:         false,
+		//broadcastedMsgs: make(map[string]map[string]bool),
+		clientHandlers: make(map[string]func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)),
+		broadcastChan:  make(chan *broadcastMsg, 1000),
+		handlers:       make(map[string]broadcastFunc),
+		responseChan:   make(chan *responseMsg),
+		clientReqs:     NewRequestMap(),
+		stopChan:       nil,
+		logger:         logger,
+		started:        false,
 	}
 }
 
@@ -81,19 +81,19 @@ func (srv *broadcastServer) addAddr(lis net.Listener) {
 	srv.id = h.Sum32()
 }
 
-func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string) bool {
-	srv.propertiesMutex.Lock()
-	defer srv.propertiesMutex.Unlock()
-	_, ok := srv.broadcastedMsgs[broadcastID]
-	if !ok {
-		srv.broadcastedMsgs[broadcastID] = make(map[string]bool)
-	}
-	broadcasted, ok := srv.broadcastedMsgs[broadcastID][method]
-	if !ok {
-		srv.broadcastedMsgs[broadcastID][method] = true
-	}
-	return ok && broadcasted
-}
+//func (srv *broadcastServer) alreadyBroadcasted(broadcastID string, method string) bool {
+//	srv.propertiesMutex.Lock()
+//	defer srv.propertiesMutex.Unlock()
+//	_, ok := srv.broadcastedMsgs[broadcastID]
+//	if !ok {
+//		srv.broadcastedMsgs[broadcastID] = make(map[string]bool)
+//	}
+//	broadcasted, ok := srv.broadcastedMsgs[broadcastID][method]
+//	if !ok {
+//		srv.broadcastedMsgs[broadcastID][method] = true
+//	}
+//	return ok && broadcasted
+//}
 
 func (srv *broadcastServer) run() {
 	for {
@@ -107,6 +107,7 @@ func (srv *broadcastServer) run() {
 }
 
 func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
+	start := time.Now()
 	// set the message as handled when returning from the method
 	defer msg.setFinished()
 	// lock to prevent view change mid execution of a broadcast request
@@ -122,6 +123,10 @@ func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
 		broadcastCall(msg.ctx, msg.request, req, msg.options)
 	}
 	srv.viewMutex.RUnlock()
+	end := time.Since(start)
+	if end >= 350*time.Microsecond {
+		slog.Error("handleBroadcast", "time", end)
+	}
 }
 
 func (srv *broadcastServer) handleClientResponses() {
@@ -178,7 +183,7 @@ func (srv *broadcastServer) sendToClient(broadcastID string, resp ResponseTypes,
 
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) (count uint64, err error) {
 	return srv.clientReqs.Add(metadata.BroadcastMsg.GetBroadcastID(), clientRequest{
-		id:       uuid.New().String(),
+		//id:       uuid.New().String(),
 		ctx:      ctx,
 		finished: finished,
 		metadata: metadata,

@@ -100,7 +100,7 @@ var registerServerBroadcast = `
 {{range .Services -}}
 {{$service := .GoName}}
 {{- range .Methods}}
-{{- if isBroadcast .}}
+{{- if isBroadcastOption .}}
 
 func (srv *Server) Broadcast{{.GoName}}(req *{{in $genFile .}}, broadcastID string, opts... gorums.BroadcastOption) {
 	if broadcastID == "" {

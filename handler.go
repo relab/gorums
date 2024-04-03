@@ -38,7 +38,7 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			return
 		}
 		broadcastMetadata := newBroadcastMetadata(in.Metadata, count)
-		broadcaster := srv.broadcastSrv.broadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
+		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
 	}
 }
@@ -74,21 +74,21 @@ func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, 
 	if len(opts) > 0 {
 		options = opts[0]
 	}
-	if !srv.alreadyBroadcasted(broadcastID, method) || options.OmitUniquenessChecks {
-		// it is possible to broadcast outside a server handler and it is thus necessary
-		// to check whether the provided broadcastID is valid. It will also add the
-		// necessary fields to correctly route the request.
-		if handled := srv.clientReqs.IsHandled(broadcastID); handled {
-			return
-		}
-		finished := make(chan struct{})
-		srv.broadcastChan <- newBroadcastMessage(broadcastID, req, method, options, finished)
-
-		// not broadcasting in a goroutine can lead to deadlock. All handlers are run sync
-		// and thus the server have to return from the handler in order to process the next
-		// request.
-		<-finished
+	//if !srv.alreadyBroadcasted(broadcastID, method) || options.OmitUniquenessChecks {
+	// it is possible to broadcast outside a server handler and it is thus necessary
+	// to check whether the provided broadcastID is valid. It will also add the
+	// necessary fields to correctly route the request.
+	if handled := srv.clientReqs.IsHandled(broadcastID); handled {
+		return
 	}
+	finished := make(chan struct{})
+	srv.broadcastChan <- newBroadcastMessage(broadcastID, req, method, options, finished)
+
+	// not broadcasting in a goroutine can lead to deadlock. All handlers are run sync
+	// and thus the server have to return from the handler in order to process the next
+	// request.
+	<-finished
+	//}
 }
 
 func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster) {

@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"fmt"
+	"sync"
 )
 
 // ConfigOption is a marker interface for options to NewConfiguration.
@@ -55,6 +56,7 @@ func (o nodeList) newConfig(mgr *RawManager) (nodes RawConfiguration, err error)
 	if len(o.addrsList) == 0 {
 		return nil, fmt.Errorf("config: missing required node addresses")
 	}
+	var wg sync.WaitGroup
 	nodes = make(RawConfiguration, 0, len(o.addrsList))
 	for _, naddr := range o.addrsList {
 		node, err := NewRawNode(naddr)
@@ -62,14 +64,19 @@ func (o nodeList) newConfig(mgr *RawManager) (nodes RawConfiguration, err error)
 			return nil, err
 		}
 		if n, found := mgr.Node(node.ID()); !found {
-			if err = mgr.AddNode(node); err != nil {
-				return nil, err
-			}
+			wg.Add(1)
+			go func() {
+				if err = mgr.AddNode(node); err != nil {
+					//return nil, err
+				}
+				wg.Done()
+			}()
 		} else {
 			node = n
 		}
 		nodes = append(nodes, node)
 	}
+	wg.Wait()
 	// Sort nodes to ensure deterministic iteration.
 	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)

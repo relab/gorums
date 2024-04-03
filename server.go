@@ -63,6 +63,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	var mut sync.Mutex // used to achieve mutex between request handlers
 	finished := make(chan *Message, s.opts.buffer)
 	ctx := srv.Context()
+	//md, _ := metadata.FromIncomingContext(ctx)
+	//slog.Error("NodeStream created", "publicKey", md.Get("publicKey"))
 
 	if s.opts.connectCallback != nil {
 		s.opts.connectCallback(ctx)

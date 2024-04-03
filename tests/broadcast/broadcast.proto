@@ -6,6 +6,13 @@ option go_package = "github.com/relab/gorums/tests/broadcast";
 import "gorums.proto";
 
 service BroadcastService {
+  rpc QuorumCall(Request) returns (Response) { 
+    option (gorums.quorumcall) = true; 
+  }
+  rpc QuorumCallWithBroadcast(Request) returns (Response) { 
+    option (gorums.quorumcall) = true; 
+    option (gorums.broadcast) = true; 
+  }
   rpc BroadcastCall(Request) returns (Response) { 
     option (gorums.broadcastcall) = true; 
   }
@@ -15,5 +22,10 @@ service BroadcastService {
 }
 
 message Request { int64 Value = 1; }
-message Response { int64 Result = 1; }
+
+message Response { 
+  int64 Result = 1;
+  int64 Replies = 2;
+}
+
 message Empty {}

@@ -455,28 +455,6 @@ func (srv *Server) BroadcastBroadcastInternal(req *Request, broadcastID string, 
 	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, broadcastID, options)
 }
 
-func (srv *Server) BroadcastBroadcastWithClientHandler1(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
-		panic("broadcastID cannot be empty.")
-	}
-	options := gorums.NewBroadcastOptions()
-	for _, opt := range opts {
-		opt(&options)
-	}
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandler1", req, broadcastID, options)
-}
-
-func (srv *Server) BroadcastBroadcastWithClientHandler2(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
-		panic("broadcastID cannot be empty.")
-	}
-	options := gorums.NewBroadcastOptions()
-	for _, opt := range opts {
-		opt(&options)
-	}
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandler2", req, broadcastID, options)
-}
-
 func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
 	if broadcastID == "" {
 		panic("broadcastID cannot be empty.")
