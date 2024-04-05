@@ -21,8 +21,9 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		defer ctx.Release()
+		//ctx.Release()
 		req := in.Message.(T)
-		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req)
+		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
 
 		// guard:
 		// - A broadcastID should be non-empty:
@@ -32,7 +33,7 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			return
 		}
 		addOriginMethod(in.Metadata)
-		data, err := srv.broadcastSrv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, finished)
+		data, err := srv.broadcastSrv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
 		if err != nil {
 			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
 			return
@@ -49,17 +50,18 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			return
 		}
 
-		if srv.broadcastSrv.inPending(ctx, in.Metadata, finished) {
-			srv.broadcastSrv.logger.Debug("server has already processed the msg", "req", req)
-			return
-		}
-		// add the request as a client request
-		count, err := srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
-		if err != nil {
-			// request has been handled and is no longer valid
-			return
-		}
-		broadcastMetadata := newBroadcastMetadata(in.Metadata, count)
+		//if srv.broadcastSrv.inPending(ctx, in.Metadata, finished) {
+		//srv.broadcastSrv.logger.Debug("server has already processed the msg", "req", req)
+		//return
+		//}
+		//// add the request as a client request
+		//count, err := srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
+		//if err != nil {
+		//// request has been handled and is no longer valid
+		//return
+		//}
+		//broadcastMetadata := newBroadcastMetadata(in.Metadata, count)
+		broadcastMetadata := newBroadcastMetadata(in.Metadata, 0)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
 	}
@@ -71,7 +73,7 @@ func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID string) error {
 		return err
 	}
 	if data.canBeRouted() {
-		err = srv.router.route(broadcastID, data, data.getResponse())
+		err = srv.router.send(broadcastID, data, data.getResponse())
 		// should be removed regardless of a success.
 		// it must have received a client request and
 		// a client request.
@@ -126,7 +128,8 @@ func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, 
 	/*if handled := srv.clientReqs.IsHandled(broadcastID); handled {
 		return
 	}*/
-	if valid := srv.state.isValid(broadcastID); valid {
+	if valid := srv.state.isValid(broadcastID); !valid {
+		srv.logger.Debug("not valid", "broadcastID", broadcastID)
 		return
 	}
 	finished := make(chan struct{})
@@ -149,12 +152,12 @@ func (srv *Server) RetToClient(resp protoreflect.ProtoMessage, err error, broadc
 }
 
 func (srv *broadcastServer) registerReturnToClientHandler(method string, handler clientHandler) {
-	srv.clientHandlers[method] = handler
+	//srv.clientHandlers[method] = handler
 	srv.router.addClientHandler(method, handler)
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.handlers[method] = func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string) {
+	/*srv.handlers[method] = func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string) {
 		cd := broadcastCallData{
 			Message:         in,
 			Method:          method,
@@ -169,7 +172,7 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 		srv.viewMutex.RLock()
 		srv.view.broadcastCall(ctx, cd)
 		srv.viewMutex.RUnlock()
-	}
+	}*/
 	srv.router.addServerHandler(method, func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string) {
 		cd := broadcastCallData{
 			Message:         in,

@@ -1,6 +1,7 @@
 package broadcast
 
 import (
+	"context"
 	"fmt"
 	net "net"
 	"sync"
@@ -12,22 +13,24 @@ import (
 
 type testServer struct {
 	*Server
-	addr   string
-	peers  []string
-	lis    net.Listener
-	mgr    *Manager
-	numMsg map[string]int
-	mu     sync.Mutex
+	addr     string
+	peers    []string
+	lis      net.Listener
+	mgr      *Manager
+	numMsg   map[string]int
+	mu       sync.Mutex
+	respChan map[int64]chan int64
 }
 
-func newtestServer(addr string, srvAddresses []string, i int) *testServer {
+func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 	// enable profiling
 	//go func() {
 	//	http.ListenAndServe(fmt.Sprintf(":1000%v", i), nil)
 	//}()
 	srv := testServer{
-		Server: NewServer(),
-		numMsg: map[string]int{"BC": 0, "QC": 0, "QCB": 0, "B": 0},
+		Server:   NewServer(),
+		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "B": 0},
+		respChan: make(map[int64]chan int64),
 	}
 	RegisterBroadcastServiceServer(srv.Server, &srv)
 	srv.peers = srvAddresses
@@ -71,6 +74,30 @@ func (srv *testServer) QuorumCallWithBroadcast(ctx gorums.ServerCtx, req *Reques
 	broadcast.Broadcast(req)
 }
 
+func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
+	done := make(chan int64)
+	srv.mu.Lock()
+	srv.numMsg["QCM"]++
+	srv.respChan[req.Value] = done
+	srv.mu.Unlock()
+	//slog.Warn("server received quorum call with broadcast")
+	srv.View.Multicast(context.Background(), req, gorums.WithNoSendWaiting())
+	res := <-done
+	return &Response{Result: res}, nil
+}
+
+func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	srv.numMsg["M"]++
+	if done, ok := srv.respChan[req.Value]; ok {
+		done <- req.Value
+		delete(srv.respChan, req.Value)
+		close(done)
+	}
+	//slog.Warn("server received quorum call with broadcast")
+}
+
 func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
@@ -93,6 +120,6 @@ func (srv *testServer) GetMsgs() string {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	res := "Srv " + srv.addr
-	res += fmt.Sprintf(" -> QC: %d, QCB: %d, BC: %d, B: %d", srv.numMsg["QC"], srv.numMsg["QCB"], srv.numMsg["BC"], srv.numMsg["B"])
+	res += fmt.Sprintf(" -> QC: %d, QCB: %d, QCM: %d, M: %d, BC: %d, B: %d", srv.numMsg["QC"], srv.numMsg["QCB"], srv.numMsg["QCM"], srv.numMsg["M"], srv.numMsg["BC"], srv.numMsg["B"])
 	return res
 }

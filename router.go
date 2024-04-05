@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -25,6 +26,8 @@ type content interface {
 	canBeRouted() bool
 	isDone() bool
 	update(content) error
+	getDur() time.Duration
+	getProcessingTime() time.Duration
 	getResponse() *reply
 	setResponse(*reply)
 }
@@ -32,6 +35,7 @@ type content interface {
 type responseData struct {
 	mut       sync.Mutex
 	messageID uint64
+	method    string
 	finished  chan<- *Message
 	response  *reply
 }
@@ -40,6 +44,12 @@ func (r *responseData) getMessageID() uint64 {
 	r.mut.Lock()
 	defer r.mut.Unlock()
 	return r.messageID
+}
+
+func (r *responseData) getMethod() string {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	return r.method
 }
 
 func (r *responseData) getResponse() *reply {
@@ -81,6 +91,7 @@ type reqContent struct {
 	originMethod string
 	methods      []string
 	timestamp    time.Time
+	reqTS        time.Time
 	doneChan     chan struct{}
 	sent         bool
 }
@@ -109,6 +120,7 @@ func (c reqContent) getMetadata() *ordering.Metadata {
 	}
 	return &ordering.Metadata{
 		MessageID: c.client.getMessageID(),
+		Method:    c.client.getMethod(),
 	}
 }
 
@@ -136,6 +148,14 @@ func (c reqContent) canBeRouted() bool {
 	return c.sent && c.senderType == BroadcastClient
 }
 
+func (c reqContent) getDur() time.Duration {
+	return time.Since(c.timestamp)
+}
+
+func (c reqContent) getProcessingTime() time.Duration {
+	return time.Since(c.reqTS)
+}
+
 func (c reqContent) isDone() bool {
 	select {
 	case <-c.ctx.Done():
@@ -153,6 +173,7 @@ func (c reqContent) update(new content) error {
 	if !ok {
 		return errors.New("could not convert to correct type")
 	}
+	c.reqTS = time.Now()
 	if c.originAddr == "" && newReq.originAddr != "" {
 		c.originAddr = newReq.originAddr
 	}
@@ -224,7 +245,7 @@ func (r *BroadcastRouter) addClientHandler(method string, handler clientHandler)
 	r.clientHandlers[method] = handler
 }
 
-func (r *BroadcastRouter) route(broadcastID string, data content, req any) error {
+func (r *BroadcastRouter) send(broadcastID string, data content, req any) error {
 	switch val := req.(type) {
 	case *reply:
 		return r.routeClientReply(broadcastID, data, val)
@@ -235,12 +256,11 @@ func (r *BroadcastRouter) route(broadcastID string, data content, req any) error
 }
 
 func (r *BroadcastRouter) routeBroadcast(broadcastID string, data content, msg *broadcastMsg) error {
-	// set the message as handled when returning from the method
-	defer msg.setFinished()
 	if handler, ok := r.serverHandlers[msg.method]; ok {
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
 		handler(msg.ctx, msg.request, broadcastID, data.getOriginAddr(), data.getOriginMethod(), msg.options, r.id, r.addr)
+		slog.Debug("broadcast took", "time", data.getProcessingTime())
 		return nil
 	}
 	return errors.New("not found")
@@ -250,12 +270,14 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 	// the client has initiated a broadcast call and the reply should be sent as an RPC
 	if handler, ok := r.clientHandlers[data.getClientHandlerName()]; ok && data.getOriginAddr() != "" {
 		handler(data.getOriginAddr(), broadcastID, resp.getResponse())
+		slog.Debug("return took", "time", data.getProcessingTime())
 		return nil
 	}
 	// there is a direct connection to the client, e.g. from a QuorumCall
 	if data.isFromClient() {
 		msg := WrapMessage(data.getMetadata(), protoreflect.ProtoMessage(resp.getResponse()), resp.getError())
 		SendMessage(data.getCtx(), data.getFinished(), msg)
+		slog.Debug("return took", "time", data.getProcessingTime())
 		return nil
 	}
 	// the server can receive a broadcast from another server before a client sends a direct message.
@@ -276,11 +298,12 @@ func newBroadcastStorage() *BroadcastState {
 	}
 }
 
-func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, originMethod string, messageID uint64, finished chan<- *Message) (content, error) {
+func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) (content, error) {
 	var client *responseData
 	if senderType == BroadcastClient {
 		client = &responseData{
 			messageID: messageID,
+			method:    method,
 			finished:  finished,
 		}
 	}
@@ -292,6 +315,9 @@ func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, or
 		originAddr:   originAddr,
 		originMethod: originMethod,
 		client:       client,
+		timestamp:    time.Now(),
+		reqTS:        time.Now(),
+		sent:         false,
 	}
 	return data, nil
 }
@@ -299,6 +325,7 @@ func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, or
 func (s *BroadcastState) addOrUpdate(broadcastID string, msg content) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
+	defer slog.Debug("added broadcast", "broadcastID", broadcastID)
 	if old, ok := s.msgs[broadcastID]; ok {
 		// update old with new
 		err := old.update(msg)
@@ -369,6 +396,9 @@ func (s *BroadcastState) remove(broadcastID string) error {
 	if !ok {
 		return errors.New("not found")
 	}
+	//if msg.getDur() > 15*time.Millisecond {
+	//slog.Info("duration", "time", msg.getDur())
+	//}
 	delete(s.msgs, broadcastID)
 	return nil
 }

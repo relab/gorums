@@ -40,9 +40,9 @@ func createSrvs(numSrvs int) ([]*testServer, []string, func(), error) {
 	}, nil
 }
 
-func TestBroadcast(t *testing.T) {
+func TestOneBroadcast(t *testing.T) {
 	//slog.Info("test")
-	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	srvs, srvAddrs, srvCleanup, err := createSrvs(2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -56,16 +56,23 @@ func TestBroadcast(t *testing.T) {
 	defer clientCleanup()
 	//slog.Info("started client")
 
-	val := int64(1)
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-	//slog.Info("sending req")
-	resp, err := config.BroadcastCall(ctx, &Request{Value: val})
-	if err != nil {
-		t.Error(err)
+	for i := 0; i < 5; i++ {
+		val := int64(i)
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		//slog.Info("sending req")
+		start := time.Now()
+		resp, err := config.BroadcastCall(ctx, &Request{Value: val})
+		slog.Info("took", "time", time.Since(start))
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != val {
+			t.Fatal("resp is wrong")
+		}
+		cancel()
 	}
-	if resp.GetResult() != val {
-		t.Fatal("resp is wrong")
+	for _, srv := range srvs {
+		slog.Info("num msgs", "num", srv.GetMsgs())
 	}
 	//slog.Info("done")
 }
@@ -96,16 +103,18 @@ func TestBroadcastManyReqs(t *testing.T) {
 		t.Fatal("resp is wrong")
 	}
 	//slog.Info("done")
-	for i := 0; i < 10000; i++ {
-		if i%100 == 0 {
-			slog.Info("req", "num", i)
-		}
+	for i := 0; i <= 10000; i++ {
+		start := time.Now()
 		resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(i)})
+		end := time.Now()
 		if err != nil {
 			t.Error(err)
 		}
 		if resp.GetResult() != int64(i) {
 			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+		}
+		if i%1000 == 0 {
+			slog.Info("req", "num", i, "time", end.Sub(start))
 		}
 		//slog.Warn("client reply", "val", resp.GetResult())
 	}
@@ -138,11 +147,10 @@ func TestQCBroadcastManyReqs(t *testing.T) {
 	}
 	//slog.Info("done")
 	for i := 0; i < 10000; i++ {
-		if i%100 == 0 {
-			slog.Info("req", "num", i)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+		start := time.Now()
 		resp, err := config.QuorumCallWithBroadcast(ctx, &Request{Value: int64(i)})
+		end := time.Now()
 		if err != nil {
 			t.Error(err)
 		}
@@ -150,6 +158,57 @@ func TestQCBroadcastManyReqs(t *testing.T) {
 			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
 		}
 		cancel()
+		if i%1000 == 0 {
+			slog.Info("req", "num", i, "time", end.Sub(start))
+		}
+		//slog.Warn("client reply", "val", resp.GetResult())
+	}
+	for _, srv := range srvs {
+		slog.Info("num msgs", "num", srv.GetMsgs())
+	}
+}
+
+func TestQCMulticastManyReqs(t *testing.T) {
+	//slog.Info("test")
+	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+	//slog.Info("started servers")
+
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+	//slog.Info("started client")
+
+	val := int64(1)
+	//slog.Info("sending req")
+	resp, err := config.QuorumCallWithMulticast(context.Background(), &Request{Value: val})
+	if err != nil {
+		t.Error(err)
+	}
+	if resp.GetResult() != val {
+		t.Fatal("resp is wrong")
+	}
+	//slog.Info("done")
+	for i := 0; i < 10000; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		start := time.Now()
+		resp, err := config.QuorumCallWithMulticast(ctx, &Request{Value: int64(i)})
+		end := time.Now()
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != int64(i) {
+			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+		}
+		cancel()
+		if i%1000 == 0 {
+			slog.Info("req", "num", i, "time", end.Sub(start))
+		}
 		//slog.Warn("client reply", "val", resp.GetResult())
 	}
 	for _, srv := range srvs {

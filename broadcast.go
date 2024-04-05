@@ -102,7 +102,7 @@ func (srv *broadcastServer) run() {
 	for {
 		select {
 		case msg := <-srv.broadcastChan:
-			go srv.handleBroadcast(msg)
+			go srv.handleBroadcast2(msg)
 		case <-srv.stopChan:
 			return
 		}
@@ -110,12 +110,14 @@ func (srv *broadcastServer) run() {
 }
 
 func (srv *broadcastServer) handleBroadcast2(msg *broadcastMsg) {
+	// set the message as handled when returning from the method
+	defer msg.setFinished()
 	broadcastID := msg.broadcastID
-	req, err := srv.state.get(broadcastID)
+	data, err := srv.state.get(broadcastID)
 	if err != nil {
 		return
 	}
-	_ = srv.router.route(broadcastID, req, msg)
+	_ = srv.router.send(broadcastID, data, msg)
 }
 
 func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
@@ -126,13 +128,18 @@ func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
 	//defer srv.viewMutex.RUnlock()
 	if broadcastCall, ok := srv.handlers[msg.method]; ok {
 		// ignore if the client request is no longer valid
-		req, ok := srv.clientReqs.Get(msg.broadcastID)
+		/*req, ok := srv.clientReqs.Get(msg.broadcastID)
 		if !ok {
+			return
+		}*/
+		req, err := srv.state.get(msg.broadcastID)
+		if err != nil {
 			return
 		}
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
-		broadcastCall(msg.ctx, msg.request, req.metadata.BroadcastMsg.BroadcastID, req.metadata.BroadcastMsg.OriginAddr, req.metadata.BroadcastMsg.OriginMethod, msg.options, srv.id, srv.addr)
+		broadcastCall(msg.ctx, msg.request, msg.broadcastID, req.getOriginAddr(), req.getOriginMethod(), msg.options, srv.id, srv.addr)
+		//broadcastCall(msg.ctx, msg.request, req.metadata.BroadcastMsg.BroadcastID, req.metadata.BroadcastMsg.OriginAddr, req.metadata.BroadcastMsg.OriginMethod, msg.options, srv.id, srv.addr)
 	}
 }
 
@@ -141,7 +148,7 @@ func (srv *broadcastServer) handleClientResponses() {
 	for {
 		select {
 		case response := <-srv.responseChan:
-			srv.handle(response)
+			srv.handle2(response)
 		case <-srv.stopChan:
 			srv.clientReqs.Stop()
 			return
@@ -151,11 +158,11 @@ func (srv *broadcastServer) handleClientResponses() {
 
 func (srv *broadcastServer) handle2(response *reply) {
 	broadcastID := response.getBroadcastID()
-	req, err := srv.state.get(broadcastID)
+	data, err := srv.state.get(broadcastID)
 	if err != nil {
 		return
 	}
-	err = srv.router.route(broadcastID, req, response)
+	err = srv.router.send(broadcastID, data, response)
 	if err != nil {
 		srv.state.setShouldWaitForClient(broadcastID, response)
 		return

@@ -40,6 +40,16 @@ func (qs *testQSpec) QuorumCallWithBroadcastQF(in *Request, replies map[uint32]*
 	return nil, false
 }
 
+func (qs *testQSpec) QuorumCallWithMulticastQF(in *Request, replies map[uint32]*Response) (*Response, bool) {
+	//slog.Warn("client received reply")
+	if len(replies) >= qs.quorumSize {
+		for _, resp := range replies {
+			return resp, true
+		}
+	}
+	return nil, false
+}
+
 func (qs *testQSpec) BroadcastCallQF(replies []*Response) (*Response, bool) {
 	//slog.Warn("client received reply")
 	if len(replies) >= qs.quorumSize {

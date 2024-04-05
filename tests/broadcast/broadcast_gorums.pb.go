@@ -315,6 +315,17 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "",
 }
 
+// Multicast is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "broadcast.BroadcastService.Multicast",
+	}
+
+	c.RawConfiguration.Multicast(ctx, cd, opts...)
+}
+
 // QuorumSpec is the interface of quorum functions for BroadcastService.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -332,6 +343,13 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
 	QuorumCallWithBroadcastQF(in *Request, replies map[uint32]*Response) (*Response, bool)
+
+	// QuorumCallWithMulticastQF is the quorum function for the QuorumCallWithMulticast
+	// quorum call method. The in parameter is the request object
+	// supplied to the QuorumCallWithMulticast method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	QuorumCallWithMulticastQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// BroadcastCallQF is the quorum function for the BroadcastCall
 	// broadcastcall call method. The in parameter is the request object
@@ -388,10 +406,34 @@ func (c *Configuration) QuorumCallWithBroadcast(ctx context.Context, in *Request
 	return res.(*Response), err
 }
 
+// QuorumCallWithMulticast is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) QuorumCallWithMulticast(ctx context.Context, in *Request) (resp *Response, err error) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "broadcast.BroadcastService.QuorumCallWithMulticast",
+	}
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[uint32]*Response, len(replies))
+		for k, v := range replies {
+			r[k] = v.(*Response)
+		}
+		return c.qspec.QuorumCallWithMulticastQF(req.(*Request), r)
+	}
+
+	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
+	return res.(*Response), err
+}
+
 // BroadcastService is the server-side API for the BroadcastService Service
 type BroadcastService interface {
 	QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	QuorumCallWithMulticast(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	Multicast(ctx gorums.ServerCtx, request *Request)
 	BroadcastCall(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 }
@@ -401,6 +443,12 @@ func (srv *Server) QuorumCall(ctx gorums.ServerCtx, request *Request) (response 
 }
 func (srv *Server) QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method QuorumCallWithBroadcast not implemented"))
+}
+func (srv *Server) QuorumCallWithMulticast(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
+	panic(status.Errorf(codes.Unimplemented, "method QuorumCallWithMulticast not implemented"))
+}
+func (srv *Server) Multicast(ctx gorums.ServerCtx, request *Request) {
+	panic(status.Errorf(codes.Unimplemented, "method Multicast not implemented"))
 }
 func (srv *Server) BroadcastCall(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method BroadcastCall not implemented"))
@@ -417,6 +465,17 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
 	})
 	srv.RegisterHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", gorums.BroadcastHandler(impl.QuorumCallWithBroadcast, srv.Server))
+	srv.RegisterHandler("broadcast.BroadcastService.QuorumCallWithMulticast", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		resp, err := impl.QuorumCallWithMulticast(ctx, req)
+		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+	})
+	srv.RegisterHandler("broadcast.BroadcastService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		impl.Multicast(ctx, req)
+	})
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCall", gorums.BroadcastHandler(impl.BroadcastCall, srv.Server))
 	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCall", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCall"))
 	srv.RegisterHandler("broadcast.BroadcastService.Broadcast", gorums.BroadcastHandler(impl.Broadcast, srv.Server))
