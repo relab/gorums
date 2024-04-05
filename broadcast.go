@@ -25,7 +25,7 @@ type broadcastServer struct {
 	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
 	orchestrator      *BroadcastOrchestrator
 	clientReqs        *RequestMap
-	storage           *BroadcastStorage
+	state             *BroadcastState
 	router            *BroadcastRouter
 	stopChan          chan struct{}
 	logger            *slog.Logger
@@ -41,7 +41,7 @@ func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 		responseChan:   make(chan *reply),
 		clientReqs:     NewRequestMap(),
 		router:         newBroadcastRouter(),
-		storage:        newBroadcastStorage(),
+		state:          newBroadcastStorage(),
 		stopChan:       nil,
 		logger:         logger,
 		started:        false,
@@ -111,7 +111,7 @@ func (srv *broadcastServer) run() {
 
 func (srv *broadcastServer) handleBroadcast2(msg *broadcastMsg) {
 	broadcastID := msg.broadcastID
-	req, err := srv.storage.get(broadcastID, true)
+	req, err := srv.state.get(broadcastID)
 	if err != nil {
 		return
 	}
@@ -151,16 +151,16 @@ func (srv *broadcastServer) handleClientResponses() {
 
 func (srv *broadcastServer) handle2(response *reply) {
 	broadcastID := response.getBroadcastID()
-	req, err := srv.storage.get(broadcastID, true)
+	req, err := srv.state.get(broadcastID)
 	if err != nil {
 		return
 	}
 	err = srv.router.route(broadcastID, req, response)
 	if err != nil {
-		srv.storage.setShouldWaitForClient(broadcastID, response)
+		srv.state.setShouldWaitForClient(broadcastID, response)
 		return
 	}
-	srv.storage.remove(broadcastID)
+	srv.state.remove(broadcastID)
 }
 
 func (srv *broadcastServer) handle(response *reply) {

@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/relab/gorums/ordering"
@@ -23,31 +24,35 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		req := in.Message.(T)
 		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req)
 
-		/*data, err := srv.broadcastSrv.storage.get(in.Metadata.BroadcastMsg.BroadcastID, false)
-		if data.shouldWaitForClient() {
-			srv.broadcastSrv.router.route(in.Metadata.BroadcastMsg.BroadcastID, data, data.getResponse())
-			return
-		}
-		if err != nil {
-			srv.broadcastSrv.storage.add(in.Metadata.BroadcastMsg.BroadcastID, data)
-		} else {
-			err := srv.broadcastSrv.storage.update(in.Metadata.BroadcastMsg.BroadcastID, data)
-			if err != nil {
-				return
-			}
-		}*/
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
 		if err := srv.broadcastSrv.validateMessage(in); err != nil {
-			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req)
+			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
 			return
 		}
+		addOriginMethod(in.Metadata)
+		data, err := srv.broadcastSrv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, finished)
+		if err != nil {
+			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			return
+		}
+		err = srv.broadcastSrv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
+		if err != nil {
+			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			return
+		}
+
+		err = srv.broadcastSrv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
+		if err != nil {
+			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			return
+		}
+
 		if srv.broadcastSrv.inPending(ctx, in.Metadata, finished) {
 			srv.broadcastSrv.logger.Debug("server has already processed the msg", "req", req)
 			return
 		}
-		addOriginMethod(in.Metadata)
 		// add the request as a client request
 		count, err := srv.broadcastSrv.addClientRequest(in.Metadata, ctx, finished)
 		if err != nil {
@@ -58,6 +63,26 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
 	}
+}
+
+func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID string) error {
+	data, err := srv.state.get(broadcastID)
+	if err != nil {
+		return err
+	}
+	if data.canBeRouted() {
+		err = srv.router.route(broadcastID, data, data.getResponse())
+		// should be removed regardless of a success.
+		// it must have received a client request and
+		// a client request.
+		defer srv.state.remove(broadcastID)
+		if err != nil {
+			return err
+		}
+		// returning an error because request is already handled
+		return errors.New("already processed")
+	}
+	return nil
 }
 
 func addOriginMethod(md *ordering.Metadata) {
@@ -98,7 +123,10 @@ func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, 
 	// it is possible to broadcast outside a server handler and it is thus necessary
 	// to check whether the provided broadcastID is valid. It will also add the
 	// necessary fields to correctly route the request.
-	if handled := srv.clientReqs.IsHandled(broadcastID); handled {
+	/*if handled := srv.clientReqs.IsHandled(broadcastID); handled {
+		return
+	}*/
+	if valid := srv.state.isValid(broadcastID); valid {
 		return
 	}
 	finished := make(chan struct{})

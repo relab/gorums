@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,39 +12,187 @@ import (
 )
 
 type content interface {
+	Validate() error
 	getCtx() context.Context
 	getFinished() chan<- *Message
 	getMetadata() *ordering.Metadata
 	isFromClient() bool
-	getMethod() string
+	//getMethod() string
 	getClientHandlerName() string
 	getOriginAddr() string
 	getOriginMethod() string
 	shouldWaitForClient() bool
+	canBeRouted() bool
+	isDone() bool
 	update(content) error
 	getResponse() *reply
 	setResponse(*reply)
 }
 
-type clientReq struct {
-	ctx        context.Context
-	finished   chan<- *Message
-	metadata   *ordering.Metadata
-	senderType string
-	methods    []string
-	timestamp  time.Time
-	doneChan   chan struct{}
-	sent       bool
+type responseData struct {
+	mut       sync.Mutex
+	messageID uint64
+	finished  chan<- *Message
+	response  *reply
 }
 
-func (c *clientReq) getMetadata() *ordering.Metadata {
+func (r *responseData) getMessageID() uint64 {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	return r.messageID
+}
+
+func (r *responseData) getResponse() *reply {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	return r.response
+}
+
+func (r *responseData) getFinished() chan<- *Message {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	return r.finished
+}
+
+func (r *responseData) addMessageID(messageID uint64) {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	r.messageID = messageID
+}
+
+func (r *responseData) addResponse(resp *reply) {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	r.response = resp
+}
+
+func (r *responseData) addFinished(finished chan<- *Message) {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	r.finished = finished
+}
+
+type reqContent struct {
+	ctx          context.Context
+	cancelFunc   context.CancelFunc
+	client       *responseData
+	senderType   string
+	originAddr   string
+	originMethod string
+	methods      []string
+	timestamp    time.Time
+	doneChan     chan struct{}
+	sent         bool
+}
+
+func (c reqContent) Validate() error {
+	if c.senderType != BroadcastClient && c.senderType != BroadcastServer {
+		return errors.New(fmt.Sprintf("senderType must be either %s or %s", BroadcastServer, BroadcastClient))
+	}
+	return nil
+}
+
+func (c reqContent) getCtx() context.Context {
+	return c.ctx
+}
+
+func (c reqContent) getFinished() chan<- *Message {
+	if c.client == nil {
+		return nil
+	}
+	return c.client.finished
+}
+
+func (c reqContent) getMetadata() *ordering.Metadata {
+	if c.client == nil {
+		return nil
+	}
 	return &ordering.Metadata{
-		MessageID: c.metadata.MessageID,
+		MessageID: c.client.getMessageID(),
 	}
 }
 
-func (c *clientReq) isFromClient() bool {
+func (c reqContent) isFromClient() bool {
 	return c.senderType == BroadcastClient
+}
+
+func (c reqContent) getClientHandlerName() string {
+	return c.originMethod
+}
+
+func (c reqContent) getOriginAddr() string {
+	return c.originAddr
+}
+
+func (c reqContent) getOriginMethod() string {
+	return c.originMethod
+}
+
+func (c reqContent) shouldWaitForClient() bool {
+	return c.sent
+}
+
+func (c reqContent) canBeRouted() bool {
+	return c.sent && c.senderType == BroadcastClient
+}
+
+func (c reqContent) isDone() bool {
+	select {
+	case <-c.ctx.Done():
+		return true
+	default:
+	}
+	return false
+}
+
+func (c reqContent) update(new content) error {
+	if c.ctx.Err() != nil {
+		return c.ctx.Err()
+	}
+	newReq, ok := new.(reqContent)
+	if !ok {
+		return errors.New("could not convert to correct type")
+	}
+	if c.originAddr == "" && newReq.originAddr != "" {
+		c.originAddr = newReq.originAddr
+	}
+	if c.originMethod == "" && newReq.originMethod != "" {
+		c.originMethod = newReq.originMethod
+	}
+	if c.senderType == BroadcastServer && newReq.senderType == BroadcastClient {
+		c.senderType = BroadcastClient
+		if newReq.client != nil && newReq.client.getFinished() != nil {
+			var resp *reply
+			// check if a response has been added.
+			// can happen if the server has executed
+			// SendToClient before receiving the client
+			// request directly from the client.
+			if c.client != nil {
+				resp = c.client.getResponse()
+			}
+			// add the response to new if resp is non-nil
+			// and update the current data
+			if resp != nil {
+				newReq.client.addResponse(resp)
+			}
+			c.client = newReq.client
+		}
+	}
+	return nil
+}
+
+func (c reqContent) getResponse() *reply {
+	if c.client != nil {
+		return c.client.getResponse()
+	}
+	return nil
+}
+
+func (c reqContent) setResponse(response *reply) {
+	if c.client == nil {
+		c.client = &responseData{}
+	}
+	c.client.addResponse(response)
 }
 
 type BroadcastRouter struct {
@@ -114,20 +263,57 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 	return errors.New("not routed")
 }
 
-type BroadcastStorage struct {
+type BroadcastState struct {
 	mut      sync.RWMutex
 	msgs     map[string]content
 	doneChan chan struct{}
 }
 
-func newBroadcastStorage() *BroadcastStorage {
-	return &BroadcastStorage{
+func newBroadcastStorage() *BroadcastState {
+	return &BroadcastState{
 		msgs:     make(map[string]content),
 		doneChan: make(chan struct{}),
 	}
 }
 
-func (s *BroadcastStorage) add(broadcastID string, msg content) error {
+func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, originMethod string, messageID uint64, finished chan<- *Message) (content, error) {
+	var client *responseData
+	if senderType == BroadcastClient {
+		client = &responseData{
+			messageID: messageID,
+			finished:  finished,
+		}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	data := reqContent{
+		ctx:          ctx,
+		cancelFunc:   cancel,
+		senderType:   senderType,
+		originAddr:   originAddr,
+		originMethod: originMethod,
+		client:       client,
+	}
+	return data, nil
+}
+
+func (s *BroadcastState) addOrUpdate(broadcastID string, msg content) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	if old, ok := s.msgs[broadcastID]; ok {
+		// update old with new
+		err := old.update(msg)
+		if err != nil {
+			return err
+		}
+		// data is not a pointer and must thus be saved
+		s.msgs[broadcastID] = old
+		return nil
+	}
+	s.msgs[broadcastID] = msg
+	return nil
+}
+
+func (s *BroadcastState) add(broadcastID string, msg content) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	if _, ok := s.msgs[broadcastID]; ok {
@@ -137,20 +323,38 @@ func (s *BroadcastStorage) add(broadcastID string, msg content) error {
 	return nil
 }
 
-func (s *BroadcastStorage) update(broadcastID string, new content) error {
+func (s *BroadcastState) update(broadcastID string, new content) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	if old, ok := s.msgs[broadcastID]; ok {
-		return old.update(new)
+		// update old with new
+		err := old.update(new)
+		if err != nil {
+			return err
+		}
+		// data is not a pointer and must thus be saved
+		s.msgs[broadcastID] = old
+		return nil
 	}
 	return errors.New("not found")
 }
 
-func (s *BroadcastStorage) get(broadcastID string, onlyValid bool) (content, error) {
+func (s *BroadcastState) isValid(broadcastID string) bool {
+	s.mut.RLock()
+	defer s.mut.RUnlock()
+	msg, ok := s.msgs[broadcastID]
+	if !ok {
+		return false
+	}
+	// the request is done if the server has replied to the client
+	return !msg.shouldWaitForClient()
+}
+
+func (s *BroadcastState) get(broadcastID string) (content, error) {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 	if msg, ok := s.msgs[broadcastID]; ok {
-		if onlyValid && msg.shouldWaitForClient() {
+		if msg.shouldWaitForClient() {
 			return nil, errors.New("not valid")
 		}
 		return msg, nil
@@ -158,7 +362,7 @@ func (s *BroadcastStorage) get(broadcastID string, onlyValid bool) (content, err
 	return nil, errors.New("not found")
 }
 
-func (s *BroadcastStorage) remove(broadcastID string) error {
+func (s *BroadcastState) remove(broadcastID string) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	_, ok := s.msgs[broadcastID]
@@ -169,7 +373,7 @@ func (s *BroadcastStorage) remove(broadcastID string) error {
 	return nil
 }
 
-func (s *BroadcastStorage) setShouldWaitForClient(broadcastID string, response *reply) {
+func (s *BroadcastState) setShouldWaitForClient(broadcastID string, response *reply) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	msg, ok := s.msgs[broadcastID]
@@ -177,4 +381,10 @@ func (s *BroadcastStorage) setShouldWaitForClient(broadcastID string, response *
 		return
 	}
 	msg.setResponse(response)
+}
+
+func (s *BroadcastState) prune() error {
+	s.msgs = make(map[string]content)
+	s.doneChan = make(chan struct{})
+	return nil
 }
