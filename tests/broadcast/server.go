@@ -131,3 +131,9 @@ func (srv *testServer) GetMsgs() string {
 	res += fmt.Sprintf(" -> QC: %d, QCB: %d, QCM: %d, M: %d, BC: %d, B: %d", srv.numMsg["QC"], srv.numMsg["QCB"], srv.numMsg["QCM"], srv.numMsg["M"], srv.numMsg["BC"], srv.numMsg["B"])
 	return res
 }
+
+func (srv *testServer) GetNumMsgs() int {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	return srv.numMsg["BC"] + srv.numMsg["B"]
+}

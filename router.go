@@ -218,15 +218,16 @@ func (c *content) setResponse(response *reply) error {
 }
 
 type BroadcastRouter struct {
-	sendMutex      sync.Mutex
-	id             uint32
-	addr           string
-	serverHandlers map[string]serverHandler // handlers on other servers
-	clientHandlers map[string]clientHandler // handlers on client servers
-	connections    map[string]*grpc.ClientConn
-	dialOpts       []grpc.DialOption
-	dialTimeout    time.Duration
-	doneChan       chan struct{}
+	sendMutex         sync.Mutex
+	id                uint32
+	addr              string
+	serverHandlers    map[string]serverHandler // handlers on other servers
+	clientHandlers    map[string]clientHandler // handlers on client servers
+	connections       map[string]*grpc.ClientConn
+	connectionTimeout time.Duration
+	dialOpts          []grpc.DialOption
+	dialTimeout       time.Duration
+	doneChan          chan struct{}
 }
 
 func newBroadcastRouter(dialOpts ...grpc.DialOption) *BroadcastRouter {
@@ -234,12 +235,13 @@ func newBroadcastRouter(dialOpts ...grpc.DialOption) *BroadcastRouter {
 		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	}
 	return &BroadcastRouter{
-		serverHandlers: make(map[string]serverHandler),
-		clientHandlers: make(map[string]clientHandler),
-		connections:    make(map[string]*grpc.ClientConn),
-		dialOpts:       dialOpts,
-		dialTimeout:    100 * time.Millisecond,
-		doneChan:       make(chan struct{}),
+		serverHandlers:    make(map[string]serverHandler),
+		clientHandlers:    make(map[string]clientHandler),
+		connections:       make(map[string]*grpc.ClientConn),
+		dialOpts:          dialOpts,
+		dialTimeout:       100 * time.Millisecond,
+		connectionTimeout: 1 * time.Minute,
+		doneChan:          make(chan struct{}),
 	}
 }
 
@@ -288,6 +290,11 @@ func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
 		return nil, err
 	}
 	//defer cc.Close()
+	// make sure the connection is closed
+	go func() {
+		time.Sleep(r.connectionTimeout)
+		cc.Close()
+	}()
 	r.connections[addr] = cc
 	return cc, err
 }
