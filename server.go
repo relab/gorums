@@ -174,7 +174,7 @@ func (s *Server) RegisterHandler(method string, handler requestHandler) {
 }
 
 func (s *Server) RegisterClientHandler(method string, handler func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)) {
-	s.broadcastSrv.registerReturnToClientHandler(method, handler)
+	s.broadcastSrv.registerSendToClientHandler(method, handler)
 }
 
 // Serve starts serving on the listener.

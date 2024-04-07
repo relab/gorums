@@ -38,7 +38,7 @@ func (srv *broadcastServer) addAddr(lis net.Listener) {
 	srv.router.addAddr(srv.id, srv.addr)
 }
 
-func (srv *broadcastServer) handleBroadcast2(msg *broadcastMsg) error {
+func (srv *broadcastServer) broadcast(msg *broadcastMsg) error {
 	// set the message as handled when returning from the method
 	defer msg.setFinished()
 	broadcastID := msg.broadcastID
@@ -49,7 +49,7 @@ func (srv *broadcastServer) handleBroadcast2(msg *broadcastMsg) error {
 	return srv.router.send(broadcastID, data, msg)
 }
 
-func (srv *broadcastServer) handle2(response *reply) error {
+func (srv *broadcastServer) sendToClient(response *reply) error {
 	srv.router.lock()
 	defer srv.router.unlock()
 	broadcastID := response.getBroadcastID()
@@ -65,7 +65,6 @@ func (srv *broadcastServer) handle2(response *reply) error {
 	return srv.state.remove(broadcastID)
 }
 
-func (srv *broadcastServer) sendToClient(broadcastID string, resp ResponseTypes, err error) {
-	//srv.responseChan <- newResponseMessage(resp, err, broadcastID)
-	srv.handle2(newReply(resp, err, broadcastID))
+func (srv *broadcastServer) sendToClientHandler(broadcastID string, resp ResponseTypes, err error) {
+	srv.sendToClient(newReply(resp, err, broadcastID))
 }

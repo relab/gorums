@@ -64,5 +64,5 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 }
 
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
-	srv.RetToClient(resp, err, broadcastID)
+	srv.SendToClientHandler(resp, err, broadcastID)
 }

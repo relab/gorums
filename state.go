@@ -10,6 +10,31 @@ import (
 	"github.com/relab/gorums/ordering"
 )
 
+type CacheOption int
+
+/*
+redis:
+
+  - noeviction: New values aren’t saved when memory limit is reached. When a database uses replication, this applies to the primary database
+  - allkeys-lru: Keeps most recently used keys; removes least recently used (LRU) keys
+  - allkeys-lfu: Keeps frequently used keys; removes least frequently used (LFU) keys
+  - volatile-lru: Removes least recently used keys with the expire field set to true.
+  - volatile-lfu: Removes least frequently used keys with the expire field set to true.
+  - allkeys-random: Randomly removes keys to make space for the new data added.
+  - volatile-random: Randomly removes keys with expire field set to true.
+  - volatile-ttl: Removes keys with expire field set to true and the shortest remaining time-to-live (TTL) value.
+*/
+const (
+	noeviction CacheOption = iota
+	allkeysLRU
+	allkeysLFU
+	volatileLRU
+	volatileLFU
+	allkeysRANDOM
+	volatileRANDOM
+	volatileTTL
+)
+
 type BroadcastState struct {
 	mut      sync.RWMutex
 	msgs     map[string]*content
