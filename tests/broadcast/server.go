@@ -11,6 +11,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type response struct {
+	respChan  chan int64
+	messageID int64
+}
+
 type testServer struct {
 	*Server
 	addr     string
@@ -19,7 +24,7 @@ type testServer struct {
 	mgr      *Manager
 	numMsg   map[string]int
 	mu       sync.Mutex
-	respChan map[int64]chan int64
+	respChan map[int64]response
 }
 
 func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
@@ -30,7 +35,7 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 	srv := testServer{
 		Server:   NewServer(),
 		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "B": 0},
-		respChan: make(map[int64]chan int64),
+		respChan: make(map[int64]response),
 	}
 	RegisterBroadcastServiceServer(srv.Server, &srv)
 	srv.peers = srvAddresses
@@ -78,7 +83,10 @@ func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Reques
 	done := make(chan int64)
 	srv.mu.Lock()
 	srv.numMsg["QCM"]++
-	srv.respChan[req.Value] = done
+	srv.respChan[req.Value] = response{
+		messageID: req.Value,
+		respChan:  done,
+	}
 	srv.mu.Unlock()
 	//slog.Warn("server received quorum call with broadcast")
 	srv.View.Multicast(context.Background(), req, gorums.WithNoSendWaiting())
@@ -90,10 +98,10 @@ func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	srv.numMsg["M"]++
-	if done, ok := srv.respChan[req.Value]; ok {
-		done <- req.Value
+	if response, ok := srv.respChan[req.Value]; ok {
+		response.respChan <- req.Value
+		close(response.respChan)
 		delete(srv.respChan, req.Value)
-		close(done)
 	}
 	//slog.Warn("server received quorum call with broadcast")
 }

@@ -388,7 +388,7 @@ func (c *Configuration) QuorumCallWithBroadcast(ctx context.Context, in *Request
 		Message: in,
 		Method:  "broadcast.BroadcastService.QuorumCallWithBroadcast",
 
-		BroadcastID: uuid.New().String(),
+		BroadcastID: uuid.NewString(),
 		SenderType:  gorums.BroadcastClient,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {

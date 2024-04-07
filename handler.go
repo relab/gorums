@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/relab/gorums/ordering"
@@ -35,20 +34,24 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		addOriginMethod(in.Metadata)
 		data, err := srv.broadcastSrv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
 		if err != nil {
-			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			srv.broadcastSrv.logger.Debug("broadcast data could not be created", "req", req, "err", err)
 			return
 		}
+		srv.broadcastSrv.router.sendMutex.Lock()
 		err = srv.broadcastSrv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
 		if err != nil {
-			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			srv.broadcastSrv.logger.Debug("broadcast request could not be added", "req", req, "err", err)
+			srv.broadcastSrv.router.sendMutex.Unlock()
 			return
 		}
 
-		err = srv.broadcastSrv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
-		if err != nil {
-			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+		sent, err := srv.broadcastSrv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
+		if sent {
+			srv.broadcastSrv.logger.Debug("broadcast request already processed", "req", req, "err", err)
+			srv.broadcastSrv.router.sendMutex.Unlock()
 			return
 		}
+		srv.broadcastSrv.router.sendMutex.Unlock()
 
 		//if srv.broadcastSrv.inPending(ctx, in.Metadata, finished) {
 		//srv.broadcastSrv.logger.Debug("server has already processed the msg", "req", req)
@@ -67,10 +70,10 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 	}
 }
 
-func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID string) error {
+func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID string) (bool, error) {
 	data, err := srv.state.get(broadcastID)
 	if err != nil {
-		return err
+		return true, err
 	}
 	if data.canBeRouted() {
 		err = srv.router.send(broadcastID, data, data.getResponse())
@@ -79,12 +82,12 @@ func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID string) error {
 		// a client request.
 		defer srv.state.remove(broadcastID)
 		if err != nil {
-			return err
+			return true, err
 		}
 		// returning an error because request is already handled
-		return errors.New("already processed")
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
 func addOriginMethod(md *ordering.Metadata) {

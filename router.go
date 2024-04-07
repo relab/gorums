@@ -12,25 +12,23 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type content interface {
-	Validate() error
-	getCtx() context.Context
-	getFinished() chan<- *Message
-	getMetadata() *ordering.Metadata
-	isFromClient() bool
-	//getMethod() string
-	getClientHandlerName() string
-	getOriginAddr() string
-	getOriginMethod() string
-	shouldWaitForClient() bool
-	canBeRouted() bool
-	isDone() bool
-	update(content) error
-	getDur() time.Duration
-	getProcessingTime() time.Duration
-	getResponse() *reply
-	setResponse(*reply)
-}
+//type content interface {
+//	getCtx() context.Context
+//	getFinished() chan<- *Message
+//	getMetadata() *ordering.Metadata
+//	isFromClient() bool
+//	getClientHandlerName() string
+//	getOriginAddr() string
+//	getOriginMethod() string
+//	shouldWaitForClient() bool
+//	canBeRouted() bool
+//	isDone() bool
+//	update(content) error
+//	getDur() time.Duration
+//	getProcessingTime() time.Duration
+//	getResponse() *reply
+//	setResponse(*reply) error
+//}
 
 type responseData struct {
 	mut       sync.Mutex
@@ -82,7 +80,7 @@ func (r *responseData) addFinished(finished chan<- *Message) {
 	r.finished = finished
 }
 
-type reqContent struct {
+type content struct {
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
 	client       *responseData
@@ -96,25 +94,18 @@ type reqContent struct {
 	sent         bool
 }
 
-func (c reqContent) Validate() error {
-	if c.senderType != BroadcastClient && c.senderType != BroadcastServer {
-		return errors.New(fmt.Sprintf("senderType must be either %s or %s", BroadcastServer, BroadcastClient))
-	}
-	return nil
-}
-
-func (c reqContent) getCtx() context.Context {
+func (c *content) getCtx() context.Context {
 	return c.ctx
 }
 
-func (c reqContent) getFinished() chan<- *Message {
+func (c *content) getFinished() chan<- *Message {
 	if c.client == nil {
 		return nil
 	}
 	return c.client.finished
 }
 
-func (c reqContent) getMetadata() *ordering.Metadata {
+func (c *content) getMetadata() *ordering.Metadata {
 	if c.client == nil {
 		return nil
 	}
@@ -124,39 +115,39 @@ func (c reqContent) getMetadata() *ordering.Metadata {
 	}
 }
 
-func (c reqContent) isFromClient() bool {
+func (c *content) isFromClient() bool {
 	return c.senderType == BroadcastClient
 }
 
-func (c reqContent) getClientHandlerName() string {
+func (c *content) getClientHandlerName() string {
 	return c.originMethod
 }
 
-func (c reqContent) getOriginAddr() string {
+func (c *content) getOriginAddr() string {
 	return c.originAddr
 }
 
-func (c reqContent) getOriginMethod() string {
+func (c *content) getOriginMethod() string {
 	return c.originMethod
 }
 
-func (c reqContent) shouldWaitForClient() bool {
+func (c *content) shouldWaitForClient() bool {
 	return c.sent
 }
 
-func (c reqContent) canBeRouted() bool {
+func (c *content) canBeRouted() bool {
 	return c.sent && c.senderType == BroadcastClient
 }
 
-func (c reqContent) getDur() time.Duration {
+func (c *content) getDur() time.Duration {
 	return time.Since(c.timestamp)
 }
 
-func (c reqContent) getProcessingTime() time.Duration {
+func (c *content) getProcessingTime() time.Duration {
 	return time.Since(c.reqTS)
 }
 
-func (c reqContent) isDone() bool {
+func (c *content) isDone() bool {
 	select {
 	case <-c.ctx.Done():
 		return true
@@ -165,58 +156,67 @@ func (c reqContent) isDone() bool {
 	return false
 }
 
-func (c reqContent) update(new content) error {
-	if c.ctx.Err() != nil {
-		return c.ctx.Err()
+func (old *content) update(new *content) error {
+	if old.ctx.Err() != nil {
+		return old.ctx.Err()
 	}
-	newReq, ok := new.(reqContent)
-	if !ok {
-		return errors.New("could not convert to correct type")
+	//newReq, ok := new.(*reqContent)
+	//if !ok {
+	//	return errors.New("could not convert to correct type")
+	//}
+	old.reqTS = time.Now()
+	if old.originAddr == "" && new.originAddr != "" {
+		old.originAddr = new.originAddr
 	}
-	c.reqTS = time.Now()
-	if c.originAddr == "" && newReq.originAddr != "" {
-		c.originAddr = newReq.originAddr
+	if old.originMethod == "" && new.originMethod != "" {
+		old.originMethod = new.originMethod
 	}
-	if c.originMethod == "" && newReq.originMethod != "" {
-		c.originMethod = newReq.originMethod
-	}
-	if c.senderType == BroadcastServer && newReq.senderType == BroadcastClient {
-		c.senderType = BroadcastClient
-		if newReq.client != nil && newReq.client.getFinished() != nil {
+	if old.senderType == BroadcastServer && new.senderType == BroadcastClient {
+		old.senderType = BroadcastClient
+		if new.client != nil && new.client.getFinished() != nil {
+			//slog.Info("client arrived later", "old", c.sent, "new", new.shouldWaitForClient())
 			var resp *reply
 			// check if a response has been added.
 			// can happen if the server has executed
 			// SendToClient before receiving the client
 			// request directly from the client.
-			if c.client != nil {
-				resp = c.client.getResponse()
+			if old.client != nil {
+				resp = old.client.getResponse()
 			}
 			// add the response to new if resp is non-nil
 			// and update the current data
 			if resp != nil {
-				newReq.client.addResponse(resp)
+				new.client.addResponse(resp)
 			}
-			c.client = newReq.client
+			old.client = new.client
+			//slog.Info("it happened", "sent", old.sent, "resp", resp.broadcastID, "canBeRouted", old.canBeRouted())
 		}
 	}
 	return nil
 }
 
-func (c reqContent) getResponse() *reply {
+func (c *content) getResponse() *reply {
 	if c.client != nil {
 		return c.client.getResponse()
 	}
 	return nil
 }
 
-func (c reqContent) setResponse(response *reply) {
+func (c *content) setResponse(response *reply) error {
 	if c.client == nil {
 		c.client = &responseData{}
 	}
+	if c.client.response != nil {
+		return errors.New("already added a response")
+	}
+	//slog.Info("setting response", "resp", response.response)
 	c.client.addResponse(response)
+	c.sent = true
+	return nil
 }
 
 type BroadcastRouter struct {
+	sendMutex      sync.Mutex
 	id             uint32
 	addr           string
 	serverHandlers map[string]serverHandler // handlers on other servers
@@ -287,18 +287,21 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 
 type BroadcastState struct {
 	mut      sync.RWMutex
-	msgs     map[string]content
+	msgs     map[string]*content
 	doneChan chan struct{}
 }
 
 func newBroadcastStorage() *BroadcastState {
 	return &BroadcastState{
-		msgs:     make(map[string]content),
+		msgs:     make(map[string]*content),
 		doneChan: make(chan struct{}),
 	}
 }
 
-func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) (content, error) {
+func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) (*content, error) {
+	if senderType != BroadcastClient && senderType != BroadcastServer {
+		return nil, errors.New(fmt.Sprintf("senderType must be either %s or %s", BroadcastServer, BroadcastClient))
+	}
 	var client *responseData
 	if senderType == BroadcastClient {
 		client = &responseData{
@@ -308,7 +311,7 @@ func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, or
 		}
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	data := reqContent{
+	data := &content{
 		ctx:          ctx,
 		cancelFunc:   cancel,
 		senderType:   senderType,
@@ -322,17 +325,14 @@ func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, or
 	return data, nil
 }
 
-func (s *BroadcastState) addOrUpdate(broadcastID string, msg content) error {
+func (s *BroadcastState) addOrUpdate(broadcastID string, msg *content) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	defer slog.Debug("added broadcast", "broadcastID", broadcastID)
 	if old, ok := s.msgs[broadcastID]; ok {
 		// update old with new
-		err := old.update(msg)
-		if err != nil {
+		if err := old.update(msg); err != nil {
 			return err
 		}
-		// data is not a pointer and must thus be saved
 		s.msgs[broadcastID] = old
 		return nil
 	}
@@ -340,31 +340,31 @@ func (s *BroadcastState) addOrUpdate(broadcastID string, msg content) error {
 	return nil
 }
 
-func (s *BroadcastState) add(broadcastID string, msg content) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-	if _, ok := s.msgs[broadcastID]; ok {
-		return errors.New("already added")
-	}
-	s.msgs[broadcastID] = msg
-	return nil
-}
+//func (s *BroadcastState) add(broadcastID string, msg content) error {
+//s.mut.Lock()
+//defer s.mut.Unlock()
+//if _, ok := s.msgs[broadcastID]; ok {
+//return errors.New("already added")
+//}
+//s.msgs[broadcastID] = msg
+//return nil
+//}
 
-func (s *BroadcastState) update(broadcastID string, new content) error {
-	s.mut.Lock()
-	defer s.mut.Unlock()
-	if old, ok := s.msgs[broadcastID]; ok {
-		// update old with new
-		err := old.update(new)
-		if err != nil {
-			return err
-		}
-		// data is not a pointer and must thus be saved
-		s.msgs[broadcastID] = old
-		return nil
-	}
-	return errors.New("not found")
-}
+//func (s *BroadcastState) update(broadcastID string, new content) error {
+//s.mut.Lock()
+//defer s.mut.Unlock()
+//if old, ok := s.msgs[broadcastID]; ok {
+//// update old with new
+//err := old.update(new)
+//if err != nil {
+//return err
+//}
+//// data is not a pointer and must thus be saved
+//s.msgs[broadcastID] = old
+//return nil
+//}
+//return errors.New("not found")
+//}
 
 //func (s *BroadcastState) isValid(broadcastID string) bool {
 //s.mut.RLock()
@@ -377,16 +377,15 @@ func (s *BroadcastState) update(broadcastID string, new content) error {
 //return !msg.shouldWaitForClient()
 //}
 
+var emptyContent = content{}
+
 func (s *BroadcastState) get(broadcastID string) (content, error) {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 	if msg, ok := s.msgs[broadcastID]; ok {
-		if msg.shouldWaitForClient() {
-			return nil, errors.New("not valid")
-		}
-		return msg, nil
+		return *msg, nil
 	}
-	return nil, errors.New("not found")
+	return emptyContent, errors.New("not found")
 }
 
 func (s *BroadcastState) remove(broadcastID string) error {
@@ -403,18 +402,22 @@ func (s *BroadcastState) remove(broadcastID string) error {
 	return nil
 }
 
-func (s *BroadcastState) setShouldWaitForClient(broadcastID string, response *reply) {
+func (s *BroadcastState) setShouldWaitForClient(broadcastID string, response *reply) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	msg, ok := s.msgs[broadcastID]
 	if !ok {
-		return
+		return errors.New("not found")
 	}
-	msg.setResponse(response)
+	return msg.setResponse(response)
+	//if err := msg.setResponse(response); err != nil {
+	//	return
+	//}
+	//s.msgs[broadcastID] = msg
 }
 
 func (s *BroadcastState) prune() error {
-	s.msgs = make(map[string]content)
+	s.msgs = make(map[string]*content)
 	s.doneChan = make(chan struct{})
 	return nil
 }

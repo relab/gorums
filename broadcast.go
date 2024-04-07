@@ -156,18 +156,21 @@ func (srv *broadcastServer) handleClientResponses() {
 	}
 }
 
-func (srv *broadcastServer) handle2(response *reply) {
+func (srv *broadcastServer) handle2(response *reply) error {
+	srv.router.sendMutex.Lock()
+	defer srv.router.sendMutex.Unlock()
 	broadcastID := response.getBroadcastID()
 	data, err := srv.state.get(broadcastID)
 	if err != nil {
-		return
+		return err
 	}
 	err = srv.router.send(broadcastID, data, response)
 	if err != nil {
+		//slog.Warn("client req not arrived yet")
 		srv.state.setShouldWaitForClient(broadcastID, response)
-		return
+		return err
 	}
-	srv.state.remove(broadcastID)
+	return srv.state.remove(broadcastID)
 }
 
 func (srv *broadcastServer) handle(response *reply) {

@@ -327,7 +327,7 @@ func BenchmarkQCBroadcastOption(b *testing.B) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 			resp, err := config.QuorumCallWithBroadcast(ctx, &Request{Value: int64(i)})
 			if err != nil {
-				//b.Error(err)
+				b.Error(err, i)
 			}
 			if resp.GetResult() != int64(i) {
 				//b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
