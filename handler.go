@@ -200,13 +200,11 @@ func (srv *Server) RegisterConfig(config RawConfiguration) {
 	// broadcast messages. Otherwise, beacuse the broadcast queueing
 	// method holds a read lock and can thus prevent this method
 	// from running.
-	srv.broadcastSrv.stop()
 	// handle all queued broadcast messages before changing the view
 	srv.broadcastSrv.viewMutex.Lock()
 	// delete all client requests. This resets all broadcast requests.
-	srv.broadcastSrv.clientReqs.Reset()
+	srv.broadcastSrv.state.prune()
 	srv.broadcastSrv.view = config
 	srv.broadcastSrv.viewMutex.Unlock()
 	// restart the server to resume progress
-	srv.broadcastSrv.start()
 }
