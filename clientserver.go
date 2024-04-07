@@ -6,10 +6,10 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -59,7 +59,7 @@ func NewClientServer(lis net.Listener) (*ClientServer, error) {
 		cancelCtx: cancel,
 	}
 	srv.lis = lis
-	go srv.handle()
+	//go srv.handle()
 	return srv, nil
 }
 
@@ -183,22 +183,20 @@ func ConvertToType[T protoreflect.ProtoMessage](handler func([]T) (T, bool)) fun
 	}
 }
 
-func ServerClientRPC(method string) func(addr, broadcastID string, in protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error) {
-	return func(addr, broadcastID string, in protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error) {
+func ServerClientRPC(method string) func(broadcastID string, in protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
+	return func(broadcastID string, in protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
 		tmp := strings.Split(method, ".")
 		m := ""
 		if len(tmp) >= 1 {
 			m = tmp[len(tmp)-1]
 		}
 		clientMethod := "/protos.ClientServer/Client" + m
-		cc, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, err
-		}
 		out := new(any)
 		md := metadata.Pairs(BroadcastID, broadcastID)
-		ctx := metadata.NewOutgoingContext(context.Background(), md)
-		err = cc.Invoke(ctx, clientMethod, in, out, opts...)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		ctx = metadata.NewOutgoingContext(ctx, md)
+		err := cc.Invoke(ctx, clientMethod, in, out, opts...)
 		if err != nil {
 			return nil, err
 		}

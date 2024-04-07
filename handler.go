@@ -37,21 +37,21 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			srv.broadcastSrv.logger.Debug("broadcast data could not be created", "req", req, "err", err)
 			return
 		}
-		srv.broadcastSrv.router.sendMutex.Lock()
+		srv.broadcastSrv.router.lock()
 		err = srv.broadcastSrv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
 		if err != nil {
 			srv.broadcastSrv.logger.Debug("broadcast request could not be added", "req", req, "err", err)
-			srv.broadcastSrv.router.sendMutex.Unlock()
+			srv.broadcastSrv.router.unlock()
 			return
 		}
 
 		sent, err := srv.broadcastSrv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
 		if sent {
 			srv.broadcastSrv.logger.Debug("broadcast request already processed", "req", req, "err", err)
-			srv.broadcastSrv.router.sendMutex.Unlock()
+			srv.broadcastSrv.router.unlock()
 			return
 		}
-		srv.broadcastSrv.router.sendMutex.Unlock()
+		srv.broadcastSrv.router.unlock()
 
 		//if srv.broadcastSrv.inPending(ctx, in.Metadata, finished) {
 		//srv.broadcastSrv.logger.Debug("server has already processed the msg", "req", req)

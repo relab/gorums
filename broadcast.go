@@ -157,8 +157,8 @@ func (srv *broadcastServer) handleClientResponses() {
 }
 
 func (srv *broadcastServer) handle2(response *reply) error {
-	srv.router.sendMutex.Lock()
-	defer srv.router.sendMutex.Unlock()
+	srv.router.lock()
+	defer srv.router.unlock()
 	broadcastID := response.getBroadcastID()
 	data, err := srv.state.get(broadcastID)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -172,7 +173,7 @@ func (s *Server) RegisterHandler(method string, handler requestHandler) {
 	s.srv.handlers[method] = handler
 }
 
-func (s *Server) RegisterClientHandler(method string, handler func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)) {
+func (s *Server) RegisterClientHandler(method string, handler func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)) {
 	s.broadcastSrv.registerReturnToClientHandler(method, handler)
 }
 

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -221,13 +223,22 @@ type BroadcastRouter struct {
 	addr           string
 	serverHandlers map[string]serverHandler // handlers on other servers
 	clientHandlers map[string]clientHandler // handlers on client servers
+	connections    map[string]*grpc.ClientConn
+	dialOpts       []grpc.DialOption
+	dialTimeout    time.Duration
 	doneChan       chan struct{}
 }
 
-func newBroadcastRouter() *BroadcastRouter {
+func newBroadcastRouter(dialOpts ...grpc.DialOption) *BroadcastRouter {
+	if len(dialOpts) <= 0 {
+		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	}
 	return &BroadcastRouter{
 		serverHandlers: make(map[string]serverHandler),
 		clientHandlers: make(map[string]clientHandler),
+		connections:    make(map[string]*grpc.ClientConn),
+		dialOpts:       dialOpts,
+		dialTimeout:    100 * time.Millisecond,
 		doneChan:       make(chan struct{}),
 	}
 }
@@ -266,10 +277,37 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID string, data content, msg *
 	return errors.New("not found")
 }
 
+func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
+	if conn, ok := r.connections[addr]; ok {
+		return conn, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, addr, r.dialOpts...)
+	if err != nil {
+		return nil, err
+	}
+	//defer cc.Close()
+	r.connections[addr] = cc
+	return cc, err
+}
+
+func (r *BroadcastRouter) lock() {
+	r.sendMutex.Lock()
+}
+
+func (r *BroadcastRouter) unlock() {
+	r.sendMutex.Unlock()
+}
+
 func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, resp *reply) error {
 	// the client has initiated a broadcast call and the reply should be sent as an RPC
 	if handler, ok := r.clientHandlers[data.getClientHandlerName()]; ok && data.getOriginAddr() != "" {
-		handler(data.getOriginAddr(), broadcastID, resp.getResponse())
+		cc, err := r.getConnection(data.getOriginAddr())
+		if err != nil {
+			return err
+		}
+		handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
 		slog.Debug("return took", "time", data.getProcessingTime())
 		return nil
 	}

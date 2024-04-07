@@ -20,7 +20,7 @@ const (
 )
 
 type serverHandler func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
-type clientHandler func(addr, broadcastID string, req protoreflect.ProtoMessage, opts ...grpc.CallOption) (any, error)
+type clientHandler func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
 
 type RequestTypes interface {
 	ProtoReflect() protoreflect.Message
