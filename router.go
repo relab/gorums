@@ -366,16 +366,16 @@ func (s *BroadcastState) update(broadcastID string, new content) error {
 	return errors.New("not found")
 }
 
-func (s *BroadcastState) isValid(broadcastID string) bool {
-	s.mut.RLock()
-	defer s.mut.RUnlock()
-	msg, ok := s.msgs[broadcastID]
-	if !ok {
-		return false
-	}
-	// the request is done if the server has replied to the client
-	return !msg.shouldWaitForClient()
-}
+//func (s *BroadcastState) isValid(broadcastID string) bool {
+//s.mut.RLock()
+//defer s.mut.RUnlock()
+//msg, ok := s.msgs[broadcastID]
+//if !ok {
+//return false
+//}
+//// the request is done if the server has replied to the client
+//return !msg.shouldWaitForClient()
+//}
 
 func (s *BroadcastState) get(broadcastID string) (content, error) {
 	s.mut.RLock()

@@ -109,15 +109,15 @@ func (srv *broadcastServer) run() {
 	}
 }
 
-func (srv *broadcastServer) handleBroadcast2(msg *broadcastMsg) {
+func (srv *broadcastServer) handleBroadcast2(msg *broadcastMsg) error {
 	// set the message as handled when returning from the method
 	defer msg.setFinished()
 	broadcastID := msg.broadcastID
 	data, err := srv.state.get(broadcastID)
 	if err != nil {
-		return
+		return err
 	}
-	_ = srv.router.send(broadcastID, data, msg)
+	return srv.router.send(broadcastID, data, msg)
 }
 
 func (srv *broadcastServer) handleBroadcast(msg *broadcastMsg) {
@@ -221,7 +221,8 @@ func (srv *broadcastServer) sendMsg(broadcastID string, req clientRequest, respo
 }
 
 func (srv *broadcastServer) sendToClient(broadcastID string, resp ResponseTypes, err error) {
-	srv.responseChan <- newResponseMessage(resp, err, broadcastID)
+	//srv.responseChan <- newResponseMessage(resp, err, broadcastID)
+	srv.handle2(newResponseMessage(resp, err, broadcastID))
 }
 
 func (srv *broadcastServer) addClientRequest(metadata *ordering.Metadata, ctx ServerCtx, finished chan<- *Message) (count uint64, err error) {

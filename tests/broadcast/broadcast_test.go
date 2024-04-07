@@ -121,23 +121,19 @@ func TestBroadcastManyReqs(t *testing.T) {
 }
 
 func TestQCBroadcastManyReqs(t *testing.T) {
-	//slog.Info("test")
 	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		t.Error(err)
 	}
 	defer srvCleanup()
-	//slog.Info("started servers")
 
 	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
 	if err != nil {
 		t.Error(err)
 	}
 	defer clientCleanup()
-	//slog.Info("started client")
 
 	val := int64(1)
-	//slog.Info("sending req")
 	resp, err := config.QuorumCallWithBroadcast(context.Background(), &Request{Value: val})
 	if err != nil {
 		t.Error(err)
@@ -145,8 +141,7 @@ func TestQCBroadcastManyReqs(t *testing.T) {
 	if resp.GetResult() != val {
 		t.Fatal("resp is wrong")
 	}
-	//slog.Info("done")
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 		start := time.Now()
 		resp, err := config.QuorumCallWithBroadcast(ctx, &Request{Value: int64(i)})
@@ -161,7 +156,6 @@ func TestQCBroadcastManyReqs(t *testing.T) {
 		if i%1000 == 0 {
 			slog.Info("req", "num", i, "time", end.Sub(start))
 		}
-		//slog.Warn("client reply", "val", resp.GetResult())
 	}
 	for _, srv := range srvs {
 		slog.Info("num msgs", "num", srv.GetMsgs())
@@ -194,7 +188,7 @@ func TestQCMulticastManyReqs(t *testing.T) {
 		t.Fatal("resp is wrong")
 	}
 	//slog.Info("done")
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		start := time.Now()
 		resp, err := config.QuorumCallWithMulticast(ctx, &Request{Value: int64(i)})
@@ -301,7 +295,7 @@ func BenchmarkBroadcastCall(b *testing.B) {
 	pprof.WriteHeapProfile(memProfile)
 }
 
-func BenchmarkBroadcastOption(b *testing.B) {
+func BenchmarkQCBroadcastOption(b *testing.B) {
 	// go test -bench=BenchmarkBroadcastOption -benchmem -count=5 -run=^# -benchtime=5x
 	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
@@ -328,16 +322,62 @@ func BenchmarkBroadcastOption(b *testing.B) {
 	memProfile, _ := os.Create("memprofileQFwithB")
 	pprof.StartCPUProfile(cpuProfile)
 
-	b.Run(fmt.Sprintf("QuorumCallWithBroadcast_%d", 1), func(b *testing.B) {
+	b.Run(fmt.Sprintf("QCB_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			slog.Info("run", "#", i)
-			resp, err := config.QuorumCallWithBroadcast(context.Background(), &Request{Value: int64(i)})
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			resp, err := config.QuorumCallWithBroadcast(ctx, &Request{Value: int64(i)})
+			if err != nil {
+				//b.Error(err)
+			}
+			if resp.GetResult() != int64(i) {
+				//b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+			}
+			cancel()
+			//slog.Warn("client reply", "val", resp.GetResult())
+		}
+	})
+	pprof.StopCPUProfile()
+	pprof.WriteHeapProfile(memProfile)
+}
+
+func BenchmarkQCMulticast(b *testing.B) {
+	// go test -bench=BenchmarkBroadcastOption -benchmem -count=5 -run=^# -benchtime=5x
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		b.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newClient(srvAddrs, "")
+	if err != nil {
+		b.Error(err)
+	}
+	defer clientCleanup()
+
+	init := 1
+	resp, err := config.QuorumCallWithMulticast(context.Background(), &Request{Value: int64(init)})
+	if err != nil {
+		b.Error(err)
+	}
+	if resp.GetResult() != int64(init) {
+		b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+	}
+
+	cpuProfile, _ := os.Create("cpuprofileQFwithB")
+	memProfile, _ := os.Create("memprofileQFwithB")
+	pprof.StartCPUProfile(cpuProfile)
+
+	b.Run(fmt.Sprintf("QCB_%d", 1), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			resp, err := config.QuorumCallWithMulticast(ctx, &Request{Value: int64(i)})
 			if err != nil {
 				b.Error(err)
 			}
 			if resp.GetResult() != int64(i) {
 				b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
 			}
+			cancel()
 			//slog.Warn("client reply", "val", resp.GetResult())
 		}
 	})

@@ -128,12 +128,13 @@ func (srv *broadcastServer) broadcasterHandler(method string, req RequestTypes, 
 	/*if handled := srv.clientReqs.IsHandled(broadcastID); handled {
 		return
 	}*/
-	if valid := srv.state.isValid(broadcastID); !valid {
+	/*if valid := srv.state.isValid(broadcastID); !valid {
 		srv.logger.Debug("not valid", "broadcastID", broadcastID)
 		return
-	}
+	}*/
 	finished := make(chan struct{})
-	srv.broadcastChan <- newBroadcastMessage(broadcastID, req, method, options, finished)
+	//srv.broadcastChan <- newBroadcastMessage(broadcastID, req, method, options, finished)
+	srv.handleBroadcast2(newBroadcastMessage(broadcastID, req, method, options, finished))
 
 	// not broadcasting in a goroutine can lead to deadlock. All handlers are run sync
 	// and thus the server have to return from the handler in order to process the next
