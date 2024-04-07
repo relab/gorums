@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -26,7 +27,15 @@ type ClientRequest struct {
 	handler     ReplySpecHandler
 }
 
+type csr struct {
+	resps    []protoreflect.ProtoMessage
+	doneChan chan protoreflect.ProtoMessage
+	handler  func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
+}
+
 type ClientServer struct {
+	mu        sync.Mutex
+	csr       map[string]*csr
 	respChan  chan *ClientResponse
 	reqChan   chan *ClientRequest
 	resps     map[string][]protoreflect.ProtoMessage
@@ -45,6 +54,7 @@ func NewClientServer(lis net.Listener) (*ClientServer, error) {
 		resps:     make(map[string][]protoreflect.ProtoMessage),
 		doneChans: make(map[string]chan protoreflect.ProtoMessage),
 		handlers:  make(map[string]func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)),
+		csr:       make(map[string]*csr),
 		ctx:       ctx,
 		cancelCtx: cancel,
 	}
@@ -68,11 +78,22 @@ func (srv *ClientServer) AddRequest(ctx context.Context, in protoreflect.ProtoMe
 		OriginAddr:  srv.lis.Addr().String(),
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)
-	srv.reqChan <- &ClientRequest{
-		broadcastID: broadcastID,
-		doneChan:    doneChan,
-		handler:     handler,
+
+	srv.mu.Lock()
+	srv.csr[broadcastID] = &csr{
+		resps:    make([]protoreflect.ProtoMessage, 0, 3),
+		doneChan: doneChan,
+		handler:  handler,
 	}
+	//srv.resps[broadcastID] = make([]protoreflect.ProtoMessage, 0)
+	//srv.doneChans[broadcastID] = doneChan
+	//srv.handlers[broadcastID] = handler
+	srv.mu.Unlock()
+	//srv.reqChan <- &ClientRequest{
+	//broadcastID: broadcastID,
+	//doneChan:    doneChan,
+	//handler:     handler,
+	//}
 	return doneChan, cd
 }
 
@@ -89,10 +110,37 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 	if broadcastID == "" {
 		return fmt.Errorf("no broadcastID")
 	}
-	srv.respChan <- &ClientResponse{
-		broadcastID: broadcastID,
-		data:        resp,
+
+	srv.mu.Lock()
+	csr, ok := srv.csr[broadcastID]
+	if !ok {
+		srv.mu.Unlock()
+		return fmt.Errorf("doesn't exist")
 	}
+	csr.resps = append(csr.resps, resp)
+	response, done := csr.handler(csr.resps)
+	if done {
+		csr.doneChan <- response
+		delete(srv.csr, broadcastID)
+	}
+	//if _, ok := srv.resps[broadcastID]; !ok {
+	//srv.mu.Unlock()
+	//return fmt.Errorf("doesn't exist")
+	//}
+	//srv.resps[broadcastID] = append(srv.resps[broadcastID], resp)
+	//response, done := srv.handlers[broadcastID](srv.resps[broadcastID])
+	//if done {
+	//srv.doneChans[broadcastID] <- response
+	//close(srv.doneChans[broadcastID])
+	//delete(srv.resps, broadcastID)
+	//delete(srv.doneChans, broadcastID)
+	//delete(srv.handlers, broadcastID)
+	//}
+	srv.mu.Unlock()
+	//srv.respChan <- &ClientResponse{
+	//broadcastID: broadcastID,
+	//data:        resp,
+	//}
 	return nil
 }
 
@@ -102,7 +150,9 @@ func (srv *ClientServer) handle() {
 		case <-srv.ctx.Done():
 			return
 		case resp := <-srv.respChan:
+			srv.mu.Lock()
 			if _, ok := srv.resps[resp.broadcastID]; !ok {
+				srv.mu.Unlock()
 				continue
 			}
 			srv.resps[resp.broadcastID] = append(srv.resps[resp.broadcastID], resp.data)
@@ -114,10 +164,11 @@ func (srv *ClientServer) handle() {
 				delete(srv.doneChans, resp.broadcastID)
 				delete(srv.handlers, resp.broadcastID)
 			}
-		case req := <-srv.reqChan:
-			srv.resps[req.broadcastID] = make([]protoreflect.ProtoMessage, 0)
-			srv.doneChans[req.broadcastID] = req.doneChan
-			srv.handlers[req.broadcastID] = req.handler
+			srv.mu.Unlock()
+			//case req := <-srv.reqChan:
+			//srv.resps[req.broadcastID] = make([]protoreflect.ProtoMessage, 0)
+			//srv.doneChans[req.broadcastID] = req.doneChan
+			//srv.handlers[req.broadcastID] = req.handler
 		}
 	}
 }
