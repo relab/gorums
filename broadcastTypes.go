@@ -147,6 +147,7 @@ type BroadcastMetadata struct {
 	OriginMethod string // the first method called by the origin
 	Method       string // the current method
 	Count        uint64 // number of messages received to the current method
+	Digest       []byte // digest of original message sent by client
 }
 
 func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata {

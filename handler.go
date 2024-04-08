@@ -22,6 +22,7 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		//defer ctx.Release()
 		ctx.Release()
 		req := in.Message.(T)
+
 		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
 
 		// guard:

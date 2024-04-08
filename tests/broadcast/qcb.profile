@@ -2,17 +2,15 @@ goos: linux
 goarch: amd64
 pkg: github.com/relab/gorums/tests/broadcast
 cpu: 11th Gen Intel(R) Core(TM) i5-11300H @ 3.10GHz
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    158939 ns/op	   40004 B/op	     707 allocs/op
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    158950 ns/op	   39855 B/op	     707 allocs/op
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    159995 ns/op	   40923 B/op	     708 allocs/op
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    159867 ns/op	   38821 B/op	     707 allocs/op
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    159868 ns/op	   39011 B/op	     708 allocs/op
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    166392 ns/op	   43033 B/op	     708 allocs/op
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    165096 ns/op	   38847 B/op	     707 allocs/op
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    158566 ns/op	   38821 B/op	     707 allocs/op
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	--- FAIL: BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8
-    broadcast_test.go:374: quorum call error: context deadline exceeded (errors: 0, replies: 2) 3141
-    broadcast_test.go:377: result is wrong. got: 0, want: 3141
-BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    5000	    162302 ns/op	   39042 B/op	     708 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    210016 ns/op	  120414 B/op	    1868 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    211114 ns/op	  119389 B/op	    1862 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    216433 ns/op	  115601 B/op	    1859 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    215608 ns/op	  122404 B/op	    1858 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    211989 ns/op	  115461 B/op	    1859 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    218915 ns/op	  115784 B/op	    1860 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    217878 ns/op	  129319 B/op	    1859 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    213996 ns/op	  115011 B/op	    1853 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    213751 ns/op	  115430 B/op	    1858 allocs/op
+BenchmarkQCBroadcastOption/QCB_AllSuccessful_1-8         	    1000	    211209 ns/op	  115157 B/op	    1855 allocs/op
 PASS
-ok  	github.com/relab/gorums/tests/broadcast	9.015s
+ok  	github.com/relab/gorums/tests/broadcast	2.599s

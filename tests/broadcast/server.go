@@ -76,7 +76,7 @@ func (srv *testServer) QuorumCallWithBroadcast(ctx gorums.ServerCtx, req *Reques
 	defer srv.mu.Unlock()
 	srv.numMsg["QCB"]++
 	//slog.Warn("server received quorum call with broadcast")
-	broadcast.Broadcast(req)
+	broadcast.BroadcastIntermediate(req)
 }
 
 func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
@@ -89,9 +89,16 @@ func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Reques
 	}
 	srv.mu.Unlock()
 	//slog.Warn("server received quorum call with broadcast")
-	srv.View.Multicast(context.Background(), req, gorums.WithNoSendWaiting())
+	srv.View.MulticastIntermediate(context.Background(), req, gorums.WithNoSendWaiting())
 	res := <-done
 	return &Response{Result: res}, nil
+}
+
+func (srv *testServer) MulticastIntermediate(ctx gorums.ServerCtx, req *Request) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	srv.numMsg["M"]++
+	srv.View.Multicast(context.Background(), req, gorums.WithNoSendWaiting())
 }
 
 func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
@@ -111,6 +118,14 @@ func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadca
 	defer srv.mu.Unlock()
 	srv.numMsg["BC"]++
 	//slog.Warn("server received broadcast call")
+	broadcast.BroadcastIntermediate(req)
+}
+
+func (srv *testServer) BroadcastIntermediate(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	srv.numMsg["B"]++
+	//slog.Warn("server received broadcast")
 	broadcast.Broadcast(req)
 }
 

@@ -256,6 +256,57 @@ func TestBroadcastCallRaceTwoClients(t *testing.T) {
 	}
 }
 
+func TestBroadcastCallAsyncReqs(t *testing.T) {
+	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	numClients := 10
+	clients := make([]*Configuration, numClients)
+	for c := 0; c < numClients; c++ {
+		config, clientCleanup, err := newClient(srvAddrs, fmt.Sprintf("127.0.0.1:808%v", c), 3)
+		if err != nil {
+			t.Error(err)
+		}
+		defer clientCleanup()
+		clients[c] = config
+	}
+
+	for _, client := range clients {
+		val := int64(1)
+		resp, err := client.BroadcastCall(context.Background(), &Request{Value: val})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != val {
+			t.Fatal("resp is wrong")
+		}
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i <= 100; i++ {
+		for _, client := range clients {
+			go func(j int, c *Configuration) {
+				resp, err := c.BroadcastCall(context.Background(), &Request{Value: int64(j)})
+				if err != nil {
+					t.Error(err)
+				}
+				if resp.GetResult() != int64(j) {
+					t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), j)
+				}
+				wg.Done()
+			}(i, client)
+			wg.Add(1)
+		}
+	}
+	wg.Wait()
+	for _, srv := range srvs {
+		fmt.Println(srv.GetMsgs())
+	}
+}
+
 func TestQCBroadcastOptionRace(t *testing.T) {
 	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
@@ -666,8 +717,8 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 		var wg sync.WaitGroup
 		for i := 0; i < b.N; i++ {
 			for _, client := range clients {
-				go func(i int) {
-					resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(i)})
+				go func(i int, c *Configuration) {
+					resp, err := c.BroadcastCall(context.Background(), &Request{Value: int64(i)})
 					if err != nil {
 						b.Error(err)
 					}
@@ -675,7 +726,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 						b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
 					}
 					wg.Done()
-				}(i)
+				}(i, client)
 				wg.Add(1)
 			}
 		}

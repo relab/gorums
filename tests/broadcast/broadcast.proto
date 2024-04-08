@@ -19,8 +19,14 @@ service BroadcastService {
   rpc Multicast(Request) returns (Empty) { 
     option (gorums.multicast) = true; 
   }
+  rpc MulticastIntermediate(Request) returns (Empty) { 
+    option (gorums.multicast) = true; 
+  }
   rpc BroadcastCall(Request) returns (Response) { 
     option (gorums.broadcastcall) = true; 
+  }
+  rpc BroadcastIntermediate(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
   }
   rpc Broadcast(Request) returns (Empty) { 
     option (gorums.broadcast) = true; 

@@ -256,6 +256,17 @@ func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.Broadca
 	go b.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, options)
 }
 
+func (b *Broadcast) BroadcastIntermediate(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == "" {
+		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcastIntermediate instead")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	go b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, b.metadata.BroadcastID, options)
+}
+
 func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
 	if b.metadata.BroadcastID == "" {
 		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcast instead")
@@ -321,6 +332,17 @@ func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...goru
 	cd := gorums.QuorumCallData{
 		Message: in,
 		Method:  "broadcast.BroadcastService.Multicast",
+	}
+
+	c.RawConfiguration.Multicast(ctx, cd, opts...)
+}
+
+// MulticastIntermediate is a quorum call invoked on all nodes in configuration c,
+// with the same argument in, and returns a combined result.
+func (c *Configuration) MulticastIntermediate(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "broadcast.BroadcastService.MulticastIntermediate",
 	}
 
 	c.RawConfiguration.Multicast(ctx, cd, opts...)
@@ -434,7 +456,9 @@ type BroadcastService interface {
 	QuorumCallWithBroadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	QuorumCallWithMulticast(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	Multicast(ctx gorums.ServerCtx, request *Request)
+	MulticastIntermediate(ctx gorums.ServerCtx, request *Request)
 	BroadcastCall(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	BroadcastIntermediate(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 }
 
@@ -450,8 +474,14 @@ func (srv *Server) QuorumCallWithMulticast(ctx gorums.ServerCtx, request *Reques
 func (srv *Server) Multicast(ctx gorums.ServerCtx, request *Request) {
 	panic(status.Errorf(codes.Unimplemented, "method Multicast not implemented"))
 }
+func (srv *Server) MulticastIntermediate(ctx gorums.ServerCtx, request *Request) {
+	panic(status.Errorf(codes.Unimplemented, "method MulticastIntermediate not implemented"))
+}
 func (srv *Server) BroadcastCall(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method BroadcastCall not implemented"))
+}
+func (srv *Server) BroadcastIntermediate(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method BroadcastIntermediate not implemented"))
 }
 func (srv *Server) Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method Broadcast not implemented"))
@@ -476,8 +506,14 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 		defer ctx.Release()
 		impl.Multicast(ctx, req)
 	})
+	srv.RegisterHandler("broadcast.BroadcastService.MulticastIntermediate", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		impl.MulticastIntermediate(ctx, req)
+	})
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCall", gorums.BroadcastHandler(impl.BroadcastCall, srv.Server))
 	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCall", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCall"))
+	srv.RegisterHandler("broadcast.BroadcastService.BroadcastIntermediate", gorums.BroadcastHandler(impl.BroadcastIntermediate, srv.Server))
 	srv.RegisterHandler("broadcast.BroadcastService.Broadcast", gorums.BroadcastHandler(impl.Broadcast, srv.Server))
 }
 
@@ -490,6 +526,17 @@ func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID st
 		opt(&options)
 	}
 	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, broadcastID, options)
+}
+
+func (srv *Server) BroadcastBroadcastIntermediate(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
+	if broadcastID == "" {
+		panic("broadcastID cannot be empty.")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, broadcastID, options)
 }
 
 func (srv *Server) BroadcastBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
