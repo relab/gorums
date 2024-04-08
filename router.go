@@ -23,9 +23,10 @@ type BroadcastRouter struct {
 	dialOpts          []grpc.DialOption
 	dialTimeout       time.Duration
 	doneChan          chan struct{}
+	logger            *slog.Logger
 }
 
-func newBroadcastRouter(dialOpts ...grpc.DialOption) *BroadcastRouter {
+func newBroadcastRouter(logger *slog.Logger, dialOpts ...grpc.DialOption) *BroadcastRouter {
 	if len(dialOpts) <= 0 {
 		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	}
@@ -37,6 +38,7 @@ func newBroadcastRouter(dialOpts ...grpc.DialOption) *BroadcastRouter {
 		dialTimeout:       100 * time.Millisecond,
 		connectionTimeout: 1 * time.Minute,
 		doneChan:          make(chan struct{}),
+		logger:            logger,
 	}
 }
 
@@ -68,7 +70,7 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID string, data content, msg *
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
 		handler(msg.ctx, msg.request, broadcastID, data.getOriginAddr(), data.getOriginMethod(), msg.options, r.id, r.addr)
-		slog.Debug("broadcast took", "time", data.getProcessingTime())
+		r.logger.Debug("broadcast took", "time", data.getProcessingTime())
 		return nil
 	}
 	return errors.New("not found")
@@ -78,7 +80,7 @@ func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
 	if conn, ok := r.connections[addr]; ok {
 		return conn, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), r.dialTimeout)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, addr, r.dialOpts...)
 	if err != nil {
@@ -109,14 +111,14 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 			return err
 		}
 		handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
-		slog.Debug("return took", "time", data.getProcessingTime())
+		r.logger.Debug("return took", "time", data.getProcessingTime())
 		return nil
 	}
 	// there is a direct connection to the client, e.g. from a QuorumCall
 	if data.isFromClient() {
 		msg := WrapMessage(data.getMetadata(), protoreflect.ProtoMessage(resp.getResponse()), resp.getError())
 		SendMessage(data.getCtx(), data.getFinished(), msg)
-		slog.Debug("return took", "time", data.getProcessingTime())
+		r.logger.Debug("return took", "time", data.getProcessingTime())
 		return nil
 	}
 	// the server can receive a broadcast from another server before a client sends a direct message.

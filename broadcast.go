@@ -22,8 +22,8 @@ type broadcastServer struct {
 
 func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 	return &broadcastServer{
-		router: newBroadcastRouter(),
-		state:  newBroadcastStorage(),
+		router: newBroadcastRouter(logger),
+		state:  newBroadcastStorage(logger),
 		logger: logger,
 	}
 }
@@ -50,9 +50,14 @@ func (srv *broadcastServer) broadcast(msg *broadcastMsg) error {
 }
 
 func (srv *broadcastServer) sendToClient(response *reply) error {
-	srv.router.lock()
-	defer srv.router.unlock()
+	//srv.router.lock()
+	//defer srv.router.unlock()
 	broadcastID := response.getBroadcastID()
+	mut, err := srv.state.lockRequest(broadcastID)
+	if err != nil {
+		return err
+	}
+	defer mut.Unlock()
 	data, err := srv.state.get(broadcastID)
 	if err != nil {
 		return err

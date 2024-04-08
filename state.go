@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -38,12 +39,14 @@ const (
 type BroadcastState struct {
 	mut      sync.RWMutex
 	msgs     map[string]*content
+	logger   *slog.Logger
 	doneChan chan struct{}
 }
 
-func newBroadcastStorage() *BroadcastState {
+func newBroadcastStorage(logger *slog.Logger) *BroadcastState {
 	return &BroadcastState{
 		msgs:     make(map[string]*content),
+		logger:   logger,
 		doneChan: make(chan struct{}),
 	}
 }
@@ -83,14 +86,26 @@ func (s *BroadcastState) addOrUpdate(broadcastID string, msg *content) error {
 		if err := old.update(msg); err != nil {
 			return err
 		}
+		s.logger.Debug("broadcast: updated req", "broadcastID", broadcastID, "msg", msg)
 		s.msgs[broadcastID] = old
 		return nil
 	}
+	s.logger.Debug("broadcast: added req", "broadcastID", broadcastID, "msg", msg)
+	msg.mut = &sync.Mutex{}
 	s.msgs[broadcastID] = msg
 	return nil
 }
 
 var emptyContent = content{}
+
+func (s *BroadcastState) lockRequest(broadcastID string) (*sync.Mutex, error) {
+	content, err := s.get(broadcastID)
+	if err != nil {
+		return nil, err
+	}
+	content.mut.Lock()
+	return content.mut, nil
+}
 
 func (s *BroadcastState) get(broadcastID string) (content, error) {
 	s.mut.RLock()
@@ -109,6 +124,7 @@ func (s *BroadcastState) remove(broadcastID string) error {
 		return errors.New("not found")
 	}
 	delete(s.msgs, broadcastID)
+	s.logger.Debug("broadcast: removed req", "broadcastID", broadcastID)
 	return nil
 }
 
@@ -125,6 +141,7 @@ func (s *BroadcastState) setShouldWaitForClient(broadcastID string, response *re
 func (s *BroadcastState) prune() error {
 	s.msgs = make(map[string]*content)
 	s.doneChan = make(chan struct{})
+	s.logger.Debug("broadcast: pruned reqs")
 	return nil
 }
 
@@ -179,6 +196,7 @@ func (r *responseData) addFinished(finished chan<- *Message) {
 }
 
 type content struct {
+	mut          *sync.Mutex
 	ctx          context.Context
 	cancelFunc   context.CancelFunc
 	client       *responseData

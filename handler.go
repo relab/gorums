@@ -19,7 +19,8 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 
 func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
-		defer ctx.Release()
+		//defer ctx.Release()
+		ctx.Release()
 		req := in.Message.(T)
 		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
 
@@ -36,21 +37,34 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			srv.broadcastSrv.logger.Debug("broadcast data could not be created", "req", req, "err", err)
 			return
 		}
-		srv.broadcastSrv.router.lock()
+		//srv.broadcastSrv.router.lock()
+		// lockErr is non-nil when the req does not exist which could be when first
+		// receiving the request.
+		mut, lockErr := srv.broadcastSrv.state.lockRequest(in.Metadata.BroadcastMsg.BroadcastID)
+
 		err = srv.broadcastSrv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
 		if err != nil {
 			srv.broadcastSrv.logger.Debug("broadcast request could not be added", "req", req, "err", err)
-			srv.broadcastSrv.router.unlock()
+			if mut != nil && lockErr == nil {
+				mut.Unlock()
+			}
+			//srv.broadcastSrv.router.unlock()
 			return
 		}
 
 		sent, err := srv.broadcastSrv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
 		if sent {
 			srv.broadcastSrv.logger.Debug("broadcast request already processed", "req", req, "err", err)
-			srv.broadcastSrv.router.unlock()
+			if mut != nil && lockErr == nil {
+				mut.Unlock()
+			}
+			//srv.broadcastSrv.router.unlock()
 			return
 		}
-		srv.broadcastSrv.router.unlock()
+		//srv.broadcastSrv.router.unlock()
+		if mut != nil && lockErr == nil {
+			mut.Unlock()
+		}
 
 		broadcastMetadata := newBroadcastMetadata(in.Metadata, 0)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)

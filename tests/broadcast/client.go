@@ -60,7 +60,11 @@ func (qs *testQSpec) BroadcastCallQF(replies []*Response) (*Response, bool) {
 	return nil, false
 }
 
-func newClient(srvAddrs []string, listenAddr string) (*Configuration, func(), error) {
+func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configuration, func(), error) {
+	quorumSize := len(srvAddrs)
+	if len(qsize) > 0 {
+		quorumSize = qsize[0]
+	}
 	mgr := NewManager(
 		gorums.WithPublicKey("client"),
 		gorums.WithGrpcDialOptions(
@@ -79,7 +83,7 @@ func newClient(srvAddrs []string, listenAddr string) (*Configuration, func(), er
 	}
 	config, err := mgr.NewConfiguration(
 		gorums.WithNodeList(srvAddrs),
-		newQSpec(len(srvAddrs), len(srvAddrs)),
+		newQSpec(quorumSize, quorumSize),
 	)
 	if err != nil {
 		return nil, nil, err
