@@ -69,7 +69,3 @@ func (srv *broadcastServer) sendToClient(response *reply) error {
 	}
 	return srv.state.remove(broadcastID)
 }
-
-func (srv *broadcastServer) sendToClientHandler(broadcastID string, resp ResponseTypes, err error) {
-	srv.sendToClient(newReply(resp, err, broadcastID))
-}

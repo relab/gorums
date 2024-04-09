@@ -122,6 +122,11 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	return nil
 }
 
+func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster) {
+	srv.broadcastSrv.createBroadcaster = b
+	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
+}
+
 func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, broadcastID string, opts ...BroadcastOptions) {
 	options := BroadcastOptions{}
 	if len(opts) > 0 {
@@ -137,9 +142,8 @@ func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, br
 	//}
 }
 
-func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster) {
-	srv.broadcastSrv.createBroadcaster = b
-	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
+func (srv *broadcastServer) sendToClientHandler(broadcastID string, resp ResponseTypes, err error) {
+	srv.sendToClient(newReply(resp, err, broadcastID))
 }
 
 func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error, broadcastID string) {
