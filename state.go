@@ -37,7 +37,7 @@ const (
 )
 
 type BroadcastState struct {
-	mut      sync.RWMutex
+	mut      sync.Mutex // change to mutex
 	msgs     map[string]*content
 	logger   *slog.Logger
 	doneChan chan struct{}
@@ -63,13 +63,13 @@ func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, or
 			finished:  finished,
 		}
 	}
-	ctx, cancel := context.WithCancel(ctx)
 	data := &content{
-		ctx:          ctx,
-		cancelFunc:   cancel,
+		ctx: ctx,
+		//cancelFunc:   nil,
 		senderType:   senderType,
 		originAddr:   originAddr,
 		originMethod: originMethod,
+		methods:      make([]string, 0),
 		client:       client,
 		timestamp:    time.Now(),
 		reqTS:        time.Now(),
@@ -98,18 +98,18 @@ func (s *BroadcastState) addOrUpdate(broadcastID string, msg *content) error {
 
 var emptyContent = content{}
 
-func (s *BroadcastState) lockRequest(broadcastID string) (*sync.Mutex, error) {
+func (s *BroadcastState) lockRequest(broadcastID string) (func(), content, error) {
 	content, err := s.get(broadcastID)
 	if err != nil {
-		return nil, err
+		return func() {}, content, err
 	}
 	content.mut.Lock()
-	return content.mut, nil
+	return func() { content.mut.Unlock() }, content, nil
 }
 
 func (s *BroadcastState) get(broadcastID string) (content, error) {
-	s.mut.RLock()
-	defer s.mut.RUnlock()
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	if msg, ok := s.msgs[broadcastID]; ok {
 		return *msg, nil
 	}
@@ -119,11 +119,12 @@ func (s *BroadcastState) get(broadcastID string) (content, error) {
 func (s *BroadcastState) remove(broadcastID string) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	_, ok := s.msgs[broadcastID]
+	msg, ok := s.msgs[broadcastID]
 	if !ok {
 		return errors.New("not found")
 	}
-	delete(s.msgs, broadcastID)
+	//delete(s.msgs, broadcastID)
+	msg.setDone()
 	s.logger.Debug("broadcast: removed req", "broadcastID", broadcastID)
 	return nil
 }
@@ -136,6 +137,17 @@ func (s *BroadcastState) setShouldWaitForClient(broadcastID string, response *re
 		return errors.New("not found")
 	}
 	return msg.setResponse(response)
+}
+
+func (s *BroadcastState) setBroadcasted(broadcastID, method string) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	msg, ok := s.msgs[broadcastID]
+	if !ok {
+		return errors.New("not found")
+	}
+	msg.addMethod(method)
+	return nil
 }
 
 func (s *BroadcastState) prune() error {
@@ -208,6 +220,7 @@ type content struct {
 	reqTS        time.Time
 	doneChan     chan struct{}
 	sent         bool
+	done         bool
 }
 
 func (c *content) getCtx() context.Context {
@@ -269,12 +282,16 @@ func (c *content) isDone() bool {
 		return true
 	default:
 	}
-	return false
+	return c.done
+}
+
+func (c *content) setDone() {
+	c.done = true
 }
 
 func (old *content) update(new *content) error {
-	if old.ctx.Err() != nil {
-		return old.ctx.Err()
+	if old.isDone() {
+		return errors.New("req is done")
 	}
 	old.reqTS = time.Now()
 	if old.originAddr == "" && new.originAddr != "" {
@@ -303,6 +320,19 @@ func (old *content) update(new *content) error {
 		}
 	}
 	return nil
+}
+
+func (c *content) hasBeenBroadcasted(method string) bool {
+	for _, m := range c.methods {
+		if m == method {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *content) addMethod(method string) {
+	c.methods = append(c.methods, method)
 }
 
 func (c *content) getResponse() *reply {

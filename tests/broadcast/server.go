@@ -34,7 +34,7 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 	//}()
 	srv := testServer{
 		Server:   NewServer(),
-		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "B": 0},
+		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
 	}
 	RegisterBroadcastServiceServer(srv.Server, &srv)
@@ -115,24 +115,24 @@ func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
 
 func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	srv.mu.Lock()
-	defer srv.mu.Unlock()
 	srv.numMsg["BC"]++
+	srv.mu.Unlock()
 	//slog.Warn("server received broadcast call")
 	broadcast.BroadcastIntermediate(req)
 }
 
 func (srv *testServer) BroadcastIntermediate(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	srv.mu.Lock()
-	defer srv.mu.Unlock()
-	srv.numMsg["B"]++
+	srv.numMsg["BI"]++
+	srv.mu.Unlock()
 	//slog.Warn("server received broadcast")
 	broadcast.Broadcast(req)
 }
 
 func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	srv.mu.Lock()
-	defer srv.mu.Unlock()
 	srv.numMsg["B"]++
+	srv.mu.Unlock()
 	//slog.Warn("server received broadcast")
 	broadcast.SendToClient(&Response{
 		Result: req.Value,
@@ -143,12 +143,12 @@ func (srv *testServer) GetMsgs() string {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	res := "Srv " + srv.addr
-	res += fmt.Sprintf(" -> QC: %d, QCB: %d, QCM: %d, M: %d, BC: %d, B: %d", srv.numMsg["QC"], srv.numMsg["QCB"], srv.numMsg["QCM"], srv.numMsg["M"], srv.numMsg["BC"], srv.numMsg["B"])
+	res += fmt.Sprintf(" -> QC: %d, QCB: %d, QCM: %d, M: %d, BC: %d, BI: %d, B: %d", srv.numMsg["QC"], srv.numMsg["QCB"], srv.numMsg["QCM"], srv.numMsg["M"], srv.numMsg["BC"], srv.numMsg["BI"], srv.numMsg["B"])
 	return res
 }
 
 func (srv *testServer) GetNumMsgs() int {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
-	return srv.numMsg["BC"] + srv.numMsg["B"]
+	return srv.numMsg["BC"] + srv.numMsg["B"] + srv.numMsg["BI"]
 }

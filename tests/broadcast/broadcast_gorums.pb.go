@@ -238,7 +238,7 @@ func (c *clientServerImpl) stop() {
 }
 
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
-	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
+	go b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {

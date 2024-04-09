@@ -41,14 +41,12 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		//srv.broadcastSrv.router.lock()
 		// lockErr is non-nil when the req does not exist which could be when first
 		// receiving the request.
-		mut, lockErr := srv.broadcastSrv.state.lockRequest(in.Metadata.BroadcastMsg.BroadcastID)
+		unlock, _, _ := srv.broadcastSrv.state.lockRequest(in.Metadata.BroadcastMsg.BroadcastID)
 
 		err = srv.broadcastSrv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
 		if err != nil {
 			srv.broadcastSrv.logger.Debug("broadcast request could not be added", "req", req, "err", err)
-			if mut != nil && lockErr == nil {
-				mut.Unlock()
-			}
+			unlock()
 			//srv.broadcastSrv.router.unlock()
 			return
 		}
@@ -56,16 +54,12 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		sent, err := srv.broadcastSrv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
 		if sent {
 			srv.broadcastSrv.logger.Debug("broadcast request already processed", "req", req, "err", err)
-			if mut != nil && lockErr == nil {
-				mut.Unlock()
-			}
+			unlock()
 			//srv.broadcastSrv.router.unlock()
 			return
 		}
 		//srv.broadcastSrv.router.unlock()
-		if mut != nil && lockErr == nil {
-			mut.Unlock()
-		}
+		unlock()
 
 		broadcastMetadata := newBroadcastMetadata(in.Metadata, 0)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)

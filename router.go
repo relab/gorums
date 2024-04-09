@@ -13,12 +13,13 @@ import (
 )
 
 type BroadcastRouter struct {
-	sendMutex         sync.Mutex
+	mut               sync.Mutex
 	id                uint32
 	addr              string
 	serverHandlers    map[string]serverHandler // handlers on other servers
 	clientHandlers    map[string]clientHandler // handlers on client servers
 	connections       map[string]*grpc.ClientConn
+	connMutexes       map[string]*sync.Mutex
 	connectionTimeout time.Duration
 	dialOpts          []grpc.DialOption
 	dialTimeout       time.Duration
@@ -34,6 +35,7 @@ func newBroadcastRouter(logger *slog.Logger, dialOpts ...grpc.DialOption) *Broad
 		serverHandlers:    make(map[string]serverHandler),
 		clientHandlers:    make(map[string]clientHandler),
 		connections:       make(map[string]*grpc.ClientConn),
+		connMutexes:       make(map[string]*sync.Mutex),
 		dialOpts:          dialOpts,
 		dialTimeout:       100 * time.Millisecond,
 		connectionTimeout: 1 * time.Minute,
@@ -57,10 +59,10 @@ func (r *BroadcastRouter) addClientHandler(method string, handler clientHandler)
 
 func (r *BroadcastRouter) send(broadcastID string, data content, req any) error {
 	switch val := req.(type) {
-	case *reply:
-		return r.routeClientReply(broadcastID, data, val)
 	case *broadcastMsg:
 		return r.routeBroadcast(broadcastID, data, val)
+	case *reply:
+		return r.routeClientReply(broadcastID, data, val)
 	}
 	return errors.New("wrong req type")
 }
@@ -69,38 +71,11 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID string, data content, msg *
 	if handler, ok := r.serverHandlers[msg.method]; ok {
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
-		handler(msg.ctx, msg.request, broadcastID, data.getOriginAddr(), data.getOriginMethod(), msg.options, r.id, r.addr)
+		go handler(msg.ctx, msg.request, broadcastID, data.getOriginAddr(), data.getOriginMethod(), msg.options, r.id, r.addr)
 		r.logger.Debug("broadcast took", "time", data.getProcessingTime())
 		return nil
 	}
 	return errors.New("not found")
-}
-
-func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
-	if conn, ok := r.connections[addr]; ok {
-		return conn, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), r.dialTimeout)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, addr, r.dialOpts...)
-	if err != nil {
-		return nil, err
-	}
-	// make sure the connection is closed
-	go func() {
-		time.Sleep(r.connectionTimeout)
-		cc.Close()
-	}()
-	r.connections[addr] = cc
-	return cc, err
-}
-
-func (r *BroadcastRouter) lock() {
-	r.sendMutex.Lock()
-}
-
-func (r *BroadcastRouter) unlock() {
-	r.sendMutex.Unlock()
 }
 
 func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, resp *reply) error {
@@ -110,7 +85,7 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 		if err != nil {
 			return err
 		}
-		handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
+		go handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
 		r.logger.Debug("return took", "time", data.getProcessingTime())
 		return nil
 	}
@@ -125,3 +100,61 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 	// it should thus wait for a potential message from the client. otherwise, it should be removed.
 	return errors.New("not routed")
 }
+
+func (r *BroadcastRouter) getConnMutex(addr string) *sync.Mutex {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	mut, ok := r.connMutexes[addr]
+	if !ok {
+		mut = &sync.Mutex{}
+		r.connMutexes[addr] = mut
+	}
+	return mut
+}
+
+func (r *BroadcastRouter) dial(addr string) (*grpc.ClientConn, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), r.dialTimeout)
+	defer cancel()
+	return grpc.DialContext(ctx, addr, r.dialOpts...)
+}
+
+func (r *BroadcastRouter) getConn(addr string) (*grpc.ClientConn, bool) {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	cc, ok := r.connections[addr]
+	return cc, ok
+}
+
+func (r *BroadcastRouter) addConn(addr string, cc *grpc.ClientConn) {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	r.connections[addr] = cc
+}
+
+func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
+	mut := r.getConnMutex(addr)
+	mut.Lock()
+	defer mut.Unlock()
+	if conn, ok := r.getConn(addr); ok {
+		return conn, nil
+	}
+	cc, err := r.dial(addr)
+	if err != nil {
+		return nil, err
+	}
+	// make sure the connection is closed
+	go func() {
+		time.Sleep(r.connectionTimeout)
+		cc.Close()
+	}()
+	r.addConn(addr, cc)
+	return cc, err
+}
+
+//func (r *BroadcastRouter) lock() {
+//r.connMutex.Lock()
+//}
+
+//func (r *BroadcastRouter) unlock() {
+//r.connMutex.Unlock()
+//}

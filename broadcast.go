@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"errors"
 	"hash/fnv"
 	"log/slog"
 	"net"
@@ -42,29 +43,37 @@ func (srv *broadcastServer) broadcast(msg *broadcastMsg) error {
 	// set the message as handled when returning from the method
 	defer msg.setFinished()
 	broadcastID := msg.broadcastID
-	data, err := srv.state.get(broadcastID)
+	unlock, data, err := srv.state.lockRequest(broadcastID)
 	if err != nil {
 		return err
 	}
-	return srv.router.send(broadcastID, data, msg)
+	defer unlock()
+	if data.hasBeenBroadcasted(msg.method) {
+		return errors.New("already broadcasted")
+	}
+	if data.isDone() {
+		return errors.New("request is done and handled")
+	}
+	err = srv.router.send(broadcastID, data, msg)
+	if err != nil {
+		return err
+	}
+	return srv.state.setBroadcasted(broadcastID, msg.method)
 }
 
-func (srv *broadcastServer) sendToClient(response *reply) error {
-	//srv.router.lock()
-	//defer srv.router.unlock()
-	broadcastID := response.getBroadcastID()
-	mut, err := srv.state.lockRequest(broadcastID)
+func (srv *broadcastServer) sendToClient(resp *reply) error {
+	broadcastID := resp.getBroadcastID()
+	unlock, data, err := srv.state.lockRequest(broadcastID)
 	if err != nil {
 		return err
 	}
-	defer mut.Unlock()
-	data, err := srv.state.get(broadcastID)
-	if err != nil {
-		return err
+	defer unlock()
+	if data.isDone() {
+		return errors.New("request is done and handled")
 	}
-	err = srv.router.send(broadcastID, data, response)
+	err = srv.router.send(broadcastID, data, resp)
 	if err != nil {
-		srv.state.setShouldWaitForClient(broadcastID, response)
+		srv.state.setShouldWaitForClient(broadcastID, resp)
 		return err
 	}
 	return srv.state.remove(broadcastID)
