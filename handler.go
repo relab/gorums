@@ -19,8 +19,9 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 
 func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+		//start := time.Now()
 		//defer ctx.Release()
-		ctx.Release()
+		defer ctx.Release()
 		req := in.Message.(T)
 
 		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
@@ -32,39 +33,73 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
 			return
 		}
-		addOriginMethod(in.Metadata)
-		data, err := srv.broadcastSrv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
+		data, err := srv.broadcastSrv.createRequest(ctx, in, finished)
 		if err != nil {
-			srv.broadcastSrv.logger.Debug("broadcast data could not be created", "req", req, "err", err)
+			return
+		}
+		err = srv.broadcastSrv.processRequest(in, data)
+		if err != nil {
 			return
 		}
 		//srv.broadcastSrv.router.lock()
 		// lockErr is non-nil when the req does not exist which could be when first
 		// receiving the request.
-		unlock, _, _ := srv.broadcastSrv.state.lockRequest(in.Metadata.BroadcastMsg.BroadcastID)
+		//unlock, _, _ := srv.broadcastSrv.state.lockRequest(in.Metadata.BroadcastMsg.BroadcastID)
 
-		err = srv.broadcastSrv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
-		if err != nil {
-			srv.broadcastSrv.logger.Debug("broadcast request could not be added", "req", req, "err", err)
-			unlock()
-			//srv.broadcastSrv.router.unlock()
-			return
-		}
+		//err = srv.broadcastSrv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
+		//if err != nil {
+		//srv.broadcastSrv.logger.Debug("broadcast request could not be added", "req", req, "err", err)
+		//unlock()
+		////srv.broadcastSrv.router.unlock()
+		//return
+		//}
 
-		sent, err := srv.broadcastSrv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
-		if sent {
-			srv.broadcastSrv.logger.Debug("broadcast request already processed", "req", req, "err", err)
-			unlock()
-			//srv.broadcastSrv.router.unlock()
-			return
-		}
-		//srv.broadcastSrv.router.unlock()
-		unlock()
+		//sent, err := srv.broadcastSrv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
+		//if sent {
+		//srv.broadcastSrv.logger.Debug("broadcast request already processed", "req", req, "err", err)
+		//unlock()
+		////srv.broadcastSrv.router.unlock()
+		//return
+		//}
+		////srv.broadcastSrv.router.unlock()
+		//unlock()
 
 		broadcastMetadata := newBroadcastMetadata(in.Metadata, 0)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
+		//fmt.Println(in.Metadata.Method, time.Since(start))
 	}
+}
+
+func (srv *broadcastServer) createRequest(ctx ServerCtx, in *Message, finished chan<- *Message) (*content, error) {
+	addOriginMethod(in.Metadata)
+	data, err := srv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
+	if err != nil {
+		srv.logger.Debug("broadcast data could not be created", "data", data, "err", err)
+		return nil, err
+	}
+	return data, nil
+}
+
+func (srv *broadcastServer) processRequest(in *Message, data *content) error {
+	unlock, _, _ := srv.state.lockRequest(in.Metadata.BroadcastMsg.BroadcastID)
+	defer unlock()
+
+	err := srv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
+	if err != nil {
+		srv.logger.Debug("broadcast request could not be added", "data", data, "err", err)
+		//srv.broadcastSrv.router.unlock()
+		return err
+	}
+
+	sent, err := srv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
+	if sent {
+		srv.logger.Debug("broadcast request already processed", "data", data, "err", err)
+		//srv.broadcastSrv.router.unlock()
+		return err
+	}
+	//srv.broadcastSrv.router.unlock()
+	return nil
 }
 
 func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID string) (bool, error) {

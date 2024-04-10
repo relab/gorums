@@ -37,7 +37,7 @@ const (
 )
 
 type BroadcastState struct {
-	mut      sync.Mutex // change to mutex
+	mut      sync.Mutex
 	msgs     map[string]*content
 	logger   *slog.Logger
 	doneChan chan struct{}
@@ -82,12 +82,12 @@ func (s *BroadcastState) addOrUpdate(broadcastID string, msg *content) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	if old, ok := s.msgs[broadcastID]; ok {
-		// update old with new
+		// update old with new. err if msg is done.
 		if err := old.update(msg); err != nil {
 			return err
 		}
 		s.logger.Debug("broadcast: updated req", "broadcastID", broadcastID, "msg", msg)
-		s.msgs[broadcastID] = old
+		s.msgs[broadcastID] = old // NOT NECESSARY??
 		return nil
 	}
 	s.logger.Debug("broadcast: added req", "broadcastID", broadcastID, "msg", msg)
@@ -103,6 +103,7 @@ func (s *BroadcastState) lockRequest(broadcastID string) (func(), content, error
 	if err != nil {
 		return func() {}, content, err
 	}
+	//slog.Info("broadcast: before locking req", "broadcastID", broadcastID, "took", content.getTotalTime())
 	content.mut.Lock()
 	return func() { content.mut.Unlock() }, content, nil
 }
@@ -125,7 +126,7 @@ func (s *BroadcastState) remove(broadcastID string) error {
 	}
 	//delete(s.msgs, broadcastID)
 	msg.setDone()
-	s.logger.Debug("broadcast: removed req", "broadcastID", broadcastID)
+	s.logger.Debug("broadcast: removed req", "broadcastID", broadcastID, "took", msg.getTotalTime())
 	return nil
 }
 
@@ -218,7 +219,6 @@ type content struct {
 	methods      []string
 	timestamp    time.Time
 	reqTS        time.Time
-	doneChan     chan struct{}
 	sent         bool
 	done         bool
 }
@@ -268,7 +268,7 @@ func (c *content) canBeRouted() bool {
 	return c.sent && c.senderType == BroadcastClient
 }
 
-func (c *content) getDur() time.Duration {
+func (c *content) getTotalTime() time.Duration {
 	return time.Since(c.timestamp)
 }
 

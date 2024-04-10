@@ -29,7 +29,7 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
+		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
 		sentMsgs++
 	}
 

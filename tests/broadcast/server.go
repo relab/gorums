@@ -90,18 +90,21 @@ func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Reques
 	srv.mu.Unlock()
 	//slog.Warn("server received quorum call with broadcast")
 	srv.View.MulticastIntermediate(context.Background(), req, gorums.WithNoSendWaiting())
+	ctx.Release()
 	res := <-done
 	return &Response{Result: res}, nil
 }
 
 func (srv *testServer) MulticastIntermediate(ctx gorums.ServerCtx, req *Request) {
 	srv.mu.Lock()
-	defer srv.mu.Unlock()
 	srv.numMsg["M"]++
+	srv.mu.Unlock()
+	ctx.Release()
 	srv.View.Multicast(context.Background(), req, gorums.WithNoSendWaiting())
 }
 
 func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
+	ctx.Release()
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	srv.numMsg["M"]++
@@ -114,25 +117,25 @@ func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
 }
 
 func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	srv.mu.Lock()
-	srv.numMsg["BC"]++
-	srv.mu.Unlock()
+	//srv.mu.Lock()
+	//srv.numMsg["BC"]++
+	//srv.mu.Unlock()
 	//slog.Warn("server received broadcast call")
 	broadcast.BroadcastIntermediate(req)
 }
 
 func (srv *testServer) BroadcastIntermediate(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	srv.mu.Lock()
-	srv.numMsg["BI"]++
-	srv.mu.Unlock()
+	//srv.mu.Lock()
+	//srv.numMsg["BI"]++
+	//srv.mu.Unlock()
 	//slog.Warn("server received broadcast")
 	broadcast.Broadcast(req)
 }
 
 func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	srv.mu.Lock()
-	srv.numMsg["B"]++
-	srv.mu.Unlock()
+	//srv.mu.Lock()
+	//srv.numMsg["B"]++
+	//srv.mu.Unlock()
 	//slog.Warn("server received broadcast")
 	broadcast.SendToClient(&Response{
 		Result: req.Value,
