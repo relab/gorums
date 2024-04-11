@@ -30,6 +30,7 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 			}
 		}
 		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
+		//time.Sleep(1 * time.Second)
 		sentMsgs++
 	}
 

@@ -36,11 +36,21 @@ const (
 	volatileTTL
 )
 
+type reqContent struct {
+	broadcastChan chan bMsg
+	sendChan      chan content
+	ctx           context.Context
+	cancelFunc    context.CancelFunc
+}
+
 type BroadcastState struct {
-	mut      sync.Mutex
-	msgs     map[string]*content
-	logger   *slog.Logger
-	doneChan chan struct{}
+	mut        sync.Mutex
+	msgs       map[string]*content
+	logger     *slog.Logger
+	doneChan   chan struct{}
+	reqs       map[string]*reqContent
+	reqTTL     time.Duration
+	sendBuffer int
 }
 
 func newBroadcastStorage(logger *slog.Logger) *BroadcastState {
@@ -48,7 +58,34 @@ func newBroadcastStorage(logger *slog.Logger) *BroadcastState {
 		msgs:     make(map[string]*content),
 		logger:   logger,
 		doneChan: make(chan struct{}),
+		reqs:     make(map[string]*reqContent),
+		reqTTL:   100 * time.Millisecond,
 	}
+}
+
+func (s *BroadcastState) createReq(_ context.Context, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) (content, error) {
+	if senderType != BroadcastClient && senderType != BroadcastServer {
+		return emptyContent, errors.New(fmt.Sprintf("senderType must be either %s or %s", BroadcastServer, BroadcastClient))
+	}
+	var client *responseData
+	if senderType == BroadcastClient {
+		client = &responseData{
+			messageID: messageID,
+			method:    method,
+			finished:  finished,
+		}
+	}
+	return content{
+		//ctx: ctx,
+		//cancelFunc:   nil,
+		senderType:   senderType,
+		originAddr:   originAddr,
+		originMethod: originMethod,
+		reqTS:        time.Now(),
+		client:       client,
+		timestamp:    time.Now(),
+		sent:         false,
+	}, nil
 }
 
 func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) (*content, error) {
@@ -76,6 +113,23 @@ func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, or
 		sent:         false,
 	}
 	return data, nil
+}
+
+func (s *BroadcastState) addOrUpdate2(broadcastID string) (bool, *reqContent) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	if req, ok := s.reqs[broadcastID]; ok {
+		return false, req
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), s.reqTTL)
+	rC := &reqContent{
+		ctx:           ctx,
+		cancelFunc:    cancel,
+		sendChan:      make(chan content, s.sendBuffer),
+		broadcastChan: make(chan bMsg, s.sendBuffer),
+	}
+	s.reqs[broadcastID] = rC
+	return true, rC
 }
 
 func (s *BroadcastState) addOrUpdate(broadcastID string, msg *content) error {
@@ -106,6 +160,15 @@ func (s *BroadcastState) lockRequest(broadcastID string) (func(), content, error
 	//slog.Info("broadcast: before locking req", "broadcastID", broadcastID, "took", content.getTotalTime())
 	content.mut.Lock()
 	return func() { content.mut.Unlock() }, content, nil
+}
+
+func (s *BroadcastState) getReqContent(broadcastID string) (*reqContent, error) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	if req, ok := s.reqs[broadcastID]; ok {
+		return req, nil
+	}
+	return nil, errors.New("not found")
 }
 
 func (s *BroadcastState) get(broadcastID string) (content, error) {
@@ -221,10 +284,14 @@ type content struct {
 	reqTS        time.Time
 	sent         bool
 	done         bool
+	receiveChan  chan error
 }
 
 func (c *content) getCtx() context.Context {
-	return c.ctx
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
 }
 
 func (c *content) getFinished() chan<- *Message {
@@ -277,16 +344,25 @@ func (c *content) getProcessingTime() time.Duration {
 }
 
 func (c *content) isDone() bool {
-	select {
-	case <-c.ctx.Done():
-		return true
-	default:
+	if c.ctx != nil {
+		select {
+		case <-c.ctx.Done():
+			return true
+		default:
+		}
 	}
 	return c.done
 }
 
 func (c *content) setDone() {
 	c.done = true
+	if c.cancelFunc != nil {
+		c.cancelFunc()
+	}
+	//go func() {
+	//time.Sleep(100 * time.Millisecond)
+	//c.cancelFunc()
+	//}()
 }
 
 func (old *content) update(new *content) error {

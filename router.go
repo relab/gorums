@@ -93,7 +93,7 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 	if data.isFromClient() {
 		msg := WrapMessage(data.getMetadata(), protoreflect.ProtoMessage(resp.getResponse()), resp.getError())
 		SendMessage(data.getCtx(), data.getFinished(), msg)
-		r.logger.Debug("return took", "time", data.getProcessingTime())
+		r.logger.Debug("return took", "time", data.getProcessingTime(), "data", data.client)
 		return nil
 	}
 	// the server can receive a broadcast from another server before a client sends a direct message.
@@ -135,9 +135,13 @@ func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
 	mut := r.getConnMutex(addr)
 	mut.Lock()
 	defer mut.Unlock()
+	//slog.Info("just sleeping a bit", "addr", addr, "id", r.addr)
+	//time.Sleep(100 * time.Millisecond)
 	if conn, ok := r.getConn(addr); ok {
+		//slog.Info("cc cached", "addr", addr, "id", r.addr)
 		return conn, nil
 	}
+	//slog.Info("dialing", "addr", addr, "id", r.addr)
 	cc, err := r.dial(addr)
 	if err != nil {
 		return nil, err
@@ -149,6 +153,13 @@ func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
 	}()
 	r.addConn(addr, cc)
 	return cc, err
+}
+
+func (r *BroadcastRouter) createConnection(addr string) {
+	if addr == "" {
+		return
+	}
+	r.getConnection(addr)
 }
 
 //func (r *BroadcastRouter) lock() {

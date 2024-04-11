@@ -2,11 +2,14 @@ package gorums
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
+
+var VERSION int = 2
 
 func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
@@ -18,6 +21,13 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 }
 
 func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+	if VERSION == 1 {
+		return BroadcastHandler1(impl, srv)
+	}
+	return BroadcastHandler2(impl, srv)
+}
+
+func BroadcastHandler1[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		defer ctx.Release()
 		req := in.Message.(T)
@@ -43,6 +53,125 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		broadcastMetadata := newBroadcastMetadata(in.Metadata, 0)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
+	}
+}
+
+func BroadcastHandler2[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+		defer ctx.Release()
+		req := in.Message.(T)
+
+		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
+
+		// guard:
+		// - A broadcastID should be non-empty:
+		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
+		if err := srv.broadcastSrv.validateMessage(in); err != nil {
+			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			return
+		}
+		msg, err := srv.broadcastSrv.createRequest2(ctx, in, finished)
+		if err != nil {
+			return
+		}
+		err = srv.broadcastSrv.processRequest2(in, msg)
+		if err != nil {
+			return
+		}
+
+		broadcastMetadata := newBroadcastMetadata(in.Metadata, 0)
+		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
+		impl(ctx, req, broadcaster)
+	}
+}
+
+func (srv *broadcastServer) createRequest2(ctx ServerCtx, in *Message, finished chan<- *Message) (content, error) {
+	addOriginMethod(in.Metadata)
+	return srv.state.createReq(ctx.Context, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
+}
+
+func (srv *broadcastServer) processRequest2(in *Message, msg content) error {
+	new, rC := srv.state.addOrUpdate2(in.Metadata.BroadcastMsg.BroadcastID)
+	if new {
+		go srv.handleReq(in.Metadata.BroadcastMsg.BroadcastID, rC, in.Metadata.BroadcastMsg.OriginAddr)
+	}
+	receiveChan := make(chan error)
+	msg.receiveChan = receiveChan
+	select {
+	case rC.sendChan <- msg:
+	case <-rC.ctx.Done():
+		return errors.New("req is done")
+	}
+	return <-receiveChan
+}
+
+func (srv *broadcastServer) handleReq(broadcastID string, init *reqContent, originAddr string) {
+	msg := content{
+		ctx:        context.Background(),
+		cancelFunc: init.cancelFunc,
+		senderType: BroadcastServer,
+		methods:    make([]string, 0),
+	}
+	go srv.router.createConnection(originAddr)
+	defer msg.setDone()
+	for {
+		select {
+		case <-init.ctx.Done():
+			return
+		case bMsg := <-init.broadcastChan:
+			//slog.Info("received bMsg")
+			if broadcastID != bMsg.broadcastID {
+				//bMsg.receiveChan <- errors.New("wrong broadcastID")
+				continue
+			}
+			if msg.isDone() {
+				//bMsg.receiveChan <- errors.New("request is done and handled")
+				continue
+			}
+			if bMsg.broadcast {
+				if msg.hasBeenBroadcasted(bMsg.method) {
+					//bMsg.receiveChan <- errors.New("already broadcasted")
+					continue
+				}
+				err := srv.router.send(broadcastID, msg, bMsg.msg)
+				if err != nil {
+					//bMsg.receiveChan <- err
+					continue
+				}
+				msg.addMethod(bMsg.method)
+			} else {
+				err := srv.router.send(broadcastID, msg, bMsg.reply)
+				if err != nil {
+					//slog.Warn("could not send", "sender", msg.senderType)
+					_ = msg.setResponse(bMsg.reply)
+					//if err == nil {
+					//slog.Error("added response", "resp", bMsg.reply.response)
+					//}
+					//bMsg.receiveChan <- err
+					continue
+				}
+				return
+			}
+		case new := <-init.sendChan:
+			//slog.Info("received msg")
+			if msg.isDone() {
+				new.receiveChan <- errors.New("req is done")
+				continue
+			}
+			msg.update(&new)
+			if msg.canBeRouted() {
+				//slog.Error("can be routed")
+				err := srv.router.send(broadcastID, msg, msg.getResponse())
+				if err != nil {
+					//slog.Error("shoot", "err", err)
+					new.receiveChan <- err
+					continue
+				}
+				//slog.Error("was routed")
+				return
+			}
+			new.receiveChan <- nil
+		}
 	}
 }
 
@@ -132,6 +261,55 @@ func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastO
 }
 
 func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, broadcastID string, opts ...BroadcastOptions) {
+	if VERSION == 1 {
+		srv.broadcastHandler1(method, req, broadcastID, opts...)
+	} else {
+		srv.broadcastHandler2(method, req, broadcastID, opts...)
+	}
+}
+
+func (srv *broadcastServer) sendToClientHandler(broadcastID string, resp ResponseTypes, err error) {
+	if VERSION == 1 {
+		srv.sendToClientHandler1(broadcastID, resp, err)
+	} else {
+		srv.sendToClientHandler2(broadcastID, resp, err)
+	}
+}
+
+func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, broadcastID string, opts ...BroadcastOptions) {
+	rc, err := srv.state.getReqContent(broadcastID)
+	if err != nil {
+		return
+	}
+	select {
+	case rc.broadcastChan <- bMsg{
+		broadcast:   true,
+		msg:         newBroadcastMessage2(broadcastID, req, method),
+		method:      method,
+		broadcastID: broadcastID,
+	}:
+	case <-rc.ctx.Done():
+	}
+}
+
+func (srv *broadcastServer) sendToClientHandler2(broadcastID string, resp ResponseTypes, err error) {
+	rc, err := srv.state.getReqContent(broadcastID)
+	if err != nil {
+		return
+	}
+	select {
+	case rc.broadcastChan <- bMsg{
+		reply: &reply{
+			response: resp,
+			err:      err,
+		},
+		broadcastID: broadcastID,
+	}:
+	case <-rc.ctx.Done():
+	}
+}
+
+func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, broadcastID string, opts ...BroadcastOptions) {
 	options := BroadcastOptions{}
 	if len(opts) > 0 {
 		options = opts[0]
@@ -146,7 +324,7 @@ func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, br
 	//}
 }
 
-func (srv *broadcastServer) sendToClientHandler(broadcastID string, resp ResponseTypes, err error) {
+func (srv *broadcastServer) sendToClientHandler1(broadcastID string, resp ResponseTypes, err error) {
 	srv.sendToClient(newReply(resp, err, broadcastID))
 }
 

@@ -14,7 +14,7 @@ var broadcastBody = `
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go b.orchestrator.BroadcastHandler("{{.Method.Desc.FullName}}", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("{{.Method.Desc.FullName}}", req, b.metadata.BroadcastID, options)
 }
 `
 

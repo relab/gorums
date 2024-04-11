@@ -238,7 +238,7 @@ func (c *clientServerImpl) stop() {
 }
 
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
-	go b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
+	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
@@ -253,7 +253,7 @@ func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.Broadca
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go b.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, options)
 }
 
 func (b *Broadcast) BroadcastIntermediate(req *Request, opts ...gorums.BroadcastOption) {
@@ -264,7 +264,7 @@ func (b *Broadcast) BroadcastIntermediate(req *Request, opts ...gorums.Broadcast
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, b.metadata.BroadcastID, options)
 }
 
 func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
@@ -275,7 +275,7 @@ func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, b.metadata.BroadcastID, options)
 }
 
 func _clientBroadcastCall(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {

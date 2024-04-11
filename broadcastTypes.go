@@ -171,6 +171,15 @@ func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata
 	}
 }
 
+type bMsg struct {
+	broadcast   bool
+	broadcastID string
+	msg         *broadcastMsg
+	method      string
+	reply       *reply
+	//receiveChan chan error
+}
+
 type broadcastMsg struct {
 	request     RequestTypes
 	method      string
@@ -191,6 +200,15 @@ func newBroadcastMessage(broadcastID string, req RequestTypes, method string, op
 		broadcastID: broadcastID,
 		options:     options,
 		finished:    finished,
+		ctx:         context.WithValue(context.Background(), BroadcastID, broadcastID),
+	}
+}
+
+func newBroadcastMessage2(broadcastID string, req RequestTypes, method string) *broadcastMsg {
+	return &broadcastMsg{
+		request:     req,
+		method:      method,
+		broadcastID: broadcastID,
 		ctx:         context.WithValue(context.Background(), BroadcastID, broadcastID),
 	}
 }
