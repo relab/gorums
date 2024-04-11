@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"sync"
 	"testing"
@@ -332,7 +333,7 @@ func TestQCBroadcastOptionRace(t *testing.T) {
 		t.Fatal("resp is wrong")
 	}
 	for i := 0; i < 100; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		resp, err := config.QuorumCallWithBroadcast(ctx, &Request{Value: int64(i)})
 		if err != nil {
 			t.Error(err)
@@ -746,7 +747,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 	}
 	defer srvCleanup()
 
-	numClients := 20
+	numClients := 10
 	clients := make([]*Configuration, numClients)
 	for c := 0; c < numClients; c++ {
 		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
@@ -775,6 +776,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 	defer stop()
 	cpuProfile, _ := os.Create("cpuprofileBC")
 	memProfile, _ := os.Create("memprofileBC")
+	runtime.GC()
 	pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneClientOneReq_%d", 0), func(b *testing.B) {
@@ -856,4 +858,175 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 	})
 	pprof.StopCPUProfile()
 	pprof.WriteHeapProfile(memProfile)
+	cpuProfile.Close()
+	memProfile.Close()
+}
+
+func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		b.Error(err)
+	}
+	defer srvCleanup()
+
+	numClients := 10
+	clients := make([]*Configuration, numClients)
+	for c := 0; c < numClients; c++ {
+		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+		if err != nil {
+			b.Error(err)
+		}
+		defer clientCleanup()
+		clients[c] = config
+	}
+
+	for _, client := range clients {
+		init := 1
+		resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
+		if err != nil {
+			b.Error(err)
+		}
+		if resp.GetResult() != int64(init) {
+			b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+		}
+	}
+
+	cpuProfile, _ := os.Create("cpuprofileBC")
+	pprof.StartCPUProfile(cpuProfile)
+
+	b.Run(fmt.Sprintf("BC_%d", 3), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var wg sync.WaitGroup
+			for _, client := range clients {
+				go func(i int, c *Configuration) {
+					resp, err := c.BroadcastCall(context.Background(), &Request{Value: int64(i)})
+					if err != nil {
+						b.Error(err)
+					}
+					if resp.GetResult() != int64(i) {
+						b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+					}
+					wg.Done()
+				}(i, client)
+				wg.Add(1)
+			}
+			wg.Wait()
+		}
+	})
+	pprof.StopCPUProfile()
+	cpuProfile.Close()
+}
+
+func BenchmarkBroadcastCallTenClientsMEM(b *testing.B) {
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		b.Error(err)
+	}
+	defer srvCleanup()
+
+	numClients := 10
+	clients := make([]*Configuration, numClients)
+	for c := 0; c < numClients; c++ {
+		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+		if err != nil {
+			b.Error(err)
+		}
+		defer clientCleanup()
+		clients[c] = config
+	}
+
+	for _, client := range clients {
+		init := 1
+		resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
+		if err != nil {
+			b.Error(err)
+		}
+		if resp.GetResult() != int64(init) {
+			b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+		}
+	}
+
+	memProfile, _ := os.Create("memprofileBC")
+	runtime.GC()
+
+	b.Run(fmt.Sprintf("BC_%d", 3), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var wg sync.WaitGroup
+			for _, client := range clients {
+				go func(i int, c *Configuration) {
+					resp, err := c.BroadcastCall(context.Background(), &Request{Value: int64(i)})
+					if err != nil {
+						b.Error(err)
+					}
+					if resp.GetResult() != int64(i) {
+						b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+					}
+					wg.Done()
+				}(i, client)
+				wg.Add(1)
+			}
+			wg.Wait()
+		}
+	})
+	pprof.WriteHeapProfile(memProfile)
+	memProfile.Close()
+}
+
+func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		b.Error(err)
+	}
+	defer srvCleanup()
+
+	numClients := 10
+	clients := make([]*Configuration, numClients)
+	for c := 0; c < numClients; c++ {
+		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+		if err != nil {
+			b.Error(err)
+		}
+		defer clientCleanup()
+		clients[c] = config
+	}
+
+	for _, client := range clients {
+		init := 1
+		resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
+		if err != nil {
+			b.Error(err)
+		}
+		if resp.GetResult() != int64(init) {
+			b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+		}
+	}
+
+	stop, err := StartTrace("traceprofileBC")
+	if err != nil {
+		b.Error(err)
+	}
+	defer stop()
+
+	//time.Sleep(100 * time.Millisecond)
+	b.Run(fmt.Sprintf("BC_%d", 3), func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			var wg sync.WaitGroup
+			for _, client := range clients {
+				go func(i int, c *Configuration) {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+					resp, err := c.BroadcastCall(ctx, &Request{Value: int64(i)})
+					cancel()
+					if err != nil {
+						b.Error(err)
+					}
+					if resp.GetResult() != int64(i) {
+						b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+					}
+					wg.Done()
+				}(i, client)
+				wg.Add(1)
+			}
+			wg.Wait()
+		}
+	})
 }

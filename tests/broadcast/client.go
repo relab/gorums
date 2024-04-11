@@ -51,7 +51,7 @@ func (qs *testQSpec) QuorumCallWithMulticastQF(in *Request, replies map[uint32]*
 }
 
 func (qs *testQSpec) BroadcastCallQF(replies []*Response) (*Response, bool) {
-	//slog.Warn("client received reply")
+	//slog.Warn("client received reply", "resps", len(replies))
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {
 			return resp, true

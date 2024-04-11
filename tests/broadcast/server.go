@@ -128,7 +128,7 @@ func (srv *testServer) BroadcastIntermediate(ctx gorums.ServerCtx, req *Request,
 	//srv.mu.Lock()
 	//srv.numMsg["BI"]++
 	//srv.mu.Unlock()
-	//slog.Warn("server received broadcast")
+	//slog.Warn("server received broadcast intermediate")
 	broadcast.Broadcast(req)
 }
 
