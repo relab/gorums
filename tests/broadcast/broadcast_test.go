@@ -189,6 +189,30 @@ func TestBroadcastCallOneServerIsDown(t *testing.T) {
 	}
 }
 
+func TestBroadcastCallForward(t *testing.T) {
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newClient(srvAddrs[1:2], "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	for i := 0; i < 1; i++ {
+		resp, err := config.BroadcastCallForward(context.Background(), &Request{Value: int64(i)})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != int64(i) {
+			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+		}
+	}
+}
+
 func TestBroadcastCallRaceTwoClients(t *testing.T) {
 	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {

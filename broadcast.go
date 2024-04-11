@@ -41,7 +41,6 @@ func (srv *broadcastServer) addAddr(lis net.Listener) {
 
 func (srv *broadcastServer) broadcast(msg *broadcastMsg) error {
 	// set the message as handled when returning from the method
-	defer msg.setFinished()
 	broadcastID := msg.broadcastID
 	unlock, data, err := srv.state.lockRequest(broadcastID)
 	if err != nil {

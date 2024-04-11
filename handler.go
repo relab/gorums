@@ -168,6 +168,7 @@ func (srv *broadcastServer) handleReq(broadcastID string, init *reqContent, orig
 					continue
 				}
 				//slog.Error("was routed")
+				new.receiveChan <- nil
 				return
 			}
 			new.receiveChan <- nil
@@ -314,8 +315,7 @@ func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, b
 	if len(opts) > 0 {
 		options = opts[0]
 	}
-	finished := make(chan struct{})
-	srv.broadcast(newBroadcastMessage(broadcastID, req, method, options, finished))
+	srv.broadcast(newBroadcastMessage(broadcastID, req, method, options))
 
 	// not broadcasting in a goroutine can lead to deadlock. All handlers are run sync
 	// and thus the server have to return from the handler in order to process the next
@@ -326,6 +326,22 @@ func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, b
 
 func (srv *broadcastServer) sendToClientHandler1(broadcastID string, resp ResponseTypes, err error) {
 	srv.sendToClient(newReply(resp, err, broadcastID))
+}
+
+func (srv *broadcastServer) forwardHandler(req RequestTypes, method, broadcastID, forwardAddr, originAddr string) {
+	cd := broadcastCallData{
+		Message:         req,
+		Method:          method,
+		BroadcastID:     broadcastID,
+		SenderType:      BroadcastClient,
+		OriginAddr:      originAddr,
+		ServerAddresses: []string{forwardAddr},
+	}
+	srv.viewMutex.RLock()
+	// drop request if a view change has occured
+	srv.view.broadcastCall(context.Background(), cd)
+	srv.viewMutex.RUnlock()
+
 }
 
 func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error, broadcastID string) {

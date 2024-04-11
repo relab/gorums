@@ -59,6 +59,13 @@ func (c *clientServerImpl) stop() {
 	c.grpcServer.Stop()
 }
 
+func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) {
+	if addr == "" {
+		panic("cannot forward to empty addr")
+	}
+	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
+}
+
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }

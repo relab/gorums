@@ -237,6 +237,13 @@ func (c *clientServerImpl) stop() {
 	c.grpcServer.Stop()
 }
 
+func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) {
+	if addr == "" {
+		panic("cannot forward to empty addr")
+	}
+	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
+}
+
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
@@ -307,9 +314,39 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	return response.(*Response), err
 }
 
+func _clientBroadcastCallForward(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Response)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	return srv.(clientServer).clientBroadcastCallForward(ctx, in)
+}
+
+func (srv *clientServerImpl) clientBroadcastCallForward(ctx context.Context, resp *Response) (*Response, error) {
+	err := srv.AddResponse(ctx, resp)
+	return resp, err
+}
+
+func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (resp *Response, err error) {
+	if c.srv == nil {
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
+	}
+	if c.qspec == nil {
+		return nil, fmt.Errorf("a qspec is not defined")
+	}
+	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallForwardQF), "broadcast.BroadcastService.BroadcastCallForward")
+	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	response, ok := <-doneChan
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	return response.(*Response), err
+}
+
 // clientServer is the client server API for the BroadcastService Service
 type clientServer interface {
 	clientBroadcastCall(ctx context.Context, request *Response) (*Response, error)
+	clientBroadcastCallForward(ctx context.Context, request *Response) (*Response, error)
 }
 
 var clientServer_ServiceDesc = grpc.ServiceDesc{
@@ -320,6 +357,10 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClientBroadcastCall",
 			Handler:    _clientBroadcastCall,
+		},
+		{
+			MethodName: "ClientBroadcastCallForward",
+			Handler:    _clientBroadcastCallForward,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -360,7 +401,7 @@ type QuorumSpec interface {
 	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
-	// quorum call method. The in parameter is the request object
+	// broadcast call method. The in parameter is the request object
 	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
@@ -379,6 +420,13 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
 	BroadcastCallQF(replies []*Response) (*Response, bool)
+
+	// BroadcastCallForwardQF is the quorum function for the BroadcastCallForward
+	// broadcastcall call method. The in parameter is the request object
+	// supplied to the BroadcastCallForward method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	BroadcastCallForwardQF(replies []*Response) (*Response, bool)
 }
 
 // QuorumCall is a quorum call invoked on all nodes in configuration c,
@@ -460,6 +508,7 @@ type BroadcastService interface {
 	BroadcastCall(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	BroadcastIntermediate(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	BroadcastCallForward(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 }
 
 func (srv *Server) QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
@@ -485,6 +534,9 @@ func (srv *Server) BroadcastIntermediate(ctx gorums.ServerCtx, request *Request,
 }
 func (srv *Server) Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method Broadcast not implemented"))
+}
+func (srv *Server) BroadcastCallForward(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method BroadcastCallForward not implemented"))
 }
 
 func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
@@ -515,6 +567,8 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCall", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCall"))
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastIntermediate", gorums.BroadcastHandler(impl.BroadcastIntermediate, srv.Server))
 	srv.RegisterHandler("broadcast.BroadcastService.Broadcast", gorums.BroadcastHandler(impl.Broadcast, srv.Server))
+	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.BroadcastHandler(impl.BroadcastCallForward, srv.Server))
+	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCallForward"))
 }
 
 func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {

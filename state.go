@@ -59,7 +59,7 @@ func newBroadcastStorage(logger *slog.Logger) *BroadcastState {
 		logger:   logger,
 		doneChan: make(chan struct{}),
 		reqs:     make(map[string]*reqContent),
-		reqTTL:   100 * time.Millisecond,
+		reqTTL:   5 * time.Second,
 	}
 }
 

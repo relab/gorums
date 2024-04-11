@@ -31,6 +31,9 @@ service BroadcastService {
   rpc Broadcast(Request) returns (Empty) { 
     option (gorums.broadcast) = true; 
   }
+  rpc BroadcastCallForward(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
 }
 
 message Request { int64 Value = 1; }

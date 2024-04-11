@@ -28,6 +28,7 @@ type ResponseTypes interface {
 }
 
 type BroadcastHandlerFunc func(method string, req RequestTypes, broadcastID string, data ...BroadcastOptions)
+type BroadcastForwardHandlerFunc func(req RequestTypes, method, broadcastID, forwardAddr, originAddr string)
 type BroadcastSendToClientHandlerFunc func(broadcastID string, resp ResponseTypes, err error)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
@@ -74,12 +75,14 @@ func (r *reply) getBroadcastID() string {
 // generated code.
 type BroadcastOrchestrator struct {
 	BroadcastHandler    BroadcastHandlerFunc
+	ForwardHandler      BroadcastForwardHandlerFunc
 	SendToClientHandler BroadcastSendToClientHandlerFunc
 }
 
 func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
 	return &BroadcastOrchestrator{
 		BroadcastHandler:    srv.broadcastSrv.broadcastHandler,
+		ForwardHandler:      srv.broadcastSrv.forwardHandler,
 		SendToClientHandler: srv.broadcastSrv.sendToClientHandler,
 	}
 }
@@ -185,21 +188,15 @@ type broadcastMsg struct {
 	method      string
 	broadcastID string
 	options     BroadcastOptions
-	finished    chan<- struct{}
 	ctx         context.Context
 }
 
-func (b *broadcastMsg) setFinished() {
-	close(b.finished)
-}
-
-func newBroadcastMessage(broadcastID string, req RequestTypes, method string, options BroadcastOptions, finished chan<- struct{}) *broadcastMsg {
+func newBroadcastMessage(broadcastID string, req RequestTypes, method string, options BroadcastOptions) *broadcastMsg {
 	return &broadcastMsg{
 		request:     req,
 		method:      method,
 		broadcastID: broadcastID,
 		options:     options,
-		finished:    finished,
 		ctx:         context.WithValue(context.Background(), BroadcastID, broadcastID),
 	}
 }

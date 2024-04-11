@@ -18,6 +18,7 @@ type response struct {
 
 type testServer struct {
 	*Server
+	leader   string
 	addr     string
 	peers    []string
 	lis      net.Listener
@@ -36,6 +37,7 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 		Server:   NewServer(),
 		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
+		leader:   "127.0.0.1:5000",
 	}
 	RegisterBroadcastServiceServer(srv.Server, &srv)
 	srv.peers = srvAddresses
@@ -140,6 +142,18 @@ func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *
 	broadcast.SendToClient(&Response{
 		Result: req.Value,
 	}, nil)
+}
+
+func (srv *testServer) BroadcastCallForward(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	//srv.mu.Lock()
+	//srv.numMsg["BC"]++
+	//srv.mu.Unlock()
+	//slog.Warn("server received broadcast call")
+	if srv.addr != srv.leader {
+		broadcast.Forward(req, srv.leader)
+		return
+	}
+	broadcast.Broadcast(req)
 }
 
 func (srv *testServer) GetMsgs() string {
