@@ -5,7 +5,7 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastMetadata", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listener"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastClient", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listener"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
@@ -222,11 +222,15 @@ func (c *clientServerImpl) stop() {
 	c.grpcServer.Stop()
 }
 
-func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) {
+func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	if addr == "" {
-		panic("cannot forward to empty addr")
+		return fmt.Errorf("cannot forward to empty addr, got: %s", addr)
+	}
+	if b.metadata.SenderType != gorums.BroadcastClient {
+		return fmt.Errorf("can only forward client requests")
 	}
 	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
+	return nil
 }
 
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {

@@ -1,0 +1,16 @@
+goos: linux
+goarch: amd64
+pkg: github.com/relab/gorums/tests/broadcast
+cpu: 11th Gen Intel(R) Core(TM) i5-11300H @ 3.10GHz
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1441224 ns/op	  794566 B/op	   12540 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1221751 ns/op	  790659 B/op	   12580 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1249443 ns/op	  779983 B/op	   12495 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1261498 ns/op	  785543 B/op	   12481 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1266076 ns/op	  780767 B/op	   12528 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1261558 ns/op	  781163 B/op	   12525 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1291541 ns/op	  793021 B/op	   12521 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1243989 ns/op	  777060 B/op	   12478 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1290464 ns/op	  774934 B/op	   12462 allocs/op
+BenchmarkBroadcastCallTenClientsCPU/BC_3-8         	     200	   1270993 ns/op	  777999 B/op	   12512 allocs/op
+PASS
+ok  	github.com/relab/gorums/tests/broadcast	3.005s

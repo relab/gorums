@@ -17,7 +17,7 @@ type broadcastServer struct {
 	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
 	orchestrator      *BroadcastOrchestrator
 	state             *BroadcastState
-	router            *BroadcastRouter
+	router            IBroadcastRouter
 	logger            *slog.Logger
 }
 
@@ -36,7 +36,7 @@ func (srv *broadcastServer) addAddr(lis net.Listener) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(srv.addr))
 	srv.id = h.Sum32()
-	srv.router.addAddr(srv.id, srv.addr)
+	srv.router.AddAddr(srv.id, srv.addr)
 }
 
 func (srv *broadcastServer) broadcast(msg *broadcastMsg) error {
@@ -53,7 +53,7 @@ func (srv *broadcastServer) broadcast(msg *broadcastMsg) error {
 	if data.isDone() {
 		return errors.New("request is done and handled")
 	}
-	err = srv.router.send(broadcastID, data, msg)
+	err = srv.router.SendOrg(broadcastID, data, msg)
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func (srv *broadcastServer) sendToClient(resp *reply) error {
 	if data.isDone() {
 		return errors.New("request is done and handled")
 	}
-	err = srv.router.send(broadcastID, data, resp)
+	err = srv.router.SendOrg(broadcastID, data, resp)
 	if err != nil {
 		srv.state.setShouldWaitForClient(broadcastID, resp)
 		return err

@@ -237,11 +237,15 @@ func (c *clientServerImpl) stop() {
 	c.grpcServer.Stop()
 }
 
-func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) {
+func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	if addr == "" {
-		panic("cannot forward to empty addr")
+		return fmt.Errorf("cannot forward to empty addr, got: %s", addr)
+	}
+	if b.metadata.SenderType != gorums.BroadcastClient {
+		return fmt.Errorf("can only forward client requests")
 	}
 	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
+	return nil
 }
 
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {

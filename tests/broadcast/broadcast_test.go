@@ -202,7 +202,31 @@ func TestBroadcastCallForward(t *testing.T) {
 	}
 	defer clientCleanup()
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 10; i++ {
+		resp, err := config.BroadcastCallForward(context.Background(), &Request{Value: int64(i)})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != int64(i) {
+			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+		}
+	}
+}
+
+func TestBroadcastCallForwardMultiple(t *testing.T) {
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	for i := 0; i < 10; i++ {
 		resp, err := config.BroadcastCallForward(context.Background(), &Request{Value: int64(i)})
 		if err != nil {
 			t.Error(err)
@@ -354,7 +378,7 @@ func TestQCBroadcastOptionRace(t *testing.T) {
 		t.Error(err)
 	}
 	if resp.GetResult() != val {
-		t.Fatal("resp is wrong")
+		t.Fatalf("resp is wrong, got: %v, want: %v", resp.GetResult(), val)
 	}
 	for i := 0; i < 100; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

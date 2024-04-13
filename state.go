@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type CacheOption int
@@ -38,7 +39,7 @@ const (
 
 type reqContent struct {
 	broadcastChan chan bMsg
-	sendChan      chan content
+	sendChan      chan content2
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
 }
@@ -61,31 +62,6 @@ func newBroadcastStorage(logger *slog.Logger) *BroadcastState {
 		reqs:     make(map[string]*reqContent),
 		reqTTL:   5 * time.Second,
 	}
-}
-
-func (s *BroadcastState) createReq(_ context.Context, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) (content, error) {
-	if senderType != BroadcastClient && senderType != BroadcastServer {
-		return emptyContent, errors.New(fmt.Sprintf("senderType must be either %s or %s", BroadcastServer, BroadcastClient))
-	}
-	var client *responseData
-	if senderType == BroadcastClient {
-		client = &responseData{
-			messageID: messageID,
-			method:    method,
-			finished:  finished,
-		}
-	}
-	return content{
-		//ctx: ctx,
-		//cancelFunc:   nil,
-		senderType:   senderType,
-		originAddr:   originAddr,
-		originMethod: originMethod,
-		reqTS:        time.Now(),
-		client:       client,
-		timestamp:    time.Now(),
-		sent:         false,
-	}, nil
 }
 
 func (s *BroadcastState) newData(ctx context.Context, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) (*content, error) {
@@ -125,7 +101,7 @@ func (s *BroadcastState) addOrUpdate2(broadcastID string) (bool, *reqContent) {
 	rC := &reqContent{
 		ctx:           ctx,
 		cancelFunc:    cancel,
-		sendChan:      make(chan content, s.sendBuffer),
+		sendChan:      make(chan content2, s.sendBuffer),
 		broadcastChan: make(chan bMsg, s.sendBuffer),
 	}
 	s.reqs[broadcastID] = rC
@@ -151,6 +127,7 @@ func (s *BroadcastState) addOrUpdate(broadcastID string, msg *content) error {
 }
 
 var emptyContent = content{}
+var emptyContent2 = content2{}
 
 func (s *BroadcastState) lockRequest(broadcastID string) (func(), content, error) {
 	content, err := s.get(broadcastID)
@@ -269,6 +246,35 @@ func (r *responseData) addFinished(finished chan<- *Message) {
 	r.mut.Lock()
 	defer r.mut.Unlock()
 	r.finished = finished
+}
+
+type content2 struct {
+	resp         protoreflect.ProtoMessage
+	err          error
+	senderType   string
+	originAddr   string
+	originMethod string
+	receiveChan  chan error
+	sendFn       func(resp protoreflect.ProtoMessage, err error)
+}
+
+func (c content2) send(resp protoreflect.ProtoMessage, err error) error {
+	if c.sendFn == nil {
+		return errors.New("has not received client req yet")
+	}
+	if c.senderType != BroadcastClient {
+		return errors.New("has not received client req yet")
+	}
+	c.sendFn(resp, err)
+	return nil
+}
+
+func (c content2) retrySend() error {
+	if c.sendFn == nil {
+		return errors.New("has not received client req yet")
+	}
+	c.sendFn(c.resp, c.err)
+	return nil
 }
 
 type content struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"sync"
 	"time"
 
@@ -11,6 +12,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
+
+type IBroadcastRouter interface {
+	Send(broadcastID, addr, method string, msg any) error
+	SendOrg(broadcastID string, data content, msg any) error
+	CreateConnection(addr string)
+	AddAddr(id uint32, addr string)
+	AddServerHandler(method string, handler serverHandler)
+	AddClientHandler(method string, handler clientHandler)
+}
 
 type BroadcastRouter struct {
 	mut               sync.Mutex
@@ -44,35 +54,44 @@ func newBroadcastRouter(logger *slog.Logger, dialOpts ...grpc.DialOption) *Broad
 	}
 }
 
-func (r *BroadcastRouter) addAddr(id uint32, addr string) {
+func (r *BroadcastRouter) AddAddr(id uint32, addr string) {
 	r.id = id
 	r.addr = addr
 }
 
-func (r *BroadcastRouter) addServerHandler(method string, handler serverHandler) {
+func (r *BroadcastRouter) AddServerHandler(method string, handler serverHandler) {
 	r.serverHandlers[method] = handler
 }
 
-func (r *BroadcastRouter) addClientHandler(method string, handler clientHandler) {
+func (r *BroadcastRouter) AddClientHandler(method string, handler clientHandler) {
 	r.clientHandlers[method] = handler
 }
 
-func (r *BroadcastRouter) send(broadcastID string, data content, req any) error {
+func (r *BroadcastRouter) SendOrg(broadcastID string, data content, req any) error {
 	switch val := req.(type) {
 	case *broadcastMsg:
-		return r.routeBroadcast(broadcastID, data, val)
+		return r.routeBroadcast(broadcastID, data.getOriginAddr(), data.getOriginMethod(), val)
 	case *reply:
 		return r.routeClientReply(broadcastID, data, val)
 	}
 	return errors.New("wrong req type")
 }
 
-func (r *BroadcastRouter) routeBroadcast(broadcastID string, data content, msg *broadcastMsg) error {
+func (r *BroadcastRouter) Send(broadcastID, addr, method string, req any) error {
+	switch val := req.(type) {
+	case *broadcastMsg:
+		return r.routeBroadcast(broadcastID, addr, method, val)
+	case *reply:
+		return r.routeClientReply2(broadcastID, addr, method, val)
+	}
+	return errors.New("wrong req type")
+}
+
+func (r *BroadcastRouter) routeBroadcast(broadcastID, addr, method string, msg *broadcastMsg) error {
 	if handler, ok := r.serverHandlers[msg.method]; ok {
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
-		go handler(msg.ctx, msg.request, broadcastID, data.getOriginAddr(), data.getOriginMethod(), msg.options, r.id, r.addr)
-		r.logger.Debug("broadcast took", "time", data.getProcessingTime())
+		go handler(msg.ctx, msg.request, broadcastID, addr, method, msg.options, r.id, r.addr)
 		return nil
 	}
 	return errors.New("not found")
@@ -94,6 +113,21 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 		msg := WrapMessage(data.getMetadata(), protoreflect.ProtoMessage(resp.getResponse()), resp.getError())
 		SendMessage(data.getCtx(), data.getFinished(), msg)
 		r.logger.Debug("return took", "time", data.getProcessingTime(), "data", data.client)
+		return nil
+	}
+	// the server can receive a broadcast from another server before a client sends a direct message.
+	// it should thus wait for a potential message from the client. otherwise, it should be removed.
+	return errors.New("not routed")
+}
+
+func (r *BroadcastRouter) routeClientReply2(broadcastID, addr, method string, resp *reply) error {
+	// the client has initiated a broadcast call and the reply should be sent as an RPC
+	if handler, ok := r.clientHandlers[method]; ok && addr != "" {
+		cc, err := r.getConnection(addr)
+		if err != nil {
+			return err
+		}
+		go handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
 		return nil
 	}
 	// the server can receive a broadcast from another server before a client sends a direct message.
@@ -132,6 +166,11 @@ func (r *BroadcastRouter) addConn(addr string, cc *grpc.ClientConn) {
 }
 
 func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	addr = tcpAddr.String()
 	mut := r.getConnMutex(addr)
 	mut.Lock()
 	defer mut.Unlock()
@@ -155,10 +194,7 @@ func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
 	return cc, err
 }
 
-func (r *BroadcastRouter) createConnection(addr string) {
-	if addr == "" {
-		return
-	}
+func (r *BroadcastRouter) CreateConnection(addr string) {
 	r.getConnection(addr)
 }
 
