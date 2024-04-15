@@ -9,10 +9,19 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type serverHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID, originAddr, originMethod string, options any, id uint32, addr string)
+type BroadcastOptions struct {
+	ServerAddresses      []string
+	GossipPercentage     float32
+	TTL                  int
+	Deadline             time.Time
+	OmitUniquenessChecks bool
+	SkipSelf             bool
+}
+
+type ServerHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
 
 // type serverHandler func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
-type clientHandler func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
+type ClientHandler func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
 
 type reply struct {
 	response    protoreflect.ProtoMessage
@@ -129,7 +138,7 @@ type broadcastMsg struct {
 	request     protoreflect.ProtoMessage
 	method      string
 	broadcastID string
-	options     any
+	options     BroadcastOptions
 	ctx         context.Context
 }
 

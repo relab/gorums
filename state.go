@@ -42,6 +42,7 @@ type reqContent struct {
 	sendChan      chan content2
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
+	//sync.Once
 }
 
 type BroadcastState struct {
@@ -106,6 +107,31 @@ func (s *BroadcastState) addOrUpdate2(broadcastID string) (bool, *reqContent) {
 	}
 	s.reqs[broadcastID] = rC
 	return true, rC
+}
+
+func (s *BroadcastState) get2(broadcastID string) (bool, *reqContent) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	req, ok := s.reqs[broadcastID]
+	return ok, req
+}
+
+func (s *BroadcastState) add2(broadcastID string) (bool, *reqContent) {
+	ctx, cancel := context.WithTimeout(context.Background(), s.reqTTL)
+	rC := reqContent{
+		ctx:           ctx,
+		cancelFunc:    cancel,
+		sendChan:      make(chan content2, s.sendBuffer),
+		broadcastChan: make(chan bMsg, s.sendBuffer),
+	}
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	if req, ok := s.reqs[broadcastID]; ok {
+		cancel()
+		return false, req
+	}
+	s.reqs[broadcastID] = &rC
+	return true, &rC
 }
 
 func (s *BroadcastState) addOrUpdate(broadcastID string, msg *content) error {

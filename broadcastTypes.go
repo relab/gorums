@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -16,7 +17,7 @@ const (
 	BroadcastID     string = "broadcastID"
 )
 
-type serverHandler func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
+type serverHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string)
 type clientHandler func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
 
 type RequestTypes interface {
@@ -27,7 +28,7 @@ type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastHandlerFunc func(method string, req RequestTypes, broadcastID string, data ...BroadcastOptions)
+type BroadcastHandlerFunc func(method string, req RequestTypes, broadcastID string, data ...broadcast.BroadcastOptions)
 type BroadcastForwardHandlerFunc func(req RequestTypes, method, broadcastID, forwardAddr, originAddr string)
 type BroadcastSendToClientHandlerFunc func(broadcastID string, resp ResponseTypes, err error)
 
@@ -87,56 +88,47 @@ func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
 	}
 }
 
-type BroadcastOption func(*BroadcastOptions)
+type BroadcastOption func(*broadcast.BroadcastOptions)
 
 func WithSubset(srvAddrs ...string) BroadcastOption {
-	return func(b *BroadcastOptions) {
+	return func(b *broadcast.BroadcastOptions) {
 		b.ServerAddresses = srvAddrs
 	}
 }
 
 func WithGossip(percentage float32, ttl int) BroadcastOption {
-	return func(b *BroadcastOptions) {
+	return func(b *broadcast.BroadcastOptions) {
 		b.GossipPercentage = percentage
 		b.TTL = ttl
 	}
 }
 
 func WithTTL(ttl int) BroadcastOption {
-	return func(b *BroadcastOptions) {
+	return func(b *broadcast.BroadcastOptions) {
 		b.TTL = ttl
 	}
 }
 
 func WithDeadline(deadline time.Time) BroadcastOption {
-	return func(b *BroadcastOptions) {
+	return func(b *broadcast.BroadcastOptions) {
 		b.Deadline = deadline
 	}
 }
 
 func WithoutSelf() BroadcastOption {
-	return func(b *BroadcastOptions) {
+	return func(b *broadcast.BroadcastOptions) {
 		b.SkipSelf = true
 	}
 }
 
 func WithoutUniquenessChecks() BroadcastOption {
-	return func(b *BroadcastOptions) {
+	return func(b *broadcast.BroadcastOptions) {
 		b.OmitUniquenessChecks = true
 	}
 }
 
-type BroadcastOptions struct {
-	ServerAddresses      []string
-	GossipPercentage     float32
-	TTL                  int
-	Deadline             time.Time
-	OmitUniquenessChecks bool
-	SkipSelf             bool
-}
-
-func NewBroadcastOptions() BroadcastOptions {
-	return BroadcastOptions{}
+func NewBroadcastOptions() broadcast.BroadcastOptions {
+	return broadcast.BroadcastOptions{}
 }
 
 type Broadcaster interface{}
@@ -187,11 +179,11 @@ type broadcastMsg struct {
 	request     RequestTypes
 	method      string
 	broadcastID string
-	options     BroadcastOptions
+	options     broadcast.BroadcastOptions
 	ctx         context.Context
 }
 
-func newBroadcastMessage(broadcastID string, req RequestTypes, method string, options BroadcastOptions) *broadcastMsg {
+func newBroadcastMessage(broadcastID string, req RequestTypes, method string, options broadcast.BroadcastOptions) *broadcastMsg {
 	return &broadcastMsg{
 		request:     req,
 		method:      method,

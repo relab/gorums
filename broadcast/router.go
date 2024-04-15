@@ -16,16 +16,16 @@ type IBroadcastRouter interface {
 	Send(broadcastID, addr, method string, msg any) error
 	CreateConnection(addr string)
 	AddAddr(id uint32, addr string)
-	AddServerHandler(method string, handler serverHandler)
-	AddClientHandler(method string, handler clientHandler)
+	AddServerHandler(method string, handler ServerHandler)
+	AddClientHandler(method string, handler ClientHandler)
 }
 
 type BroadcastRouter struct {
 	mut               sync.Mutex
 	id                uint32
 	addr              string
-	serverHandlers    map[string]serverHandler // handlers on other servers
-	clientHandlers    map[string]clientHandler // handlers on client servers
+	serverHandlers    map[string]ServerHandler // handlers on other servers
+	clientHandlers    map[string]ClientHandler // handlers on client servers
 	connections       map[string]*grpc.ClientConn
 	connMutexes       map[string]*sync.Mutex
 	connectionTimeout time.Duration
@@ -40,8 +40,8 @@ func newBroadcastRouter(logger *slog.Logger, dialOpts ...grpc.DialOption) *Broad
 		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	}
 	return &BroadcastRouter{
-		serverHandlers:    make(map[string]serverHandler),
-		clientHandlers:    make(map[string]clientHandler),
+		serverHandlers:    make(map[string]ServerHandler),
+		clientHandlers:    make(map[string]ClientHandler),
 		connections:       make(map[string]*grpc.ClientConn),
 		connMutexes:       make(map[string]*sync.Mutex),
 		dialOpts:          dialOpts,
@@ -57,11 +57,11 @@ func (r *BroadcastRouter) AddAddr(id uint32, addr string) {
 	r.addr = addr
 }
 
-func (r *BroadcastRouter) AddServerHandler(method string, handler serverHandler) {
+func (r *BroadcastRouter) AddServerHandler(method string, handler ServerHandler) {
 	r.serverHandlers[method] = handler
 }
 
-func (r *BroadcastRouter) AddClientHandler(method string, handler clientHandler) {
+func (r *BroadcastRouter) AddClientHandler(method string, handler ClientHandler) {
 	r.clientHandlers[method] = handler
 }
 

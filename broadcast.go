@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 )
 
 type broadcastServer struct {
@@ -27,6 +28,24 @@ func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 		state:  newBroadcastStorage(logger),
 		logger: logger,
 	}
+}
+
+func NewMachineID(addr string) uint16 {
+	return 1
+}
+
+func NewBroadcastID(machineID uint16, sequenceNum uint32) uint64 {
+	// timestamp: 32 bit -> seconds since 01.01.2024
+	//bitMaskTimestamp := uint64((1<<32)-1) << 32
+	// machineID: 12 bit -> 4096 clients
+	bitMaskMachineID := uint64((1 << 12) - 1)
+	// sequenceNum: 20 bit -> 1 048 576 messages
+	bitMaskSequenceNum := uint64((1 << 20) - 1)
+
+	t := uint64(time.Since(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)).Seconds()) << 32
+	m := (uint64(machineID) & bitMaskMachineID) << 20
+	s := uint64(sequenceNum) & bitMaskSequenceNum
+	return t | m | s
 }
 
 func (srv *broadcastServer) addAddr(lis net.Listener) {

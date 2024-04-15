@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -58,10 +59,10 @@ func BroadcastHandler1[T RequestTypes, V Broadcaster](impl implementationFunc[T,
 
 func BroadcastHandler2[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
-		defer ctx.Release()
+		ctx.Release()
 		req := in.Message.(T)
 
-		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
+		//srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
 
 		// guard:
 		// - A broadcastID should be non-empty:
@@ -126,7 +127,15 @@ func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx Ser
 }
 
 func (srv *broadcastServer) processRequest2(in *Message, msg content2) error {
-	new, rC := srv.state.addOrUpdate2(in.Metadata.BroadcastMsg.BroadcastID)
+	//new, rC := srv.state.addOrUpdate2(in.Metadata.BroadcastMsg.BroadcastID)
+	exists, rC := srv.state.get2(in.Metadata.BroadcastMsg.BroadcastID)
+	new := false
+	if !exists {
+		new, rC = srv.state.add2(in.Metadata.BroadcastMsg.BroadcastID)
+	}
+	//rC.Do(func() {
+	//go handleReq(srv.router, in.Metadata.BroadcastMsg.BroadcastID, rC, msg)
+	//})
 	if new {
 		go handleReq(srv.router, in.Metadata.BroadcastMsg.BroadcastID, rC, msg)
 	}
@@ -312,7 +321,7 @@ func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastO
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
 }
 
-func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, broadcastID string, opts ...BroadcastOptions) {
+func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, broadcastID string, opts ...broadcast.BroadcastOptions) {
 	if VERSION == 1 {
 		srv.broadcastHandler1(method, req, broadcastID, opts...)
 	} else {
@@ -328,7 +337,7 @@ func (srv *broadcastServer) sendToClientHandler(broadcastID string, resp Respons
 	}
 }
 
-func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, broadcastID string, opts ...BroadcastOptions) {
+func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, broadcastID string, opts ...broadcast.BroadcastOptions) {
 	rc, err := srv.state.getReqContent(broadcastID)
 	if err != nil {
 		return
@@ -361,8 +370,8 @@ func (srv *broadcastServer) sendToClientHandler2(broadcastID string, resp Respon
 	}
 }
 
-func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, broadcastID string, opts ...BroadcastOptions) {
-	options := BroadcastOptions{}
+func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, broadcastID string, opts ...broadcast.BroadcastOptions) {
+	options := broadcast.BroadcastOptions{}
 	if len(opts) > 0 {
 		options = opts[0]
 	}
@@ -400,7 +409,7 @@ func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.router.AddServerHandler(method, func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string) {
+	srv.router.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
 		cd := broadcastCallData{
 			Message:         in,
 			Method:          method,

@@ -942,6 +942,7 @@ func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
 	cpuProfile, _ := os.Create("cpuprofileBC")
 	pprof.StartCPUProfile(cpuProfile)
 
+	b.ResetTimer()
 	b.Run(fmt.Sprintf("BC_%d", 3), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var wg sync.WaitGroup
@@ -997,6 +998,7 @@ func BenchmarkBroadcastCallTenClientsMEM(b *testing.B) {
 	memProfile, _ := os.Create("memprofileBC")
 	runtime.GC()
 
+	b.ResetTimer()
 	b.Run(fmt.Sprintf("BC_%d", 3), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var wg sync.WaitGroup
@@ -1055,26 +1057,20 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	}
 	defer stop()
 
-	//time.Sleep(100 * time.Millisecond)
-	b.Run(fmt.Sprintf("BC_%d", 3), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			var wg sync.WaitGroup
-			for _, client := range clients {
-				go func(i int, c *Configuration) {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-					resp, err := c.BroadcastCall(ctx, &Request{Value: int64(i)})
-					cancel()
-					if err != nil {
-						b.Error(err)
-					}
-					if resp.GetResult() != int64(i) {
-						b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
-					}
-					wg.Done()
-				}(i, client)
-				wg.Add(1)
+	b.ResetTimer()
+	for _, client := range clients {
+		b.RunParallel(func(pb *testing.PB) {
+			for i := 0; pb.Next(); i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+				resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
+				cancel()
+				if err != nil {
+					b.Error(err)
+				}
+				if resp.GetResult() != int64(i) {
+					b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+				}
 			}
-			wg.Wait()
-		}
-	})
+		})
+	}
 }
