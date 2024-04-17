@@ -45,6 +45,13 @@ type reqContent struct {
 	//sync.Once
 }
 
+type shardElement struct {
+	sendChan   chan content2
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+	//sync.Once
+}
+
 type BroadcastState struct {
 	mut        sync.Mutex
 	msgs       map[string]*content
@@ -53,15 +60,28 @@ type BroadcastState struct {
 	reqs       map[string]*reqContent
 	reqTTL     time.Duration
 	sendBuffer int
+
+	shards [16]*shardElement
 }
 
 func newBroadcastStorage(logger *slog.Logger) *BroadcastState {
+	TTL := 5 * time.Second
+	var shards [16]*shardElement
+	for i := 0; i < 16; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), TTL)
+		shard := &shardElement{
+			sendChan:   make(chan content2),
+			ctx:        ctx,
+			cancelFunc: cancel,
+		}
+		shards[i] = shard
+	}
 	return &BroadcastState{
 		msgs:     make(map[string]*content),
 		logger:   logger,
 		doneChan: make(chan struct{}),
 		reqs:     make(map[string]*reqContent),
-		reqTTL:   5 * time.Second,
+		reqTTL:   TTL,
 	}
 }
 
@@ -275,8 +295,6 @@ func (r *responseData) addFinished(finished chan<- *Message) {
 }
 
 type content2 struct {
-	resp         protoreflect.ProtoMessage
-	err          error
 	senderType   string
 	originAddr   string
 	originMethod string
@@ -288,18 +306,10 @@ func (c content2) send(resp protoreflect.ProtoMessage, err error) error {
 	if c.sendFn == nil {
 		return errors.New("has not received client req yet")
 	}
-	if c.senderType != BroadcastClient {
-		return errors.New("has not received client req yet")
-	}
+	//if c.senderType != BroadcastClient {
+	//return errors.New("has not received client req yet")
+	//}
 	c.sendFn(resp, err)
-	return nil
-}
-
-func (c content2) retrySend() error {
-	if c.sendFn == nil {
-		return errors.New("has not received client req yet")
-	}
-	c.sendFn(c.resp, c.err)
 	return nil
 }
 

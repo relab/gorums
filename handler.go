@@ -71,11 +71,12 @@ func BroadcastHandler2[T RequestTypes, V Broadcaster](impl implementationFunc[T,
 			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
 			return
 		}
-		msg, err := srv.broadcastSrv.createRequest2(ctx, in, finished)
+		msg := &content2{}
+		err := srv.broadcastSrv.createRequest2(msg, ctx, in, finished)
 		if err != nil {
 			return
 		}
-		err = srv.broadcastSrv.processRequest2(in, msg)
+		err = srv.broadcastSrv.processRequest2(in, *msg)
 		if err != nil {
 			return
 		}
@@ -95,24 +96,22 @@ func alreadyBroadcasted(methods []string, method string) bool {
 	return false
 }
 
-func (srv *broadcastServer) createRequest2(ctx ServerCtx, in *Message, finished chan<- *Message) (content2, error) {
+func (srv *broadcastServer) createRequest2(msg *content2, ctx ServerCtx, in *Message, finished chan<- *Message) error {
 	addOriginMethod(in.Metadata)
-	return createReq(ctx, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
+	return createReq(msg, ctx, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
 }
 
-func createReq(ctx ServerCtx, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) (content2, error) {
+func createReq(c *content2, ctx ServerCtx, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) error {
 	if senderType != BroadcastClient && senderType != BroadcastServer {
-		return emptyContent2, errors.New(fmt.Sprintf("senderType must be either %s or %s", BroadcastServer, BroadcastClient))
+		return errors.New(fmt.Sprintf("senderType must be either %s or %s", BroadcastServer, BroadcastClient))
 	}
-	c := content2{
-		senderType:   senderType,
-		originAddr:   originAddr,
-		originMethod: originMethod,
-	}
+	c.senderType = senderType
+	c.originAddr = originAddr
+	c.originMethod = originMethod
 	if originAddr == "" && senderType == BroadcastClient {
 		c.sendFn = createSendFn(messageID, method, finished, ctx)
 	}
-	return c, nil
+	return nil
 }
 
 func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx ServerCtx) func(resp protoreflect.ProtoMessage, err error) {
@@ -131,6 +130,7 @@ func (srv *broadcastServer) processRequest2(in *Message, msg content2) error {
 	exists, rC := srv.state.get2(in.Metadata.BroadcastMsg.BroadcastID)
 	new := false
 	if !exists {
+		// slow path
 		new, rC = srv.state.add2(in.Metadata.BroadcastMsg.BroadcastID)
 	}
 	//rC.Do(func() {
@@ -152,7 +152,9 @@ func (srv *broadcastServer) processRequest2(in *Message, msg content2) error {
 func handleReq(router IBroadcastRouter, broadcastID string, init *reqContent, msg content2) {
 	done := false
 	sent := false
-	methods := make([]string, 0)
+	methods := make([]string, 0, 3)
+	var respErr error
+	var respMsg protoreflect.ProtoMessage
 	go router.CreateConnection(msg.originAddr)
 	defer func() {
 		done = true
@@ -192,9 +194,13 @@ func handleReq(router IBroadcastRouter, broadcastID string, init *reqContent, ms
 				}
 				if err != nil {
 					// add response if not already done
-					if msg.resp == nil {
-						msg.resp = bMsg.reply.response
-						msg.err = bMsg.reply.err
+					if respMsg == nil {
+						//slog.Info("resp is nil")
+						//if msg.resp == nil {
+						//msg.resp = bMsg.reply.response
+						//msg.err = bMsg.reply.err
+						respMsg = bMsg.reply.response
+						respErr = bMsg.reply.err
 						sent = true
 					}
 					//if err == nil {
@@ -221,9 +227,10 @@ func handleReq(router IBroadcastRouter, broadcastID string, init *reqContent, ms
 			}
 			if sent && msg.sendFn != nil {
 				//slog.Error("can be routed")
-				err := msg.retrySend()
+				err := msg.send(respMsg, respErr)
 				//err := srv.router.send(broadcastID, msg, msg.resp)
 				if err != nil {
+					//slog.Info("error when sending", "err", err)
 					new.receiveChan <- err
 					continue
 				}

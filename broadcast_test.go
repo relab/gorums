@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
+	"runtime/trace"
 	"strconv"
 	"sync"
 	"testing"
@@ -102,10 +104,45 @@ func (r *requester) sendReq(val string) {
 	r.handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &r.mut}, req, r.finished)
 }
 func TestBroadcastID(t *testing.T) {
-	machineID := NewMachineID("127.0.0.1")
-	id := NewBroadcastID(machineID, 2)
-	fmt.Println(id)
-	fmt.Printf("0b%08b\n", id)
+	snowflake := NewSnowflake("127.0.0.1")
+	machineID := snowflake.machineID
+	timestampDistribution := make(map[uint32]int)
+	shardDistribution := make(map[uint16]int)
+	maxN := 262144
+	for j := 1; j < 3*maxN; j++ {
+		i := j % maxN
+		broadcastID := snowflake.NewBroadcastID()
+		timestamp, shard, m, n := snowflake.DecodeBroadcastID(broadcastID)
+		if i != int(n) {
+			t.Errorf("wrong sequence number. want: %v, got: %v", i, n)
+		}
+		if m >= 4096 {
+			t.Errorf("machine ID cannot be higher than max. want: %v, got: %v", 4095, m)
+		}
+		if m != uint16(machineID) {
+			t.Errorf("wrong machine ID. want: %v, got: %v", machineID, m)
+		}
+		if shard >= 16 {
+			t.Errorf("cannot have higher shard than max. want: %v, got: %v", 15, shard)
+		}
+		if n >= uint32(maxN) {
+			t.Errorf("sequence number cannot be higher than max. want: %v, got: %v", maxN, n)
+		}
+		timestampDistribution[timestamp]++
+		shardDistribution[shard]++
+		//fmt.Println(timestamp, shard, m, n)
+	}
+	for k, v := range timestampDistribution {
+		if v > maxN {
+			t.Errorf("cannot have more than maxN in a second. want: %v, got: %v", maxN, k)
+		}
+	}
+	fmt.Println(timestampDistribution)
+	fmt.Println(shardDistribution)
+	//fmt.Printf("0b%08b\n", broadcastID)
+	//if machineID != m {
+	//t.Errorf("machineID is wrong. got: %v, want: %v", m, machineID)
+	//}
 }
 
 func TestBroadcastFunc(t *testing.T) {
@@ -144,6 +181,11 @@ func BenchmarkBroadcastFuncE(b *testing.B) {
 	r := newRequester(setup(b))
 	numClients := 100
 
+	//stop, err := StartTrace("traceprofileBC")
+	//if err != nil {
+	//b.Error(err)
+	//}
+	//defer stop()
 	b.ResetTimer()
 	for c := 0; c < numClients; c++ {
 		b.RunParallel(func(pb *testing.PB) {
@@ -152,4 +194,22 @@ func BenchmarkBroadcastFuncE(b *testing.B) {
 			}
 		})
 	}
+}
+
+func StartTrace(tracePath string) (stop func() error, err error) {
+	traceFile, err := os.Create(tracePath)
+	if err != nil {
+		return nil, err
+	}
+	if err := trace.Start(traceFile); err != nil {
+		return nil, err
+	}
+	return func() error {
+		trace.Stop()
+		err = traceFile.Close()
+		if err != nil {
+			return err
+		}
+		return nil
+	}, nil
 }

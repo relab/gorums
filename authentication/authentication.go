@@ -15,6 +15,8 @@ import (
 // ECC focuses on pairs of public and private keys for decryption and encryption of web traffic.
 // ECC is frequently discussed in the context of the Rivest–Shamir–Adleman (RSA) cryptographic algorithm.
 // EllipticCurve data struct
+//
+// https://pkg.go.dev/github.com/katzenpost/core/crypto/eddsa
 type EllipticCurve struct {
 	pubKeyCurve elliptic.Curve // http://golang.org/pkg/crypto/elliptic/#P256
 	privateKey  *ecdsa.PrivateKey
