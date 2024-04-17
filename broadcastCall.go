@@ -11,16 +11,14 @@ import (
 // and other information necessary to perform the various quorum call types
 // supported by Gorums.
 type broadcastCallData struct {
-	Message         protoreflect.ProtoMessage
-	Method          string
-	BroadcastID     string // a unique identifier for the current broadcast request
-	SenderID        uint32
-	SenderType      string
-	SenderAddr      string
-	OriginAddr      string
-	OriginMethod    string
-	Deadline        uint64
-	ServerAddresses []string
+	Message           protoreflect.ProtoMessage
+	Method            string
+	BroadcastID       uint64 // a unique identifier for the current broadcast request
+	IsBroadcastClient bool
+	SenderAddr        string
+	OriginAddr        string
+	OriginMethod      string
+	ServerAddresses   []string
 }
 
 // checks whether the given address is contained in the given subset
@@ -40,9 +38,8 @@ func (bcd *broadcastCallData) inSubset(addr string) bool {
 // broadcastCall performs a multicast call on the configuration.
 func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		SenderType:   d.SenderType,
+		SenderType:   d.IsBroadcastClient,
 		BroadcastID:  d.BroadcastID,
-		SenderID:     d.SenderID,
 		SenderAddr:   d.SenderAddr,
 		OriginAddr:   d.OriginAddr,
 		OriginMethod: d.OriginMethod,

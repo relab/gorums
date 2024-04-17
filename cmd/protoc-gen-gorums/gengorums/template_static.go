@@ -5,7 +5,7 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastClient", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listener"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastMetadata", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listener"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
@@ -15,9 +15,10 @@ var staticCode = `// A Configuration represents a static set of nodes on which q
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	qspec QuorumSpec
-	srv   *clientServerImpl
-	nodes []*Node
+	qspec     QuorumSpec
+	srv       *clientServerImpl
+	snowflake gorums.Snowflake
+	nodes     []*Node
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -140,6 +141,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	if m.srv != nil {
 		c.srv = m.srv
 	}
+	c.snowflake = m.Snowflake()
 	//var test interface{} = struct{}{}
 	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
 	//	return nil, fmt.Errorf("config: missing required QuorumSpec")
@@ -226,7 +228,7 @@ func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	if addr == "" {
 		return fmt.Errorf("cannot forward to empty addr, got: %s", addr)
 	}
-	if b.metadata.SenderType != gorums.BroadcastClient {
+	if !b.metadata.SenderType {
 		return fmt.Errorf("can only forward client requests")
 	}
 	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
@@ -237,7 +239,7 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
-func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
+func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
 	srv.SendToClientHandler(resp, err, broadcastID)
 }
 

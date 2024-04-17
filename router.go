@@ -14,8 +14,8 @@ import (
 )
 
 type IBroadcastRouter interface {
-	Send(broadcastID, addr, method string, msg any) error
-	SendOrg(broadcastID string, data content, msg any) error
+	Send(broadcastID uint64, addr, method string, msg any) error
+	SendOrg(broadcastID uint64, data content, msg any) error
 	CreateConnection(addr string)
 	AddAddr(id uint32, addr string)
 	AddServerHandler(method string, handler serverHandler)
@@ -67,7 +67,7 @@ func (r *BroadcastRouter) AddClientHandler(method string, handler clientHandler)
 	r.clientHandlers[method] = handler
 }
 
-func (r *BroadcastRouter) SendOrg(broadcastID string, data content, req any) error {
+func (r *BroadcastRouter) SendOrg(broadcastID uint64, data content, req any) error {
 	switch val := req.(type) {
 	case *broadcastMsg:
 		return r.routeBroadcast(broadcastID, data.getOriginAddr(), data.getOriginMethod(), val)
@@ -77,7 +77,7 @@ func (r *BroadcastRouter) SendOrg(broadcastID string, data content, req any) err
 	return errors.New("wrong req type")
 }
 
-func (r *BroadcastRouter) Send(broadcastID, addr, method string, req any) error {
+func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any) error {
 	switch val := req.(type) {
 	case *broadcastMsg:
 		return r.routeBroadcast(broadcastID, addr, method, val)
@@ -87,7 +87,7 @@ func (r *BroadcastRouter) Send(broadcastID, addr, method string, req any) error 
 	return errors.New("wrong req type")
 }
 
-func (r *BroadcastRouter) routeBroadcast(broadcastID, addr, method string, msg *broadcastMsg) error {
+func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string, msg *broadcastMsg) error {
 	if handler, ok := r.serverHandlers[msg.method]; ok {
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
@@ -97,7 +97,7 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID, addr, method string, msg *
 	return errors.New("not found")
 }
 
-func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, resp *reply) error {
+func (r *BroadcastRouter) routeClientReply(broadcastID uint64, data content, resp *reply) error {
 	// the client has initiated a broadcast call and the reply should be sent as an RPC
 	if handler, ok := r.clientHandlers[data.getClientHandlerName()]; ok && data.getOriginAddr() != "" {
 		cc, err := r.getConnection(data.getOriginAddr())
@@ -120,7 +120,7 @@ func (r *BroadcastRouter) routeClientReply(broadcastID string, data content, res
 	return errors.New("not routed")
 }
 
-func (r *BroadcastRouter) routeClientReply2(broadcastID, addr, method string, resp *reply) error {
+func (r *BroadcastRouter) routeClientReply2(broadcastID uint64, addr, method string, resp *reply) error {
 	// the client has initiated a broadcast call and the reply should be sent as an RPC
 	if handler, ok := r.clientHandlers[method]; ok && addr != "" {
 		cc, err := r.getConnection(addr)

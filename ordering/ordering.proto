@@ -19,14 +19,12 @@ message Metadata {
   string Method = 2;
   google.rpc.Status Status = 3;
   BroadcastMsg BroadcastMsg = 4;
-  bytes Signature = 5;
 }
 
 message BroadcastMsg {
-  string SenderType = 1;
-  string BroadcastID = 2;
-  uint32 SenderID = 3;
-  string SenderAddr = 4;
-  string OriginAddr = 5;
-  string OriginMethod = 6;
+  bool IsBroadcastClient = 1;
+  uint64 BroadcastID = 2;
+  string SenderAddr = 3;
+  string OriginAddr = 4;
+  string OriginMethod = 5;
 }

@@ -9,7 +9,6 @@ package broadcast
 import (
 	context "context"
 	fmt "fmt"
-	uuid "github.com/google/uuid"
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
@@ -30,9 +29,10 @@ const (
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	qspec QuorumSpec
-	srv   *clientServerImpl
-	nodes []*Node
+	qspec     QuorumSpec
+	srv       *clientServerImpl
+	snowflake gorums.Snowflake
+	nodes     []*Node
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -155,6 +155,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	if m.srv != nil {
 		c.srv = m.srv
 	}
+	c.snowflake = m.Snowflake()
 	//var test interface{} = struct{}{}
 	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
 	//	return nil, fmt.Errorf("config: missing required QuorumSpec")
@@ -241,7 +242,7 @@ func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	if addr == "" {
 		return fmt.Errorf("cannot forward to empty addr, got: %s", addr)
 	}
-	if b.metadata.SenderType != gorums.BroadcastClient {
+	if !b.metadata.SenderType {
 		return fmt.Errorf("can only forward client requests")
 	}
 	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
@@ -252,12 +253,12 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
-func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
+func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
 	srv.SendToClientHandler(resp, err, broadcastID)
 }
 
 func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
-	if b.metadata.BroadcastID == "" {
+	if b.metadata.BroadcastID == 0 {
 		panic("broadcastID cannot be empty. Use srv.BroadcastQuorumCallWithBroadcast instead")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -268,7 +269,7 @@ func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.Broadca
 }
 
 func (b *Broadcast) BroadcastIntermediate(req *Request, opts ...gorums.BroadcastOption) {
-	if b.metadata.BroadcastID == "" {
+	if b.metadata.BroadcastID == 0 {
 		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcastIntermediate instead")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -279,7 +280,7 @@ func (b *Broadcast) BroadcastIntermediate(req *Request, opts ...gorums.Broadcast
 }
 
 func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
-	if b.metadata.BroadcastID == "" {
+	if b.metadata.BroadcastID == 0 {
 		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcast instead")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -309,7 +310,7 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
+	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {
@@ -338,7 +339,7 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallForwardQF), "broadcast.BroadcastService.BroadcastCallForward")
+	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallForwardQF), "broadcast.BroadcastService.BroadcastCallForward")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {
@@ -462,8 +463,8 @@ func (c *Configuration) QuorumCallWithBroadcast(ctx context.Context, in *Request
 		Message: in,
 		Method:  "broadcast.BroadcastService.QuorumCallWithBroadcast",
 
-		BroadcastID: uuid.New().String(),
-		SenderType:  gorums.BroadcastClient,
+		BroadcastID:       c.snowflake.NewBroadcastID(),
+		IsBroadcastClient: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))
@@ -575,8 +576,8 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCallForward"))
 }
 
-func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
+func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
+	if broadcastID == 0 {
 		panic("broadcastID cannot be empty.")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -586,8 +587,8 @@ func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID st
 	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, broadcastID, options)
 }
 
-func (srv *Server) BroadcastBroadcastIntermediate(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
+func (srv *Server) BroadcastBroadcastIntermediate(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
+	if broadcastID == 0 {
 		panic("broadcastID cannot be empty.")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -597,8 +598,8 @@ func (srv *Server) BroadcastBroadcastIntermediate(req *Request, broadcastID stri
 	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, broadcastID, options)
 }
 
-func (srv *Server) BroadcastBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
+func (srv *Server) BroadcastBroadcast(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
+	if broadcastID == 0 {
 		panic("broadcastID cannot be empty.")
 	}
 	options := gorums.NewBroadcastOptions()

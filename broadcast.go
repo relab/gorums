@@ -31,6 +31,11 @@ func newBroadcastServer(logger *slog.Logger) *broadcastServer {
 	}
 }
 
+type Snowflake interface {
+	NewBroadcastID() uint64
+	DecodeBroadcastID(broadcastID uint64) (uint32, uint16, uint16, uint32)
+}
+
 type snowflake struct {
 	mut         sync.Mutex
 	machineID   uint64

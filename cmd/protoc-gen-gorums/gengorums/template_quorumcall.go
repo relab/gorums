@@ -42,17 +42,14 @@ var qcVar = `
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
 {{$context := use "context.Context" .GenFile}}
-{{if isBroadcast .Method}}
-{{$uuid := use "uuid.UUID" .GenFile}}
-{{end -}}
 `
 
 var quorumCallBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
 		{{if isBroadcast .Method}}
-		BroadcastID: uuid.New().String(),
-		SenderType: gorums.BroadcastClient,
+		BroadcastID: c.snowflake.NewBroadcastID(),
+		IsBroadcastClient:  true,
 		{{end -}}
 	}
 	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {

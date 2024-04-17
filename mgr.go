@@ -24,6 +24,7 @@ type RawManager struct {
 	opts      managerOptions
 	nextMsgID uint64
 	publicKey string
+	snowflake *snowflake
 }
 
 // NewRawManager returns a new RawManager for managing connection to nodes added
@@ -53,6 +54,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 	if m.logger != nil {
 		m.logger.Printf("ready")
 	}
+	m.snowflake = NewSnowflake("test")
 	return m
 }
 
@@ -130,6 +132,10 @@ func (m *RawManager) AddNode(node *RawNode) error {
 	m.lookup[node.id] = node
 	m.nodes = append(m.nodes, node)
 	return nil
+}
+
+func (m *RawManager) Snowflake() Snowflake {
+	return m.snowflake
 }
 
 // getMsgID returns a unique message ID.

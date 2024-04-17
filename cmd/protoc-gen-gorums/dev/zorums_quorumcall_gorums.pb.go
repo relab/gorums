@@ -9,7 +9,6 @@ package dev
 import (
 	context "context"
 	empty "github.com/golang/protobuf/ptypes/empty"
-	uuid "github.com/google/uuid"
 	gorums "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -161,8 +160,8 @@ func (c *Configuration) QuorumCallWithBroadcast(ctx context.Context, in *Request
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallWithBroadcast",
 
-		BroadcastID: uuid.New().String(),
-		SenderType:  gorums.BroadcastClient,
+		BroadcastID:       c.snowflake.NewBroadcastID(),
+		IsBroadcastClient: true,
 	}
 	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
 		r := make(map[uint32]*Response, len(replies))

@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/relab/gorums/ordering"
 	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
@@ -21,10 +20,10 @@ import (
 type mockRouter struct {
 }
 
-func (m *mockRouter) Send(broadcastID, addr, method string, msg any) error {
+func (m *mockRouter) Send(broadcastID uint64, addr, method string, msg any) error {
 	return nil
 }
-func (m *mockRouter) SendOrg(broadcastID string, data content, msg any) error {
+func (m *mockRouter) SendOrg(broadcastID uint64, data content, msg any) error {
 	return nil
 }
 func (m *mockRouter) CreateConnection(addr string) {
@@ -68,7 +67,7 @@ func setup[T testingInterface](t T) func(ServerCtx, *Message, chan<- *Message) {
 	listener.Close()
 	var mut sync.Mutex
 	mut.Lock()
-	clientHandlerMock := func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
+	clientHandlerMock := func(broadcastID uint64, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
 		return nil, nil
 	}
 	srv.broadcastSrv.registerSendToClientHandler(clientHandlerName, clientHandlerMock)
@@ -77,15 +76,17 @@ func setup[T testingInterface](t T) func(ServerCtx, *Message, chan<- *Message) {
 }
 
 type requester struct {
-	mut      sync.Mutex
-	finished chan *Message
-	handler  func(ServerCtx, *Message, chan<- *Message)
+	mut       sync.Mutex
+	finished  chan *Message
+	handler   func(ServerCtx, *Message, chan<- *Message)
+	snowflake *snowflake
 }
 
 func newRequester(handler func(ServerCtx, *Message, chan<- *Message)) *requester {
 	return &requester{
-		finished: make(chan *Message),
-		handler:  handler,
+		finished:  make(chan *Message),
+		handler:   handler,
+		snowflake: NewSnowflake("test"),
 	}
 }
 
@@ -95,8 +96,8 @@ func (r *requester) sendReq(val string) {
 		Val: val,
 	}
 	bMsg := &ordering.BroadcastMsg{
-		BroadcastID: uuid.NewString(),
-		SenderType:  BroadcastClient,
+		BroadcastID: r.snowflake.NewBroadcastID(),
+		SenderType:  true,
 	}
 	req.Metadata.BroadcastMsg = bMsg
 	ctx := context.Background()

@@ -7,7 +7,7 @@ var broadcastVar = `
 var broadcastSignature = `func (b *Broadcast) {{.Method.GoName}}(req *{{in .GenFile .Method}}, opts... gorums.BroadcastOption) {`
 
 var broadcastBody = `
-	if b.metadata.BroadcastID == "" {
+	if b.metadata.BroadcastID == 0 {
 		panic("broadcastID cannot be empty. Use srv.Broadcast{{.Method.GoName}} instead")
 	}
 	options := gorums.NewBroadcastOptions()

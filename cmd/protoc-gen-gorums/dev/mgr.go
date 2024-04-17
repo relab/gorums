@@ -86,6 +86,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	if m.srv != nil {
 		c.srv = m.srv
 	}
+	c.snowflake = m.Snowflake()
 	//var test interface{} = struct{}{}
 	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
 	//	return nil, fmt.Errorf("config: missing required QuorumSpec")

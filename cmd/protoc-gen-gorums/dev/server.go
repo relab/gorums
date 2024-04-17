@@ -65,7 +65,7 @@ func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	if addr == "" {
 		return fmt.Errorf("cannot forward to empty addr, got: %s", addr)
 	}
-	if b.metadata.SenderType != gorums.BroadcastClient {
+	if !b.metadata.SenderType {
 		return fmt.Errorf("can only forward client requests")
 	}
 	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
@@ -76,6 +76,6 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
-func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID string) {
+func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
 	srv.SendToClientHandler(resp, err, broadcastID)
 }

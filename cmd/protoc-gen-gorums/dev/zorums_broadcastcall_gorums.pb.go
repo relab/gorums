@@ -40,7 +40,7 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF), "dev.ZorumsService.BroadcastWithClientHandler1")
+	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF), "dev.ZorumsService.BroadcastWithClientHandler1")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {
@@ -69,7 +69,7 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF), "dev.ZorumsService.BroadcastWithClientHandler2")
+	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF), "dev.ZorumsService.BroadcastWithClientHandler2")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {
@@ -98,7 +98,7 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF), "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption")
+	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF), "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	response, ok := <-doneChan
 	if !ok {

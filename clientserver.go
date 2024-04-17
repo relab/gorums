@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -35,7 +35,7 @@ type csr struct {
 
 type ClientServer struct {
 	mu        sync.Mutex
-	csr       map[string]*csr
+	csr       map[uint64]*csr
 	respChan  chan *ClientResponse
 	reqChan   chan *ClientRequest
 	resps     map[string][]protoreflect.ProtoMessage
@@ -54,7 +54,7 @@ func NewClientServer(lis net.Listener) (*ClientServer, error) {
 		resps:     make(map[string][]protoreflect.ProtoMessage),
 		doneChans: make(map[string]chan protoreflect.ProtoMessage),
 		handlers:  make(map[string]func(resps []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)),
-		csr:       make(map[string]*csr),
+		csr:       make(map[uint64]*csr),
 		ctx:       ctx,
 		cancelCtx: cancel,
 	}
@@ -67,15 +67,14 @@ func (srv *ClientServer) Stop() {
 	srv.cancelCtx()
 }
 
-func (srv *ClientServer) AddRequest(ctx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler, method string) (chan protoreflect.ProtoMessage, QuorumCallData) {
-	broadcastID := uuid.New().String()
+func (srv *ClientServer) AddRequest(broadcastID uint64, ctx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler, method string) (chan protoreflect.ProtoMessage, QuorumCallData) {
 	cd := QuorumCallData{
 		Message: in,
 		Method:  method,
 
-		BroadcastID: broadcastID,
-		SenderType:  BroadcastClient,
-		OriginAddr:  srv.lis.Addr().String(),
+		BroadcastID:       broadcastID,
+		IsBroadcastClient: true,
+		OriginAddr:        srv.lis.Addr().String(),
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)
 
@@ -102,12 +101,16 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 	if !ok {
 		return fmt.Errorf("no metadata")
 	}
-	broadcastID := ""
+	broadcastID := uint64(0)
 	val := md.Get(BroadcastID)
 	if val != nil && len(val) >= 1 {
-		broadcastID = val[0]
+		bID, err := strconv.Atoi(val[0])
+		broadcastID = uint64(bID)
+		if err != nil {
+			return err
+		}
 	}
-	if broadcastID == "" {
+	if broadcastID == 0 {
 		return fmt.Errorf("no broadcastID")
 	}
 
@@ -123,54 +126,8 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 		csr.doneChan <- response
 		delete(srv.csr, broadcastID)
 	}
-	//if _, ok := srv.resps[broadcastID]; !ok {
-	//srv.mu.Unlock()
-	//return fmt.Errorf("doesn't exist")
-	//}
-	//srv.resps[broadcastID] = append(srv.resps[broadcastID], resp)
-	//response, done := srv.handlers[broadcastID](srv.resps[broadcastID])
-	//if done {
-	//srv.doneChans[broadcastID] <- response
-	//close(srv.doneChans[broadcastID])
-	//delete(srv.resps, broadcastID)
-	//delete(srv.doneChans, broadcastID)
-	//delete(srv.handlers, broadcastID)
-	//}
 	srv.mu.Unlock()
-	//srv.respChan <- &ClientResponse{
-	//broadcastID: broadcastID,
-	//data:        resp,
-	//}
 	return nil
-}
-
-func (srv *ClientServer) handle() {
-	for {
-		select {
-		case <-srv.ctx.Done():
-			return
-		case resp := <-srv.respChan:
-			srv.mu.Lock()
-			if _, ok := srv.resps[resp.broadcastID]; !ok {
-				srv.mu.Unlock()
-				continue
-			}
-			srv.resps[resp.broadcastID] = append(srv.resps[resp.broadcastID], resp.data)
-			response, done := srv.handlers[resp.broadcastID](srv.resps[resp.broadcastID])
-			if done {
-				srv.doneChans[resp.broadcastID] <- response
-				close(srv.doneChans[resp.broadcastID])
-				delete(srv.resps, resp.broadcastID)
-				delete(srv.doneChans, resp.broadcastID)
-				delete(srv.handlers, resp.broadcastID)
-			}
-			srv.mu.Unlock()
-			//case req := <-srv.reqChan:
-			//srv.resps[req.broadcastID] = make([]protoreflect.ProtoMessage, 0)
-			//srv.doneChans[req.broadcastID] = req.doneChan
-			//srv.handlers[req.broadcastID] = req.handler
-		}
-	}
 }
 
 func ConvertToType[T protoreflect.ProtoMessage](handler func([]T) (T, bool)) func(d []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
@@ -183,8 +140,8 @@ func ConvertToType[T protoreflect.ProtoMessage](handler func([]T) (T, bool)) fun
 	}
 }
 
-func ServerClientRPC(method string) func(broadcastID string, in protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
-	return func(broadcastID string, in protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
+func ServerClientRPC(method string) func(broadcastID uint64, in protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
+	return func(broadcastID uint64, in protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
 		tmp := strings.Split(method, ".")
 		m := ""
 		if len(tmp) >= 1 {
@@ -192,7 +149,7 @@ func ServerClientRPC(method string) func(broadcastID string, in protoreflect.Pro
 		}
 		clientMethod := "/protos.ClientServer/Client" + m
 		out := new(any)
-		md := metadata.Pairs(BroadcastID, broadcastID)
+		md := metadata.Pairs(BroadcastID, strconv.Itoa(int(broadcastID)))
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		ctx = metadata.NewOutgoingContext(ctx, md)

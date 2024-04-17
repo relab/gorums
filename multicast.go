@@ -13,7 +13,7 @@ import (
 func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		SenderType: d.SenderType, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
+		SenderType: d.IsBroadcastClient, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
 	}}
 	sentMsgs := 0
 

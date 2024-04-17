@@ -18,7 +18,7 @@ const (
 )
 
 func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
-	if b.metadata.BroadcastID == "" {
+	if b.metadata.BroadcastID == 0 {
 		panic("broadcastID cannot be empty. Use srv.BroadcastQuorumCallWithBroadcast instead")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -29,7 +29,7 @@ func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.Broadca
 }
 
 func (b *Broadcast) MulticastWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
-	if b.metadata.BroadcastID == "" {
+	if b.metadata.BroadcastID == 0 {
 		panic("broadcastID cannot be empty. Use srv.BroadcastMulticastWithBroadcast instead")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -40,7 +40,7 @@ func (b *Broadcast) MulticastWithBroadcast(req *Request, opts ...gorums.Broadcas
 }
 
 func (b *Broadcast) BroadcastInternal(req *Request, opts ...gorums.BroadcastOption) {
-	if b.metadata.BroadcastID == "" {
+	if b.metadata.BroadcastID == 0 {
 		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcastInternal instead")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -51,7 +51,7 @@ func (b *Broadcast) BroadcastInternal(req *Request, opts ...gorums.BroadcastOpti
 }
 
 func (b *Broadcast) BroadcastWithClientHandlerAndBroadcastOption(req *Request, opts ...gorums.BroadcastOption) {
-	if b.metadata.BroadcastID == "" {
+	if b.metadata.BroadcastID == 0 {
 		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcastWithClientHandlerAndBroadcastOption instead")
 	}
 	options := gorums.NewBroadcastOptions()

@@ -422,8 +422,8 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	})
 }
 
-func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
+func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
+	if broadcastID == 0 {
 		panic("broadcastID cannot be empty.")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -433,8 +433,8 @@ func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID st
 	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, broadcastID, options)
 }
 
-func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
+func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
+	if broadcastID == 0 {
 		panic("broadcastID cannot be empty.")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -444,8 +444,8 @@ func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, broadcastID str
 	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, broadcastID, options)
 }
 
-func (srv *Server) BroadcastBroadcastInternal(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
+func (srv *Server) BroadcastBroadcastInternal(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
+	if broadcastID == 0 {
 		panic("broadcastID cannot be empty.")
 	}
 	options := gorums.NewBroadcastOptions()
@@ -455,8 +455,8 @@ func (srv *Server) BroadcastBroadcastInternal(req *Request, broadcastID string, 
 	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, broadcastID, options)
 }
 
-func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Request, broadcastID string, opts ...gorums.BroadcastOption) {
-	if broadcastID == "" {
+func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
+	if broadcastID == 0 {
 		panic("broadcastID cannot be empty.")
 	}
 	options := gorums.NewBroadcastOptions()

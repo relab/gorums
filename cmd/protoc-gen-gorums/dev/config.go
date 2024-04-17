@@ -10,9 +10,10 @@ import (
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	qspec QuorumSpec
-	srv   *clientServerImpl
-	nodes []*Node
+	qspec     QuorumSpec
+	srv       *clientServerImpl
+	snowflake gorums.Snowflake
+	nodes     []*Node
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.

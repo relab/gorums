@@ -17,8 +17,8 @@ const (
 	BroadcastID     string = "broadcastID"
 )
 
-type serverHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string)
-type clientHandler func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
+type serverHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string)
+type clientHandler func(broadcastID uint64, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
 
 type RequestTypes interface {
 	ProtoReflect() protoreflect.Message
@@ -28,9 +28,9 @@ type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastHandlerFunc func(method string, req RequestTypes, broadcastID string, data ...broadcast.BroadcastOptions)
-type BroadcastForwardHandlerFunc func(req RequestTypes, method, broadcastID, forwardAddr, originAddr string)
-type BroadcastSendToClientHandlerFunc func(broadcastID string, resp ResponseTypes, err error)
+type BroadcastHandlerFunc func(method string, req RequestTypes, broadcastID uint64, data ...broadcast.BroadcastOptions)
+type BroadcastForwardHandlerFunc func(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string)
+type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp ResponseTypes, err error)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
@@ -39,11 +39,11 @@ type implementationFunc[T RequestTypes, V Broadcaster] func(ServerCtx, T, V)
 type reply struct {
 	response    ResponseTypes
 	err         error
-	broadcastID string
+	broadcastID uint64
 	timestamp   time.Time
 }
 
-func newReply(response ResponseTypes, err error, broadcastID string) *reply {
+func newReply(response ResponseTypes, err error, broadcastID uint64) *reply {
 	return &reply{
 		response:    response,
 		err:         err,
@@ -60,7 +60,7 @@ func (r *reply) getError() error {
 	return r.err
 }
 
-func (r *reply) getBroadcastID() string {
+func (r *reply) getBroadcastID() uint64 {
 	return r.broadcastID
 }
 
@@ -134,9 +134,9 @@ func NewBroadcastOptions() broadcast.BroadcastOptions {
 type Broadcaster interface{}
 
 type BroadcastMetadata struct {
-	BroadcastID  string
-	SenderType   string // type of sender, could be: Client or Server
-	SenderID     uint32 // nodeID of last hop
+	BroadcastID uint64
+	SenderType  bool // type of sender, could be: Client or Server
+	//SenderID     uint32 // nodeID of last hop
 	SenderAddr   string // address of last hop
 	OriginAddr   string // address of the origin
 	OriginMethod string // the first method called by the origin
@@ -155,9 +155,9 @@ func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata
 		m = tmp[len(tmp)-1]
 	}
 	return BroadcastMetadata{
-		BroadcastID:  md.BroadcastMsg.BroadcastID,
-		SenderType:   md.BroadcastMsg.SenderType,
-		SenderID:     md.BroadcastMsg.SenderID,
+		BroadcastID: md.BroadcastMsg.BroadcastID,
+		SenderType:  md.BroadcastMsg.SenderType,
+		//SenderID:     md.BroadcastMsg.SenderID,
 		SenderAddr:   md.BroadcastMsg.SenderAddr,
 		OriginAddr:   md.BroadcastMsg.OriginAddr,
 		OriginMethod: md.BroadcastMsg.OriginMethod,
@@ -168,7 +168,7 @@ func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata
 
 type bMsg struct {
 	broadcast   bool
-	broadcastID string
+	broadcastID uint64
 	msg         *broadcastMsg
 	method      string
 	reply       *reply
@@ -178,12 +178,12 @@ type bMsg struct {
 type broadcastMsg struct {
 	request     RequestTypes
 	method      string
-	broadcastID string
+	broadcastID uint64
 	options     broadcast.BroadcastOptions
 	ctx         context.Context
 }
 
-func newBroadcastMessage(broadcastID string, req RequestTypes, method string, options broadcast.BroadcastOptions) *broadcastMsg {
+func newBroadcastMessage(broadcastID uint64, req RequestTypes, method string, options broadcast.BroadcastOptions) *broadcastMsg {
 	return &broadcastMsg{
 		request:     req,
 		method:      method,
@@ -193,7 +193,7 @@ func newBroadcastMessage(broadcastID string, req RequestTypes, method string, op
 	}
 }
 
-func newBroadcastMessage2(broadcastID string, req RequestTypes, method string) *broadcastMsg {
+func newBroadcastMessage2(broadcastID uint64, req RequestTypes, method string) *broadcastMsg {
 	return &broadcastMsg{
 		request:     req,
 		method:      method,

@@ -101,14 +101,11 @@ func (srv *broadcastServer) createRequest2(msg *content2, ctx ServerCtx, in *Mes
 	return createReq(msg, ctx, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
 }
 
-func createReq(c *content2, ctx ServerCtx, senderType, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) error {
-	if senderType != BroadcastClient && senderType != BroadcastServer {
-		return errors.New(fmt.Sprintf("senderType must be either %s or %s", BroadcastServer, BroadcastClient))
-	}
-	c.senderType = senderType
+func createReq(c *content2, ctx ServerCtx, isBroadcastClient bool, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) error {
+	c.isBroadcastClient = isBroadcastClient
 	c.originAddr = originAddr
 	c.originMethod = originMethod
-	if originAddr == "" && senderType == BroadcastClient {
+	if originAddr == "" && isBroadcastClient {
 		c.sendFn = createSendFn(messageID, method, finished, ctx)
 	}
 	return nil
@@ -149,7 +146,7 @@ func (srv *broadcastServer) processRequest2(in *Message, msg content2) error {
 	return <-receiveChan
 }
 
-func handleReq(router IBroadcastRouter, broadcastID string, init *reqContent, msg content2) {
+func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, msg content2) {
 	done := false
 	sent := false
 	methods := make([]string, 0, 3)
@@ -274,7 +271,7 @@ func (srv *broadcastServer) processRequest(in *Message, data *content) error {
 	return nil
 }
 
-func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID string) (bool, error) {
+func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID uint64) (bool, error) {
 	data, err := srv.state.get(broadcastID)
 	if err != nil {
 		return true, err
@@ -295,7 +292,7 @@ func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID string) (bool, 
 }
 
 func addOriginMethod(md *ordering.Metadata) {
-	if md.BroadcastMsg.SenderType != BroadcastClient {
+	if !md.BroadcastMsg.SenderType {
 		return
 	}
 	// keep track of the method called by the user
@@ -312,11 +309,8 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	if in.Metadata.BroadcastMsg == nil {
 		return fmt.Errorf("broadcastMsg cannot be empty. got: %v", in.Metadata.BroadcastMsg)
 	}
-	if in.Metadata.BroadcastMsg.BroadcastID == "" {
+	if in.Metadata.BroadcastMsg.BroadcastID == 0 {
 		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.BroadcastMsg.BroadcastID)
-	}
-	if in.Metadata.BroadcastMsg.SenderType == "" {
-		return fmt.Errorf("senderType cannot be empty. got: %v", in.Metadata.BroadcastMsg.SenderType)
 	}
 	// check and update TTL
 	// check deadline
@@ -328,7 +322,7 @@ func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastO
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
 }
 
-func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, broadcastID string, opts ...broadcast.BroadcastOptions) {
+func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
 	if VERSION == 1 {
 		srv.broadcastHandler1(method, req, broadcastID, opts...)
 	} else {
@@ -336,7 +330,7 @@ func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, br
 	}
 }
 
-func (srv *broadcastServer) sendToClientHandler(broadcastID string, resp ResponseTypes, err error) {
+func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp ResponseTypes, err error) {
 	if VERSION == 1 {
 		srv.sendToClientHandler1(broadcastID, resp, err)
 	} else {
@@ -344,7 +338,7 @@ func (srv *broadcastServer) sendToClientHandler(broadcastID string, resp Respons
 	}
 }
 
-func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, broadcastID string, opts ...broadcast.BroadcastOptions) {
+func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
 	rc, err := srv.state.getReqContent(broadcastID)
 	if err != nil {
 		return
@@ -360,7 +354,7 @@ func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, b
 	}
 }
 
-func (srv *broadcastServer) sendToClientHandler2(broadcastID string, resp ResponseTypes, err error) {
+func (srv *broadcastServer) sendToClientHandler2(broadcastID uint64, resp ResponseTypes, err error) {
 	rc, err := srv.state.getReqContent(broadcastID)
 	if err != nil {
 		return
@@ -377,7 +371,7 @@ func (srv *broadcastServer) sendToClientHandler2(broadcastID string, resp Respon
 	}
 }
 
-func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, broadcastID string, opts ...broadcast.BroadcastOptions) {
+func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
 	options := broadcast.BroadcastOptions{}
 	if len(opts) > 0 {
 		options = opts[0]
@@ -391,18 +385,18 @@ func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, b
 	//}
 }
 
-func (srv *broadcastServer) sendToClientHandler1(broadcastID string, resp ResponseTypes, err error) {
+func (srv *broadcastServer) sendToClientHandler1(broadcastID uint64, resp ResponseTypes, err error) {
 	srv.sendToClient(newReply(resp, err, broadcastID))
 }
 
-func (srv *broadcastServer) forwardHandler(req RequestTypes, method, broadcastID, forwardAddr, originAddr string) {
+func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string) {
 	cd := broadcastCallData{
-		Message:         req,
-		Method:          method,
-		BroadcastID:     broadcastID,
-		SenderType:      BroadcastClient,
-		OriginAddr:      originAddr,
-		ServerAddresses: []string{forwardAddr},
+		Message:           req,
+		Method:            method,
+		BroadcastID:       broadcastID,
+		IsBroadcastClient: true,
+		OriginAddr:        originAddr,
+		ServerAddresses:   []string{forwardAddr},
 	}
 	srv.viewMutex.RLock()
 	// drop request if a view change has occured
@@ -411,22 +405,21 @@ func (srv *broadcastServer) forwardHandler(req RequestTypes, method, broadcastID
 
 }
 
-func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error, broadcastID string) {
+func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
 	srv.broadcastSrv.sendToClientHandler(broadcastID, resp, err)
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.router.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
+	srv.router.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
 		cd := broadcastCallData{
-			Message:         in,
-			Method:          method,
-			BroadcastID:     broadcastID,
-			SenderType:      BroadcastServer,
-			SenderID:        id,
-			SenderAddr:      addr,
-			OriginAddr:      originAddr,
-			OriginMethod:    originMethod,
-			ServerAddresses: options.ServerAddresses,
+			Message:           in,
+			Method:            method,
+			BroadcastID:       broadcastID,
+			IsBroadcastClient: false,
+			SenderAddr:        addr,
+			OriginAddr:        originAddr,
+			OriginMethod:      originMethod,
+			ServerAddresses:   options.ServerAddresses,
 		}
 		srv.viewMutex.RLock()
 		// drop request if a view change has occured
