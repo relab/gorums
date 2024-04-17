@@ -25,7 +25,7 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *{{$in}}'.
 	{{- if isBroadcastCall .}}
-	{{.GoName}}QF(replies []*{{$out}}) (*{{$out}}, bool)
+	{{.GoName}}QF(in *{{$in}}, replies []*{{$out}}) (*{{$out}}, bool)
 	{{- else}}
 	{{$method}}QF(in *{{$in}}, replies map[uint32]*{{$out}}) (*{{$customOut}}{{withCorrectable . ", int"}}, bool)
 	{{- end}}

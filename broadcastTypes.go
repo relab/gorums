@@ -156,7 +156,7 @@ func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata
 	}
 	return BroadcastMetadata{
 		BroadcastID: md.BroadcastMsg.BroadcastID,
-		SenderType:  md.BroadcastMsg.SenderType,
+		SenderType:  md.BroadcastMsg.IsBroadcastClient,
 		//SenderID:     md.BroadcastMsg.SenderID,
 		SenderAddr:   md.BroadcastMsg.SenderAddr,
 		OriginAddr:   md.BroadcastMsg.OriginAddr,

@@ -50,8 +50,8 @@ func (qs *testQSpec) QuorumCallWithMulticastQF(in *Request, replies map[uint32]*
 	return nil, false
 }
 
-func (qs *testQSpec) BroadcastCallQF(replies []*Response) (*Response, bool) {
-	//slog.Warn("client received reply", "resps", len(replies))
+func (qs *testQSpec) BroadcastCallQF(in *Request, replies []*Response) (*Response, bool) {
+	//slog.Warn("client received reply", "val", in.Value, "resps", len(replies))
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {
 			return resp, true
@@ -60,7 +60,7 @@ func (qs *testQSpec) BroadcastCallQF(replies []*Response) (*Response, bool) {
 	return nil, false
 }
 
-func (qs *testQSpec) BroadcastCallForwardQF(replies []*Response) (*Response, bool) {
+func (qs *testQSpec) BroadcastCallForwardQF(in *Request, replies []*Response) (*Response, bool) {
 	//slog.Warn("client received reply", "resps", len(replies))
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {

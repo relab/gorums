@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
+	"runtime/pprof"
 	"runtime/trace"
 	"strconv"
 	"sync"
@@ -53,7 +55,7 @@ type testingInterface interface {
 	Error(...any)
 }
 
-func setup[T testingInterface](t T) func(ServerCtx, *Message, chan<- *Message) {
+func setup[T testingInterface](t T) (func(ServerCtx, *Message, chan<- *Message), func()) {
 	srv := NewServer()
 	srv.broadcastSrv.router = &mockRouter{}
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
@@ -72,7 +74,9 @@ func setup[T testingInterface](t T) func(ServerCtx, *Message, chan<- *Message) {
 	}
 	srv.broadcastSrv.registerSendToClientHandler(clientHandlerName, clientHandlerMock)
 	handler := BroadcastHandler2(testHandler, srv)
-	return handler
+	return handler, func() {
+		srv.Stop()
+	}
 }
 
 type requester struct {
@@ -96,8 +100,8 @@ func (r *requester) sendReq(val string) {
 		Val: val,
 	}
 	bMsg := &ordering.BroadcastMsg{
-		BroadcastID: r.snowflake.NewBroadcastID(),
-		SenderType:  true,
+		BroadcastID:       r.snowflake.NewBroadcastID(),
+		IsBroadcastClient: true,
 	}
 	req.Metadata.BroadcastMsg = bMsg
 	ctx := context.Background()
@@ -113,7 +117,7 @@ func TestBroadcastID(t *testing.T) {
 	for j := 1; j < 3*maxN; j++ {
 		i := j % maxN
 		broadcastID := snowflake.NewBroadcastID()
-		timestamp, shard, m, n := snowflake.DecodeBroadcastID(broadcastID)
+		timestamp, shard, m, n := decodeBroadcastID(broadcastID)
 		if i != int(n) {
 			t.Errorf("wrong sequence number. want: %v, got: %v", i, n)
 		}
@@ -147,14 +151,17 @@ func TestBroadcastID(t *testing.T) {
 }
 
 func TestBroadcastFunc(t *testing.T) {
-	r := newRequester(setup(t))
+	handler, cleanup := setup(t)
+	r := newRequester(handler)
 	start := time.Now()
 	r.sendReq("test")
 	fmt.Println(time.Since(start))
+	cleanup()
 }
 
 func BenchmarkBroadcastFunc2(b *testing.B) {
-	r := newRequester(setup(b))
+	handler, cleanup := setup(b)
+	r := newRequester(handler)
 
 	b.ResetTimer()
 	b.Run("BroadcastFunc", func(b *testing.B) {
@@ -162,10 +169,13 @@ func BenchmarkBroadcastFunc2(b *testing.B) {
 			r.sendReq(strconv.Itoa(i))
 		}
 	})
+	b.StopTimer()
+	cleanup()
 }
 
 func BenchmarkBroadcastFunc1(b *testing.B) {
-	r := newRequester(setup(b))
+	handler, cleanup := setup(b)
+	r := newRequester(handler)
 	numClients := 100
 
 	b.ResetTimer()
@@ -176,17 +186,22 @@ func BenchmarkBroadcastFunc1(b *testing.B) {
 			}
 		}
 	})
+	b.StopTimer()
+	cleanup()
 }
 
-func BenchmarkBroadcastFuncE(b *testing.B) {
-	r := newRequester(setup(b))
+func BenchmarkBroadcastFuncT(b *testing.B) {
+	handler, cleanup := setup(b)
+	r := newRequester(handler)
 	numClients := 100
 
-	//stop, err := StartTrace("traceprofileBC")
-	//if err != nil {
-	//b.Error(err)
-	//}
-	//defer stop()
+	stop, err := StartTrace("traceprofileBC")
+	if err != nil {
+		b.Error(err)
+	}
+	defer stop()
+	cpuProfile, _ := os.Create("cpuprofileBC")
+	pprof.StartCPUProfile(cpuProfile)
 	b.ResetTimer()
 	for c := 0; c < numClients; c++ {
 		b.RunParallel(func(pb *testing.PB) {
@@ -195,6 +210,56 @@ func BenchmarkBroadcastFuncE(b *testing.B) {
 			}
 		})
 	}
+	b.StopTimer()
+	pprof.StopCPUProfile()
+	cpuProfile.Close()
+	cleanup()
+}
+func BenchmarkBroadcastFuncM(b *testing.B) {
+	handler, cleanup := setup(b)
+	r := newRequester(handler)
+	numClients := 100
+
+	stop, err := StartTrace("traceprofileBC")
+	if err != nil {
+		b.Error(err)
+	}
+	defer stop()
+	memProfile, _ := os.Create("memprofileBC")
+	runtime.GC()
+	b.ResetTimer()
+	for c := 0; c < numClients; c++ {
+		b.RunParallel(func(pb *testing.PB) {
+			for i := 0; pb.Next(); i++ {
+				r.sendReq(strconv.Itoa(i))
+			}
+		})
+	}
+	b.StopTimer()
+	pprof.WriteHeapProfile(memProfile)
+	memProfile.Close()
+	cleanup()
+}
+func BenchmarkBroadcastFuncC(b *testing.B) {
+	handler, cleanup := setup(b)
+	r := newRequester(handler)
+	numClients := 100
+
+	stop, err := StartTrace("traceprofileBC")
+	if err != nil {
+		b.Error(err)
+	}
+	defer stop()
+	b.ResetTimer()
+	for c := 0; c < numClients; c++ {
+		b.RunParallel(func(pb *testing.PB) {
+			for i := 0; pb.Next(); i++ {
+				r.sendReq(strconv.Itoa(i))
+			}
+		})
+	}
+	b.StopTimer()
+	cleanup()
 }
 
 func StartTrace(tracePath string) (stop func() error, err error) {

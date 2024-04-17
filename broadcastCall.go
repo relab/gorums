@@ -38,11 +38,11 @@ func (bcd *broadcastCallData) inSubset(addr string) bool {
 // broadcastCall performs a multicast call on the configuration.
 func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		SenderType:   d.IsBroadcastClient,
-		BroadcastID:  d.BroadcastID,
-		SenderAddr:   d.SenderAddr,
-		OriginAddr:   d.OriginAddr,
-		OriginMethod: d.OriginMethod,
+		IsBroadcastClient: d.IsBroadcastClient,
+		BroadcastID:       d.BroadcastID,
+		SenderAddr:        d.SenderAddr,
+		OriginAddr:        d.OriginAddr,
+		OriginMethod:      d.OriginMethod,
 	}}
 	o := getCallOptions(E_Broadcast, nil)
 

@@ -66,7 +66,7 @@ func TestSimpleBroadcastCall(t *testing.T) {
 
 	for i := 0; i < numReqs; i++ {
 		val := int64(i)
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 		resp, err := config.BroadcastCall(ctx, &Request{Value: val})
 		if err != nil {
 			t.Error(err)
@@ -275,7 +275,9 @@ func TestBroadcastCallRaceTwoClients(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i <= 100; i++ {
 		go func(j int) {
-			resp, err := client1.BroadcastCall(context.Background(), &Request{Value: int64(j)})
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			resp, err := client1.BroadcastCall(ctx, &Request{Value: int64(j)})
 			if err != nil {
 				t.Error(err)
 			}
@@ -285,7 +287,9 @@ func TestBroadcastCallRaceTwoClients(t *testing.T) {
 			wg.Done()
 		}(i)
 		go func(j int) {
-			resp, err := client1.BroadcastCall(context.Background(), &Request{Value: int64(j)})
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+			resp, err := client2.BroadcastCall(ctx, &Request{Value: int64(j)})
 			if err != nil {
 				t.Error(err)
 			}
@@ -962,6 +966,7 @@ func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
 			wg.Wait()
 		}
 	})
+	b.StopTimer()
 	pprof.StopCPUProfile()
 	cpuProfile.Close()
 }
@@ -1018,6 +1023,7 @@ func BenchmarkBroadcastCallTenClientsMEM(b *testing.B) {
 			wg.Wait()
 		}
 	})
+	b.StopTimer()
 	pprof.WriteHeapProfile(memProfile)
 	memProfile.Close()
 }
@@ -1073,4 +1079,5 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 			}
 		})
 	}
+	b.StopTimer()
 }

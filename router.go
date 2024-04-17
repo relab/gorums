@@ -130,6 +130,7 @@ func (r *BroadcastRouter) routeClientReply2(broadcastID uint64, addr, method str
 		go handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
 		return nil
 	}
+	//slog.Error("not routed")
 	// the server can receive a broadcast from another server before a client sends a direct message.
 	// it should thus wait for a potential message from the client. otherwise, it should be removed.
 	return errors.New("not routed")

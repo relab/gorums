@@ -28,7 +28,7 @@ type QuorumCallData struct {
 func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(c)
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		SenderType: d.IsBroadcastClient, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
+		IsBroadcastClient: d.IsBroadcastClient, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
 	}}
 
 	replyChan := make(chan response, expectedReplies)

@@ -185,11 +185,17 @@ func (s *Server) Serve(listener net.Listener) error {
 
 // GracefulStop waits for all RPCs to finish before stopping.
 func (s *Server) GracefulStop() {
+	if s.broadcastSrv != nil {
+		s.broadcastSrv.stop()
+	}
 	s.grpcServer.GracefulStop()
 }
 
 // Stop stops the server immediately.
 func (s *Server) Stop() {
+	if s.broadcastSrv != nil {
+		s.broadcastSrv.stop()
+	}
 	s.grpcServer.Stop()
 }
 

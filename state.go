@@ -45,9 +45,10 @@ type reqContent struct {
 }
 
 type shardElement struct {
-	sendChan   chan content2
-	ctx        context.Context
-	cancelFunc context.CancelFunc
+	sendChan      chan content2
+	broadcastChan chan bMsg
+	ctx           context.Context
+	cancelFunc    context.CancelFunc
 	//sync.Once
 }
 
@@ -61,28 +62,90 @@ type BroadcastState struct {
 	reqs             map[uint64]*reqContent
 	reqTTL           time.Duration
 	sendBuffer       int
+	shardBuffer      int
 
 	shards [16]*shardElement
 }
 
-func newBroadcastStorage(logger *slog.Logger) *BroadcastState {
+func newBroadcastStorage(logger *slog.Logger, router IBroadcastRouter) *BroadcastState {
+	shardBuffer := 100
 	TTL := 5 * time.Second
+	ctx, cancel := context.WithCancel(context.Background())
+	shards := createShards(ctx, shardBuffer)
+	state := &BroadcastState{
+		parentCtx:        ctx,
+		parentCancelFunc: cancel,
+		msgs:             make(map[uint64]*content),
+		shards:           shards,
+		logger:           logger,
+		doneChan:         make(chan struct{}),
+		reqs:             make(map[uint64]*reqContent),
+		reqTTL:           TTL,
+		sendBuffer:       5,
+		shardBuffer:      shardBuffer,
+	}
+	for i := 0; i < 16; i++ {
+		go state.runShard(shards[i], router, state.reqTTL, state.sendBuffer, state.shardBuffer)
+	}
+	return state
+}
+
+func createShards(ctx context.Context, shardBuffer int) [16]*shardElement {
 	var shards [16]*shardElement
 	for i := 0; i < 16; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), TTL)
+		ctx, cancel := context.WithCancel(ctx)
 		shard := &shardElement{
-			sendChan:   make(chan content2),
-			ctx:        ctx,
-			cancelFunc: cancel,
+			sendChan:      make(chan content2, shardBuffer),
+			broadcastChan: make(chan bMsg, shardBuffer),
+			ctx:           ctx,
+			cancelFunc:    cancel,
 		}
 		shards[i] = shard
 	}
-	return &BroadcastState{
-		msgs:     make(map[uint64]*content),
-		logger:   logger,
-		doneChan: make(chan struct{}),
-		reqs:     make(map[uint64]*reqContent),
-		reqTTL:   TTL,
+	return shards
+}
+
+func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, reqTTL time.Duration, sendBuffer, shardBuffer int) {
+	//slog.Info("shard running", "ID", i)
+	reqs := make(map[uint64]*reqContent, shardBuffer)
+	for {
+		select {
+		case <-shard.ctx.Done():
+			//slog.Info("shard done")
+			return
+		case msg := <-shard.sendChan:
+			//slog.Info("shard got req")
+			if req, ok := reqs[msg.broadcastID]; ok {
+				select {
+				case <-req.ctx.Done():
+					msg.receiveChan <- errors.New("req is done")
+				case req.sendChan <- msg:
+				}
+			} else {
+				ctx, cancel := context.WithTimeout(s.parentCtx, reqTTL)
+				req := &reqContent{
+					ctx:           ctx,
+					cancelFunc:    cancel,
+					sendChan:      make(chan content2, sendBuffer),
+					broadcastChan: make(chan bMsg, sendBuffer),
+				}
+				reqs[msg.broadcastID] = req
+				go handleReq(router, msg.broadcastID, req, msg)
+				select {
+				case <-req.ctx.Done():
+					msg.receiveChan <- errors.New("req is done")
+				case req.sendChan <- msg:
+				}
+			}
+		case msg := <-shard.broadcastChan:
+			//slog.Info("shard got bMsg")
+			if req, ok := reqs[msg.broadcastID]; ok {
+				select {
+				case <-req.ctx.Done():
+				case req.broadcastChan <- msg:
+				}
+			}
+		}
 	}
 }
 
@@ -127,6 +190,67 @@ func (s *BroadcastState) addOrUpdate2(broadcastID uint64) (bool, *reqContent) {
 	return true, rC
 }
 
+func (s *BroadcastState) process(msg content2) error {
+	_, shardID, _, _ := decodeBroadcastID(msg.broadcastID)
+	if shardID >= 16 {
+		return errors.New("wrong shardID")
+	}
+	//s.mut.Lock()
+	//shard := s.shards[shardID]
+	//s.mut.Unlock()
+	shard := s.shards[shardID]
+
+	receiveChan := make(chan error)
+	msg.receiveChan = receiveChan
+	select {
+	case shard.sendChan <- msg:
+	case <-shard.ctx.Done():
+		return errors.New("shard is down")
+	}
+	return <-receiveChan
+}
+
+func (s *BroadcastState) processBroadcast(broadcastID uint64, req protoreflect.ProtoMessage, method string) {
+	_, shardID, _, _ := decodeBroadcastID(broadcastID)
+	if shardID >= 16 {
+		return
+	}
+	//s.mut.Lock()
+	//shard := s.shards[shardID]
+	//s.mut.Unlock()
+	shard := s.shards[shardID]
+	select {
+	case shard.broadcastChan <- bMsg{
+		broadcast:   true,
+		msg:         newBroadcastMessage2(broadcastID, req, method),
+		method:      method,
+		broadcastID: broadcastID,
+	}:
+	case <-shard.ctx.Done():
+	}
+}
+
+func (s *BroadcastState) processSendToClient(broadcastID uint64, resp ResponseTypes, err error) {
+	_, shardID, _, _ := decodeBroadcastID(broadcastID)
+	if shardID >= 16 {
+		return
+	}
+	//s.mut.Lock()
+	//shard := s.shards[shardID]
+	//s.mut.Unlock()
+	shard := s.shards[shardID]
+	select {
+	case shard.broadcastChan <- bMsg{
+		reply: &reply{
+			response: resp,
+			err:      err,
+		},
+		broadcastID: broadcastID,
+	}:
+	case <-shard.ctx.Done():
+	}
+}
+
 func (s *BroadcastState) get2(broadcastID uint64) (bool, *reqContent) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -135,7 +259,7 @@ func (s *BroadcastState) get2(broadcastID uint64) (bool, *reqContent) {
 }
 
 func (s *BroadcastState) add2(broadcastID uint64) (bool, *reqContent) {
-	ctx, cancel := context.WithTimeout(context.Background(), s.reqTTL)
+	ctx, cancel := context.WithTimeout(s.parentCtx, s.reqTTL)
 	rC := reqContent{
 		ctx:           ctx,
 		cancelFunc:    cancel,
@@ -237,8 +361,10 @@ func (s *BroadcastState) setBroadcasted(broadcastID uint64, method string) error
 
 func (s *BroadcastState) prune() error {
 	s.msgs = make(map[uint64]*content)
+	s.reqs = make(map[uint64]*reqContent)
 	s.doneChan = make(chan struct{})
 	s.logger.Debug("broadcast: pruned reqs")
+	s.parentCancelFunc()
 	return nil
 }
 
@@ -293,6 +419,7 @@ func (r *responseData) addFinished(finished chan<- *Message) {
 }
 
 type content2 struct {
+	broadcastID       uint64
 	isBroadcastClient bool
 	originAddr        string
 	originMethod      string

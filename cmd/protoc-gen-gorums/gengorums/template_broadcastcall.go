@@ -37,7 +37,13 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.{{.Method.GoName}}QF), "{{.Method.Desc.FullName}}")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	response, ok := <-doneChan
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}

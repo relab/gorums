@@ -24,16 +24,20 @@ type broadcastServer struct {
 }
 
 func newBroadcastServer(logger *slog.Logger) *broadcastServer {
+	router := newBroadcastRouter(logger)
 	return &broadcastServer{
-		router: newBroadcastRouter(logger),
-		state:  newBroadcastStorage(logger),
+		router: router,
+		state:  newBroadcastStorage(logger, router),
 		logger: logger,
 	}
 }
 
+func (srv *broadcastServer) stop() {
+	srv.state.prune()
+}
+
 type Snowflake interface {
 	NewBroadcastID() uint64
-	DecodeBroadcastID(broadcastID uint64) (uint32, uint16, uint16, uint32)
 }
 
 type snowflake struct {
@@ -94,7 +98,7 @@ start:
 	return t | shard | m | n
 }
 
-func (s *snowflake) DecodeBroadcastID(broadcastID uint64) (uint32, uint16, uint16, uint32) {
+func decodeBroadcastID(broadcastID uint64) (uint32, uint16, uint16, uint32) {
 	t := (broadcastID & bitMaskTimestamp) >> 34
 	shard := (broadcastID & bitMaskShardID) >> 30
 	m := (broadcastID & bitMaskMachineID) >> 18

@@ -115,7 +115,7 @@ type BroadcastMsg struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	SenderType  bool   `protobuf:"varint,1,opt,name=SenderType,proto3" json:"SenderType,omitempty"`
+	IsBroadcastClient  bool   `protobuf:"varint,1,opt,name=SenderType,proto3" json:"SenderType,omitempty"`
 	BroadcastID uint64 `protobuf:"varint,2,opt,name=BroadcastID,proto3" json:"BroadcastID,omitempty"`
 	// uint32 SenderID = 3;
 	SenderAddr   string `protobuf:"bytes,3,opt,name=SenderAddr,proto3" json:"SenderAddr,omitempty"`
@@ -157,7 +157,7 @@ func (*BroadcastMsg) Descriptor() ([]byte, []int) {
 
 func (x *BroadcastMsg) GetSenderType() bool {
 	if x != nil {
-		return x.SenderType
+		return x.IsBroadcastClient
 	}
 	return false
 }

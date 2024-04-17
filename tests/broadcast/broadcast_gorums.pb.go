@@ -312,7 +312,13 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	response, ok := <-doneChan
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
@@ -424,14 +430,14 @@ type QuorumSpec interface {
 	// supplied to the BroadcastCall method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	BroadcastCallQF(replies []*Response) (*Response, bool)
+	BroadcastCallQF(in *Request, replies []*Response) (*Response, bool)
 
 	// BroadcastCallForwardQF is the quorum function for the BroadcastCallForward
 	// broadcastcall call method. The in parameter is the request object
 	// supplied to the BroadcastCallForward method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	BroadcastCallForwardQF(replies []*Response) (*Response, bool)
+	BroadcastCallForwardQF(in *Request, replies []*Response) (*Response, bool)
 }
 
 // QuorumCall is a quorum call invoked on all nodes in configuration c,

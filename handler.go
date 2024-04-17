@@ -71,12 +71,10 @@ func BroadcastHandler2[T RequestTypes, V Broadcaster](impl implementationFunc[T,
 			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
 			return
 		}
-		msg := &content2{}
-		err := srv.broadcastSrv.createRequest2(msg, ctx, in, finished)
-		if err != nil {
-			return
-		}
-		err = srv.broadcastSrv.processRequest2(in, *msg)
+		msg := content2{}
+		createRequest2(&msg, ctx, in, finished)
+
+		err := srv.broadcastSrv.processRequest2(msg)
 		if err != nil {
 			return
 		}
@@ -96,19 +94,15 @@ func alreadyBroadcasted(methods []string, method string) bool {
 	return false
 }
 
-func (srv *broadcastServer) createRequest2(msg *content2, ctx ServerCtx, in *Message, finished chan<- *Message) error {
+func createRequest2(msg *content2, ctx ServerCtx, in *Message, finished chan<- *Message) {
 	addOriginMethod(in.Metadata)
-	return createReq(msg, ctx, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
-}
-
-func createReq(c *content2, ctx ServerCtx, isBroadcastClient bool, originAddr, originMethod string, messageID uint64, method string, finished chan<- *Message) error {
-	c.isBroadcastClient = isBroadcastClient
-	c.originAddr = originAddr
-	c.originMethod = originMethod
-	if originAddr == "" && isBroadcastClient {
-		c.sendFn = createSendFn(messageID, method, finished, ctx)
+	msg.broadcastID = in.Metadata.BroadcastMsg.BroadcastID
+	msg.isBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
+	msg.originAddr = in.Metadata.BroadcastMsg.OriginAddr
+	msg.originMethod = in.Metadata.BroadcastMsg.OriginMethod
+	if msg.originAddr == "" && msg.isBroadcastClient {
+		msg.sendFn = createSendFn(in.Metadata.MessageID, in.Metadata.Method, finished, ctx)
 	}
-	return nil
 }
 
 func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx ServerCtx) func(resp protoreflect.ProtoMessage, err error) {
@@ -122,14 +116,17 @@ func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx Ser
 	}
 }
 
-func (srv *broadcastServer) processRequest2(in *Message, msg content2) error {
+func (srv *broadcastServer) processRequest2(msg content2) error {
+	return srv.state.process(msg)
 	//new, rC := srv.state.addOrUpdate2(in.Metadata.BroadcastMsg.BroadcastID)
-	exists, rC := srv.state.get2(in.Metadata.BroadcastMsg.BroadcastID)
+
+	/*exists, rC := srv.state.get2(in.Metadata.BroadcastMsg.BroadcastID)
 	new := false
 	if !exists {
 		// slow path
 		new, rC = srv.state.add2(in.Metadata.BroadcastMsg.BroadcastID)
 	}
+
 	//rC.Do(func() {
 	//go handleReq(srv.router, in.Metadata.BroadcastMsg.BroadcastID, rC, msg)
 	//})
@@ -143,7 +140,7 @@ func (srv *broadcastServer) processRequest2(in *Message, msg content2) error {
 	case <-rC.ctx.Done():
 		return errors.New("req is done")
 	}
-	return <-receiveChan
+	return <-receiveChan*/
 }
 
 func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, msg content2) {
@@ -162,7 +159,6 @@ func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 		case <-init.ctx.Done():
 			return
 		case bMsg := <-init.broadcastChan:
-			//slog.Info("received bMsg")
 			if broadcastID != bMsg.broadcastID {
 				//bMsg.receiveChan <- errors.New("wrong broadcastID")
 				continue
@@ -187,9 +183,11 @@ func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 				if msg.sendFn != nil {
 					err = msg.send(bMsg.reply.response, bMsg.reply.err)
 				} else {
+					//slog.Error("error", "bID", broadcastID)
 					err = router.Send(broadcastID, msg.originAddr, msg.originMethod, bMsg.reply)
 				}
 				if err != nil {
+					//slog.Error("error", "err", err)
 					// add response if not already done
 					if respMsg == nil {
 						//slog.Info("resp is nil")
@@ -206,6 +204,7 @@ func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 					//bMsg.receiveChan <- err
 					continue
 				}
+				//slog.Error("done", "bID", broadcastID)
 				return
 			}
 		case new := <-init.sendChan:
@@ -242,7 +241,7 @@ func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 
 func (srv *broadcastServer) createRequest(ctx ServerCtx, in *Message, finished chan<- *Message) (*content, error) {
 	addOriginMethod(in.Metadata)
-	data, err := srv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.SenderType, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
+	data, err := srv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.IsBroadcastClient, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
 	if err != nil {
 		srv.logger.Debug("broadcast data could not be created", "data", data, "err", err)
 		return nil, err
@@ -292,7 +291,7 @@ func (srv *broadcastServer) checkMsgAlreadyProcessed(broadcastID uint64) (bool, 
 }
 
 func addOriginMethod(md *ordering.Metadata) {
-	if !md.BroadcastMsg.SenderType {
+	if !md.BroadcastMsg.IsBroadcastClient {
 		return
 	}
 	// keep track of the method called by the user
@@ -339,36 +338,38 @@ func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp Respons
 }
 
 func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
-	rc, err := srv.state.getReqContent(broadcastID)
-	if err != nil {
-		return
-	}
-	select {
-	case rc.broadcastChan <- bMsg{
-		broadcast:   true,
-		msg:         newBroadcastMessage2(broadcastID, req, method),
-		method:      method,
-		broadcastID: broadcastID,
-	}:
-	case <-rc.ctx.Done():
-	}
+	srv.state.processBroadcast(broadcastID, req, method)
+	//rc, err := srv.state.getReqContent(broadcastID)
+	//if err != nil {
+	//return
+	//}
+	//select {
+	//case rc.broadcastChan <- bMsg{
+	//broadcast:   true,
+	//msg:         newBroadcastMessage2(broadcastID, req, method),
+	//method:      method,
+	//broadcastID: broadcastID,
+	//}:
+	//case <-rc.ctx.Done():
+	//}
 }
 
 func (srv *broadcastServer) sendToClientHandler2(broadcastID uint64, resp ResponseTypes, err error) {
-	rc, err := srv.state.getReqContent(broadcastID)
-	if err != nil {
-		return
-	}
-	select {
-	case rc.broadcastChan <- bMsg{
-		reply: &reply{
-			response: resp,
-			err:      err,
-		},
-		broadcastID: broadcastID,
-	}:
-	case <-rc.ctx.Done():
-	}
+	srv.state.processSendToClient(broadcastID, resp, err)
+	//rc, err := srv.state.getReqContent(broadcastID)
+	//if err != nil {
+	//return
+	//}
+	//select {
+	//case rc.broadcastChan <- bMsg{
+	//reply: &reply{
+	//response: resp,
+	//err:      err,
+	//},
+	//broadcastID: broadcastID,
+	//}:
+	//case <-rc.ctx.Done():
+	//}
 }
 
 func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
@@ -440,7 +441,7 @@ func (srv *Server) RegisterConfig(config RawConfiguration) {
 	// handle all queued broadcast messages before changing the view
 	srv.broadcastSrv.viewMutex.Lock()
 	// delete all client requests. This resets all broadcast requests.
-	srv.broadcastSrv.state.prune()
+	//srv.broadcastSrv.state.prune()
 	srv.broadcastSrv.view = config
 	srv.broadcastSrv.viewMutex.Unlock()
 }
