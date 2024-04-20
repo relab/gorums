@@ -1090,12 +1090,11 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	b.StopTimer()
 }
 
-func TestBroadcastCallTenClients(t *testing.T) {
-	_, srvAddrs, srvCleanup, err := createSrvs(3)
+func TestBroadcastCallTenClientsOnly(t *testing.T) {
+	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		t.Error(err)
 	}
-	defer srvCleanup()
 
 	numClients := 100
 	clients := make([]*Configuration, numClients)
@@ -1122,6 +1121,9 @@ func TestBroadcastCallTenClients(t *testing.T) {
 	}
 	fmt.Println("total took (sync):", time.Since(s))
 
+	for _, srv := range srvs {
+		srv.PrintStats()
+	}
 	fmt.Println("starting...")
 	s = time.Now()
 	var wg sync.WaitGroup
@@ -1142,4 +1144,8 @@ func TestBroadcastCallTenClients(t *testing.T) {
 	}
 	wg.Wait()
 	fmt.Println("total took (async):", time.Since(s))
+	srvCleanup()
+	for _, srv := range srvs {
+		srv.PrintStats()
+	}
 }

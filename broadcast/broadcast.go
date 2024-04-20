@@ -16,7 +16,8 @@ type BroadcastOptions struct {
 	SkipSelf             bool
 }
 
-func HandleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, msg Content2) {
+func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, msg Content, metrics *Metrics) {
+	start := time.Now()
 	done := false
 	sent := false
 	methods := make([]string, 0, 3)
@@ -26,10 +27,16 @@ func HandleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 	defer func() {
 		done = true
 		init.cancelFunc()
+		if metrics != nil {
+			metrics.AddRoundTripLatency(start)
+		}
 	}()
 	for {
 		select {
 		case <-init.ctx.Done():
+			if metrics != nil {
+				metrics.AddFinishedFailed()
+			}
 			return
 		case bMsg := <-init.broadcastChan:
 			if broadcastID != bMsg.BroadcastID {
@@ -64,6 +71,9 @@ func HandleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 					}
 					continue
 				}
+				if metrics != nil {
+					metrics.AddFinishedSuccessful()
+				}
 				return
 			}
 		case new := <-init.sendChan:
@@ -86,7 +96,11 @@ func HandleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 					new.ReceiveChan <- err
 					continue
 				}
+				//new.ReceiveChan <- errors.New("req is done and should be returned immediately to client")
 				new.ReceiveChan <- nil
+				if metrics != nil {
+					metrics.AddFinishedSuccessful()
+				}
 				return
 			}
 			new.ReceiveChan <- nil

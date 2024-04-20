@@ -191,9 +191,9 @@ type Server struct {
 	View      *Configuration
 }
 
-func NewServer() *Server {
+func NewServer(opts ...gorums.ServerOption) *Server {
 	srv := &Server{
-		Server: gorums.NewServer(),
+		Server: gorums.NewServer(opts...),
 	}
 	b := &Broadcast{
 		orchestrator: gorums.NewBroadcastOrchestrator(srv.Server),
@@ -312,13 +312,17 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	var response protoreflect.ProtoMessage
+	var ok bool
 	select {
+	case response, ok = <-doneChan:
 	case <-ctx.Done():
 		return nil, fmt.Errorf("context cancelled")
-	case response := <-doneChan:
-	//slog.Info("received response", "resp", response, "response", response.(*Response))
-		return response.(*Response), err
 	}
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	return response.(*Response), err
 }
 
 func _clientBroadcastCallForward(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -343,7 +347,13 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallForwardQF), "broadcast.BroadcastService.BroadcastCallForward")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	response, ok := <-doneChan
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
@@ -408,7 +418,7 @@ type QuorumSpec interface {
 	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
-	// broadcast call method. The in parameter is the request object
+	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.

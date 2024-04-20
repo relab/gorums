@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
@@ -23,11 +24,12 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		ctx.Release()
 		req := in.Message.(T)
 
+		var start time.Time
 		if srv.broadcastSrv.metrics != nil {
 			srv.broadcastSrv.metrics.AddMsg()
+			start = time.Now()
+			//defer srv.broadcastSrv.metrics.AddReqLatency(time.Now())
 		}
-
-		//srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
 
 		// guard:
 		// - A broadcastID should be non-empty:
@@ -36,15 +38,19 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			if srv.broadcastSrv.logger != nil {
 				srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
 			}
+			if srv.broadcastSrv.metrics != nil {
+				srv.broadcastSrv.metrics.AddDropped()
+			}
 			return
 		}
-		msg := broadcast.Content2{}
+		msg := broadcast.Content{}
 		createRequest(&msg, ctx, in, finished)
-		//slog.Info("got req", "broadcastID", msg.broadcastID, "req", req, "method", in.Metadata.Method)
 
-		err := srv.broadcastSrv.processRequest(msg)
+		err := srv.broadcastSrv.state.Process(msg)
 		if err != nil {
-			//slog.Error("broadcast handler", "err", err)
+			if srv.broadcastSrv.metrics != nil {
+				srv.broadcastSrv.metrics.AddDropped()
+			}
 			return
 		}
 
@@ -53,11 +59,12 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		impl(ctx, req, broadcaster)
 		if srv.broadcastSrv.metrics != nil {
 			srv.broadcastSrv.metrics.AddProcessed()
+			srv.broadcastSrv.metrics.AddReqLatency(start)
 		}
 	}
 }
 
-func createRequest(msg *broadcast.Content2, ctx ServerCtx, in *Message, finished chan<- *Message) {
+func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message) {
 	addOriginMethod(in.Metadata)
 	msg.BroadcastID = in.Metadata.BroadcastMsg.BroadcastID
 	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
@@ -77,10 +84,6 @@ func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx Ser
 		msg := WrapMessage(md, resp, err)
 		SendMessage(ctx, finished, msg)
 	}
-}
-
-func (srv *broadcastServer) processRequest(msg broadcast.Content2) error {
-	return srv.state.Process(msg)
 }
 
 func addOriginMethod(md *ordering.Metadata) {

@@ -11,6 +11,7 @@ import (
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
@@ -42,7 +43,13 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF), "dev.ZorumsService.BroadcastWithClientHandler1")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	response, ok := <-doneChan
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
@@ -71,7 +78,13 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF), "dev.ZorumsService.BroadcastWithClientHandler2")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	response, ok := <-doneChan
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
@@ -100,7 +113,13 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF), "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	response, ok := <-doneChan
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}

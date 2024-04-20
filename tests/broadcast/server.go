@@ -35,7 +35,7 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 	//	http.ListenAndServe(fmt.Sprintf(":1000%v", i), nil)
 	//}()
 	srv := testServer{
-		Server:   NewServer(),
+		Server:   NewServer(gorums.WithMetrics()),
 		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
 		leader:   "127.0.0.1:5000",

@@ -41,9 +41,10 @@ type BroadcastRouter struct {
 	dialTimeout       time.Duration
 	doneChan          chan struct{}
 	logger            *slog.Logger
+	metrics           *Metrics
 }
 
-func NewRouter(logger *slog.Logger, dialOpts ...grpc.DialOption) *BroadcastRouter {
+func NewRouter(logger *slog.Logger, metrics *Metrics, dialOpts ...grpc.DialOption) *BroadcastRouter {
 	if len(dialOpts) <= 0 {
 		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	}
@@ -57,6 +58,7 @@ func NewRouter(logger *slog.Logger, dialOpts ...grpc.DialOption) *BroadcastRoute
 		connectionTimeout: 1 * time.Minute,
 		doneChan:          make(chan struct{}),
 		logger:            logger,
+		metrics:           metrics,
 	}
 }
 

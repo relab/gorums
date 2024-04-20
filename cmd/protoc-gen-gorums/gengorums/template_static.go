@@ -177,9 +177,9 @@ type Server struct {
 	View      *Configuration
 }
 
-func NewServer() *Server {
+func NewServer(opts ...gorums.ServerOption) *Server {
 	srv := &Server{
-		Server: gorums.NewServer(),
+		Server: gorums.NewServer(opts...),
 	}
 	b := &Broadcast{
 		orchestrator: gorums.NewBroadcastOrchestrator(srv.Server),
@@ -228,7 +228,7 @@ func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	if addr == "" {
 		return fmt.Errorf("cannot forward to empty addr, got: %s", addr)
 	}
-	if !b.metadata.SenderType {
+	if !b.metadata.IsBroadcastClient {
 		return fmt.Errorf("can only forward client requests")
 	}
 	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)

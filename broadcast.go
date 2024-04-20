@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"fmt"
 	"hash/fnv"
 	"log/slog"
 	"net"
@@ -9,36 +10,6 @@ import (
 	"github.com/relab/gorums/broadcast"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
-
-type timingMetric struct {
-	Avg    uint64
-	Median uint64
-	Min    uint64
-	Max    uint64
-}
-
-type metrics struct {
-	mut               sync.Mutex
-	TotalNum          uint64
-	Processed         uint64
-	RoundTripLatency  timingMetric
-	ReqLatency        timingMetric
-	ShardDistribution map[int]int
-	// measures unique number of broadcastIDs processed simultaneounsly
-	ConcurrencyDistribution timingMetric
-}
-
-func (m *metrics) AddMsg() {
-	m.mut.Lock()
-	defer m.mut.Unlock()
-	m.TotalNum++
-}
-
-func (m *metrics) AddProcessed() {
-	m.mut.Lock()
-	defer m.mut.Unlock()
-	m.Processed++
-}
 
 type broadcastServer struct {
 	propertiesMutex   sync.Mutex
@@ -51,18 +22,25 @@ type broadcastServer struct {
 	state             BroadcastState
 	router            BroadcastRouter
 	logger            *slog.Logger
-	metrics           *metrics
+	metrics           *broadcast.Metrics
+}
+
+func (srv *Server) PrintStats() {
+	fmt.Println(srv.broadcastSrv.metrics.GetStats())
+	srv.broadcastSrv.metrics.Reset()
 }
 
 func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer {
-	var m *metrics = nil
+	var m *broadcast.Metrics = nil
 	if withMetrics {
-		m = &metrics{}
+		m = &broadcast.Metrics{
+			ShardDistribution: make(map[uint16]uint64),
+		}
 	}
-	router := broadcast.NewRouter(logger)
+	router := broadcast.NewRouter(logger, m)
 	return &broadcastServer{
 		router:  router,
-		state:   broadcast.NewState(logger, router),
+		state:   broadcast.NewState(logger, router, m),
 		logger:  logger,
 		metrics: m,
 	}
@@ -74,7 +52,7 @@ func (srv *broadcastServer) stop() {
 
 type BroadcastState interface {
 	Prune() error
-	Process(broadcast.Content2) error
+	Process(broadcast.Content) error
 	ProcessBroadcast(uint64, protoreflect.ProtoMessage, string)
 	ProcessSendToClient(uint64, protoreflect.ProtoMessage, error)
 }

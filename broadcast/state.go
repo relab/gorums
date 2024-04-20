@@ -12,6 +12,151 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+type timingMetric struct {
+	Avg time.Duration
+	//Median time.Duration
+	Min time.Duration
+	Max time.Duration
+}
+
+type Metrics struct {
+	mut          sync.Mutex
+	TotalNum     uint64
+	FinishedReqs struct {
+		Total     uint64
+		Succesful uint64
+		Failed    uint64
+	}
+	Processed         uint64
+	Dropped           uint64
+	RoundTripLatency  timingMetric
+	ReqLatency        timingMetric
+	ShardDistribution map[uint16]uint64
+	// measures unique number of broadcastIDs processed simultaneounsly
+	ConcurrencyDistribution timingMetric
+}
+
+func (m *Metrics) Reset() {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.TotalNum = 0
+	m.FinishedReqs.Total = 0
+	m.FinishedReqs.Succesful = 0
+	m.FinishedReqs.Failed = 0
+	m.Processed = 0
+	m.Dropped = 0
+	m.RoundTripLatency.Avg = 0
+	m.RoundTripLatency.Min = 100 * time.Hour
+	m.RoundTripLatency.Max = 0
+	m.ReqLatency.Avg = 0
+	m.ReqLatency.Min = 100 * time.Hour
+	m.ReqLatency.Max = 0
+	m.ShardDistribution = make(map[uint16]uint64)
+	// measures unique number of broadcastIDs processed simultaneounsly
+	//m.ConcurrencyDistribution timingMetric
+}
+
+func (m *Metrics) String() string {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	res := "Metrics:"
+	res += "\n\t- TotalNum: " + fmt.Sprintf("%v", m.TotalNum)
+	res += "\n\t- FinishedReqs:"
+	res += "\n\t\t- Total: " + fmt.Sprintf("%v", m.FinishedReqs.Total)
+	res += "\n\t\t- Succesful: " + fmt.Sprintf("%v", m.FinishedReqs.Succesful)
+	res += "\n\t\t- Failed: " + fmt.Sprintf("%v", m.FinishedReqs.Failed)
+	res += "\n\t- Processed: " + fmt.Sprintf("%v", m.Processed)
+	res += "\n\t- Dropped: " + fmt.Sprintf("%v", m.Dropped)
+	res += "\n\t- RoundTripLatency:"
+	res += "\n\t\t- Avg: " + fmt.Sprintf("%v", m.RoundTripLatency.Avg)
+	res += "\n\t\t- Min: " + fmt.Sprintf("%v", m.RoundTripLatency.Min)
+	res += "\n\t\t- Max: " + fmt.Sprintf("%v", m.RoundTripLatency.Max)
+	res += "\n\t- ReqLatency:"
+	res += "\n\t\t- Avg: " + fmt.Sprintf("%v", m.ReqLatency.Avg)
+	res += "\n\t\t- Min: " + fmt.Sprintf("%v", m.ReqLatency.Min)
+	res += "\n\t\t- Max: " + fmt.Sprintf("%v", m.ReqLatency.Max)
+	res += "\n\t- ShardDistribution: " + fmt.Sprintf("%v", m.ShardDistribution)
+	return res
+}
+
+func (m *Metrics) GetStats() *Metrics {
+	if m == nil {
+		return &Metrics{}
+	}
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	if m.Processed > 0 {
+		m.ReqLatency.Avg /= time.Duration(m.Processed)
+	}
+	if m.FinishedReqs.Total > 0 {
+		m.RoundTripLatency.Avg /= time.Duration(m.FinishedReqs.Total)
+	}
+	return m
+}
+
+func (m *Metrics) AddReqLatency(start time.Time) {
+	latency := time.Since(start)
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	if latency > m.ReqLatency.Max {
+		m.ReqLatency.Max = latency
+	}
+	if latency < m.ReqLatency.Min {
+		m.ReqLatency.Min = latency
+	}
+	m.ReqLatency.Avg += latency
+}
+
+func (m *Metrics) AddRoundTripLatency(start time.Time) {
+	latency := time.Since(start)
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	if latency > m.RoundTripLatency.Max {
+		m.RoundTripLatency.Max = latency
+	}
+	if latency < m.RoundTripLatency.Min {
+		m.RoundTripLatency.Min = latency
+	}
+	m.RoundTripLatency.Avg += latency
+	m.FinishedReqs.Total++
+}
+
+func (m *Metrics) AddFinishedSuccessful() {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.FinishedReqs.Succesful = m.FinishedReqs.Succesful + 1
+}
+
+func (m *Metrics) AddFinishedFailed() {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.FinishedReqs.Failed++
+}
+
+func (m *Metrics) AddMsg() {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.TotalNum++
+}
+
+func (m *Metrics) AddDropped() {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.Dropped++
+}
+
+func (m *Metrics) AddProcessed() {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.Processed++
+}
+
+func (m *Metrics) AddShardDistribution(i int) {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.ShardDistribution[uint16(i)]++
+}
+
 type Snowflake struct {
 	mut         sync.Mutex
 	MachineID   uint64
@@ -105,14 +250,15 @@ const (
 
 type reqContent struct {
 	broadcastChan chan Msg
-	sendChan      chan Content2
+	sendChan      chan Content
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
 	//sync.Once
 }
 
 type shardElement struct {
-	sendChan      chan Content2
+	id            int
+	sendChan      chan Content
 	broadcastChan chan Msg
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
@@ -122,18 +268,16 @@ type shardElement struct {
 type BroadcastState struct {
 	parentCtx        context.Context
 	parentCancelFunc context.CancelFunc
-	mut              sync.Mutex
 	logger           *slog.Logger
-	doneChan         chan struct{}
-	reqs             map[uint64]*reqContent
 	reqTTL           time.Duration
 	sendBuffer       int
 	shardBuffer      int
+	metrics          *Metrics
 
 	shards [16]*shardElement
 }
 
-func NewState(logger *slog.Logger, router IBroadcastRouter) *BroadcastState {
+func NewState(logger *slog.Logger, router IBroadcastRouter, metrics *Metrics) *BroadcastState {
 	shardBuffer := 100
 	TTL := 5 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
@@ -143,11 +287,10 @@ func NewState(logger *slog.Logger, router IBroadcastRouter) *BroadcastState {
 		parentCancelFunc: cancel,
 		shards:           shards,
 		logger:           logger,
-		doneChan:         make(chan struct{}),
-		reqs:             make(map[uint64]*reqContent),
 		reqTTL:           TTL,
 		sendBuffer:       5,
 		shardBuffer:      shardBuffer,
+		metrics:          metrics,
 	}
 	for i := 0; i < 16; i++ {
 		go state.runShard(shards[i], router, state.reqTTL, state.sendBuffer, state.shardBuffer)
@@ -160,7 +303,8 @@ func createShards(ctx context.Context, shardBuffer int) [16]*shardElement {
 	for i := 0; i < 16; i++ {
 		ctx, cancel := context.WithCancel(ctx)
 		shard := &shardElement{
-			sendChan:      make(chan Content2, shardBuffer),
+			id:            i,
+			sendChan:      make(chan Content, shardBuffer),
 			broadcastChan: make(chan Msg, shardBuffer),
 			ctx:           ctx,
 			cancelFunc:    cancel,
@@ -171,15 +315,15 @@ func createShards(ctx context.Context, shardBuffer int) [16]*shardElement {
 }
 
 func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, reqTTL time.Duration, sendBuffer, shardBuffer int) {
-	//slog.Info("shard running", "ID", i)
 	reqs := make(map[uint64]*reqContent, shardBuffer)
 	for {
 		select {
 		case <-shard.ctx.Done():
-			//slog.Info("shard done")
 			return
 		case msg := <-shard.sendChan:
-			//slog.Info("shard got req")
+			if s.metrics != nil {
+				s.metrics.AddShardDistribution(shard.id)
+			}
 			if req, ok := reqs[msg.BroadcastID]; ok {
 				select {
 				case <-req.ctx.Done():
@@ -191,11 +335,11 @@ func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, 
 				req := &reqContent{
 					ctx:           ctx,
 					cancelFunc:    cancel,
-					sendChan:      make(chan Content2, sendBuffer),
+					sendChan:      make(chan Content, sendBuffer),
 					broadcastChan: make(chan Msg, sendBuffer),
 				}
 				reqs[msg.BroadcastID] = req
-				go HandleReq(router, msg.BroadcastID, req, msg)
+				go handleReq(router, msg.BroadcastID, req, msg, s.metrics)
 				select {
 				case <-req.ctx.Done():
 					msg.ReceiveChan <- errors.New("req is done")
@@ -203,6 +347,9 @@ func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, 
 				}
 			}
 		case msg := <-shard.broadcastChan:
+			if s.metrics != nil {
+				s.metrics.AddShardDistribution(shard.id)
+			}
 			//slog.Info("shard got bMsg")
 			if req, ok := reqs[msg.BroadcastID]; ok {
 				select {
@@ -214,22 +361,19 @@ func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, 
 	}
 }
 
-func (s *BroadcastState) Process(msg Content2) error {
+func (s *BroadcastState) Process(msg Content) error {
 	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
 	if shardID >= 16 {
 		return errors.New("wrong shardID")
 	}
-	//s.mut.Lock()
-	//shard := s.shards[shardID]
-	//s.mut.Unlock()
 	shard := s.shards[shardID]
 
 	receiveChan := make(chan error)
 	msg.ReceiveChan = receiveChan
 	select {
-	case shard.sendChan <- msg:
 	case <-shard.ctx.Done():
 		return errors.New("shard is down")
+	case shard.sendChan <- msg:
 	}
 	return <-receiveChan
 }
@@ -239,9 +383,6 @@ func (s *BroadcastState) ProcessBroadcast(broadcastID uint64, req protoreflect.P
 	if shardID >= 16 {
 		return
 	}
-	//s.mut.Lock()
-	//shard := s.shards[shardID]
-	//s.mut.Unlock()
 	shard := s.shards[shardID]
 	select {
 	case shard.broadcastChan <- Msg{
@@ -259,9 +400,6 @@ func (s *BroadcastState) ProcessSendToClient(broadcastID uint64, resp protorefle
 	if shardID >= 16 {
 		return
 	}
-	//s.mut.Lock()
-	//shard := s.shards[shardID]
-	//s.mut.Unlock()
 	shard := s.shards[shardID]
 	select {
 	case shard.broadcastChan <- Msg{
@@ -275,11 +413,7 @@ func (s *BroadcastState) ProcessSendToClient(broadcastID uint64, resp protorefle
 	}
 }
 
-var emptyContent2 = Content2{}
-
 func (s *BroadcastState) Prune() error {
-	s.reqs = make(map[uint64]*reqContent)
-	s.doneChan = make(chan struct{})
 	if s.logger != nil {
 		s.logger.Debug("broadcast: pruned reqs")
 	}
@@ -287,7 +421,7 @@ func (s *BroadcastState) Prune() error {
 	return nil
 }
 
-type Content2 struct {
+type Content struct {
 	BroadcastID       uint64
 	IsBroadcastClient bool
 	OriginAddr        string
@@ -296,7 +430,7 @@ type Content2 struct {
 	SendFn            func(resp protoreflect.ProtoMessage, err error)
 }
 
-func (c Content2) send(resp protoreflect.ProtoMessage, err error) error {
+func (c Content) send(resp protoreflect.ProtoMessage, err error) error {
 	if c.SendFn == nil {
 		return errors.New("has not received client req yet")
 	}

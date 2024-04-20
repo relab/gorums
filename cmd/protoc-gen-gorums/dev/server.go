@@ -14,9 +14,9 @@ type Server struct {
 	View      *Configuration
 }
 
-func NewServer() *Server {
+func NewServer(opts ...gorums.ServerOption) *Server {
 	srv := &Server{
-		Server: gorums.NewServer(),
+		Server: gorums.NewServer(opts...),
 	}
 	b := &Broadcast{
 		orchestrator: gorums.NewBroadcastOrchestrator(srv.Server),

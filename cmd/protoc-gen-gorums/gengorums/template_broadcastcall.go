@@ -5,6 +5,7 @@ var clientServerVar = `
 {{$context := use "context.Context" .GenFile}}
 {{$grpc := use "grpc.GRPC" .GenFile}}
 {{$fmt := use "fmt.FMT" .GenFile}}
+{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
 `
 
 var clientServerSignature = `func _client{{.Method.GoName}}(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {`
@@ -37,7 +38,7 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.{{.Method.GoName}}QF), "{{.Method.Desc.FullName}}")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	var response protoreflect.ProtoMessage
+	var response {{$protoMessage}}
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
