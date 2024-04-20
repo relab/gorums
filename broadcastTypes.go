@@ -1,24 +1,17 @@
 package gorums
 
 import (
-	"context"
 	"strings"
 	"time"
 
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const (
-	BroadcastClient string = "client"
-	BroadcastServer string = "server"
-	BroadcastID     string = "broadcastID"
+	BroadcastID string = "broadcastID"
 )
-
-type serverHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string)
-type clientHandler func(broadcastID uint64, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
 
 type RequestTypes interface {
 	ProtoReflect() protoreflect.Message
@@ -35,34 +28,6 @@ type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
 type implementationFunc[T RequestTypes, V Broadcaster] func(ServerCtx, T, V)
-
-type reply struct {
-	response    ResponseTypes
-	err         error
-	broadcastID uint64
-	timestamp   time.Time
-}
-
-func newReply(response protoreflect.ProtoMessage, err error, broadcastID uint64) *reply {
-	return &reply{
-		response:    response,
-		err:         err,
-		broadcastID: broadcastID,
-		timestamp:   time.Now(),
-	}
-}
-
-func (r *reply) getResponse() protoreflect.ProtoMessage {
-	return r.response
-}
-
-func (r *reply) getError() error {
-	return r.err
-}
-
-func (r *reply) getBroadcastID() uint64 {
-	return r.broadcastID
-}
 
 // The BroadcastOrchestrator is used as a container for all
 // broadcast handlers. The BroadcastHandler takes in a method
@@ -161,41 +126,5 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 		OriginAddr:   md.BroadcastMsg.OriginAddr,
 		OriginMethod: md.BroadcastMsg.OriginMethod,
 		Method:       m,
-	}
-}
-
-type bMsg struct {
-	broadcast   bool
-	broadcastID uint64
-	msg         *broadcastMsg
-	method      string
-	reply       *reply
-	//receiveChan chan error
-}
-
-type broadcastMsg struct {
-	request     protoreflect.ProtoMessage
-	method      string
-	broadcastID uint64
-	options     broadcast.BroadcastOptions
-	ctx         context.Context
-}
-
-func newBroadcastMessage(broadcastID uint64, req protoreflect.ProtoMessage, method string, options broadcast.BroadcastOptions) *broadcastMsg {
-	return &broadcastMsg{
-		request:     req,
-		method:      method,
-		broadcastID: broadcastID,
-		options:     options,
-		ctx:         context.WithValue(context.Background(), BroadcastID, broadcastID),
-	}
-}
-
-func newBroadcastMessage2(broadcastID uint64, req protoreflect.ProtoMessage, method string) *broadcastMsg {
-	return &broadcastMsg{
-		request:     req,
-		method:      method,
-		broadcastID: broadcastID,
-		ctx:         context.WithValue(context.Background(), BroadcastID, broadcastID),
 	}
 }

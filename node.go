@@ -103,7 +103,7 @@ func (n *RawNode) newContext() context.Context {
 	if n.mgr.opts.perNodeMD != nil {
 		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
 	}
-	md = metadata.Join(md, metadata.Pairs("publicKey", n.mgr.publicKey))
+	//md = metadata.Join(md, metadata.Pairs("publicKey", n.mgr.publicKey))
 	var ctx context.Context
 	ctx, n.cancel = context.WithCancel(context.Background())
 	return metadata.NewOutgoingContext(ctx, md)

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
@@ -25,16 +26,13 @@ type mockRouter struct {
 func (m *mockRouter) Send(broadcastID uint64, addr, method string, msg any) error {
 	return nil
 }
-func (m *mockRouter) SendOrg(broadcastID uint64, data content, msg any) error {
-	return nil
-}
 func (m *mockRouter) CreateConnection(addr string) {
 }
 func (m *mockRouter) AddAddr(id uint32, addr string) {
 }
-func (m *mockRouter) AddServerHandler(method string, handler serverHandler) {
+func (m *mockRouter) AddServerHandler(method string, handler broadcast.ServerHandler) {
 }
-func (m *mockRouter) AddClientHandler(method string, handler clientHandler) {
+func (m *mockRouter) AddClientHandler(method string, handler broadcast.ClientHandler) {
 }
 
 var newBroadcaster = func(BroadcastMetadata, *BroadcastOrchestrator) Broadcaster {
@@ -73,7 +71,7 @@ func setup[T testingInterface](t T) (func(ServerCtx, *Message, chan<- *Message),
 		return nil, nil
 	}
 	srv.broadcastSrv.registerSendToClientHandler(clientHandlerName, clientHandlerMock)
-	handler := BroadcastHandler2(testHandler, srv)
+	handler := BroadcastHandler(testHandler, srv)
 	return handler, func() {
 		srv.Stop()
 	}
@@ -83,14 +81,14 @@ type requester struct {
 	mut       sync.Mutex
 	finished  chan *Message
 	handler   func(ServerCtx, *Message, chan<- *Message)
-	snowflake *snowflake
+	snowflake *broadcast.Snowflake
 }
 
 func newRequester(handler func(ServerCtx, *Message, chan<- *Message)) *requester {
 	return &requester{
 		finished:  make(chan *Message),
 		handler:   handler,
-		snowflake: NewSnowflake("test"),
+		snowflake: broadcast.NewSnowflake("test"),
 	}
 }
 
@@ -109,15 +107,15 @@ func (r *requester) sendReq(val string) {
 	r.handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &r.mut}, req, r.finished)
 }
 func TestBroadcastID(t *testing.T) {
-	snowflake := NewSnowflake("127.0.0.1")
-	machineID := snowflake.machineID
+	snowflake := broadcast.NewSnowflake("127.0.0.1")
+	machineID := snowflake.MachineID
 	timestampDistribution := make(map[uint32]int)
 	shardDistribution := make(map[uint16]int)
 	maxN := 262144
 	for j := 1; j < 3*maxN; j++ {
 		i := j % maxN
 		broadcastID := snowflake.NewBroadcastID()
-		timestamp, shard, m, n := decodeBroadcastID(broadcastID)
+		timestamp, shard, m, n := broadcast.DecodeBroadcastID(broadcastID)
 		if i != int(n) {
 			t.Errorf("wrong sequence number. want: %v, got: %v", i, n)
 		}

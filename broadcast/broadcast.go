@@ -1,11 +1,9 @@
 package broadcast
 
 import (
-	"context"
 	"errors"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -18,23 +16,13 @@ type BroadcastOptions struct {
 	SkipSelf             bool
 }
 
-type ServerHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
-
-// type serverHandler func(ctx context.Context, in RequestTypes, broadcastID, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
-type ClientHandler func(broadcastID string, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
-
-type reply struct {
-	response    protoreflect.ProtoMessage
-	err         error
-	broadcastID string
-	timestamp   time.Time
-}
-
-func HandleReq(router IBroadcastRouter, broadcastID string, init *reqContent, msg Content2) {
+func HandleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, msg Content2) {
 	done := false
 	sent := false
-	methods := make([]string, 0)
-	go router.CreateConnection(msg.originAddr)
+	methods := make([]string, 0, 3)
+	var respErr error
+	var respMsg protoreflect.ProtoMessage
+	go router.CreateConnection(msg.OriginAddr)
 	defer func() {
 		done = true
 		init.cancelFunc()
@@ -44,75 +32,64 @@ func HandleReq(router IBroadcastRouter, broadcastID string, init *reqContent, ms
 		case <-init.ctx.Done():
 			return
 		case bMsg := <-init.broadcastChan:
-			//slog.Info("received bMsg")
-			if broadcastID != bMsg.broadcastID {
-				//bMsg.receiveChan <- errors.New("wrong broadcastID")
+			if broadcastID != bMsg.BroadcastID {
 				continue
 			}
 			if done {
-				//bMsg.receiveChan <- errors.New("request is done and handled")
 				continue
 			}
-			if bMsg.broadcast {
+			if bMsg.Broadcast {
 				// check if msg has already been broadcasted for this method
-				if alreadyBroadcasted(methods, bMsg.method) {
+				if alreadyBroadcasted(methods, bMsg.Method) {
 					continue
 				}
-				err := router.Send(broadcastID, msg.originAddr, msg.originMethod, bMsg.msg)
+				err := router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
 				if err != nil {
-					//bMsg.receiveChan <- err
 					continue
 				}
-				methods = append(methods, bMsg.method)
+				methods = append(methods, bMsg.Method)
 			} else {
 				var err error
-				if msg.sendFn != nil {
-					err = msg.send(bMsg.reply.response, bMsg.reply.err)
+				if msg.SendFn != nil {
+					err = msg.send(bMsg.Reply.Response, bMsg.Reply.Err)
 				} else {
-					err = router.Send(broadcastID, msg.originAddr, msg.originMethod, bMsg.reply)
+					err = router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
 				}
 				if err != nil {
 					// add response if not already done
-					if msg.resp == nil {
-						msg.resp = bMsg.reply.response
-						msg.err = bMsg.reply.err
+					if respMsg == nil {
+						respMsg = bMsg.Reply.Response
+						respErr = bMsg.Reply.Err
 						sent = true
 					}
-					//if err == nil {
-					//slog.Error("added response", "resp", bMsg.reply.response)
-					//}
-					//bMsg.receiveChan <- err
 					continue
 				}
 				return
 			}
 		case new := <-init.sendChan:
 			if done {
-				new.receiveChan <- errors.New("req is done")
+				new.ReceiveChan <- errors.New("req is done in handler")
 				continue
 			}
-			if msg.originAddr == "" && new.originAddr != "" {
-				msg.originAddr = new.originAddr
+			if msg.OriginAddr == "" && new.OriginAddr != "" {
+				msg.OriginAddr = new.OriginAddr
 			}
-			if msg.originMethod == "" && new.originMethod != "" {
-				msg.originMethod = new.originMethod
+			if msg.OriginMethod == "" && new.OriginMethod != "" {
+				msg.OriginMethod = new.OriginMethod
 			}
-			if msg.sendFn == nil && new.sendFn != nil {
-				msg.sendFn = new.sendFn
+			if msg.SendFn == nil && new.SendFn != nil {
+				msg.SendFn = new.SendFn
 			}
-			if sent && msg.sendFn != nil {
-				//slog.Error("can be routed")
-				err := msg.retrySend()
-				//err := srv.router.send(broadcastID, msg, msg.resp)
+			if sent && msg.SendFn != nil {
+				err := msg.send(respMsg, respErr)
 				if err != nil {
-					new.receiveChan <- err
+					new.ReceiveChan <- err
 					continue
 				}
-				//slog.Error("was routed")
-				new.receiveChan <- nil
+				new.ReceiveChan <- nil
 				return
 			}
-			new.receiveChan <- nil
+			new.ReceiveChan <- nil
 		}
 	}
 }
@@ -124,32 +101,4 @@ func alreadyBroadcasted(methods []string, method string) bool {
 		}
 	}
 	return false
-}
-
-type bMsg struct {
-	broadcast   bool
-	broadcastID string
-	msg         *broadcastMsg
-	method      string
-	reply       *reply
-}
-
-type broadcastMsg struct {
-	request     protoreflect.ProtoMessage
-	method      string
-	broadcastID string
-	options     BroadcastOptions
-	ctx         context.Context
-}
-
-func (r *reply) getResponse() protoreflect.ProtoMessage {
-	return r.response
-}
-
-func (r *reply) getError() error {
-	return r.err
-}
-
-func (r *reply) getBroadcastID() string {
-	return r.broadcastID
 }
