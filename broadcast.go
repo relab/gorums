@@ -10,30 +10,34 @@ import (
 	"time"
 )
 
+type timingMetric struct {
+	Avg    uint64
+	Median uint64
+	Min    uint64
+	Max    uint64
+}
+
 type metrics struct {
-	TotalNum         uint64
-	Processed        uint64
-	Discarded        uint64
-	RoundTripLatency struct {
-		Avg    uint64
-		Median uint64
-		Min    uint64
-		Max    uint64
-	}
-	ReqLatency struct {
-		Avg    uint64
-		Median uint64
-		Min    uint64
-		Max    uint64
-	}
+	mut               sync.Mutex
+	TotalNum          uint64
+	Processed         uint64
+	RoundTripLatency  timingMetric
+	ReqLatency        timingMetric
 	ShardDistribution map[int]int
 	// measures unique number of broadcastIDs processed simultaneounsly
-	ConcurrencyDistribution struct {
-		Avg    uint64
-		Median uint64
-		Min    uint64
-		Max    uint64
-	}
+	ConcurrencyDistribution timingMetric
+}
+
+func (m *metrics) AddMsg() {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.TotalNum++
+}
+
+func (m *metrics) AddProcessed() {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	m.Processed++
 }
 
 type broadcastServer struct {
@@ -50,12 +54,17 @@ type broadcastServer struct {
 	metrics           *metrics
 }
 
-func newBroadcastServer(logger *slog.Logger) *broadcastServer {
+func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer {
+	var m *metrics = nil
+	if withMetrics {
+		m = &metrics{}
+	}
 	router := newBroadcastRouter(logger)
 	return &broadcastServer{
-		router: router,
-		state:  newBroadcastStorage(logger, router),
-		logger: logger,
+		router:  router,
+		state:   newBroadcastStorage(logger, router),
+		logger:  logger,
+		metrics: m,
 	}
 }
 

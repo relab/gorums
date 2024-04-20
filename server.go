@@ -110,6 +110,8 @@ type serverOptions struct {
 	buffer          uint
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
+	logger          *slog.Logger
+	useMetrics      bool
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -140,6 +142,18 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
+func WithMetrics() ServerOption {
+	return func(o *serverOptions) {
+		o.useMetrics = true
+	}
+}
+
+func WithSlogger(logger *slog.Logger) ServerOption {
+	return func(o *serverOptions) {
+		o.logger = logger
+	}
+}
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *orderingServer
@@ -155,11 +169,10 @@ func NewServer(opts ...ServerOption) *Server {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
-	logger := slog.Default()
 	s := &Server{
 		srv:          newOrderingServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
-		broadcastSrv: newBroadcastServer(logger),
+		broadcastSrv: newBroadcastServer(serverOpts.logger, serverOpts.useMetrics),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s

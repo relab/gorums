@@ -33,13 +33,17 @@ func BroadcastHandler1[T RequestTypes, V Broadcaster](impl implementationFunc[T,
 		defer ctx.Release()
 		req := in.Message.(T)
 
-		srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
+		if srv.broadcastSrv.logger != nil {
+			srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
+		}
 
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
 		if err := srv.broadcastSrv.validateMessage(in); err != nil {
-			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			if srv.broadcastSrv.logger != nil {
+				srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			}
 			return
 		}
 		data, err := srv.broadcastSrv.createRequest(ctx, in, finished)
@@ -62,13 +66,19 @@ func BroadcastHandler2[T RequestTypes, V Broadcaster](impl implementationFunc[T,
 		ctx.Release()
 		req := in.Message.(T)
 
+		if srv.broadcastSrv.metrics != nil {
+			srv.broadcastSrv.metrics.AddMsg()
+		}
+
 		//srv.broadcastSrv.logger.Debug("received broadcast request", "req", req, "broadcastID", in.Metadata.BroadcastMsg.BroadcastID)
 
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
 		if err := srv.broadcastSrv.validateMessage(in); err != nil {
-			srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			if srv.broadcastSrv.logger != nil {
+				srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+			}
 			return
 		}
 		msg := content2{}
@@ -84,6 +94,9 @@ func BroadcastHandler2[T RequestTypes, V Broadcaster](impl implementationFunc[T,
 		broadcastMetadata := newBroadcastMetadata(in.Metadata)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
+		if srv.broadcastSrv.metrics != nil {
+			srv.broadcastSrv.metrics.AddProcessed()
+		}
 	}
 }
 
@@ -246,7 +259,9 @@ func (srv *broadcastServer) createRequest(ctx ServerCtx, in *Message, finished c
 	addOriginMethod(in.Metadata)
 	data, err := srv.state.newData(ctx.Context, in.Metadata.BroadcastMsg.IsBroadcastClient, in.Metadata.BroadcastMsg.OriginAddr, in.Metadata.BroadcastMsg.OriginMethod, in.Metadata.MessageID, in.Metadata.Method, finished)
 	if err != nil {
-		srv.logger.Debug("broadcast data could not be created", "data", data, "err", err)
+		if srv.logger != nil {
+			srv.logger.Debug("broadcast data could not be created", "data", data, "err", err)
+		}
 		return nil, err
 	}
 	return data, nil
@@ -258,14 +273,18 @@ func (srv *broadcastServer) processRequest(in *Message, data *content) error {
 
 	err := srv.state.addOrUpdate(in.Metadata.BroadcastMsg.BroadcastID, data)
 	if err != nil {
-		srv.logger.Debug("broadcast request could not be added", "data", data, "err", err)
+		if srv.logger != nil {
+			srv.logger.Debug("broadcast request could not be added", "data", data, "err", err)
+		}
 		//srv.broadcastSrv.router.unlock()
 		return err
 	}
 
 	sent, err := srv.checkMsgAlreadyProcessed(in.Metadata.BroadcastMsg.BroadcastID)
 	if sent {
-		srv.logger.Debug("broadcast request already processed", "data", data, "err", err)
+		if srv.logger != nil {
+			srv.logger.Debug("broadcast request already processed", "data", data, "err", err)
+		}
 		//srv.broadcastSrv.router.unlock()
 		return err
 	}
