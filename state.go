@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -118,7 +119,7 @@ func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, 
 			if req, ok := reqs[msg.broadcastID]; ok {
 				select {
 				case <-req.ctx.Done():
-					msg.receiveChan <- errors.New("req is done")
+					msg.receiveChan <- errors.New(fmt.Sprintf("req is done. broadcastID: %v", msg.broadcastID))
 				case req.sendChan <- msg:
 				}
 			} else {
@@ -230,7 +231,7 @@ func (s *BroadcastState) processBroadcast(broadcastID uint64, req protoreflect.P
 	}
 }
 
-func (s *BroadcastState) processSendToClient(broadcastID uint64, resp ResponseTypes, err error) {
+func (s *BroadcastState) processSendToClient(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
 	_, shardID, _, _ := decodeBroadcastID(broadcastID)
 	if shardID >= 16 {
 		return

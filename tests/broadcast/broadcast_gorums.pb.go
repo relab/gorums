@@ -242,7 +242,7 @@ func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	if addr == "" {
 		return fmt.Errorf("cannot forward to empty addr, got: %s", addr)
 	}
-	if !b.metadata.SenderType {
+	if !b.metadata.IsBroadcastClient {
 		return fmt.Errorf("can only forward client requests")
 	}
 	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
@@ -312,17 +312,13 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	}
 	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	var response protoreflect.ProtoMessage
-	var ok bool
 	select {
-	case response, ok = <-doneChan:
 	case <-ctx.Done():
 		return nil, fmt.Errorf("context cancelled")
+	case response := <-doneChan:
+	//slog.Info("received response", "resp", response, "response", response.(*Response))
+		return response.(*Response), err
 	}
-	if !ok {
-		return nil, fmt.Errorf("done channel was closed before returning a value")
-	}
-	return response.(*Response), err
 }
 
 func _clientBroadcastCallForward(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {

@@ -51,7 +51,7 @@ func BroadcastHandler1[T RequestTypes, V Broadcaster](impl implementationFunc[T,
 			return
 		}
 
-		broadcastMetadata := newBroadcastMetadata(in.Metadata, 0)
+		broadcastMetadata := newBroadcastMetadata(in.Metadata)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
 	}
@@ -73,13 +73,15 @@ func BroadcastHandler2[T RequestTypes, V Broadcaster](impl implementationFunc[T,
 		}
 		msg := content2{}
 		createRequest2(&msg, ctx, in, finished)
+		//slog.Info("got req", "broadcastID", msg.broadcastID, "req", req, "method", in.Metadata.Method)
 
 		err := srv.broadcastSrv.processRequest2(msg)
 		if err != nil {
+			//slog.Error("broadcast handler", "err", err)
 			return
 		}
 
-		broadcastMetadata := newBroadcastMetadata(in.Metadata, 0)
+		broadcastMetadata := newBroadcastMetadata(in.Metadata)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
 	}
@@ -178,6 +180,7 @@ func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 					continue
 				}
 				methods = append(methods, bMsg.method)
+				//slog.Info("methods", "methods", methods)
 			} else {
 				var err error
 				if msg.sendFn != nil {
@@ -209,7 +212,7 @@ func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 			}
 		case new := <-init.sendChan:
 			if done {
-				new.receiveChan <- errors.New("req is done")
+				new.receiveChan <- errors.New("req is done in handler")
 				continue
 			}
 			if msg.originAddr == "" && new.originAddr != "" {
@@ -321,7 +324,7 @@ func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastO
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
 }
 
-func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
+func (srv *broadcastServer) broadcastHandler(method string, req protoreflect.ProtoMessage, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
 	if VERSION == 1 {
 		srv.broadcastHandler1(method, req, broadcastID, opts...)
 	} else {
@@ -329,7 +332,7 @@ func (srv *broadcastServer) broadcastHandler(method string, req RequestTypes, br
 	}
 }
 
-func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp ResponseTypes, err error) {
+func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
 	if VERSION == 1 {
 		srv.sendToClientHandler1(broadcastID, resp, err)
 	} else {
@@ -337,7 +340,7 @@ func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp Respons
 	}
 }
 
-func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
+func (srv *broadcastServer) broadcastHandler2(method string, req protoreflect.ProtoMessage, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
 	srv.state.processBroadcast(broadcastID, req, method)
 	//rc, err := srv.state.getReqContent(broadcastID)
 	//if err != nil {
@@ -354,7 +357,7 @@ func (srv *broadcastServer) broadcastHandler2(method string, req RequestTypes, b
 	//}
 }
 
-func (srv *broadcastServer) sendToClientHandler2(broadcastID uint64, resp ResponseTypes, err error) {
+func (srv *broadcastServer) sendToClientHandler2(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
 	srv.state.processSendToClient(broadcastID, resp, err)
 	//rc, err := srv.state.getReqContent(broadcastID)
 	//if err != nil {
@@ -386,7 +389,7 @@ func (srv *broadcastServer) broadcastHandler1(method string, req RequestTypes, b
 	//}
 }
 
-func (srv *broadcastServer) sendToClientHandler1(broadcastID uint64, resp ResponseTypes, err error) {
+func (srv *broadcastServer) sendToClientHandler1(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
 	srv.sendToClient(newReply(resp, err, broadcastID))
 }
 

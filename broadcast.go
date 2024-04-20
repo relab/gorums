@@ -10,6 +10,32 @@ import (
 	"time"
 )
 
+type metrics struct {
+	TotalNum         uint64
+	Processed        uint64
+	Discarded        uint64
+	RoundTripLatency struct {
+		Avg    uint64
+		Median uint64
+		Min    uint64
+		Max    uint64
+	}
+	ReqLatency struct {
+		Avg    uint64
+		Median uint64
+		Min    uint64
+		Max    uint64
+	}
+	ShardDistribution map[int]int
+	// measures unique number of broadcastIDs processed simultaneounsly
+	ConcurrencyDistribution struct {
+		Avg    uint64
+		Median uint64
+		Min    uint64
+		Max    uint64
+	}
+}
+
 type broadcastServer struct {
 	propertiesMutex   sync.Mutex
 	viewMutex         sync.RWMutex
@@ -21,6 +47,7 @@ type broadcastServer struct {
 	state             *BroadcastState
 	router            IBroadcastRouter
 	logger            *slog.Logger
+	metrics           *metrics
 }
 
 func newBroadcastServer(logger *slog.Logger) *broadcastServer {

@@ -98,7 +98,9 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 		return fmt.Errorf("no broadcastID")
 	}
 
+	//slog.Info("AddResponse: Lock", "broadcastID", broadcastID)
 	srv.mu.Lock()
+	//slog.Info("AddResponse: Inside", "broadcastID", broadcastID)
 	csr, ok := srv.csr[broadcastID]
 	if !ok {
 		srv.mu.Unlock()
@@ -106,9 +108,17 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 	}
 	csr.resps = append(csr.resps, resp)
 	response, done := csr.handler(csr.req, csr.resps)
+
+	var doneChan chan protoreflect.ProtoMessage
 	if done {
-		csr.doneChan <- response
+		doneChan = csr.doneChan
 		delete(srv.csr, broadcastID)
+		srv.mu.Unlock()
+		//slog.Info("AddResponse: Unlock", "broadcastID", broadcastID)
+		doneChan <- response
+		//slog.Info("add response", "response", resp, "response", response)
+		//slog.Info("AddResponse: Done, sent", "resp", response, "broadcastID", broadcastID)
+		return nil
 	}
 	srv.mu.Unlock()
 	return nil
@@ -139,6 +149,8 @@ func ServerClientRPC(method string) func(broadcastID uint64, in protoreflect.Pro
 		ctx = metadata.NewOutgoingContext(ctx, md)
 		err := cc.Invoke(ctx, clientMethod, in, out, opts...)
 		if err != nil {
+			//_, ok := in.(protoreflect.ProtoMessage)
+			//slog.Error("clientserver: ServerClientRPC", "err", err, "req", in, "proto.Message", ok)
 			return nil, err
 		}
 		return nil, nil

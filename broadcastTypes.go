@@ -28,9 +28,9 @@ type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastHandlerFunc func(method string, req RequestTypes, broadcastID uint64, data ...broadcast.BroadcastOptions)
+type BroadcastHandlerFunc func(method string, req protoreflect.ProtoMessage, broadcastID uint64, data ...broadcast.BroadcastOptions)
 type BroadcastForwardHandlerFunc func(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string)
-type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp ResponseTypes, err error)
+type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 
@@ -43,7 +43,7 @@ type reply struct {
 	timestamp   time.Time
 }
 
-func newReply(response ResponseTypes, err error, broadcastID uint64) *reply {
+func newReply(response protoreflect.ProtoMessage, err error, broadcastID uint64) *reply {
 	return &reply{
 		response:    response,
 		err:         err,
@@ -52,7 +52,7 @@ func newReply(response ResponseTypes, err error, broadcastID uint64) *reply {
 	}
 }
 
-func (r *reply) getResponse() ResponseTypes {
+func (r *reply) getResponse() protoreflect.ProtoMessage {
 	return r.response
 }
 
@@ -134,18 +134,17 @@ func NewBroadcastOptions() broadcast.BroadcastOptions {
 type Broadcaster interface{}
 
 type BroadcastMetadata struct {
-	BroadcastID uint64
-	SenderType  bool // type of sender, could be: Client or Server
+	BroadcastID       uint64
+	IsBroadcastClient bool // type of sender, could be: Client or Server
 	//SenderID     uint32 // nodeID of last hop
 	SenderAddr   string // address of last hop
 	OriginAddr   string // address of the origin
 	OriginMethod string // the first method called by the origin
 	Method       string // the current method
-	Count        uint64 // number of messages received to the current method
 	Digest       []byte // digest of original message sent by client
 }
 
-func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata {
+func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	if md == nil {
 		return BroadcastMetadata{}
 	}
@@ -155,14 +154,13 @@ func newBroadcastMetadata(md *ordering.Metadata, count uint64) BroadcastMetadata
 		m = tmp[len(tmp)-1]
 	}
 	return BroadcastMetadata{
-		BroadcastID: md.BroadcastMsg.BroadcastID,
-		SenderType:  md.BroadcastMsg.IsBroadcastClient,
+		BroadcastID:       md.BroadcastMsg.BroadcastID,
+		IsBroadcastClient: md.BroadcastMsg.IsBroadcastClient,
 		//SenderID:     md.BroadcastMsg.SenderID,
 		SenderAddr:   md.BroadcastMsg.SenderAddr,
 		OriginAddr:   md.BroadcastMsg.OriginAddr,
 		OriginMethod: md.BroadcastMsg.OriginMethod,
 		Method:       m,
-		Count:        count,
 	}
 }
 
@@ -176,14 +174,14 @@ type bMsg struct {
 }
 
 type broadcastMsg struct {
-	request     RequestTypes
+	request     protoreflect.ProtoMessage
 	method      string
 	broadcastID uint64
 	options     broadcast.BroadcastOptions
 	ctx         context.Context
 }
 
-func newBroadcastMessage(broadcastID uint64, req RequestTypes, method string, options broadcast.BroadcastOptions) *broadcastMsg {
+func newBroadcastMessage(broadcastID uint64, req protoreflect.ProtoMessage, method string, options broadcast.BroadcastOptions) *broadcastMsg {
 	return &broadcastMsg{
 		request:     req,
 		method:      method,
@@ -193,7 +191,7 @@ func newBroadcastMessage(broadcastID uint64, req RequestTypes, method string, op
 	}
 }
 
-func newBroadcastMessage2(broadcastID uint64, req RequestTypes, method string) *broadcastMsg {
+func newBroadcastMessage2(broadcastID uint64, req protoreflect.ProtoMessage, method string) *broadcastMsg {
 	return &broadcastMsg{
 		request:     req,
 		method:      method,

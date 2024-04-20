@@ -47,7 +47,7 @@ func newBroadcastRouter(logger *slog.Logger, dialOpts ...grpc.DialOption) *Broad
 		connections:       make(map[string]*grpc.ClientConn),
 		connMutexes:       make(map[string]*sync.Mutex),
 		dialOpts:          dialOpts,
-		dialTimeout:       100 * time.Millisecond,
+		dialTimeout:       5 * time.Second,
 		connectionTimeout: 1 * time.Minute,
 		doneChan:          make(chan struct{}),
 		logger:            logger,
@@ -128,11 +128,13 @@ func (r *BroadcastRouter) routeClientReply2(broadcastID uint64, addr, method str
 			return err
 		}
 		go handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
+		//slog.Info("routed", "broadcastID", broadcastID)
 		return nil
 	}
 	//slog.Error("not routed")
 	// the server can receive a broadcast from another server before a client sends a direct message.
 	// it should thus wait for a potential message from the client. otherwise, it should be removed.
+	//slog.Info("not routed", "broadcastID", broadcastID)
 	return errors.New("not routed")
 }
 
