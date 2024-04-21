@@ -16,19 +16,23 @@ type BroadcastOptions struct {
 	SkipSelf             bool
 }
 
-func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, msg Content, metrics *Metrics) {
+func handleReq(router *BroadcastRouter, broadcastID uint64, init *reqContent, msg Content, metrics *Metrics) {
 	start := time.Now()
 	done := false
 	sent := false
 	methods := make([]string, 0, 3)
 	var respErr error
 	var respMsg protoreflect.ProtoMessage
+	if metrics != nil {
+		metrics.AddGoroutine(broadcastID, "req")
+	}
 	go router.CreateConnection(msg.OriginAddr)
 	defer func() {
 		done = true
 		init.cancelFunc()
 		if metrics != nil {
 			metrics.AddRoundTripLatency(start)
+			metrics.RemoveGoroutine(broadcastID, "req")
 		}
 	}()
 	for {
@@ -56,12 +60,25 @@ func handleReq(router IBroadcastRouter, broadcastID uint64, init *reqContent, ms
 				}
 				methods = append(methods, bMsg.Method)
 			} else {
-				var err error
-				if msg.SendFn != nil {
-					err = msg.send(bMsg.Reply.Response, bMsg.Reply.Err)
-				} else {
-					err = router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
+				// BroadcastCall if origin addr is non-empty.
+				if msg.OriginAddr != "" {
+					err := router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
+					if metrics != nil {
+						if err != nil {
+							metrics.AddFinishedFailed()
+						} else {
+							metrics.AddFinishedSuccessful()
+						}
+					}
+					return
 				}
+				// QuorumCall if origin addr is empty.
+				if msg.SendFn == nil {
+					// Has not received client request
+					continue
+				}
+				// Has received client request
+				err := msg.send(bMsg.Reply.Response, bMsg.Reply.Err)
 				if err != nil {
 					// add response if not already done
 					if respMsg == nil {

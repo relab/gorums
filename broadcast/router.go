@@ -20,14 +20,6 @@ const (
 type ServerHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
 type ClientHandler func(broadcastID uint64, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
 
-type IBroadcastRouter interface {
-	Send(broadcastID uint64, addr, method string, msg any) error
-	CreateConnection(addr string)
-	AddAddr(id uint32, addr string)
-	AddServerHandler(method string, handler ServerHandler)
-	AddClientHandler(method string, handler ClientHandler)
-}
-
 type BroadcastRouter struct {
 	mut               sync.Mutex
 	id                uint32

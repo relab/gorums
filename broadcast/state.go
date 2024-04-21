@@ -19,16 +19,26 @@ type timingMetric struct {
 	Max time.Duration
 }
 
+type goroutineMetric struct {
+	started time.Time
+	ended   time.Time
+}
+
 type Metrics struct {
-	mut          sync.Mutex
-	TotalNum     uint64
-	FinishedReqs struct {
+	mut               sync.Mutex
+	TotalNum          uint64
+	GoroutinesStarted uint64
+	GoroutinesStopped uint64
+	Goroutines        map[string]*goroutineMetric
+	FinishedReqs      struct {
 		Total     uint64
 		Succesful uint64
 		Failed    uint64
 	}
 	Processed         uint64
 	Dropped           uint64
+	Invalid           uint64
+	AlreadyProcessed  uint64
 	RoundTripLatency  timingMetric
 	ReqLatency        timingMetric
 	ShardDistribution map[uint16]uint64
@@ -36,22 +46,34 @@ type Metrics struct {
 	ConcurrencyDistribution timingMetric
 }
 
+func NewMetrics() *Metrics {
+	return &Metrics{
+		ShardDistribution: make(map[uint16]uint64, 16),
+		Goroutines:        make(map[string]*goroutineMetric, 2000),
+	}
+}
+
 func (m *Metrics) Reset() {
 	m.mut.Lock()
 	defer m.mut.Unlock()
 	m.TotalNum = 0
+	m.GoroutinesStarted = 0
+	m.GoroutinesStopped = 0
+	m.Goroutines = make(map[string]*goroutineMetric, 2000)
 	m.FinishedReqs.Total = 0
 	m.FinishedReqs.Succesful = 0
 	m.FinishedReqs.Failed = 0
 	m.Processed = 0
 	m.Dropped = 0
+	m.Invalid = 0
+	m.AlreadyProcessed = 0
 	m.RoundTripLatency.Avg = 0
 	m.RoundTripLatency.Min = 100 * time.Hour
 	m.RoundTripLatency.Max = 0
 	m.ReqLatency.Avg = 0
 	m.ReqLatency.Min = 100 * time.Hour
 	m.ReqLatency.Max = 0
-	m.ShardDistribution = make(map[uint16]uint64)
+	m.ShardDistribution = make(map[uint16]uint64, 16)
 	// measures unique number of broadcastIDs processed simultaneounsly
 	//m.ConcurrencyDistribution timingMetric
 }
@@ -61,12 +83,16 @@ func (m *Metrics) String() string {
 	defer m.mut.Unlock()
 	res := "Metrics:"
 	res += "\n\t- TotalNum: " + fmt.Sprintf("%v", m.TotalNum)
+	res += "\n\t- Goroutines started: " + fmt.Sprintf("%v", m.GoroutinesStarted)
+	res += "\n\t- Goroutines stopped: " + fmt.Sprintf("%v", m.GoroutinesStopped)
 	res += "\n\t- FinishedReqs:"
 	res += "\n\t\t- Total: " + fmt.Sprintf("%v", m.FinishedReqs.Total)
-	res += "\n\t\t- Succesful: " + fmt.Sprintf("%v", m.FinishedReqs.Succesful)
+	res += "\n\t\t- Successful: " + fmt.Sprintf("%v", m.FinishedReqs.Succesful)
 	res += "\n\t\t- Failed: " + fmt.Sprintf("%v", m.FinishedReqs.Failed)
 	res += "\n\t- Processed: " + fmt.Sprintf("%v", m.Processed)
 	res += "\n\t- Dropped: " + fmt.Sprintf("%v", m.Dropped)
+	res += "\n\t\t- Invalid: " + fmt.Sprintf("%v", m.Invalid)
+	res += "\n\t\t- AlreadyProcessed: " + fmt.Sprintf("%v", m.AlreadyProcessed)
 	res += "\n\t- RoundTripLatency:"
 	res += "\n\t\t- Avg: " + fmt.Sprintf("%v", m.RoundTripLatency.Avg)
 	res += "\n\t\t- Min: " + fmt.Sprintf("%v", m.RoundTripLatency.Min)
@@ -139,10 +165,41 @@ func (m *Metrics) AddMsg() {
 	m.TotalNum++
 }
 
-func (m *Metrics) AddDropped() {
+func (m *Metrics) AddGoroutine(broadcastID uint64, name string) {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	if name == "handler" {
+		m.GoroutinesStarted++
+	}
+	index := fmt.Sprintf("%s.%v", name, broadcastID)
+	m.Goroutines[index] = &goroutineMetric{
+		started: time.Now(),
+	}
+}
+
+func (m *Metrics) RemoveGoroutine(broadcastID uint64, name string) {
+	m.mut.Lock()
+	defer m.mut.Unlock()
+	if name == "handler" {
+		m.GoroutinesStopped++
+	}
+	index := fmt.Sprintf("%s.%v", name, broadcastID)
+	if g, ok := m.Goroutines[index]; ok {
+		g.ended = time.Now()
+	} else {
+		panic("what")
+	}
+}
+
+func (m *Metrics) AddDropped(invalid bool) {
 	m.mut.Lock()
 	defer m.mut.Unlock()
 	m.Dropped++
+	if invalid {
+		m.Invalid++
+	} else {
+		m.AlreadyProcessed++
+	}
 }
 
 func (m *Metrics) AddProcessed() {
@@ -266,31 +323,31 @@ type shardElement struct {
 }
 
 type BroadcastState struct {
-	parentCtx        context.Context
-	parentCancelFunc context.CancelFunc
-	logger           *slog.Logger
-	reqTTL           time.Duration
-	sendBuffer       int
-	shardBuffer      int
-	metrics          *Metrics
+	parentCtx           context.Context
+	parentCtxCancelFunc context.CancelFunc
+	logger              *slog.Logger
+	reqTTL              time.Duration
+	sendBuffer          int
+	shardBuffer         int
+	metrics             *Metrics
 
 	shards [16]*shardElement
 }
 
-func NewState(logger *slog.Logger, router IBroadcastRouter, metrics *Metrics) *BroadcastState {
+func NewState(logger *slog.Logger, router *BroadcastRouter, metrics *Metrics) *BroadcastState {
 	shardBuffer := 100
 	TTL := 5 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
 	shards := createShards(ctx, shardBuffer)
 	state := &BroadcastState{
-		parentCtx:        ctx,
-		parentCancelFunc: cancel,
-		shards:           shards,
-		logger:           logger,
-		reqTTL:           TTL,
-		sendBuffer:       5,
-		shardBuffer:      shardBuffer,
-		metrics:          metrics,
+		parentCtx:           ctx,
+		parentCtxCancelFunc: cancel,
+		shards:              shards,
+		logger:              logger,
+		reqTTL:              TTL,
+		sendBuffer:          5,
+		shardBuffer:         shardBuffer,
+		metrics:             metrics,
 	}
 	for i := 0; i < 16; i++ {
 		go state.runShard(shards[i], router, state.reqTTL, state.sendBuffer, state.shardBuffer)
@@ -314,7 +371,7 @@ func createShards(ctx context.Context, shardBuffer int) [16]*shardElement {
 	return shards
 }
 
-func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, reqTTL time.Duration, sendBuffer, shardBuffer int) {
+func (s *BroadcastState) runShard(shard *shardElement, router *BroadcastRouter, reqTTL time.Duration, sendBuffer, shardBuffer int) {
 	reqs := make(map[uint64]*reqContent, shardBuffer)
 	for {
 		select {
@@ -333,9 +390,13 @@ func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, 
 			} else {
 				ctx, cancel := context.WithTimeout(s.parentCtx, reqTTL)
 				req := &reqContent{
-					ctx:           ctx,
-					cancelFunc:    cancel,
-					sendChan:      make(chan Content, sendBuffer),
+					ctx:        ctx,
+					cancelFunc: cancel,
+					// it is important to not buffer the channel. Otherwise,
+					// it will cause a deadlock on the receiving channel. Will
+					// happen in this scenario: A msg is queued/buffered but the
+					// listening goroutine is stopped.
+					sendChan:      make(chan Content),
 					broadcastChan: make(chan Msg, sendBuffer),
 				}
 				reqs[msg.BroadcastID] = req
@@ -350,7 +411,6 @@ func (s *BroadcastState) runShard(shard *shardElement, router IBroadcastRouter, 
 			if s.metrics != nil {
 				s.metrics.AddShardDistribution(shard.id)
 			}
-			//slog.Info("shard got bMsg")
 			if req, ok := reqs[msg.BroadcastID]; ok {
 				select {
 				case <-req.ctx.Done():
@@ -375,7 +435,12 @@ func (s *BroadcastState) Process(msg Content) error {
 		return errors.New("shard is down")
 	case shard.sendChan <- msg:
 	}
-	return <-receiveChan
+	select {
+	case <-shard.ctx.Done():
+		return errors.New("shard is down")
+	case err := <-receiveChan:
+		return err
+	}
 }
 
 func (s *BroadcastState) ProcessBroadcast(broadcastID uint64, req protoreflect.ProtoMessage, method string) {
@@ -417,7 +482,7 @@ func (s *BroadcastState) Prune() error {
 	if s.logger != nil {
 		s.logger.Debug("broadcast: pruned reqs")
 	}
-	s.parentCancelFunc()
+	s.parentCtxCancelFunc()
 	return nil
 }
 

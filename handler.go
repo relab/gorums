@@ -27,6 +27,8 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		var start time.Time
 		if srv.broadcastSrv.metrics != nil {
 			srv.broadcastSrv.metrics.AddMsg()
+			srv.broadcastSrv.metrics.AddGoroutine(in.Metadata.BroadcastMsg.BroadcastID, "handler")
+			defer srv.broadcastSrv.metrics.RemoveGoroutine(in.Metadata.BroadcastMsg.BroadcastID, "handler")
 			start = time.Now()
 			//defer srv.broadcastSrv.metrics.AddReqLatency(time.Now())
 		}
@@ -39,7 +41,7 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 				srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
 			}
 			if srv.broadcastSrv.metrics != nil {
-				srv.broadcastSrv.metrics.AddDropped()
+				srv.broadcastSrv.metrics.AddDropped(true)
 			}
 			return
 		}
@@ -49,11 +51,12 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		err := srv.broadcastSrv.state.Process(msg)
 		if err != nil {
 			if srv.broadcastSrv.metrics != nil {
-				srv.broadcastSrv.metrics.AddDropped()
+				srv.broadcastSrv.metrics.AddDropped(false)
 			}
 			return
 		}
 
+		//ctx.Release()
 		broadcastMetadata := newBroadcastMetadata(in.Metadata)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)

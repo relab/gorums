@@ -5,7 +5,6 @@ import (
 	"fmt"
 	net "net"
 	"sync"
-	"time"
 
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
@@ -124,7 +123,10 @@ func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadca
 	//srv.numMsg["BC"]++
 	//srv.mu.Unlock()
 	//slog.Warn("server received broadcast call")
-	time.Sleep(1 * time.Millisecond)
+	//time.Sleep(1 * time.Millisecond)
+	//broadcast.SendToClient(&Response{
+	//Result: req.Value,
+	//}, nil)
 	broadcast.BroadcastIntermediate(req)
 }
 
@@ -133,7 +135,7 @@ func (srv *testServer) BroadcastIntermediate(ctx gorums.ServerCtx, req *Request,
 	//srv.numMsg["BI"]++
 	//srv.mu.Unlock()
 	//slog.Warn("server received broadcast intermediate")
-	time.Sleep(1 * time.Millisecond)
+	//time.Sleep(1 * time.Millisecond)
 	broadcast.Broadcast(req)
 }
 
@@ -142,7 +144,7 @@ func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *
 	//srv.numMsg["B"]++
 	//srv.mu.Unlock()
 	//slog.Warn("server received broadcast")
-	time.Sleep(1 * time.Millisecond)
+	//time.Sleep(1 * time.Millisecond)
 	broadcast.SendToClient(&Response{
 		Result: req.Value,
 	}, nil)

@@ -1127,25 +1127,30 @@ func TestBroadcastCallTenClientsOnly(t *testing.T) {
 	fmt.Println("starting...")
 	s = time.Now()
 	var wg sync.WaitGroup
-	for i, client := range clients {
-		go func(i int) {
-			start := time.Now()
-			resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(i)})
-			fmt.Println(i, "took:", time.Since(start))
-			if err != nil {
-				t.Error(err)
-			}
-			if resp.GetResult() != int64(i) {
-				t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
-			}
-			wg.Done()
-		}(i)
-		wg.Add(1)
+	for r := 0; r < 100; r++ {
+		for i, client := range clients {
+			go func(i int) {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				//start := time.Now()
+				resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
+				//fmt.Println(i, "took:", time.Since(start))
+				if err != nil {
+					t.Error(err)
+				}
+				if resp.GetResult() != int64(i) {
+					t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+				}
+				wg.Done()
+			}(i)
+			wg.Add(1)
+		}
 	}
 	wg.Wait()
-	fmt.Println("total took (async):", time.Since(s))
+	end := time.Now()
 	srvCleanup()
 	for _, srv := range srvs {
 		srv.PrintStats()
 	}
+	fmt.Println("total took (async):", end.Sub(s))
 }

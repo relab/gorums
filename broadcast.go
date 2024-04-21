@@ -33,9 +33,7 @@ func (srv *Server) PrintStats() {
 func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer {
 	var m *broadcast.Metrics = nil
 	if withMetrics {
-		m = &broadcast.Metrics{
-			ShardDistribution: make(map[uint16]uint64),
-		}
+		m = broadcast.NewMetrics()
 	}
 	router := broadcast.NewRouter(logger, m)
 	return &broadcastServer{
