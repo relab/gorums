@@ -24,6 +24,8 @@ type BroadcastRouter struct {
 	mut               sync.Mutex
 	id                uint32
 	addr              string
+	prevMethod        uint16
+	methodsConversion map[string]uint16
 	serverHandlers    map[string]ServerHandler // handlers on other servers
 	clientHandlers    map[string]ClientHandler // handlers on client servers
 	connections       map[string]*grpc.ClientConn

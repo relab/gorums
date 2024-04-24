@@ -53,6 +53,7 @@ type BroadcastState interface {
 	Process(broadcast.Content) error
 	ProcessBroadcast(uint64, protoreflect.ProtoMessage, string)
 	ProcessSendToClient(uint64, protoreflect.ProtoMessage, error)
+	NewBroadcastID() uint64
 }
 
 type BroadcastRouter interface {

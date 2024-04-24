@@ -14,6 +14,7 @@ type BroadcastOptions struct {
 	Deadline             time.Time
 	OmitUniquenessChecks bool
 	SkipSelf             bool
+	RelatedToReq         uint64
 }
 
 func handleReq(router *BroadcastRouter, broadcastID uint64, init *reqContent, msg Content, metrics *Metrics) {
@@ -28,12 +29,12 @@ func handleReq(router *BroadcastRouter, broadcastID uint64, init *reqContent, ms
 	}
 	go router.CreateConnection(msg.OriginAddr)
 	defer func() {
-		done = true
-		init.cancelFunc()
 		if metrics != nil {
 			metrics.AddRoundTripLatency(start)
 			metrics.RemoveGoroutine(broadcastID, "req")
 		}
+		done = true
+		init.cancelFunc()
 	}()
 	for {
 		select {

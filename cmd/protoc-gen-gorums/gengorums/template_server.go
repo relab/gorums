@@ -102,15 +102,16 @@ var registerServerBroadcast = `
 {{- range .Methods}}
 {{- if isBroadcastOption .}}
 
-func (srv *Server) Broadcast{{.GoName}}(req *{{in $genFile .}}, broadcastID uint64, opts... gorums.BroadcastOption) {
-	if broadcastID == 0 {
-		panic("broadcastID cannot be empty.")
-	}
+func (srv *Server) Broadcast{{.GoName}}(req *{{in $genFile .}}, opts... gorums.BroadcastOption) {
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("{{.Desc.FullName}}", req, broadcastID, options)
+	if options.RelatedToReq > 0 {
+		go srv.broadcast.orchestrator.BroadcastHandler("{{.Desc.FullName}}", req, options.RelatedToReq, options)
+	} else {
+		go srv.broadcast.orchestrator.ServerBroadcastHandler("{{.Desc.FullName}}", req, options)
+	}
 }
 
 {{- end}}

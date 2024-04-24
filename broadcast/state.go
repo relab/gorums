@@ -26,6 +26,7 @@ type goroutineMetric struct {
 
 type Metrics struct {
 	mut               sync.Mutex
+	start             time.Time
 	TotalNum          uint64
 	GoroutinesStarted uint64
 	GoroutinesStopped uint64
@@ -48,6 +49,7 @@ type Metrics struct {
 
 func NewMetrics() *Metrics {
 	return &Metrics{
+		start:             time.Now(),
 		ShardDistribution: make(map[uint16]uint64, 16),
 		Goroutines:        make(map[string]*goroutineMetric, 2000),
 	}
@@ -56,6 +58,7 @@ func NewMetrics() *Metrics {
 func (m *Metrics) Reset() {
 	m.mut.Lock()
 	defer m.mut.Unlock()
+	m.start = time.Now()
 	m.TotalNum = 0
 	m.GoroutinesStarted = 0
 	m.GoroutinesStopped = 0
@@ -81,7 +84,12 @@ func (m *Metrics) Reset() {
 func (m *Metrics) String() string {
 	m.mut.Lock()
 	defer m.mut.Unlock()
+	dur := time.Since(m.start)
 	res := "Metrics:"
+	res += "\n\t- TotalTime: " + fmt.Sprintf("%v", dur)
+	if m.FinishedReqs.Total > 0 {
+		res += "\n\t- ReqTime: " + fmt.Sprintf("%v", dur/time.Duration(m.FinishedReqs.Total))
+	}
 	res += "\n\t- TotalNum: " + fmt.Sprintf("%v", m.TotalNum)
 	res += "\n\t- Goroutines started: " + fmt.Sprintf("%v", m.GoroutinesStarted)
 	res += "\n\t- Goroutines stopped: " + fmt.Sprintf("%v", m.GoroutinesStopped)
@@ -168,9 +176,7 @@ func (m *Metrics) AddMsg() {
 func (m *Metrics) AddGoroutine(broadcastID uint64, name string) {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	if name == "handler" {
-		m.GoroutinesStarted++
-	}
+	m.GoroutinesStarted++
 	index := fmt.Sprintf("%s.%v", name, broadcastID)
 	m.Goroutines[index] = &goroutineMetric{
 		started: time.Now(),
@@ -180,14 +186,12 @@ func (m *Metrics) AddGoroutine(broadcastID uint64, name string) {
 func (m *Metrics) RemoveGoroutine(broadcastID uint64, name string) {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	if name == "handler" {
-		m.GoroutinesStopped++
-	}
+	m.GoroutinesStopped++
 	index := fmt.Sprintf("%s.%v", name, broadcastID)
 	if g, ok := m.Goroutines[index]; ok {
 		g.ended = time.Now()
-	} else {
-		panic("what")
+		//} else {
+		//panic("what")
 	}
 }
 
@@ -330,15 +334,18 @@ type BroadcastState struct {
 	sendBuffer          int
 	shardBuffer         int
 	metrics             *Metrics
+	snowflake           *Snowflake
 
 	shards [16]*shardElement
 }
+
+const NumShards = 16
 
 func NewState(logger *slog.Logger, router *BroadcastRouter, metrics *Metrics) *BroadcastState {
 	shardBuffer := 100
 	TTL := 5 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
-	shards := createShards(ctx, shardBuffer)
+	shards := createShards(ctx, shardBuffer, NumShards)
 	state := &BroadcastState{
 		parentCtx:           ctx,
 		parentCtxCancelFunc: cancel,
@@ -348,16 +355,17 @@ func NewState(logger *slog.Logger, router *BroadcastRouter, metrics *Metrics) *B
 		sendBuffer:          5,
 		shardBuffer:         shardBuffer,
 		metrics:             metrics,
+		snowflake:           NewSnowflake(router.addr),
 	}
-	for i := 0; i < 16; i++ {
+	for i := 0; i < NumShards; i++ {
 		go state.runShard(shards[i], router, state.reqTTL, state.sendBuffer, state.shardBuffer)
 	}
 	return state
 }
 
-func createShards(ctx context.Context, shardBuffer int) [16]*shardElement {
+func createShards(ctx context.Context, shardBuffer, numShards int) [16]*shardElement {
 	var shards [16]*shardElement
-	for i := 0; i < 16; i++ {
+	for i := 0; i < numShards; i++ {
 		ctx, cancel := context.WithCancel(ctx)
 		shard := &shardElement{
 			id:            i,
@@ -382,9 +390,15 @@ func (s *BroadcastState) runShard(shard *shardElement, router *BroadcastRouter, 
 				s.metrics.AddShardDistribution(shard.id)
 			}
 			if req, ok := reqs[msg.BroadcastID]; ok {
+				if !msg.IsBroadcastClient {
+					// no need to send it to the broadcast request goroutine.
+					//
+					msg.ReceiveChan <- nil
+					continue
+				}
 				select {
 				case <-req.ctx.Done():
-					msg.ReceiveChan <- errors.New(fmt.Sprintf("req is done. broadcastID: %v", msg.BroadcastID))
+					msg.ReceiveChan <- fmt.Errorf("req is done. broadcastID: %v", msg.BroadcastID)
 				case req.sendChan <- msg:
 				}
 			} else {
@@ -423,9 +437,10 @@ func (s *BroadcastState) runShard(shard *shardElement, router *BroadcastRouter, 
 
 func (s *BroadcastState) Process(msg Content) error {
 	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
-	if shardID >= 16 {
-		return errors.New("wrong shardID")
-	}
+	shardID = shardID % NumShards
+	//if shardID >= 16 {
+	//return errors.New("wrong shardID")
+	//}
 	shard := s.shards[shardID]
 
 	receiveChan := make(chan error)
@@ -484,6 +499,10 @@ func (s *BroadcastState) Prune() error {
 	}
 	s.parentCtxCancelFunc()
 	return nil
+}
+
+func (s *BroadcastState) NewBroadcastID() uint64 {
+	return s.snowflake.NewBroadcastID()
 }
 
 type Content struct {

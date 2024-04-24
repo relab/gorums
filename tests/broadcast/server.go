@@ -127,6 +127,9 @@ func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadca
 	//broadcast.SendToClient(&Response{
 	//Result: req.Value,
 	//}, nil)
+	/*broadcast.SendToClient(&Response{
+		Result: req.Value,
+	}, nil)*/
 	broadcast.BroadcastIntermediate(req)
 }
 

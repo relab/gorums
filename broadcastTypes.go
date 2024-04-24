@@ -21,8 +21,9 @@ type ResponseTypes interface {
 	ProtoReflect() protoreflect.Message
 }
 
-type BroadcastHandlerFunc func(method string, req protoreflect.ProtoMessage, broadcastID uint64, data ...broadcast.BroadcastOptions)
+type BroadcastHandlerFunc func(method string, req protoreflect.ProtoMessage, broadcastID uint64, options ...broadcast.BroadcastOptions)
 type BroadcastForwardHandlerFunc func(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string)
+type BroadcastServerHandlerFunc func(method string, req RequestTypes, options ...broadcast.BroadcastOptions)
 type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
@@ -40,16 +41,18 @@ type implementationFunc[T RequestTypes, V Broadcaster] func(ServerCtx, T, V)
 // be an unimported field in the broadcast struct in the
 // generated code.
 type BroadcastOrchestrator struct {
-	BroadcastHandler    BroadcastHandlerFunc
-	ForwardHandler      BroadcastForwardHandlerFunc
-	SendToClientHandler BroadcastSendToClientHandlerFunc
+	BroadcastHandler       BroadcastHandlerFunc
+	ForwardHandler         BroadcastForwardHandlerFunc
+	SendToClientHandler    BroadcastSendToClientHandlerFunc
+	ServerBroadcastHandler BroadcastServerHandlerFunc
 }
 
 func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
 	return &BroadcastOrchestrator{
-		BroadcastHandler:    srv.broadcastSrv.broadcastHandler,
-		ForwardHandler:      srv.broadcastSrv.forwardHandler,
-		SendToClientHandler: srv.broadcastSrv.sendToClientHandler,
+		BroadcastHandler:       srv.broadcastSrv.broadcastHandler,
+		ForwardHandler:         srv.broadcastSrv.forwardHandler,
+		ServerBroadcastHandler: srv.broadcastSrv.serverBroadcastHandler,
+		SendToClientHandler:    srv.broadcastSrv.sendToClientHandler,
 	}
 }
 
@@ -89,6 +92,12 @@ func WithoutSelf() BroadcastOption {
 func WithoutUniquenessChecks() BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
 		b.OmitUniquenessChecks = true
+	}
+}
+
+func WithRelationToRequest(broadcastID uint64) BroadcastOption {
+	return func(b *broadcast.BroadcastOptions) {
+		b.RelatedToReq = broadcastID
 	}
 }
 

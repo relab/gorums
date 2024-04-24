@@ -422,46 +422,50 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 	})
 }
 
-func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
-	if broadcastID == 0 {
-		panic("broadcastID cannot be empty.")
-	}
+func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, broadcastID, options)
+	if options.RelatedToReq > 0 {
+		go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, options.RelatedToReq, options)
+	} else {
+		go srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, options)
+	}
 }
 
-func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
-	if broadcastID == 0 {
-		panic("broadcastID cannot be empty.")
-	}
+func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, broadcastID, options)
+	if options.RelatedToReq > 0 {
+		go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, options.RelatedToReq, options)
+	} else {
+		go srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, options)
+	}
 }
 
-func (srv *Server) BroadcastBroadcastInternal(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
-	if broadcastID == 0 {
-		panic("broadcastID cannot be empty.")
-	}
+func (srv *Server) BroadcastBroadcastInternal(req *Request, opts ...gorums.BroadcastOption) {
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, broadcastID, options)
+	if options.RelatedToReq > 0 {
+		go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, options.RelatedToReq, options)
+	} else {
+		go srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.BroadcastInternal", req, options)
+	}
 }
 
-func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
-	if broadcastID == 0 {
-		panic("broadcastID cannot be empty.")
-	}
+func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Request, opts ...gorums.BroadcastOption) {
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, broadcastID, options)
+	if options.RelatedToReq > 0 {
+		go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, options.RelatedToReq, options)
+	} else {
+		go srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, options)
+	}
 }
