@@ -21,8 +21,8 @@ var clientServerBody = `
 `
 
 var clientServerMethodImpl = `
-func (srv *clientServerImpl) client{{.Method.GoName}}(ctx context.Context, resp *{{out .GenFile .Method}}) (*{{out .GenFile .Method}}, error) {
-	err := srv.AddResponse(ctx, resp)
+func (srv *clientServerImpl) client{{.Method.GoName}}(ctx context.Context, resp *{{out .GenFile .Method}}, broadcastID uint64) (*{{out .GenFile .Method}}, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
 	return resp, err
 }
 

@@ -19,6 +19,7 @@ type managerOptions struct {
 	metadata        metadata.MD
 	perNodeMD       func(uint32) metadata.MD
 	publicKey       string
+	addr            string
 }
 
 func newManagerOptions() managerOptions {
@@ -97,10 +98,14 @@ func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
 	}
 }
 
-// WithPerNodeMetadata returns a ManagerOption that allows you to set metadata for each
-// node individually.
 func WithPublicKey(publicKey string) ManagerOption {
 	return func(o *managerOptions) {
 		o.publicKey = publicKey
+	}
+}
+
+func WithAddr(addr string) ManagerOption {
+	return func(o *managerOptions) {
+		o.addr = addr
 	}
 }

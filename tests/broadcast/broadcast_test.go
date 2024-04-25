@@ -68,7 +68,7 @@ func TestSimpleBroadcastCall(t *testing.T) {
 
 	for i := 1; i <= numReqs; i++ {
 		//slog.Info("req", "no", i)
-		val := int64(i)
+		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		resp, err := config.BroadcastCall(ctx, &Request{Value: val})
 		if err != nil {
@@ -1127,10 +1127,10 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	fmt.Println("starting...")
 	s = time.Now()
 	var wg sync.WaitGroup
-	for r := 0; r < 10; r++ {
+	for r := 0; r < 100; r++ {
 		for i, client := range clients {
 			go func(i int) {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				//start := time.Now()
 				resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})

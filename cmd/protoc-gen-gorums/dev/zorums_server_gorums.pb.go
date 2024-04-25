@@ -428,9 +428,9 @@ func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, opts ...gorums
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, options.RelatedToReq, options)
 	} else {
-		go srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, options)
+		srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, options)
 	}
 }
 
@@ -440,9 +440,9 @@ func (srv *Server) BroadcastMulticastWithBroadcast(req *Request, opts ...gorums.
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, options.RelatedToReq, options)
 	} else {
-		go srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, options)
+		srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, options)
 	}
 }
 
@@ -452,9 +452,9 @@ func (srv *Server) BroadcastBroadcastInternal(req *Request, opts ...gorums.Broad
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, options.RelatedToReq, options)
 	} else {
-		go srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.BroadcastInternal", req, options)
+		srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.BroadcastInternal", req, options)
 	}
 }
 
@@ -464,8 +464,8 @@ func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Re
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		go srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, options.RelatedToReq, options)
 	} else {
-		go srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, options)
+		srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, options)
 	}
 }

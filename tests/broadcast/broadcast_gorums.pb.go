@@ -109,6 +109,17 @@ func (mgr *Manager) Close() {
 	}
 }
 
+func (mgr *Manager) AddClientServer2(lis net.Listener, opts ...grpc.ServerOption) error {
+	srv := gorums.NewClientServer2(lis)
+	srvImpl := &clientServerImpl{
+		ClientServer: srv,
+	}
+	registerClientServerHandlers(srvImpl)
+	go srvImpl.Serve(lis)
+	mgr.srv = srvImpl
+	return nil
+}
+
 func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
 	srvImpl := &clientServerImpl{
 		grpcServer: grpc.NewServer(opts...),
@@ -235,7 +246,9 @@ type clientServerImpl struct {
 
 func (c *clientServerImpl) stop() {
 	c.ClientServer.Stop()
-	c.grpcServer.Stop()
+	if c.grpcServer != nil {
+		c.grpcServer.Stop()
+	}
 }
 
 func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
@@ -298,8 +311,8 @@ func _clientBroadcastCall(srv interface{}, ctx context.Context, dec func(interfa
 	return srv.(clientServer).clientBroadcastCall(ctx, in)
 }
 
-func (srv *clientServerImpl) clientBroadcastCall(ctx context.Context, resp *Response) (*Response, error) {
-	err := srv.AddResponse(ctx, resp)
+func (srv *clientServerImpl) clientBroadcastCall(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
 	return resp, err
 }
 
@@ -333,8 +346,8 @@ func _clientBroadcastCallForward(srv interface{}, ctx context.Context, dec func(
 	return srv.(clientServer).clientBroadcastCallForward(ctx, in)
 }
 
-func (srv *clientServerImpl) clientBroadcastCallForward(ctx context.Context, resp *Response) (*Response, error) {
-	err := srv.AddResponse(ctx, resp)
+func (srv *clientServerImpl) clientBroadcastCallForward(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
 	return resp, err
 }
 
@@ -382,6 +395,12 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "",
+}
+
+func registerClientServerHandlers(srv *clientServerImpl) {
+
+	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCall", gorums.ClientHandler(srv.clientBroadcastCall))
+	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.ClientHandler(srv.clientBroadcastCallForward))
 }
 
 // Multicast is a quorum call invoked on all nodes in configuration c,
@@ -588,37 +607,40 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCallForward"))
 }
 
-func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
-	if broadcastID == 0 {
-		panic("broadcastID cannot be empty.")
-	}
+func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, broadcastID, options)
+	if options.RelatedToReq > 0 {
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, options.RelatedToReq, options)
+	} else {
+		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, options)
+	}
 }
 
-func (srv *Server) BroadcastBroadcastIntermediate(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
-	if broadcastID == 0 {
-		panic("broadcastID cannot be empty.")
-	}
+func (srv *Server) BroadcastBroadcastIntermediate(req *Request, opts ...gorums.BroadcastOption) {
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, broadcastID, options)
+	if options.RelatedToReq > 0 {
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, options.RelatedToReq, options)
+	} else {
+		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, options)
+	}
 }
 
-func (srv *Server) BroadcastBroadcast(req *Request, broadcastID uint64, opts ...gorums.BroadcastOption) {
-	if broadcastID == 0 {
-		panic("broadcastID cannot be empty.")
-	}
+func (srv *Server) BroadcastBroadcast(req *Request, opts ...gorums.BroadcastOption) {
 	options := gorums.NewBroadcastOptions()
 	for _, opt := range opts {
 		opt(&options)
 	}
-	go srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, broadcastID, options)
+	if options.RelatedToReq > 0 {
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, options.RelatedToReq, options)
+	} else {
+		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.Broadcast", req, options)
+	}
 }
 
 type internalResponse struct {

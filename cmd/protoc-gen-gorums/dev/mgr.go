@@ -40,6 +40,17 @@ func (mgr *Manager) Close() {
 	}
 }
 
+func (mgr *Manager) AddClientServer2(lis net.Listener, opts ...grpc.ServerOption) error {
+	srv := gorums.NewClientServer2(lis)
+	srvImpl := &clientServerImpl{
+		ClientServer: srv,
+	}
+	registerClientServerHandlers(srvImpl)
+	go srvImpl.Serve(lis)
+	mgr.srv = srvImpl
+	return nil
+}
+
 func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
 	srvImpl := &clientServerImpl{
 		grpcServer: grpc.NewServer(opts...),

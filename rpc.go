@@ -11,15 +11,16 @@ import (
 //
 // This struct should be used by generated code only.
 type CallData struct {
-	Message protoreflect.ProtoMessage
-	Method  string
+	Message     protoreflect.ProtoMessage
+	Method      string
+	BroadcastID uint64
 }
 
 // RPCCall executes a remote procedure call on the node.
 //
 // This method should be used by generated code only.
 func (n *RawNode) RPCCall(ctx context.Context, d CallData) (protoreflect.ProtoMessage, error) {
-	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
+	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{BroadcastID: d.BroadcastID}}
 	replyChan := make(chan response, 1)
 	n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}, replyChan, false)
 

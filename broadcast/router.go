@@ -20,6 +20,11 @@ const (
 type ServerHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
 type ClientHandler func(broadcastID uint64, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
 
+type Client struct {
+	Addr    string
+	SendMsg func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration)
+}
+
 type BroadcastRouter struct {
 	mut               sync.Mutex
 	id                uint32
@@ -29,24 +34,31 @@ type BroadcastRouter struct {
 	serverHandlers    map[string]ServerHandler // handlers on other servers
 	clientHandlers    map[string]ClientHandler // handlers on client servers
 	connections       map[string]*grpc.ClientConn
+	clients           map[string]*Client
+	createClient      func(addr string, dialOpts []grpc.DialOption) (*Client, error)
 	connMutexes       map[string]*sync.Mutex
 	connectionTimeout time.Duration
 	dialOpts          []grpc.DialOption
 	dialTimeout       time.Duration
 	doneChan          chan struct{}
 	logger            *slog.Logger
-	metrics           *Metrics
+	metrics           *Metric
 }
 
-func NewRouter(logger *slog.Logger, metrics *Metrics, dialOpts ...grpc.DialOption) *BroadcastRouter {
+func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), dialOpts ...grpc.DialOption) *BroadcastRouter {
 	if len(dialOpts) <= 0 {
-		dialOpts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		dialOpts = []grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithDefaultCallOptions(grpc.CallContentSubtype("gorums")),
+		}
 	}
 	return &BroadcastRouter{
 		serverHandlers:    make(map[string]ServerHandler),
 		clientHandlers:    make(map[string]ClientHandler),
 		connections:       make(map[string]*grpc.ClientConn),
 		connMutexes:       make(map[string]*sync.Mutex),
+		clients:           make(map[string]*Client),
+		createClient:      createClient,
 		dialOpts:          dialOpts,
 		dialTimeout:       5 * time.Second,
 		connectionTimeout: 1 * time.Minute,
@@ -74,7 +86,7 @@ func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any)
 	case *broadcastMsg:
 		return r.routeBroadcast(broadcastID, addr, method, val)
 	case *reply:
-		return r.routeClientReply(broadcastID, addr, method, val)
+		return r.routeClientReply2(broadcastID, addr, method, val)
 	}
 	return errors.New("wrong req type")
 }
@@ -105,6 +117,35 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 	// it should thus wait for a potential message from the client. otherwise, it should be removed.
 	//slog.Info("not routed", "broadcastID", broadcastID)
 	return errors.New("not routed")
+}
+
+func (r *BroadcastRouter) routeClientReply2(broadcastID uint64, addr, method string, resp *reply) error {
+	// the client has initiated a broadcast call and the reply should be sent as an RPC
+	if _, ok := r.clientHandlers[method]; ok && addr != "" {
+		client, err := r.getClient(addr)
+		if err != nil {
+			return err
+		}
+		client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout)
+		return nil
+	}
+	// the server can receive a broadcast from another server before a client sends a direct message.
+	// it should thus wait for a potential message from the client. otherwise, it should be removed.
+	return errors.New("not routed")
+}
+
+func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
+	r.mut.Lock()
+	defer r.mut.Unlock()
+	if client, ok := r.clients[addr]; ok {
+		return client, nil
+	}
+	client, err := r.createClient(addr, r.dialOpts)
+	if err != nil {
+		return nil, err
+	}
+	r.clients[addr] = client
+	return client, nil
 }
 
 func (r *BroadcastRouter) getConnMutex(addr string) *sync.Mutex {

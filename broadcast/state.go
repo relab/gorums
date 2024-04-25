@@ -25,7 +25,6 @@ type goroutineMetric struct {
 }
 
 type Metrics struct {
-	mut               sync.Mutex
 	start             time.Time
 	TotalNum          uint64
 	GoroutinesStarted uint64
@@ -42,48 +41,53 @@ type Metrics struct {
 	AlreadyProcessed  uint64
 	RoundTripLatency  timingMetric
 	ReqLatency        timingMetric
-	ShardDistribution map[uint16]uint64
+	ShardDistribution map[uint32]uint64
 	// measures unique number of broadcastIDs processed simultaneounsly
 	ConcurrencyDistribution timingMetric
 }
 
-func NewMetrics() *Metrics {
-	return &Metrics{
-		start:             time.Now(),
-		ShardDistribution: make(map[uint16]uint64, 16),
-		Goroutines:        make(map[string]*goroutineMetric, 2000),
+type Metric struct {
+	mut sync.Mutex
+	m   Metrics
+}
+
+func NewMetric() *Metric {
+	return &Metric{
+		m: Metrics{
+			start:             time.Now(),
+			ShardDistribution: make(map[uint32]uint64, 16),
+			Goroutines:        make(map[string]*goroutineMetric, 2000),
+		},
 	}
 }
 
-func (m *Metrics) Reset() {
+func (m *Metric) Reset() {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.start = time.Now()
-	m.TotalNum = 0
-	m.GoroutinesStarted = 0
-	m.GoroutinesStopped = 0
-	m.Goroutines = make(map[string]*goroutineMetric, 2000)
-	m.FinishedReqs.Total = 0
-	m.FinishedReqs.Succesful = 0
-	m.FinishedReqs.Failed = 0
-	m.Processed = 0
-	m.Dropped = 0
-	m.Invalid = 0
-	m.AlreadyProcessed = 0
-	m.RoundTripLatency.Avg = 0
-	m.RoundTripLatency.Min = 100 * time.Hour
-	m.RoundTripLatency.Max = 0
-	m.ReqLatency.Avg = 0
-	m.ReqLatency.Min = 100 * time.Hour
-	m.ReqLatency.Max = 0
-	m.ShardDistribution = make(map[uint16]uint64, 16)
+	m.m.start = time.Now()
+	m.m.TotalNum = 0
+	m.m.GoroutinesStarted = 0
+	m.m.GoroutinesStopped = 0
+	m.m.Goroutines = make(map[string]*goroutineMetric, 2000)
+	m.m.FinishedReqs.Total = 0
+	m.m.FinishedReqs.Succesful = 0
+	m.m.FinishedReqs.Failed = 0
+	m.m.Processed = 0
+	m.m.Dropped = 0
+	m.m.Invalid = 0
+	m.m.AlreadyProcessed = 0
+	m.m.RoundTripLatency.Avg = 0
+	m.m.RoundTripLatency.Min = 100 * time.Hour
+	m.m.RoundTripLatency.Max = 0
+	m.m.ReqLatency.Avg = 0
+	m.m.ReqLatency.Min = 100 * time.Hour
+	m.m.ReqLatency.Max = 0
+	m.m.ShardDistribution = make(map[uint32]uint64, 16)
 	// measures unique number of broadcastIDs processed simultaneounsly
 	//m.ConcurrencyDistribution timingMetric
 }
 
-func (m *Metrics) String() string {
-	m.mut.Lock()
-	defer m.mut.Unlock()
+func (m Metrics) String() string {
 	dur := time.Since(m.start)
 	res := "Metrics:"
 	res += "\n\t- TotalTime: " + fmt.Sprintf("%v", dur)
@@ -113,109 +117,112 @@ func (m *Metrics) String() string {
 	return res
 }
 
-func (m *Metrics) GetStats() *Metrics {
+func (m *Metric) GetStats() Metrics {
 	if m == nil {
-		return &Metrics{}
+		return Metrics{}
 	}
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	if m.Processed > 0 {
-		m.ReqLatency.Avg /= time.Duration(m.Processed)
+	if m.m.Processed > 0 {
+		m.m.ReqLatency.Avg /= time.Duration(m.m.Processed)
 	}
-	if m.FinishedReqs.Total > 0 {
-		m.RoundTripLatency.Avg /= time.Duration(m.FinishedReqs.Total)
+	if m.m.FinishedReqs.Total > 0 {
+		m.m.RoundTripLatency.Avg /= time.Duration(m.m.FinishedReqs.Total)
 	}
-	return m
+	return m.m
 }
 
-func (m *Metrics) AddReqLatency(start time.Time) {
+func (m *Metric) AddReqLatency(start time.Time) {
 	latency := time.Since(start)
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	if latency > m.ReqLatency.Max {
-		m.ReqLatency.Max = latency
+	if latency > m.m.ReqLatency.Max {
+		m.m.ReqLatency.Max = latency
 	}
-	if latency < m.ReqLatency.Min {
-		m.ReqLatency.Min = latency
+	if latency < m.m.ReqLatency.Min {
+		m.m.ReqLatency.Min = latency
 	}
-	m.ReqLatency.Avg += latency
+	m.m.ReqLatency.Avg += latency
 }
 
-func (m *Metrics) AddRoundTripLatency(start time.Time) {
+func (m *Metric) AddRoundTripLatency(start time.Time) {
 	latency := time.Since(start)
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	if latency > m.RoundTripLatency.Max {
-		m.RoundTripLatency.Max = latency
+	if latency > m.m.RoundTripLatency.Max {
+		m.m.RoundTripLatency.Max = latency
 	}
-	if latency < m.RoundTripLatency.Min {
-		m.RoundTripLatency.Min = latency
+	if latency < m.m.RoundTripLatency.Min {
+		m.m.RoundTripLatency.Min = latency
 	}
-	m.RoundTripLatency.Avg += latency
-	m.FinishedReqs.Total++
+	m.m.RoundTripLatency.Avg += latency
+	m.m.FinishedReqs.Total++
+	if m.m.FinishedReqs.Total%50000 == 0 {
+		fmt.Println("1000 done")
+	}
 }
 
-func (m *Metrics) AddFinishedSuccessful() {
+func (m *Metric) AddFinishedSuccessful() {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.FinishedReqs.Succesful = m.FinishedReqs.Succesful + 1
+	m.m.FinishedReqs.Succesful = m.m.FinishedReqs.Succesful + 1
 }
 
-func (m *Metrics) AddFinishedFailed() {
+func (m *Metric) AddFinishedFailed() {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.FinishedReqs.Failed++
+	m.m.FinishedReqs.Failed++
 }
 
-func (m *Metrics) AddMsg() {
+func (m *Metric) AddMsg() {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.TotalNum++
+	m.m.TotalNum++
 }
 
-func (m *Metrics) AddGoroutine(broadcastID uint64, name string) {
+func (m *Metric) AddGoroutine(broadcastID uint64, name string) {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.GoroutinesStarted++
+	m.m.GoroutinesStarted++
 	index := fmt.Sprintf("%s.%v", name, broadcastID)
-	m.Goroutines[index] = &goroutineMetric{
+	m.m.Goroutines[index] = &goroutineMetric{
 		started: time.Now(),
 	}
 }
 
-func (m *Metrics) RemoveGoroutine(broadcastID uint64, name string) {
+func (m *Metric) RemoveGoroutine(broadcastID uint64, name string) {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.GoroutinesStopped++
+	m.m.GoroutinesStopped++
 	index := fmt.Sprintf("%s.%v", name, broadcastID)
-	if g, ok := m.Goroutines[index]; ok {
+	if g, ok := m.m.Goroutines[index]; ok {
 		g.ended = time.Now()
 		//} else {
 		//panic("what")
 	}
 }
 
-func (m *Metrics) AddDropped(invalid bool) {
+func (m *Metric) AddDropped(invalid bool) {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.Dropped++
+	m.m.Dropped++
 	if invalid {
-		m.Invalid++
+		m.m.Invalid++
 	} else {
-		m.AlreadyProcessed++
+		m.m.AlreadyProcessed++
 	}
 }
 
-func (m *Metrics) AddProcessed() {
+func (m *Metric) AddProcessed() {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.Processed++
+	m.m.Processed++
 }
 
-func (m *Metrics) AddShardDistribution(i int) {
+func (m *Metric) AddShardDistribution(i int) {
 	m.mut.Lock()
 	defer m.mut.Unlock()
-	m.ShardDistribution[uint16(i)]++
+	m.m.ShardDistribution[uint32(i)]++
 }
 
 type Snowflake struct {
@@ -333,7 +340,7 @@ type BroadcastState struct {
 	reqTTL              time.Duration
 	sendBuffer          int
 	shardBuffer         int
-	metrics             *Metrics
+	metrics             *Metric
 	snowflake           *Snowflake
 
 	shards [16]*shardElement
@@ -341,7 +348,7 @@ type BroadcastState struct {
 
 const NumShards = 16
 
-func NewState(logger *slog.Logger, router *BroadcastRouter, metrics *Metrics) *BroadcastState {
+func NewState(logger *slog.Logger, router *BroadcastRouter, metrics *Metric) *BroadcastState {
 	shardBuffer := 100
 	TTL := 5 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
@@ -460,9 +467,7 @@ func (s *BroadcastState) Process(msg Content) error {
 
 func (s *BroadcastState) ProcessBroadcast(broadcastID uint64, req protoreflect.ProtoMessage, method string) {
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
-	if shardID >= 16 {
-		return
-	}
+	shardID = shardID % NumShards
 	shard := s.shards[shardID]
 	select {
 	case shard.broadcastChan <- Msg{
@@ -477,9 +482,7 @@ func (s *BroadcastState) ProcessBroadcast(broadcastID uint64, req protoreflect.P
 
 func (s *BroadcastState) ProcessSendToClient(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
-	if shardID >= 16 {
-		return
-	}
+	shardID = shardID % NumShards
 	shard := s.shards[shardID]
 	select {
 	case shard.broadcastChan <- Msg{

@@ -17,7 +17,7 @@ type BroadcastOptions struct {
 	RelatedToReq         uint64
 }
 
-func handleReq(router *BroadcastRouter, broadcastID uint64, init *reqContent, msg Content, metrics *Metrics) {
+func handleReq(router *BroadcastRouter, broadcastID uint64, init *reqContent, msg Content, metrics *Metric) {
 	start := time.Now()
 	done := false
 	sent := false
@@ -27,7 +27,7 @@ func handleReq(router *BroadcastRouter, broadcastID uint64, init *reqContent, ms
 	if metrics != nil {
 		metrics.AddGoroutine(broadcastID, "req")
 	}
-	go router.CreateConnection(msg.OriginAddr)
+	//go router.CreateConnection(msg.OriginAddr)
 	defer func() {
 		if metrics != nil {
 			metrics.AddRoundTripLatency(start)

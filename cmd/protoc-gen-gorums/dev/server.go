@@ -58,7 +58,9 @@ type clientServerImpl struct {
 
 func (c *clientServerImpl) stop() {
 	c.ClientServer.Stop()
-	c.grpcServer.Stop()
+	if c.grpcServer != nil {
+		c.grpcServer.Stop()
+	}
 }
 
 func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {

@@ -22,7 +22,7 @@ type broadcastServer struct {
 	state             BroadcastState
 	router            BroadcastRouter
 	logger            *slog.Logger
-	metrics           *broadcast.Metrics
+	metrics           *broadcast.Metric
 }
 
 func (srv *Server) PrintStats() {
@@ -30,12 +30,18 @@ func (srv *Server) PrintStats() {
 	srv.broadcastSrv.metrics.Reset()
 }
 
+func (srv *Server) GetStats() broadcast.Metrics {
+	m := srv.broadcastSrv.metrics.GetStats()
+	srv.broadcastSrv.metrics.Reset()
+	return m
+}
+
 func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer {
-	var m *broadcast.Metrics = nil
+	var m *broadcast.Metric = nil
 	if withMetrics {
-		m = broadcast.NewMetrics()
+		m = broadcast.NewMetric()
 	}
-	router := broadcast.NewRouter(logger, m)
+	router := broadcast.NewRouter(logger, m, createClient)
 	return &broadcastServer{
 		router:  router,
 		state:   broadcast.NewState(logger, router, m),

@@ -29,8 +29,8 @@ func _clientBroadcastWithClientHandler1(srv interface{}, ctx context.Context, de
 	return srv.(clientServer).clientBroadcastWithClientHandler1(ctx, in)
 }
 
-func (srv *clientServerImpl) clientBroadcastWithClientHandler1(ctx context.Context, resp *Response) (*Response, error) {
-	err := srv.AddResponse(ctx, resp)
+func (srv *clientServerImpl) clientBroadcastWithClientHandler1(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
 	return resp, err
 }
 
@@ -64,8 +64,8 @@ func _clientBroadcastWithClientHandler2(srv interface{}, ctx context.Context, de
 	return srv.(clientServer).clientBroadcastWithClientHandler2(ctx, in)
 }
 
-func (srv *clientServerImpl) clientBroadcastWithClientHandler2(ctx context.Context, resp *Response) (*Response, error) {
-	err := srv.AddResponse(ctx, resp)
+func (srv *clientServerImpl) clientBroadcastWithClientHandler2(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
 	return resp, err
 }
 
@@ -99,8 +99,8 @@ func _clientBroadcastWithClientHandlerAndBroadcastOption(srv interface{}, ctx co
 	return srv.(clientServer).clientBroadcastWithClientHandlerAndBroadcastOption(ctx, in)
 }
 
-func (srv *clientServerImpl) clientBroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, resp *Response) (*Response, error) {
-	err := srv.AddResponse(ctx, resp)
+func (srv *clientServerImpl) clientBroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
 	return resp, err
 }
 

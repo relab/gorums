@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ type BroadcastServerHandlerFunc func(method string, req RequestTypes, options ..
 type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
+type clientImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(context.Context, T, uint64) (V, error)
 
 type implementationFunc[T RequestTypes, V Broadcaster] func(ServerCtx, T, V)
 

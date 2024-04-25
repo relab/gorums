@@ -53,7 +53,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 	if m.logger != nil {
 		m.logger.Printf("ready")
 	}
-	m.snowflake = broadcast.NewSnowflake("test")
+	m.snowflake = broadcast.NewSnowflake(m.opts.addr)
 	return m
 }
 

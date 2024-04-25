@@ -47,3 +47,10 @@ var clientServer_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "",
 }
+
+func registerClientServerHandlers(srv *clientServerImpl) {
+
+	srv.RegisterHandler("dev.ZorumsService.BroadcastWithClientHandler1", gorums.ClientHandler(srv.clientBroadcastWithClientHandler1))
+	srv.RegisterHandler("dev.ZorumsService.BroadcastWithClientHandler2", gorums.ClientHandler(srv.clientBroadcastWithClientHandler2))
+	srv.RegisterHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", gorums.ClientHandler(srv.clientBroadcastWithClientHandlerAndBroadcastOption))
+}
