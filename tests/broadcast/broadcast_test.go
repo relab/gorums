@@ -1127,7 +1127,7 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	fmt.Println("starting...")
 	s = time.Now()
 	var wg sync.WaitGroup
-	for r := 0; r < 100; r++ {
+	for r := 0; r < 1000; r++ {
 		for i, client := range clients {
 			go func(i int) {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

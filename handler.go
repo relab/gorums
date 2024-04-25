@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/relab/gorums/broadcast"
@@ -22,7 +21,7 @@ func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationF
 
 func ClientHandler[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage](impl clientImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, _ chan<- *Message) {
-		slog.Info("method", "m", in.Metadata.Method, "msg", in.Message)
+		defer ctx.Release()
 		req := in.Message.(T)
 		impl(ctx, req, in.Metadata.BroadcastMsg.BroadcastID)
 	}

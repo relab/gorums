@@ -192,7 +192,11 @@ func ServerClientRPC(method string) func(broadcastID uint64, in protoreflect.Pro
 // NodeStream handles a connection to a single client. The stream is aborted if there
 // is any error with sending or receiving.
 func (s *ClientServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+	var mut sync.Mutex // used to achieve mutex between request handlers
 	ctx := srv.Context()
+	// Start with a locked mutex
+	mut.Lock()
+	defer mut.Unlock()
 	for {
 		req := newMessage(responseType)
 		err := srv.RecvMsg(req)
@@ -203,7 +207,8 @@ func (s *ClientServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: nil}, req, nil)
+			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &mut}, req, nil)
+			mut.Lock()
 		}
 	}
 }
