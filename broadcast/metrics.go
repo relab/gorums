@@ -51,6 +51,12 @@ func NewMetric() *Metric {
 			start:             time.Now(),
 			ShardDistribution: make(map[uint32]uint64, 16),
 			Goroutines:        make(map[string]*goroutineMetric, 2000),
+			RoundTripLatency: timingMetric{
+				Min: 100 * time.Hour,
+			},
+			ReqLatency: timingMetric{
+				Min: 100 * time.Hour,
+			},
 		},
 	}
 }
@@ -62,6 +68,12 @@ func (m *Metric) Reset() {
 		start:             time.Now(),
 		ShardDistribution: make(map[uint32]uint64, 16),
 		Goroutines:        make(map[string]*goroutineMetric, 2000),
+		RoundTripLatency: timingMetric{
+			Min: 100 * time.Hour,
+		},
+		ReqLatency: timingMetric{
+			Min: 100 * time.Hour,
+		},
 	}
 }
 
