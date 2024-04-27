@@ -193,9 +193,9 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 	})
 }
 
-func (srv *broadcastServer) registerSendToClientHandler(method string, handler broadcast.ClientHandler) {
+func (srv *broadcastServer) registerSendToClientHandler(method string) {
 	//srv.router.AddClientHandler(method, handler)
-	srv.manager.AddClientHandler(method, handler)
+	srv.manager.AddClientHandler(method)
 }
 
 func (srv *Server) RegisterConfig(config RawConfiguration) {

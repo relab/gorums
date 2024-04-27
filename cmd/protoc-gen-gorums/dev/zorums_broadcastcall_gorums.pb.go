@@ -10,7 +10,6 @@ import (
 	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
-	grpc "google.golang.org/grpc"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -20,14 +19,6 @@ const (
 	// Verify that the gorums runtime is sufficiently up-to-date.
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 7)
 )
-
-func _clientBroadcastWithClientHandler1(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Response)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	return srv.(clientServer).clientBroadcastWithClientHandler1(ctx, in)
-}
 
 func (srv *clientServerImpl) clientBroadcastWithClientHandler1(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
 	err := srv.AddResponse(ctx, resp, broadcastID)
@@ -53,15 +44,11 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
-	return response.(*Response), err
-}
-
-func _clientBroadcastWithClientHandler2(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Response)
-	if err := dec(in); err != nil {
-		return nil, err
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
 	}
-	return srv.(clientServer).clientBroadcastWithClientHandler2(ctx, in)
+	return resp, nil
 }
 
 func (srv *clientServerImpl) clientBroadcastWithClientHandler2(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
@@ -88,15 +75,11 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
-	return response.(*Response), err
-}
-
-func _clientBroadcastWithClientHandlerAndBroadcastOption(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Response)
-	if err := dec(in); err != nil {
-		return nil, err
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
 	}
-	return srv.(clientServer).clientBroadcastWithClientHandlerAndBroadcastOption(ctx, in)
+	return resp, nil
 }
 
 func (srv *clientServerImpl) clientBroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
@@ -123,5 +106,9 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
-	return response.(*Response), err
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
+	}
+	return resp, nil
 }

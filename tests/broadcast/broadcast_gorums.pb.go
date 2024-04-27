@@ -109,28 +109,13 @@ func (mgr *Manager) Close() {
 	}
 }
 
-func (mgr *Manager) AddClientServer2(lis net.Listener, opts ...grpc.ServerOption) error {
-	srv := gorums.NewClientServer2(lis)
+func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
+	srv := gorums.NewClientServer(lis)
 	srvImpl := &clientServerImpl{
 		ClientServer: srv,
 	}
 	registerClientServerHandlers(srvImpl)
 	go srvImpl.Serve(lis)
-	mgr.srv = srvImpl
-	return nil
-}
-
-func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
-	srvImpl := &clientServerImpl{
-		grpcServer: grpc.NewServer(opts...),
-	}
-	srv, err := gorums.NewClientServer(lis)
-	if err != nil {
-		return err
-	}
-	srvImpl.grpcServer.RegisterService(&clientServer_ServiceDesc, srvImpl)
-	go srvImpl.grpcServer.Serve(lis)
-	srvImpl.ClientServer = srv
 	mgr.srv = srvImpl
 	return nil
 }
@@ -303,14 +288,6 @@ func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
 	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, b.metadata.BroadcastID, options)
 }
 
-func _clientBroadcastCall(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Response)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	return srv.(clientServer).clientBroadcastCall(ctx, in)
-}
-
 func (srv *clientServerImpl) clientBroadcastCall(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
 	err := srv.AddResponse(ctx, resp, broadcastID)
 	return resp, err
@@ -330,24 +307,16 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		return nil, fmt.Errorf("provided context cancelled")
+		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
 	resp, ok = response.(*Response)
 	if !ok {
-		return nil, fmt.Errorf("done channel was closed before returning a value")
+		return nil, fmt.Errorf("wrong proto format")
 	}
 	return resp, nil
-}
-
-func _clientBroadcastCallForward(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Response)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	return srv.(clientServer).clientBroadcastCallForward(ctx, in)
 }
 
 func (srv *clientServerImpl) clientBroadcastCallForward(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
@@ -374,31 +343,11 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
-	return response.(*Response), err
-}
-
-// clientServer is the client server API for the BroadcastService Service
-type clientServer interface {
-	clientBroadcastCall(ctx context.Context, request *Response) (*Response, error)
-	clientBroadcastCallForward(ctx context.Context, request *Response) (*Response, error)
-}
-
-var clientServer_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "protos.ClientServer",
-	HandlerType: (*clientServer)(nil),
-	Methods: []grpc.MethodDesc{
-
-		{
-			MethodName: "ClientBroadcastCall",
-			Handler:    _clientBroadcastCall,
-		},
-		{
-			MethodName: "ClientBroadcastCallForward",
-			Handler:    _clientBroadcastCallForward,
-		},
-	},
-	Streams:  []grpc.StreamDesc{},
-	Metadata: "",
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
+	}
+	return resp, nil
 }
 
 func registerClientServerHandlers(srv *clientServerImpl) {
@@ -604,11 +553,11 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 		impl.MulticastIntermediate(ctx, req)
 	})
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCall", gorums.BroadcastHandler(impl.BroadcastCall, srv.Server))
-	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCall", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCall"))
+	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCall")
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastIntermediate", gorums.BroadcastHandler(impl.BroadcastIntermediate, srv.Server))
 	srv.RegisterHandler("broadcast.BroadcastService.Broadcast", gorums.BroadcastHandler(impl.Broadcast, srv.Server))
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.BroadcastHandler(impl.BroadcastCallForward, srv.Server))
-	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.ServerClientRPC("broadcast.BroadcastService.BroadcastCallForward"))
+	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCallForward")
 }
 
 func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {

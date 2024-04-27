@@ -3,21 +3,8 @@ package gengorums
 var clientServerVar = `
 {{$callData := use "gorums.CallData" .GenFile}}
 {{$context := use "context.Context" .GenFile}}
-{{$grpc := use "grpc.GRPC" .GenFile}}
 {{$fmt := use "fmt.FMT" .GenFile}}
 {{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
-`
-
-var clientServerSignature = `func _client{{.Method.GoName}}(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {`
-
-var clientServerBody = `
-	in := new({{out .GenFile .Method}})
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	return srv.(clientServer).client{{.Method.GoName}}(ctx, in)
-}
-
 `
 
 var clientServerMethodImpl = `
@@ -56,5 +43,4 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 }
 `
 
-var broadcastCall = clientServerVar +
-	clientServerSignature + clientServerBody + clientServerMethodImpl + clientServerImplMethod
+var broadcastCall = clientServerVar + clientServerMethodImpl + clientServerImplMethod

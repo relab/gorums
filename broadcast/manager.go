@@ -94,8 +94,8 @@ func (mgr *BroadcastManager) AddServerHandler(method string, handler ServerHandl
 	mgr.router.serverHandlers[method] = handler
 }
 
-func (mgr *BroadcastManager) AddClientHandler(method string, handler ClientHandler) {
-	mgr.router.clientHandlers[method] = handler
+func (mgr *BroadcastManager) AddClientHandler(method string) {
+	mgr.router.clientHandlers[method] = struct{}{}
 }
 
 func (mgr *BroadcastManager) Close() error {

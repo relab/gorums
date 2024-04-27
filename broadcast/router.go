@@ -25,7 +25,7 @@ type BroadcastRouter struct {
 	prevMethod        uint16
 	methodsConversion map[string]uint16
 	serverHandlers    map[string]ServerHandler // handlers on other servers
-	clientHandlers    map[string]ClientHandler // handlers on client servers
+	clientHandlers    map[string]struct{}      // specifies what handlers a client has implemented. Used only for BroadcastCalls.
 	connections       map[string]*grpc.ClientConn
 	clients           map[string]*Client
 	createClient      func(addr string, dialOpts []grpc.DialOption) (*Client, error)
@@ -47,7 +47,7 @@ func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr stri
 	}
 	return &BroadcastRouter{
 		serverHandlers:    make(map[string]ServerHandler),
-		clientHandlers:    make(map[string]ClientHandler),
+		clientHandlers:    make(map[string]struct{}),
 		connections:       make(map[string]*grpc.ClientConn),
 		connMutexes:       make(map[string]*sync.Mutex),
 		clients:           make(map[string]*Client),
@@ -81,24 +81,6 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string
 	return errors.New("not found")
 }
 
-//func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method string, resp *reply) error {
-//// the client has initiated a broadcast call and the reply should be sent as an RPC
-//if handler, ok := r.clientHandlers[method]; ok && addr != "" {
-//cc, err := r.getConnection(addr)
-//if err != nil {
-//return err
-//}
-//go handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
-////slog.Info("routed", "broadcastID", broadcastID)
-//return nil
-//}
-////slog.Error("not routed")
-//// the server can receive a broadcast from another server before a client sends a direct message.
-//// it should thus wait for a potential message from the client. otherwise, it should be removed.
-////slog.Info("not routed", "broadcastID", broadcastID)
-//return errors.New("not routed")
-//}
-
 func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method string, resp *reply) error {
 	// the client has initiated a broadcast call and the reply should be sent as an RPC
 	if _, ok := r.clientHandlers[method]; ok && addr != "" {
@@ -106,7 +88,6 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 		if err != nil {
 			return err
 		}
-		//slog.Info("router: sending to client", "addr", r.addr, "bID", broadcastID)
 		return client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout)
 	}
 	// the server can receive a broadcast from another server before a client sends a direct message.
@@ -127,77 +108,6 @@ func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
 	r.clients[addr] = client
 	return client, nil
 }
-
-/*func (r *BroadcastRouter) getConnMutex(addr string) *sync.Mutex {
-	r.mut.Lock()
-	defer r.mut.Unlock()
-	mut, ok := r.connMutexes[addr]
-	if !ok {
-		mut = &sync.Mutex{}
-		r.connMutexes[addr] = mut
-	}
-	return mut
-}
-
-func (r *BroadcastRouter) dial(addr string) (*grpc.ClientConn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), r.dialTimeout)
-	defer cancel()
-	return grpc.DialContext(ctx, addr, r.dialOpts...)
-}
-
-func (r *BroadcastRouter) getConn(addr string) (*grpc.ClientConn, bool) {
-	r.mut.Lock()
-	defer r.mut.Unlock()
-	cc, ok := r.connections[addr]
-	return cc, ok
-}
-
-func (r *BroadcastRouter) addConn(addr string, cc *grpc.ClientConn) {
-	r.mut.Lock()
-	defer r.mut.Unlock()
-	r.connections[addr] = cc
-}
-
-func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	addr = tcpAddr.String()
-	mut := r.getConnMutex(addr)
-	mut.Lock()
-	defer mut.Unlock()
-	//slog.Info("just sleeping a bit", "addr", addr, "id", r.addr)
-	//time.Sleep(100 * time.Millisecond)
-	if conn, ok := r.getConn(addr); ok {
-		//slog.Info("cc cached", "addr", addr, "id", r.addr)
-		return conn, nil
-	}
-	//slog.Info("dialing", "addr", addr, "id", r.addr)
-	cc, err := r.dial(addr)
-	if err != nil {
-		return nil, err
-	}
-	// make sure the connection is closed
-	go func() {
-		time.Sleep(r.connectionTimeout)
-		cc.Close()
-	}()
-	r.addConn(addr, cc)
-	return cc, err
-}
-
-func (r *BroadcastRouter) CreateConnection(addr string) {
-	r.getConnection(addr)
-}*/
-
-//func (r *BroadcastRouter) lock() {
-//r.connMutex.Lock()
-//}
-
-//func (r *BroadcastRouter) unlock() {
-//r.connMutex.Unlock()
-//}
 
 type Msg struct {
 	Broadcast   bool

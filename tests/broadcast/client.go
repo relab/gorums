@@ -86,7 +86,7 @@ func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configurati
 		if err != nil {
 			return nil, nil, err
 		}
-		err = mgr.AddClientServer2(lis)
+		err = mgr.AddClientServer(lis)
 		if err != nil {
 			return nil, nil, err
 		}

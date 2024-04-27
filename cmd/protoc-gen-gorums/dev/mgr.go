@@ -40,28 +40,13 @@ func (mgr *Manager) Close() {
 	}
 }
 
-func (mgr *Manager) AddClientServer2(lis net.Listener, opts ...grpc.ServerOption) error {
-	srv := gorums.NewClientServer2(lis)
+func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
+	srv := gorums.NewClientServer(lis)
 	srvImpl := &clientServerImpl{
 		ClientServer: srv,
 	}
 	registerClientServerHandlers(srvImpl)
 	go srvImpl.Serve(lis)
-	mgr.srv = srvImpl
-	return nil
-}
-
-func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
-	srvImpl := &clientServerImpl{
-		grpcServer: grpc.NewServer(opts...),
-	}
-	srv, err := gorums.NewClientServer(lis)
-	if err != nil {
-		return err
-	}
-	srvImpl.grpcServer.RegisterService(&clientServer_ServiceDesc, srvImpl)
-	go srvImpl.grpcServer.Serve(lis)
-	srvImpl.ClientServer = srv
 	mgr.srv = srvImpl
 	return nil
 }

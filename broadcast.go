@@ -89,7 +89,7 @@ type BroadcastManger interface {
 	NewBroadcastID() uint64
 	AddAddr(id uint32, addr string)
 	AddServerHandler(method string, handler broadcast.ServerHandler)
-	AddClientHandler(method string, handler broadcast.ClientHandler)
+	AddClientHandler(method string)
 	Close() error
 }
 

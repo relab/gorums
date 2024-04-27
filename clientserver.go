@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +11,6 @@ import (
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -46,17 +43,6 @@ type csr struct {
 	handler  ReplySpecHandler
 }
 
-func (c *ClientServer) status() {
-	for {
-		select {
-		case <-c.ctx.Done():
-			return
-		case <-time.After(5 * time.Second):
-			fmt.Println(c.inProgress)
-		}
-	}
-}
-
 type ClientServer struct {
 	mu         sync.Mutex
 	csr        map[uint64]*csr
@@ -68,17 +54,6 @@ type ClientServer struct {
 	grpcServer *grpc.Server
 	handlers   map[string]requestHandler
 	ordering.UnimplementedGorumsServer
-}
-
-func NewClientServer(lis net.Listener) (*ClientServer, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	srv := &ClientServer{
-		csr:       make(map[uint64]*csr),
-		ctx:       ctx,
-		cancelCtx: cancel,
-	}
-	srv.lis = lis
-	return srv, nil
 }
 
 func (srv *ClientServer) Stop() {
@@ -109,14 +84,6 @@ func (srv *ClientServer) AddRequest(broadcastID uint64, clientCtx context.Contex
 		cancel:   cancel,
 		respChan: respChan,
 	}
-	//srv.csr[broadcastID] = &csr{
-	//ctx:      ctx,
-	//cancel:   cancel,
-	//req:      in,
-	//resps:    make([]protoreflect.ProtoMessage, 0, 3),
-	//doneChan: doneChan,
-	//handler:  handler,
-	//}
 	srv.mu.Unlock()
 
 	go createReq(ctx, clientCtx, cancel, in, doneChan, respChan, handler)
@@ -167,30 +134,13 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 }
 
 func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.ProtoMessage, broadcastID uint64) error {
-	//md, ok := metadata.FromIncomingContext(ctx)
-	//if !ok {
-	//return fmt.Errorf("no metadata")
-	//}
-	//broadcastID := uint64(0)
-	//val := md.Get(BroadcastID)
-	//if val != nil && len(val) >= 1 {
-	//bID, err := strconv.Atoi(val[0])
-	//broadcastID = uint64(bID)
-	//if err != nil {
-	//return err
-	//}
-	//}
 	if broadcastID == 0 {
 		return fmt.Errorf("no broadcastID")
 	}
-	//slog.Info("clientserver: received response", "bID", broadcastID)
-
-	//slog.Info("clientserver: waiting for lock")
 	srv.mu.Lock()
-	//slog.Info("clientserver: lock")
 	csr, ok := srv.csr[broadcastID]
 	srv.mu.Unlock()
-	//slog.Info("clientserver: unlock")
+
 	if !ok {
 		return fmt.Errorf("doesn't exist")
 	}
@@ -202,32 +152,6 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 	case csr.respChan <- resp:
 	}
 	return nil
-	//slog.Info("AddResponse: Lock", "broadcastID", broadcastID)
-	//srv.mu.Lock()
-	////slog.Info("AddResponse: Inside", "broadcastID", broadcastID)
-	//csr, ok := srv.csr[broadcastID]
-	//if !ok {
-	//srv.mu.Unlock()
-	//return fmt.Errorf("doesn't exist")
-	//}
-	//csr.resps = append(csr.resps, resp)
-	//response, done := csr.handler(csr.req, csr.resps)
-
-	//var doneChan chan protoreflect.ProtoMessage
-	//if done {
-	//srv.inProgress--
-	//csr.cancel()
-	//doneChan = csr.doneChan
-	//delete(srv.csr, broadcastID)
-	//srv.mu.Unlock()
-	////slog.Info("AddResponse: Unlock", "broadcastID", broadcastID)
-	//doneChan <- response
-	////slog.Info("add response", "response", resp, "response", response)
-	////slog.Info("AddResponse: Done, sent", "resp", response, "broadcastID", broadcastID)
-	//return nil
-	//}
-	//srv.mu.Unlock()
-	//return nil
 }
 
 func ConvertToType[T, U protoreflect.ProtoMessage](handler func(U, []T) (T, bool)) ReplySpecHandler {
@@ -237,29 +161,6 @@ func ConvertToType[T, U protoreflect.ProtoMessage](handler func(U, []T) (T, bool
 			data[i] = elem.(T)
 		}
 		return handler(req.(U), data)
-	}
-}
-
-func ServerClientRPC(method string) func(broadcastID uint64, in protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
-	return func(broadcastID uint64, in protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error) {
-		tmp := strings.Split(method, ".")
-		m := ""
-		if len(tmp) >= 1 {
-			m = tmp[len(tmp)-1]
-		}
-		clientMethod := "/protos.ClientServer/Client" + m
-		out := new(any)
-		md := metadata.Pairs(BroadcastID, strconv.Itoa(int(broadcastID)))
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		ctx = metadata.NewOutgoingContext(ctx, md)
-		err := cc.Invoke(ctx, clientMethod, in, out, opts...)
-		if err != nil {
-			//_, ok := in.(protoreflect.ProtoMessage)
-			//slog.Error("clientserver: ServerClientRPC", "err", err, "req", in, "proto.Message", ok)
-			return nil, err
-		}
-		return nil, nil
 	}
 }
 
@@ -291,7 +192,7 @@ func (s *ClientServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 // NewServer returns a new instance of GorumsServer.
 // This function is intended for internal Gorums use.
 // You should call `NewServer` in the generated code instead.
-func NewClientServer2(lis net.Listener, opts ...ServerOption) *ClientServer {
+func NewClientServer(lis net.Listener, opts ...ServerOption) *ClientServer {
 	var serverOpts serverOptions
 	for _, opt := range opts {
 		opt(&serverOpts)

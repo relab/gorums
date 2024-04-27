@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -23,4 +22,5 @@ const (
 )
 
 type ServerHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
-type ClientHandler func(broadcastID uint64, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
+
+//type ClientHandler func(broadcastID uint64, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)

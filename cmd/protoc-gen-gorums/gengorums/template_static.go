@@ -5,7 +5,7 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastMetadata", "google.golang.org/grpc": "NewServer", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listener"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastMetadata", "google.golang.org/grpc": "Server", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listener"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
@@ -95,28 +95,13 @@ func (mgr *Manager) Close() {
 	}
 }
 
-func (mgr *Manager) AddClientServer2(lis net.Listener, opts ...grpc.ServerOption) error {
-	srv := gorums.NewClientServer2(lis)
+func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
+	srv := gorums.NewClientServer(lis)
 	srvImpl := &clientServerImpl{
 		ClientServer: srv,
 	}
 	registerClientServerHandlers(srvImpl)
 	go srvImpl.Serve(lis)
-	mgr.srv = srvImpl
-	return nil
-}
-
-func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
-	srvImpl := &clientServerImpl{
-		grpcServer: grpc.NewServer(opts...),
-	}
-	srv, err := gorums.NewClientServer(lis)
-	if err != nil {
-		return err
-	}
-	srvImpl.grpcServer.RegisterService(&clientServer_ServiceDesc, srvImpl)
-	go srvImpl.grpcServer.Serve(lis)
-	srvImpl.ClientServer = srv
 	mgr.srv = srvImpl
 	return nil
 }
