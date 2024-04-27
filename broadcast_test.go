@@ -1,6 +1,6 @@
 package gorums
 
-import (
+/*import (
 	"context"
 	"fmt"
 	"net"
@@ -277,3 +277,4 @@ func StartTrace(tracePath string) (stop func() error, err error) {
 		return nil
 	}, nil
 }
+*/

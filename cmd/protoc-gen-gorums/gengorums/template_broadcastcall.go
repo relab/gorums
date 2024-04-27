@@ -48,7 +48,11 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
-	return response.(*{{out .GenFile .Method}}), err
+	resp, ok = response.(*{{out .GenFile .Method}})
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
+	}
+	return resp, nil
 }
 `
 

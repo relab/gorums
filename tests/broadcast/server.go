@@ -122,7 +122,8 @@ func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadca
 	//srv.mu.Lock()
 	//srv.numMsg["BC"]++
 	//srv.mu.Unlock()
-	//slog.Warn("server received broadcast call")
+	//md := broadcast.GetMetadata()
+	//slog.Warn("server received broadcast call", "srv", srv.addr, "bID", md.BroadcastID)
 	//time.Sleep(1 * time.Millisecond)
 	//broadcast.SendToClient(&Response{
 	//Result: req.Value,
@@ -130,6 +131,7 @@ func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadca
 	/*broadcast.SendToClient(&Response{
 		Result: req.Value,
 	}, nil)*/
+	//time.Sleep(1 * time.Millisecond)
 	broadcast.BroadcastIntermediate(req)
 }
 
@@ -137,7 +139,12 @@ func (srv *testServer) BroadcastIntermediate(ctx gorums.ServerCtx, req *Request,
 	//srv.mu.Lock()
 	//srv.numMsg["BI"]++
 	//srv.mu.Unlock()
-	//slog.Warn("server received broadcast intermediate")
+	///md := broadcast.GetMetadata()
+	///slog.Warn("server received broadcast intermediate", "srv", srv.addr, "bID", md.BroadcastID)
+	//broadcast.SendToClient(&Response{
+	//Result: req.Value,
+	//}, nil)
+	//time.Sleep(1 * time.Millisecond)
 	//time.Sleep(1 * time.Millisecond)
 	broadcast.Broadcast(req)
 }
@@ -146,7 +153,9 @@ func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *
 	//srv.mu.Lock()
 	//srv.numMsg["B"]++
 	//srv.mu.Unlock()
-	//slog.Warn("server received broadcast")
+	///md := broadcast.GetMetadata()
+	///slog.Warn("server received broadcast", "srv", srv.addr, "bID", md.BroadcastID)
+	//time.Sleep(1 * time.Millisecond)
 	//time.Sleep(1 * time.Millisecond)
 	broadcast.SendToClient(&Response{
 		Result: req.Value,

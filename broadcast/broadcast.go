@@ -7,16 +7,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type BroadcastOptions struct {
-	ServerAddresses      []string
-	GossipPercentage     float32
-	TTL                  int
-	Deadline             time.Time
-	OmitUniquenessChecks bool
-	SkipSelf             bool
-	RelatedToReq         uint64
-}
-
 func handleReq(router *BroadcastRouter, broadcastID uint64, init *reqContent, msg Content, metrics *Metric) {
 	start := time.Now()
 	done := false
@@ -64,12 +54,19 @@ func handleReq(router *BroadcastRouter, broadcastID uint64, init *reqContent, ms
 				// BroadcastCall if origin addr is non-empty.
 				if msg.OriginAddr != "" {
 					err := router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
-					if metrics != nil {
-						if err != nil {
+					if err != nil {
+						if metrics != nil {
 							metrics.AddFinishedFailed()
-						} else {
+						}
+						if router.logger != nil {
+							router.logger.Error("broadcast: could not send response to client", "err", err, "broadcastID", broadcastID)
+						}
+						//slog.Error("broadcast: could not send response to client", "err", err, "broadcastID", broadcastID)
+					} else {
+						if metrics != nil {
 							metrics.AddFinishedSuccessful()
 						}
+						//slog.Info("broadcast: could send response to client", "err", err, "broadcastID", broadcastID)
 					}
 					return
 				}

@@ -19,10 +19,11 @@ type broadcastServer struct {
 	view              RawConfiguration
 	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
 	orchestrator      *BroadcastOrchestrator
-	state             BroadcastState
-	router            BroadcastRouter
-	logger            *slog.Logger
-	metrics           *broadcast.Metric
+	//state             BroadcastState
+	manager BroadcastManger
+	//router            BroadcastRouter
+	logger  *slog.Logger
+	metrics *broadcast.Metric
 }
 
 func (srv *Server) PrintStats() {
@@ -41,33 +42,55 @@ func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer 
 	if withMetrics {
 		m = broadcast.NewMetric()
 	}
-	router := broadcast.NewRouter(logger, m, createClient)
 	return &broadcastServer{
-		router:  router,
-		state:   broadcast.NewState(logger, router, m),
+		manager: broadcast.NewBroadcastManager(logger, m, createClient),
 		logger:  logger,
 		metrics: m,
 	}
 }
 
+//func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer {
+//var m *broadcast.Metric = nil
+//if withMetrics {
+//m = broadcast.NewMetric()
+//}
+//router := broadcast.NewRouter(logger, m, createClient)
+//return &broadcastServer{
+//router:  router,
+//state:   broadcast.NewState(logger, router, m),
+//logger:  logger,
+//metrics: m,
+//}
+//}
+
 func (srv *broadcastServer) stop() {
-	srv.state.Prune()
+	//srv.state.Prune()
+	srv.manager.Close()
 }
 
-type BroadcastState interface {
-	Prune() error
+//type BroadcastState interface {
+//Prune() error
+//Process(broadcast.Content) error
+//ProcessBroadcast(uint64, protoreflect.ProtoMessage, string)
+//ProcessSendToClient(uint64, protoreflect.ProtoMessage, error)
+//NewBroadcastID() uint64
+//}
+
+//type BroadcastRouter interface {
+//AddAddr(id uint32, addr string)
+//AddServerHandler(method string, handler broadcast.ServerHandler)
+//AddClientHandler(method string, handler broadcast.ClientHandler)
+//}
+
+type BroadcastManger interface {
 	Process(broadcast.Content) error
 	ProcessBroadcast(uint64, protoreflect.ProtoMessage, string)
 	ProcessSendToClient(uint64, protoreflect.ProtoMessage, error)
 	NewBroadcastID() uint64
-}
-
-type BroadcastRouter interface {
-	Send(broadcastID uint64, addr, method string, msg any) error
-	CreateConnection(addr string)
 	AddAddr(id uint32, addr string)
 	AddServerHandler(method string, handler broadcast.ServerHandler)
 	AddClientHandler(method string, handler broadcast.ClientHandler)
+	Close() error
 }
 
 type Snowflake interface {
@@ -81,5 +104,6 @@ func (srv *broadcastServer) addAddr(lis net.Listener) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(srv.addr))
 	srv.id = h.Sum32()
-	srv.router.AddAddr(srv.id, srv.addr)
+	//srv.router.AddAddr(srv.id, srv.addr)
+	srv.manager.AddAddr(srv.id, srv.addr)
 }

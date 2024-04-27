@@ -56,7 +56,8 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		msg := broadcast.Content{}
 		createRequest(&msg, ctx, in, finished)
 
-		err := srv.broadcastSrv.state.Process(msg)
+		//err := srv.broadcastSrv.state.Process(msg)
+		err := srv.broadcastSrv.manager.Process(msg)
 		if err != nil {
 			if srv.broadcastSrv.metrics != nil {
 				srv.broadcastSrv.metrics.AddDropped(false)
@@ -129,11 +130,13 @@ func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastO
 }
 
 func (srv *broadcastServer) broadcastHandler(method string, req protoreflect.ProtoMessage, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
-	srv.state.ProcessBroadcast(broadcastID, req, method)
+	//srv.state.ProcessBroadcast(broadcastID, req, method)
+	srv.manager.ProcessBroadcast(broadcastID, req, method)
 }
 
 func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
-	srv.state.ProcessSendToClient(broadcastID, resp, err)
+	//srv.state.ProcessSendToClient(broadcastID, resp, err)
+	srv.manager.ProcessSendToClient(broadcastID, resp, err)
 }
 
 func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string) {
@@ -153,9 +156,10 @@ func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broa
 
 func (srv *broadcastServer) serverBroadcastHandler(method string, req RequestTypes, opts ...broadcast.BroadcastOptions) {
 	cd := broadcastCallData{
-		Message:           req,
-		Method:            method,
-		BroadcastID:       srv.state.NewBroadcastID(),
+		Message: req,
+		Method:  method,
+		//BroadcastID:       srv.state.NewBroadcastID(),
+		BroadcastID:       srv.manager.NewBroadcastID(),
 		OriginAddr:        "server",
 		IsBroadcastClient: false,
 	}
@@ -170,7 +174,8 @@ func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.router.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
+	//srv.router.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
+	srv.manager.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
 		cd := broadcastCallData{
 			Message:           in,
 			Method:            method,
@@ -189,7 +194,8 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 }
 
 func (srv *broadcastServer) registerSendToClientHandler(method string, handler broadcast.ClientHandler) {
-	srv.router.AddClientHandler(method, handler)
+	//srv.router.AddClientHandler(method, handler)
+	srv.manager.AddClientHandler(method, handler)
 }
 
 func (srv *Server) RegisterConfig(config RawConfiguration) {

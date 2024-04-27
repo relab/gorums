@@ -227,16 +227,22 @@ func (c *channel) sender() {
 		// have failed or if the node has disconnected
 		if !c.isConnected() {
 			// streamBroken will be set if the reconnection fails
-			c.connect()
+			err := c.connect()
+			if err != nil {
+				c.setLastErr(err)
+				c.streamBroken.set()
+			}
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
+			//slog.Info("channel: stream is broken")
 			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: streamDownErr})
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
+			//slog.Info("channel: well this is weird", "err", err)
 			// return the error
 			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: err})
 		}
@@ -282,12 +288,10 @@ func (c *channel) connect() error {
 		// try dialing again.
 		err := c.node.dial()
 		if err != nil {
-			c.streamBroken.set()
 			return err
 		}
 		err = c.newNodeStream(c.node.conn)
 		if err != nil {
-			c.streamBroken.set()
 			return err
 		}
 		// return early because streamBroken will be cleared if no error occurs.

@@ -330,12 +330,16 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		return nil, fmt.Errorf("context cancelled")
+		return nil, fmt.Errorf("provided context cancelled")
 	}
 	if !ok {
 		return nil, fmt.Errorf("done channel was closed before returning a value")
 	}
-	return response.(*Response), err
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	return resp, nil
 }
 
 func _clientBroadcastCallForward(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {

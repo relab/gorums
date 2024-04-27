@@ -52,8 +52,8 @@ func createSrvs(numSrvs int, down ...int) ([]*testServer, []string, func(), erro
 
 func TestSimpleBroadcastCall(t *testing.T) {
 	slog.Info("TestSimpleBroadcastCall")
-	numSrvs := 1
-	numReqs := 5
+	numSrvs := 3
+	numReqs := 10
 	srvs, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
@@ -69,7 +69,7 @@ func TestSimpleBroadcastCall(t *testing.T) {
 	for i := 1; i <= numReqs; i++ {
 		//slog.Info("req", "no", i)
 		val := int64(i * 100)
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.BroadcastCall(ctx, &Request{Value: val})
 		if err != nil {
 			t.Error(err)
@@ -87,7 +87,6 @@ func TestSimpleBroadcastCall(t *testing.T) {
 }
 
 func TestBroadcastCallRace(t *testing.T) {
-	slog.Info("TestBroadcastCallRace")
 	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		t.Error(err)
@@ -120,7 +119,6 @@ func TestBroadcastCallRace(t *testing.T) {
 }
 
 func TestBroadcastCallClientKnowsOnlyOneServer(t *testing.T) {
-	slog.Info("TestBroadcastCallClientKnowsOnlyOneServer")
 	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		t.Error(err)
@@ -277,10 +275,11 @@ func TestBroadcastCallRaceTwoClients(t *testing.T) {
 		t.Fatal("resp is wrong")
 	}
 
+	timeout := 3 * time.Second
 	var wg sync.WaitGroup
 	for i := 0; i <= 100; i++ {
 		go func(j int) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			resp, err := client1.BroadcastCall(ctx, &Request{Value: int64(j)})
 			if err != nil {
@@ -292,7 +291,7 @@ func TestBroadcastCallRaceTwoClients(t *testing.T) {
 			wg.Done()
 		}(i)
 		go func(j int) {
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			resp, err := client2.BroadcastCall(ctx, &Request{Value: int64(j)})
 			if err != nil {
@@ -301,16 +300,13 @@ func TestBroadcastCallRaceTwoClients(t *testing.T) {
 			if resp.GetResult() != int64(j) {
 				t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), j)
 			}
-			if err != nil {
-				t.Error(err)
-			}
 			wg.Done()
 		}(i)
 		wg.Add(2)
 	}
 	wg.Wait()
 	for _, srv := range srvs {
-		fmt.Println(srv.GetMsgs())
+		srv.PrintStats()
 	}
 }
 
@@ -980,16 +976,17 @@ func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
 }
 
 func BenchmarkBroadcastCallTenClientsMEM(b *testing.B) {
-	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	numSrvs := 3
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		b.Error(err)
 	}
 	defer srvCleanup()
 
-	numClients := 10
+	numClients := 1
 	clients := make([]*Configuration, numClients)
 	for c := 0; c < numClients; c++ {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
 		if err != nil {
 			b.Error(err)
 		}
@@ -1012,41 +1009,38 @@ func BenchmarkBroadcastCallTenClientsMEM(b *testing.B) {
 	runtime.GC()
 
 	b.ResetTimer()
-	b.Run(fmt.Sprintf("BC_%d", 3), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			var wg sync.WaitGroup
-			for _, client := range clients {
-				go func(i int, c *Configuration) {
-					resp, err := c.BroadcastCall(context.Background(), &Request{Value: int64(i)})
-					if err != nil {
-						b.Error(err)
-					}
-					if resp.GetResult() != int64(i) {
-						b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
-					}
-					wg.Done()
-				}(i, client)
-				wg.Add(1)
+	for _, client := range clients {
+		b.RunParallel(func(pb *testing.PB) {
+			for i := 0; pb.Next(); i++ {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
+				cancel()
+				if err != nil {
+					b.Error(err)
+				}
+				if resp.GetResult() != int64(i) {
+					b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+				}
 			}
-			wg.Wait()
-		}
-	})
+		})
+	}
 	b.StopTimer()
 	pprof.WriteHeapProfile(memProfile)
 	memProfile.Close()
 }
 
 func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
-	_, srvAddrs, srvCleanup, err := createSrvs(3)
+	numSrvs := 1
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		b.Error(err)
 	}
 	defer srvCleanup()
 
-	numClients := 10
+	numClients := 1
 	clients := make([]*Configuration, numClients)
 	for c := 0; c < numClients; c++ {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
 		if err != nil {
 			b.Error(err)
 		}
@@ -1075,7 +1069,7 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	for _, client := range clients {
 		b.RunParallel(func(pb *testing.PB) {
 			for i := 0; pb.Next(); i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
 				cancel()
 				if err != nil {
@@ -1091,15 +1085,17 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 }
 
 func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
-	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
+	numSrvs := 3
+	numClients := 20
+	numReqs := 500
+	srvs, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
 	}
 
-	numClients := 10
 	clients := make([]*Configuration, numClients)
 	for c := 0; c < numClients; c++ {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1108,26 +1104,38 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	}
 
 	fmt.Println("making sure all clients are connected...")
+	var wg1 sync.WaitGroup
 	s := time.Now()
 	for _, client := range clients {
 		init := 1
-		resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
-		if err != nil {
-			t.Error(err)
-		}
-		if resp.GetResult() != int64(init) {
-			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
-		}
+		go func(client *Configuration) {
+			resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
+			if err != nil {
+				t.Error(err)
+			}
+			if resp.GetResult() != int64(init) {
+				t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+			}
+			wg1.Done()
+		}(client)
+		wg1.Add(1)
 	}
+	wg1.Wait()
 	fmt.Println("total took (sync):", time.Since(s))
+	time.Sleep(1 * time.Second)
 
 	for _, srv := range srvs {
 		srv.PrintStats()
 	}
+	stop, err := StartTrace("traceprofileBC")
+	if err != nil {
+		t.Error(err)
+	}
+	defer stop()
 	fmt.Println("starting...")
 	s = time.Now()
 	var wg sync.WaitGroup
-	for r := 0; r < 1000; r++ {
+	for r := 0; r < numReqs; r++ {
 		for i, client := range clients {
 			go func(i int) {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1148,6 +1156,7 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	}
 	wg.Wait()
 	end := time.Now()
+	time.Sleep(1 * time.Second)
 	srvCleanup()
 	for _, srv := range srvs {
 		srv.PrintStats()

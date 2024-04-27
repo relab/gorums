@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net"
 	"sync"
 	"time"
 
@@ -13,16 +12,10 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-const (
-	BroadcastID string = "broadcastID"
-)
-
-type ServerHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
-type ClientHandler func(broadcastID uint64, req protoreflect.ProtoMessage, cc *grpc.ClientConn, timeout time.Duration, opts ...grpc.CallOption) (any, error)
-
 type Client struct {
 	Addr    string
-	SendMsg func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration)
+	SendMsg func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration) error
+	Close   func() error
 }
 
 type BroadcastRouter struct {
@@ -43,13 +36,13 @@ type BroadcastRouter struct {
 	doneChan          chan struct{}
 	logger            *slog.Logger
 	metrics           *Metric
+	state             *BroadcastState
 }
 
 func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), dialOpts ...grpc.DialOption) *BroadcastRouter {
 	if len(dialOpts) <= 0 {
 		dialOpts = []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithDefaultCallOptions(grpc.CallContentSubtype("gorums")),
 		}
 	}
 	return &BroadcastRouter{
@@ -60,7 +53,7 @@ func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr stri
 		clients:           make(map[string]*Client),
 		createClient:      createClient,
 		dialOpts:          dialOpts,
-		dialTimeout:       5 * time.Second,
+		dialTimeout:       3 * time.Second,
 		connectionTimeout: 1 * time.Minute,
 		doneChan:          make(chan struct{}),
 		logger:            logger,
@@ -68,25 +61,12 @@ func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr stri
 	}
 }
 
-func (r *BroadcastRouter) AddAddr(id uint32, addr string) {
-	r.id = id
-	r.addr = addr
-}
-
-func (r *BroadcastRouter) AddServerHandler(method string, handler ServerHandler) {
-	r.serverHandlers[method] = handler
-}
-
-func (r *BroadcastRouter) AddClientHandler(method string, handler ClientHandler) {
-	r.clientHandlers[method] = handler
-}
-
 func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any) error {
 	switch val := req.(type) {
 	case *broadcastMsg:
 		return r.routeBroadcast(broadcastID, addr, method, val)
 	case *reply:
-		return r.routeClientReply2(broadcastID, addr, method, val)
+		return r.routeClientReply(broadcastID, addr, method, val)
 	}
 	return errors.New("wrong req type")
 }
@@ -101,33 +81,33 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string
 	return errors.New("not found")
 }
 
-func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method string, resp *reply) error {
-	// the client has initiated a broadcast call and the reply should be sent as an RPC
-	if handler, ok := r.clientHandlers[method]; ok && addr != "" {
-		cc, err := r.getConnection(addr)
-		if err != nil {
-			return err
-		}
-		go handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
-		//slog.Info("routed", "broadcastID", broadcastID)
-		return nil
-	}
-	//slog.Error("not routed")
-	// the server can receive a broadcast from another server before a client sends a direct message.
-	// it should thus wait for a potential message from the client. otherwise, it should be removed.
-	//slog.Info("not routed", "broadcastID", broadcastID)
-	return errors.New("not routed")
-}
+//func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method string, resp *reply) error {
+//// the client has initiated a broadcast call and the reply should be sent as an RPC
+//if handler, ok := r.clientHandlers[method]; ok && addr != "" {
+//cc, err := r.getConnection(addr)
+//if err != nil {
+//return err
+//}
+//go handler(broadcastID, resp.getResponse(), cc, r.dialTimeout)
+////slog.Info("routed", "broadcastID", broadcastID)
+//return nil
+//}
+////slog.Error("not routed")
+//// the server can receive a broadcast from another server before a client sends a direct message.
+//// it should thus wait for a potential message from the client. otherwise, it should be removed.
+////slog.Info("not routed", "broadcastID", broadcastID)
+//return errors.New("not routed")
+//}
 
-func (r *BroadcastRouter) routeClientReply2(broadcastID uint64, addr, method string, resp *reply) error {
+func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method string, resp *reply) error {
 	// the client has initiated a broadcast call and the reply should be sent as an RPC
 	if _, ok := r.clientHandlers[method]; ok && addr != "" {
 		client, err := r.getClient(addr)
 		if err != nil {
 			return err
 		}
-		client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout)
-		return nil
+		//slog.Info("router: sending to client", "addr", r.addr, "bID", broadcastID)
+		return client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout)
 	}
 	// the server can receive a broadcast from another server before a client sends a direct message.
 	// it should thus wait for a potential message from the client. otherwise, it should be removed.
@@ -148,7 +128,7 @@ func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
 	return client, nil
 }
 
-func (r *BroadcastRouter) getConnMutex(addr string) *sync.Mutex {
+/*func (r *BroadcastRouter) getConnMutex(addr string) *sync.Mutex {
 	r.mut.Lock()
 	defer r.mut.Unlock()
 	mut, ok := r.connMutexes[addr]
@@ -209,7 +189,7 @@ func (r *BroadcastRouter) getConnection(addr string) (*grpc.ClientConn, error) {
 
 func (r *BroadcastRouter) CreateConnection(addr string) {
 	r.getConnection(addr)
-}
+}*/
 
 //func (r *BroadcastRouter) lock() {
 //r.connMutex.Lock()

@@ -37,9 +37,12 @@ type ClientRequest struct {
 }
 
 type csr struct {
+	ctx      context.Context
+	cancel   context.CancelFunc
 	req      protoreflect.ProtoMessage
 	resps    []protoreflect.ProtoMessage
 	doneChan chan protoreflect.ProtoMessage
+	respChan chan protoreflect.ProtoMessage
 	handler  ReplySpecHandler
 }
 
@@ -75,7 +78,6 @@ func NewClientServer(lis net.Listener) (*ClientServer, error) {
 		cancelCtx: cancel,
 	}
 	srv.lis = lis
-	go srv.status()
 	return srv, nil
 }
 
@@ -88,7 +90,7 @@ func (srv *ClientServer) Stop() {
 	}
 }
 
-func (srv *ClientServer) AddRequest(broadcastID uint64, ctx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler, method string) (chan protoreflect.ProtoMessage, QuorumCallData) {
+func (srv *ClientServer) AddRequest(broadcastID uint64, clientCtx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler, method string) (chan protoreflect.ProtoMessage, QuorumCallData) {
 	cd := QuorumCallData{
 		Message: in,
 		Method:  method,
@@ -98,17 +100,70 @@ func (srv *ClientServer) AddRequest(broadcastID uint64, ctx context.Context, in 
 		OriginAddr:        srv.lis.Addr().String(),
 	}
 	doneChan := make(chan protoreflect.ProtoMessage)
+	respChan := make(chan protoreflect.ProtoMessage)
+	ctx, cancel := context.WithCancel(srv.ctx)
 
 	srv.mu.Lock()
 	srv.csr[broadcastID] = &csr{
-		req:      in,
-		resps:    make([]protoreflect.ProtoMessage, 0, 3),
-		doneChan: doneChan,
-		handler:  handler,
+		ctx:      ctx,
+		cancel:   cancel,
+		respChan: respChan,
 	}
-	srv.inProgress++
+	//srv.csr[broadcastID] = &csr{
+	//ctx:      ctx,
+	//cancel:   cancel,
+	//req:      in,
+	//resps:    make([]protoreflect.ProtoMessage, 0, 3),
+	//doneChan: doneChan,
+	//handler:  handler,
+	//}
 	srv.mu.Unlock()
+
+	go createReq(ctx, clientCtx, cancel, in, doneChan, respChan, handler)
+
 	return doneChan, cd
+}
+
+func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req protoreflect.ProtoMessage, doneChan chan protoreflect.ProtoMessage, respChan chan protoreflect.ProtoMessage, handler ReplySpecHandler) {
+	// make sure to cancel the req ctx when returning to
+	// prevent a leaking ctx.
+	defer cancel()
+	resps := make([]protoreflect.ProtoMessage, 0, 3)
+	for {
+		select {
+		case <-clientCtx.Done():
+			// client provided ctx
+			//slog.Info("clientserver: clientCtx done", "resps", len(resps))
+			return
+		case <-ctx.Done():
+			// request ctx. this is a child to the server ctx.
+			// hence, guaranteeing that all reqs are finished
+			// when the server is stopped.
+
+			// we must send on channel to prevent deadlock on
+			// the receiving end. this can happen if the client
+			// chooses not to timeout the request and the server
+			// goes down.
+			select {
+			case doneChan <- nil:
+			case <-clientCtx.Done():
+				return
+			}
+			return
+		case resp := <-respChan:
+			resps = append(resps, resp)
+			response, done := handler(req, resps)
+			if done {
+				select {
+				case doneChan <- response:
+				case <-ctx.Done():
+				case <-clientCtx.Done():
+				}
+				return
+			}
+		}
+	}
+
 }
 
 func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.ProtoMessage, broadcastID uint64) error {
@@ -128,32 +183,51 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 	if broadcastID == 0 {
 		return fmt.Errorf("no broadcastID")
 	}
+	//slog.Info("clientserver: received response", "bID", broadcastID)
 
-	//slog.Info("AddResponse: Lock", "broadcastID", broadcastID)
+	//slog.Info("clientserver: waiting for lock")
 	srv.mu.Lock()
-	//slog.Info("AddResponse: Inside", "broadcastID", broadcastID)
+	//slog.Info("clientserver: lock")
 	csr, ok := srv.csr[broadcastID]
+	srv.mu.Unlock()
+	//slog.Info("clientserver: unlock")
 	if !ok {
-		srv.mu.Unlock()
 		return fmt.Errorf("doesn't exist")
 	}
-	csr.resps = append(csr.resps, resp)
-	response, done := csr.handler(csr.req, csr.resps)
-
-	var doneChan chan protoreflect.ProtoMessage
-	if done {
-		srv.inProgress--
-		doneChan = csr.doneChan
-		delete(srv.csr, broadcastID)
-		srv.mu.Unlock()
-		//slog.Info("AddResponse: Unlock", "broadcastID", broadcastID)
-		doneChan <- response
-		//slog.Info("add response", "response", resp, "response", response)
-		//slog.Info("AddResponse: Done, sent", "resp", response, "broadcastID", broadcastID)
-		return nil
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-csr.ctx.Done():
+		return csr.ctx.Err()
+	case csr.respChan <- resp:
 	}
-	srv.mu.Unlock()
 	return nil
+	//slog.Info("AddResponse: Lock", "broadcastID", broadcastID)
+	//srv.mu.Lock()
+	////slog.Info("AddResponse: Inside", "broadcastID", broadcastID)
+	//csr, ok := srv.csr[broadcastID]
+	//if !ok {
+	//srv.mu.Unlock()
+	//return fmt.Errorf("doesn't exist")
+	//}
+	//csr.resps = append(csr.resps, resp)
+	//response, done := csr.handler(csr.req, csr.resps)
+
+	//var doneChan chan protoreflect.ProtoMessage
+	//if done {
+	//srv.inProgress--
+	//csr.cancel()
+	//doneChan = csr.doneChan
+	//delete(srv.csr, broadcastID)
+	//srv.mu.Unlock()
+	////slog.Info("AddResponse: Unlock", "broadcastID", broadcastID)
+	//doneChan <- response
+	////slog.Info("add response", "response", resp, "response", response)
+	////slog.Info("AddResponse: Done, sent", "resp", response, "broadcastID", broadcastID)
+	//return nil
+	//}
+	//srv.mu.Unlock()
+	//return nil
 }
 
 func ConvertToType[T, U protoreflect.ProtoMessage](handler func(U, []T) (T, bool)) ReplySpecHandler {
@@ -192,6 +266,7 @@ func ServerClientRPC(method string) func(broadcastID uint64, in protoreflect.Pro
 // NodeStream handles a connection to a single client. The stream is aborted if there
 // is any error with sending or receiving.
 func (s *ClientServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
+	//slog.Info("clientserver: connected to client", "addr", s.lis.Addr().String())
 	var mut sync.Mutex // used to achieve mutex between request handlers
 	ctx := srv.Context()
 	// Start with a locked mutex
@@ -221,7 +296,10 @@ func NewClientServer2(lis net.Listener, opts ...ServerOption) *ClientServer {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
+	ctx, cancel := context.WithCancel(context.Background())
 	srv := &ClientServer{
+		ctx:        ctx,
+		cancelCtx:  cancel,
 		csr:        make(map[uint64]*csr),
 		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
 		handlers:   make(map[string]requestHandler),
@@ -244,6 +322,8 @@ func (srv *ClientServer) Serve(listener net.Listener) error {
 }
 
 func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, error) {
+	// necessary to ensure correct marshalling and unmarshalling of gorums messages
+	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(grpc.CallContentSubtype(ContentSubtype)))
 	mgr := &RawManager{
 		opts: managerOptions{
 			grpcDialOpts: dialOpts,
@@ -259,7 +339,7 @@ func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, e
 	}
 	return &broadcast.Client{
 		Addr: node.Address(),
-		SendMsg: func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration) {
+		SendMsg: func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration) error {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			cd := CallData{
@@ -267,7 +347,11 @@ func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, e
 				Message:     msg,
 				BroadcastID: broadcastID,
 			}
-			node.RPCCall(ctx, cd)
+			node.Unicast(ctx, cd)
+			return node.LastErr()
+		},
+		Close: func() error {
+			return node.close()
 		},
 	}, nil
 }
