@@ -25,6 +25,7 @@ func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.Broadca
 	for _, opt := range opts {
 		opt(&options)
 	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
 	b.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, options)
 }
 
@@ -36,6 +37,7 @@ func (b *Broadcast) MulticastWithBroadcast(req *Request, opts ...gorums.Broadcas
 	for _, opt := range opts {
 		opt(&options)
 	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
 	b.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, b.metadata.BroadcastID, options)
 }
 
@@ -47,6 +49,7 @@ func (b *Broadcast) BroadcastInternal(req *Request, opts ...gorums.BroadcastOpti
 	for _, opt := range opts {
 		opt(&options)
 	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
 	b.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, b.metadata.BroadcastID, options)
 }
 
@@ -58,5 +61,6 @@ func (b *Broadcast) BroadcastWithClientHandlerAndBroadcastOption(req *Request, o
 	for _, opt := range opts {
 		opt(&options)
 	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
 	b.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, b.metadata.BroadcastID, options)
 }

@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/relab/gorums/broadcast"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type broadcastServer struct {
@@ -19,11 +18,9 @@ type broadcastServer struct {
 	view              RawConfiguration
 	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
 	orchestrator      *BroadcastOrchestrator
-	//state             BroadcastState
-	manager BroadcastManger
-	//router            BroadcastRouter
-	logger  *slog.Logger
-	metrics *broadcast.Metric
+	manager           broadcast.BroadcastManager
+	logger            *slog.Logger
+	metrics           *broadcast.Metric
 }
 
 func (srv *Server) PrintStats() {
@@ -81,17 +78,6 @@ func (srv *broadcastServer) stop() {
 //AddServerHandler(method string, handler broadcast.ServerHandler)
 //AddClientHandler(method string, handler broadcast.ClientHandler)
 //}
-
-type BroadcastManger interface {
-	Process(broadcast.Content) error
-	ProcessBroadcast(uint64, protoreflect.ProtoMessage, string)
-	ProcessSendToClient(uint64, protoreflect.ProtoMessage, error)
-	NewBroadcastID() uint64
-	AddAddr(id uint32, addr string)
-	AddServerHandler(method string, handler broadcast.ServerHandler)
-	AddClientHandler(method string)
-	Close() error
-}
 
 type Snowflake interface {
 	NewBroadcastID() uint64

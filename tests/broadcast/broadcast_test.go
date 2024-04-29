@@ -3,7 +3,6 @@ package broadcast
 import (
 	"context"
 	fmt "fmt"
-	"log/slog"
 	net "net"
 	"net/http"
 	_ "net/http/pprof"
@@ -51,7 +50,6 @@ func createSrvs(numSrvs int, down ...int) ([]*testServer, []string, func(), erro
 }
 
 func TestSimpleBroadcastCall(t *testing.T) {
-	slog.Info("TestSimpleBroadcastCall")
 	numSrvs := 3
 	numReqs := 10
 	srvs, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
@@ -83,6 +81,37 @@ func TestSimpleBroadcastCall(t *testing.T) {
 		if srv.GetNumMsgs() != numReqs*numSrvs {
 			//t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", numReqs*numSrvs, srv.GetNumMsgs()))
 		}
+	}
+}
+
+func TestSimpleBroadcastTo(t *testing.T) {
+	numSrvs := 3
+	numReqs := 10
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	// only want a response from the leader, hence qsize = 1
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080", 1)
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	for i := 1; i <= numReqs; i++ {
+		//slog.Info("req", "no", i)
+		val := int64(i * 100)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		resp, err := config.BroadcastCallTo(ctx, &Request{Value: val})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetFrom() != leader {
+			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", leader, resp.GetFrom()))
+		}
+		cancel()
 	}
 }
 

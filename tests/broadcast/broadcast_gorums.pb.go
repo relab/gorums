@@ -203,6 +203,7 @@ func newBroadcaster(m gorums.BroadcastMetadata, o *gorums.BroadcastOrchestrator)
 	return &Broadcast{
 		orchestrator: o,
 		metadata:     m,
+		srvAddrs:     make([]string, 0),
 	}
 }
 
@@ -214,6 +215,7 @@ func (srv *Server) SetView(config *Configuration) {
 type Broadcast struct {
 	orchestrator *gorums.BroadcastOrchestrator
 	metadata     gorums.BroadcastMetadata
+	srvAddrs     []string
 }
 
 // Returns a readonly struct of the metadata used in the broadcast.
@@ -234,6 +236,14 @@ func (c *clientServerImpl) stop() {
 	if c.grpcServer != nil {
 		c.grpcServer.Stop()
 	}
+}
+
+func (b *Broadcast) To(addrs ...string) *Broadcast {
+	if len(addrs) <= 0 {
+		return b
+	}
+	b.srvAddrs = append(b.srvAddrs, addrs...)
+	return b
 }
 
 func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
@@ -263,6 +273,7 @@ func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.Broadca
 	for _, opt := range opts {
 		opt(&options)
 	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
 	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, options)
 }
 
@@ -274,6 +285,7 @@ func (b *Broadcast) BroadcastIntermediate(req *Request, opts ...gorums.Broadcast
 	for _, opt := range opts {
 		opt(&options)
 	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
 	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, b.metadata.BroadcastID, options)
 }
 
@@ -285,7 +297,20 @@ func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
 	for _, opt := range opts {
 		opt(&options)
 	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
 	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, b.metadata.BroadcastID, options)
+}
+
+func (b *Broadcast) BroadcastToResponse(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == 0 {
+		panic("broadcastID cannot be empty. Use srv.BroadcastBroadcastToResponse instead")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, b.metadata.BroadcastID, options)
 }
 
 func (srv *clientServerImpl) clientBroadcastCall(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
@@ -350,10 +375,42 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (
 	return resp, nil
 }
 
+func (srv *clientServerImpl) clientBroadcastCallTo(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
+	return resp, err
+}
+
+func (c *Configuration) BroadcastCallTo(ctx context.Context, in *Request) (resp *Response, err error) {
+	if c.srv == nil {
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
+	}
+	if c.qspec == nil {
+		return nil, fmt.Errorf("a qspec is not defined")
+	}
+	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallToQF), "broadcast.BroadcastService.BroadcastCallTo")
+	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
+	}
+	return resp, nil
+}
+
 func registerClientServerHandlers(srv *clientServerImpl) {
 
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCall", gorums.ClientHandler(srv.clientBroadcastCall))
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.ClientHandler(srv.clientBroadcastCallForward))
+	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallTo", gorums.ClientHandler(srv.clientBroadcastCallTo))
 }
 
 // Multicast is a quorum call invoked on all nodes in configuration c,
@@ -416,6 +473,13 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
 	BroadcastCallForwardQF(in *Request, replies []*Response) (*Response, bool)
+
+	// BroadcastCallToQF is the quorum function for the BroadcastCallTo
+	// broadcastcall call method. The in parameter is the request object
+	// supplied to the BroadcastCallTo method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	BroadcastCallToQF(in *Request, replies []*Response) (*Response, bool)
 }
 
 // QuorumCall is a quorum call invoked on all nodes in configuration c,
@@ -498,6 +562,8 @@ type BroadcastService interface {
 	BroadcastIntermediate(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	BroadcastCallForward(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	BroadcastCallTo(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	BroadcastToResponse(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 }
 
 func (srv *Server) QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
@@ -526,6 +592,12 @@ func (srv *Server) Broadcast(ctx gorums.ServerCtx, request *Request, broadcast *
 }
 func (srv *Server) BroadcastCallForward(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method BroadcastCallForward not implemented"))
+}
+func (srv *Server) BroadcastCallTo(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method BroadcastCallTo not implemented"))
+}
+func (srv *Server) BroadcastToResponse(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method BroadcastToResponse not implemented"))
 }
 
 func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
@@ -558,6 +630,9 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 	srv.RegisterHandler("broadcast.BroadcastService.Broadcast", gorums.BroadcastHandler(impl.Broadcast, srv.Server))
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.BroadcastHandler(impl.BroadcastCallForward, srv.Server))
 	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCallForward")
+	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallTo", gorums.BroadcastHandler(impl.BroadcastCallTo, srv.Server))
+	srv.RegisterClientHandler("broadcast.BroadcastService.BroadcastCallTo")
+	srv.RegisterHandler("broadcast.BroadcastService.BroadcastToResponse", gorums.BroadcastHandler(impl.BroadcastToResponse, srv.Server))
 }
 
 func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
@@ -593,6 +668,18 @@ func (srv *Server) BroadcastBroadcast(req *Request, opts ...gorums.BroadcastOpti
 		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, options.RelatedToReq, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.Broadcast", req, options)
+	}
+}
+
+func (srv *Server) BroadcastBroadcastToResponse(req *Request, opts ...gorums.BroadcastOption) {
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	if options.RelatedToReq > 0 {
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, options.RelatedToReq, options)
+	} else {
+		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, options)
 	}
 }
 

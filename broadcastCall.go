@@ -24,7 +24,7 @@ type broadcastCallData struct {
 // checks whether the given address is contained in the given subset
 // of server addresses. Will return true if a subset is not given.
 func (bcd *broadcastCallData) inSubset(addr string) bool {
-	if len(bcd.ServerAddresses) <= 0 {
+	if bcd.ServerAddresses == nil || len(bcd.ServerAddresses) <= 0 {
 		return true
 	}
 	for _, srvAddr := range bcd.ServerAddresses {

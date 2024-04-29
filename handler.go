@@ -131,7 +131,7 @@ func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastO
 
 func (srv *broadcastServer) broadcastHandler(method string, req protoreflect.ProtoMessage, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
 	//srv.state.ProcessBroadcast(broadcastID, req, method)
-	srv.manager.ProcessBroadcast(broadcastID, req, method)
+	srv.manager.ProcessBroadcast(broadcastID, req, method, opts...)
 }
 
 func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {

@@ -126,22 +126,13 @@ type broadcastMsg struct {
 	ctx         context.Context
 }
 
-func newMsg(broadcastID uint64, req protoreflect.ProtoMessage, method string, options BroadcastOptions) *broadcastMsg {
+func NewMsg(broadcastID uint64, req protoreflect.ProtoMessage, method string, options BroadcastOptions) *broadcastMsg {
 	return &broadcastMsg{
 		request:     req,
 		method:      method,
 		broadcastID: broadcastID,
 		options:     options,
-		ctx:         context.WithValue(context.Background(), BroadcastID, broadcastID),
-	}
-}
-
-func NewMsg(broadcastID uint64, req protoreflect.ProtoMessage, method string) *broadcastMsg {
-	return &broadcastMsg{
-		request:     req,
-		method:      method,
-		broadcastID: broadcastID,
-		ctx:         context.WithValue(context.Background(), BroadcastID, broadcastID),
+		ctx:         context.Background(),
 	}
 }
 

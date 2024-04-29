@@ -34,13 +34,23 @@ service BroadcastService {
   rpc BroadcastCallForward(Request) returns (Response) { 
     option (gorums.broadcastcall) = true; 
   }
+  rpc BroadcastCallTo(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc BroadcastToResponse(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
 }
 
-message Request { int64 Value = 1; }
+message Request { 
+  int64 Value = 1; 
+  string From = 2;
+}
 
 message Response { 
   int64 Result = 1;
   int64 Replies = 2;
+  string From = 3;
 }
 
 message Empty {}

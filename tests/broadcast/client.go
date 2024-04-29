@@ -70,6 +70,16 @@ func (qs *testQSpec) BroadcastCallForwardQF(in *Request, replies []*Response) (*
 	return nil, false
 }
 
+func (qs *testQSpec) BroadcastCallToQF(in *Request, replies []*Response) (*Response, bool) {
+	//slog.Warn("client received reply", "resps", len(replies))
+	if len(replies) >= qs.quorumSize {
+		for _, resp := range replies {
+			return resp, true
+		}
+	}
+	return nil, false
+}
+
 func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configuration, func(), error) {
 	quorumSize := len(srvAddrs)
 	if len(qsize) > 0 {

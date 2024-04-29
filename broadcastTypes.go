@@ -104,7 +104,9 @@ func WithRelationToRequest(broadcastID uint64) BroadcastOption {
 }
 
 func NewBroadcastOptions() broadcast.BroadcastOptions {
-	return broadcast.BroadcastOptions{}
+	return broadcast.BroadcastOptions{
+		ServerAddresses: make([]string, 0), // to prevent nil errors
+	}
 }
 
 type Broadcaster interface{}

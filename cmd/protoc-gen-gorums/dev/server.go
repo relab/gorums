@@ -30,6 +30,7 @@ func newBroadcaster(m gorums.BroadcastMetadata, o *gorums.BroadcastOrchestrator)
 	return &Broadcast{
 		orchestrator: o,
 		metadata:     m,
+		srvAddrs:     make([]string, 0),
 	}
 }
 
@@ -41,6 +42,7 @@ func (srv *Server) SetView(config *Configuration) {
 type Broadcast struct {
 	orchestrator *gorums.BroadcastOrchestrator
 	metadata     gorums.BroadcastMetadata
+	srvAddrs     []string
 }
 
 // Returns a readonly struct of the metadata used in the broadcast.
@@ -61,6 +63,14 @@ func (c *clientServerImpl) stop() {
 	if c.grpcServer != nil {
 		c.grpcServer.Stop()
 	}
+}
+
+func (b *Broadcast) To(addrs ...string) *Broadcast {
+	if len(addrs) <= 0 {
+		return b
+	}
+	b.srvAddrs = append(b.srvAddrs, addrs...)
+	return b
 }
 
 func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {

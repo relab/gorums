@@ -11,6 +11,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+var leader = "127.0.0.1:5000"
+
 type response struct {
 	respChan  chan int64
 	messageID int64
@@ -37,7 +39,7 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 		Server:   NewServer(gorums.WithMetrics()),
 		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
-		leader:   "127.0.0.1:5000",
+		leader:   leader,
 	}
 	RegisterBroadcastServiceServer(srv.Server, &srv)
 	srv.peers = srvAddresses
@@ -172,6 +174,25 @@ func (srv *testServer) BroadcastCallForward(ctx gorums.ServerCtx, req *Request, 
 		return
 	}
 	broadcast.Broadcast(req)
+}
+
+func (srv *testServer) BroadcastCallTo(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	//srv.mu.Lock()
+	//srv.numMsg["BC"]++
+	//srv.mu.Unlock()
+	//slog.Warn("server received broadcast call")
+	broadcast.To(srv.leader).BroadcastToResponse(req) // only broadcast to the leader
+}
+
+func (srv *testServer) BroadcastToResponse(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	//srv.mu.Lock()
+	//srv.numMsg["BC"]++
+	//srv.mu.Unlock()
+	//slog.Warn("server received broadcast call")
+	// only broadcast to the leader
+	broadcast.SendToClient(&Response{
+		From: srv.addr,
+	}, nil)
 }
 
 func (srv *testServer) GetMsgs() string {
