@@ -32,7 +32,7 @@ func NewBroadcastManager(logger *slog.Logger, m *Metric, createClient func(addr 
 	router := NewRouter(logger, m, createClient)
 	state := NewState(logger, m)
 	for _, shard := range state.shards {
-		go shard.run(router, state.reqTTL, state.sendBuffer, m)
+		go shard.run(router, state.reqTTL, state.sendBuffer)
 	}
 	return &broadcastManager{
 		state:   state,
@@ -47,7 +47,8 @@ func (mgr *broadcastManager) Process(msg Content) error {
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
 
-	receiveChan := make(chan error)
+	// we only need a single response
+	receiveChan := make(chan error, 1)
 	msg.ReceiveChan = receiveChan
 	select {
 	case <-shard.ctx.Done():

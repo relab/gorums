@@ -3,7 +3,6 @@ package broadcast
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -50,7 +49,7 @@ func createShards(ctx context.Context, shardBuffer int) []*shard {
 	return shards
 }
 
-func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int, metrics *Metric) {
+func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int) {
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -62,6 +61,14 @@ func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int, metrics
 			//metrics.AddShardDistribution(s.id)
 			//}
 			if req, ok := s.reqs[msg.BroadcastID]; ok {
+				// must check if the req is done first to prevent
+				// unecessarily running the server handler
+				select {
+				case <-req.ctx.Done():
+					s.metrics.droppedMsgs++
+					msg.ReceiveChan <- AlreadyProcessedErr{}
+				default:
+				}
 				if !msg.IsBroadcastClient {
 					// no need to send it to the broadcast request goroutine.
 					// the first request should contain all info needed
@@ -69,10 +76,11 @@ func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int, metrics
 					msg.ReceiveChan <- nil
 					continue
 				}
+				// must check if the req is done to prevent deadlock
 				select {
 				case <-req.ctx.Done():
 					s.metrics.droppedMsgs++
-					msg.ReceiveChan <- fmt.Errorf("req is done. broadcastID: %v", msg.BroadcastID)
+					msg.ReceiveChan <- AlreadyProcessedErr{}
 				case req.sendChan <- msg:
 				}
 			} else {
