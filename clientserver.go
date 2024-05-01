@@ -10,15 +10,14 @@ import (
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func init() {
-	if encoding.GetCodec(ContentSubtype) == nil {
-		encoding.RegisterCodec(NewCodec())
-	}
-}
+//func init() {
+//if encoding.GetCodec(ContentSubtype) == nil {
+//encoding.RegisterCodec(NewCodec())
+//}
+//}
 
 type ReplySpecHandler func(req protoreflect.ProtoMessage, replies []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
 
@@ -224,6 +223,7 @@ func (srv *ClientServer) Serve(listener net.Listener) error {
 
 func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, error) {
 	// necessary to ensure correct marshalling and unmarshalling of gorums messages
+	// TODO: find a better solution
 	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(grpc.CallContentSubtype(ContentSubtype)))
 	mgr := &RawManager{
 		opts: managerOptions{

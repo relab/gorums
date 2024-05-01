@@ -270,7 +270,7 @@ func TestBroadcastCallForwardMultiple(t *testing.T) {
 }
 
 func TestBroadcastCallRaceTwoClients(t *testing.T) {
-	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		t.Error(err)
 	}
@@ -334,13 +334,10 @@ func TestBroadcastCallRaceTwoClients(t *testing.T) {
 		wg.Add(2)
 	}
 	wg.Wait()
-	for _, srv := range srvs {
-		srv.PrintStats()
-	}
 }
 
 func TestBroadcastCallAsyncReqs(t *testing.T) {
-	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
+	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		t.Error(err)
 	}
@@ -368,7 +365,6 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 		}
 	}
 
-	start := time.Now()
 	var wg sync.WaitGroup
 	for i := 0; i < 1; i++ {
 		for _, client := range clients {
@@ -386,11 +382,6 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 		}
 	}
 	wg.Wait()
-	end := time.Now()
-	for _, srv := range srvs {
-		fmt.Println(srv.GetMsgs())
-	}
-	fmt.Println(end.Sub(start))
 }
 
 func TestQCBroadcastOptionRace(t *testing.T) {
@@ -1117,7 +1108,7 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	numSrvs := 3
 	numClients := 20
 	numReqs := 500
-	srvs, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -1132,9 +1123,7 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 		clients[c] = config
 	}
 
-	fmt.Println("making sure all clients are connected...")
 	var wg1 sync.WaitGroup
-	s := time.Now()
 	for _, client := range clients {
 		init := 1
 		go func(client *Configuration) {
@@ -1150,19 +1139,13 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 		wg1.Add(1)
 	}
 	wg1.Wait()
-	fmt.Println("total took (sync):", time.Since(s))
 	time.Sleep(1 * time.Second)
 
-	for _, srv := range srvs {
-		srv.PrintStats()
-	}
 	stop, err := StartTrace("traceprofileBC")
 	if err != nil {
 		t.Error(err)
 	}
 	defer stop()
-	fmt.Println("starting...")
-	s = time.Now()
 	var wg sync.WaitGroup
 	for r := 0; r < numReqs; r++ {
 		for i, client := range clients {
@@ -1184,70 +1167,64 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 		}
 	}
 	wg.Wait()
-	end := time.Now()
-	time.Sleep(1 * time.Second)
 	srvCleanup()
-	for _, srv := range srvs {
-		srv.PrintStats()
-	}
-	fmt.Println("total took (async):", end.Sub(s))
 }
 
-func TestBroadcastCallTenClientsOnlySync(t *testing.T) {
-	srvs, srvAddrs, srvCleanup, err := createSrvs(3)
-	if err != nil {
-		t.Error(err)
-	}
+//func TestBroadcastCallTenClientsOnlySync(t *testing.T) {
+//srvs, srvAddrs, srvCleanup, err := createSrvs(3)
+//if err != nil {
+//t.Error(err)
+//}
 
-	numClients := 10
-	clients := make([]*Configuration, numClients)
-	for c := 0; c < numClients; c++ {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
-		if err != nil {
-			t.Error(err)
-		}
-		defer clientCleanup()
-		clients[c] = config
-	}
+//numClients := 10
+//clients := make([]*Configuration, numClients)
+//for c := 0; c < numClients; c++ {
+//config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+//if err != nil {
+//t.Error(err)
+//}
+//defer clientCleanup()
+//clients[c] = config
+//}
 
-	fmt.Println("making sure all clients are connected...")
-	s := time.Now()
-	for _, client := range clients {
-		init := 1
-		resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
-		if err != nil {
-			t.Error(err)
-		}
-		if resp.GetResult() != int64(init) {
-			t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
-		}
-	}
-	fmt.Println("total took (sync):", time.Since(s))
+//fmt.Println("making sure all clients are connected...")
+//s := time.Now()
+//for _, client := range clients {
+//init := 1
+//resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
+//if err != nil {
+//t.Error(err)
+//}
+//if resp.GetResult() != int64(init) {
+//t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
+//}
+//}
+//fmt.Println("total took (sync):", time.Since(s))
 
-	for _, srv := range srvs {
-		srv.PrintStats()
-	}
-	fmt.Println("starting...")
-	s = time.Now()
-	for r := 0; r < 100; r++ {
-		for i, client := range clients {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			defer cancel()
-			//start := time.Now()
-			resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
-			//fmt.Println(i, "took:", time.Since(start))
-			if err != nil {
-				t.Error(err)
-			}
-			if resp.GetResult() != int64(i) {
-				t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
-			}
-		}
-	}
-	end := time.Now()
-	srvCleanup()
-	for _, srv := range srvs {
-		srv.PrintStats()
-	}
-	fmt.Println("total took (async):", end.Sub(s))
-}
+//for _, srv := range srvs {
+//srv.PrintStats()
+//}
+//fmt.Println("starting...")
+//s = time.Now()
+//for r := 0; r < 100; r++ {
+//for i, client := range clients {
+//ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+//defer cancel()
+////start := time.Now()
+//resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
+////fmt.Println(i, "took:", time.Since(start))
+//if err != nil {
+//t.Error(err)
+//}
+//if resp.GetResult() != int64(i) {
+//t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
+//}
+//}
+//}
+//end := time.Now()
+//srvCleanup()
+//for _, srv := range srvs {
+//srv.PrintStats()
+//}
+//fmt.Println("total took (async):", end.Sub(s))
+//}

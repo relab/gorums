@@ -2,7 +2,6 @@ package broadcast
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
@@ -34,14 +33,6 @@ const (
 	volatileTTL
 )
 
-type reqContent struct {
-	broadcastChan chan Msg
-	sendChan      chan Content
-	ctx           context.Context
-	cancelFunc    context.CancelFunc
-	//sync.Once
-}
-
 type BroadcastState struct {
 	parentCtx           context.Context
 	parentCtxCancelFunc context.CancelFunc
@@ -53,7 +44,7 @@ type BroadcastState struct {
 	snowflake           *Snowflake
 	clients             map[string]*Client
 
-	shards []*shardElement
+	shards []*shard
 }
 
 func NewState(logger *slog.Logger, metrics *Metric) *BroadcastState {
@@ -91,6 +82,30 @@ func (state *BroadcastState) prune() {
 	state.parentCtxCancelFunc()
 }
 
+func (state *BroadcastState) getStats() shardMetrics {
+	m := shardMetrics{
+		lifetimes: make([][]time.Time, 0),
+	}
+	for _, shard := range state.shards {
+		metric := shard.getStats()
+		m.totalMsgs += metric.totalMsgs
+		m.numMsgs += metric.numMsgs
+		m.droppedMsgs += metric.droppedMsgs
+		m.numBroadcastMsgs += metric.numBroadcastMsgs
+		m.droppedBroadcastMsgs += metric.droppedBroadcastMsgs
+		m.numReqs += metric.numReqs
+		m.finishedReqs += metric.finishedReqs
+		m.lifetimes = append(m.lifetimes, metric.lifetimes...)
+		m.avgLifetime += metric.avgLifetime
+		m.maxLifetime += metric.maxLifetime
+		m.minLifetime += metric.minLifetime
+	}
+	if m.numReqs > 0 {
+		m.avgLifetime /= time.Duration(m.numReqs)
+	}
+	return m
+}
+
 type Content struct {
 	BroadcastID       uint64
 	IsBroadcastClient bool
@@ -101,8 +116,8 @@ type Content struct {
 }
 
 func (c Content) send(resp protoreflect.ProtoMessage, err error) error {
-	if c.SendFn == nil {
-		return errors.New("has not received client req yet")
+	if !c.hasReceivedClientRequest() {
+		return MissingClientReqErr{}
 	}
 	//if c.senderType != BroadcastClient {
 	//return errors.New("has not received client req yet")

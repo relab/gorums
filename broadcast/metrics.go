@@ -62,6 +62,9 @@ func NewMetric() *Metric {
 }
 
 func (m *Metric) Reset() {
+	if m == nil {
+		return
+	}
 	m.mut.Lock()
 	defer m.mut.Unlock()
 	m.m = Metrics{

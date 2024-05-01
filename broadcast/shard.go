@@ -9,41 +9,59 @@ import (
 
 const NumShards = 16
 
-type shardElement struct {
+type shardMetrics struct {
+	totalMsgs            uint64
+	numMsgs              uint64
+	droppedMsgs          uint64
+	numBroadcastMsgs     uint64
+	droppedBroadcastMsgs uint64
+	numReqs              uint64
+	finishedReqs         uint64
+	lifetimes            [][]time.Time
+	avgLifetime          time.Duration
+	minLifetime          time.Duration
+	maxLifetime          time.Duration
+}
+
+type shard struct {
 	id            int
 	sendChan      chan Content
 	broadcastChan chan Msg
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
+	metrics       shardMetrics
+	reqs          map[uint64]*BroadcastRequest
 	//sync.Once
 }
 
-func createShards(ctx context.Context, shardBuffer int) []*shardElement {
-	shards := make([]*shardElement, NumShards)
+func createShards(ctx context.Context, shardBuffer int) []*shard {
+	shards := make([]*shard, NumShards)
 	for i := range shards {
 		ctx, cancel := context.WithCancel(ctx)
-		shards[i] = &shardElement{
+		shards[i] = &shard{
 			id:            i,
 			sendChan:      make(chan Content, shardBuffer),
 			broadcastChan: make(chan Msg, shardBuffer),
 			ctx:           ctx,
 			cancelFunc:    cancel,
+			reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
 		}
 	}
 	return shards
 }
 
-func (shard *shardElement) run(router *BroadcastRouter, reqTTL time.Duration, sendBuffer, shardBuffer int, metrics *Metric) {
-	reqs := make(map[uint64]*reqContent, shardBuffer)
+func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int, metrics *Metric) {
 	for {
 		select {
-		case <-shard.ctx.Done():
+		case <-s.ctx.Done():
+			s.reqs = nil
 			return
-		case msg := <-shard.sendChan:
-			if metrics != nil {
-				metrics.AddShardDistribution(shard.id)
-			}
-			if req, ok := reqs[msg.BroadcastID]; ok {
+		case msg := <-s.sendChan:
+			s.metrics.numMsgs++
+			//if metrics != nil {
+			//metrics.AddShardDistribution(s.id)
+			//}
+			if req, ok := s.reqs[msg.BroadcastID]; ok {
 				if !msg.IsBroadcastClient {
 					// no need to send it to the broadcast request goroutine.
 					// the first request should contain all info needed
@@ -53,12 +71,15 @@ func (shard *shardElement) run(router *BroadcastRouter, reqTTL time.Duration, se
 				}
 				select {
 				case <-req.ctx.Done():
+					s.metrics.droppedMsgs++
 					msg.ReceiveChan <- fmt.Errorf("req is done. broadcastID: %v", msg.BroadcastID)
 				case req.sendChan <- msg:
 				}
 			} else {
-				ctx, cancel := context.WithTimeout(shard.ctx, reqTTL)
-				req := &reqContent{
+				// check size of s.reqs. If too big, then perform necessary cleanup.
+				// should only affect the current shard and not the others.
+				ctx, cancel := context.WithTimeout(s.ctx, reqTTL)
+				req := &BroadcastRequest{
 					ctx:        ctx,
 					cancelFunc: cancel,
 					// it is important to not buffer the channel. Otherwise,
@@ -72,22 +93,26 @@ func (shard *shardElement) run(router *BroadcastRouter, reqTTL time.Duration, se
 					// this channel can be buffered because there is no receive
 					// channel. The result is simply ignored.
 					broadcastChan: make(chan Msg, sendBuffer),
+					started:       time.Now(),
 				}
-				reqs[msg.BroadcastID] = req
-				go handleReq(router, msg.BroadcastID, req, msg, metrics)
+				s.reqs[msg.BroadcastID] = req
+				go req.handle(router, msg.BroadcastID, msg)
 				select {
 				case <-req.ctx.Done():
+					s.metrics.droppedMsgs++
 					msg.ReceiveChan <- errors.New("req is done")
 				case req.sendChan <- msg:
 				}
 			}
-		case msg := <-shard.broadcastChan:
-			if metrics != nil {
-				metrics.AddShardDistribution(shard.id)
-			}
-			if req, ok := reqs[msg.BroadcastID]; ok {
+		case msg := <-s.broadcastChan:
+			s.metrics.numBroadcastMsgs++
+			//if metrics != nil {
+			//metrics.AddShardDistribution(s.id)
+			//}
+			if req, ok := s.reqs[msg.BroadcastID]; ok {
 				select {
 				case <-req.ctx.Done():
+					s.metrics.droppedBroadcastMsgs++
 				case req.broadcastChan <- msg:
 				}
 			}
@@ -95,6 +120,39 @@ func (shard *shardElement) run(router *BroadcastRouter, reqTTL time.Duration, se
 	}
 }
 
-func (s *shardElement) Close() {
+func (s *shard) Close() {
 	s.cancelFunc()
+}
+
+func (s *shard) getStats() shardMetrics {
+	s.metrics.numReqs = uint64(len(s.reqs))
+	s.metrics.lifetimes = make([][]time.Time, len(s.reqs))
+	s.metrics.totalMsgs = s.metrics.numBroadcastMsgs + s.metrics.numMsgs
+	minLifetime := 100 * time.Hour
+	maxLifetime := time.Duration(0)
+	totalLifetime := time.Duration(0)
+	i := 0
+	for _, req := range s.reqs {
+		select {
+		case <-req.ctx.Done():
+			s.metrics.finishedReqs++
+		default:
+		}
+		s.metrics.lifetimes[i] = []time.Time{req.started, req.ended}
+		lifetime := req.ended.Sub(req.started)
+		if lifetime > 0 {
+			if lifetime < minLifetime {
+				minLifetime = lifetime
+			}
+			if lifetime > maxLifetime {
+				maxLifetime = lifetime
+			}
+			totalLifetime += lifetime
+		}
+		i++
+	}
+	s.metrics.minLifetime = minLifetime
+	s.metrics.maxLifetime = maxLifetime
+	s.metrics.avgLifetime = totalLifetime
+	return s.metrics
 }

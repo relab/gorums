@@ -3,6 +3,7 @@ package broadcast
 import (
 	"errors"
 	"log/slog"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -17,6 +18,7 @@ type BroadcastManager interface {
 	AddServerHandler(method string, handler ServerHandler)
 	AddClientHandler(method string)
 	Close() error
+	GetStats() Metrics
 }
 
 type broadcastManager struct {
@@ -30,7 +32,7 @@ func NewBroadcastManager(logger *slog.Logger, m *Metric, createClient func(addr 
 	router := NewRouter(logger, m, createClient)
 	state := NewState(logger, m)
 	for _, shard := range state.shards {
-		go shard.run(router, state.reqTTL, state.sendBuffer, state.shardBuffer, m)
+		go shard.run(router, state.reqTTL, state.sendBuffer, m)
 	}
 	return &broadcastManager{
 		state:   state,
@@ -110,9 +112,33 @@ func (mgr *broadcastManager) AddServerHandler(method string, handler ServerHandl
 }
 
 func (mgr *broadcastManager) AddClientHandler(method string) {
+	// only needs to know whether the handler exists. routing is done
+	// client-side using the provided metadata in the request.
 	mgr.router.clientHandlers[method] = struct{}{}
 }
 
 func (mgr *broadcastManager) Close() error {
 	return mgr.state.Close()
+}
+
+func (mgr *broadcastManager) GetStats() Metrics {
+	time.Sleep(5 * time.Second)
+	m := mgr.state.getStats()
+	return Metrics{
+		TotalNum: uint64(m.totalMsgs),
+		FinishedReqs: struct {
+			Total     uint64
+			Succesful uint64
+			Failed    uint64
+		}{
+			Total:     m.numReqs,
+			Succesful: m.finishedReqs,
+			Failed:    m.numReqs - m.finishedReqs,
+		},
+		RoundTripLatency: timingMetric{
+			Avg: m.avgLifetime,
+			Max: m.maxLifetime,
+			Min: m.minLifetime,
+		},
+	}
 }

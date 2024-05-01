@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
@@ -32,14 +31,14 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		ctx.Release()
 		req := in.Message.(T)
 
-		var start time.Time
-		if srv.broadcastSrv.metrics != nil {
-			srv.broadcastSrv.metrics.AddMsg()
-			srv.broadcastSrv.metrics.AddGoroutine(in.Metadata.BroadcastMsg.BroadcastID, "handler")
-			defer srv.broadcastSrv.metrics.RemoveGoroutine(in.Metadata.BroadcastMsg.BroadcastID, "handler")
-			start = time.Now()
-			//defer srv.broadcastSrv.metrics.AddReqLatency(time.Now())
-		}
+		//var start time.Time
+		//if srv.broadcastSrv.metrics != nil {
+		//srv.broadcastSrv.metrics.AddMsg()
+		//srv.broadcastSrv.metrics.AddGoroutine(in.Metadata.BroadcastMsg.BroadcastID, "handler")
+		//defer srv.broadcastSrv.metrics.RemoveGoroutine(in.Metadata.BroadcastMsg.BroadcastID, "handler")
+		//start = time.Now()
+		////defer srv.broadcastSrv.metrics.AddReqLatency(time.Now())
+		//}
 
 		// guard:
 		// - A broadcastID should be non-empty:
@@ -48,9 +47,9 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			if srv.broadcastSrv.logger != nil {
 				srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
 			}
-			if srv.broadcastSrv.metrics != nil {
-				srv.broadcastSrv.metrics.AddDropped(true)
-			}
+			//if srv.broadcastSrv.metrics != nil {
+			//srv.broadcastSrv.metrics.AddDropped(true)
+			//}
 			return
 		}
 		msg := broadcast.Content{}
@@ -59,9 +58,9 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		//err := srv.broadcastSrv.state.Process(msg)
 		err := srv.broadcastSrv.manager.Process(msg)
 		if err != nil {
-			if srv.broadcastSrv.metrics != nil {
-				srv.broadcastSrv.metrics.AddDropped(false)
-			}
+			//if srv.broadcastSrv.metrics != nil {
+			//srv.broadcastSrv.metrics.AddDropped(false)
+			//}
 			return
 		}
 
@@ -69,15 +68,18 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		broadcastMetadata := newBroadcastMetadata(in.Metadata)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		impl(ctx, req, broadcaster)
-		if srv.broadcastSrv.metrics != nil {
-			srv.broadcastSrv.metrics.AddProcessed()
-			srv.broadcastSrv.metrics.AddReqLatency(start)
-		}
+		//if srv.broadcastSrv.metrics != nil {
+		//srv.broadcastSrv.metrics.AddProcessed()
+		//srv.broadcastSrv.metrics.AddReqLatency(start)
+		//}
 	}
 }
 
 func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message) {
-	addOriginMethod(in.Metadata)
+	if in.Metadata.BroadcastMsg.IsBroadcastClient {
+		// keep track of the method called by the user
+		in.Metadata.BroadcastMsg.OriginMethod = in.Metadata.Method
+	}
 	msg.BroadcastID = in.Metadata.BroadcastMsg.BroadcastID
 	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
 	msg.OriginAddr = in.Metadata.BroadcastMsg.OriginAddr
@@ -98,14 +100,6 @@ func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx Ser
 	}
 }
 
-func addOriginMethod(md *ordering.Metadata) {
-	if !md.BroadcastMsg.IsBroadcastClient {
-		return
-	}
-	// keep track of the method called by the user
-	md.BroadcastMsg.OriginMethod = md.Method
-}
-
 func (srv *broadcastServer) validateMessage(in *Message) error {
 	if in == nil {
 		return fmt.Errorf("message cannot be empty. got: %v", in)
@@ -116,7 +110,7 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	if in.Metadata.BroadcastMsg == nil {
 		return fmt.Errorf("broadcastMsg cannot be empty. got: %v", in.Metadata.BroadcastMsg)
 	}
-	if in.Metadata.BroadcastMsg.BroadcastID == 0 {
+	if in.Metadata.BroadcastMsg.BroadcastID <= 0 {
 		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.BroadcastMsg.BroadcastID)
 	}
 	// check and update TTL

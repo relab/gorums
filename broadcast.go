@@ -29,15 +29,16 @@ func (srv *Server) PrintStats() {
 }
 
 func (srv *Server) GetStats() broadcast.Metrics {
-	m := srv.broadcastSrv.metrics.GetStats()
-	srv.broadcastSrv.metrics.Reset()
-	return m
+	//m := srv.broadcastSrv.metrics.GetStats()
+	//srv.broadcastSrv.metrics.Reset()
+	//return m
+	return srv.broadcastSrv.manager.GetStats()
 }
 
 func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer {
 	var m *broadcast.Metric = nil
 	if withMetrics {
-		m = broadcast.NewMetric()
+		//m = broadcast.NewMetric()
 	}
 	return &broadcastServer{
 		manager: broadcast.NewBroadcastManager(logger, m, createClient),

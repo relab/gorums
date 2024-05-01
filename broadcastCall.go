@@ -59,9 +59,8 @@ func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData
 	}
 
 	// wait until all requests have been sent
-	for sentMsgs > 0 {
+	for ; sentMsgs > 0; sentMsgs-- {
 		<-replyChan
-		sentMsgs--
 	}
 	close(replyChan)
 }

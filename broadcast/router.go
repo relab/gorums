@@ -18,6 +18,10 @@ type Client struct {
 	Close   func() error
 }
 
+type Router interface {
+	Send(broadcastID uint64, addr, method string, req any) error
+}
+
 type BroadcastRouter struct {
 	mut               sync.Mutex
 	id                uint32
@@ -26,14 +30,10 @@ type BroadcastRouter struct {
 	methodsConversion map[string]uint16
 	serverHandlers    map[string]ServerHandler // handlers on other servers
 	clientHandlers    map[string]struct{}      // specifies what handlers a client has implemented. Used only for BroadcastCalls.
-	connections       map[string]*grpc.ClientConn
 	clients           map[string]*Client
 	createClient      func(addr string, dialOpts []grpc.DialOption) (*Client, error)
-	connMutexes       map[string]*sync.Mutex
-	connectionTimeout time.Duration
 	dialOpts          []grpc.DialOption
 	dialTimeout       time.Duration
-	doneChan          chan struct{}
 	logger            *slog.Logger
 	metrics           *Metric
 	state             *BroadcastState
@@ -46,18 +46,14 @@ func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr stri
 		}
 	}
 	return &BroadcastRouter{
-		serverHandlers:    make(map[string]ServerHandler),
-		clientHandlers:    make(map[string]struct{}),
-		connections:       make(map[string]*grpc.ClientConn),
-		connMutexes:       make(map[string]*sync.Mutex),
-		clients:           make(map[string]*Client),
-		createClient:      createClient,
-		dialOpts:          dialOpts,
-		dialTimeout:       3 * time.Second,
-		connectionTimeout: 1 * time.Minute,
-		doneChan:          make(chan struct{}),
-		logger:            logger,
-		metrics:           metrics,
+		serverHandlers: make(map[string]ServerHandler),
+		clientHandlers: make(map[string]struct{}),
+		clients:        make(map[string]*Client),
+		createClient:   createClient,
+		dialOpts:       dialOpts,
+		dialTimeout:    3 * time.Second,
+		logger:         logger,
+		metrics:        metrics,
 	}
 }
 
