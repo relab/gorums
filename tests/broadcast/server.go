@@ -44,10 +44,6 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 	RegisterBroadcastServiceServer(srv.Server, &srv)
 	srv.peers = srvAddresses
 	srv.addr = addr
-	return &srv
-}
-
-func (srv *testServer) start(lis net.Listener) {
 	srv.mgr = NewManager(
 		gorums.WithPublicKey("server"),
 		gorums.WithGrpcDialOptions(
@@ -59,6 +55,10 @@ func (srv *testServer) start(lis net.Listener) {
 		panic(err)
 	}
 	srv.SetView(view)
+	return &srv
+}
+
+func (srv *testServer) start(lis net.Listener) {
 	srv.Serve(lis)
 }
 

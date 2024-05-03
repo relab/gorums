@@ -43,12 +43,14 @@ type BroadcastState struct {
 	metrics             *Metric
 	snowflake           *Snowflake
 	clients             map[string]*Client
+	router              Router
 
 	shards []*shard
 }
 
 func NewState(logger *slog.Logger, metrics *Metric) *BroadcastState {
 	shardBuffer := 100
+	sendBuffer := 5
 	TTL := 5 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
 	shards := createShards(ctx, shardBuffer)
@@ -58,7 +60,7 @@ func NewState(logger *slog.Logger, metrics *Metric) *BroadcastState {
 		shards:              shards,
 		logger:              logger,
 		reqTTL:              TTL,
-		sendBuffer:          5,
+		sendBuffer:          sendBuffer,
 		shardBuffer:         shardBuffer,
 		metrics:             metrics,
 		clients:             make(map[string]*Client),
@@ -67,19 +69,38 @@ func NewState(logger *slog.Logger, metrics *Metric) *BroadcastState {
 }
 
 func (s *BroadcastState) Close() error {
-	s.prune()
+	if s.logger != nil {
+		s.logger.Debug("broadcast: closing state")
+	}
+	s.parentCtxCancelFunc()
 	var err error
 	for _, client := range s.clients {
-		err = client.Close()
+		clientErr := client.Close()
+		if clientErr != nil {
+			err = clientErr
+		}
 	}
 	return err
 }
 
-func (state *BroadcastState) prune() {
-	if state.logger != nil {
-		state.logger.Debug("broadcast: pruned reqs")
+func (s *BroadcastState) RunShards(router Router) {
+	s.router = router
+	for _, shard := range s.shards {
+		go shard.run(router, s.reqTTL, s.sendBuffer)
 	}
-	state.parentCtxCancelFunc()
+}
+
+func (s *BroadcastState) reset() {
+	s.parentCtxCancelFunc()
+	ctx, cancel := context.WithCancel(context.Background())
+	s.parentCtx = ctx
+	s.parentCtxCancelFunc = cancel
+	s.shards = createShards(ctx, s.shardBuffer)
+	s.RunShards(s.router)
+	for _, client := range s.clients {
+		client.Close()
+	}
+	s.clients = make(map[string]*Client)
 }
 
 func (state *BroadcastState) getStats() shardMetrics {

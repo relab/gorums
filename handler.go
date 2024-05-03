@@ -125,12 +125,12 @@ func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastO
 
 func (srv *broadcastServer) broadcastHandler(method string, req protoreflect.ProtoMessage, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
 	//srv.state.ProcessBroadcast(broadcastID, req, method)
-	srv.manager.ProcessBroadcast(broadcastID, req, method, opts...)
+	srv.manager.Broadcast(broadcastID, req, method, opts...)
 }
 
 func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
 	//srv.state.ProcessSendToClient(broadcastID, resp, err)
-	srv.manager.ProcessSendToClient(broadcastID, resp, err)
+	srv.manager.SendToClient(broadcastID, resp, err)
 }
 
 func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string) {
@@ -150,9 +150,8 @@ func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broa
 
 func (srv *broadcastServer) serverBroadcastHandler(method string, req RequestTypes, opts ...broadcast.BroadcastOptions) {
 	cd := broadcastCallData{
-		Message: req,
-		Method:  method,
-		//BroadcastID:       srv.state.NewBroadcastID(),
+		Message:           req,
+		Method:            method,
 		BroadcastID:       srv.manager.NewBroadcastID(),
 		OriginAddr:        "server",
 		IsBroadcastClient: false,
@@ -168,8 +167,7 @@ func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	//srv.router.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
-	srv.manager.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
+	srv.manager.AddHandler(method, broadcast.ServerHandler(func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
 		cd := broadcastCallData{
 			Message:           in,
 			Method:            method,
@@ -184,12 +182,28 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 		// drop request if a view change has occured
 		srv.view.broadcastCall(ctx, cd)
 		srv.viewMutex.RUnlock()
-	})
+	}))
+	/*srv.manager.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
+		cd := broadcastCallData{
+			Message:           in,
+			Method:            method,
+			BroadcastID:       broadcastID,
+			IsBroadcastClient: false,
+			SenderAddr:        addr,
+			OriginAddr:        originAddr,
+			OriginMethod:      originMethod,
+			ServerAddresses:   options.ServerAddresses,
+		}
+		srv.viewMutex.RLock()
+		// drop request if a view change has occured
+		srv.view.broadcastCall(ctx, cd)
+		srv.viewMutex.RUnlock()
+	})*/
 }
 
 func (srv *broadcastServer) registerSendToClientHandler(method string) {
-	//srv.router.AddClientHandler(method, handler)
-	srv.manager.AddClientHandler(method)
+	//srv.manager.AddClientHandler(method)
+	srv.manager.AddHandler(method, nil)
 }
 
 func (srv *Server) RegisterConfig(config RawConfiguration) {
@@ -200,7 +214,7 @@ func (srv *Server) RegisterConfig(config RawConfiguration) {
 	// handle all queued broadcast messages before changing the view
 	srv.broadcastSrv.viewMutex.Lock()
 	// delete all client requests. This resets all broadcast requests.
-	//srv.broadcastSrv.state.prune()
+	srv.broadcastSrv.manager.ResetState()
 	srv.broadcastSrv.view = config
 	srv.broadcastSrv.viewMutex.Unlock()
 }

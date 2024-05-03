@@ -30,7 +30,6 @@ type BroadcastRouter struct {
 	methodsConversion map[string]uint16
 	serverHandlers    map[string]ServerHandler // handlers on other servers
 	clientHandlers    map[string]struct{}      // specifies what handlers a client has implemented. Used only for BroadcastCalls.
-	clients           map[string]*Client
 	createClient      func(addr string, dialOpts []grpc.DialOption) (*Client, error)
 	dialOpts          []grpc.DialOption
 	dialTimeout       time.Duration
@@ -39,7 +38,7 @@ type BroadcastRouter struct {
 	state             *BroadcastState
 }
 
-func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), dialOpts ...grpc.DialOption) *BroadcastRouter {
+func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), state *BroadcastState, dialOpts ...grpc.DialOption) *BroadcastRouter {
 	if len(dialOpts) <= 0 {
 		dialOpts = []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -48,12 +47,12 @@ func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr stri
 	return &BroadcastRouter{
 		serverHandlers: make(map[string]ServerHandler),
 		clientHandlers: make(map[string]struct{}),
-		clients:        make(map[string]*Client),
 		createClient:   createClient,
 		dialOpts:       dialOpts,
 		dialTimeout:    3 * time.Second,
 		logger:         logger,
 		metrics:        metrics,
+		state:          state,
 	}
 }
 
@@ -94,14 +93,14 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
 	r.mut.Lock()
 	defer r.mut.Unlock()
-	if client, ok := r.clients[addr]; ok {
+	if client, ok := r.state.clients[addr]; ok {
 		return client, nil
 	}
 	client, err := r.createClient(addr, r.dialOpts)
 	if err != nil {
 		return nil, err
 	}
-	r.clients[addr] = client
+	r.state.clients[addr] = client
 	return client, nil
 }
 

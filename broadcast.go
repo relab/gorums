@@ -18,7 +18,7 @@ type broadcastServer struct {
 	view              RawConfiguration
 	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
 	orchestrator      *BroadcastOrchestrator
-	manager           broadcast.BroadcastManager
+	manager           broadcast.Manager
 	logger            *slog.Logger
 	metrics           *broadcast.Metric
 }
@@ -62,7 +62,6 @@ func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer 
 //}
 
 func (srv *broadcastServer) stop() {
-	//srv.state.Prune()
 	srv.manager.Close()
 }
 
@@ -91,6 +90,5 @@ func (srv *broadcastServer) addAddr(lis net.Listener) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(srv.addr))
 	srv.id = h.Sum32()
-	//srv.router.AddAddr(srv.id, srv.addr)
 	srv.manager.AddAddr(srv.id, srv.addr)
 }
