@@ -28,30 +28,22 @@ func ClientHandler[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage](imp
 
 func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+		// release immediately to process next message
 		ctx.Release()
-		req := in.Message.(T)
-
-		//var start time.Time
-		//if srv.broadcastSrv.metrics != nil {
-		//srv.broadcastSrv.metrics.AddMsg()
-		//srv.broadcastSrv.metrics.AddGoroutine(in.Metadata.BroadcastMsg.BroadcastID, "handler")
-		//defer srv.broadcastSrv.metrics.RemoveGoroutine(in.Metadata.BroadcastMsg.BroadcastID, "handler")
-		//start = time.Now()
-		////defer srv.broadcastSrv.metrics.AddReqLatency(time.Now())
-		//}
 
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
 		if err := srv.broadcastSrv.validateMessage(in); err != nil {
 			if srv.broadcastSrv.logger != nil {
-				srv.broadcastSrv.logger.Debug("broadcast request not valid", "req", req, "err", err)
+				srv.broadcastSrv.logger.Debug("broadcast request not valid", "metadata", in.Metadata, "err", err)
 			}
 			//if srv.broadcastSrv.metrics != nil {
 			//srv.broadcastSrv.metrics.AddDropped(true)
 			//}
 			return
 		}
+
 		msg := broadcast.Content{}
 		createRequest(&msg, ctx, in, finished)
 
@@ -62,20 +54,18 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		// for cancels and do proper actions.
 		err, ctx.Context = srv.broadcastSrv.manager.Process(msg)
 		if err != nil {
-			//if srv.broadcastSrv.metrics != nil {
-			//srv.broadcastSrv.metrics.AddDropped(false)
-			//}
 			return
 		}
 
-		//ctx.Release()
 		broadcastMetadata := newBroadcastMetadata(in.Metadata)
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
+		// interface conversion can fail if proto message of the wrong type is given.
+		// this happens when Cancellations arrive because the proto message is nil.
+		req, ok := in.Message.(T)
+		if !ok {
+			return
+		}
 		impl(ctx, req, broadcaster)
-		//if srv.broadcastSrv.metrics != nil {
-		//srv.broadcastSrv.metrics.AddProcessed()
-		//srv.broadcastSrv.metrics.AddReqLatency(start)
-		//}
 	}
 }
 
@@ -162,6 +152,7 @@ func (srv *broadcastServer) cancelHandler(broadcastID uint64, srvAddrs []string)
 
 func (srv *broadcastServer) canceler(broadcastID uint64, srvAddrs []string) {
 	cd := broadcastCallData{
+		//Message:         &emptypb.Empty{},
 		Message:         nil,
 		Method:          Cancellation,
 		BroadcastID:     broadcastID,

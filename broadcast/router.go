@@ -39,7 +39,7 @@ type BroadcastRouter struct {
 	state             *BroadcastState
 }
 
-func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), state *BroadcastState, canceler func(broadcastID uint64, srvAddrs []string), dialOpts ...grpc.DialOption) *BroadcastRouter {
+func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string), dialOpts ...grpc.DialOption) *BroadcastRouter {
 	if len(dialOpts) <= 0 {
 		dialOpts = []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -54,8 +54,11 @@ func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr stri
 		dialTimeout:    3 * time.Second,
 		logger:         logger,
 		metrics:        metrics,
-		state:          state,
 	}
+}
+
+func (r *BroadcastRouter) registerState(state *BroadcastState) {
+	r.state = state
 }
 
 func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any) error {

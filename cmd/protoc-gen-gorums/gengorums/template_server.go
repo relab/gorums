@@ -90,6 +90,7 @@ func Register{{$service}}Server(srv *Server, impl {{$service}}) {
 	})
 	{{- end}}
 	{{- end}}
+	srv.RegisterHandler(gorums.Cancellation, gorums.BroadcastHandler(gorums.CancelFunc, srv.Server))
 }
 {{- end}}
 `

@@ -16,6 +16,7 @@ type BroadcastRequest struct {
 	ended                 time.Time
 	cancellationCtx       context.Context
 	cancellationCtxCancel context.CancelFunc // should only be called by the shard
+	sentCancellation      bool
 }
 
 // func (req *BroadcastRequest) handle(router *BroadcastRouter, broadcastID uint64, msg Content, metrics *Metric) {
@@ -48,10 +49,6 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 		case bMsg := <-req.broadcastChan:
 			if broadcastID != bMsg.BroadcastID {
 				continue
-			}
-			if bMsg.Cancellation != nil {
-				_ = router.Send(broadcastID, "", "", bMsg.Cancellation)
-				return
 			}
 			if bMsg.Broadcast {
 				// check if msg has already been broadcasted for this method
@@ -95,7 +92,7 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 				}
 				continue
 			}
-			if msg.IsCancellation {
+			if new.IsCancellation {
 				new.ReceiveChan <- shardResponse{
 					err: nil,
 				}

@@ -29,10 +29,11 @@ type shard struct {
 	cancelFunc    context.CancelFunc
 	metrics       shardMetrics
 	reqs          map[uint64]*BroadcastRequest
+	router        Router
 	//sync.Once
 }
 
-func createShards(ctx context.Context, shardBuffer int) []*shard {
+func createShards(ctx context.Context, shardBuffer int, router Router) []*shard {
 	shards := make([]*shard, NumShards)
 	for i := range shards {
 		ctx, cancel := context.WithCancel(ctx)
@@ -43,12 +44,13 @@ func createShards(ctx context.Context, shardBuffer int) []*shard {
 			ctx:           ctx,
 			cancelFunc:    cancel,
 			reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
+			router:        router,
 		}
 	}
 	return shards
 }
 
-func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int) {
+func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -71,6 +73,7 @@ func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int) {
 				default:
 				}
 				if msg.IsCancellation {
+					req.cancellationCtxCancel()
 					msg.ReceiveChan <- shardResponse{
 						err: nil,
 					}
@@ -130,7 +133,7 @@ func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int) {
 					cancellationCtxCancel: msg.CancelCtx,
 				}
 				s.reqs[msg.BroadcastID] = req
-				go req.handle(router, msg.BroadcastID, msg)
+				go req.handle(s.router, msg.BroadcastID, msg)
 				select {
 				case <-req.ctx.Done():
 					s.metrics.droppedMsgs++
@@ -146,6 +149,13 @@ func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int) {
 			//metrics.AddShardDistribution(s.id)
 			//}
 			if req, ok := s.reqs[msg.BroadcastID]; ok {
+				if msg.Cancellation != nil {
+					if !req.sentCancellation {
+						req.sentCancellation = true
+						go s.router.Send(msg.BroadcastID, "", "", msg.Cancellation)
+					}
+					continue
+				}
 				select {
 				case <-req.ctx.Done():
 					s.metrics.droppedBroadcastMsgs++

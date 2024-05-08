@@ -40,6 +40,10 @@ service BroadcastService {
   rpc BroadcastToResponse(Request) returns (Empty) { 
     option (gorums.broadcast) = true; 
   }
+
+  rpc Search(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
 }
 
 message Request { 

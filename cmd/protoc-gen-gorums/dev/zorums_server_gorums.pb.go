@@ -420,6 +420,7 @@ func RegisterZorumsServiceServer(srv *Server, impl ZorumsService) {
 		defer ctx.Release()
 		impl.Unicast2(ctx, req)
 	})
+	srv.RegisterHandler(gorums.Cancellation, gorums.BroadcastHandler(gorums.CancelFunc, srv.Server))
 }
 
 func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {

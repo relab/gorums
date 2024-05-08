@@ -48,12 +48,12 @@ type BroadcastState struct {
 	shards []*shard
 }
 
-func NewState(logger *slog.Logger, metrics *Metric) *BroadcastState {
+func NewState(logger *slog.Logger, metrics *Metric, router Router) *BroadcastState {
 	shardBuffer := 100
 	sendBuffer := 5
 	TTL := 5 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
-	shards := createShards(ctx, shardBuffer)
+	shards := createShards(ctx, shardBuffer, router)
 	state := &BroadcastState{
 		parentCtx:           ctx,
 		parentCtxCancelFunc: cancel,
@@ -63,6 +63,7 @@ func NewState(logger *slog.Logger, metrics *Metric) *BroadcastState {
 		sendBuffer:          sendBuffer,
 		shardBuffer:         shardBuffer,
 		metrics:             metrics,
+		router:              router,
 		clients:             make(map[string]*Client),
 	}
 	return state
@@ -83,10 +84,9 @@ func (s *BroadcastState) Close() error {
 	return err
 }
 
-func (s *BroadcastState) RunShards(router Router) {
-	s.router = router
+func (s *BroadcastState) RunShards() {
 	for _, shard := range s.shards {
-		go shard.run(router, s.reqTTL, s.sendBuffer)
+		go shard.run(s.reqTTL, s.sendBuffer)
 	}
 }
 
@@ -95,8 +95,8 @@ func (s *BroadcastState) reset() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.parentCtx = ctx
 	s.parentCtxCancelFunc = cancel
-	s.shards = createShards(ctx, s.shardBuffer)
-	s.RunShards(s.router)
+	s.shards = createShards(ctx, s.shardBuffer, s.router)
+	s.RunShards()
 	for _, client := range s.clients {
 		client.Close()
 	}

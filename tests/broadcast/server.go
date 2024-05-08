@@ -5,6 +5,7 @@ import (
 	"fmt"
 	net "net"
 	"sync"
+	"time"
 
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
@@ -20,14 +21,15 @@ type response struct {
 
 type testServer struct {
 	*Server
-	leader   string
-	addr     string
-	peers    []string
-	lis      net.Listener
-	mgr      *Manager
-	numMsg   map[string]int
-	mu       sync.Mutex
-	respChan map[int64]response
+	leader         string
+	addr           string
+	peers          []string
+	lis            net.Listener
+	mgr            *Manager
+	numMsg         map[string]int
+	mu             sync.Mutex
+	respChan       map[int64]response
+	processingTime time.Duration
 }
 
 func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
@@ -44,6 +46,9 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 	RegisterBroadcastServiceServer(srv.Server, &srv)
 	srv.peers = srvAddresses
 	srv.addr = addr
+	if addr != leader {
+		srv.processingTime = 100 * time.Millisecond
+	}
 	srv.mgr = NewManager(
 		gorums.WithSendBufferSize(uint(2*len(srvAddresses))),
 		gorums.WithPublicKey("server"),
@@ -194,6 +199,24 @@ func (srv *testServer) BroadcastToResponse(ctx gorums.ServerCtx, req *Request, b
 	broadcast.SendToClient(&Response{
 		From: srv.addr,
 	}, nil)
+}
+
+func (srv *testServer) Search(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	select {
+	case <-ctx.Done():
+		//slog.Info("cancelled", "addr", srv.addr)
+		broadcast.SendToClient(&Response{
+			From:   srv.addr,
+			Result: 0,
+		}, nil)
+	case <-time.After(srv.processingTime):
+		//slog.Info("processed", "addr", srv.addr)
+		broadcast.SendToClient(&Response{
+			From:   srv.addr,
+			Result: 1,
+		}, nil)
+	}
+	broadcast.Cancel()
 }
 
 func (srv *testServer) GetMsgs() string {

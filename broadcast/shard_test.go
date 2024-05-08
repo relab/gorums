@@ -46,8 +46,9 @@ func TestShard(t *testing.T) {
 		ctx:           ctx,
 		cancelFunc:    cancel,
 		reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
+		router:        router,
 	}
-	go shard.run(router, 5*time.Minute, 5)
+	go shard.run(5*time.Minute, 5)
 
 	var tests = []struct {
 		in  Content
@@ -157,8 +158,9 @@ func BenchmarkShard(b *testing.B) {
 		ctx:           ctx,
 		cancelFunc:    cancel,
 		reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
+		router:        router,
 	}
-	go shard.run(router, 5*time.Minute, 5)
+	go shard.run(5*time.Minute, 5)
 
 	originMethod := "test"
 	originAddr := "127.0.0.1:8080"

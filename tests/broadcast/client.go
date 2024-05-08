@@ -80,6 +80,22 @@ func (qs *testQSpec) BroadcastCallToQF(in *Request, replies []*Response) (*Respo
 	return nil, false
 }
 
+func (qs *testQSpec) SearchQF(in *Request, replies []*Response) (*Response, bool) {
+	if len(replies) < qs.quorumSize {
+		return nil, false
+	}
+	numCorrect := 0
+	for _, resp := range replies {
+		if resp.Result == 1 {
+			numCorrect++
+		}
+	}
+	if numCorrect == 1 {
+		return &Response{Result: 1}, true
+	}
+	return &Response{Result: 0}, true
+}
+
 func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configuration, func(), error) {
 	quorumSize := len(srvAddrs)
 	if len(qsize) > 0 {
