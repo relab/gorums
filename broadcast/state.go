@@ -127,13 +127,21 @@ func (state *BroadcastState) getStats() shardMetrics {
 	return m
 }
 
+type shardResponse struct {
+	err    error
+	reqCtx context.Context
+}
+
 type Content struct {
 	BroadcastID       uint64
 	IsBroadcastClient bool
+	IsCancellation    bool
 	OriginAddr        string
 	OriginMethod      string
-	ReceiveChan       chan error
+	ReceiveChan       chan shardResponse
 	SendFn            func(resp protoreflect.ProtoMessage, err error)
+	Ctx               context.Context
+	CancelCtx         context.CancelFunc
 }
 
 func (c Content) send(resp protoreflect.ProtoMessage, err error) error {

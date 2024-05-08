@@ -8,13 +8,14 @@ import (
 )
 
 type BroadcastRequest struct {
-	broadcastChan chan Msg
-	sendChan      chan Content
-	ctx           context.Context
-	cancelFunc    context.CancelFunc
-	started       time.Time
-	ended         time.Time
-	//sync.Once
+	broadcastChan         chan Msg
+	sendChan              chan Content
+	ctx                   context.Context
+	cancelFunc            context.CancelFunc
+	started               time.Time
+	ended                 time.Time
+	cancellationCtx       context.Context
+	cancellationCtxCancel context.CancelFunc // should only be called by the shard
 }
 
 // func (req *BroadcastRequest) handle(router *BroadcastRouter, broadcastID uint64, msg Content, metrics *Metric) {
@@ -35,6 +36,7 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 		//metrics.RemoveGoroutine(broadcastID, "req")
 		//}
 		req.cancelFunc()
+		req.cancellationCtxCancel()
 	}()
 	for {
 		select {
@@ -46,6 +48,10 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 		case bMsg := <-req.broadcastChan:
 			if broadcastID != bMsg.BroadcastID {
 				continue
+			}
+			if bMsg.Cancellation != nil {
+				_ = router.Send(broadcastID, "", "", bMsg.Cancellation)
+				return
 			}
 			if bMsg.Broadcast {
 				// check if msg has already been broadcasted for this method
@@ -67,11 +73,6 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 					return
 				}
 				// QuorumCall if origin addr is empty.
-				//if !msg.hasReceivedClientRequest() {
-				//// Has not received client request
-				//continue
-				//}
-				// Has received client request
 				err := msg.send(bMsg.Reply.Response, bMsg.Reply.Err)
 				if err != nil {
 					// add response if not already done
@@ -89,7 +90,15 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 			}
 		case new := <-req.sendChan:
 			if new.BroadcastID != broadcastID {
-				new.ReceiveChan <- BroadcastIDErr{}
+				new.ReceiveChan <- shardResponse{
+					err: BroadcastIDErr{},
+				}
+				continue
+			}
+			if msg.IsCancellation {
+				new.ReceiveChan <- shardResponse{
+					err: nil,
+				}
 				continue
 			}
 			if msg.OriginAddr == "" && new.OriginAddr != "" {
@@ -107,15 +116,21 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 			if sent && !msg.isBroadcastCall() {
 				err := msg.send(respMsg, respErr)
 				if err != nil {
-					new.ReceiveChan <- err
-					// should return here?
+					new.ReceiveChan <- shardResponse{
+						err: err,
+					}
 					return
 				}
 				//new.ReceiveChan <- errors.New("req is done and should be returned immediately to client")
-				new.ReceiveChan <- AlreadyProcessedErr{}
+				new.ReceiveChan <- shardResponse{
+					err: AlreadyProcessedErr{},
+				}
 				return
 			}
-			new.ReceiveChan <- nil
+			new.ReceiveChan <- shardResponse{
+				err:    nil,
+				reqCtx: req.cancellationCtx,
+			}
 		}
 	}
 }

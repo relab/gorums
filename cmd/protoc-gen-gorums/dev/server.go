@@ -88,6 +88,10 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
+func (b *Broadcast) Cancel() {
+	b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs)
+}
+
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
 	srv.SendToClientHandler(resp, err, broadcastID)
 }

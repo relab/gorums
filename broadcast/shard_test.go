@@ -59,7 +59,7 @@ func TestShard(t *testing.T) {
 				OriginAddr:        "127.0.0.1:8080",
 				OriginMethod:      "testMethod",
 				IsBroadcastClient: true,
-				ReceiveChan:       make(chan error),
+				ReceiveChan:       make(chan shardResponse),
 			},
 			out: nil,
 		},
@@ -69,7 +69,7 @@ func TestShard(t *testing.T) {
 				OriginAddr:        "127.0.0.1:8080",
 				OriginMethod:      "testMethod",
 				IsBroadcastClient: false,
-				ReceiveChan:       make(chan error),
+				ReceiveChan:       make(chan shardResponse),
 			},
 			out: nil,
 		},
@@ -79,7 +79,7 @@ func TestShard(t *testing.T) {
 				OriginAddr:        "127.0.0.1:8080",
 				OriginMethod:      "testMethod",
 				IsBroadcastClient: false,
-				ReceiveChan:       make(chan error),
+				ReceiveChan:       make(chan shardResponse),
 			},
 			out: nil,
 		},
@@ -87,9 +87,9 @@ func TestShard(t *testing.T) {
 
 	for _, tt := range tests {
 		shard.sendChan <- tt.in
-		err := <-tt.in.ReceiveChan
-		if err != tt.out {
-			t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", tt.out, err)
+		resp := <-tt.in.ReceiveChan
+		if resp.err != tt.out {
+			t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", tt.out, resp.err)
 		}
 	}
 
@@ -106,7 +106,8 @@ func TestShard(t *testing.T) {
 		OriginAddr:        "127.0.0.1:8080",
 		OriginMethod:      "testMethod",
 		IsBroadcastClient: true,
-		ReceiveChan:       make(chan error, 1),
+		ReceiveChan:       make(chan shardResponse, 1),
+		Ctx:               context.Background(),
 	}
 	shard.sendChan <- clientMsg
 
@@ -117,13 +118,14 @@ func TestShard(t *testing.T) {
 		OriginAddr:        "127.0.0.1:8080",
 		OriginMethod:      "testMethod",
 		IsBroadcastClient: true,
-		ReceiveChan:       make(chan error, 1),
+		ReceiveChan:       make(chan shardResponse, 1),
+		Ctx:               context.Background(),
 	}
 	// this will panic if the request sendChan is closed
 	shard.sendChan <- msgShouldBeDropped
 	select {
-	case err := <-msgShouldBeDropped.ReceiveChan:
-		if err == nil {
+	case resp := <-msgShouldBeDropped.ReceiveChan:
+		if resp.err == nil {
 			t.Fatalf("the request should have been stopped. SendToClient has been called.")
 		}
 	case <-time.After(3 * time.Second):
@@ -131,8 +133,8 @@ func TestShard(t *testing.T) {
 	}
 
 	select {
-	case err := <-clientMsg.ReceiveChan:
-		if err == nil {
+	case resp := <-clientMsg.ReceiveChan:
+		if resp.err == nil {
 			t.Fatalf("the request should have been stopped. SendToClient has been called.")
 		}
 	case <-time.After(3 * time.Second):
@@ -167,7 +169,8 @@ func BenchmarkShard(b *testing.B) {
 			IsBroadcastClient: false,
 			OriginAddr:        originAddr,
 			OriginMethod:      originMethod,
-			ReceiveChan:       make(chan error, 1),
+			ReceiveChan:       make(chan shardResponse, 1),
+			Ctx:               context.Background(),
 		}
 		msgs[i] = msg
 		shard.sendChan <- msg
@@ -192,7 +195,8 @@ func BenchmarkShard(b *testing.B) {
 					IsBroadcastClient: true,
 					OriginAddr:        originAddr,
 					OriginMethod:      originMethod,
-					ReceiveChan:       make(chan error, 1),
+					ReceiveChan:       make(chan shardResponse, 1),
+					Ctx:               context.Background(),
 				}
 			} else {
 				msg = msgs[i%10]

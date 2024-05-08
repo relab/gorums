@@ -45,6 +45,7 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 	srv.peers = srvAddresses
 	srv.addr = addr
 	srv.mgr = NewManager(
+		gorums.WithSendBufferSize(uint(2*len(srvAddresses))),
 		gorums.WithPublicKey("server"),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),

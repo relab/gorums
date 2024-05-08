@@ -1,6 +1,7 @@
 package broadcast
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"time"
@@ -10,9 +11,10 @@ import (
 )
 
 type Manager interface {
-	Process(Content) error
+	Process(Content) (error, context.Context)
 	Broadcast(uint64, protoreflect.ProtoMessage, string, ...BroadcastOptions)
 	SendToClient(uint64, protoreflect.ProtoMessage, error)
+	Cancel(uint64, []string)
 	NewBroadcastID() uint64
 	AddAddr(id uint32, addr string)
 	AddHandler(method string, handler any)
@@ -28,9 +30,9 @@ type manager struct {
 	logger  *slog.Logger
 }
 
-func NewBroadcastManager(logger *slog.Logger, m *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error)) Manager {
+func NewBroadcastManager(logger *slog.Logger, m *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string)) Manager {
 	state := NewState(logger, m)
-	router := NewRouter(logger, m, createClient, state)
+	router := NewRouter(logger, m, createClient, state, canceler)
 	state.RunShards(router)
 	return &manager{
 		state:   state,
@@ -40,24 +42,24 @@ func NewBroadcastManager(logger *slog.Logger, m *Metric, createClient func(addr 
 	}
 }
 
-func (mgr *manager) Process(msg Content) error {
+func (mgr *manager) Process(msg Content) (error, context.Context) {
 	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
 
 	// we only need a single response
-	receiveChan := make(chan error, 1)
+	receiveChan := make(chan shardResponse, 1)
 	msg.ReceiveChan = receiveChan
 	select {
 	case <-shard.ctx.Done():
-		return errors.New("shard is down")
+		return errors.New("shard is down"), nil
 	case shard.sendChan <- msg:
 	}
 	select {
 	case <-shard.ctx.Done():
-		return errors.New("shard is down")
-	case err := <-receiveChan:
-		return err
+		return errors.New("shard is down"), nil
+	case resp := <-receiveChan:
+		return resp.err, resp.reqCtx
 	}
 }
 
@@ -89,6 +91,21 @@ func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMess
 		Reply: &reply{
 			Response: resp,
 			Err:      err,
+		},
+		BroadcastID: broadcastID,
+	}:
+	case <-shard.ctx.Done():
+	}
+}
+
+func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string) {
+	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+	select {
+	case shard.broadcastChan <- Msg{
+		Cancellation: &cancellation{
+			srvAddrs: srvAddrs,
 		},
 		BroadcastID: broadcastID,
 	}:

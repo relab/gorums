@@ -31,6 +31,7 @@ type BroadcastRouter struct {
 	serverHandlers    map[string]ServerHandler // handlers on other servers
 	clientHandlers    map[string]struct{}      // specifies what handlers a client has implemented. Used only for BroadcastCalls.
 	createClient      func(addr string, dialOpts []grpc.DialOption) (*Client, error)
+	canceler          func(broadcastID uint64, srvAddrs []string)
 	dialOpts          []grpc.DialOption
 	dialTimeout       time.Duration
 	logger            *slog.Logger
@@ -38,7 +39,7 @@ type BroadcastRouter struct {
 	state             *BroadcastState
 }
 
-func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), state *BroadcastState, dialOpts ...grpc.DialOption) *BroadcastRouter {
+func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), state *BroadcastState, canceler func(broadcastID uint64, srvAddrs []string), dialOpts ...grpc.DialOption) *BroadcastRouter {
 	if len(dialOpts) <= 0 {
 		dialOpts = []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -48,6 +49,7 @@ func NewRouter(logger *slog.Logger, metrics *Metric, createClient func(addr stri
 		serverHandlers: make(map[string]ServerHandler),
 		clientHandlers: make(map[string]struct{}),
 		createClient:   createClient,
+		canceler:       canceler,
 		dialOpts:       dialOpts,
 		dialTimeout:    3 * time.Second,
 		logger:         logger,
@@ -62,6 +64,9 @@ func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any)
 		return r.routeBroadcast(broadcastID, addr, method, val)
 	case *reply:
 		return r.routeClientReply(broadcastID, addr, method, val)
+	case *cancellation:
+		r.canceler(broadcastID, val.srvAddrs)
+		return nil
 	}
 	return errors.New("wrong req type")
 }
@@ -105,11 +110,12 @@ func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
 }
 
 type Msg struct {
-	Broadcast   bool
-	BroadcastID uint64
-	Msg         *broadcastMsg
-	Method      string
-	Reply       *reply
+	Broadcast    bool
+	BroadcastID  uint64
+	Msg          *broadcastMsg
+	Method       string
+	Reply        *reply
+	Cancellation *cancellation
 	//receiveChan chan error
 }
 
@@ -149,4 +155,8 @@ func (r *reply) getResponse() protoreflect.ProtoMessage {
 
 func (r *reply) getError() error {
 	return r.Err
+}
+
+type cancellation struct {
+	srvAddrs []string
 }

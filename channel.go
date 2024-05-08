@@ -199,7 +199,9 @@ func (c *channel) sendMsg(req request) (err error) {
 				// false alarm
 			default:
 				// trigger reconnect
+				c.streamMut.Lock()
 				c.cancelStream()
+				c.streamMut.Unlock()
 			}
 		}
 	}()
@@ -235,14 +237,12 @@ func (c *channel) sender() {
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
-			//slog.Info("channel: stream is broken")
 			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: streamDownErr})
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
-			//slog.Info("channel: well this is weird", "err", err)
 			// return the error
 			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: err})
 		}

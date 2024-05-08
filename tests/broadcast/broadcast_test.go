@@ -842,15 +842,15 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 		}
 	}
 
-	stop, err := StartTrace("traceprofileBC")
-	if err != nil {
-		b.Error(err)
-	}
-	defer stop()
-	cpuProfile, _ := os.Create("cpuprofileBC")
-	memProfile, _ := os.Create("memprofileBC")
-	runtime.GC()
-	pprof.StartCPUProfile(cpuProfile)
+	//stop, err := StartTrace("traceprofileBC")
+	//if err != nil {
+	//b.Error(err)
+	//}
+	//defer stop()
+	//cpuProfile, _ := os.Create("cpuprofileBC")
+	//memProfile, _ := os.Create("memprofileBC")
+	//runtime.GC()
+	//pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneClientOneReq_%d", 0), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -929,10 +929,10 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 			}
 		}
 	})
-	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
-	cpuProfile.Close()
-	memProfile.Close()
+	//pprof.StopCPUProfile()
+	//pprof.WriteHeapProfile(memProfile)
+	//cpuProfile.Close()
+	//memProfile.Close()
 }
 
 func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
@@ -1141,11 +1141,11 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	wg1.Wait()
 	time.Sleep(1 * time.Second)
 
-	stop, err := StartTrace("traceprofileBC")
-	if err != nil {
-		t.Error(err)
-	}
-	defer stop()
+	//stop, err := StartTrace("traceprofileBC")
+	//if err != nil {
+	//t.Error(err)
+	//}
+	//defer stop()
 	var wg sync.WaitGroup
 	for r := 0; r < numReqs; r++ {
 		for i, client := range clients {

@@ -2,7 +2,6 @@ package broadcast
 
 import (
 	"context"
-	"errors"
 	"time"
 )
 
@@ -66,24 +65,49 @@ func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int) {
 				select {
 				case <-req.ctx.Done():
 					s.metrics.droppedMsgs++
-					msg.ReceiveChan <- AlreadyProcessedErr{}
+					msg.ReceiveChan <- shardResponse{
+						err: AlreadyProcessedErr{},
+					}
 				default:
+				}
+				if msg.IsCancellation {
+					msg.ReceiveChan <- shardResponse{
+						err: nil,
+					}
+					continue
 				}
 				if !msg.IsBroadcastClient {
 					// no need to send it to the broadcast request goroutine.
 					// the first request should contain all info needed
 					// except for the routing info given in the client req.
-					msg.ReceiveChan <- nil
+					msg.ReceiveChan <- shardResponse{
+						err:    nil,
+						reqCtx: req.cancellationCtx,
+					}
 					continue
 				}
+				// msg.Ctx will correspond to the streamCtx between the client and this server.
+				// We can thus listen to it and signal a cancellation if the client goes offline
+				// or cancels the request. We also have to listen to the req.ctx to prevent leaking
+				// the goroutine.
+				go func() {
+					select {
+					case <-req.ctx.Done():
+					case <-msg.Ctx.Done():
+					}
+					req.cancellationCtxCancel()
+				}()
 				// must check if the req is done to prevent deadlock
 				select {
 				case <-req.ctx.Done():
 					s.metrics.droppedMsgs++
-					msg.ReceiveChan <- AlreadyProcessedErr{}
+					msg.ReceiveChan <- shardResponse{
+						err: AlreadyProcessedErr{},
+					}
 				case req.sendChan <- msg:
 				}
 			} else {
+				msg.Ctx, msg.CancelCtx = context.WithCancel(context.Background())
 				// check size of s.reqs. If too big, then perform necessary cleanup.
 				// should only affect the current shard and not the others.
 				ctx, cancel := context.WithTimeout(s.ctx, reqTTL)
@@ -100,15 +124,19 @@ func (s *shard) run(router Router, reqTTL time.Duration, sendBuffer int) {
 					sendChan: make(chan Content),
 					// this channel can be buffered because there is no receive
 					// channel. The result is simply ignored.
-					broadcastChan: make(chan Msg, sendBuffer),
-					started:       time.Now(),
+					broadcastChan:         make(chan Msg, sendBuffer),
+					started:               time.Now(),
+					cancellationCtx:       msg.Ctx,
+					cancellationCtxCancel: msg.CancelCtx,
 				}
 				s.reqs[msg.BroadcastID] = req
 				go req.handle(router, msg.BroadcastID, msg)
 				select {
 				case <-req.ctx.Done():
 					s.metrics.droppedMsgs++
-					msg.ReceiveChan <- errors.New("req is done")
+					msg.ReceiveChan <- shardResponse{
+						err: AlreadyProcessedErr{},
+					}
 				case req.sendChan <- msg:
 				}
 			}

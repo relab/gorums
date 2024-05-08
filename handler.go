@@ -55,8 +55,12 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		msg := broadcast.Content{}
 		createRequest(&msg, ctx, in, finished)
 
-		//err := srv.broadcastSrv.state.Process(msg)
-		err := srv.broadcastSrv.manager.Process(msg)
+		var err error
+		// we are not interested in the server context as this is tied to the previous hop.
+		// instead we want to check whether the client has cancelled the broadcast request
+		// and if so, we return a cancelled context. This enables the implementer to listen
+		// for cancels and do proper actions.
+		err, ctx.Context = srv.broadcastSrv.manager.Process(msg)
 		if err != nil {
 			//if srv.broadcastSrv.metrics != nil {
 			//srv.broadcastSrv.metrics.AddDropped(false)
@@ -84,8 +88,12 @@ func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished 
 	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
 	msg.OriginAddr = in.Metadata.BroadcastMsg.OriginAddr
 	msg.OriginMethod = in.Metadata.BroadcastMsg.OriginMethod
+	msg.Ctx = ctx.Context
 	if msg.OriginAddr == "" && msg.IsBroadcastClient {
 		msg.SendFn = createSendFn(in.Metadata.MessageID, in.Metadata.Method, finished, ctx)
+	}
+	if in.Metadata.Method == Cancellation {
+		msg.IsCancellation = true
 	}
 }
 
@@ -141,6 +149,23 @@ func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broa
 		IsBroadcastClient: true,
 		OriginAddr:        originAddr,
 		ServerAddresses:   []string{forwardAddr},
+	}
+	srv.viewMutex.RLock()
+	// drop request if a view change has occured
+	srv.view.broadcastCall(context.Background(), cd)
+	srv.viewMutex.RUnlock()
+}
+
+func (srv *broadcastServer) cancelHandler(broadcastID uint64, srvAddrs []string) {
+	srv.manager.Cancel(broadcastID, srvAddrs)
+}
+
+func (srv *broadcastServer) canceler(broadcastID uint64, srvAddrs []string) {
+	cd := broadcastCallData{
+		Message:         nil,
+		Method:          Cancellation,
+		BroadcastID:     broadcastID,
+		ServerAddresses: srvAddrs,
 	}
 	srv.viewMutex.RLock()
 	// drop request if a view change has occured

@@ -261,6 +261,10 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
+func (b *Broadcast) Cancel() {
+	b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs)
+}
+
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
 	srv.SendToClientHandler(resp, err, broadcastID)
 }
@@ -447,7 +451,7 @@ type QuorumSpec interface {
 	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
-	// quorum call method. The in parameter is the request object
+	// broadcast call method. The in parameter is the request object
 	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.

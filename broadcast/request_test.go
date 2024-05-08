@@ -47,7 +47,7 @@ func TestHandleBroadcastOption(t *testing.T) {
 			in: Content{
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
-				ReceiveChan:       make(chan error),
+				ReceiveChan:       make(chan shardResponse),
 			},
 			out: nil,
 		},
@@ -55,7 +55,7 @@ func TestHandleBroadcastOption(t *testing.T) {
 			in: Content{
 				BroadcastID:       snowflake.NewBroadcastID(),
 				IsBroadcastClient: false,
-				ReceiveChan:       make(chan error),
+				ReceiveChan:       make(chan shardResponse),
 			},
 			out: BroadcastIDErr{},
 		},
@@ -63,7 +63,7 @@ func TestHandleBroadcastOption(t *testing.T) {
 			in: Content{
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
-				ReceiveChan:       make(chan error),
+				ReceiveChan:       make(chan shardResponse),
 			},
 			out: nil,
 		},
@@ -72,29 +72,33 @@ func TestHandleBroadcastOption(t *testing.T) {
 	msg := Content{
 		BroadcastID:  broadcastID,
 		OriginMethod: "testMethod",
-		ReceiveChan:  make(chan error),
+		ReceiveChan:  make(chan shardResponse),
 	}
 
 	router := &mockRouter{
 		returnError: false,
 	}
 
+	cancelCtx, cancelCancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
+	defer cancelCancel()
 	req := &BroadcastRequest{
-		ctx:           ctx,
-		cancelFunc:    cancel,
-		sendChan:      make(chan Content),
-		broadcastChan: make(chan Msg, 5),
-		started:       time.Now(),
+		ctx:                   ctx,
+		cancelFunc:            cancel,
+		sendChan:              make(chan Content),
+		broadcastChan:         make(chan Msg, 5),
+		started:               time.Now(),
+		cancellationCtx:       cancelCtx,
+		cancellationCtxCancel: cancelCancel,
 	}
 	go req.handle(router, msg.BroadcastID, msg)
 
 	for _, tt := range tests {
 		req.sendChan <- tt.in
-		err := <-tt.in.ReceiveChan
-		if err != tt.out {
-			t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", tt.out, err)
+		resp := <-tt.in.ReceiveChan
+		if resp.err != tt.out {
+			t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", tt.out, resp.err)
 		}
 	}
 
@@ -122,13 +126,13 @@ func TestHandleBroadcastOption(t *testing.T) {
 		BroadcastID:       broadcastID,
 		IsBroadcastClient: true,
 		SendFn:            func(resp protoreflect.ProtoMessage, err error) {},
-		ReceiveChan:       make(chan error),
+		ReceiveChan:       make(chan shardResponse),
 	}
 	req.sendChan <- clientMsg
-	err := <-clientMsg.ReceiveChan
+	resp := <-clientMsg.ReceiveChan
 	expectedErr := AlreadyProcessedErr{}
-	if err != expectedErr {
-		t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", err, expectedErr)
+	if resp.err != expectedErr {
+		t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", resp.err, expectedErr)
 	}
 
 	select {
@@ -150,7 +154,7 @@ func TestHandleBroadcastCall(t *testing.T) {
 			in: Content{
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
-				ReceiveChan:       make(chan error, 1),
+				ReceiveChan:       make(chan shardResponse, 1),
 			},
 			out: nil,
 		},
@@ -158,7 +162,7 @@ func TestHandleBroadcastCall(t *testing.T) {
 			in: Content{
 				BroadcastID:       snowflake.NewBroadcastID(),
 				IsBroadcastClient: false,
-				ReceiveChan:       make(chan error, 1),
+				ReceiveChan:       make(chan shardResponse, 1),
 			},
 			out: BroadcastIDErr{},
 		},
@@ -166,7 +170,7 @@ func TestHandleBroadcastCall(t *testing.T) {
 			in: Content{
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
-				ReceiveChan:       make(chan error, 1),
+				ReceiveChan:       make(chan shardResponse, 1),
 			},
 			out: nil,
 		},
@@ -177,7 +181,7 @@ func TestHandleBroadcastCall(t *testing.T) {
 		IsBroadcastClient: false,
 		OriginAddr:        "127.0.0.1:8080",
 		OriginMethod:      "testMethod",
-		ReceiveChan:       make(chan error),
+		ReceiveChan:       make(chan shardResponse),
 	}
 
 	router := &mockRouter{
@@ -185,21 +189,25 @@ func TestHandleBroadcastCall(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	cancelCtx, cancelCancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
+	defer cancelCancel()
 	req := &BroadcastRequest{
-		ctx:           ctx,
-		cancelFunc:    cancel,
-		sendChan:      make(chan Content),
-		broadcastChan: make(chan Msg, 5),
-		started:       time.Now(),
+		ctx:                   ctx,
+		cancelFunc:            cancel,
+		sendChan:              make(chan Content),
+		broadcastChan:         make(chan Msg, 5),
+		started:               time.Now(),
+		cancellationCtx:       cancelCtx,
+		cancellationCtxCancel: cancelCancel,
 	}
 	go req.handle(router, msg.BroadcastID, msg)
 
 	for _, tt := range tests {
 		req.sendChan <- tt.in
-		err := <-tt.in.ReceiveChan
-		if err != tt.out {
-			t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", tt.out, err)
+		resp := <-tt.in.ReceiveChan
+		if resp.err != tt.out {
+			t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", tt.out, resp.err)
 		}
 	}
 
@@ -228,7 +236,7 @@ func TestHandleBroadcastCall(t *testing.T) {
 		IsBroadcastClient: true,
 		OriginAddr:        "127.0.0.1:8080",
 		OriginMethod:      "testMethod",
-		ReceiveChan:       make(chan error),
+		ReceiveChan:       make(chan shardResponse),
 	}
 	select {
 	case <-req.ctx.Done():
@@ -263,7 +271,7 @@ func BenchmarkHandle(b *testing.B) {
 				IsBroadcastClient: true,
 				SendFn:            sendFn,
 				OriginMethod:      originMethod,
-				ReceiveChan:       make(chan error, 1),
+				ReceiveChan:       make(chan shardResponse, 1),
 			}
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)

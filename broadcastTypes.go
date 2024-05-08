@@ -26,11 +26,16 @@ type BroadcastHandlerFunc func(method string, req protoreflect.ProtoMessage, bro
 type BroadcastForwardHandlerFunc func(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string)
 type BroadcastServerHandlerFunc func(method string, req RequestTypes, options ...broadcast.BroadcastOptions)
 type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error)
+type CancelHandlerFunc func(broadcastID uint64, srvAddrs []string)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 type clientImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(context.Context, T, uint64) (V, error)
 
 type implementationFunc[T RequestTypes, V Broadcaster] func(ServerCtx, T, V)
+
+func CancelFunc(ServerCtx, RequestTypes, Broadcaster) {}
+
+const Cancellation string = "cancel"
 
 // The BroadcastOrchestrator is used as a container for all
 // broadcast handlers. The BroadcastHandler takes in a method
@@ -47,6 +52,7 @@ type BroadcastOrchestrator struct {
 	ForwardHandler         BroadcastForwardHandlerFunc
 	SendToClientHandler    BroadcastSendToClientHandlerFunc
 	ServerBroadcastHandler BroadcastServerHandlerFunc
+	CancelHandler          CancelHandlerFunc
 }
 
 func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
@@ -55,6 +61,7 @@ func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
 		ForwardHandler:         srv.broadcastSrv.forwardHandler,
 		ServerBroadcastHandler: srv.broadcastSrv.serverBroadcastHandler,
 		SendToClientHandler:    srv.broadcastSrv.sendToClientHandler,
+		CancelHandler:          srv.broadcastSrv.cancelHandler,
 	}
 }
 

@@ -16,7 +16,7 @@ service Gorums {
 // and contains information necessary for Gorums to handle the messages.
 message Metadata {
   uint64 MessageID = 1;
-  string Method = 2;
+  string Method = 2; // uint32: 4 bytes
   google.rpc.Status Status = 3;
   BroadcastMsg BroadcastMsg = 4;
 }
@@ -24,7 +24,7 @@ message Metadata {
 message BroadcastMsg {
   bool IsBroadcastClient = 1;
   uint64 BroadcastID = 2;
-  string SenderAddr = 3;
-  string OriginAddr = 4;
-  string OriginMethod = 5;
+  string SenderAddr = 3; // bytes -> ipv4: 32 bit/ 4 bytes, ipv6: 128 bit / 16 bytes -> + Port: 16 bit / 2 bytes
+  string OriginAddr = 4; // bytes -> ipv4: 32 bit/ 4 bytes, ipv6: 128 bit / 16 bytes -> + Port: 16 bit / 2 bytes
+  string OriginMethod = 5; // uint32: 4 bytes
 }

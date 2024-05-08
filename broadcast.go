@@ -40,11 +40,12 @@ func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer 
 	if withMetrics {
 		//m = broadcast.NewMetric()
 	}
-	return &broadcastServer{
-		manager: broadcast.NewBroadcastManager(logger, m, createClient),
+	srv := &broadcastServer{
 		logger:  logger,
 		metrics: m,
 	}
+	srv.manager = broadcast.NewBroadcastManager(logger, m, createClient, srv.canceler)
+	return srv
 }
 
 //func newBroadcastServer(logger *slog.Logger, withMetrics bool) *broadcastServer {
