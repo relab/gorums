@@ -96,6 +96,20 @@ func (qs *testQSpec) SearchQF(in *Request, replies []*Response) (*Response, bool
 	return &Response{Result: 0}, true
 }
 
+func (qs *testQSpec) LongRunningTaskQF(in *Request, replies []*Response) (*Response, bool) {
+	if len(replies) >= qs.quorumSize {
+		return nil, true
+	}
+	return nil, false
+}
+
+func (qs *testQSpec) GetValQF(in *Request, replies []*Response) (*Response, bool) {
+	if len(replies) >= qs.quorumSize {
+		return nil, true
+	}
+	return nil, false
+}
+
 func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configuration, func(), error) {
 	quorumSize := len(srvAddrs)
 	if len(qsize) > 0 {

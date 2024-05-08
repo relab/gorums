@@ -257,14 +257,35 @@ func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	return nil
 }
 
+// Done signals the end of a broadcast request. It is necessary to call
+// either Done() or SendToClient() to properly terminate a broadcast request
+// and free up resources. Otherwise, it could cause poor performance.
+func (b *Broadcast) Done() {
+	b.orchestrator.DoneHandler(b.metadata.BroadcastID)
+}
+
+// SendToClient sends a message back to the calling client. It also terminates
+// the broadcast request, meaning subsequent messages related to the broadcast
+// request will be dropped. Either SendToClient() or Done() should be used at
+// the end of a broadcast request in order to free up resources.
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
+// Cancel is a non-destructive method call that will transmit a cancellation
+// to all servers in the view. It will not stop the execution but will cause
+// the given ServerCtx to be cancelled, making it possible to listen for
+// cancellations.
+//
+// Could be used together with either SendToClient() or Done().
 func (b *Broadcast) Cancel() {
 	b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs)
 }
 
+// SendToClient sends a message back to the calling client. It also terminates
+// the broadcast request, meaning subsequent messages related to the broadcast
+// request will be dropped. Either SendToClient() or Done() should be used at
+// the end of a broadcast request in order to free up resources.
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
 	srv.SendToClientHandler(resp, err, broadcastID)
 }
@@ -441,12 +462,76 @@ func (c *Configuration) Search(ctx context.Context, in *Request) (resp *Response
 	return resp, nil
 }
 
+func (srv *clientServerImpl) clientLongRunningTask(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
+	return resp, err
+}
+
+func (c *Configuration) LongRunningTask(ctx context.Context, in *Request) (resp *Response, err error) {
+	if c.srv == nil {
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
+	}
+	if c.qspec == nil {
+		return nil, fmt.Errorf("a qspec is not defined")
+	}
+	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.LongRunningTaskQF), "broadcast.BroadcastService.LongRunningTask")
+	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
+	}
+	return resp, nil
+}
+
+func (srv *clientServerImpl) clientGetVal(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
+	return resp, err
+}
+
+func (c *Configuration) GetVal(ctx context.Context, in *Request) (resp *Response, err error) {
+	if c.srv == nil {
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
+	}
+	if c.qspec == nil {
+		return nil, fmt.Errorf("a qspec is not defined")
+	}
+	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.GetValQF), "broadcast.BroadcastService.GetVal")
+	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		return nil, fmt.Errorf("context cancelled")
+	}
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
+	}
+	return resp, nil
+}
+
 func registerClientServerHandlers(srv *clientServerImpl) {
 
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCall", gorums.ClientHandler(srv.clientBroadcastCall))
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallForward", gorums.ClientHandler(srv.clientBroadcastCallForward))
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCallTo", gorums.ClientHandler(srv.clientBroadcastCallTo))
 	srv.RegisterHandler("broadcast.BroadcastService.Search", gorums.ClientHandler(srv.clientSearch))
+	srv.RegisterHandler("broadcast.BroadcastService.LongRunningTask", gorums.ClientHandler(srv.clientLongRunningTask))
+	srv.RegisterHandler("broadcast.BroadcastService.GetVal", gorums.ClientHandler(srv.clientGetVal))
 }
 
 // Multicast is a quorum call invoked on all nodes in configuration c,
@@ -523,6 +608,20 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
 	SearchQF(in *Request, replies []*Response) (*Response, bool)
+
+	// LongRunningTaskQF is the quorum function for the LongRunningTask
+	// broadcastcall call method. The in parameter is the request object
+	// supplied to the LongRunningTask method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	LongRunningTaskQF(in *Request, replies []*Response) (*Response, bool)
+
+	// GetValQF is the quorum function for the GetVal
+	// broadcastcall call method. The in parameter is the request object
+	// supplied to the GetVal method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	GetValQF(in *Request, replies []*Response) (*Response, bool)
 }
 
 // QuorumCall is a quorum call invoked on all nodes in configuration c,
@@ -608,6 +707,8 @@ type BroadcastService interface {
 	BroadcastCallTo(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	BroadcastToResponse(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	Search(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	LongRunningTask(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	GetVal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 }
 
 func (srv *Server) QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
@@ -646,6 +747,12 @@ func (srv *Server) BroadcastToResponse(ctx gorums.ServerCtx, request *Request, b
 func (srv *Server) Search(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method Search not implemented"))
 }
+func (srv *Server) LongRunningTask(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method LongRunningTask not implemented"))
+}
+func (srv *Server) GetVal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method GetVal not implemented"))
+}
 
 func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 	srv.RegisterHandler("broadcast.BroadcastService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
@@ -682,6 +789,10 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastToResponse", gorums.BroadcastHandler(impl.BroadcastToResponse, srv.Server))
 	srv.RegisterHandler("broadcast.BroadcastService.Search", gorums.BroadcastHandler(impl.Search, srv.Server))
 	srv.RegisterClientHandler("broadcast.BroadcastService.Search")
+	srv.RegisterHandler("broadcast.BroadcastService.LongRunningTask", gorums.BroadcastHandler(impl.LongRunningTask, srv.Server))
+	srv.RegisterClientHandler("broadcast.BroadcastService.LongRunningTask")
+	srv.RegisterHandler("broadcast.BroadcastService.GetVal", gorums.BroadcastHandler(impl.GetVal, srv.Server))
+	srv.RegisterClientHandler("broadcast.BroadcastService.GetVal")
 	srv.RegisterHandler(gorums.Cancellation, gorums.BroadcastHandler(gorums.CancelFunc, srv.Server))
 }
 

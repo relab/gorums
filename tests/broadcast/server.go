@@ -3,6 +3,7 @@ package broadcast
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	net "net"
 	"sync"
 	"time"
@@ -21,15 +22,16 @@ type response struct {
 
 type testServer struct {
 	*Server
+	mut            sync.Mutex
 	leader         string
 	addr           string
 	peers          []string
 	lis            net.Listener
 	mgr            *Manager
 	numMsg         map[string]int
-	mu             sync.Mutex
 	respChan       map[int64]response
 	processingTime time.Duration
+	val            int64
 }
 
 func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
@@ -74,16 +76,16 @@ func (srv *testServer) Stop() {
 }
 
 func (srv *testServer) QuorumCall(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
+	srv.mut.Lock()
+	defer srv.mut.Unlock()
 	srv.numMsg["QC"]++
 	//slog.Warn("server received broadcast call")
 	return &Response{Result: req.Value}, nil
 }
 
 func (srv *testServer) QuorumCallWithBroadcast(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
+	srv.mut.Lock()
+	defer srv.mut.Unlock()
 	srv.numMsg["QCB"]++
 	//slog.Warn("server received quorum call with broadcast")
 	broadcast.BroadcastIntermediate(req)
@@ -91,13 +93,13 @@ func (srv *testServer) QuorumCallWithBroadcast(ctx gorums.ServerCtx, req *Reques
 
 func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	done := make(chan int64)
-	srv.mu.Lock()
+	srv.mut.Lock()
 	srv.numMsg["QCM"]++
 	srv.respChan[req.Value] = response{
 		messageID: req.Value,
 		respChan:  done,
 	}
-	srv.mu.Unlock()
+	srv.mut.Unlock()
 	//slog.Warn("server received quorum call with broadcast")
 	srv.View.MulticastIntermediate(context.Background(), req, gorums.WithNoSendWaiting())
 	ctx.Release()
@@ -106,17 +108,17 @@ func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Reques
 }
 
 func (srv *testServer) MulticastIntermediate(ctx gorums.ServerCtx, req *Request) {
-	srv.mu.Lock()
+	srv.mut.Lock()
 	srv.numMsg["M"]++
-	srv.mu.Unlock()
+	srv.mut.Unlock()
 	ctx.Release()
 	srv.View.Multicast(context.Background(), req, gorums.WithNoSendWaiting())
 }
 
 func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
 	ctx.Release()
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
+	srv.mut.Lock()
+	defer srv.mut.Unlock()
 	srv.numMsg["M"]++
 	if response, ok := srv.respChan[req.Value]; ok {
 		response.respChan <- req.Value
@@ -219,16 +221,39 @@ func (srv *testServer) Search(ctx gorums.ServerCtx, req *Request, broadcast *Bro
 	broadcast.Cancel()
 }
 
+func (srv *testServer) LongRunningTask(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	srv.mut.Lock()
+	defer srv.mut.Unlock()
+	select {
+	case <-ctx.Done():
+		slog.Info("ctx cancelled")
+		srv.val = 1
+	case <-time.After(2 * time.Second):
+		slog.Info("ctx not cancelled")
+		srv.val = 0
+	}
+	broadcast.Done()
+}
+
+func (srv *testServer) GetVal(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	srv.mut.Lock()
+	defer srv.mut.Unlock()
+	broadcast.SendToClient(&Response{
+		From:   srv.addr,
+		Result: srv.val,
+	}, nil)
+}
+
 func (srv *testServer) GetMsgs() string {
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
+	srv.mut.Lock()
+	defer srv.mut.Unlock()
 	res := "Srv " + srv.addr
 	res += fmt.Sprintf(" -> QC: %d, QCB: %d, QCM: %d, M: %d, BC: %d, BI: %d, B: %d", srv.numMsg["QC"], srv.numMsg["QCB"], srv.numMsg["QCM"], srv.numMsg["M"], srv.numMsg["BC"], srv.numMsg["BI"], srv.numMsg["B"])
 	return res
 }
 
 func (srv *testServer) GetNumMsgs() int {
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
+	srv.mut.Lock()
+	defer srv.mut.Unlock()
 	return srv.numMsg["BC"] + srv.numMsg["B"] + srv.numMsg["BI"]
 }

@@ -150,6 +150,10 @@ func (srv *broadcastServer) cancelHandler(broadcastID uint64, srvAddrs []string)
 	srv.manager.Cancel(broadcastID, srvAddrs)
 }
 
+func (srv *broadcastServer) doneHandler(broadcastID uint64) {
+	srv.manager.Done(broadcastID)
+}
+
 func (srv *broadcastServer) canceler(broadcastID uint64, srvAddrs []string) {
 	cd := broadcastCallData{
 		//Message:         &emptypb.Empty{},

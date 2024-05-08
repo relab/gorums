@@ -27,6 +27,7 @@ type BroadcastForwardHandlerFunc func(req RequestTypes, method string, broadcast
 type BroadcastServerHandlerFunc func(method string, req RequestTypes, options ...broadcast.BroadcastOptions)
 type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error)
 type CancelHandlerFunc func(broadcastID uint64, srvAddrs []string)
+type DoneHandlerFunc func(broadcastID uint64)
 
 type defaultImplementationFunc[T RequestTypes, V ResponseTypes] func(ServerCtx, T) (V, error)
 type clientImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(context.Context, T, uint64) (V, error)
@@ -53,6 +54,7 @@ type BroadcastOrchestrator struct {
 	SendToClientHandler    BroadcastSendToClientHandlerFunc
 	ServerBroadcastHandler BroadcastServerHandlerFunc
 	CancelHandler          CancelHandlerFunc
+	DoneHandler            DoneHandlerFunc
 }
 
 func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
@@ -62,6 +64,7 @@ func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
 		ServerBroadcastHandler: srv.broadcastSrv.serverBroadcastHandler,
 		SendToClientHandler:    srv.broadcastSrv.sendToClientHandler,
 		CancelHandler:          srv.broadcastSrv.cancelHandler,
+		DoneHandler:            srv.broadcastSrv.doneHandler,
 	}
 }
 

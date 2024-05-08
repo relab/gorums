@@ -110,7 +110,13 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 				case req.sendChan <- msg:
 				}
 			} else {
-				msg.Ctx, msg.CancelCtx = context.WithCancel(context.Background())
+				if msg.IsBroadcastClient {
+					// msg.Ctx will correspond to the streamCtx between the client and this server,
+					// meaning the ctx will cancel when the client cancels or disconnects.
+					msg.Ctx, msg.CancelCtx = context.WithCancel(msg.Ctx)
+				} else {
+					msg.Ctx, msg.CancelCtx = context.WithCancel(context.Background())
+				}
 				// check size of s.reqs. If too big, then perform necessary cleanup.
 				// should only affect the current shard and not the others.
 				ctx, cancel := context.WithTimeout(s.ctx, reqTTL)
@@ -150,6 +156,10 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 			//}
 			if req, ok := s.reqs[msg.BroadcastID]; ok {
 				if msg.Cancellation != nil {
+					if msg.Cancellation.end {
+						req.cancelFunc()
+						continue
+					}
 					if !req.sentCancellation {
 						req.sentCancellation = true
 						go s.router.Send(msg.BroadcastID, "", "", msg.Cancellation)

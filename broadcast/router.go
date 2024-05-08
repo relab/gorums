@@ -162,4 +162,5 @@ func (r *reply) getError() error {
 
 type cancellation struct {
 	srvAddrs []string
+	end      bool
 }

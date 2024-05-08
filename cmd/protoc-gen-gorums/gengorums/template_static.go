@@ -243,14 +243,35 @@ func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 	return nil
 }
 
+// Done signals the end of a broadcast request. It is necessary to call
+// either Done() or SendToClient() to properly terminate a broadcast request
+// and free up resources. Otherwise, it could cause poor performance.
+func (b *Broadcast) Done() {
+	b.orchestrator.DoneHandler(b.metadata.BroadcastID)
+}
+
+// SendToClient sends a message back to the calling client. It also terminates
+// the broadcast request, meaning subsequent messages related to the broadcast
+// request will be dropped. Either SendToClient() or Done() should be used at
+// the end of a broadcast request in order to free up resources.
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
 }
 
+// Cancel is a non-destructive method call that will transmit a cancellation
+// to all servers in the view. It will not stop the execution but will cause
+// the given ServerCtx to be cancelled, making it possible to listen for
+// cancellations.
+//
+// Could be used together with either SendToClient() or Done().
 func (b *Broadcast) Cancel() {
 	b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs)
 }
 
+// SendToClient sends a message back to the calling client. It also terminates
+// the broadcast request, meaning subsequent messages related to the broadcast
+// request will be dropped. Either SendToClient() or Done() should be used at
+// the end of a broadcast request in order to free up resources.
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
 	srv.SendToClientHandler(resp, err, broadcastID)
 }

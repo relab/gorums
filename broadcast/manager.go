@@ -15,6 +15,7 @@ type Manager interface {
 	Broadcast(uint64, protoreflect.ProtoMessage, string, ...BroadcastOptions)
 	SendToClient(uint64, protoreflect.ProtoMessage, error)
 	Cancel(uint64, []string)
+	Done(uint64)
 	NewBroadcastID() uint64
 	AddAddr(id uint32, addr string)
 	AddHandler(method string, handler any)
@@ -107,6 +108,21 @@ func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string) {
 	case shard.broadcastChan <- Msg{
 		Cancellation: &cancellation{
 			srvAddrs: srvAddrs,
+		},
+		BroadcastID: broadcastID,
+	}:
+	case <-shard.ctx.Done():
+	}
+}
+
+func (mgr *manager) Done(broadcastID uint64) {
+	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+	select {
+	case shard.broadcastChan <- Msg{
+		Cancellation: &cancellation{
+			end: true,
 		},
 		BroadcastID: broadcastID,
 	}:
