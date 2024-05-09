@@ -99,7 +99,6 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 		select {
 		case <-clientCtx.Done():
 			// client provided ctx
-			//slog.Info("clientserver: clientCtx done", "resps", len(resps))
 			return
 		case <-ctx.Done():
 			// request ctx. this is a child to the server ctx.

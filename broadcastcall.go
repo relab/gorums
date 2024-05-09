@@ -7,10 +7,10 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// broadcastCallData holds the message, destination nodes, method identifier,
+// BroadcastCallData holds the message, destination nodes, method identifier,
 // and other information necessary to perform the various quorum call types
 // supported by Gorums.
-type broadcastCallData struct {
+type BroadcastCallData struct {
 	Message           protoreflect.ProtoMessage
 	Method            string
 	BroadcastID       uint64 // a unique identifier for the current broadcast request
@@ -23,7 +23,7 @@ type broadcastCallData struct {
 
 // checks whether the given address is contained in the given subset
 // of server addresses. Will return true if a subset is not given.
-func (bcd *broadcastCallData) inSubset(addr string) bool {
+func (bcd *BroadcastCallData) inSubset(addr string) bool {
 	if bcd.ServerAddresses == nil || len(bcd.ServerAddresses) <= 0 {
 		return true
 	}
@@ -35,8 +35,8 @@ func (bcd *broadcastCallData) inSubset(addr string) bool {
 	return false
 }
 
-// broadcastCall performs a multicast call on the configuration.
-func (c RawConfiguration) broadcastCall(ctx context.Context, d broadcastCallData) {
+// BroadcastCall performs a multicast call on the configuration.
+func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
 		IsBroadcastClient: d.IsBroadcastClient,
 		BroadcastID:       d.BroadcastID,

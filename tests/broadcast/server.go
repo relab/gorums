@@ -3,7 +3,6 @@ package broadcast
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	net "net"
 	"sync"
 	"time"
@@ -226,10 +225,8 @@ func (srv *testServer) LongRunningTask(ctx gorums.ServerCtx, req *Request, broad
 	defer srv.mut.Unlock()
 	select {
 	case <-ctx.Done():
-		slog.Info("ctx cancelled")
 		srv.val = 1
 	case <-time.After(2 * time.Second):
-		slog.Info("ctx not cancelled")
 		srv.val = 0
 	}
 	broadcast.Done()

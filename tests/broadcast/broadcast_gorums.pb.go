@@ -350,13 +350,19 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -381,13 +387,19 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallForwardQF), "broadcast.BroadcastService.BroadcastCallForward")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallForwardQF), "broadcast.BroadcastService.BroadcastCallForward")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -412,13 +424,19 @@ func (c *Configuration) BroadcastCallTo(ctx context.Context, in *Request) (resp 
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallToQF), "broadcast.BroadcastService.BroadcastCallTo")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallToQF), "broadcast.BroadcastService.BroadcastCallTo")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -443,13 +461,19 @@ func (c *Configuration) Search(ctx context.Context, in *Request) (resp *Response
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.SearchQF), "broadcast.BroadcastService.Search")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.SearchQF), "broadcast.BroadcastService.Search")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -474,13 +498,19 @@ func (c *Configuration) LongRunningTask(ctx context.Context, in *Request) (resp 
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.LongRunningTaskQF), "broadcast.BroadcastService.LongRunningTask")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.LongRunningTaskQF), "broadcast.BroadcastService.LongRunningTask")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -505,13 +535,19 @@ func (c *Configuration) GetVal(ctx context.Context, in *Request) (resp *Response
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.GetValQF), "broadcast.BroadcastService.GetVal")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.GetValQF), "broadcast.BroadcastService.GetVal")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -568,7 +604,7 @@ type QuorumSpec interface {
 	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
-	// quorum call method. The in parameter is the request object
+	// broadcast call method. The in parameter is the request object
 	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.

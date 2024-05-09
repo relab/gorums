@@ -148,14 +148,13 @@ func TestSimpleBroadcastCancel(t *testing.T) {
 
 func TestBroadcastCancel(t *testing.T) {
 	numSrvs := 3
-	numReqs := 1
+	numReqs := 10
 	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
 	}
 	defer srvCleanup()
 
-	// only want a response from the leader, hence qsize = 1
 	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
 	if err != nil {
 		t.Error(err)
@@ -163,7 +162,6 @@ func TestBroadcastCancel(t *testing.T) {
 	defer clientCleanup()
 
 	for i := 1; i <= numReqs; i++ {
-		//slog.Info("req", "no", i)
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		config.LongRunningTask(ctx, &Request{Value: val})
@@ -177,6 +175,75 @@ func TestBroadcastCancel(t *testing.T) {
 		if resp.GetResult() != 1 {
 			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
 		}
+	}
+}
+
+func TestBroadcastCancelOneSrvDown(t *testing.T) {
+	numSrvs := 3
+	numReqs := 10
+	srvs, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	// stop one of the servers
+	srvs[numSrvs-1].Stop()
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	// only want response from the online servers
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080", numSrvs-1)
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	for i := 1; i <= numReqs; i++ {
+		val := int64(i * 100)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		config.LongRunningTask(ctx, &Request{Value: val})
+		cancel()
+		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		resp, err := config.GetVal(ctx, &Request{Value: val})
+		cancel()
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != 1 {
+			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
+		}
+	}
+}
+
+func TestBroadcastCancelOneSrvFails(t *testing.T) {
+	numSrvs := 3
+	srvs, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	// only want response from the online servers
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080", numSrvs-1)
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	val := int64(100)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	config.LongRunningTask(ctx, &Request{Value: val})
+	cancel()
+
+	// stop one of the servers
+	srvs[numSrvs-1].Stop()
+
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	resp, err := config.GetVal(ctx, &Request{Value: val})
+	cancel()
+	if err != nil {
+		t.Error(err)
+	}
+	if resp.GetResult() != 1 {
+		t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
 	}
 }
 
@@ -1206,20 +1273,13 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	wg1.Wait()
 	time.Sleep(1 * time.Second)
 
-	//stop, err := StartTrace("traceprofileBC")
-	//if err != nil {
-	//t.Error(err)
-	//}
-	//defer stop()
 	var wg sync.WaitGroup
 	for r := 0; r < numReqs; r++ {
 		for i, client := range clients {
 			go func(i int) {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				//start := time.Now()
 				resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
-				//fmt.Println(i, "took:", time.Since(start))
 				if err != nil {
 					t.Error(err)
 				}
@@ -1234,62 +1294,3 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	wg.Wait()
 	srvCleanup()
 }
-
-//func TestBroadcastCallTenClientsOnlySync(t *testing.T) {
-//srvs, srvAddrs, srvCleanup, err := createSrvs(3)
-//if err != nil {
-//t.Error(err)
-//}
-
-//numClients := 10
-//clients := make([]*Configuration, numClients)
-//for c := 0; c < numClients; c++ {
-//config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
-//if err != nil {
-//t.Error(err)
-//}
-//defer clientCleanup()
-//clients[c] = config
-//}
-
-//fmt.Println("making sure all clients are connected...")
-//s := time.Now()
-//for _, client := range clients {
-//init := 1
-//resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
-//if err != nil {
-//t.Error(err)
-//}
-//if resp.GetResult() != int64(init) {
-//t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
-//}
-//}
-//fmt.Println("total took (sync):", time.Since(s))
-
-//for _, srv := range srvs {
-//srv.PrintStats()
-//}
-//fmt.Println("starting...")
-//s = time.Now()
-//for r := 0; r < 100; r++ {
-//for i, client := range clients {
-//ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-//defer cancel()
-////start := time.Now()
-//resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
-////fmt.Println(i, "took:", time.Since(start))
-//if err != nil {
-//t.Error(err)
-//}
-//if resp.GetResult() != int64(i) {
-//t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
-//}
-//}
-//}
-//end := time.Now()
-//srvCleanup()
-//for _, srv := range srvs {
-//srv.PrintStats()
-//}
-//fmt.Println("total took (async):", end.Sub(s))
-//}

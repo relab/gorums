@@ -105,7 +105,13 @@ func (qs *testQSpec) LongRunningTaskQF(in *Request, replies []*Response) (*Respo
 
 func (qs *testQSpec) GetValQF(in *Request, replies []*Response) (*Response, bool) {
 	if len(replies) >= qs.quorumSize {
-		return nil, true
+		for _, reply := range replies {
+			// all responses should be cancelled
+			if reply.GetResult() != 1 {
+				return &Response{Result: 0}, true
+			}
+		}
+		return &Response{Result: 1}, true
 	}
 	return nil, false
 }

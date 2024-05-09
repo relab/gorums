@@ -23,13 +23,19 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.{{.Method.GoName}}QF), "{{.Method.Desc.FullName}}")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.{{.Method.GoName}}QF), "{{.Method.Desc.FullName}}")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response {{$protoMessage}}
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {

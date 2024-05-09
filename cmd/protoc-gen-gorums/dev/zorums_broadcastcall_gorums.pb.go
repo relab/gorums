@@ -32,13 +32,19 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF), "dev.ZorumsService.BroadcastWithClientHandler1")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF), "dev.ZorumsService.BroadcastWithClientHandler1")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -63,13 +69,19 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF), "dev.ZorumsService.BroadcastWithClientHandler2")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF), "dev.ZorumsService.BroadcastWithClientHandler2")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -94,13 +106,19 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
-	doneChan, cd := c.srv.AddRequest(c.snowflake.NewBroadcastID(), ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF), "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption")
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF), "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
 	var response protoreflect.ProtoMessage
 	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {

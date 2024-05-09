@@ -132,7 +132,7 @@ func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp protore
 }
 
 func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string) {
-	cd := broadcastCallData{
+	cd := BroadcastCallData{
 		Message:           req,
 		Method:            method,
 		BroadcastID:       broadcastID,
@@ -142,7 +142,7 @@ func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broa
 	}
 	srv.viewMutex.RLock()
 	// drop request if a view change has occured
-	srv.view.broadcastCall(context.Background(), cd)
+	srv.view.BroadcastCall(context.Background(), cd)
 	srv.viewMutex.RUnlock()
 }
 
@@ -155,8 +155,7 @@ func (srv *broadcastServer) doneHandler(broadcastID uint64) {
 }
 
 func (srv *broadcastServer) canceler(broadcastID uint64, srvAddrs []string) {
-	cd := broadcastCallData{
-		//Message:         &emptypb.Empty{},
+	cd := BroadcastCallData{
 		Message:         nil,
 		Method:          Cancellation,
 		BroadcastID:     broadcastID,
@@ -164,12 +163,12 @@ func (srv *broadcastServer) canceler(broadcastID uint64, srvAddrs []string) {
 	}
 	srv.viewMutex.RLock()
 	// drop request if a view change has occured
-	srv.view.broadcastCall(context.Background(), cd)
+	srv.view.BroadcastCall(context.Background(), cd)
 	srv.viewMutex.RUnlock()
 }
 
 func (srv *broadcastServer) serverBroadcastHandler(method string, req RequestTypes, opts ...broadcast.BroadcastOptions) {
-	cd := broadcastCallData{
+	cd := BroadcastCallData{
 		Message:           req,
 		Method:            method,
 		BroadcastID:       srv.manager.NewBroadcastID(),
@@ -178,7 +177,7 @@ func (srv *broadcastServer) serverBroadcastHandler(method string, req RequestTyp
 	}
 	srv.viewMutex.RLock()
 	// drop request if a view change has occured
-	srv.view.broadcastCall(context.Background(), cd)
+	srv.view.BroadcastCall(context.Background(), cd)
 	srv.viewMutex.RUnlock()
 }
 
@@ -188,7 +187,7 @@ func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
 	srv.manager.AddHandler(method, broadcast.ServerHandler(func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
-		cd := broadcastCallData{
+		cd := BroadcastCallData{
 			Message:           in,
 			Method:            method,
 			BroadcastID:       broadcastID,
@@ -200,7 +199,7 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 		}
 		srv.viewMutex.RLock()
 		// drop request if a view change has occured
-		srv.view.broadcastCall(ctx, cd)
+		srv.view.BroadcastCall(ctx, cd)
 		srv.viewMutex.RUnlock()
 	}))
 	/*srv.manager.AddServerHandler(method, func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
