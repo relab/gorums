@@ -20,6 +20,7 @@ type Client struct {
 
 type Router interface {
 	Send(broadcastID uint64, addr, method string, req any) error
+	Connect(addr string)
 }
 
 type BroadcastRouter struct {
@@ -72,6 +73,10 @@ func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any)
 		return nil
 	}
 	return errors.New("wrong req type")
+}
+
+func (r *BroadcastRouter) Connect(addr string) {
+	r.getClient(addr)
 }
 
 func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string, msg *broadcastMsg) error {

@@ -21,30 +21,20 @@ type BroadcastRequest struct {
 
 // func (req *BroadcastRequest) handle(router *BroadcastRouter, broadcastID uint64, msg Content, metrics *Metric) {
 func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Content) {
-	//start := time.Now()
 	sent := false
 	methods := make([]string, 0, 3)
 	var respErr error
 	var respMsg protoreflect.ProtoMessage
-	//if metrics != nil {
-	//metrics.AddGoroutine(broadcastID, "req")
-	//}
-	//go router.CreateConnection(msg.OriginAddr)
+	// connect to client immediately to potentially save some time
+	go router.Connect(msg.OriginAddr)
 	defer func() {
 		req.ended = time.Now()
-		//if metrics != nil {
-		//metrics.AddRoundTripLatency(start)
-		//metrics.RemoveGoroutine(broadcastID, "req")
-		//}
 		req.cancelFunc()
 		req.cancellationCtxCancel()
 	}()
 	for {
 		select {
 		case <-req.ctx.Done():
-			//if metrics != nil {
-			//metrics.AddFinishedFailed()
-			//}
 			return
 		case bMsg := <-req.broadcastChan:
 			if broadcastID != bMsg.BroadcastID {
@@ -55,15 +45,17 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 				if alreadyBroadcasted(methods, bMsg.Method) {
 					continue
 				}
-				err := router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
+				go router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
+				/*err := router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
 				if err != nil {
 					continue
-				}
+				}*/
 				methods = append(methods, bMsg.Method)
 			} else {
 				// BroadcastCall if origin addr is non-empty.
 				if msg.isBroadcastCall() {
-					_ = router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
+					go router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
+					//_ = router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
 					//if err != nil && router.logger != nil {
 					//router.logger.Error("broadcast: could not send response to client", "err", err, "broadcastID", broadcastID)
 					//}

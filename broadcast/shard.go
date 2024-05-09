@@ -151,9 +151,6 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 			}
 		case msg := <-s.broadcastChan:
 			s.metrics.numBroadcastMsgs++
-			//if metrics != nil {
-			//metrics.AddShardDistribution(s.id)
-			//}
 			if req, ok := s.reqs[msg.BroadcastID]; ok {
 				if msg.Cancellation != nil {
 					if msg.Cancellation.end {

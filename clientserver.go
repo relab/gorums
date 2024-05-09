@@ -109,11 +109,7 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 			// the receiving end. this can happen if the client
 			// chooses not to timeout the request and the server
 			// goes down.
-			select {
-			case doneChan <- nil:
-			case <-clientCtx.Done():
-				return
-			}
+			close(doneChan)
 			return
 		case resp := <-respChan:
 			resps = append(resps, resp)
@@ -124,6 +120,7 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 				case <-ctx.Done():
 				case <-clientCtx.Done():
 				}
+				close(doneChan)
 				return
 			}
 		}

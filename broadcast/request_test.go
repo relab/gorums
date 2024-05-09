@@ -35,6 +35,8 @@ func (r *mockRouter) Send(broadcastID uint64, addr, method string, req any) erro
 	return nil
 }
 
+func (r *mockRouter) Connect(addr string) {}
+
 func TestHandleBroadcastOption(t *testing.T) {
 	snowflake := NewSnowflake("127.0.0.1:8080")
 	broadcastID := snowflake.NewBroadcastID()

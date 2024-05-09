@@ -30,6 +30,8 @@ func (r *slowRouter) Send(broadcastID uint64, addr, method string, req any) erro
 	return nil
 }
 
+func (r *slowRouter) Connect(addr string) {}
+
 func TestShard(t *testing.T) {
 	snowflake := NewSnowflake("127.0.0.1:8080")
 	broadcastID := snowflake.NewBroadcastID()
