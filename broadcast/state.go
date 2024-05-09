@@ -142,6 +142,7 @@ type Content struct {
 	SendFn            func(resp protoreflect.ProtoMessage, err error)
 	Ctx               context.Context
 	CancelCtx         context.CancelFunc
+	Run               func()
 }
 
 func (c Content) send(resp protoreflect.ProtoMessage, err error) error {

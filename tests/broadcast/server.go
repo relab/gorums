@@ -205,13 +205,11 @@ func (srv *testServer) BroadcastToResponse(ctx gorums.ServerCtx, req *Request, b
 func (srv *testServer) Search(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	select {
 	case <-ctx.Done():
-		//slog.Info("cancelled", "addr", srv.addr)
 		broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 0,
 		}, nil)
 	case <-time.After(srv.processingTime):
-		//slog.Info("processed", "addr", srv.addr)
 		broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 1,

@@ -31,6 +31,7 @@ type shard struct {
 	reqs          map[uint64]*BroadcastRequest
 	router        Router
 	//sync.Once
+	preserveOrdering bool
 }
 
 func createShards(ctx context.Context, shardBuffer int, router Router) []*shard {
@@ -79,7 +80,7 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 					}
 					continue
 				}
-				if !msg.IsBroadcastClient {
+				if !msg.IsBroadcastClient && !s.preserveOrdering {
 					// no need to send it to the broadcast request goroutine.
 					// the first request should contain all info needed
 					// except for the routing info given in the client req.
@@ -110,6 +111,11 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 				case req.sendChan <- msg:
 				}
 			} else {
+				if msg.IsCancellation {
+					// ignore cancellations if a broadcast request
+					// has not been created yet
+					continue
+				}
 				if msg.IsBroadcastClient {
 					// msg.Ctx will correspond to the streamCtx between the client and this server,
 					// meaning the ctx will cancel when the client cancels or disconnects.

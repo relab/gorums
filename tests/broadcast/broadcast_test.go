@@ -247,6 +247,45 @@ func TestBroadcastCancelOneSrvFails(t *testing.T) {
 	}
 }
 
+func TestBroadcastCancelOneClientFails(t *testing.T) {
+	numSrvs := 3
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	// only want response from the online servers
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+
+	val := int64(100)
+	go config.LongRunningTask(context.Background(), &Request{Value: val})
+
+	// make sure the request is sent and stop the client
+	time.Sleep(100 * time.Millisecond)
+	clientCleanup()
+
+	// only want response from the online servers
+	config2, clientCleanup2, err2 := newClient(srvAddrs, "127.0.0.1:8081")
+	defer clientCleanup2()
+	if err2 != nil {
+		t.Error(err2)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	resp, err := config2.GetVal(ctx, &Request{Value: val})
+	cancel()
+	if err != nil {
+		t.Error(err)
+	}
+	if resp.GetResult() != 1 {
+		t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
+	}
+}
+
 func TestBroadcastCallRace(t *testing.T) {
 	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
@@ -367,7 +406,9 @@ func TestBroadcastCallForward(t *testing.T) {
 	defer clientCleanup()
 
 	for i := 0; i < 10; i++ {
-		resp, err := config.BroadcastCallForward(context.Background(), &Request{Value: int64(i)})
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		resp, err := config.BroadcastCallForward(ctx, &Request{Value: int64(i)})
 		if err != nil {
 			t.Error(err)
 		}
@@ -384,7 +425,7 @@ func TestBroadcastCallForwardMultiple(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs[1:], "127.0.0.1:8080")
 	if err != nil {
 		t.Error(err)
 	}

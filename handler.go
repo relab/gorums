@@ -38,14 +38,30 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			if srv.broadcastSrv.logger != nil {
 				srv.broadcastSrv.logger.Debug("broadcast request not valid", "metadata", in.Metadata, "err", err)
 			}
-			//if srv.broadcastSrv.metrics != nil {
-			//srv.broadcastSrv.metrics.AddDropped(true)
-			//}
 			return
 		}
 
+		// interface conversion can fail if proto message of the wrong type is given.
+		// this happens when Cancellations arrive because the proto message is nil but
+		// we still want to process the message.
+		req, ok := in.Message.(T)
+		if !ok && in.Metadata.Method != Cancellation {
+			return
+		}
+		if in.Metadata.BroadcastMsg.IsBroadcastClient {
+			// keep track of the method called by the user
+			in.Metadata.BroadcastMsg.OriginMethod = in.Metadata.Method
+		}
+		broadcastMetadata := newBroadcastMetadata(in.Metadata)
+		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
+		// due to ordering we wrap the actual implementation function to be able to
+		// run it at a later time.
+		run := func() {
+			impl(ctx, req, broadcaster)
+		}
+
 		msg := broadcast.Content{}
-		createRequest(&msg, ctx, in, finished)
+		createRequest(&msg, ctx, in, finished, run)
 
 		var err error
 		// we are not interested in the server context as this is tied to the previous hop.
@@ -57,28 +73,17 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 			return
 		}
 
-		broadcastMetadata := newBroadcastMetadata(in.Metadata)
-		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
-		// interface conversion can fail if proto message of the wrong type is given.
-		// this happens when Cancellations arrive because the proto message is nil.
-		req, ok := in.Message.(T)
-		if !ok {
-			return
-		}
-		impl(ctx, req, broadcaster)
+		run()
 	}
 }
 
-func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message) {
-	if in.Metadata.BroadcastMsg.IsBroadcastClient {
-		// keep track of the method called by the user
-		in.Metadata.BroadcastMsg.OriginMethod = in.Metadata.Method
-	}
+func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func()) {
 	msg.BroadcastID = in.Metadata.BroadcastMsg.BroadcastID
 	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
 	msg.OriginAddr = in.Metadata.BroadcastMsg.OriginAddr
 	msg.OriginMethod = in.Metadata.BroadcastMsg.OriginMethod
 	msg.Ctx = ctx.Context
+	msg.Run = run
 	if msg.OriginAddr == "" && msg.IsBroadcastClient {
 		msg.SendFn = createSendFn(in.Metadata.MessageID, in.Metadata.Method, finished, ctx)
 	}
