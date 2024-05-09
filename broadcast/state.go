@@ -138,11 +138,12 @@ type Content struct {
 	IsCancellation    bool
 	OriginAddr        string
 	OriginMethod      string
+	CurrentMethod     string
 	ReceiveChan       chan shardResponse
 	SendFn            func(resp protoreflect.ProtoMessage, err error)
 	Ctx               context.Context
 	CancelCtx         context.CancelFunc
-	Run               func()
+	Run               func(context.Context)
 }
 
 func (c Content) send(resp protoreflect.ProtoMessage, err error) error {

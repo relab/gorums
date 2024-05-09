@@ -56,32 +56,36 @@ func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, 
 		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		// due to ordering we wrap the actual implementation function to be able to
 		// run it at a later time.
-		run := func() {
+		run := func(reqCtx context.Context) {
+			// we need to pass in the reqCtx because we can only retrieve
+			// it after we have gotten a response from the shard. The reqCtx
+			// is used for cancellations.
+			ctx.Context = reqCtx
 			impl(ctx, req, broadcaster)
 		}
 
 		msg := broadcast.Content{}
 		createRequest(&msg, ctx, in, finished, run)
 
-		var err error
 		// we are not interested in the server context as this is tied to the previous hop.
 		// instead we want to check whether the client has cancelled the broadcast request
 		// and if so, we return a cancelled context. This enables the implementer to listen
 		// for cancels and do proper actions.
-		err, ctx.Context = srv.broadcastSrv.manager.Process(msg)
+		err, reqCtx := srv.broadcastSrv.manager.Process(msg)
 		if err != nil {
 			return
 		}
 
-		run()
+		run(reqCtx)
 	}
 }
 
-func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func()) {
+func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func(context.Context)) {
 	msg.BroadcastID = in.Metadata.BroadcastMsg.BroadcastID
 	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
 	msg.OriginAddr = in.Metadata.BroadcastMsg.OriginAddr
 	msg.OriginMethod = in.Metadata.BroadcastMsg.OriginMethod
+	msg.CurrentMethod = in.Metadata.Method
 	msg.Ctx = ctx.Context
 	msg.Run = run
 	if msg.OriginAddr == "" && msg.IsBroadcastClient {

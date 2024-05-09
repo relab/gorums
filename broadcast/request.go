@@ -17,12 +17,17 @@ type BroadcastRequest struct {
 	cancellationCtx       context.Context
 	cancellationCtxCancel context.CancelFunc // should only be called by the shard
 	sentCancellation      bool
+
+	executionOrder []string
+	orderIndex     int
+	outOfOrderMsgs map[string][]Content
 }
 
 // func (req *BroadcastRequest) handle(router *BroadcastRouter, broadcastID uint64, msg Content, metrics *Metric) {
 func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Content) {
 	sent := false
 	methods := make([]string, 0, 3)
+	req.initOrder()
 	var respErr error
 	var respMsg protoreflect.ProtoMessage
 	// connect to client immediately to potentially save some time
@@ -51,6 +56,7 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 					continue
 				}*/
 				methods = append(methods, bMsg.Method)
+				req.updateOrder(bMsg.Method)
 			} else {
 				// BroadcastCall if origin addr is non-empty.
 				if msg.isBroadcastCall() {
@@ -104,17 +110,20 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 			// direct connection to the client, e.g. QuorumCall.
 			if sent && !msg.isBroadcastCall() {
 				err := msg.send(respMsg, respErr)
-				if err != nil {
-					new.ReceiveChan <- shardResponse{
-						err: err,
-					}
-					return
+				if err == nil {
+					err = AlreadyProcessedErr{}
 				}
-				//new.ReceiveChan <- errors.New("req is done and should be returned immediately to client")
 				new.ReceiveChan <- shardResponse{
-					err: AlreadyProcessedErr{},
+					err: err,
 				}
 				return
+			}
+			if !req.isInOrder(new.CurrentMethod) {
+				// save the message and execute it later
+				req.addToOutOfOrder(new)
+				new.ReceiveChan <- shardResponse{
+					err: OutOfOrderErr{},
+				}
 			}
 			new.ReceiveChan <- shardResponse{
 				err:    nil,
@@ -139,4 +148,44 @@ func (c *Content) isBroadcastCall() bool {
 
 func (c *Content) hasReceivedClientRequest() bool {
 	return c.IsBroadcastClient && c.SendFn != nil
+}
+
+func (r *BroadcastRequest) initOrder() {
+	// the implementer has not specified an execution order
+	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
+		return
+	}
+	r.outOfOrderMsgs = make(map[string][]Content)
+}
+
+func (r *BroadcastRequest) isInOrder(method string) bool {
+	// the implementer has not specified an execution order
+	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
+		return true
+	}
+	// the first method should always be allowed to be executed
+	if r.executionOrder[0] == method {
+		return true
+	}
+
+	return false
+}
+
+func (r *BroadcastRequest) addToOutOfOrder(msg Content) {
+
+}
+
+func (r *BroadcastRequest) updateOrder(method string) {
+	// the implementer has not specified an execution order
+	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
+		return
+	}
+	for i, m := range r.executionOrder {
+		if m == method {
+			if i > r.orderIndex {
+				r.orderIndex = i
+			}
+			return
+		}
+	}
 }

@@ -17,3 +17,9 @@ type AlreadyProcessedErr struct{}
 func (err AlreadyProcessedErr) Error() string {
 	return "already processed request"
 }
+
+type OutOfOrderErr struct{}
+
+func (err OutOfOrderErr) Error() string {
+	return "the message is out of order"
+}
