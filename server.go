@@ -171,7 +171,7 @@ func NewServer(opts ...ServerOption) *Server {
 	s := &Server{
 		srv:          newOrderingServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
-		broadcastSrv: newBroadcastServer(serverOpts.logger, serverOpts.useMetrics),
+		broadcastSrv: newBroadcastServer(serverOpts.logger),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s

@@ -40,7 +40,6 @@ type BroadcastState struct {
 	reqTTL              time.Duration
 	sendBuffer          int
 	shardBuffer         int
-	metrics             *Metric
 	snowflake           *Snowflake
 	clients             map[string]*Client
 	router              Router
@@ -48,7 +47,7 @@ type BroadcastState struct {
 	shards []*shard
 }
 
-func NewState(logger *slog.Logger, metrics *Metric, router Router) *BroadcastState {
+func NewState(logger *slog.Logger, router Router) *BroadcastState {
 	shardBuffer := 100
 	sendBuffer := 5
 	TTL := 5 * time.Second
@@ -62,7 +61,6 @@ func NewState(logger *slog.Logger, metrics *Metric, router Router) *BroadcastSta
 		reqTTL:              TTL,
 		sendBuffer:          sendBuffer,
 		shardBuffer:         shardBuffer,
-		metrics:             metrics,
 		router:              router,
 		clients:             make(map[string]*Client),
 	}

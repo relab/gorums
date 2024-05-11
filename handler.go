@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-func DefaultHandler[T RequestTypes, V ResponseTypes](impl defaultImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func DefaultHandler[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage](impl defaultImplementationFunc[T, V]) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		req := in.Message.(T)
 		defer ctx.Release()
@@ -26,7 +26,7 @@ func ClientHandler[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage](imp
 	}
 }
 
-func BroadcastHandler[T RequestTypes, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implementationFunc[T, V], srv *Server) func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 	return func(ctx ServerCtx, in *Message, finished chan<- *Message) {
 		// release immediately to process next message
 		ctx.Release()
@@ -140,7 +140,7 @@ func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp protore
 	srv.manager.SendToClient(broadcastID, resp, err)
 }
 
-func (srv *broadcastServer) forwardHandler(req RequestTypes, method string, broadcastID uint64, forwardAddr, originAddr string) {
+func (srv *broadcastServer) forwardHandler(req protoreflect.ProtoMessage, method string, broadcastID uint64, forwardAddr, originAddr string) {
 	cd := BroadcastCallData{
 		Message:           req,
 		Method:            method,
@@ -176,7 +176,7 @@ func (srv *broadcastServer) canceler(broadcastID uint64, srvAddrs []string) {
 	srv.viewMutex.RUnlock()
 }
 
-func (srv *broadcastServer) serverBroadcastHandler(method string, req RequestTypes, opts ...broadcast.BroadcastOptions) {
+func (srv *broadcastServer) serverBroadcastHandler(method string, req protoreflect.ProtoMessage, opts ...broadcast.BroadcastOptions) {
 	cd := BroadcastCallData{
 		Message:           req,
 		Method:            method,

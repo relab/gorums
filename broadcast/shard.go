@@ -30,7 +30,7 @@ type shard struct {
 	metrics       shardMetrics
 	reqs          map[uint64]*BroadcastRequest
 	router        Router
-	//sync.Once
+
 	preserveOrdering bool
 }
 

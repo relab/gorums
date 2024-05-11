@@ -25,22 +25,20 @@ type Manager interface {
 }
 
 type manager struct {
-	state   *BroadcastState
-	router  *BroadcastRouter
-	metrics *Metric
-	logger  *slog.Logger
+	state  *BroadcastState
+	router *BroadcastRouter
+	logger *slog.Logger
 }
 
-func NewBroadcastManager(logger *slog.Logger, m *Metric, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string)) Manager {
-	router := NewRouter(logger, m, createClient, canceler)
-	state := NewState(logger, m, router)
+func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string)) Manager {
+	router := NewRouter(logger, createClient, canceler)
+	state := NewState(logger, router)
 	router.registerState(state)
 	state.RunShards()
 	return &manager{
-		state:   state,
-		router:  router,
-		logger:  logger,
-		metrics: m,
+		state:  state,
+		router: router,
+		logger: logger,
 	}
 }
 
