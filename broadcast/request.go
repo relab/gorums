@@ -50,7 +50,7 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 				if alreadyBroadcasted(methods, bMsg.Method) {
 					continue
 				}
-				go router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
+				router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
 				/*err := router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
 				if err != nil {
 					continue

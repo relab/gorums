@@ -3,6 +3,7 @@ package broadcast
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -34,6 +35,7 @@ const (
 )
 
 type BroadcastState struct {
+	mut                 sync.Mutex
 	parentCtx           context.Context
 	parentCtxCancelFunc context.CancelFunc
 	logger              *slog.Logger
@@ -68,6 +70,8 @@ func NewState(logger *slog.Logger, router Router) *BroadcastState {
 }
 
 func (s *BroadcastState) Close() error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	if s.logger != nil {
 		s.logger.Debug("broadcast: closing state")
 	}
@@ -89,6 +93,8 @@ func (s *BroadcastState) RunShards() {
 }
 
 func (s *BroadcastState) reset() {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	s.parentCtxCancelFunc()
 	ctx, cancel := context.WithCancel(context.Background())
 	s.parentCtx = ctx
@@ -99,6 +105,19 @@ func (s *BroadcastState) reset() {
 		client.Close()
 	}
 	s.clients = make(map[string]*Client)
+}
+
+func (s *BroadcastState) getClient(addr string) (*Client, bool) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	client, ok := s.clients[addr]
+	return client, ok
+}
+
+func (s *BroadcastState) addClient(addr string, client *Client) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	s.clients[addr] = client
 }
 
 func (state *BroadcastState) getStats() shardMetrics {

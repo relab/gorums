@@ -24,7 +24,7 @@ type Router interface {
 }
 
 type BroadcastRouter struct {
-	mut               sync.Mutex
+	mut               sync.RWMutex
 	id                uint32
 	addr              string
 	prevMethod        uint16
@@ -81,7 +81,7 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string
 	if handler, ok := r.serverHandlers[msg.method]; ok {
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see (srv *broadcastServer) registerBroadcastFunc(method string).
-		go handler(msg.ctx, msg.request, broadcastID, addr, method, msg.options, r.id, r.addr)
+		handler(msg.ctx, msg.request, broadcastID, addr, method, msg.options, r.id, r.addr)
 		return nil
 	}
 	return errors.New("not found")
@@ -102,16 +102,30 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 }
 
 func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
+	// fast path:
+	// read lock because it is likely that we will send many
+	// messages to the same client.
+	r.mut.RLock()
+	if client, ok := r.state.getClient(addr); ok {
+		r.mut.RUnlock()
+		return client, nil
+	}
+	r.mut.RUnlock()
+	// slow path:
+	// we need a write lock when adding a new client. This only process
+	// one at a time and is thus necessary to check if the client has
+	// already been added again. Otherwise, we can end up creating multiple
+	// clients.
 	r.mut.Lock()
 	defer r.mut.Unlock()
-	if client, ok := r.state.clients[addr]; ok {
+	if client, ok := r.state.getClient(addr); ok {
 		return client, nil
 	}
 	client, err := r.createClient(addr, r.dialOpts)
 	if err != nil {
 		return nil, err
 	}
-	r.state.clients[addr] = client
+	r.state.addClient(addr, client)
 	return client, nil
 }
 
@@ -122,7 +136,6 @@ type Msg struct {
 	Method       string
 	Reply        *reply
 	Cancellation *cancellation
-	//receiveChan chan error
 }
 
 type broadcastMsg struct {

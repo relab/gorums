@@ -144,7 +144,36 @@ func (c *channel) enqueue(req request, responseChan chan<- response, streaming b
 		c.responseMut.Unlock()
 	}
 	// either enqueue the request on the sendQ or respond
-	// with error if the node is closed
+	// with error if the node is closed.
+	select {
+	case <-c.parentCtx.Done():
+		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		return
+	case c.sendQ <- req:
+	}
+}
+
+func (c *channel) enqueueFast(req request, responseChan chan<- response, streaming bool) bool {
+	if responseChan != nil {
+		c.responseMut.Lock()
+		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, streaming}
+		c.responseMut.Unlock()
+	}
+	// only enqueue the request on the sendQ if it is available and
+	// the node is not closed.
+	select {
+	case <-c.parentCtx.Done():
+		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+	case c.sendQ <- req:
+	default:
+		return false
+	}
+	return true
+}
+
+func (c *channel) enqueueSlow(req request) {
+	// either enqueue the request on the sendQ or respond
+	// with error if the node is closed.
 	select {
 	case <-c.parentCtx.Done():
 		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})

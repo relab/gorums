@@ -46,8 +46,12 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 	}}
 	o := getCallOptions(E_Broadcast, nil)
 
-	replyChan := make(chan response, len(c))
+	var replyChan chan response
+	if !o.noSendWaiting {
+		replyChan = make(chan response, len(c))
+	}
 	sentMsgs := 0
+	notEnqueued := make([]*RawNode, 0, len(c))
 	for _, n := range c {
 		// skip nodes not specified in subset
 		if !d.inSubset(n.addr) {
@@ -55,7 +59,28 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		}
 		sentMsgs++
 		msg := d.Message
-		go n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
+		// do NOT enqueue in a goroutine. This inhibits ordering constraints.
+		// the message will only be enqueued if the channel has enough capacity
+		// or if the receiver is ready. This prevents a slow node from limiting the
+		// enqueueing of messages to other nodes while still ensuring correct
+		// ordering of messages.
+		enqueued := n.channel.enqueueFast(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
+		if !enqueued {
+			notEnqueued = append(notEnqueued, n)
+		}
+	}
+
+	// it is important to retry the enqueueing for slow nodes. the method
+	// will block until the message is enqueued.
+	// NOTE: enqueueFast() creates a responseRouter and thus it is not
+	// necessary to provide the replyChan to enqueueSlow().
+	for _, n := range notEnqueued {
+		msg := d.Message
+		n.channel.enqueueSlow(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o})
+	}
+
+	if o.noSendWaiting {
+		return
 	}
 
 	// wait until all requests have been sent
