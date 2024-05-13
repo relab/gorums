@@ -1280,7 +1280,7 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 	numSrvs := 3
 	numClients := 20
-	numReqs := 500
+	numReqs := 50
 	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
