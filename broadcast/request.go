@@ -211,6 +211,7 @@ func (r *BroadcastRequest) dispatchOutOfOrderMsgs(ctx context.Context) {
 	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
 		return
 	}
+	handledMethods := make([]string, 0, len(r.outOfOrderMsgs))
 	for method, msgs := range r.outOfOrderMsgs {
 		order, ok := r.executionOrder[method]
 		if !ok {
@@ -222,6 +223,11 @@ func (r *BroadcastRequest) dispatchOutOfOrderMsgs(ctx context.Context) {
 			for _, msg := range msgs {
 				msg.Run(ctx)
 			}
+			handledMethods = append(handledMethods, method)
 		}
+	}
+	// cleanup after dispatching the cached messages
+	for _, m := range handledMethods {
+		delete(r.outOfOrderMsgs, m)
 	}
 }

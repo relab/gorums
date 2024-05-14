@@ -338,6 +338,42 @@ func (b *Broadcast) BroadcastToResponse(req *Request, opts ...gorums.BroadcastOp
 	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, b.metadata.BroadcastID, options)
 }
 
+func (b *Broadcast) PrePrepare(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == 0 {
+		panic("broadcastID cannot be empty. Use srv.BroadcastPrePrepare instead")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.PrePrepare", req, b.metadata.BroadcastID, options)
+}
+
+func (b *Broadcast) Prepare(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == 0 {
+		panic("broadcastID cannot be empty. Use srv.BroadcastPrepare instead")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Prepare", req, b.metadata.BroadcastID, options)
+}
+
+func (b *Broadcast) Commit(req *Request, opts ...gorums.BroadcastOption) {
+	if b.metadata.BroadcastID == 0 {
+		panic("broadcastID cannot be empty. Use srv.BroadcastCommit instead")
+	}
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Commit", req, b.metadata.BroadcastID, options)
+}
+
 func (srv *clientServerImpl) clientBroadcastCall(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
 	err := srv.AddResponse(ctx, resp, broadcastID)
 	return resp, err
@@ -560,6 +596,43 @@ func (c *Configuration) GetVal(ctx context.Context, in *Request) (resp *Response
 	return resp, nil
 }
 
+func (srv *clientServerImpl) clientOrder(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
+	err := srv.AddResponse(ctx, resp, broadcastID)
+	return resp, err
+}
+
+func (c *Configuration) Order(ctx context.Context, in *Request) (resp *Response, err error) {
+	if c.srv == nil {
+		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
+	}
+	if c.qspec == nil {
+		return nil, fmt.Errorf("a qspec is not defined")
+	}
+	broadcastID := c.snowflake.NewBroadcastID()
+	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.OrderQF), "broadcast.BroadcastService.Order")
+	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	var response protoreflect.ProtoMessage
+	var ok bool
+	select {
+	case response, ok = <-doneChan:
+	case <-ctx.Done():
+		bd := gorums.BroadcastCallData{
+			Method:      gorums.Cancellation,
+			BroadcastID: broadcastID,
+		}
+		c.RawConfiguration.BroadcastCall(context.Background(), bd)
+		return nil, fmt.Errorf("context cancelled")
+	}
+	if !ok {
+		return nil, fmt.Errorf("done channel was closed before returning a value")
+	}
+	resp, ok = response.(*Response)
+	if !ok {
+		return nil, fmt.Errorf("wrong proto format")
+	}
+	return resp, nil
+}
+
 func registerClientServerHandlers(srv *clientServerImpl) {
 
 	srv.RegisterHandler("broadcast.BroadcastService.BroadcastCall", gorums.ClientHandler(srv.clientBroadcastCall))
@@ -568,6 +641,7 @@ func registerClientServerHandlers(srv *clientServerImpl) {
 	srv.RegisterHandler("broadcast.BroadcastService.Search", gorums.ClientHandler(srv.clientSearch))
 	srv.RegisterHandler("broadcast.BroadcastService.LongRunningTask", gorums.ClientHandler(srv.clientLongRunningTask))
 	srv.RegisterHandler("broadcast.BroadcastService.GetVal", gorums.ClientHandler(srv.clientGetVal))
+	srv.RegisterHandler("broadcast.BroadcastService.Order", gorums.ClientHandler(srv.clientOrder))
 }
 
 // Multicast is a quorum call invoked on all nodes in configuration c,
@@ -658,6 +732,13 @@ type QuorumSpec interface {
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
 	GetValQF(in *Request, replies []*Response) (*Response, bool)
+
+	// OrderQF is the quorum function for the Order
+	// broadcastcall call method. The in parameter is the request object
+	// supplied to the Order method at call time, and may or may not
+	// be used by the quorum function. If the in parameter is not needed
+	// you should implement your quorum function with '_ *Request'.
+	OrderQF(in *Request, replies []*Response) (*Response, bool)
 }
 
 // QuorumCall is a quorum call invoked on all nodes in configuration c,
@@ -745,6 +826,10 @@ type BroadcastService interface {
 	Search(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	LongRunningTask(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 	GetVal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	Order(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	PrePrepare(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	Prepare(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
+	Commit(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast)
 }
 
 func (srv *Server) QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error) {
@@ -789,6 +874,18 @@ func (srv *Server) LongRunningTask(ctx gorums.ServerCtx, request *Request, broad
 func (srv *Server) GetVal(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
 	panic(status.Errorf(codes.Unimplemented, "method GetVal not implemented"))
 }
+func (srv *Server) Order(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method Order not implemented"))
+}
+func (srv *Server) PrePrepare(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method PrePrepare not implemented"))
+}
+func (srv *Server) Prepare(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method Prepare not implemented"))
+}
+func (srv *Server) Commit(ctx gorums.ServerCtx, request *Request, broadcast *Broadcast) {
+	panic(status.Errorf(codes.Unimplemented, "method Commit not implemented"))
+}
 
 func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 	srv.RegisterHandler("broadcast.BroadcastService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
@@ -829,6 +926,11 @@ func RegisterBroadcastServiceServer(srv *Server, impl BroadcastService) {
 	srv.RegisterClientHandler("broadcast.BroadcastService.LongRunningTask")
 	srv.RegisterHandler("broadcast.BroadcastService.GetVal", gorums.BroadcastHandler(impl.GetVal, srv.Server))
 	srv.RegisterClientHandler("broadcast.BroadcastService.GetVal")
+	srv.RegisterHandler("broadcast.BroadcastService.Order", gorums.BroadcastHandler(impl.Order, srv.Server))
+	srv.RegisterClientHandler("broadcast.BroadcastService.Order")
+	srv.RegisterHandler("broadcast.BroadcastService.PrePrepare", gorums.BroadcastHandler(impl.PrePrepare, srv.Server))
+	srv.RegisterHandler("broadcast.BroadcastService.Prepare", gorums.BroadcastHandler(impl.Prepare, srv.Server))
+	srv.RegisterHandler("broadcast.BroadcastService.Commit", gorums.BroadcastHandler(impl.Commit, srv.Server))
 	srv.RegisterHandler(gorums.Cancellation, gorums.BroadcastHandler(gorums.CancelFunc, srv.Server))
 }
 
@@ -880,6 +982,42 @@ func (srv *Server) BroadcastBroadcastToResponse(req *Request, opts ...gorums.Bro
 	}
 }
 
+func (srv *Server) BroadcastPrePrepare(req *Request, opts ...gorums.BroadcastOption) {
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	if options.RelatedToReq > 0 {
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.PrePrepare", req, options.RelatedToReq, options)
+	} else {
+		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.PrePrepare", req, options)
+	}
+}
+
+func (srv *Server) BroadcastPrepare(req *Request, opts ...gorums.BroadcastOption) {
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	if options.RelatedToReq > 0 {
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Prepare", req, options.RelatedToReq, options)
+	} else {
+		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.Prepare", req, options)
+	}
+}
+
+func (srv *Server) BroadcastCommit(req *Request, opts ...gorums.BroadcastOption) {
+	options := gorums.NewBroadcastOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+	if options.RelatedToReq > 0 {
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Commit", req, options.RelatedToReq, options)
+	} else {
+		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.Commit", req, options)
+	}
+}
+
 const (
 	BroadcastServiceQuorumCallWithBroadcast string = "broadcast.BroadcastService.QuorumCallWithBroadcast"
 	BroadcastServiceBroadcastCall           string = "broadcast.BroadcastService.BroadcastCall"
@@ -891,6 +1029,10 @@ const (
 	BroadcastServiceSearch                  string = "broadcast.BroadcastService.Search"
 	BroadcastServiceLongRunningTask         string = "broadcast.BroadcastService.LongRunningTask"
 	BroadcastServiceGetVal                  string = "broadcast.BroadcastService.GetVal"
+	BroadcastServiceOrder                   string = "broadcast.BroadcastService.Order"
+	BroadcastServicePrePrepare              string = "broadcast.BroadcastService.PrePrepare"
+	BroadcastServicePrepare                 string = "broadcast.BroadcastService.Prepare"
+	BroadcastServiceCommit                  string = "broadcast.BroadcastService.Commit"
 )
 
 type internalResponse struct {

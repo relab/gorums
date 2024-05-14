@@ -49,6 +49,18 @@ service BroadcastService {
   rpc GetVal(Request) returns (Response) { 
     option (gorums.broadcastcall) = true; 
   }
+  rpc Order(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc PrePrepare(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+  rpc Prepare(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+  rpc Commit(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
 }
 
 message Request { 

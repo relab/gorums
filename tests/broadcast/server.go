@@ -2,6 +2,7 @@ package broadcast
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	net "net"
 	"sync"
@@ -31,6 +32,8 @@ type testServer struct {
 	respChan       map[int64]response
 	processingTime time.Duration
 	val            int64
+	err            error
+	order          []string
 }
 
 func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
@@ -39,6 +42,7 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
 		leader:   leader,
+		order:    make([]string, 0),
 	}
 	RegisterBroadcastServiceServer(srv.Server, &srv)
 	srv.peers = srvAddresses
@@ -246,4 +250,70 @@ func (srv *testServer) GetNumMsgs() int {
 	srv.mut.Lock()
 	defer srv.mut.Unlock()
 	return srv.numMsg["BC"] + srv.numMsg["B"] + srv.numMsg["BI"]
+}
+
+func (srv *testServer) Order(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	broadcast.PrePrepare(&Request{})
+}
+
+func (srv *testServer) PrePrepare(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	srv.mut.Lock()
+	added := false
+	for _, m := range srv.order {
+		if m == "PrePrepare" {
+			added = true
+			break
+		}
+	}
+	if !added {
+		srv.order = append(srv.order, "PrePrepare")
+	}
+	srv.mut.Unlock()
+	broadcast.Prepare(&Request{})
+}
+
+func (srv *testServer) Prepare(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	srv.mut.Lock()
+	if len(srv.order) <= 0 {
+		broadcast.SendToClient(&Response{
+			From:   srv.addr,
+			Result: 1,
+		}, errors.New("did not receive PrePrepare before Prepare"))
+		return
+	}
+	added := false
+	for _, m := range srv.order {
+		if m == "Prepare" {
+			added = true
+			break
+		}
+	}
+	if !added {
+		srv.order = append(srv.order, "Prepare")
+	}
+	srv.mut.Unlock()
+	broadcast.Commit(&Request{})
+}
+
+func (srv *testServer) Commit(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	srv.mut.Lock()
+	if len(srv.order) <= 0 {
+		broadcast.SendToClient(&Response{
+			From:   srv.addr,
+			Result: 2,
+		}, errors.New("did not receive PrePrepare and Prepare before Commit"))
+		return
+	}
+	if len(srv.order) <= 1 {
+		broadcast.SendToClient(&Response{
+			From:   srv.addr,
+			Result: 3,
+		}, errors.New("did not receive Prepare before Commit"))
+		return
+	}
+	srv.mut.Unlock()
+	broadcast.SendToClient(&Response{
+		From:   srv.addr,
+		Result: 0,
+	}, nil)
 }

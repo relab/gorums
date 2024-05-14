@@ -52,7 +52,7 @@ func createSrvs(numSrvs int, down ...int) ([]*testServer, []string, func(), erro
 func TestSimpleBroadcastCall(t *testing.T) {
 	numSrvs := 3
 	numReqs := 10
-	srvs, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -76,11 +76,6 @@ func TestSimpleBroadcastCall(t *testing.T) {
 			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", val, resp.GetResult()))
 		}
 		cancel()
-	}
-	for _, srv := range srvs {
-		if srv.GetNumMsgs() != numReqs*numSrvs {
-			//t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", numReqs*numSrvs, srv.GetNumMsgs()))
-		}
 	}
 }
 
@@ -283,6 +278,36 @@ func TestBroadcastCancelOneClientFails(t *testing.T) {
 	}
 	if resp.GetResult() != 1 {
 		t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
+	}
+}
+
+func TestBroadcastCallOrdering(t *testing.T) {
+	numSrvs := 3
+	numReqs := 10
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	for i := 1; i <= numReqs; i++ {
+		//slog.Info("req", "no", i)
+		val := int64(i * 100)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		resp, err := config.Order(ctx, &Request{Value: val})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != 0 {
+			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", val, resp.GetResult()))
+		}
+		cancel()
 	}
 }
 

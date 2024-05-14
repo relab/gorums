@@ -116,6 +116,20 @@ func (qs *testQSpec) GetValQF(in *Request, replies []*Response) (*Response, bool
 	return nil, false
 }
 
+func (qs *testQSpec) OrderQF(in *Request, replies []*Response) (*Response, bool) {
+	if len(replies) >= qs.quorumSize {
+		for _, resp := range replies {
+			if resp.GetResult() != 0 {
+				return resp, true
+			}
+		}
+		return &Response{
+			Result: 0,
+		}, true
+	}
+	return nil, false
+}
+
 func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configuration, func(), error) {
 	quorumSize := len(srvAddrs)
 	if len(qsize) > 0 {
