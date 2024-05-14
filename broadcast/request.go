@@ -211,12 +211,16 @@ func (r *BroadcastRequest) dispatchOutOfOrderMsgs(ctx context.Context) {
 	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
 		return
 	}
+	// return early if there are no cached msgs
+	if len(r.outOfOrderMsgs) <= 0 {
+		return
+	}
 	handledMethods := make([]string, 0, len(r.outOfOrderMsgs))
 	for method, msgs := range r.outOfOrderMsgs {
 		order, ok := r.executionOrder[method]
 		if !ok {
 			// this should not be possible unless the execution order
-			// is changed during operation.
+			// is changed during operation, which is prohibited.
 			panic("how did you get here?")
 		}
 		if order <= r.orderIndex {

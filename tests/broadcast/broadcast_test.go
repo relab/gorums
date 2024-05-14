@@ -281,9 +281,39 @@ func TestBroadcastCancelOneClientFails(t *testing.T) {
 	}
 }
 
-func TestBroadcastCallOrdering(t *testing.T) {
+func TestBroadcastCallOrderingSendToOneSrv(t *testing.T) {
 	numSrvs := 3
-	numReqs := 10
+	numReqs := 3
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newClient(srvAddrs[1:2], "127.0.0.1:8080", len(srvAddrs))
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	for i := 1; i <= numReqs; i++ {
+		//slog.Info("req", "no", i)
+		val := int64(i * 100)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		resp, err := config.Order(ctx, &Request{Value: val})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != 0 {
+			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 0, resp.GetResult()))
+		}
+		cancel()
+	}
+}
+
+func TestBroadcastCallOrderingSendToAllSrvs(t *testing.T) {
+	numSrvs := 3
+	numReqs := 3
 	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
@@ -305,7 +335,7 @@ func TestBroadcastCallOrdering(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetResult() != 0 {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", val, resp.GetResult()))
+			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 0, resp.GetResult()))
 		}
 		cancel()
 	}

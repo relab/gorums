@@ -38,7 +38,7 @@ type testServer struct {
 
 func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 	srv := testServer{
-		Server:   NewServer(),
+		Server:   NewServer(gorums.WithOrder(BroadcastServicePrePrepare, BroadcastServicePrepare, BroadcastServiceCommit)),
 		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
 		leader:   leader,
@@ -257,6 +257,13 @@ func (srv *testServer) Order(ctx gorums.ServerCtx, req *Request, broadcast *Broa
 }
 
 func (srv *testServer) PrePrepare(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	// this will cause the leader to be late to call broadcast.Prepare().
+	// Hence, it will receive Prepare and Commit from the other servers
+	// before calling Prepare. The order of received msgs will thus be
+	// wrong and the msgs need to be stored temporarily.
+	if srv.addr == srv.leader {
+		time.Sleep(20 * time.Millisecond)
+	}
 	srv.mut.Lock()
 	added := false
 	for _, m := range srv.order {
@@ -279,6 +286,7 @@ func (srv *testServer) Prepare(ctx gorums.ServerCtx, req *Request, broadcast *Br
 			From:   srv.addr,
 			Result: 1,
 		}, errors.New("did not receive PrePrepare before Prepare"))
+		srv.mut.Unlock()
 		return
 	}
 	added := false
@@ -302,6 +310,7 @@ func (srv *testServer) Commit(ctx gorums.ServerCtx, req *Request, broadcast *Bro
 			From:   srv.addr,
 			Result: 2,
 		}, errors.New("did not receive PrePrepare and Prepare before Commit"))
+		srv.mut.Unlock()
 		return
 	}
 	if len(srv.order) <= 1 {
@@ -309,6 +318,7 @@ func (srv *testServer) Commit(ctx gorums.ServerCtx, req *Request, broadcast *Bro
 			From:   srv.addr,
 			Result: 3,
 		}, errors.New("did not receive Prepare before Commit"))
+		srv.mut.Unlock()
 		return
 	}
 	srv.mut.Unlock()
