@@ -34,12 +34,8 @@ type testServer struct {
 }
 
 func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
-	// enable profiling
-	//go func() {
-	//	http.ListenAndServe(fmt.Sprintf(":1000%v", i), nil)
-	//}()
 	srv := testServer{
-		Server:   NewServer(gorums.WithOrder(BroadcastCall)),
+		Server:   NewServer(),
 		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
 		leader:   leader,
@@ -51,7 +47,6 @@ func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
 		srv.processingTime = 100 * time.Millisecond
 	}
 	srv.mgr = NewManager(
-		gorums.WithSendBufferSize(uint(2*len(srvAddresses))),
 		gorums.WithPublicKey("server"),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),

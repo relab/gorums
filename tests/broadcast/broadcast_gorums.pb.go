@@ -881,16 +881,16 @@ func (srv *Server) BroadcastBroadcastToResponse(req *Request, opts ...gorums.Bro
 }
 
 const (
-	QuorumCallWithBroadcast string = "broadcast.BroadcastService.QuorumCallWithBroadcast"
-	BroadcastCall           string = "broadcast.BroadcastService.BroadcastCall"
-	//Broadcast           string = "broadcast.BroadcastService.Broadcast"
-	BroadcastIntermediate   string = "broadcast.BroadcastService.BroadcastIntermediate"
-	BroadcastCallForward    string = "broadcast.BroadcastService.BroadcastCallForward"
-	BroadcastCallTo         string = "broadcast.BroadcastService.BroadcastCallTo"
-	BroadcastToResponse     string = "broadcast.BroadcastService.BroadcastToResponse"
-	Search                  string = "broadcast.BroadcastService.Search"
-	LongRunningTask         string = "broadcast.BroadcastService.LongRunningTask"
-	GetVal                  string = "broadcast.BroadcastService.GetVal"
+	BroadcastServiceQuorumCallWithBroadcast string = "broadcast.BroadcastService.QuorumCallWithBroadcast"
+	BroadcastServiceBroadcastCall           string = "broadcast.BroadcastService.BroadcastCall"
+	BroadcastServiceBroadcastIntermediate   string = "broadcast.BroadcastService.BroadcastIntermediate"
+	BroadcastServiceBroadcast               string = "broadcast.BroadcastService.Broadcast"
+	BroadcastServiceBroadcastCallForward    string = "broadcast.BroadcastService.BroadcastCallForward"
+	BroadcastServiceBroadcastCallTo         string = "broadcast.BroadcastService.BroadcastCallTo"
+	BroadcastServiceBroadcastToResponse     string = "broadcast.BroadcastService.BroadcastToResponse"
+	BroadcastServiceSearch                  string = "broadcast.BroadcastService.Search"
+	BroadcastServiceLongRunningTask         string = "broadcast.BroadcastService.LongRunningTask"
+	BroadcastServiceGetVal                  string = "broadcast.BroadcastService.GetVal"
 )
 
 type internalResponse struct {

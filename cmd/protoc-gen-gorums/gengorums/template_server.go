@@ -128,10 +128,10 @@ const (
 {{$service := .GoName}}
 {{- range .Methods}}
 {{- if isBroadcast .}}
-	{{.GoName}}Method string = "{{.Desc.FullName}}"
+	{{$service}}{{.GoName}} string = "{{.Desc.FullName}}"
 {{- else }}
 	{{- if isBroadcastCall .}}
-	{{.GoName}}Method string = "{{.Desc.FullName}}"
+	{{$service}}{{.GoName}} string = "{{.Desc.FullName}}"
 	{{- end}}
 {{- end}}
 {{- end}}
