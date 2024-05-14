@@ -45,16 +45,17 @@ type BroadcastState struct {
 	snowflake           *Snowflake
 	clients             map[string]*Client
 	router              Router
+	order               map[string]int
 
 	shards []*shard
 }
 
-func NewState(logger *slog.Logger, router Router) *BroadcastState {
+func NewState(logger *slog.Logger, router Router, order map[string]int) *BroadcastState {
 	shardBuffer := 100
 	sendBuffer := 5
 	TTL := 5 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
-	shards := createShards(ctx, shardBuffer, router)
+	shards := createShards(ctx, shardBuffer, router, order)
 	state := &BroadcastState{
 		parentCtx:           ctx,
 		parentCtxCancelFunc: cancel,
@@ -64,6 +65,7 @@ func NewState(logger *slog.Logger, router Router) *BroadcastState {
 		sendBuffer:          sendBuffer,
 		shardBuffer:         shardBuffer,
 		router:              router,
+		order:               order,
 		clients:             make(map[string]*Client),
 	}
 	return state
@@ -99,7 +101,7 @@ func (s *BroadcastState) reset() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.parentCtx = ctx
 	s.parentCtxCancelFunc = cancel
-	s.shards = createShards(ctx, s.shardBuffer, s.router)
+	s.shards = createShards(ctx, s.shardBuffer, s.router, s.order)
 	s.RunShards()
 	for _, client := range s.clients {
 		client.Close()

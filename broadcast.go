@@ -30,11 +30,11 @@ func (srv *Server) GetStats() broadcast.Metrics {
 	return srv.broadcastSrv.manager.GetStats()
 }
 
-func newBroadcastServer(logger *slog.Logger) *broadcastServer {
+func newBroadcastServer(logger *slog.Logger, order map[string]int) *broadcastServer {
 	srv := &broadcastServer{
 		logger: logger,
 	}
-	srv.manager = broadcast.NewBroadcastManager(logger, createClient, srv.canceler)
+	srv.manager = broadcast.NewBroadcastManager(logger, createClient, srv.canceler, order)
 	return srv
 }
 

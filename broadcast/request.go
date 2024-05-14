@@ -18,7 +18,7 @@ type BroadcastRequest struct {
 	cancellationCtxCancel context.CancelFunc // should only be called by the shard
 	sentCancellation      bool
 
-	executionOrder []string
+	executionOrder map[string]int
 	orderIndex     int
 	outOfOrderMsgs map[string][]Content
 }
@@ -57,6 +57,7 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 				}*/
 				methods = append(methods, bMsg.Method)
 				req.updateOrder(bMsg.Method)
+				req.dispatchOutOfOrderMsgs(req.cancellationCtx)
 			} else {
 				// BroadcastCall if origin addr is non-empty.
 				if msg.isBroadcastCall() {
@@ -163,16 +164,33 @@ func (r *BroadcastRequest) isInOrder(method string) bool {
 	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
 		return true
 	}
-	// the first method should always be allowed to be executed
-	if r.executionOrder[0] == method {
+	order, ok := r.executionOrder[method]
+	// accept all methods without a specified order
+	if !ok {
 		return true
 	}
-
-	return false
+	// the first method should always be allowed to be executed
+	if r.executionOrder[method] <= 0 {
+		return true
+	}
+	return order <= r.orderIndex
 }
 
 func (r *BroadcastRequest) addToOutOfOrder(msg Content) {
-
+	// the implementer has not specified an execution order
+	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
+		return
+	}
+	var (
+		msgs []Content
+		ok   bool
+	)
+	if msgs, ok = r.outOfOrderMsgs[msg.CurrentMethod]; ok {
+		msgs = append(msgs, msg)
+	} else {
+		msgs = []Content{msg}
+	}
+	r.outOfOrderMsgs[msg.CurrentMethod] = msgs
 }
 
 func (r *BroadcastRequest) updateOrder(method string) {
@@ -180,12 +198,30 @@ func (r *BroadcastRequest) updateOrder(method string) {
 	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
 		return
 	}
-	for i, m := range r.executionOrder {
-		if m == method {
-			if i > r.orderIndex {
-				r.orderIndex = i
+	order, ok := r.executionOrder[method]
+	// do nothing for methods without specified order
+	if !ok {
+		return
+	}
+	r.orderIndex = order
+}
+
+func (r *BroadcastRequest) dispatchOutOfOrderMsgs(ctx context.Context) {
+	// the implementer has not specified an execution order
+	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
+		return
+	}
+	for method, msgs := range r.outOfOrderMsgs {
+		order, ok := r.executionOrder[method]
+		if !ok {
+			// this should not be possible unless the execution order
+			// is changed during operation.
+			panic("how did you get here?")
+		}
+		if order <= r.orderIndex {
+			for _, msg := range msgs {
+				msg.Run(ctx)
 			}
-			return
 		}
 	}
 }

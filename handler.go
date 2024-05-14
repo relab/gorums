@@ -22,6 +22,7 @@ func ClientHandler[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage](imp
 	return func(ctx ServerCtx, in *Message, _ chan<- *Message) {
 		defer ctx.Release()
 		req := in.Message.(T)
+		//err := status.FromProto(in.Metadata.GetStatus()).Err()
 		impl(ctx, req, in.Metadata.BroadcastMsg.BroadcastID)
 	}
 }

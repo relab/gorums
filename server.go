@@ -110,7 +110,7 @@ type serverOptions struct {
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
 	logger          *slog.Logger
-	useMetrics      bool
+	executionOrder  map[string]int
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -141,9 +141,12 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
-func WithMetrics() ServerOption {
+func WithOrder(executionOrder ...string) ServerOption {
 	return func(o *serverOptions) {
-		o.useMetrics = true
+		o.executionOrder = make(map[string]int)
+		for i, method := range executionOrder {
+			o.executionOrder[method] = i
+		}
 	}
 }
 
@@ -171,7 +174,7 @@ func NewServer(opts ...ServerOption) *Server {
 	s := &Server{
 		srv:          newOrderingServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
-		broadcastSrv: newBroadcastServer(serverOpts.logger),
+		broadcastSrv: newBroadcastServer(serverOpts.logger, serverOpts.executionOrder),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s

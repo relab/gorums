@@ -22,8 +22,8 @@ import (
 type ReplySpecHandler func(req protoreflect.ProtoMessage, replies []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
 
 type ClientResponse struct {
-	broadcastID string
-	data        protoreflect.ProtoMessage
+	err error
+	msg protoreflect.ProtoMessage
 }
 
 type ClientRequest struct {
@@ -112,7 +112,9 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 			close(doneChan)
 			return
 		case resp := <-respChan:
+			// keep track of all responses thus far
 			resps = append(resps, resp)
+			// handler is the QSpec method provided by the implementer.
 			response, done := handler(req, resps)
 			if done {
 				select {
@@ -175,9 +177,6 @@ func (s *ClientServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 			return err
 		}
 		if handler, ok := s.handlers[req.Metadata.Method]; ok {
-			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
-			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
-			// finished, or when it is safe to start processing the next request.
 			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &mut}, req, nil)
 			mut.Lock()
 		}

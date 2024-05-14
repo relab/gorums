@@ -32,20 +32,23 @@ type shard struct {
 	router        Router
 
 	preserveOrdering bool
+	order            map[string]int
 }
 
-func createShards(ctx context.Context, shardBuffer int, router Router) []*shard {
+func createShards(ctx context.Context, shardBuffer int, router Router, order map[string]int) []*shard {
 	shards := make([]*shard, NumShards)
 	for i := range shards {
 		ctx, cancel := context.WithCancel(ctx)
 		shards[i] = &shard{
-			id:            i,
-			sendChan:      make(chan Content, shardBuffer),
-			broadcastChan: make(chan Msg, shardBuffer),
-			ctx:           ctx,
-			cancelFunc:    cancel,
-			reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
-			router:        router,
+			id:               i,
+			sendChan:         make(chan Content, shardBuffer),
+			broadcastChan:    make(chan Msg, shardBuffer),
+			ctx:              ctx,
+			cancelFunc:       cancel,
+			reqs:             make(map[uint64]*BroadcastRequest, shardBuffer),
+			router:           router,
+			preserveOrdering: order != nil,
+			order:            order,
 		}
 	}
 	return shards
@@ -143,6 +146,7 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 					started:               time.Now(),
 					cancellationCtx:       msg.Ctx,
 					cancellationCtxCancel: msg.CancelCtx,
+					executionOrder:        s.order,
 				}
 				s.reqs[msg.BroadcastID] = req
 				go req.handle(s.router, msg.BroadcastID, msg)

@@ -352,6 +352,10 @@ func (c *channel) reconnect(maxRetries float64) {
 			c.streamMut.Unlock()
 			return
 		}
+		// make sure to cancel the previous ctx to prevent context leakage
+		if c.cancelStream != nil {
+			c.cancelStream()
+		}
 		c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 		c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 		if err == nil {
