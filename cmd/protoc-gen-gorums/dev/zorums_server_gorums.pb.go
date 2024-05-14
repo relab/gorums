@@ -470,3 +470,12 @@ func (srv *Server) BroadcastBroadcastWithClientHandlerAndBroadcastOption(req *Re
 		srv.broadcast.orchestrator.ServerBroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, options)
 	}
 }
+
+const (
+	QuorumCallWithBroadcast                      string = "dev.ZorumsService.QuorumCallWithBroadcast"
+	MulticastWithBroadcast                       string = "dev.ZorumsService.MulticastWithBroadcast"
+	BroadcastInternal                            string = "dev.ZorumsService.BroadcastInternal"
+	BroadcastWithClientHandler1                  string = "dev.ZorumsService.BroadcastWithClientHandler1"
+	BroadcastWithClientHandler2                  string = "dev.ZorumsService.BroadcastWithClientHandler2"
+	BroadcastWithClientHandlerAndBroadcastOption string = "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption"
+)

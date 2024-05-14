@@ -120,4 +120,23 @@ func (srv *Server) Broadcast{{.GoName}}(req *{{in $genFile .}}, opts... gorums.B
 {{- end}}
 `
 
-var server = serverVariables + serverInterface + registerServerMethods + registerInterface + registerServerBroadcast
+var registerMethodConstants = `
+{{$genFile := .GenFile}}
+{{$gorumsMessage := use "gorums.Message" .GenFile}}
+const (
+{{range .Services -}}
+{{$service := .GoName}}
+{{- range .Methods}}
+{{- if isBroadcast .}}
+	{{.GoName}}Method string = "{{.Desc.FullName}}"
+{{- else }}
+	{{- if isBroadcastCall .}}
+	{{.GoName}}Method string = "{{.Desc.FullName}}"
+	{{- end}}
+{{- end}}
+{{- end}}
+{{- end}}
+)
+`
+
+var server = serverVariables + serverInterface + registerServerMethods + registerInterface + registerServerBroadcast + registerMethodConstants

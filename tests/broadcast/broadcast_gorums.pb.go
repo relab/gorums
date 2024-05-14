@@ -604,7 +604,7 @@ type QuorumSpec interface {
 	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
-	// broadcast call method. The in parameter is the request object
+	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
@@ -879,6 +879,19 @@ func (srv *Server) BroadcastBroadcastToResponse(req *Request, opts ...gorums.Bro
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, options)
 	}
 }
+
+const (
+	QuorumCallWithBroadcast string = "broadcast.BroadcastService.QuorumCallWithBroadcast"
+	BroadcastCall           string = "broadcast.BroadcastService.BroadcastCall"
+	//Broadcast           string = "broadcast.BroadcastService.Broadcast"
+	BroadcastIntermediate   string = "broadcast.BroadcastService.BroadcastIntermediate"
+	BroadcastCallForward    string = "broadcast.BroadcastService.BroadcastCallForward"
+	BroadcastCallTo         string = "broadcast.BroadcastService.BroadcastCallTo"
+	BroadcastToResponse     string = "broadcast.BroadcastService.BroadcastToResponse"
+	Search                  string = "broadcast.BroadcastService.Search"
+	LongRunningTask         string = "broadcast.BroadcastService.LongRunningTask"
+	GetVal                  string = "broadcast.BroadcastService.GetVal"
+)
 
 type internalResponse struct {
 	nid   uint32

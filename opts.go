@@ -25,7 +25,7 @@ type managerOptions struct {
 func newManagerOptions() managerOptions {
 	return managerOptions{
 		backoff:         backoff.DefaultConfig,
-		sendBuffer:      20,
+		sendBuffer:      50,
 		nodeDialTimeout: 50 * time.Millisecond,
 	}
 }
