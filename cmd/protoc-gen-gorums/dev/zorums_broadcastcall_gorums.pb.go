@@ -11,6 +11,7 @@ import (
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	time "time"
 )
 
 const (
@@ -32,11 +33,22 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
+	var (
+		timeout  time.Duration
+		ok       bool
+		response protoreflect.ProtoMessage
+	)
+	// use the same timeout as defined in the given context.
+	// this is used for cancellation.
+	deadline, ok := ctx.Deadline()
+	if ok {
+		timeout = deadline.Sub(time.Now())
+	} else {
+		timeout = 5 * time.Second
+	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF), "dev.ZorumsService.BroadcastWithClientHandler1")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	var response protoreflect.ProtoMessage
-	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -44,7 +56,9 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 			Method:      gorums.Cancellation,
 			BroadcastID: broadcastID,
 		}
-		c.RawConfiguration.BroadcastCall(context.Background(), bd)
+		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+		defer cancelCancel()
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -69,11 +83,22 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
+	var (
+		timeout  time.Duration
+		ok       bool
+		response protoreflect.ProtoMessage
+	)
+	// use the same timeout as defined in the given context.
+	// this is used for cancellation.
+	deadline, ok := ctx.Deadline()
+	if ok {
+		timeout = deadline.Sub(time.Now())
+	} else {
+		timeout = 5 * time.Second
+	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF), "dev.ZorumsService.BroadcastWithClientHandler2")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	var response protoreflect.ProtoMessage
-	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -81,7 +106,9 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 			Method:      gorums.Cancellation,
 			BroadcastID: broadcastID,
 		}
-		c.RawConfiguration.BroadcastCall(context.Background(), bd)
+		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+		defer cancelCancel()
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -106,11 +133,22 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
+	var (
+		timeout  time.Duration
+		ok       bool
+		response protoreflect.ProtoMessage
+	)
+	// use the same timeout as defined in the given context.
+	// this is used for cancellation.
+	deadline, ok := ctx.Deadline()
+	if ok {
+		timeout = deadline.Sub(time.Now())
+	} else {
+		timeout = 5 * time.Second
+	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF), "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	var response protoreflect.ProtoMessage
-	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -118,7 +156,9 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 			Method:      gorums.Cancellation,
 			BroadcastID: broadcastID,
 		}
-		c.RawConfiguration.BroadcastCall(context.Background(), bd)
+		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+		defer cancelCancel()
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {

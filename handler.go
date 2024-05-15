@@ -72,7 +72,7 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 		// instead we want to check whether the client has cancelled the broadcast request
 		// and if so, we return a cancelled context. This enables the implementer to listen
 		// for cancels and do proper actions.
-		err, reqCtx := srv.broadcastSrv.manager.Process(msg)
+		reqCtx, err := srv.broadcastSrv.manager.Process(msg)
 		if err != nil {
 			return
 		}

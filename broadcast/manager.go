@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type Manager interface {
-	Process(Content) (error, context.Context)
+	Process(Content) (context.Context, error)
 	Broadcast(uint64, protoreflect.ProtoMessage, string, ...BroadcastOptions)
 	SendToClient(uint64, protoreflect.ProtoMessage, error)
 	Cancel(uint64, []string)
@@ -42,7 +41,7 @@ func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dia
 	}
 }
 
-func (mgr *manager) Process(msg Content) (error, context.Context) {
+func (mgr *manager) Process(msg Content) (context.Context, error) {
 	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
@@ -52,14 +51,14 @@ func (mgr *manager) Process(msg Content) (error, context.Context) {
 	msg.ReceiveChan = receiveChan
 	select {
 	case <-shard.ctx.Done():
-		return errors.New("shard is down"), nil
+		return nil, errors.New("shard is down")
 	case shard.sendChan <- msg:
 	}
 	select {
 	case <-shard.ctx.Done():
-		return errors.New("shard is down"), nil
+		return nil, errors.New("shard is down")
 	case resp := <-receiveChan:
-		return resp.err, resp.reqCtx
+		return resp.reqCtx, resp.err
 	}
 }
 
@@ -158,10 +157,10 @@ func (mgr *manager) ResetState() {
 }
 
 func (mgr *manager) GetStats() Metrics {
-	time.Sleep(5 * time.Second)
 	m := mgr.state.getStats()
 	return Metrics{
 		TotalNum: uint64(m.totalMsgs),
+		Dropped:  m.droppedMsgs,
 		FinishedReqs: struct {
 			Total     uint64
 			Succesful uint64
@@ -170,11 +169,6 @@ func (mgr *manager) GetStats() Metrics {
 			Total:     m.numReqs,
 			Succesful: m.finishedReqs,
 			Failed:    m.numReqs - m.finishedReqs,
-		},
-		RoundTripLatency: timingMetric{
-			Avg: m.avgLifetime,
-			Max: m.maxLifetime,
-			Min: m.minLifetime,
 		},
 	}
 }

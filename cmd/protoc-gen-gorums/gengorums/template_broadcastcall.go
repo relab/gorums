@@ -4,6 +4,7 @@ var clientServerVar = `
 {{$callData := use "gorums.CallData" .GenFile}}
 {{$context := use "context.Context" .GenFile}}
 {{$fmt := use "fmt.FMT" .GenFile}}
+{{$time := use "time.TIME" .GenFile}}
 {{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
 `
 
@@ -23,11 +24,22 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 	if c.qspec == nil {
 		return nil, fmt.Errorf("a qspec is not defined")
 	}
+	var (
+		timeout time.Duration
+		ok bool
+		response protoreflect.ProtoMessage
+	)
+	// use the same timeout as defined in the given context.
+	// this is used for cancellation.
+	deadline, ok := ctx.Deadline()
+	if ok {
+		timeout = deadline.Sub(time.Now())
+	} else {
+		timeout = 5 * time.Second
+	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.{{.Method.GoName}}QF), "{{.Method.Desc.FullName}}")
 	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
-	var response {{$protoMessage}}
-	var ok bool
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -35,7 +47,9 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 			Method:      gorums.Cancellation,
 			BroadcastID: broadcastID,
 		}
-		c.RawConfiguration.BroadcastCall(context.Background(), bd)
+		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+		defer cancelCancel()
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {

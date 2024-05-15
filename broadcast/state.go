@@ -22,7 +22,6 @@ redis:
   - allkeys-random: Randomly removes keys to make space for the new data added.
   - volatile-random: Randomly removes keys with expire field set to true.
   - volatile-ttl: Removes keys with expire field set to true and the shortest remaining time-to-live (TTL) value.
-*/
 const (
 	noeviction CacheOption = iota
 	allkeysLRU
@@ -33,6 +32,7 @@ const (
 	volatileRANDOM
 	volatileTTL
 )
+*/
 
 type BroadcastState struct {
 	mut                 sync.Mutex
