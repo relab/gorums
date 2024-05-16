@@ -92,6 +92,9 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 				continue
 			}
 			if new.IsCancellation {
+				// the cancellation implementation is just an
+				// empty function and does not need the ctx or
+				// broadcastChan.
 				new.ReceiveChan <- shardResponse{
 					err: nil,
 				}
@@ -127,8 +130,9 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 				}
 			}
 			new.ReceiveChan <- shardResponse{
-				err:    nil,
-				reqCtx: req.cancellationCtx,
+				err:              nil,
+				reqCtx:           req.cancellationCtx,
+				enqueueBroadcast: req.enqueueBroadcast,
 			}
 		}
 	}
@@ -225,7 +229,7 @@ func (r *BroadcastRequest) dispatchOutOfOrderMsgs(ctx context.Context) {
 		}
 		if order <= r.orderIndex {
 			for _, msg := range msgs {
-				msg.Run(ctx)
+				msg.Run(ctx, r.enqueueBroadcast)
 			}
 			handledMethods = append(handledMethods, method)
 		}
@@ -233,5 +237,21 @@ func (r *BroadcastRequest) dispatchOutOfOrderMsgs(ctx context.Context) {
 	// cleanup after dispatching the cached messages
 	for _, m := range handledMethods {
 		delete(r.outOfOrderMsgs, m)
+	}
+}
+
+// this method is used to enqueue messages onto the broadcast channel
+// of a broadcast request. The messages enqueued are then transmitted
+// to the other servers or the client depending on the type of message.
+// Currently there are three types:
+// - BroadcastMsg
+// - ClientReply
+// - Cancellation
+func (req *BroadcastRequest) enqueueBroadcast(msg Msg) error {
+	select {
+	case req.broadcastChan <- msg:
+		return nil
+	case <-req.ctx.Done():
+		return AlreadyProcessedErr{}
 	}
 }

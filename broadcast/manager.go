@@ -10,7 +10,7 @@ import (
 )
 
 type Manager interface {
-	Process(Content) (context.Context, error)
+	Process(Content) (context.Context, func(Msg) error, error)
 	Broadcast(uint64, protoreflect.ProtoMessage, string, ...BroadcastOptions)
 	SendToClient(uint64, protoreflect.ProtoMessage, error)
 	Cancel(uint64, []string)
@@ -41,7 +41,7 @@ func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dia
 	}
 }
 
-func (mgr *manager) Process(msg Content) (context.Context, error) {
+func (mgr *manager) Process(msg Content) (context.Context, func(Msg) error, error) {
 	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
@@ -51,14 +51,14 @@ func (mgr *manager) Process(msg Content) (context.Context, error) {
 	msg.ReceiveChan = receiveChan
 	select {
 	case <-shard.ctx.Done():
-		return nil, errors.New("shard is down")
+		return nil, nil, errors.New("shard is down")
 	case shard.sendChan <- msg:
 	}
 	select {
 	case <-shard.ctx.Done():
-		return nil, errors.New("shard is down")
+		return nil, nil, errors.New("shard is down")
 	case resp := <-receiveChan:
-		return resp.reqCtx, resp.err
+		return resp.reqCtx, resp.enqueueBroadcast, resp.err
 	}
 }
 

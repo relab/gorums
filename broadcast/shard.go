@@ -88,8 +88,9 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 					// the first request should contain all info needed
 					// except for the routing info given in the client req.
 					msg.ReceiveChan <- shardResponse{
-						err:    nil,
-						reqCtx: req.cancellationCtx,
+						err:              nil,
+						reqCtx:           req.cancellationCtx,
+						enqueueBroadcast: req.enqueueBroadcast,
 					}
 					continue
 				}

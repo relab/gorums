@@ -53,14 +53,14 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 			// keep track of the method called by the user
 			in.Metadata.BroadcastMsg.OriginMethod = in.Metadata.Method
 		}
-		broadcastMetadata := newBroadcastMetadata(in.Metadata)
-		broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator).(V)
 		// due to ordering we wrap the actual implementation function to be able to
 		// run it at a later time.
-		run := func(reqCtx context.Context) {
-			// we need to pass in the reqCtx because we can only retrieve
-			// it after we have gotten a response from the shard. The reqCtx
-			// is used for cancellations.
+		run := func(reqCtx context.Context, enqueueBroadcast func(broadcast.Msg) error) {
+			// we need to pass in the reqCtx and broadcastChan because we can only retrieve
+			// them after we have gotten a response from the shard. The reqCtx
+			// is used for cancellations and broadcastChan for broadcasts.
+			broadcastMetadata := newBroadcastMetadata(in.Metadata)
+			broadcaster := srv.broadcastSrv.createBroadcaster(broadcastMetadata, srv.broadcastSrv.orchestrator, enqueueBroadcast).(V)
 			ctx.Context = reqCtx
 			impl(ctx, req, broadcaster)
 		}
@@ -72,16 +72,16 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 		// instead we want to check whether the client has cancelled the broadcast request
 		// and if so, we return a cancelled context. This enables the implementer to listen
 		// for cancels and do proper actions.
-		reqCtx, err := srv.broadcastSrv.manager.Process(msg)
+		reqCtx, broadcastChan, err := srv.broadcastSrv.manager.Process(msg)
 		if err != nil {
 			return
 		}
 
-		run(reqCtx)
+		run(reqCtx, broadcastChan)
 	}
 }
 
-func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func(context.Context)) {
+func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func(context.Context, func(broadcast.Msg) error)) {
 	msg.BroadcastID = in.Metadata.BroadcastMsg.BroadcastID
 	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
 	msg.OriginAddr = in.Metadata.BroadcastMsg.OriginAddr
@@ -126,8 +126,8 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	return nil
 }
 
-func (srv *Server) RegisterBroadcaster(b func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster) {
-	srv.broadcastSrv.createBroadcaster = b
+func (srv *Server) RegisterBroadcaster(broadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator, e EnqueueBroadcast) Broadcaster) {
+	srv.broadcastSrv.createBroadcaster = broadcaster
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
 }
 

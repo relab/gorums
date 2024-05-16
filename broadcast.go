@@ -20,7 +20,7 @@ type broadcastServer struct {
 	id                uint32
 	addr              string
 	view              RawConfiguration
-	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator) Broadcaster
+	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator, b EnqueueBroadcast) Broadcaster
 	orchestrator      *BroadcastOrchestrator
 	manager           broadcast.Manager
 	logger            *slog.Logger
@@ -66,6 +66,7 @@ type BroadcastServerHandlerFunc func(method string, req protoreflect.ProtoMessag
 type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error)
 type CancelHandlerFunc func(broadcastID uint64, srvAddrs []string)
 type DoneHandlerFunc func(broadcastID uint64)
+type EnqueueBroadcast func(broadcast.Msg) error
 
 type defaultImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(ServerCtx, T) (V, error)
 type clientImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(context.Context, T, uint64) (V, error)

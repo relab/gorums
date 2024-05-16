@@ -200,11 +200,12 @@ func NewServer(opts ...gorums.ServerOption) *Server {
 	return srv
 }
 
-func newBroadcaster(m gorums.BroadcastMetadata, o *gorums.BroadcastOrchestrator) gorums.Broadcaster {
+func newBroadcaster(m gorums.BroadcastMetadata, o *gorums.BroadcastOrchestrator, e gorums.EnqueueBroadcast) gorums.Broadcaster {
 	return &Broadcast{
-		orchestrator: o,
-		metadata:     m,
-		srvAddrs:     make([]string, 0),
+		orchestrator:     o,
+		metadata:         m,
+		srvAddrs:         make([]string, 0),
+		enqueueBroadcast: e,
 	}
 }
 
@@ -214,9 +215,10 @@ func (srv *Server) SetView(config *Configuration) {
 }
 
 type Broadcast struct {
-	orchestrator *gorums.BroadcastOrchestrator
-	metadata     gorums.BroadcastMetadata
-	srvAddrs     []string
+	orchestrator     *gorums.BroadcastOrchestrator
+	metadata         gorums.BroadcastMetadata
+	srvAddrs         []string
+	enqueueBroadcast gorums.EnqueueBroadcast
 }
 
 // Returns a readonly struct of the metadata used in the broadcast.

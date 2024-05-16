@@ -147,8 +147,9 @@ func (state *BroadcastState) getStats() shardMetrics {
 }
 
 type shardResponse struct {
-	err    error
-	reqCtx context.Context
+	err              error
+	reqCtx           context.Context
+	enqueueBroadcast func(Msg) error
 }
 
 type Content struct {
@@ -162,7 +163,7 @@ type Content struct {
 	SendFn            func(resp protoreflect.ProtoMessage, err error)
 	Ctx               context.Context
 	CancelCtx         context.CancelFunc
-	Run               func(context.Context)
+	Run               func(context.Context, func(Msg) error)
 }
 
 func (c Content) send(resp protoreflect.ProtoMessage, err error) error {
