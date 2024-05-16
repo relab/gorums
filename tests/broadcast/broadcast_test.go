@@ -4,7 +4,6 @@ import (
 	"context"
 	fmt "fmt"
 	net "net"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
@@ -15,13 +14,15 @@ import (
 )
 
 func createSrvs(numSrvs int, down ...int) ([]*testServer, []string, func(), error) {
+	ordering := false
 	skip := 0
 	if len(down) > 0 {
 		skip = down[0]
+		if skip > numSrvs {
+			skip = 0
+			ordering = true
+		}
 	}
-	go func() {
-		http.ListenAndServe("localhost:10001", nil)
-	}()
 	srvs := make([]*testServer, 0, numSrvs)
 	srvAddrs := make([]string, numSrvs)
 	for i := 0; i < numSrvs; i++ {
@@ -32,7 +33,12 @@ func createSrvs(numSrvs int, down ...int) ([]*testServer, []string, func(), erro
 			skip--
 			continue
 		}
-		srv := newtestServer(addr, srvAddrs, i)
+		var srv *testServer
+		if ordering {
+			srv = newtestServer(addr, srvAddrs, i, true)
+		} else {
+			srv = newtestServer(addr, srvAddrs, i)
+		}
 		lis, err := net.Listen("tcp4", srv.addr)
 		if err != nil {
 			return nil, nil, nil, err
@@ -284,7 +290,8 @@ func TestBroadcastCancelOneClientFails(t *testing.T) {
 func TestBroadcastCallOrderingSendToOneSrv(t *testing.T) {
 	numSrvs := 3
 	numReqs := 3
-	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	useOrdering := 2 * numSrvs
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs, useOrdering)
 	if err != nil {
 		t.Error(err)
 	}
@@ -314,7 +321,8 @@ func TestBroadcastCallOrderingSendToOneSrv(t *testing.T) {
 func TestBroadcastCallOrderingSendToAllSrvs(t *testing.T) {
 	numSrvs := 3
 	numReqs := 3
-	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
+	useOrdering := 2 * numSrvs
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs, useOrdering)
 	if err != nil {
 		t.Error(err)
 	}
@@ -336,6 +344,37 @@ func TestBroadcastCallOrderingSendToAllSrvs(t *testing.T) {
 		}
 		if resp.GetResult() != 0 {
 			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 0, resp.GetResult()))
+		}
+		cancel()
+	}
+}
+
+func TestBroadcastCallOrderingDoesNotInterfereWithMethodsNotSpecifiedInOrder(t *testing.T) {
+	numSrvs := 3
+	numReqs := 10
+	useOrdering := 2 * numSrvs
+	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs, useOrdering)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	for i := 1; i <= numReqs; i++ {
+		val := int64(i * 100)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// BroadcastCall is not specified in the order
+		resp, err := config.BroadcastCall(ctx, &Request{Value: val})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != val {
+			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", val, resp.GetResult()))
 		}
 		cancel()
 	}
@@ -1332,7 +1371,7 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	b.StopTimer()
 }
 
-func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
+func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	numSrvs := 3
 	numClients := 20
 	numReqs := 50
@@ -1367,13 +1406,13 @@ func TestBroadcastCallTenClientsOnlyAsync(t *testing.T) {
 		wg1.Add(1)
 	}
 	wg1.Wait()
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
 	var wg sync.WaitGroup
 	for r := 0; r < numReqs; r++ {
 		for i, client := range clients {
 			go func(i int) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
 				if err != nil {

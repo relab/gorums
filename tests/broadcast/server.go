@@ -36,9 +36,15 @@ type testServer struct {
 	order          []string
 }
 
-func newtestServer(addr string, srvAddresses []string, _ int) *testServer {
+func newtestServer(addr string, srvAddresses []string, _ int, withOrder ...bool) *testServer {
+	var osrv *Server
+	if len(withOrder) > 0 {
+		osrv = NewServer(gorums.WithOrder(BroadcastServicePrePrepare, BroadcastServicePrepare, BroadcastServiceCommit))
+	} else {
+		osrv = NewServer()
+	}
 	srv := testServer{
-		Server:   NewServer(gorums.WithOrder(BroadcastServicePrePrepare, BroadcastServicePrepare, BroadcastServiceCommit)),
+		Server:   osrv,
 		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
 		leader:   leader,
