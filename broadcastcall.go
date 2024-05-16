@@ -64,6 +64,9 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		// or if the receiver is ready. This prevents a slow node from limiting the
 		// enqueueing of messages to other nodes while still ensuring correct
 		// ordering of messages.
+		//
+		// NOTE: the slow path will be invoked even though we buffer the channel. Hence,
+		// the enqueueFast will provide a small performance benefit.
 		enqueued := n.channel.enqueueFast(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
 		if !enqueued {
 			notEnqueued = append(notEnqueued, n)
