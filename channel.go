@@ -282,7 +282,17 @@ func (c *channel) receiver() {
 	for {
 		resp := newMessage(responseType)
 		c.streamMut.RLock()
-		err := c.gorumsStream.RecvMsg(resp)
+		var err error
+		// the gorumsStream can be nil because this method
+		// runs in a goroutine. If the stream goes down after
+		// the streamMut is unlocked, then we can have a scenario
+		// where the gorumsStream is set to nil in the reconnect
+		// method by another goroutine.
+		if c.gorumsStream != nil {
+			err = c.gorumsStream.RecvMsg(resp)
+		} else {
+			err = streamDownErr
+		}
 		if err != nil {
 			c.streamBroken.set()
 			c.streamMut.RUnlock()
