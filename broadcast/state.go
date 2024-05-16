@@ -53,7 +53,7 @@ type BroadcastState struct {
 func NewState(logger *slog.Logger, router Router, order map[string]int) *BroadcastState {
 	shardBuffer := 100
 	sendBuffer := 5
-	TTL := 5 * time.Second
+	TTL := 20 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
 	shards := createShards(ctx, shardBuffer, router, order)
 	state := &BroadcastState{

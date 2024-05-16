@@ -161,13 +161,6 @@ type reply struct {
 	Err      error
 }
 
-func NewReply(response protoreflect.ProtoMessage, err error) *reply {
-	return &reply{
-		Response: response,
-		Err:      err,
-	}
-}
-
 func (r *reply) getResponse() protoreflect.ProtoMessage {
 	return r.Response
 }
