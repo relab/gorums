@@ -109,7 +109,7 @@ func (srv *Server) Broadcast{{.GoName}}(req *{{in $genFile .}}, opts... gorums.B
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		srv.broadcast.orchestrator.BroadcastHandler("{{.Desc.FullName}}", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("{{.Desc.FullName}}", req, options.RelatedToReq, nil, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("{{.Desc.FullName}}", req, options)
 	}

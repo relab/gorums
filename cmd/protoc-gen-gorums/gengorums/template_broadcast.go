@@ -15,7 +15,7 @@ var broadcastBody = `
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("{{.Method.Desc.FullName}}", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("{{.Method.Desc.FullName}}", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 `
 

@@ -60,10 +60,10 @@ const (
 	BroadcastID string = "broadcastID"
 )
 
-type BroadcastHandlerFunc func(method string, req protoreflect.ProtoMessage, broadcastID uint64, options ...broadcast.BroadcastOptions)
+type BroadcastHandlerFunc func(method string, req protoreflect.ProtoMessage, broadcastID uint64, enqueueBroadcast EnqueueBroadcast, options ...broadcast.BroadcastOptions)
 type BroadcastForwardHandlerFunc func(req protoreflect.ProtoMessage, method string, broadcastID uint64, forwardAddr, originAddr string)
 type BroadcastServerHandlerFunc func(method string, req protoreflect.ProtoMessage, options ...broadcast.BroadcastOptions)
-type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error)
+type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast EnqueueBroadcast)
 type CancelHandlerFunc func(broadcastID uint64, srvAddrs []string)
 type DoneHandlerFunc func(broadcastID uint64)
 type EnqueueBroadcast func(broadcast.Msg) error

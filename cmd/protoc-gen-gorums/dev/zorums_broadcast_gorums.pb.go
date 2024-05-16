@@ -26,7 +26,7 @@ func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.Broadca
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("dev.ZorumsService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) MulticastWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
@@ -38,7 +38,7 @@ func (b *Broadcast) MulticastWithBroadcast(req *Request, opts ...gorums.Broadcas
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("dev.ZorumsService.MulticastWithBroadcast", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) BroadcastInternal(req *Request, opts ...gorums.BroadcastOption) {
@@ -50,7 +50,7 @@ func (b *Broadcast) BroadcastInternal(req *Request, opts ...gorums.BroadcastOpti
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastInternal", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) BroadcastWithClientHandlerAndBroadcastOption(req *Request, opts ...gorums.BroadcastOption) {
@@ -62,5 +62,5 @@ func (b *Broadcast) BroadcastWithClientHandlerAndBroadcastOption(req *Request, o
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }

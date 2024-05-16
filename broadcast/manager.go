@@ -11,9 +11,9 @@ import (
 
 type Manager interface {
 	Process(Content) (context.Context, func(Msg) error, error)
-	Broadcast(uint64, protoreflect.ProtoMessage, string, ...BroadcastOptions)
-	SendToClient(uint64, protoreflect.ProtoMessage, error)
-	Cancel(uint64, []string)
+	Broadcast(uint64, protoreflect.ProtoMessage, string, func(Msg) error, ...BroadcastOptions) error
+	SendToClient(uint64, protoreflect.ProtoMessage, error, func(Msg) error) error
+	Cancel(uint64, []string) error
 	Done(uint64)
 	NewBroadcastID() uint64
 	AddAddr(id uint32, addr string)
@@ -62,42 +62,58 @@ func (mgr *manager) Process(msg Content) (context.Context, func(Msg) error, erro
 	}
 }
 
-func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage, method string, opts ...BroadcastOptions) {
+func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage, method string, enqueueBroadcast func(Msg) error, opts ...BroadcastOptions) error {
 	var options BroadcastOptions
 	if len(opts) > 0 {
 		options = opts[0]
 	}
-	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
-	shardID = shardID % NumShards
-	shard := mgr.state.shards[shardID]
-	select {
-	case shard.broadcastChan <- Msg{
+	msg := Msg{
 		Broadcast:   true,
 		Msg:         NewMsg(broadcastID, req, method, options),
 		Method:      method,
 		BroadcastID: broadcastID,
-	}:
-	case <-shard.ctx.Done():
 	}
-}
-
-func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
+	// fast path: communicate directly with the broadcast request
+	if enqueueBroadcast != nil {
+		return enqueueBroadcast(msg)
+	}
+	// slow path: communicate with the shard first
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
 	select {
-	case shard.broadcastChan <- Msg{
+	case shard.broadcastChan <- msg:
+		return nil
+	case <-shard.ctx.Done():
+		return ShardDownErr{}
+	}
+}
+
+func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast func(Msg) error) error {
+	msg := Msg{
 		Reply: &reply{
 			Response: resp,
 			Err:      err,
 		},
 		BroadcastID: broadcastID,
-	}:
+	}
+	// fast path: communicate directly with the broadcast request
+	if enqueueBroadcast != nil {
+		return enqueueBroadcast(msg)
+	}
+	// slow path: communicate with the shard first
+	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+	select {
+	case shard.broadcastChan <- msg:
+		return nil
 	case <-shard.ctx.Done():
+		return ShardDownErr{}
 	}
 }
 
-func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string) {
+func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string) error {
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
@@ -108,7 +124,9 @@ func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string) {
 		},
 		BroadcastID: broadcastID,
 	}:
+		return nil
 	case <-shard.ctx.Done():
+		return ShardDownErr{}
 	}
 }
 

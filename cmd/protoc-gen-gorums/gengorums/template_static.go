@@ -257,7 +257,7 @@ func (b *Broadcast) Done() {
 // request will be dropped. Either SendToClient() or Done() should be used at
 // the end of a broadcast request in order to free up resources.
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
-	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
+	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err, b.enqueueBroadcast)
 }
 
 // Cancel is a non-destructive method call that will transmit a cancellation
@@ -275,7 +275,7 @@ func (b *Broadcast) Cancel() {
 // request will be dropped. Either SendToClient() or Done() should be used at
 // the end of a broadcast request in order to free up resources.
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
-	srv.SendToClientHandler(resp, err, broadcastID)
+	srv.SendToClientHandler(resp, err, broadcastID, nil)
 }
 
 `

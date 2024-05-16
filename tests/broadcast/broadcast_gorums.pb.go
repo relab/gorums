@@ -272,7 +272,7 @@ func (b *Broadcast) Done() {
 // request will be dropped. Either SendToClient() or Done() should be used at
 // the end of a broadcast request in order to free up resources.
 func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
-	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err)
+	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err, b.enqueueBroadcast)
 }
 
 // Cancel is a non-destructive method call that will transmit a cancellation
@@ -290,7 +290,7 @@ func (b *Broadcast) Cancel() {
 // request will be dropped. Either SendToClient() or Done() should be used at
 // the end of a broadcast request in order to free up resources.
 func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
-	srv.SendToClientHandler(resp, err, broadcastID)
+	srv.SendToClientHandler(resp, err, broadcastID, nil)
 }
 
 func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.BroadcastOption) {
@@ -302,7 +302,7 @@ func (b *Broadcast) QuorumCallWithBroadcast(req *Request, opts ...gorums.Broadca
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) BroadcastIntermediate(req *Request, opts ...gorums.BroadcastOption) {
@@ -314,7 +314,7 @@ func (b *Broadcast) BroadcastIntermediate(req *Request, opts ...gorums.Broadcast
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
@@ -326,7 +326,7 @@ func (b *Broadcast) Broadcast(req *Request, opts ...gorums.BroadcastOption) {
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) BroadcastToResponse(req *Request, opts ...gorums.BroadcastOption) {
@@ -338,7 +338,7 @@ func (b *Broadcast) BroadcastToResponse(req *Request, opts ...gorums.BroadcastOp
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) PrePrepare(req *Request, opts ...gorums.BroadcastOption) {
@@ -350,7 +350,7 @@ func (b *Broadcast) PrePrepare(req *Request, opts ...gorums.BroadcastOption) {
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.PrePrepare", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.PrePrepare", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) Prepare(req *Request, opts ...gorums.BroadcastOption) {
@@ -362,7 +362,7 @@ func (b *Broadcast) Prepare(req *Request, opts ...gorums.BroadcastOption) {
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Prepare", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Prepare", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (b *Broadcast) Commit(req *Request, opts ...gorums.BroadcastOption) {
@@ -374,7 +374,7 @@ func (b *Broadcast) Commit(req *Request, opts ...gorums.BroadcastOption) {
 		opt(&options)
 	}
 	options.ServerAddresses = append(options.ServerAddresses, b.srvAddrs...)
-	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Commit", req, b.metadata.BroadcastID, options)
+	b.orchestrator.BroadcastHandler("broadcast.BroadcastService.Commit", req, b.metadata.BroadcastID, b.enqueueBroadcast, options)
 }
 
 func (srv *clientServerImpl) clientBroadcastCall(ctx context.Context, resp *Response, broadcastID uint64) (*Response, error) {
@@ -1034,7 +1034,7 @@ func (srv *Server) BroadcastQuorumCallWithBroadcast(req *Request, opts ...gorums
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, options.RelatedToReq, nil, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.QuorumCallWithBroadcast", req, options)
 	}
@@ -1046,7 +1046,7 @@ func (srv *Server) BroadcastBroadcastIntermediate(req *Request, opts ...gorums.B
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, options.RelatedToReq, nil, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.BroadcastIntermediate", req, options)
 	}
@@ -1058,7 +1058,7 @@ func (srv *Server) BroadcastBroadcast(req *Request, opts ...gorums.BroadcastOpti
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Broadcast", req, options.RelatedToReq, nil, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.Broadcast", req, options)
 	}
@@ -1070,7 +1070,7 @@ func (srv *Server) BroadcastBroadcastToResponse(req *Request, opts ...gorums.Bro
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, options.RelatedToReq, nil, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.BroadcastToResponse", req, options)
 	}
@@ -1082,7 +1082,7 @@ func (srv *Server) BroadcastPrePrepare(req *Request, opts ...gorums.BroadcastOpt
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.PrePrepare", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.PrePrepare", req, options.RelatedToReq, nil, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.PrePrepare", req, options)
 	}
@@ -1094,7 +1094,7 @@ func (srv *Server) BroadcastPrepare(req *Request, opts ...gorums.BroadcastOption
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Prepare", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Prepare", req, options.RelatedToReq, nil, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.Prepare", req, options)
 	}
@@ -1106,7 +1106,7 @@ func (srv *Server) BroadcastCommit(req *Request, opts ...gorums.BroadcastOption)
 		opt(&options)
 	}
 	if options.RelatedToReq > 0 {
-		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Commit", req, options.RelatedToReq, options)
+		srv.broadcast.orchestrator.BroadcastHandler("broadcast.BroadcastService.Commit", req, options.RelatedToReq, nil, options)
 	} else {
 		srv.broadcast.orchestrator.ServerBroadcastHandler("broadcast.BroadcastService.Commit", req, options)
 	}

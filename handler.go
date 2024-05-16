@@ -131,14 +131,14 @@ func (srv *Server) RegisterBroadcaster(broadcaster func(m BroadcastMetadata, o *
 	srv.broadcastSrv.orchestrator = NewBroadcastOrchestrator(srv)
 }
 
-func (srv *broadcastServer) broadcastHandler(method string, req protoreflect.ProtoMessage, broadcastID uint64, opts ...broadcast.BroadcastOptions) {
+func (srv *broadcastServer) broadcastHandler(method string, req protoreflect.ProtoMessage, broadcastID uint64, enqueueBroadcast EnqueueBroadcast, opts ...broadcast.BroadcastOptions) {
 	//srv.state.ProcessBroadcast(broadcastID, req, method)
-	srv.manager.Broadcast(broadcastID, req, method, opts...)
+	srv.manager.Broadcast(broadcastID, req, method, enqueueBroadcast, opts...)
 }
 
-func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp protoreflect.ProtoMessage, err error) {
+func (srv *broadcastServer) sendToClientHandler(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast EnqueueBroadcast) {
 	//srv.state.ProcessSendToClient(broadcastID, resp, err)
-	srv.manager.SendToClient(broadcastID, resp, err)
+	srv.manager.SendToClient(broadcastID, resp, err, enqueueBroadcast)
 }
 
 func (srv *broadcastServer) forwardHandler(req protoreflect.ProtoMessage, method string, broadcastID uint64, forwardAddr, originAddr string) {
@@ -191,8 +191,8 @@ func (srv *broadcastServer) serverBroadcastHandler(method string, req protorefle
 	srv.viewMutex.RUnlock()
 }
 
-func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
-	srv.broadcastSrv.sendToClientHandler(broadcastID, resp, err)
+func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error, broadcastID uint64, enqueueBroadcast EnqueueBroadcast) {
+	srv.broadcastSrv.sendToClientHandler(broadcastID, resp, err, enqueueBroadcast)
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {

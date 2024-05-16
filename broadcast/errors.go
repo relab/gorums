@@ -23,3 +23,9 @@ type OutOfOrderErr struct{}
 func (err OutOfOrderErr) Error() string {
 	return "the message is out of order"
 }
+
+type ShardDownErr struct{}
+
+func (err ShardDownErr) Error() string {
+	return "the shard is down"
+}
