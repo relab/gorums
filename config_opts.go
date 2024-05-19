@@ -107,7 +107,7 @@ func (o nodeIDs) newConfig(mgr *RawManager) (nodes RawConfiguration, err error) 
 
 // WithNodeIDs returns a NodeListOption containing a list of node IDs.
 // This assumes that the provided node IDs have already been registered with the manager.
-func WithNodeIDs(ids []uint32) NodeListOption {
+func WithNodeIDs(ids ...uint32) NodeListOption {
 	return &nodeIDs{nodeIDs: ids}
 }
 
