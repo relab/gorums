@@ -194,7 +194,7 @@ func (s *Server) RegisterClientHandler(method string) {
 
 // Serve starts serving on the listener.
 func (s *Server) Serve(listener net.Listener) error {
-	s.broadcastSrv.addAddr(listener)
+	s.broadcastSrv.addAddr(listener.Addr().String())
 	return s.grpcServer.Serve(listener)
 }
 

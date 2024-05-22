@@ -4,7 +4,6 @@ import (
 	"context"
 	"hash/fnv"
 	"log/slog"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -46,10 +45,17 @@ type Snowflake interface {
 	NewBroadcastID() uint64
 }
 
-func (srv *broadcastServer) addAddr(lis net.Listener) {
+func (srv *broadcastServer) addAddr(addr string) {
 	srv.propertiesMutex.Lock()
 	defer srv.propertiesMutex.Unlock()
-	srv.addr = lis.Addr().String()
+	//if srv.addr != "" {
+	//return
+	//}
+	//t := strings.Split(addr, ":")
+	//if len(t) < 2 || t[0] == "" || t[0] == "0.0.0.0" {
+	//panic(fmt.Sprintf("addr cannot be 0.0.0.0 or empty. got: %s", addr))
+	//}
+	srv.addr = addr
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(srv.addr))
 	srv.id = h.Sum32()
