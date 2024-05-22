@@ -3,6 +3,7 @@ package broadcast
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type shardMetrics struct {
 }
 
 type shard struct {
+	mut           sync.RWMutex
 	id            int
 	sendChan      chan Content
 	broadcastChan chan Msg
@@ -33,6 +35,7 @@ type shard struct {
 	reqs   map[uint64]*BroadcastProcessor
 	reqTTL time.Duration
 	router Router
+	nextGC time.Time
 
 	preserveOrdering bool
 	order            map[string]int
@@ -63,7 +66,10 @@ func (s *shard) run(sendBuffer int) {
 	for {
 		select {
 		case <-s.ctx.Done():
+			// it is possible that GC is running concurrently in another goroutine
+			s.mut.Lock()
 			s.reqs = nil
+			s.mut.Unlock()
 			return
 		case msg := <-s.sendChan:
 			s.metrics.numMsgs++
@@ -156,11 +162,22 @@ func (s *shard) Close() {
 }
 
 func (s *shard) getProcessor(broadcastID uint64) (*BroadcastProcessor, bool) {
+	s.mut.RLock()
+	defer s.mut.RUnlock()
 	p, ok := s.reqs[broadcastID]
 	return p, ok
 }
 
 func (s *shard) addProcessor(sendBuffer int, msg Content) {
+	s.mut.RLock()
+	defer s.mut.RUnlock()
+	if time.Since(s.nextGC) > 0 {
+		// make sure the current request is done before running the GC.
+		// This is to prevent running the GC in vain.
+		t := s.reqTTL + 5*time.Second
+		s.nextGC = time.Now().Add(t)
+		go s.gc(t)
+	}
 	if msg.IsBroadcastClient {
 		// msg.Ctx will correspond to the streamCtx between the client and this server,
 		// meaning the ctx will cancel when the client cancels or disconnects.
@@ -205,19 +222,39 @@ func (s *shard) addProcessor(sendBuffer int, msg Content) {
 	}
 }
 
-func (s *shard) gc() {
-	for _, req := range s.reqs {
+func (s *shard) gc(nextGC time.Duration) {
+	// make sure there is overlap between GC's
+	time.Sleep(nextGC + 1*time.Second)
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	newReqs := make(map[uint64]*BroadcastProcessor)
+	for broadcastID, req := range s.reqs {
+		// stale requests should be cancelled and removed immediately
+		if time.Since(req.started) > s.reqTTL {
+			req.cancelFunc()
+			continue
+		}
 		select {
 		case <-req.ctx.Done():
-			if time.Since(req.started) > s.reqTTL {
+			// if the request has finished early then it has
+			// probably executed successfully on all servers.
+			// we can thus assume it is safe to remove the req
+			// after a short period after it has finished because
+			// it will likely not receive any msg related to this
+			// broadcast request.
+			if time.Since(req.ended) > s.reqTTL/5 {
 				continue
 			}
 		default:
 		}
+		newReqs[broadcastID] = req
 	}
+	s.reqs = newReqs
 }
 
 func (s *shard) getStats() shardMetrics {
+	s.mut.RLock()
+	defer s.mut.RUnlock()
 	s.metrics.numReqs = uint64(len(s.reqs))
 	s.metrics.lifetimes = make([][]time.Time, len(s.reqs))
 	s.metrics.totalMsgs = s.metrics.numBroadcastMsgs + s.metrics.numMsgs
