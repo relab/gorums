@@ -268,7 +268,7 @@ func (srv *testServer) PrePrepare(ctx gorums.ServerCtx, req *Request, broadcast 
 	// before calling Prepare. The order of received msgs will thus be
 	// wrong and the msgs need to be stored temporarily.
 	if srv.addr == srv.leader {
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 	}
 	srv.mut.Lock()
 	added := false
