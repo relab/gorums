@@ -47,8 +47,9 @@ func TestShard(t *testing.T) {
 		broadcastChan: make(chan Msg, shardBuffer),
 		ctx:           ctx,
 		cancelFunc:    cancel,
-		reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
-		router:        router,
+		//reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
+		reqs:   make(map[uint64]*BroadcastProcessor, shardBuffer),
+		router: router,
 	}
 	go shard.run(5*time.Minute, 5)
 
@@ -162,8 +163,9 @@ func BenchmarkShard(b *testing.B) {
 		broadcastChan: make(chan Msg, shardBuffer),
 		ctx:           ctx,
 		cancelFunc:    cancel,
-		reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
-		router:        router,
+		//reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
+		reqs:   make(map[uint64]*BroadcastProcessor, shardBuffer),
+		router: router,
 	}
 	go shard.run(5*time.Minute, 5)
 

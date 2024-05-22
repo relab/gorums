@@ -2,23 +2,22 @@ package broadcast
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type mockResp struct{}
+/*type mockResp struct{}
 
 func (mockResp) ProtoReflect() protoreflect.Message {
-	return nil
+return nil
 }
 
 type mockRouter struct {
-	returnError bool
-	reqType     string
-	resp        protoreflect.ProtoMessage
+returnError bool
+reqType     string
+resp        protoreflect.ProtoMessage
 }
 
 func (r *mockRouter) Send(broadcastID uint64, addr, method string, req any) error {
@@ -35,9 +34,9 @@ func (r *mockRouter) Send(broadcastID uint64, addr, method string, req any) erro
 	return nil
 }
 
-func (r *mockRouter) Connect(addr string) {}
+func (r *mockRouter) Connect(addr string) {}*/
 
-func TestHandleBroadcastOption(t *testing.T) {
+func TestHandleBroadcastOption1(t *testing.T) {
 	snowflake := NewSnowflake("127.0.0.1:8080")
 	broadcastID := snowflake.NewBroadcastID()
 
@@ -85,7 +84,7 @@ func TestHandleBroadcastOption(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	defer cancelCancel()
-	req := &BroadcastRequest{
+	req := &BroadcastProcessor{
 		ctx:                   ctx,
 		cancelFunc:            cancel,
 		sendChan:              make(chan Content),
@@ -93,8 +92,9 @@ func TestHandleBroadcastOption(t *testing.T) {
 		started:               time.Now(),
 		cancellationCtx:       cancelCtx,
 		cancellationCtxCancel: cancelCancel,
+		router:                router,
 	}
-	go req.handle(router, msg.BroadcastID, msg)
+	go req.handle(msg)
 
 	for _, tt := range tests {
 		req.sendChan <- tt.in
@@ -144,7 +144,7 @@ func TestHandleBroadcastOption(t *testing.T) {
 	}
 }
 
-func TestHandleBroadcastCall(t *testing.T) {
+func TestHandleBroadcastCall1(t *testing.T) {
 	snowflake := NewSnowflake("127.0.0.1:8080")
 	broadcastID := snowflake.NewBroadcastID()
 
@@ -194,7 +194,7 @@ func TestHandleBroadcastCall(t *testing.T) {
 	cancelCtx, cancelCancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 	defer cancelCancel()
-	req := &BroadcastRequest{
+	req := &BroadcastProcessor{
 		ctx:                   ctx,
 		cancelFunc:            cancel,
 		sendChan:              make(chan Content),
@@ -202,8 +202,9 @@ func TestHandleBroadcastCall(t *testing.T) {
 		started:               time.Now(),
 		cancellationCtx:       cancelCtx,
 		cancellationCtxCancel: cancelCancel,
+		router:                router,
 	}
-	go req.handle(router, msg.BroadcastID, msg)
+	go req.handle(msg)
 
 	for _, tt := range tests {
 		req.sendChan <- tt.in
@@ -247,7 +248,7 @@ func TestHandleBroadcastCall(t *testing.T) {
 	}
 }
 
-func BenchmarkHandle2(b *testing.B) {
+func BenchmarkHandle1(b *testing.B) {
 	snowflake := NewSnowflake("127.0.0.1:8080")
 	originMethod := "testMethod"
 	router := &mockRouter{
@@ -278,7 +279,7 @@ func BenchmarkHandle2(b *testing.B) {
 
 			cancelCtx, cancelCancel := context.WithTimeout(context.Background(), 1*time.Minute)
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-			req := &BroadcastRequest{
+			req := &BroadcastProcessor{
 				ctx:                   ctx,
 				cancelFunc:            cancel,
 				cancellationCtx:       cancelCtx,
@@ -286,8 +287,9 @@ func BenchmarkHandle2(b *testing.B) {
 				sendChan:              make(chan Content),
 				broadcastChan:         make(chan Msg, 5),
 				started:               time.Now(),
+				router:                router,
 			}
-			go req.handle(router, msg.BroadcastID, msg)
+			go req.handle(msg)
 
 			req.broadcastChan <- resp
 

@@ -28,8 +28,9 @@ type shard struct {
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
 	metrics       shardMetrics
-	reqs          map[uint64]*BroadcastRequest
-	router        Router
+	//reqs          map[uint64]*BroadcastRequest
+	reqs   map[uint64]*BroadcastProcessor
+	router Router
 
 	preserveOrdering bool
 	order            map[string]int
@@ -40,12 +41,13 @@ func createShards(ctx context.Context, shardBuffer int, router Router, order map
 	for i := range shards {
 		ctx, cancel := context.WithCancel(ctx)
 		shards[i] = &shard{
-			id:               i,
-			sendChan:         make(chan Content, shardBuffer),
-			broadcastChan:    make(chan Msg, shardBuffer),
-			ctx:              ctx,
-			cancelFunc:       cancel,
-			reqs:             make(map[uint64]*BroadcastRequest, shardBuffer),
+			id:            i,
+			sendChan:      make(chan Content, shardBuffer),
+			broadcastChan: make(chan Msg, shardBuffer),
+			ctx:           ctx,
+			cancelFunc:    cancel,
+			//reqs:             make(map[uint64]*BroadcastRequest, shardBuffer),
+			reqs:             make(map[uint64]*BroadcastProcessor, shardBuffer),
 			router:           router,
 			preserveOrdering: order != nil,
 			order:            order,
@@ -130,7 +132,8 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 				// check size of s.reqs. If too big, then perform necessary cleanup.
 				// should only affect the current shard and not the others.
 				ctx, cancel := context.WithTimeout(s.ctx, reqTTL)
-				req := &BroadcastRequest{
+				//req := &BroadcastRequest{
+				req := &BroadcastProcessor{
 					ctx:        ctx,
 					cancelFunc: cancel,
 					// it is important to not buffer the channel. Otherwise,
@@ -145,12 +148,14 @@ func (s *shard) run(reqTTL time.Duration, sendBuffer int) {
 					// channel. The result is simply ignored.
 					broadcastChan:         make(chan Msg, sendBuffer),
 					started:               time.Now(),
+					router:                s.router,
 					cancellationCtx:       msg.Ctx,
 					cancellationCtxCancel: msg.CancelCtx,
 					executionOrder:        s.order,
 				}
 				s.reqs[msg.BroadcastID] = req
-				go req.handle(s.router, msg.BroadcastID, msg)
+				//go req.handle(s.router, msg.BroadcastID, msg)
+				go req.handle(msg)
 				select {
 				case <-req.ctx.Done():
 					s.metrics.droppedMsgs++

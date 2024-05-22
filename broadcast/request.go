@@ -51,10 +51,7 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 					continue
 				}
 				router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
-				/*err := router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Msg)
-				if err != nil {
-					continue
-				}*/
+
 				methods = append(methods, bMsg.Method)
 				req.updateOrder(bMsg.Method)
 				req.dispatchOutOfOrderMsgs(req.cancellationCtx)
@@ -62,10 +59,6 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 				// BroadcastCall if origin addr is non-empty.
 				if msg.isBroadcastCall() {
 					go router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
-					//_ = router.Send(broadcastID, msg.OriginAddr, msg.OriginMethod, bMsg.Reply)
-					//if err != nil && router.logger != nil {
-					//router.logger.Error("broadcast: could not send response to client", "err", err, "broadcastID", broadcastID)
-					//}
 					return
 				}
 				// QuorumCall if origin addr is empty.
@@ -79,9 +72,6 @@ func (req *BroadcastRequest) handle(router Router, broadcastID uint64, msg Conte
 					}
 					continue
 				}
-				//if metrics != nil {
-				//metrics.AddFinishedSuccessful()
-				//}
 				return
 			}
 		case new := <-req.sendChan:
