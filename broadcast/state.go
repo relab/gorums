@@ -55,7 +55,7 @@ func NewState(logger *slog.Logger, router Router, order map[string]int) *Broadca
 	sendBuffer := 5
 	TTL := 20 * time.Second
 	ctx, cancel := context.WithCancel(context.Background())
-	shards := createShards(ctx, shardBuffer, router, order)
+	shards := createShards(ctx, shardBuffer, router, order, TTL)
 	state := &BroadcastState{
 		parentCtx:           ctx,
 		parentCtxCancelFunc: cancel,
@@ -90,7 +90,7 @@ func (s *BroadcastState) Close() error {
 
 func (s *BroadcastState) RunShards() {
 	for _, shard := range s.shards {
-		go shard.run(s.reqTTL, s.sendBuffer)
+		go shard.run(s.sendBuffer)
 	}
 }
 
@@ -101,7 +101,7 @@ func (s *BroadcastState) reset() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.parentCtx = ctx
 	s.parentCtxCancelFunc = cancel
-	s.shards = createShards(ctx, s.shardBuffer, s.router, s.order)
+	s.shards = createShards(ctx, s.shardBuffer, s.router, s.order, s.reqTTL)
 	s.RunShards()
 	for _, client := range s.clients {
 		client.Close()

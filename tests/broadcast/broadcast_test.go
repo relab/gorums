@@ -118,14 +118,13 @@ func TestSimpleBroadcastTo(t *testing.T) {
 
 func TestSimpleBroadcastCancel(t *testing.T) {
 	numSrvs := 3
-	numReqs := 10
+	numReqs := 1000
 	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
 	}
 	defer srvCleanup()
 
-	// only want a response from the leader, hence qsize = 1
 	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
 	if err != nil {
 		t.Error(err)
@@ -133,8 +132,7 @@ func TestSimpleBroadcastCancel(t *testing.T) {
 	defer clientCleanup()
 
 	for i := 1; i <= numReqs; i++ {
-		//slog.Info("req", "no", i)
-		val := int64(i * 100)
+		val := int64(i * 10)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.Search(ctx, &Request{Value: val})
 		if err != nil {
@@ -623,7 +621,9 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 
 	for _, client := range clients {
 		init := 1
-		resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		resp, err := client.BroadcastCall(ctx, &Request{Value: int64(init)})
+		cancel()
 		if err != nil {
 			t.Error(err)
 		}
@@ -636,7 +636,9 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 	for i := 0; i < 1; i++ {
 		for _, client := range clients {
 			go func(j int, c *Configuration) {
-				resp, err := c.BroadcastCall(context.Background(), &Request{Value: int64(j)})
+				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+				resp, err := c.BroadcastCall(ctx, &Request{Value: int64(j)})
+				cancel()
 				if err != nil {
 					t.Error(err)
 				}

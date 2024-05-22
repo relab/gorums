@@ -197,17 +197,18 @@ func (srv *testServer) BroadcastCallTo(ctx gorums.ServerCtx, req *Request, broad
 }
 
 func (srv *testServer) BroadcastToResponse(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	//srv.mu.Lock()
-	//srv.numMsg["BC"]++
-	//srv.mu.Unlock()
-	//slog.Warn("server received broadcast call")
-	// only broadcast to the leader
 	broadcast.SendToClient(&Response{
 		From: srv.addr,
 	}, nil)
 }
 
 func (srv *testServer) Search(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
+	// make sure the client req reaches all servers first.
+	// this is because the cancellation only give weak
+	// guarantees. Meaning, cancellations not yet related
+	// to a broadcast request (e.g. because the client req has
+	// not yet arrived) will be dropped.
+	time.Sleep(1 * time.Millisecond)
 	select {
 	case <-ctx.Done():
 		broadcast.SendToClient(&Response{

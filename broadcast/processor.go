@@ -19,7 +19,6 @@ type BroadcastProcessor struct {
 	cancellationCtx       context.Context
 	cancellationCtxCancel context.CancelFunc // should only be called by the shard
 	sentCancellation      bool
-	//metadata              *metadata
 
 	executionOrder map[string]int
 	orderIndex     int

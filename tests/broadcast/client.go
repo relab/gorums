@@ -1,6 +1,7 @@
 package broadcast
 
 import (
+	"log/slog"
 	net "net"
 
 	gorums "github.com/relab/gorums"
@@ -93,6 +94,7 @@ func (qs *testQSpec) SearchQF(in *Request, replies []*Response) (*Response, bool
 	if numCorrect == 1 {
 		return &Response{Result: 1}, true
 	}
+	slog.Info("got wrong res", "replies", replies)
 	return &Response{Result: 0}, true
 }
 
