@@ -621,7 +621,7 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 
 	for _, client := range clients {
 		init := 1
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := client.BroadcastCall(ctx, &Request{Value: int64(init)})
 		cancel()
 		if err != nil {
@@ -636,7 +636,7 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 	for i := 0; i < 1; i++ {
 		for _, client := range clients {
 			go func(j int, c *Configuration) {
-				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				resp, err := c.BroadcastCall(ctx, &Request{Value: int64(j)})
 				cancel()
 				if err != nil {

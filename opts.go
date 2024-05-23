@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/relab/gorums/broadcast"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/metadata"
@@ -27,6 +28,9 @@ func newManagerOptions() managerOptions {
 		backoff:         backoff.DefaultConfig,
 		sendBuffer:      50,
 		nodeDialTimeout: 50 * time.Millisecond,
+		// Provide an illegal machineID to avoid unintentional collisions.
+		// 0 is a valid MachineID and should not be used as default.
+		machineID: uint64(broadcast.MaxMachineID) + 1,
 	}
 }
 

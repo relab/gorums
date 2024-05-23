@@ -1,7 +1,6 @@
 package broadcast
 
 import (
-	"log/slog"
 	"math/rand"
 	"sync"
 	"time"
@@ -29,9 +28,10 @@ const (
 
 func NewSnowflake(id uint64) *Snowflake {
 	if id < 0 || id >= uint64(MaxMachineID) {
-		newID := uint64(rand.Int31n(int32(MaxMachineID)))
-		slog.Warn("snowflakeID: provided machienID is higher than max or lower than min. A random ID will be assigned instead.", "max", MaxMachineID, "min", 0, "givenID", id, "assignedID", newID)
-		id = newID
+		//newID := uint64(rand.Int31n(int32(MaxMachineID)))
+		//slog.Warn("snowflakeID: provided machineID is higher than max or lower than min. A random ID will be assigned instead.", "max", MaxMachineID, "min", 0, "givenID", id, "assignedID", newID)
+		//id = newID
+		id = uint64(rand.Int31n(int32(MaxMachineID)))
 	}
 	timestamp, _ := time.Parse("2006-01-02T15:04:05", epoch)
 	return &Snowflake{
