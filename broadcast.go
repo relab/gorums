@@ -170,12 +170,16 @@ type Broadcaster interface{}
 
 type BroadcastMetadata struct {
 	BroadcastID       uint64
-	IsBroadcastClient bool   // type of sender, could be: Client or Server
-	SenderAddr        string // address of last hop
-	OriginAddr        string // address of the origin
-	OriginMethod      string // the first method called by the origin
-	Method            string // the current method
-	Digest            []byte // digest of original message sent by client
+	IsBroadcastClient bool      // type of sender, could be: Client or Server
+	SenderAddr        string    // address of last hop
+	OriginAddr        string    // address of the origin
+	OriginMethod      string    // the first method called by the origin
+	Method            string    // the current method
+	Digest            []byte    // digest of original message sent by client
+	Timestamp         time.Time // timestamp in seconds when the broadcast request was issued by the client/server
+	ShardID           uint16    // ID of the shard handling the broadcast request
+	MachineID         uint16    // ID of the client/server that issued the broadcast request
+	SequenceNo        uint32    // sequence number of the broadcast request from that particular client/server. Will roll over when reaching max.
 }
 
 func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
@@ -187,6 +191,7 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	if len(tmp) >= 1 {
 		m = tmp[len(tmp)-1]
 	}
+	timestamp, shardID, machineID, sequenceNo := broadcast.DecodeBroadcastID(md.BroadcastMsg.BroadcastID)
 	return BroadcastMetadata{
 		BroadcastID:       md.BroadcastMsg.BroadcastID,
 		IsBroadcastClient: md.BroadcastMsg.IsBroadcastClient,
@@ -194,5 +199,9 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 		OriginAddr:        md.BroadcastMsg.OriginAddr,
 		OriginMethod:      md.BroadcastMsg.OriginMethod,
 		Method:            m,
+		Timestamp:         broadcast.Epoch().Add(time.Duration(timestamp) * time.Second),
+		ShardID:           shardID,
+		MachineID:         machineID,
+		SequenceNo:        sequenceNo,
 	}
 }

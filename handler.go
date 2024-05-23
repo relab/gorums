@@ -180,7 +180,7 @@ func (srv *broadcastServer) serverBroadcastHandler(method string, req protorefle
 		Message:           req,
 		Method:            method,
 		BroadcastID:       srv.manager.NewBroadcastID(),
-		OriginAddr:        "server",
+		OriginAddr:        broadcast.ServerOriginAddr,
 		IsBroadcastClient: false,
 	}
 	srv.viewMutex.RLock()

@@ -8,18 +8,21 @@ import (
 )
 
 type BroadcastProcessor struct {
-	broadcastID           uint64
-	router                Router
-	broadcastChan         chan Msg
-	sendChan              chan Content
-	ctx                   context.Context
-	cancelFunc            context.CancelFunc
-	started               time.Time
-	ended                 time.Time
+	broadcastID   uint64
+	router        Router
+	broadcastChan chan Msg
+	sendChan      chan Content
+	ctx           context.Context
+	cancelFunc    context.CancelFunc
+	started       time.Time
+	ended         time.Time
+
+	// handled by shard
 	cancellationCtx       context.Context
-	cancellationCtxCancel context.CancelFunc // should only be called by the shard
+	cancellationCtxCancel context.CancelFunc
 	sentCancellation      bool
 
+	// ordering
 	executionOrder map[string]int
 	orderIndex     int
 	outOfOrderMsgs map[string][]Content

@@ -26,6 +26,11 @@ const (
 	epoch              = "2024-01-01T00:00:00"
 )
 
+func Epoch() time.Time {
+	timestamp, _ := time.Parse("2006-01-02T15:04:05", epoch)
+	return timestamp
+}
+
 func NewSnowflake(id uint64) *Snowflake {
 	if id < 0 || id >= uint64(MaxMachineID) {
 		//newID := uint64(rand.Int31n(int32(MaxMachineID)))
@@ -33,11 +38,10 @@ func NewSnowflake(id uint64) *Snowflake {
 		//id = newID
 		id = uint64(rand.Int31n(int32(MaxMachineID)))
 	}
-	timestamp, _ := time.Parse("2006-01-02T15:04:05", epoch)
 	return &Snowflake{
 		MachineID:   id,
 		SequenceNum: 0,
-		epoch:       timestamp,
+		epoch:       Epoch(),
 		//sequenceNum: uint32(maxSequenceNum * rand.Float32()),
 	}
 }
@@ -70,7 +74,7 @@ start:
 	return t | shard | m | n
 }
 
-func DecodeBroadcastID(broadcastID uint64) (uint32, uint16, uint16, uint32) {
+func DecodeBroadcastID(broadcastID uint64) (timestamp uint32, shardID uint16, machineID uint16, sequenceNo uint32) {
 	t := (broadcastID & bitMaskTimestamp) >> 34
 	shard := (broadcastID & bitMaskShardID) >> 30
 	m := (broadcastID & bitMaskMachineID) >> 18

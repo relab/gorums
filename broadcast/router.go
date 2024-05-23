@@ -102,7 +102,7 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 }
 
 func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
-	if addr == "" {
+	if addr == "" || addr == ServerOriginAddr {
 		return nil, InvalidAddrErr{addr: addr}
 	}
 	// fast path:
