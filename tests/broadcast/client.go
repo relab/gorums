@@ -144,7 +144,7 @@ func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configurati
 		),
 	)
 	if listenAddr != "" {
-		lis, err := net.Listen("tcp", listenAddr)
+		lis, err := net.Listen("tcp", "127.0.0.1:")
 		if err != nil {
 			return nil, nil, err
 		}
