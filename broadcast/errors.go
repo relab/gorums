@@ -29,3 +29,11 @@ type ShardDownErr struct{}
 func (err ShardDownErr) Error() string {
 	return "the shard is down"
 }
+
+type InvalidAddrErr struct {
+	addr string
+}
+
+func (err InvalidAddrErr) Error() string {
+	return "provided addr is invalid. got: " + err.addr
+}

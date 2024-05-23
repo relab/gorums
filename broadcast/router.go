@@ -102,6 +102,9 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 }
 
 func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
+	if addr == "" {
+		return nil, InvalidAddrErr{addr: addr}
+	}
 	// fast path:
 	// read lock because it is likely that we will send many
 	// messages to the same client.
