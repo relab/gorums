@@ -97,14 +97,14 @@ func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished 
 	}
 }
 
-func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx ServerCtx) func(resp protoreflect.ProtoMessage, err error) {
-	return func(resp protoreflect.ProtoMessage, err error) {
+func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx ServerCtx) func(resp protoreflect.ProtoMessage, err error) error {
+	return func(resp protoreflect.ProtoMessage, err error) error {
 		md := &ordering.Metadata{
 			MessageID: msgID,
 			Method:    method,
 		}
 		msg := WrapMessage(md, resp, err)
-		SendMessage(ctx, finished, msg)
+		return SendMessage(ctx, finished, msg)
 	}
 }
 

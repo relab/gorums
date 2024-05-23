@@ -18,6 +18,7 @@ type broadcastServer struct {
 	viewMutex         sync.RWMutex
 	id                uint32
 	addr              string
+	machineID         uint64
 	view              RawConfiguration
 	createBroadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator, b EnqueueBroadcast) Broadcaster
 	orchestrator      *BroadcastOrchestrator
@@ -29,9 +30,10 @@ func (srv *Server) GetStats() broadcast.Metrics {
 	return srv.broadcastSrv.manager.GetStats()
 }
 
-func newBroadcastServer(logger *slog.Logger, order map[string]int) *broadcastServer {
+func newBroadcastServer(logger *slog.Logger, order map[string]int, machineID uint64) *broadcastServer {
 	srv := &broadcastServer{
-		logger: logger,
+		logger:    logger,
+		machineID: machineID,
 	}
 	srv.manager = broadcast.NewBroadcastManager(logger, createClient, srv.canceler, order)
 	return srv
@@ -59,7 +61,7 @@ func (srv *broadcastServer) addAddr(addr string) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(srv.addr))
 	srv.id = h.Sum32()
-	srv.manager.AddAddr(srv.id, srv.addr)
+	srv.manager.AddAddr(srv.id, srv.addr, srv.machineID)
 }
 
 const (

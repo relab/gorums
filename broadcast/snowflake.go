@@ -1,6 +1,7 @@
 package broadcast
 
 import (
+	"log/slog"
 	"math/rand"
 	"sync"
 	"time"
@@ -16,8 +17,8 @@ type Snowflake struct {
 }
 
 const (
-	maxShard           = float32(1 << 4)
-	maxMachineID       = float32(1 << 12)
+	MaxMachineID       = uint16(1 << 12)
+	maxShard           = uint8(1 << 4)
 	maxSequenceNum     = uint32(1 << 18)
 	bitMaskTimestamp   = uint64((1<<30)-1) << 34
 	bitMaskShardID     = uint64((1<<4)-1) << 30
@@ -26,10 +27,15 @@ const (
 	epoch              = "2024-01-01T00:00:00"
 )
 
-func NewSnowflake(addr string) *Snowflake {
+func NewSnowflake(id uint64) *Snowflake {
+	if id < 0 || id >= uint64(MaxMachineID) {
+		newID := uint64(rand.Int31n(int32(MaxMachineID)))
+		slog.Warn("snowflakeID: provided machienID is higher than max or lower than min. A random ID will be assigned instead.", "max", MaxMachineID, "min", 0, "givenID", id, "assignedID", newID)
+		id = newID
+	}
 	timestamp, _ := time.Parse("2006-01-02T15:04:05", epoch)
 	return &Snowflake{
-		MachineID:   uint64(rand.Int31n(int32(maxMachineID))),
+		MachineID:   id,
 		SequenceNum: 0,
 		epoch:       timestamp,
 		//sequenceNum: uint32(maxSequenceNum * rand.Float32()),

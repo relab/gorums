@@ -37,7 +37,7 @@ func (r *mockRouter) Send(broadcastID uint64, addr, method string, req any) erro
 func (r *mockRouter) Connect(addr string) {}*/
 
 func TestHandleBroadcastOption1(t *testing.T) {
-	snowflake := NewSnowflake("127.0.0.1:8080")
+	snowflake := NewSnowflake(0)
 	broadcastID := snowflake.NewBroadcastID()
 
 	var tests = []struct {
@@ -127,7 +127,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 	clientMsg := Content{
 		BroadcastID:       broadcastID,
 		IsBroadcastClient: true,
-		SendFn:            func(resp protoreflect.ProtoMessage, err error) {},
+		SendFn:            func(resp protoreflect.ProtoMessage, err error) error { return nil },
 		ReceiveChan:       make(chan shardResponse),
 	}
 	req.sendChan <- clientMsg
@@ -145,7 +145,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 }
 
 func TestHandleBroadcastCall1(t *testing.T) {
-	snowflake := NewSnowflake("127.0.0.1:8080")
+	snowflake := NewSnowflake(0)
 	broadcastID := snowflake.NewBroadcastID()
 
 	var tests = []struct {
@@ -249,7 +249,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 }
 
 func BenchmarkHandle1(b *testing.B) {
-	snowflake := NewSnowflake("127.0.0.1:8080")
+	snowflake := NewSnowflake(0)
 	originMethod := "testMethod"
 	router := &mockRouter{
 		returnError: false,
@@ -264,7 +264,7 @@ func BenchmarkHandle1(b *testing.B) {
 		},
 		BroadcastID: broadcastID,
 	}
-	sendFn := func(resp protoreflect.ProtoMessage, err error) {}
+	sendFn := func(resp protoreflect.ProtoMessage, err error) error { return nil }
 
 	b.ResetTimer()
 	b.Run("RequestHandler", func(b *testing.B) {

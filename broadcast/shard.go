@@ -2,7 +2,6 @@ package broadcast
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"time"
 )
@@ -126,7 +125,6 @@ func (s *shard) run(sendBuffer int) {
 				}
 			} else {
 				if msg.IsCancellation {
-					slog.Error("this is the reason")
 					// ignore cancellations if a broadcast request
 					// has not been created yet
 					continue

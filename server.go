@@ -6,6 +6,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -111,6 +112,13 @@ type serverOptions struct {
 	connectCallback func(context.Context)
 	logger          *slog.Logger
 	executionOrder  map[string]int
+	machineID       uint64
+}
+
+var defaultServerOptions = serverOptions{
+	// Provide an illegal machineID to avoid unintentional collisions.
+	// 0 is a valid MachineID and should not be used as default.
+	machineID: uint64(broadcast.MaxMachineID) + 1,
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -167,14 +175,14 @@ type Server struct {
 // This function is intended for internal Gorums use.
 // You should call `NewServer` in the generated code instead.
 func NewServer(opts ...ServerOption) *Server {
-	var serverOpts serverOptions
+	serverOpts := defaultServerOptions
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
 	s := &Server{
 		srv:          newOrderingServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
-		broadcastSrv: newBroadcastServer(serverOpts.logger, serverOpts.executionOrder),
+		broadcastSrv: newBroadcastServer(serverOpts.logger, serverOpts.executionOrder, serverOpts.machineID),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s

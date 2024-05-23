@@ -33,7 +33,7 @@ func (r *slowRouter) Send(broadcastID uint64, addr, method string, req any) erro
 func (r *slowRouter) Connect(addr string) {}
 
 func TestShard(t *testing.T) {
-	snowflake := NewSnowflake("127.0.0.1:8080")
+	snowflake := NewSnowflake(0)
 	broadcastID := snowflake.NewBroadcastID()
 	router := &slowRouter{
 		returnError: false,
@@ -151,7 +151,7 @@ func TestShard(t *testing.T) {
 }
 
 func BenchmarkShard(b *testing.B) {
-	snowflake := NewSnowflake("127.0.0.1:8080")
+	snowflake := NewSnowflake(0)
 	router := &slowRouter{
 		returnError: false,
 	}

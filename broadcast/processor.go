@@ -31,7 +31,7 @@ type metadata struct {
 	Sent              bool
 	ResponseMsg       protoreflect.ProtoMessage
 	ResponseErr       error
-	SendFn            func(protoreflect.ProtoMessage, error)
+	SendFn            func(protoreflect.ProtoMessage, error) error
 	IsBroadcastClient bool
 }
 
@@ -188,7 +188,10 @@ func (m *metadata) send(resp protoreflect.ProtoMessage, err error) error {
 	if !m.hasReceivedClientRequest() {
 		return MissingClientReqErr{}
 	}
-	m.SendFn(resp, err)
+	// error is intentionally ignored. We have not setup retry logic for failed
+	// deliveries to clients. Responding with nil will stop the broadcast request
+	// which is needed to prevent many stale goroutines.
+	_ = m.SendFn(resp, err)
 	return nil
 }
 

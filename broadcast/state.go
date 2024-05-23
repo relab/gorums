@@ -160,7 +160,7 @@ type Content struct {
 	OriginMethod      string
 	CurrentMethod     string
 	ReceiveChan       chan shardResponse
-	SendFn            func(resp protoreflect.ProtoMessage, err error)
+	SendFn            func(resp protoreflect.ProtoMessage, err error) error
 	Ctx               context.Context
 	CancelCtx         context.CancelFunc
 	Run               func(context.Context, func(Msg) error)

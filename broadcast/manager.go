@@ -16,7 +16,7 @@ type Manager interface {
 	Cancel(uint64, []string) error
 	Done(uint64)
 	NewBroadcastID() uint64
-	AddAddr(id uint32, addr string)
+	AddAddr(id uint32, addr string, machineID uint64)
 	AddHandler(method string, handler any)
 	Close() error
 	ResetState()
@@ -149,10 +149,10 @@ func (mgr *manager) NewBroadcastID() uint64 {
 	return mgr.state.snowflake.NewBroadcastID()
 }
 
-func (mgr *manager) AddAddr(id uint32, addr string) {
+func (mgr *manager) AddAddr(id uint32, addr string, machineID uint64) {
 	mgr.router.id = id
 	mgr.router.addr = addr
-	mgr.state.snowflake = NewSnowflake(addr)
+	mgr.state.snowflake = NewSnowflake(machineID)
 }
 
 func (mgr *manager) AddHandler(method string, handler any) {

@@ -19,7 +19,7 @@ type managerOptions struct {
 	metadata        metadata.MD
 	perNodeMD       func(uint32) metadata.MD
 	publicKey       string
-	addr            string
+	machineID       uint64
 }
 
 func newManagerOptions() managerOptions {
@@ -104,8 +104,8 @@ func WithPublicKey(publicKey string) ManagerOption {
 	}
 }
 
-func WithAddr(addr string) ManagerOption {
+func WithMachineID(id uint64) ManagerOption {
 	return func(o *managerOptions) {
-		o.addr = addr
+		o.machineID = id
 	}
 }
