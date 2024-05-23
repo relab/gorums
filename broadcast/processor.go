@@ -133,7 +133,6 @@ func (p *BroadcastProcessor) handleBroadcast(bMsg Msg, methods []string, metadat
 	}
 	p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Msg)
 
-	//	p.metadata.Methods = append(p.metadata.Methods, bMsg.Method)
 	p.updateOrder(bMsg.Method)
 	p.dispatchOutOfOrderMsgs()
 	return true
@@ -266,7 +265,9 @@ func (r *BroadcastProcessor) updateOrder(method string) {
 	if !ok {
 		return
 	}
-	r.orderIndex = order
+	if order > r.orderIndex {
+		r.orderIndex = order
+	}
 }
 
 func (r *BroadcastProcessor) dispatchOutOfOrderMsgs() {
