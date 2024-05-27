@@ -18,6 +18,24 @@ func (err AlreadyProcessedErr) Error() string {
 	return "already processed request"
 }
 
+type ReqFinishedErr struct{}
+
+func (err ReqFinishedErr) Error() string {
+	return "request has terminated"
+}
+
+type ClientReqAlreadyReceivedErr struct{}
+
+func (err ClientReqAlreadyReceivedErr) Error() string {
+	return "the client req has already been received. The forward req is thus dropped."
+}
+
+type MissingReqErr struct{}
+
+func (err MissingReqErr) Error() string {
+	return "a request has not been created yet."
+}
+
 type OutOfOrderErr struct{}
 
 func (err OutOfOrderErr) Error() string {

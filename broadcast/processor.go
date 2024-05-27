@@ -8,14 +8,15 @@ import (
 )
 
 type BroadcastProcessor struct {
-	broadcastID   uint64
-	router        Router
-	broadcastChan chan Msg
-	sendChan      chan Content
-	ctx           context.Context
-	cancelFunc    context.CancelFunc
-	started       time.Time
-	ended         time.Time
+	broadcastID          uint64
+	router               Router
+	broadcastChan        chan Msg
+	sendChan             chan Content
+	ctx                  context.Context
+	cancelFunc           context.CancelFunc
+	started              time.Time
+	ended                time.Time
+	hasReceivedClientReq bool
 
 	// handled by shard
 	cancellationCtx       context.Context
@@ -52,6 +53,20 @@ func (p *BroadcastProcessor) handle(msg Content) {
 	p.initOrder()
 	// connect to client immediately to potentially save some time
 	go p.router.Connect(metadata.OriginAddr)
+	if msg.ReceiveChan != nil {
+		if !p.isInOrder(msg.CurrentMethod) {
+			// save the message and execute it later
+			p.addToOutOfOrder(msg)
+			msg.ReceiveChan <- shardResponse{
+				err: OutOfOrderErr{},
+			}
+		}
+		msg.ReceiveChan <- shardResponse{
+			err:              nil,
+			reqCtx:           p.cancellationCtx,
+			enqueueBroadcast: p.enqueueBroadcast,
+		}
+	}
 	defer func() {
 		p.ended = time.Now()
 		p.cancelFunc()
@@ -95,6 +110,33 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				}
 				continue
 			}
+
+			if new.IsBroadcastClient {
+				if p.hasReceivedClientReq {
+					// this is a duplicate request, possibly from a forward operation.
+					// the req should simply be dropped.
+					new.ReceiveChan <- shardResponse{
+						err: ClientReqAlreadyReceivedErr{},
+					}
+					continue
+				}
+				// important to set this option to prevent duplicate client reqs.
+				// this can be the result if a server forwards the req but the
+				// leader has already received the client req.
+				p.hasReceivedClientReq = true
+				go func() {
+					// msg.Ctx will correspond to the streamCtx between the client and this server.
+					// We can thus listen to it and signal a cancellation if the client goes offline
+					// or cancels the request. We also have to listen to the req.ctx to prevent leaking
+					// the goroutine.
+					select {
+					case <-p.ctx.Done():
+					case <-msg.Ctx.Done():
+					}
+					p.cancellationCtxCancel()
+				}()
+			}
+
 			metadata.update(new)
 			// this only pertains to requests where the server has a
 			// direct connection to the client, e.g. QuorumCall.
@@ -110,6 +152,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				new.ReceiveChan <- shardResponse{
 					err: err,
 				}
+				//slog.Info("receive: late", "err", err, "id", p.broadcastID)
 				return
 			}
 			if !p.isInOrder(new.CurrentMethod) {
@@ -164,6 +207,7 @@ func (p *BroadcastProcessor) handleReply(bMsg Msg, metadata *metadata) bool {
 		}
 		// the request is not done yet because we have not replied to
 		// the client.
+		//slog.Info("reply: late", "err", err, "id", p.broadcastID)
 		return false
 	}
 	// the request is done becuase we have sent a reply to the client

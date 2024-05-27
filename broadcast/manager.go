@@ -41,7 +41,7 @@ func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dia
 	}
 }
 
-func (mgr *manager) Process(msg Content) (context.Context, func(Msg) error, error) {
+func (mgr *manager) Process2(msg Content) (context.Context, func(Msg) error, error) {
 	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
@@ -62,6 +62,18 @@ func (mgr *manager) Process(msg Content) (context.Context, func(Msg) error, erro
 	}
 }
 
+func (mgr *manager) Process(msg Content) (context.Context, func(Msg) error, error) {
+	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+
+	// we only need a single response
+	receiveChan := make(chan shardResponse, 1)
+	msg.ReceiveChan = receiveChan
+	resp := shard.handleMsg(msg)
+	return resp.reqCtx, resp.enqueueBroadcast, resp.err
+}
+
 func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage, method string, enqueueBroadcast func(Msg) error, opts ...BroadcastOptions) error {
 	var options BroadcastOptions
 	if len(opts) > 0 {
@@ -77,6 +89,31 @@ func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage,
 	if enqueueBroadcast != nil {
 		return enqueueBroadcast(msg)
 	}
+	slog.Info("manager: slow path")
+	// slow path: communicate with the shard first
+	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+	shard.handleBMsg(msg)
+	return nil
+}
+
+func (mgr *manager) Broadcast2(broadcastID uint64, req protoreflect.ProtoMessage, method string, enqueueBroadcast func(Msg) error, opts ...BroadcastOptions) error {
+	var options BroadcastOptions
+	if len(opts) > 0 {
+		options = opts[0]
+	}
+	msg := Msg{
+		Broadcast:   true,
+		Msg:         NewMsg(broadcastID, req, method, options),
+		Method:      method,
+		BroadcastID: broadcastID,
+	}
+	// fast path: communicate directly with the broadcast request
+	if enqueueBroadcast != nil {
+		return enqueueBroadcast(msg)
+	}
+	slog.Info("manager: slow path")
 	// slow path: communicate with the shard first
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
@@ -101,6 +138,28 @@ func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMess
 	if enqueueBroadcast != nil {
 		return enqueueBroadcast(msg)
 	}
+	slog.Info("manager: slow path")
+	// slow path: communicate with the shard first
+	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+	shard.handleBMsg(msg)
+	return nil
+}
+
+func (mgr *manager) SendToClient2(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast func(Msg) error) error {
+	msg := Msg{
+		Reply: &reply{
+			Response: resp,
+			Err:      err,
+		},
+		BroadcastID: broadcastID,
+	}
+	// fast path: communicate directly with the broadcast request
+	if enqueueBroadcast != nil {
+		return enqueueBroadcast(msg)
+	}
+	slog.Info("manager: slow path")
 	// slow path: communicate with the shard first
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
@@ -114,6 +173,19 @@ func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMess
 }
 
 func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string) error {
+	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+	shard.handleBMsg(Msg{
+		Cancellation: &cancellation{
+			srvAddrs: srvAddrs,
+		},
+		BroadcastID: broadcastID,
+	})
+	return nil
+}
+
+func (mgr *manager) Cancel2(broadcastID uint64, srvAddrs []string) error {
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
@@ -131,6 +203,19 @@ func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string) error {
 }
 
 func (mgr *manager) Done(broadcastID uint64) {
+	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+	shard.handleBMsg(Msg{
+		Cancellation: &cancellation{
+			end: true,
+		},
+		BroadcastID: broadcastID,
+	})
+	return
+}
+
+func (mgr *manager) Done2(broadcastID uint64) {
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]

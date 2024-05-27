@@ -247,7 +247,7 @@ func TestHandleBroadcastCall(t *testing.T) {
 	}
 }
 
-func BenchmarkHandle2(b *testing.B) {
+func BenchmarkHandleRequest(b *testing.B) {
 	snowflake := NewSnowflake(0)
 	originMethod := "testMethod"
 	router := &mockRouter{

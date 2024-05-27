@@ -95,6 +95,10 @@ func TestHandleBroadcastOption1(t *testing.T) {
 		router:                router,
 	}
 	go req.handle(msg)
+	resp := <-msg.ReceiveChan
+	if resp.err != nil {
+		t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", nil, resp.err)
+	}
 
 	for _, tt := range tests {
 		req.sendChan <- tt.in
@@ -131,7 +135,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 		ReceiveChan:       make(chan shardResponse),
 	}
 	req.sendChan <- clientMsg
-	resp := <-clientMsg.ReceiveChan
+	resp = <-clientMsg.ReceiveChan
 	expectedErr := AlreadyProcessedErr{}
 	if resp.err != expectedErr {
 		t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", resp.err, expectedErr)
@@ -205,6 +209,10 @@ func TestHandleBroadcastCall1(t *testing.T) {
 		router:                router,
 	}
 	go req.handle(msg)
+	resp := <-msg.ReceiveChan
+	if resp.err != nil {
+		t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", nil, resp.err)
+	}
 
 	for _, tt := range tests {
 		req.sendChan <- tt.in
@@ -248,7 +256,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 	}
 }
 
-func BenchmarkHandle1(b *testing.B) {
+func BenchmarkHandleProcessor(b *testing.B) {
 	snowflake := NewSnowflake(0)
 	originMethod := "testMethod"
 	router := &mockRouter{
@@ -267,14 +275,14 @@ func BenchmarkHandle1(b *testing.B) {
 	sendFn := func(resp protoreflect.ProtoMessage, err error) error { return nil }
 
 	b.ResetTimer()
-	b.Run("RequestHandler", func(b *testing.B) {
+	b.Run("ProcessorHandler", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			msg := Content{
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: true,
 				SendFn:            sendFn,
 				OriginMethod:      originMethod,
-				ReceiveChan:       make(chan shardResponse, 1),
+				ReceiveChan:       nil,
 			}
 
 			cancelCtx, cancelCancel := context.WithTimeout(context.Background(), 1*time.Minute)

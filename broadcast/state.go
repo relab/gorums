@@ -89,6 +89,7 @@ func (s *BroadcastState) Close() error {
 }
 
 func (s *BroadcastState) RunShards() {
+	return
 	for _, shard := range s.shards {
 		go shard.run(s.sendBuffer)
 	}
