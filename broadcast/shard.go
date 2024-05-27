@@ -101,7 +101,7 @@ func (s *shard) run(sendBuffer int) {
 					}
 					continue
 				}
-				if msg.IsBroadcastClient {
+				/*if msg.IsBroadcastClient {
 					// msg.Ctx will correspond to the streamCtx between the client and this server.
 					// We can thus listen to it and signal a cancellation if the client goes offline
 					// or cancels the request. We also have to listen to the req.ctx to prevent leaking
@@ -113,7 +113,7 @@ func (s *shard) run(sendBuffer int) {
 						}
 						req.cancellationCtxCancel()
 					}()
-				}
+				}*/
 				// must check if the req is done to prevent deadlock
 				select {
 				case <-req.ctx.Done():
