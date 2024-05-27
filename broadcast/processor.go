@@ -125,13 +125,13 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				// leader has already received the client req.
 				p.hasReceivedClientReq = true
 				go func() {
-					// msg.Ctx will correspond to the streamCtx between the client and this server.
+					// new.Ctx will correspond to the streamCtx between the client and this server.
 					// We can thus listen to it and signal a cancellation if the client goes offline
-					// or cancels the request. We also have to listen to the req.ctx to prevent leaking
+					// or cancels the request. We also have to listen to the p.ctx to prevent leaking
 					// the goroutine.
 					select {
 					case <-p.ctx.Done():
-					case <-msg.Ctx.Done():
+					case <-new.Ctx.Done():
 					}
 					p.cancellationCtxCancel()
 				}()

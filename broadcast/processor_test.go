@@ -46,6 +46,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 	}{
 		{
 			in: Content{
+				Ctx:               context.Background(),
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
 				ReceiveChan:       make(chan shardResponse),
@@ -54,6 +55,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 		},
 		{
 			in: Content{
+				Ctx:               context.Background(),
 				BroadcastID:       snowflake.NewBroadcastID(),
 				IsBroadcastClient: false,
 				ReceiveChan:       make(chan shardResponse),
@@ -62,6 +64,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 		},
 		{
 			in: Content{
+				Ctx:               context.Background(),
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
 				ReceiveChan:       make(chan shardResponse),
@@ -71,6 +74,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 	}
 
 	msg := Content{
+		Ctx:          context.Background(),
 		BroadcastID:  broadcastID,
 		OriginMethod: "testMethod",
 		ReceiveChan:  make(chan shardResponse),
@@ -129,6 +133,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 	}
 
 	clientMsg := Content{
+		Ctx:               context.Background(),
 		BroadcastID:       broadcastID,
 		IsBroadcastClient: true,
 		SendFn:            func(resp protoreflect.ProtoMessage, err error) error { return nil },
@@ -158,6 +163,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 	}{
 		{
 			in: Content{
+				Ctx:               context.Background(),
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
 				ReceiveChan:       make(chan shardResponse, 1),
@@ -166,6 +172,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 		},
 		{
 			in: Content{
+				Ctx:               context.Background(),
 				BroadcastID:       snowflake.NewBroadcastID(),
 				IsBroadcastClient: false,
 				ReceiveChan:       make(chan shardResponse, 1),
@@ -174,6 +181,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 		},
 		{
 			in: Content{
+				Ctx:               context.Background(),
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
 				ReceiveChan:       make(chan shardResponse, 1),
@@ -183,6 +191,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 	}
 
 	msg := Content{
+		Ctx:               context.Background(),
 		BroadcastID:       broadcastID,
 		IsBroadcastClient: false,
 		OriginAddr:        "127.0.0.1:8080",
