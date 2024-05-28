@@ -2,6 +2,7 @@ package broadcast
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -42,17 +43,17 @@ func TestShard(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	shard := &shard{
-		id:            0,
-		sendChan:      make(chan Content, shardBuffer),
-		broadcastChan: make(chan Msg, shardBuffer),
-		ctx:           ctx,
-		cancelFunc:    cancel,
+		id: 0,
+		//sendChan:      make(chan Content, shardBuffer),
+		//broadcastChan: make(chan Msg, shardBuffer),
+		ctx:        ctx,
+		cancelFunc: cancel,
 		//reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
 		reqs:   make(map[uint64]*BroadcastProcessor, shardBuffer),
 		router: router,
 		reqTTL: 5 * time.Minute,
 	}
-	go shard.run(5)
+	//go shard.run(5)
 
 	var tests = []struct {
 		in  Content
@@ -94,20 +95,20 @@ func TestShard(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		shard.sendChan <- tt.in
-		resp := <-tt.in.ReceiveChan
+		resp := shard.handleMsg(tt.in)
 		if resp.err != tt.out {
 			t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", tt.out, resp.err)
 		}
 	}
 
-	shard.broadcastChan <- Msg{
+	shard.handleBMsg(Msg{
+		MsgType: ReplyMsg,
 		Reply: &reply{
 			Response: mockResp{},
 			Err:      nil,
 		},
 		BroadcastID: broadcastID,
-	}
+	})
 
 	clientMsg := Content{
 		BroadcastID:       broadcastID,
@@ -117,10 +118,12 @@ func TestShard(t *testing.T) {
 		ReceiveChan:       make(chan shardResponse, 1),
 		Ctx:               context.Background(),
 	}
-	shard.sendChan <- clientMsg
+	resp := shard.handleMsg(clientMsg)
+	if !errors.Is(resp.err, AlreadyProcessedErr{}) {
+		t.Fatalf("the request should have been stopped. SendToClient has been called.")
+	}
 
 	// wait for the request to finish
-	time.Sleep(1 * time.Second)
 	msgShouldBeDropped := Content{
 		BroadcastID:       broadcastID,
 		OriginAddr:        "127.0.0.1:8080",
@@ -130,27 +133,30 @@ func TestShard(t *testing.T) {
 		Ctx:               context.Background(),
 	}
 	// this will panic if the request sendChan is closed
-	shard.sendChan <- msgShouldBeDropped
-	select {
-	case resp := <-msgShouldBeDropped.ReceiveChan:
-		if resp.err == nil {
-			t.Fatalf("the request should have been stopped. SendToClient has been called.")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatalf("a deadlock has most probably occured due to NOT buffering the receiveChan on the message.")
+	resp = shard.handleMsg(msgShouldBeDropped)
+	if !errors.Is(resp.err, AlreadyProcessedErr{}) {
+		t.Fatalf("the request should have been stopped. SendToClient has been called.")
 	}
+	//select {
+	//case resp := <-msgShouldBeDropped.ReceiveChan:
+	//if resp.err == nil {
+	//t.Fatalf("the request should have been stopped. SendToClient has been called.")
+	//}
+	//case <-time.After(3 * time.Second):
+	//t.Fatalf("a deadlock has most probably occured due to NOT buffering the receiveChan on the message.")
+	//}
 
-	select {
-	case resp := <-clientMsg.ReceiveChan:
-		if resp.err == nil {
-			t.Fatalf("the request should have been stopped. SendToClient has been called.")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatalf("a deadlock has most probably occured due to buffering the sendChan on a request and not cleaning up afterwards.")
-	}
+	//select {
+	//case resp := <-clientMsg.ReceiveChan:
+	//	if resp.err == nil {
+	//		t.Fatalf("the request should have been stopped. SendToClient has been called.")
+	//	}
+	//case <-time.After(3 * time.Second):
+	//	t.Fatalf("a deadlock has most probably occured due to buffering the sendChan on a request and not cleaning up afterwards.")
+	//}
 }
 
-func BenchmarkShard(b *testing.B) {
+/*func BenchmarkShard(b *testing.B) {
 	snowflake := NewSnowflake(0)
 	router := &slowRouter{
 		returnError: false,
@@ -159,17 +165,17 @@ func BenchmarkShard(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	shard := &shard{
-		id:            0,
-		sendChan:      make(chan Content, shardBuffer),
-		broadcastChan: make(chan Msg, shardBuffer),
-		ctx:           ctx,
-		cancelFunc:    cancel,
+		id: 0,
+		//sendChan:      make(chan Content, shardBuffer),
+		//broadcastChan: make(chan Msg, shardBuffer),
+		ctx:        ctx,
+		cancelFunc: cancel,
 		//reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
 		reqs:   make(map[uint64]*BroadcastProcessor, shardBuffer),
 		router: router,
 		reqTTL: 5 * time.Minute,
 	}
-	go shard.run(5)
+	//go shard.run(5)
 
 	originMethod := "test"
 	originAddr := "127.0.0.1:8080"
@@ -184,7 +190,7 @@ func BenchmarkShard(b *testing.B) {
 			Ctx:               context.Background(),
 		}
 		msgs[i] = msg
-		shard.sendChan <- msg
+		//		shard.sendChan <- msg
 		<-msg.ReceiveChan
 	}
 	//resp := Msg{
@@ -220,3 +226,4 @@ func BenchmarkShard(b *testing.B) {
 	b.StopTimer()
 	shard.Close()
 }
+*/

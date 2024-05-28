@@ -52,10 +52,10 @@ type BroadcastState struct {
 
 func NewState(logger *slog.Logger, router Router, order map[string]int) *BroadcastState {
 	shardBuffer := 100
-	sendBuffer := 10
+	sendBuffer := 30
 	TTL := 5 * time.Minute
 	ctx, cancel := context.WithCancel(context.Background())
-	shards := createShards(ctx, shardBuffer, router, order, TTL)
+	shards := createShards(ctx, shardBuffer, sendBuffer, router, order, TTL)
 	state := &BroadcastState{
 		parentCtx:           ctx,
 		parentCtxCancelFunc: cancel,
@@ -77,6 +77,7 @@ func (s *BroadcastState) Close() error {
 	if s.logger != nil {
 		s.logger.Debug("broadcast: closing state")
 	}
+	//s.debug()
 	s.parentCtxCancelFunc()
 	var err error
 	for _, client := range s.clients {
@@ -88,11 +89,24 @@ func (s *BroadcastState) Close() error {
 	return err
 }
 
+func (s *BroadcastState) debug() {
+	time.Sleep(1 * time.Second)
+	for _, shard := range s.shards {
+		for _, req := range shard.reqs {
+			select {
+			case <-req.ctx.Done():
+			default:
+				slog.Info("req not done", "req", req)
+			}
+		}
+	}
+}
+
 func (s *BroadcastState) RunShards() {
 	return
-	for _, shard := range s.shards {
-		go shard.run(s.sendBuffer)
-	}
+	//for _, shard := range s.shards {
+	//go shard.run(s.sendBuffer)
+	//}
 }
 
 func (s *BroadcastState) reset() {
@@ -102,7 +116,7 @@ func (s *BroadcastState) reset() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.parentCtx = ctx
 	s.parentCtxCancelFunc = cancel
-	s.shards = createShards(ctx, s.shardBuffer, s.router, s.order, s.reqTTL)
+	s.shards = createShards(ctx, s.shardBuffer, s.sendBuffer, s.router, s.order, s.reqTTL)
 	s.RunShards()
 	for _, client := range s.clients {
 		client.Close()

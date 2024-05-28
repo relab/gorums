@@ -154,12 +154,12 @@ func (srv *broadcastServer) forwardHandler(req protoreflect.ProtoMessage, method
 	srv.viewMutex.RUnlock()
 }
 
-func (srv *broadcastServer) cancelHandler(broadcastID uint64, srvAddrs []string) {
-	srv.manager.Cancel(broadcastID, srvAddrs)
+func (srv *broadcastServer) cancelHandler(broadcastID uint64, srvAddrs []string, enqueueBroadcast EnqueueBroadcast) error {
+	return srv.manager.Cancel(broadcastID, srvAddrs, enqueueBroadcast)
 }
 
-func (srv *broadcastServer) doneHandler(broadcastID uint64) {
-	srv.manager.Done(broadcastID)
+func (srv *broadcastServer) doneHandler(broadcastID uint64, enqueueBroadcast EnqueueBroadcast) {
+	srv.manager.Done(broadcastID, enqueueBroadcast)
 }
 
 func (srv *broadcastServer) canceler(broadcastID uint64, srvAddrs []string) {

@@ -8,20 +8,17 @@ import (
 )
 
 type BroadcastProcessor struct {
-	broadcastID          uint64
-	router               Router
-	broadcastChan        chan Msg
-	sendChan             chan Content
-	ctx                  context.Context
-	cancelFunc           context.CancelFunc
-	started              time.Time
-	ended                time.Time
-	hasReceivedClientReq bool
+	broadcastID   uint64
+	router        Router
+	broadcastChan chan Msg
+	sendChan      chan Content
+	ctx           context.Context
+	cancelFunc    context.CancelFunc
+	started       time.Time
+	ended         time.Time
 
-	// handled by shard
 	cancellationCtx       context.Context
 	cancellationCtxCancel context.CancelFunc
-	sentCancellation      bool
 
 	// ordering
 	executionOrder map[string]int
@@ -30,13 +27,15 @@ type BroadcastProcessor struct {
 }
 
 type metadata struct {
-	OriginAddr        string
-	OriginMethod      string
-	Sent              bool
-	ResponseMsg       protoreflect.ProtoMessage
-	ResponseErr       error
-	SendFn            func(protoreflect.ProtoMessage, error) error
-	IsBroadcastClient bool
+	OriginAddr           string
+	OriginMethod         string
+	Sent                 bool
+	ResponseMsg          protoreflect.ProtoMessage
+	ResponseErr          error
+	SendFn               func(protoreflect.ProtoMessage, error) error
+	IsBroadcastClient    bool
+	SentCancellation     bool
+	HasReceivedClientReq bool
 }
 
 func (p *BroadcastProcessor) handle(msg Content) {
@@ -48,6 +47,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 		IsBroadcastClient: msg.IsBroadcastClient,
 		SendFn:            msg.SendFn,
 		Sent:              false,
+		SentCancellation:  false,
 	}
 	methods := make([]string, 0, 3)
 	p.initOrder()
@@ -60,11 +60,12 @@ func (p *BroadcastProcessor) handle(msg Content) {
 			msg.ReceiveChan <- shardResponse{
 				err: OutOfOrderErr{},
 			}
-		}
-		msg.ReceiveChan <- shardResponse{
-			err:              nil,
-			reqCtx:           p.cancellationCtx,
-			enqueueBroadcast: p.enqueueBroadcast,
+		} else {
+			msg.ReceiveChan <- shardResponse{
+				err:              nil,
+				reqCtx:           p.cancellationCtx,
+				enqueueBroadcast: p.enqueueBroadcast,
+			}
 		}
 	}
 	defer func() {
@@ -73,6 +74,11 @@ func (p *BroadcastProcessor) handle(msg Content) {
 		p.cancellationCtxCancel()
 		// mark allocations ready for GC
 		p.outOfOrderMsgs = nil
+		// make sure the context is cancelled before closing the channels
+		<-p.ctx.Done()
+		//close(p.broadcastChan)
+		//close(p.sendChan)
+		p.emptyChannels(metadata)
 	}()
 	for {
 		select {
@@ -82,13 +88,18 @@ func (p *BroadcastProcessor) handle(msg Content) {
 			if p.broadcastID != bMsg.BroadcastID {
 				continue
 			}
-			if bMsg.Broadcast {
+			switch bMsg.MsgType {
+			case CancellationMsg:
+				if p.handleCancellation(bMsg, metadata) {
+					return
+				}
+			case BroadcastMsg:
 				if p.handleBroadcast(bMsg, methods, metadata) {
 					// methods keeps track of which methods has been broadcasted to.
 					// This prevents duplicate broadcasts.
 					methods = append(methods, bMsg.Method)
 				}
-			} else {
+			case ReplyMsg:
 				if p.handleReply(bMsg, metadata) {
 					// request is done if a reply is sent to the client.
 					return
@@ -112,7 +123,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 			}
 
 			if new.IsBroadcastClient {
-				if p.hasReceivedClientReq {
+				if metadata.HasReceivedClientReq {
 					// this is a duplicate request, possibly from a forward operation.
 					// the req should simply be dropped.
 					new.ReceiveChan <- shardResponse{
@@ -123,7 +134,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				// important to set this option to prevent duplicate client reqs.
 				// this can be the result if a server forwards the req but the
 				// leader has already received the client req.
-				p.hasReceivedClientReq = true
+				metadata.HasReceivedClientReq = true
 				go func() {
 					// new.Ctx will correspond to the streamCtx between the client and this server.
 					// We can thus listen to it and signal a cancellation if the client goes offline
@@ -152,7 +163,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				new.ReceiveChan <- shardResponse{
 					err: err,
 				}
-				//slog.Info("receive: late", "err", err, "id", p.broadcastID)
+				//	slog.Info("receive: late", "err", err, "id", p.broadcastID)
 				return
 			}
 			if !p.isInOrder(new.CurrentMethod) {
@@ -161,6 +172,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				new.ReceiveChan <- shardResponse{
 					err: OutOfOrderErr{},
 				}
+				continue
 			}
 			new.ReceiveChan <- shardResponse{
 				err:              nil,
@@ -169,6 +181,17 @@ func (p *BroadcastProcessor) handle(msg Content) {
 			}
 		}
 	}
+}
+
+func (p *BroadcastProcessor) handleCancellation(bMsg Msg, metadata *metadata) bool {
+	if bMsg.Cancellation.end {
+		return true
+	}
+	if !metadata.SentCancellation {
+		metadata.SentCancellation = true
+		go p.router.Send(p.broadcastID, "", "", bMsg.Cancellation)
+	}
+	return false
 }
 
 func (p *BroadcastProcessor) handleBroadcast(bMsg Msg, methods []string, metadata *metadata) bool {
@@ -263,6 +286,37 @@ func (m *metadata) hasReceivedClientRequest() bool {
 //return c.IsBroadcastClient && c.SendFn != nil
 //}
 
+func (p *BroadcastProcessor) emptyChannels(metadata *metadata) {
+	for {
+		select {
+		case msg := <-p.broadcastChan:
+			if p.broadcastID != msg.BroadcastID {
+				continue
+			}
+			switch msg.MsgType {
+			case CancellationMsg:
+				// it is possible to call SendToClient() before Cancel() in the same
+				// server handler. Since SendToClient() will stop the processor, we need
+				// to handle the cancellation here. We don't want to send duplicate
+				// cancellations and thus we only want to send a cancellation if the
+				// request has been stopped.
+				p.handleCancellation(msg, metadata)
+			case BroadcastMsg:
+				// broadcasts are not performed after a reply to the client is sent.
+				// this is to prevent duplication and processing of old messages.
+			case ReplyMsg:
+				// a reply should not be sent after the processor is done. This is
+				// because either:
+				// 	1. A reply has already been sent
+				// 	2. Done() has been called. SendToClient() should not be used together
+				//	   with this method
+			}
+		default:
+			return
+		}
+	}
+}
+
 func (r *BroadcastProcessor) initOrder() {
 	// the implementer has not specified an execution order
 	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
@@ -351,17 +405,48 @@ func (r *BroadcastProcessor) dispatchOutOfOrderMsgs() {
 }
 
 // this method is used to enqueue messages onto the broadcast channel
-// of a broadcast request. The messages enqueued are then transmitted
+// of a broadcast processor. The messages enqueued are then transmitted
 // to the other servers or the client depending on the type of message.
 // Currently there are three types:
 // - BroadcastMsg
 // - ClientReply
 // - Cancellation
-func (req *BroadcastProcessor) enqueueBroadcast(msg Msg) error {
+func (p *BroadcastProcessor) enqueueBroadcast(msg Msg) error {
+	// we want to prevent queueing messages on the buffered broadcastChan
+	// because it can potentially lead to concurrency bugs. These include:
+	//	- buffering a message on the channel and requiring that it is processed.
+	//	  this can happen with cancellation when SendToClient() is called first.
+	// 	- reaching the end of the buffer (same as not buffering the channel) and
+	//	  closing the broadcastChan at the same time. This will cause an error.
 	select {
-	case req.broadcastChan <- msg:
-		return nil
-	case <-req.ctx.Done():
+	case <-p.ctx.Done():
 		return AlreadyProcessedErr{}
+	default:
 	}
+	// this is not an optimal solution regarding cancellations. The cancellation
+	// msg can be discarded if the buffer is fully populated. This is because
+	// ctx.Done() will be called before the msg is queued.
+	select {
+	case <-p.ctx.Done():
+		return AlreadyProcessedErr{}
+	case p.broadcastChan <- msg:
+		return nil
+	}
+}
+
+func alreadyBroadcasted(methods []string, method string) bool {
+	for _, m := range methods {
+		if m == method {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Content) isBroadcastCall() bool {
+	return c.OriginAddr != ""
+}
+
+func (c *Content) hasReceivedClientRequest() bool {
+	return c.IsBroadcastClient && c.SendFn != nil
 }

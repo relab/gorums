@@ -264,7 +264,7 @@ func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
 // either Done() or SendToClient() to properly terminate a broadcast request
 // and free up resources. Otherwise, it could cause poor performance.
 func (b *Broadcast) Done() {
-	b.orchestrator.DoneHandler(b.metadata.BroadcastID)
+	b.orchestrator.DoneHandler(b.metadata.BroadcastID, b.enqueueBroadcast)
 }
 
 // SendToClient sends a message back to the calling client. It also terminates
@@ -282,7 +282,7 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 //
 // Could be used together with either SendToClient() or Done().
 func (b *Broadcast) Cancel() {
-	b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs)
+	b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs, b.enqueueBroadcast)
 }
 
 // SendToClient sends a message back to the calling client. It also terminates

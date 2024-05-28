@@ -2,7 +2,6 @@ package broadcast
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"google.golang.org/grpc"
@@ -13,8 +12,8 @@ type Manager interface {
 	Process(Content) (context.Context, func(Msg) error, error)
 	Broadcast(uint64, protoreflect.ProtoMessage, string, func(Msg) error, ...BroadcastOptions) error
 	SendToClient(uint64, protoreflect.ProtoMessage, error, func(Msg) error) error
-	Cancel(uint64, []string) error
-	Done(uint64)
+	Cancel(uint64, []string, func(Msg) error) error
+	Done(uint64, func(Msg) error)
 	NewBroadcastID() uint64
 	AddAddr(id uint32, addr string, machineID uint64)
 	AddHandler(method string, handler any)
@@ -41,7 +40,7 @@ func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dia
 	}
 }
 
-func (mgr *manager) Process2(msg Content) (context.Context, func(Msg) error, error) {
+/*func (mgr *manager) Process2(msg Content) (context.Context, func(Msg) error, error) {
 	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
@@ -60,7 +59,7 @@ func (mgr *manager) Process2(msg Content) (context.Context, func(Msg) error, err
 	case resp := <-receiveChan:
 		return resp.reqCtx, resp.enqueueBroadcast, resp.err
 	}
-}
+}*/
 
 func (mgr *manager) Process(msg Content) (context.Context, func(Msg) error, error) {
 	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
@@ -80,7 +79,8 @@ func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage,
 		options = opts[0]
 	}
 	msg := Msg{
-		Broadcast:   true,
+		//Broadcast:   true,
+		MsgType:     BroadcastMsg,
 		Msg:         NewMsg(broadcastID, req, method, options),
 		Method:      method,
 		BroadcastID: broadcastID,
@@ -89,7 +89,6 @@ func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage,
 	if enqueueBroadcast != nil {
 		return enqueueBroadcast(msg)
 	}
-	slog.Info("manager: slow path")
 	// slow path: communicate with the shard first
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
@@ -98,7 +97,7 @@ func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage,
 	return nil
 }
 
-func (mgr *manager) Broadcast2(broadcastID uint64, req protoreflect.ProtoMessage, method string, enqueueBroadcast func(Msg) error, opts ...BroadcastOptions) error {
+/*func (mgr *manager) Broadcast2(broadcastID uint64, req protoreflect.ProtoMessage, method string, enqueueBroadcast func(Msg) error, opts ...BroadcastOptions) error {
 	var options BroadcastOptions
 	if len(opts) > 0 {
 		options = opts[0]
@@ -124,10 +123,11 @@ func (mgr *manager) Broadcast2(broadcastID uint64, req protoreflect.ProtoMessage
 	case <-shard.ctx.Done():
 		return ShardDownErr{}
 	}
-}
+}*/
 
 func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast func(Msg) error) error {
 	msg := Msg{
+		MsgType: ReplyMsg,
 		Reply: &reply{
 			Response: resp,
 			Err:      err,
@@ -138,7 +138,6 @@ func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMess
 	if enqueueBroadcast != nil {
 		return enqueueBroadcast(msg)
 	}
-	slog.Info("manager: slow path")
 	// slow path: communicate with the shard first
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
@@ -147,7 +146,7 @@ func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMess
 	return nil
 }
 
-func (mgr *manager) SendToClient2(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast func(Msg) error) error {
+/*func (mgr *manager) SendToClient2(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast func(Msg) error) error {
 	msg := Msg{
 		Reply: &reply{
 			Response: resp,
@@ -170,22 +169,28 @@ func (mgr *manager) SendToClient2(broadcastID uint64, resp protoreflect.ProtoMes
 	case <-shard.ctx.Done():
 		return ShardDownErr{}
 	}
-}
+}*/
 
-func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string) error {
-	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
-	shardID = shardID % NumShards
-	shard := mgr.state.shards[shardID]
-	shard.handleBMsg(Msg{
+func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string, enqueueBroadcast func(Msg) error) error {
+	msg := Msg{
+		MsgType: CancellationMsg,
 		Cancellation: &cancellation{
+			end:      false, // should NOT stop the request
 			srvAddrs: srvAddrs,
 		},
 		BroadcastID: broadcastID,
-	})
+	}
+	if enqueueBroadcast != nil {
+		return enqueueBroadcast(msg)
+	}
+	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
+	shardID = shardID % NumShards
+	shard := mgr.state.shards[shardID]
+	shard.handleBMsg(msg)
 	return nil
 }
 
-func (mgr *manager) Cancel2(broadcastID uint64, srvAddrs []string) error {
+/*func (mgr *manager) Cancel2(broadcastID uint64, srvAddrs []string) error {
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
@@ -200,22 +205,28 @@ func (mgr *manager) Cancel2(broadcastID uint64, srvAddrs []string) error {
 	case <-shard.ctx.Done():
 		return ShardDownErr{}
 	}
-}
+}*/
 
-func (mgr *manager) Done(broadcastID uint64) {
+func (mgr *manager) Done(broadcastID uint64, enqueueBroadcast func(Msg) error) {
+	msg := Msg{
+		MsgType: CancellationMsg,
+		Cancellation: &cancellation{
+			end: true, // should stop the request
+		},
+		BroadcastID: broadcastID,
+	}
+	if enqueueBroadcast != nil {
+		enqueueBroadcast(msg)
+		return
+	}
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
-	shard.handleBMsg(Msg{
-		Cancellation: &cancellation{
-			end: true,
-		},
-		BroadcastID: broadcastID,
-	})
+	shard.handleBMsg(msg)
 	return
 }
 
-func (mgr *manager) Done2(broadcastID uint64) {
+/*func (mgr *manager) Done2(broadcastID uint64) {
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.shards[shardID]
@@ -228,7 +239,7 @@ func (mgr *manager) Done2(broadcastID uint64) {
 	}:
 	case <-shard.ctx.Done():
 	}
-}
+}*/
 
 func (mgr *manager) NewBroadcastID() uint64 {
 	return mgr.state.snowflake.NewBroadcastID()

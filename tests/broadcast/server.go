@@ -57,7 +57,6 @@ func newtestServer(addr string, srvAddresses []string, _ int, withOrder ...bool)
 		srv.processingTime = 100 * time.Millisecond
 	}
 	srv.mgr = NewManager(
-		gorums.WithPublicKey("server"),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),

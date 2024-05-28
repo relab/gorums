@@ -2,22 +2,23 @@ package broadcast
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-/*type mockResp struct{}
+type mockResp struct{}
 
 func (mockResp) ProtoReflect() protoreflect.Message {
-return nil
+	return nil
 }
 
 type mockRouter struct {
-returnError bool
-reqType     string
-resp        protoreflect.ProtoMessage
+	returnError bool
+	reqType     string
+	resp        protoreflect.ProtoMessage
 }
 
 func (r *mockRouter) Send(broadcastID uint64, addr, method string, req any) error {
@@ -34,7 +35,7 @@ func (r *mockRouter) Send(broadcastID uint64, addr, method string, req any) erro
 	return nil
 }
 
-func (r *mockRouter) Connect(addr string) {}*/
+func (r *mockRouter) Connect(addr string) {}
 
 func TestHandleBroadcastOption1(t *testing.T) {
 	snowflake := NewSnowflake(0)
@@ -119,6 +120,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 	}
 
 	req.broadcastChan <- Msg{
+		MsgType: ReplyMsg,
 		Reply: &reply{
 			Response: mockResp{},
 			Err:      nil,
@@ -238,6 +240,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 	}
 
 	req.broadcastChan <- Msg{
+		MsgType: ReplyMsg,
 		Reply: &reply{
 			Response: mockResp{},
 			Err:      nil,

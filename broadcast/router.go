@@ -132,8 +132,28 @@ func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
 	return client, nil
 }
 
+type msgType int
+
+const (
+	BroadcastMsg msgType = iota
+	ReplyMsg
+	CancellationMsg
+)
+
+func (m msgType) String() string {
+	switch m {
+	case BroadcastMsg:
+		return "BroadcastMsg"
+	case ReplyMsg:
+		return "ReplyMsg"
+	case CancellationMsg:
+		return "CancellationMsg"
+	}
+	return "unkown"
+}
+
 type Msg struct {
-	Broadcast    bool
+	MsgType      msgType
 	BroadcastID  uint64
 	Msg          *broadcastMsg
 	Method       string
@@ -174,5 +194,5 @@ func (r *reply) getError() error {
 
 type cancellation struct {
 	srvAddrs []string
-	end      bool
+	end      bool // end is used to stop the request.
 }

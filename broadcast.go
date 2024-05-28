@@ -72,8 +72,8 @@ type BroadcastHandlerFunc func(method string, req protoreflect.ProtoMessage, bro
 type BroadcastForwardHandlerFunc func(req protoreflect.ProtoMessage, method string, broadcastID uint64, forwardAddr, originAddr string)
 type BroadcastServerHandlerFunc func(method string, req protoreflect.ProtoMessage, options ...broadcast.BroadcastOptions)
 type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast EnqueueBroadcast) error
-type CancelHandlerFunc func(broadcastID uint64, srvAddrs []string)
-type DoneHandlerFunc func(broadcastID uint64)
+type CancelHandlerFunc func(broadcastID uint64, srvAddrs []string, enqueueBroadcast EnqueueBroadcast) error
+type DoneHandlerFunc func(broadcastID uint64, enqueueBroadcast EnqueueBroadcast)
 type EnqueueBroadcast func(broadcast.Msg) error
 
 type defaultImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(ServerCtx, T) (V, error)
