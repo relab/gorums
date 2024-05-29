@@ -165,6 +165,8 @@ func TestBroadcastCancel(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		config.LongRunningTask(ctx, &Request{Value: val})
 		cancel()
+		// wait until cancel has reaced the servers before asking for the result
+		time.Sleep(100 * time.Millisecond)
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.GetVal(ctx, &Request{Value: val})
 		cancel()

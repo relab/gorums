@@ -158,7 +158,7 @@ func WithOrder(executionOrder ...string) ServerOption {
 	}
 }
 
-func WithSlogger(logger *slog.Logger) ServerOption {
+func WithSLogger(logger *slog.Logger) ServerOption {
 	return func(o *serverOptions) {
 		o.logger = logger
 	}

@@ -86,6 +86,7 @@ func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished 
 	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
 	msg.OriginAddr = in.Metadata.BroadcastMsg.OriginAddr
 	msg.OriginMethod = in.Metadata.BroadcastMsg.OriginMethod
+	msg.SenderAddr = in.Metadata.BroadcastMsg.SenderAddr
 	msg.CurrentMethod = in.Metadata.Method
 	msg.Ctx = ctx.Context
 	msg.Run = run

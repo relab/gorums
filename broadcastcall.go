@@ -35,8 +35,8 @@ func (bcd *BroadcastCallData) inSubset(addr string) bool {
 	return false
 }
 
-// BroadcastCall performs a multicast call on the configuration.
-func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData) {
+// BroadcastCall performs a broadcast on the configuration.
+func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData, opts ...CallOption) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
 		IsBroadcastClient: d.IsBroadcastClient,
 		BroadcastID:       d.BroadcastID,
@@ -44,7 +44,7 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		OriginAddr:        d.OriginAddr,
 		OriginMethod:      d.OriginMethod,
 	}}
-	o := getCallOptions(E_Broadcast, nil)
+	o := getCallOptions(E_Broadcast, opts)
 
 	var replyChan chan response
 	if !o.noSendWaiting {
@@ -82,6 +82,7 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		n.channel.enqueueSlow(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o})
 	}
 
+	// if noSendWaiting is set, we will not wait for confirmation from the channel before returning.
 	if o.noSendWaiting {
 		return
 	}
@@ -90,5 +91,4 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 	for ; sentMsgs > 0; sentMsgs-- {
 		<-replyChan
 	}
-	close(replyChan)
 }

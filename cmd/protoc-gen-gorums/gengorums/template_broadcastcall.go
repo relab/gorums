@@ -39,7 +39,7 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.{{.Method.GoName}}QF), "{{.Method.Desc.FullName}}")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -49,7 +49,7 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {

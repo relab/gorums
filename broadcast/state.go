@@ -55,7 +55,7 @@ func NewState(logger *slog.Logger, router Router, order map[string]int) *Broadca
 	sendBuffer := 30
 	TTL := 5 * time.Minute
 	ctx, cancel := context.WithCancel(context.Background())
-	shards := createShards(ctx, shardBuffer, sendBuffer, router, order, TTL)
+	shards := createShards(ctx, shardBuffer, sendBuffer, router, order, TTL, logger)
 	state := &BroadcastState{
 		parentCtx:           ctx,
 		parentCtxCancelFunc: cancel,
@@ -116,7 +116,7 @@ func (s *BroadcastState) reset() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.parentCtx = ctx
 	s.parentCtxCancelFunc = cancel
-	s.shards = createShards(ctx, s.shardBuffer, s.sendBuffer, s.router, s.order, s.reqTTL)
+	s.shards = createShards(ctx, s.shardBuffer, s.sendBuffer, s.router, s.order, s.reqTTL, s.logger)
 	s.RunShards()
 	for _, client := range s.clients {
 		client.Close()
@@ -173,6 +173,7 @@ type Content struct {
 	IsCancellation    bool
 	OriginAddr        string
 	OriginMethod      string
+	SenderAddr        string
 	CurrentMethod     string
 	ReceiveChan       chan shardResponse
 	SendFn            func(resp protoreflect.ProtoMessage, err error) error

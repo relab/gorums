@@ -70,7 +70,9 @@ func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any)
 		r.canceler(broadcastID, val.srvAddrs)
 		return nil
 	}
-	return errors.New("wrong req type")
+	err := errors.New("wrong req type")
+	r.log("router: malformed msg", "err", err, "BroadcastID", broadcastID)
+	return err
 }
 
 func (r *BroadcastRouter) Connect(addr string) {
@@ -84,7 +86,9 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string
 		handler(msg.ctx, msg.request, broadcastID, addr, method, msg.options, r.id, r.addr)
 		return nil
 	}
-	return errors.New("not found")
+	err := errors.New("handler not found")
+	r.log("router (broadcast): could not find handler", "err", err, "BroadcastID", broadcastID, "addr", addr, "method", method)
+	return err
 }
 
 func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method string, resp *reply) error {
@@ -92,13 +96,18 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 	if _, ok := r.clientHandlers[method]; ok && addr != "" {
 		client, err := r.getClient(addr)
 		if err != nil {
+			r.log("router (reply): could not get client", "err", err, "BroadcastID", broadcastID, "addr", addr, "method", method)
 			return err
 		}
-		return client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout)
+		err = client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout)
+		r.log("router (reply): could not send reply", "err", err, "BroadcastID", broadcastID, "addr", addr, "method", method)
+		return err
 	}
 	// the server can receive a broadcast from another server before a client sends a direct message.
 	// it should thus wait for a potential message from the client. otherwise, it should be removed.
-	return errors.New("not routed")
+	err := errors.New("not routed")
+	r.log("router (reply): could not find handler", "err", err, "BroadcastID", broadcastID, "addr", addr, "method", method)
+	return err
 }
 
 func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
@@ -130,6 +139,12 @@ func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
 	}
 	r.state.addClient(addr, client)
 	return client, nil
+}
+
+func (r *BroadcastRouter) log(msg string, args ...any) {
+	if r.logger != nil {
+		r.logger.Debug(msg, args...)
+	}
 }
 
 type msgType int

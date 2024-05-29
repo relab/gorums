@@ -64,8 +64,8 @@ func (srv *ClientServer) Stop() {
 	}
 }
 
-func (srv *ClientServer) AddRequest(broadcastID uint64, clientCtx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler, method string) (chan protoreflect.ProtoMessage, QuorumCallData) {
-	cd := QuorumCallData{
+func (srv *ClientServer) AddRequest(broadcastID uint64, clientCtx context.Context, in protoreflect.ProtoMessage, handler ReplySpecHandler, method string) (chan protoreflect.ProtoMessage, BroadcastCallData) {
+	cd := BroadcastCallData{
 		Message: in,
 		Method:  method,
 

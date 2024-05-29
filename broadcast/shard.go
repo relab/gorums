@@ -2,6 +2,7 @@ package broadcast
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 )
@@ -37,12 +38,13 @@ type shard struct {
 	nextGC      time.Time
 	shardBuffer int
 	sendBuffer  int
+	logger      *slog.Logger
 
 	preserveOrdering bool
 	order            map[string]int
 }
 
-func createShards(ctx context.Context, shardBuffer, sendBuffer int, router Router, order map[string]int, reqTTL time.Duration) []*shard {
+func createShards(ctx context.Context, shardBuffer, sendBuffer int, router Router, order map[string]int, reqTTL time.Duration, logger *slog.Logger) []*shard {
 	shards := make([]*shard, NumShards)
 	for i := range shards {
 		ctx, cancel := context.WithCancel(ctx)
@@ -60,6 +62,7 @@ func createShards(ctx context.Context, shardBuffer, sendBuffer int, router Route
 			router:           router,
 			preserveOrdering: order != nil,
 			order:            order,
+			logger:           logger,
 		}
 	}
 	return shards
@@ -375,6 +378,10 @@ func (s *shard) addProcessor2(sendBuffer int, msg Content) (*BroadcastProcessor,
 	// should only affect the current shard and not the others.
 	ctx, cancel := context.WithTimeout(s.ctx, s.reqTTL)
 	//req := &BroadcastRequest{
+	var logger *slog.Logger
+	if s.logger != nil {
+		logger = s.logger.With(slog.Uint64("BroadcastID", msg.BroadcastID))
+	}
 	req := &BroadcastProcessor{
 		ctx:        ctx,
 		cancelFunc: cancel,
@@ -395,6 +402,7 @@ func (s *shard) addProcessor2(sendBuffer int, msg Content) (*BroadcastProcessor,
 		cancellationCtxCancel: msg.CancelCtx,
 		executionOrder:        s.order,
 		//sendCancellation:      new(sync.Once),
+		logger: logger,
 	}
 	s.reqs[msg.BroadcastID] = req
 	//go req.handle(s.router, msg.BroadcastID, msg)

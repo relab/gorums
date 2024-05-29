@@ -404,7 +404,7 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -414,7 +414,7 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -454,7 +454,7 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallForwardQF), "broadcast.BroadcastService.BroadcastCallForward")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -464,7 +464,7 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -504,7 +504,7 @@ func (c *Configuration) BroadcastCallTo(ctx context.Context, in *Request) (resp 
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallToQF), "broadcast.BroadcastService.BroadcastCallTo")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -514,7 +514,7 @@ func (c *Configuration) BroadcastCallTo(ctx context.Context, in *Request) (resp 
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -554,7 +554,7 @@ func (c *Configuration) Search(ctx context.Context, in *Request) (resp *Response
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.SearchQF), "broadcast.BroadcastService.Search")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -564,7 +564,7 @@ func (c *Configuration) Search(ctx context.Context, in *Request) (resp *Response
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -604,7 +604,7 @@ func (c *Configuration) LongRunningTask(ctx context.Context, in *Request) (resp 
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.LongRunningTaskQF), "broadcast.BroadcastService.LongRunningTask")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -654,7 +654,7 @@ func (c *Configuration) GetVal(ctx context.Context, in *Request) (resp *Response
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.GetValQF), "broadcast.BroadcastService.GetVal")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -704,7 +704,7 @@ func (c *Configuration) Order(ctx context.Context, in *Request) (resp *Response,
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.OrderQF), "broadcast.BroadcastService.Order")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -714,7 +714,7 @@ func (c *Configuration) Order(ctx context.Context, in *Request) (resp *Response,
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -772,7 +772,7 @@ type QuorumSpec interface {
 	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
-	// quorum call method. The in parameter is the request object
+	// broadcast call method. The in parameter is the request object
 	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.

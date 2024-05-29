@@ -48,7 +48,7 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler1QF), "dev.ZorumsService.BroadcastWithClientHandler1")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -58,7 +58,7 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -98,7 +98,7 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandler2QF), "dev.ZorumsService.BroadcastWithClientHandler2")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -108,7 +108,7 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -148,7 +148,7 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastWithClientHandlerAndBroadcastOptionQF), "dev.ZorumsService.BroadcastWithClientHandlerAndBroadcastOption")
-	c.RawConfiguration.Multicast(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -158,7 +158,7 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 		}
 		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
 		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
