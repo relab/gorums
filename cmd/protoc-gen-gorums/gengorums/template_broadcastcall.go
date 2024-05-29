@@ -17,7 +17,7 @@ func (srv *clientServerImpl) client{{.Method.GoName}}(ctx context.Context, resp 
 `
 
 var clientServerImplMethod = `
-func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFile .Method}}) (resp *{{out .GenFile .Method}}, err error) {
+func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFile .Method}}, cancelOnTimeout... bool) (resp *{{out .GenFile .Method}}, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -43,13 +43,17 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {

@@ -229,7 +229,7 @@ func (srv *testServer) LongRunningTask(ctx gorums.ServerCtx, req *Request, broad
 	select {
 	case <-ctx.Done():
 		srv.val = 1
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		srv.val = 0
 	}
 	broadcast.Done()

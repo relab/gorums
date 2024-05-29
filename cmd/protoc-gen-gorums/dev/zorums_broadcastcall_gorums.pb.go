@@ -26,7 +26,7 @@ func (srv *clientServerImpl) clientBroadcastWithClientHandler1(ctx context.Conte
 	return resp, err
 }
 
-func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -52,13 +52,17 @@ func (c *Configuration) BroadcastWithClientHandler1(ctx context.Context, in *Req
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -76,7 +80,7 @@ func (srv *clientServerImpl) clientBroadcastWithClientHandler2(ctx context.Conte
 	return resp, err
 }
 
-func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -102,13 +106,17 @@ func (c *Configuration) BroadcastWithClientHandler2(ctx context.Context, in *Req
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -126,7 +134,7 @@ func (srv *clientServerImpl) clientBroadcastWithClientHandlerAndBroadcastOption(
 	return resp, err
 }
 
-func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -152,13 +160,17 @@ func (c *Configuration) BroadcastWithClientHandlerAndBroadcastOption(ctx context
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {

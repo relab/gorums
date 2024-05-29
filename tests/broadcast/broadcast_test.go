@@ -163,7 +163,7 @@ func TestBroadcastCancel(t *testing.T) {
 	for i := 1; i <= numReqs; i++ {
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		config.LongRunningTask(ctx, &Request{Value: val})
+		config.LongRunningTask(ctx, &Request{Value: val}, true)
 		cancel()
 		// wait until cancel has reaced the servers before asking for the result
 		time.Sleep(100 * time.Millisecond)
@@ -200,7 +200,7 @@ func TestBroadcastCancelOneSrvDown(t *testing.T) {
 	for i := 1; i <= numReqs; i++ {
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		config.LongRunningTask(ctx, &Request{Value: val})
+		config.LongRunningTask(ctx, &Request{Value: val}, true)
 		cancel()
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.GetVal(ctx, &Request{Value: val})
@@ -231,7 +231,7 @@ func TestBroadcastCancelOneSrvFails(t *testing.T) {
 
 	val := int64(100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	config.LongRunningTask(ctx, &Request{Value: val})
+	config.LongRunningTask(ctx, &Request{Value: val}, true)
 	cancel()
 
 	// stop one of the servers
@@ -263,7 +263,7 @@ func TestBroadcastCancelOneClientFails(t *testing.T) {
 	}
 
 	val := int64(100)
-	go config.LongRunningTask(context.Background(), &Request{Value: val})
+	go config.LongRunningTask(context.Background(), &Request{Value: val}, true)
 
 	// make sure the request is sent and stop the client
 	time.Sleep(100 * time.Millisecond)

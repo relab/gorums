@@ -110,8 +110,8 @@ func (mgr *Manager) Close() {
 	}
 }
 
-func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
-	srv := gorums.NewClientServer(lis)
+func (mgr *Manager) AddClientServer(lis net.Listener, opts ...gorums.ServerOption) error {
+	srv := gorums.NewClientServer(lis, opts...)
 	srvImpl := &clientServerImpl{
 		ClientServer: srv,
 	}
@@ -382,7 +382,7 @@ func (srv *clientServerImpl) clientBroadcastCall(ctx context.Context, resp *Resp
 	return resp, err
 }
 
-func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) BroadcastCall(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -408,13 +408,17 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request) (resp *R
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -432,7 +436,7 @@ func (srv *clientServerImpl) clientBroadcastCallForward(ctx context.Context, res
 	return resp, err
 }
 
-func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -458,13 +462,17 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request) (
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -482,7 +490,7 @@ func (srv *clientServerImpl) clientBroadcastCallTo(ctx context.Context, resp *Re
 	return resp, err
 }
 
-func (c *Configuration) BroadcastCallTo(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) BroadcastCallTo(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -508,13 +516,17 @@ func (c *Configuration) BroadcastCallTo(ctx context.Context, in *Request) (resp 
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -532,7 +544,7 @@ func (srv *clientServerImpl) clientSearch(ctx context.Context, resp *Response, b
 	return resp, err
 }
 
-func (c *Configuration) Search(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) Search(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -558,13 +570,17 @@ func (c *Configuration) Search(ctx context.Context, in *Request) (resp *Response
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -582,7 +598,7 @@ func (srv *clientServerImpl) clientLongRunningTask(ctx context.Context, resp *Re
 	return resp, err
 }
 
-func (c *Configuration) LongRunningTask(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) LongRunningTask(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -608,13 +624,17 @@ func (c *Configuration) LongRunningTask(ctx context.Context, in *Request) (resp 
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -632,7 +652,7 @@ func (srv *clientServerImpl) clientGetVal(ctx context.Context, resp *Response, b
 	return resp, err
 }
 
-func (c *Configuration) GetVal(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) GetVal(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -658,13 +678,17 @@ func (c *Configuration) GetVal(ctx context.Context, in *Request) (resp *Response
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd)
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -682,7 +706,7 @@ func (srv *clientServerImpl) clientOrder(ctx context.Context, resp *Response, br
 	return resp, err
 }
 
-func (c *Configuration) Order(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *Configuration) Order(ctx context.Context, in *Request, cancelOnTimeout ...bool) (resp *Response, err error) {
 	if c.srv == nil {
 		return nil, fmt.Errorf("config: a client server is not defined. Use mgr.AddClientServer() to define a client server")
 	}
@@ -708,13 +732,17 @@ func (c *Configuration) Order(ctx context.Context, in *Request) (resp *Response,
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
-		bd := gorums.BroadcastCallData{
-			Method:      gorums.Cancellation,
-			BroadcastID: broadcastID,
+		if len(cancelOnTimeout) > 0 && cancelOnTimeout[0] {
+			go func() {
+				bd := gorums.BroadcastCallData{
+					Method:      gorums.Cancellation,
+					BroadcastID: broadcastID,
+				}
+				cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
+				defer cancelCancel()
+				c.RawConfiguration.BroadcastCall(cancelCtx, bd)
+			}()
 		}
-		cancelCtx, cancelCancel := context.WithTimeout(context.Background(), timeout)
-		defer cancelCancel()
-		c.RawConfiguration.BroadcastCall(cancelCtx, bd, gorums.WithNoSendWaiting())
 		return nil, fmt.Errorf("context cancelled")
 	}
 	if !ok {
@@ -772,7 +800,7 @@ type QuorumSpec interface {
 	QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 
 	// QuorumCallWithBroadcastQF is the quorum function for the QuorumCallWithBroadcast
-	// broadcast call method. The in parameter is the request object
+	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCallWithBroadcast method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
