@@ -115,12 +115,6 @@ type serverOptions struct {
 	machineID       uint64
 }
 
-var defaultServerOptions = serverOptions{
-	// Provide an illegal machineID to avoid unintentional collisions.
-	// 0 is a valid MachineID and should not be used as default.
-	machineID: uint64(broadcast.MaxMachineID) + 1,
-}
-
 // ServerOption is used to change settings for the GorumsServer
 type ServerOption func(*serverOptions)
 
@@ -164,6 +158,12 @@ func WithSLogger(logger *slog.Logger) ServerOption {
 	}
 }
 
+func WithSrvID(machineID uint64) ServerOption {
+	return func(o *serverOptions) {
+		o.machineID = machineID
+	}
+}
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *orderingServer
@@ -175,7 +175,11 @@ type Server struct {
 // This function is intended for internal Gorums use.
 // You should call `NewServer` in the generated code instead.
 func NewServer(opts ...ServerOption) *Server {
-	serverOpts := defaultServerOptions
+	serverOpts := serverOptions{
+		// Provide an illegal machineID to avoid unintentional collisions.
+		// 0 is a valid MachineID and should not be used as default.
+		machineID: uint64(broadcast.MaxMachineID) + 1,
+	}
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}

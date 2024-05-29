@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/relab/gorums"
-	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/encoding"
 )
 
@@ -40,8 +39,8 @@ func (mgr *Manager) Close() {
 	}
 }
 
-func (mgr *Manager) AddClientServer(lis net.Listener, opts ...grpc.ServerOption) error {
-	srv := gorums.NewClientServer(lis)
+func (mgr *Manager) AddClientServer(lis net.Listener, opts ...gorums.ServerOption) error {
+	srv := gorums.NewClientServer(lis, opts...)
 	srvImpl := &clientServerImpl{
 		ClientServer: srv,
 	}

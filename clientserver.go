@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ type csr struct {
 }
 
 type ClientServer struct {
+	id         uint64 // should correpond to the ID given to the manager
 	mu         sync.Mutex
 	csr        map[uint64]*csr
 	reqChan    chan *ClientRequest
@@ -52,10 +54,14 @@ type ClientServer struct {
 	inProgress uint64
 	grpcServer *grpc.Server
 	handlers   map[string]requestHandler
+	logger     *slog.Logger
 	ordering.UnimplementedGorumsServer
 }
 
 func (srv *ClientServer) Stop() {
+	if srv.logger != nil {
+		srv.logger.Info("clientserver: stopped")
+	}
 	if srv.cancelCtx != nil {
 		srv.cancelCtx()
 	}
@@ -85,12 +91,16 @@ func (srv *ClientServer) AddRequest(broadcastID uint64, clientCtx context.Contex
 	}
 	srv.mu.Unlock()
 
-	go createReq(ctx, clientCtx, cancel, in, doneChan, respChan, handler)
+	var logger *slog.Logger
+	if srv.logger != nil {
+		logger = srv.logger.With(slog.Uint64("BroadcastID", broadcastID))
+	}
+	go createReq(ctx, clientCtx, cancel, in, doneChan, respChan, handler, logger)
 
 	return doneChan, cd
 }
 
-func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req protoreflect.ProtoMessage, doneChan chan protoreflect.ProtoMessage, respChan chan protoreflect.ProtoMessage, handler ReplySpecHandler) {
+func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req protoreflect.ProtoMessage, doneChan chan protoreflect.ProtoMessage, respChan chan protoreflect.ProtoMessage, handler ReplySpecHandler, logger *slog.Logger) {
 	// make sure to cancel the req ctx when returning to
 	// prevent a leaking ctx.
 	defer cancel()
@@ -99,6 +109,9 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 		select {
 		case <-clientCtx.Done():
 			// client provided ctx
+			if logger != nil {
+				logger.Warn("clientserver: stopped by client")
+			}
 			return
 		case <-ctx.Done():
 			// request ctx. this is a child to the server ctx.
@@ -110,6 +123,9 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 			// chooses not to timeout the request and the server
 			// goes down.
 			close(doneChan)
+			if logger != nil {
+				logger.Warn("clientserver: stopped by server")
+			}
 			return
 		case resp := <-respChan:
 			// keep track of all responses thus far
@@ -121,6 +137,9 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 				case doneChan <- response:
 				case <-ctx.Done():
 				case <-clientCtx.Done():
+				}
+				if logger != nil {
+					logger.Info("clientserver: req done")
 				}
 				close(doneChan)
 				return
@@ -140,6 +159,9 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 
 	if !ok {
 		return fmt.Errorf("doesn't exist")
+	}
+	if srv.logger != nil {
+		srv.logger.Info("clientserver: got a reply", "BroadcastID", broadcastID)
 	}
 	select {
 	case <-ctx.Done():
@@ -191,13 +213,19 @@ func NewClientServer(lis net.Listener, opts ...ServerOption) *ClientServer {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
+	var logger *slog.Logger
+	if serverOpts.logger != nil {
+		logger = serverOpts.logger.With(slog.Uint64("ClientID", serverOpts.machineID))
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	srv := &ClientServer{
+		id:         serverOpts.machineID,
 		ctx:        ctx,
 		cancelCtx:  cancel,
 		csr:        make(map[uint64]*csr),
 		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
 		handlers:   make(map[string]requestHandler),
+		logger:     logger,
 	}
 	ordering.RegisterGorumsServer(srv.grpcServer, srv)
 	srv.lis = lis
