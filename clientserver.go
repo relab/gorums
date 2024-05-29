@@ -110,7 +110,7 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 		case <-clientCtx.Done():
 			// client provided ctx
 			if logger != nil {
-				logger.Warn("clientserver: stopped by client")
+				logger.Warn("clientserver: stopped by client", "cancelled", true)
 			}
 			return
 		case <-ctx.Done():
@@ -124,7 +124,7 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 			// goes down.
 			close(doneChan)
 			if logger != nil {
-				logger.Warn("clientserver: stopped by server")
+				logger.Warn("clientserver: stopped by server", "cancelled", true)
 			}
 			return
 		case resp := <-respChan:
@@ -135,11 +135,17 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 			if done {
 				select {
 				case doneChan <- response:
+					if logger != nil {
+						logger.Info("clientserver: req done", "cancelled", false)
+					}
 				case <-ctx.Done():
+					if logger != nil {
+						logger.Warn("clientserver: req done but stopped by server", "cancelled", true)
+					}
 				case <-clientCtx.Done():
-				}
-				if logger != nil {
-					logger.Info("clientserver: req done")
+					if logger != nil {
+						logger.Warn("clientserver: req done but cancelled by client", "cancelled", true)
+					}
 				}
 				close(doneChan)
 				return

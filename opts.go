@@ -26,7 +26,7 @@ type managerOptions struct {
 func newManagerOptions() managerOptions {
 	return managerOptions{
 		backoff:         backoff.DefaultConfig,
-		sendBuffer:      50,
+		sendBuffer:      100,
 		nodeDialTimeout: 50 * time.Millisecond,
 		// Provide an illegal machineID to avoid unintentional collisions.
 		// 0 is a valid MachineID and should not be used as default.
