@@ -19,8 +19,9 @@ type managerOptions struct {
 	sendBuffer      uint
 	metadata        metadata.MD
 	perNodeMD       func(uint32) metadata.MD
-	publicKey       string
-	machineID       uint64
+	publicKey       string // used when authenticating msgs
+	machineID       uint64 // used for generating SnowflakeIDs
+	maxRetries      int    // number of times we try to resend a failed msg
 }
 
 func newManagerOptions() managerOptions {
@@ -30,7 +31,8 @@ func newManagerOptions() managerOptions {
 		nodeDialTimeout: 50 * time.Millisecond,
 		// Provide an illegal machineID to avoid unintentional collisions.
 		// 0 is a valid MachineID and should not be used as default.
-		machineID: uint64(broadcast.MaxMachineID) + 1,
+		machineID:  uint64(broadcast.MaxMachineID) + 1,
+		maxRetries: 0,
 	}
 }
 
@@ -108,8 +110,21 @@ func WithPublicKey(publicKey string) ManagerOption {
 	}
 }
 
+// WithMachineID returns a ManagerOption that allows you to set a unique ID for the client.
+// This ID will be embedded in broadcast request sent from the client, making the requests
+// trackable by the whole cluster. A random ID will be generated if not set. This can cause
+// collisions if there are many clients. MaxID = 4096.
 func WithMachineID(id uint64) ManagerOption {
 	return func(o *managerOptions) {
 		o.machineID = id
+	}
+}
+
+// WithRetries returns a ManagerOption that allows you to specify how many times the node
+// will try to send a message. The message will be dropped if it fails to send the message
+// more than the specified number of times.
+func WithRetries(maxRetries int) ManagerOption {
+	return func(o *managerOptions) {
+		o.maxRetries = maxRetries
 	}
 }

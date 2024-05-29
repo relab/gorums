@@ -79,8 +79,11 @@ func (srv *ClientServer) AddRequest(broadcastID uint64, clientCtx context.Contex
 		IsBroadcastClient: true,
 		OriginAddr:        srv.lis.Addr().String(),
 	}
-	doneChan := make(chan protoreflect.ProtoMessage)
-	respChan := make(chan protoreflect.ProtoMessage)
+	// we expect one response when we are done
+	doneChan := make(chan protoreflect.ProtoMessage, 1)
+	// we should buffer this channel according to the number of servers.
+	// most configs hopefully contain less than 7 servers.
+	respChan := make(chan protoreflect.ProtoMessage, 7)
 	ctx, cancel := context.WithCancel(srv.ctx)
 
 	srv.mu.Lock()

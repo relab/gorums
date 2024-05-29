@@ -20,9 +20,10 @@ import (
 var streamDownErr = status.Error(codes.Unavailable, "stream is down")
 
 type request struct {
-	ctx  context.Context
-	msg  *Message
-	opts callOptions
+	ctx       context.Context
+	msg       *Message
+	opts      callOptions
+	numFailed int
 }
 
 // waitForSend returns true if the WithNoSendWaiting call option is not set.
@@ -60,6 +61,7 @@ type channel struct {
 	cancelStream    context.CancelFunc
 	responseRouters map[uint64]responseRouter
 	responseMut     sync.Mutex
+	maxRetries      int // number of times we try to resend a failed msg
 }
 
 // newChannel creates a new channel for the given node and starts the sending goroutine.
@@ -76,6 +78,7 @@ func newChannel(n *RawNode) *channel {
 		latency:         -1 * time.Second,
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouters: make(map[uint64]responseRouter),
+		maxRetries:      n.mgr.opts.maxRetries,
 	}
 	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = n.newContext()
@@ -227,10 +230,21 @@ func (c *channel) sendMsg(req request) (err error) {
 			case <-done:
 				// false alarm
 			default:
+				// CANCELLING HERE CAN HAVE DESTRUCTIVE EFFECTS!
+				// Imagine the client has sent several requests and is waiting
+				// for a response on each individual request. Furthermore, let's
+				// say the client has sent a message to two different handlers:
+				// 		1. A handler that does a lot of work and thus long response times are expected.
+				// 		2. A handler that is normally very fast.
+				//
+				// If the client is impatient and cancels a request sent to a handler in scenario 2,
+				// then all requests sent to the handler in scenario 1 will also be cancelled because
+				// the stream is taken down.
+
 				// trigger reconnect
-				c.streamMut.Lock()
-				c.cancelStream()
-				c.streamMut.Unlock()
+				//c.streamMut.Lock()
+				//c.cancelStream()
+				//c.streamMut.Unlock()
 			}
 		}
 	}()
@@ -266,14 +280,16 @@ func (c *channel) sender() {
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: streamDownErr})
+			//c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: streamDownErr})
+			go c.retryMsg(req, streamDownErr)
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
 			// return the error
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: err})
+			//c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: err})
+			go c.retryMsg(req, err)
 		}
 	}
 }
@@ -394,6 +410,38 @@ func (c *channel) reconnect(maxRetries float64) {
 			return
 		}
 	}
+}
+
+// This method should always be run in a goroutine. It will
+// enqueue a msg if it has previously failed. The message will
+// be dropped if it fails more than maxRetries or if the ctx
+// is cancelled.
+func (c *channel) retryMsg(req request, err error) {
+	req.numFailed++
+	// c.maxRetries = -1, is the same as infinite retries.
+	if req.numFailed > c.maxRetries && c.maxRetries != -1 {
+		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("max retries exceeded. err=%e", err)})
+		return
+	}
+	//delay := float64(c.backoffCfg.BaseDelay)
+	delay := float64(10 * time.Millisecond)
+	max := float64(c.backoffCfg.MaxDelay)
+	for r := req.numFailed; delay < max && r > 0; r-- {
+		delay *= c.backoffCfg.Multiplier
+	}
+	delay = math.Min(delay, max)
+	delay *= 1 + c.backoffCfg.Jitter*(rand.Float64()*2-1)
+	select {
+	case <-c.parentCtx.Done():
+		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		return
+	case <-req.ctx.Done():
+		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("context cancelled")})
+		return
+	case <-time.After(time.Duration(delay)):
+		// enqueue the request again
+	}
+	c.enqueueSlow(req)
 }
 
 func (c *channel) setLastErr(err error) {
