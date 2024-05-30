@@ -9,9 +9,13 @@ import (
 	"time"
 
 	"github.com/relab/gorums/broadcast"
+	"github.com/relab/gorums/logging"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
+
+// exposing the log entry struct used for structured logging to the user
+type LogEntry logging.LogEntry
 
 type broadcastServer struct {
 	propertiesMutex   sync.Mutex
@@ -30,12 +34,13 @@ func (srv *Server) GetStats() broadcast.Metrics {
 	return srv.broadcastSrv.manager.GetStats()
 }
 
-func newBroadcastServer(logger *slog.Logger, order map[string]int, machineID uint64) *broadcastServer {
+func newBroadcastServer(serverOpts *serverOptions) *broadcastServer {
 	srv := &broadcastServer{
-		logger:    logger,
-		machineID: machineID,
+		addr:      serverOpts.listenAddr,
+		logger:    serverOpts.logger,
+		machineID: serverOpts.machineID,
 	}
-	srv.manager = broadcast.NewBroadcastManager(logger, createClient, srv.canceler, order)
+	srv.manager = broadcast.NewBroadcastManager(serverOpts.logger, createClient, srv.canceler, serverOpts.executionOrder)
 	return srv
 }
 
@@ -50,14 +55,9 @@ type Snowflake interface {
 func (srv *broadcastServer) addAddr(addr string) {
 	srv.propertiesMutex.Lock()
 	defer srv.propertiesMutex.Unlock()
-	//if srv.addr != "" {
-	//return
-	//}
-	//t := strings.Split(addr, ":")
-	//if len(t) < 2 || t[0] == "" || t[0] == "0.0.0.0" {
-	//panic(fmt.Sprintf("addr cannot be 0.0.0.0 or empty. got: %s", addr))
-	//}
-	srv.addr = addr
+	if srv.addr == "" {
+		srv.addr = addr
+	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(srv.addr))
 	srv.id = h.Sum32()

@@ -89,7 +89,7 @@ func (s *BroadcastState) Close() error {
 	return err
 }
 
-func (s *BroadcastState) debug() {
+/*func (s *BroadcastState) debug() {
 	time.Sleep(1 * time.Second)
 	for _, shard := range s.shards {
 		for _, req := range shard.reqs {
@@ -102,12 +102,12 @@ func (s *BroadcastState) debug() {
 	}
 }
 
-func (s *BroadcastState) RunShards() {
+/*func (s *BroadcastState) RunShards() {
 	return
 	//for _, shard := range s.shards {
 	//go shard.run(s.sendBuffer)
 	//}
-}
+}*/
 
 func (s *BroadcastState) reset() {
 	s.mut.Lock()
@@ -117,7 +117,7 @@ func (s *BroadcastState) reset() {
 	s.parentCtx = ctx
 	s.parentCtxCancelFunc = cancel
 	s.shards = createShards(ctx, s.shardBuffer, s.sendBuffer, s.router, s.order, s.reqTTL, s.logger)
-	s.RunShards()
+	//s.RunShards()
 	for _, client := range s.clients {
 		client.Close()
 	}

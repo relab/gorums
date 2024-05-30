@@ -113,6 +113,11 @@ type serverOptions struct {
 	logger          *slog.Logger
 	executionOrder  map[string]int
 	machineID       uint64
+	// this is the address other nodes should connect to. Sometimes, e.g. when
+	// running in a docker container it is useful to listen to the loopback
+	// address and use forwarding from the host. If not this option is not given,
+	// the listen address used on the gRPC listener will be used instead.
+	listenAddr string
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -164,6 +169,12 @@ func WithSrvID(machineID uint64) ServerOption {
 	}
 }
 
+func WithListenAddr(listenAddr string) ServerOption {
+	return func(o *serverOptions) {
+		o.listenAddr = listenAddr
+	}
+}
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *orderingServer
@@ -186,7 +197,7 @@ func NewServer(opts ...ServerOption) *Server {
 	s := &Server{
 		srv:          newOrderingServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
-		broadcastSrv: newBroadcastServer(serverOpts.logger, serverOpts.executionOrder, serverOpts.machineID),
+		broadcastSrv: newBroadcastServer(&serverOpts),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s

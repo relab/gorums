@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/relab/gorums/logging"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -62,14 +63,14 @@ func (p *BroadcastProcessor) handle(msg Content) {
 			msg.ReceiveChan <- shardResponse{
 				err: OutOfOrderErr{},
 			}
-			p.log("msg: out of order", OutOfOrderErr{}, "method", msg.CurrentMethod, "from", msg.SenderAddr)
+			p.log("msg: out of order", OutOfOrderErr{}, logging.Method, msg.CurrentMethod, logging.From, msg.SenderAddr)
 		} else {
 			msg.ReceiveChan <- shardResponse{
 				err:              nil,
 				reqCtx:           p.cancellationCtx,
 				enqueueBroadcast: p.enqueueBroadcast,
 			}
-			p.log("msg: processed", nil, "method", msg.CurrentMethod, "from", msg.SenderAddr)
+			p.log("msg: processed", nil, logging.Method, msg.CurrentMethod, logging.From, msg.SenderAddr)
 		}
 	}
 	defer func() {
@@ -83,7 +84,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 		//close(p.broadcastChan)
 		//close(p.sendChan)
 		p.emptyChannels(metadata)
-		p.log("processor stopped", nil, "started", p.started, "ended", p.ended)
+		p.log("processor stopped", nil, logging.Started, p.started, logging.Ended, p.ended)
 	}()
 	for {
 		select {
@@ -91,7 +92,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 			return
 		case bMsg := <-p.broadcastChan:
 			if p.broadcastID != bMsg.BroadcastID {
-				p.log("broadcast: wrong BroadcastID", BroadcastIDErr{}, "type", bMsg.MsgType.String(), "stopping", false)
+				p.log("broadcast: wrong BroadcastID", BroadcastIDErr{}, logging.MsgType, bMsg.MsgType.String(), logging.Stopping, false)
 				continue
 			}
 			switch bMsg.MsgType {
@@ -116,7 +117,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				new.ReceiveChan <- shardResponse{
 					err: BroadcastIDErr{},
 				}
-				p.log("msg: wrong BroadcastID", BroadcastIDErr{}, "method", new.CurrentMethod, "from", new.SenderAddr)
+				p.log("msg: wrong BroadcastID", BroadcastIDErr{}, logging.Method, new.CurrentMethod, logging.From, new.SenderAddr)
 				continue
 			}
 			if new.IsCancellation {
@@ -126,7 +127,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				new.ReceiveChan <- shardResponse{
 					err: nil,
 				}
-				p.log("msg: received cancellation", nil, "method", new.CurrentMethod, "from", new.SenderAddr)
+				p.log("msg: received cancellation", nil, logging.Method, new.CurrentMethod, logging.From, new.SenderAddr)
 				continue
 			}
 
@@ -137,7 +138,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 					new.ReceiveChan <- shardResponse{
 						err: ClientReqAlreadyReceivedErr{},
 					}
-					p.log("msg: duplicate client req", ClientReqAlreadyReceivedErr{}, "method", new.CurrentMethod, "from", new.SenderAddr)
+					p.log("msg: duplicate client req", ClientReqAlreadyReceivedErr{}, logging.Method, new.CurrentMethod, logging.From, new.SenderAddr)
 					continue
 				}
 				// important to set this option to prevent duplicate client reqs.
@@ -155,7 +156,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 					}
 					p.cancellationCtxCancel()
 				}()
-				p.log("msg: received client req", nil, "method", new.CurrentMethod, "from", new.SenderAddr)
+				p.log("msg: received client req", nil, logging.Method, new.CurrentMethod, logging.From, new.SenderAddr)
 			}
 
 			metadata.update(new)
@@ -174,7 +175,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 					err: err,
 				}
 				//	slog.Info("receive: late", "err", err, "id", p.broadcastID)
-				p.log("msg: late msg", err, "method", new.CurrentMethod, "from", new.SenderAddr)
+				p.log("msg: late msg", err, logging.Method, new.CurrentMethod, logging.From, new.SenderAddr)
 				return
 			}
 			if !p.isInOrder(new.CurrentMethod) {
@@ -183,7 +184,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				new.ReceiveChan <- shardResponse{
 					err: OutOfOrderErr{},
 				}
-				p.log("msg: out of order", OutOfOrderErr{}, "method", new.CurrentMethod, "from", new.SenderAddr)
+				p.log("msg: out of order", OutOfOrderErr{}, logging.Method, new.CurrentMethod, logging.From, new.SenderAddr)
 				continue
 			}
 			new.ReceiveChan <- shardResponse{
@@ -191,18 +192,18 @@ func (p *BroadcastProcessor) handle(msg Content) {
 				reqCtx:           p.cancellationCtx,
 				enqueueBroadcast: p.enqueueBroadcast,
 			}
-			p.log("msg: processed", nil, "method", new.CurrentMethod, "from", new.SenderAddr)
+			p.log("msg: processed", nil, logging.Method, new.CurrentMethod, logging.From, new.SenderAddr)
 		}
 	}
 }
 
 func (p *BroadcastProcessor) handleCancellation(bMsg Msg, metadata *metadata) bool {
 	if bMsg.Cancellation.end {
-		p.log("broadcast: broadcast.Done() called", nil, "type", bMsg.MsgType.String(), "stopping", true)
+		p.log("broadcast: broadcast.Done() called", nil, logging.MsgType, bMsg.MsgType.String(), logging.Stopping, true)
 		return true
 	}
 	if !metadata.SentCancellation {
-		p.log("broadcast: sent cancellation", nil, "type", bMsg.MsgType.String(), "stopping", false)
+		p.log("broadcast: sent cancellation", nil, logging.MsgType, bMsg.MsgType.String(), logging.Stopping, false)
 		metadata.SentCancellation = true
 		go p.router.Send(p.broadcastID, "", "", bMsg.Cancellation)
 	}
@@ -216,7 +217,7 @@ func (p *BroadcastProcessor) handleBroadcast(bMsg Msg, methods []string, metadat
 		return false
 	}
 	p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Msg)
-	p.log("broadcast: sending broadcast", nil, "type", bMsg.MsgType.String(), "method", bMsg.Method, "stopping", false, "isBroadcastCall", metadata.isBroadcastCall())
+	p.log("broadcast: sending broadcast", nil, logging.MsgType, bMsg.MsgType.String(), logging.Method, bMsg.Method, logging.Stopping, false, logging.IsBroadcastCall, metadata.isBroadcastCall())
 
 	p.updateOrder(bMsg.Method)
 	p.dispatchOutOfOrderMsgs()
@@ -225,11 +226,10 @@ func (p *BroadcastProcessor) handleBroadcast(bMsg Msg, methods []string, metadat
 
 func (p *BroadcastProcessor) log(msg string, err error, args ...any) {
 	if p.logger != nil {
+		args = append(args, logging.Err, err, logging.Type, "broadcast processor")
 		if err != nil {
-			args = append(args, "err", err.Error())
 			p.logger.Error(msg, args...)
 		} else {
-			args = append(args, "err", nil)
 			p.logger.Info(msg, args...)
 		}
 	}
@@ -240,7 +240,7 @@ func (p *BroadcastProcessor) handleReply(bMsg Msg, metadata *metadata) bool {
 	if metadata.isBroadcastCall() {
 		go p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Reply)
 		// the request is done becuase we have sent a reply to the client
-		p.log("broadcast: sending reply to client", nil, "type", bMsg.MsgType.String(), "stopping", true, "isBroadcastCall", metadata.isBroadcastCall())
+		p.log("broadcast: sending reply to client", nil, logging.MsgType, bMsg.MsgType.String(), logging.Stopping, true, logging.IsBroadcastCall, metadata.isBroadcastCall())
 		return true
 	}
 	// QuorumCall if origin addr is empty.
@@ -260,11 +260,11 @@ func (p *BroadcastProcessor) handleReply(bMsg Msg, metadata *metadata) bool {
 		// the request is not done yet because we have not replied to
 		// the client.
 		//slog.Info("reply: late", "err", err, "id", p.broadcastID)
-		p.log("broadcast: failed to send reply to client", err, "type", bMsg.MsgType.String(), "stopping", false, "isBroadcastCall", metadata.isBroadcastCall())
+		p.log("broadcast: failed to send reply to client", err, logging.MsgType, bMsg.MsgType.String(), logging.Stopping, false, logging.IsBroadcastCall, metadata.isBroadcastCall())
 		return false
 	}
 	// the request is done becuase we have sent a reply to the client
-	p.log("broadcast: sending reply to client", err, "type", bMsg.MsgType.String(), "stopping", true, "isBroadcastCall", metadata.isBroadcastCall())
+	p.log("broadcast: sending reply to client", err, logging.MsgType, bMsg.MsgType.String(), logging.Stopping, true, logging.IsBroadcastCall, metadata.isBroadcastCall())
 	return true
 }
 
@@ -425,7 +425,7 @@ func (r *BroadcastProcessor) dispatchOutOfOrderMsgs() {
 		if order <= r.orderIndex {
 			for _, msg := range msgs {
 				msg.Run(r.cancellationCtx, r.enqueueBroadcast)
-				r.log("msg: dispatching out of order msg", nil, "method", msg.CurrentMethod, "from", msg.SenderAddr)
+				r.log("msg: dispatching out of order msg", nil, logging.Method, msg.CurrentMethod, logging.From, msg.SenderAddr)
 			}
 			handledMethods = append(handledMethods, method)
 		}

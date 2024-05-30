@@ -2,11 +2,12 @@ package gorums
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
 	"github.com/relab/gorums/broadcast"
+	"github.com/relab/gorums/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 )
@@ -21,7 +22,7 @@ type RawManager struct {
 	nodes     []*RawNode
 	lookup    map[uint32]*RawNode
 	closeOnce sync.Once
-	logger    *log.Logger
+	logger    *slog.Logger
 	opts      managerOptions
 	nextMsgID uint64
 	snowflake Snowflake
@@ -40,7 +41,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 		opt(&m.opts)
 	}
 	if m.opts.logger != nil {
-		m.logger = m.opts.logger
+		m.logger = m.opts.logger.With(slog.Uint64("MachineID", m.opts.machineID))
 	}
 	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
 		grpc.CallContentSubtype(ContentSubtype),
@@ -50,9 +51,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 			grpc.ConnectParams{Backoff: m.opts.backoff},
 		))
 	}
-	if m.logger != nil {
-		m.logger.Printf("ready")
-	}
+	m.log("manager: ready", nil)
 	m.snowflake = broadcast.NewSnowflake(m.opts.machineID)
 	return m
 }
@@ -60,8 +59,8 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 func (m *RawManager) closeNodeConns() {
 	for _, node := range m.nodes {
 		err := node.close()
-		if err != nil && m.logger != nil {
-			m.logger.Printf("error closing: %v", err)
+		if err != nil {
+			m.log("manager: error closing node", err, logging.NodeID, node.ID())
 		}
 	}
 }
@@ -69,9 +68,7 @@ func (m *RawManager) closeNodeConns() {
 // Close closes all node connections and any client streams.
 func (m *RawManager) Close() {
 	m.closeOnce.Do(func() {
-		if m.logger != nil {
-			m.logger.Printf("closing")
-		}
+		m.log("manager: closing", nil)
 		m.closeNodeConns()
 	})
 }
@@ -118,13 +115,9 @@ func (m *RawManager) AddNode(node *RawNode) error {
 		// Node IDs must be unique
 		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
 	}
-	if m.logger != nil {
-		m.logger.Printf("Connecting to %s with id %d\n", node, node.id)
-	}
+	m.log("manager: connecting to node", nil, logging.NodeID, node.id, logging.NodeAddr, node.addr)
 	if err := node.connect(m); err != nil {
-		if m.logger != nil {
-			m.logger.Printf("Failed to connect to %s: %v (retrying)", node, err)
-		}
+		m.log("manager: failed to connect to node (retrying later)", err, logging.NodeID, node.id, logging.NodeAddr, node.addr)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -140,4 +133,15 @@ func (m *RawManager) Snowflake() Snowflake {
 // getMsgID returns a unique message ID.
 func (m *RawManager) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)
+}
+
+func (m *RawManager) log(msg string, err error, args ...any) {
+	if m.logger != nil {
+		args = append(args, logging.Err, err, logging.Type, "manager")
+		if err != nil {
+			m.logger.Error(msg, args...)
+		} else {
+			m.logger.Info(msg, args...)
+		}
+	}
 }

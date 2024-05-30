@@ -1,7 +1,7 @@
 package gorums
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/relab/gorums/broadcast"
@@ -13,7 +13,7 @@ import (
 type managerOptions struct {
 	grpcDialOpts    []grpc.DialOption
 	nodeDialTimeout time.Duration
-	logger          *log.Logger
+	logger          *slog.Logger
 	noConnect       bool
 	backoff         backoff.Config
 	sendBuffer      uint
@@ -21,7 +21,8 @@ type managerOptions struct {
 	perNodeMD       func(uint32) metadata.MD
 	publicKey       string // used when authenticating msgs
 	machineID       uint64 // used for generating SnowflakeIDs
-	maxRetries      int    // number of times we try to resend a failed msg
+	maxSendRetries  int    // number of times we try to resend a failed msg
+	maxConnRetries  int    // number of times we try to reconnect (in the background) to a node
 }
 
 func newManagerOptions() managerOptions {
@@ -31,8 +32,9 @@ func newManagerOptions() managerOptions {
 		nodeDialTimeout: 50 * time.Millisecond,
 		// Provide an illegal machineID to avoid unintentional collisions.
 		// 0 is a valid MachineID and should not be used as default.
-		machineID:  uint64(broadcast.MaxMachineID) + 1,
-		maxRetries: 0,
+		machineID:      uint64(broadcast.MaxMachineID) + 1,
+		maxSendRetries: 0,
+		maxConnRetries: -1, // no limit
 	}
 }
 
@@ -57,7 +59,7 @@ func WithGrpcDialOptions(opts ...grpc.DialOption) ManagerOption {
 
 // WithLogger returns a ManagerOption which sets an optional error logger for
 // the Manager.
-func WithLogger(logger *log.Logger) ManagerOption {
+func WithLogger(logger *slog.Logger) ManagerOption {
 	return func(o *managerOptions) {
 		o.logger = logger
 	}
@@ -120,11 +122,19 @@ func WithMachineID(id uint64) ManagerOption {
 	}
 }
 
-// WithRetries returns a ManagerOption that allows you to specify how many times the node
+// WithSendRetries returns a ManagerOption that allows you to specify how many times the node
 // will try to send a message. The message will be dropped if it fails to send the message
 // more than the specified number of times.
-func WithRetries(maxRetries int) ManagerOption {
+func WithSendRetries(maxRetries int) ManagerOption {
 	return func(o *managerOptions) {
-		o.maxRetries = maxRetries
+		o.maxSendRetries = maxRetries
+	}
+}
+
+// WithConnRetries returns a ManagerOption that allows you to specify how many times the node
+// will try to reconnect to a node. Default: no limit but it will follow a backoff strategy.
+func WithConnRetries(maxRetries int) ManagerOption {
+	return func(o *managerOptions) {
+		o.maxConnRetries = maxRetries
 	}
 }

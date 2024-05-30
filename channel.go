@@ -3,12 +3,14 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/relab/gorums/logging"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -29,6 +31,33 @@ type request struct {
 // waitForSend returns true if the WithNoSendWaiting call option is not set.
 func (req request) waitForSend() bool {
 	return req.opts.callType != nil && !req.opts.noSendWaiting
+}
+
+// relatedToBroadcast returns true if the request is related to a broadcast request.
+func (req request) relatedToBroadcast() bool {
+	if req.msg.Metadata == nil {
+		return false
+	}
+	if req.msg.Metadata.BroadcastMsg == nil {
+		return false
+	}
+	if req.msg.Metadata.BroadcastMsg.BroadcastID <= 0 {
+		return false
+	}
+	return true
+}
+
+// getLogArgs returns the args given to the structured logger.
+func (req request) getLogArgs(c *channel) []any {
+	// no need to do processing if logging is not enabled
+	if c.logger == nil {
+		return nil
+	}
+	args := []any{logging.MsgID, req.msg.Metadata.MessageID, logging.Method, req.msg.Metadata.Method, logging.NumFailed, req.numFailed, logging.MaxRetries, c.maxSendRetries}
+	if req.relatedToBroadcast() {
+		args = append(args, logging.BroadcastID, req.msg.Metadata.BroadcastMsg.BroadcastID)
+	}
+	return args
 }
 
 type response struct {
@@ -61,7 +90,9 @@ type channel struct {
 	cancelStream    context.CancelFunc
 	responseRouters map[uint64]responseRouter
 	responseMut     sync.Mutex
-	maxRetries      int // number of times we try to resend a failed msg
+	maxSendRetries  int // number of times we try to resend a failed msg
+	maxConnRetries  int // number of times we try to reconnect to a node
+	logger          *slog.Logger
 }
 
 // newChannel creates a new channel for the given node and starts the sending goroutine.
@@ -71,6 +102,10 @@ type channel struct {
 // deadlock when invoking a call type, as the goroutine will
 // block on the sendQ until a connection has been established.
 func newChannel(n *RawNode) *channel {
+	var logger *slog.Logger
+	if n.mgr.logger != nil {
+		logger = n.mgr.logger.With(slog.Uint64("nodeID", uint64(n.ID())), slog.String("nodeAddr", n.Address()))
+	}
 	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,
@@ -78,7 +113,9 @@ func newChannel(n *RawNode) *channel {
 		latency:         -1 * time.Second,
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
 		responseRouters: make(map[uint64]responseRouter),
-		maxRetries:      n.mgr.opts.maxRetries,
+		maxSendRetries:  n.mgr.opts.maxSendRetries,
+		maxConnRetries:  n.mgr.opts.maxConnRetries,
+		logger:          logger,
 	}
 	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = n.newContext()
@@ -121,6 +158,7 @@ func (c *channel) cancelPendingMsgs() {
 	defer c.responseMut.Unlock()
 	for msgID, router := range c.responseRouters {
 		router.c <- response{nid: c.node.ID(), err: streamDownErr}
+		c.log("channel: cancelling pending msg", streamDownErr, slog.LevelError, logging.MsgID, msgID)
 		// delete the router if we are only expecting a single reply message
 		if !router.streaming {
 			delete(c.responseRouters, msgID)
@@ -290,6 +328,8 @@ func (c *channel) sender() {
 			// return the error
 			//c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: err})
 			go c.retryMsg(req, err)
+		} else {
+			c.log("channel: successfully sent msg", nil, slog.LevelInfo, req.getLogArgs(c)...)
 		}
 	}
 }
@@ -317,6 +357,7 @@ func (c *channel) receiver() {
 			// was sent and we are waiting for a reply. We thus need to respond
 			// with a stream is down error on all pending messages.
 			c.cancelPendingMsgs()
+			c.log("channel: lost connection", err, slog.LevelError, logging.Reconnect, true)
 			// attempt to reconnect indefinitely until the node is closed.
 			// This is necessary when streaming is enabled.
 			c.reconnect(-1)
@@ -324,6 +365,11 @@ func (c *channel) receiver() {
 			c.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
 			c.routeResponse(resp.Metadata.MessageID, response{nid: c.node.ID(), msg: resp.Message, err: err})
+			if err != nil {
+				c.log("channel: got response", err, slog.LevelError, "msgID", resp.Metadata.MessageID, "method", resp.Metadata.Method)
+			} else {
+				c.log("channel: got response", nil, slog.LevelInfo, "msgID", resp.Metadata.MessageID, "method", resp.Metadata.Method)
+			}
 		}
 
 		select {
@@ -363,12 +409,28 @@ func (c *channel) connect() error {
 	return nil
 }
 
+type retry float64
+
+func (r retry) exceeds(maxRetries int) bool {
+	return r >= retry(maxRetries) && maxRetries > 0
+}
+
 // reconnect tries to reconnect to the node using an exponential backoff strategy.
 // maxRetries = -1 represents infinite retries.
-func (c *channel) reconnect(maxRetries float64) {
+func (c *channel) reconnect(maxRetries int) {
+	select {
+	case <-c.parentCtx.Done():
+		// no need to try to reconnect if the node is closed.
+		// make sure to cancel the previous ctx to prevent context leakage
+		if c.cancelStream != nil {
+			c.cancelStream()
+		}
+		return
+	default:
+	}
 	backoffCfg := c.backoffCfg
 
-	var retries float64
+	var retries retry
 	for {
 		var err error
 		c.streamMut.Lock()
@@ -385,14 +447,16 @@ func (c *channel) reconnect(maxRetries float64) {
 		c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 		c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 		if err == nil {
+			c.log("channel: restored connection", nil, slog.LevelInfo)
 			c.streamBroken.clear()
 			c.streamMut.Unlock()
 			return
 		}
+		c.log("channel: reconnection failed", err, slog.LevelWarn, logging.RetryNum, retries, logging.Reconnect, !(retries.exceeds(maxRetries) || retries.exceeds(c.maxConnRetries)))
 		c.cancelStream()
 		c.streamMut.Unlock()
 		c.setLastErr(err)
-		if retries >= maxRetries && maxRetries > 0 {
+		if retries.exceeds(maxRetries) || retries.exceeds(c.maxConnRetries) {
 			c.streamBroken.set()
 			return
 		}
@@ -418,8 +482,9 @@ func (c *channel) reconnect(maxRetries float64) {
 // is cancelled.
 func (c *channel) retryMsg(req request, err error) {
 	req.numFailed++
+	c.log("channel: failed to send msg", err, slog.LevelError, req.getLogArgs(c)...)
 	// c.maxRetries = -1, is the same as infinite retries.
-	if req.numFailed > c.maxRetries && c.maxRetries != -1 {
+	if req.numFailed > c.maxSendRetries && c.maxSendRetries != -1 {
 		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("max retries exceeded. err=%e", err)})
 		return
 	}
@@ -470,6 +535,22 @@ func (c *channel) isConnected() bool {
 	// even though node.conn is not nil. Hence, we need connEstablished
 	// to make sure a proper connection has been made.
 	return c.connEstablished.get() && !c.streamBroken.get()
+}
+
+func (c *channel) log(msg string, err error, level slog.Level, args ...any) {
+	if c.logger != nil {
+		args = append(args, logging.Err, err, logging.Type, "channel")
+		switch level {
+		case slog.LevelDebug:
+			c.logger.Debug(msg, args...)
+		case slog.LevelInfo:
+			c.logger.Info(msg, args...)
+		case slog.LevelWarn:
+			c.logger.Warn(msg, args...)
+		case slog.LevelError:
+			c.logger.Error(msg, args...)
+		}
+	}
 }
 
 type atomicFlag struct {

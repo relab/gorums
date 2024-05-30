@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/relab/gorums/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -71,7 +72,7 @@ func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any)
 		return nil
 	}
 	err := errors.New("wrong req type")
-	r.log("router: malformed msg", err, "BroadcastID", broadcastID)
+	r.log("router: malformed msg", err, logging.BroadcastID, broadcastID)
 	return err
 }
 
@@ -87,7 +88,7 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string
 		return nil
 	}
 	err := errors.New("handler not found")
-	r.log("router (broadcast): could not find handler", err, "BroadcastID", broadcastID, "addr", addr, "method", method)
+	r.log("router (broadcast): could not find handler", err, logging.BroadcastID, broadcastID, logging.NodeAddr, addr, logging.Method, method)
 	return err
 }
 
@@ -96,17 +97,17 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 	if _, ok := r.clientHandlers[method]; ok && addr != "" {
 		client, err := r.getClient(addr)
 		if err != nil {
-			r.log("router (reply): could not get client", err, "BroadcastID", broadcastID, "addr", addr, "method", method)
+			r.log("router (reply): could not get client", err, logging.BroadcastID, broadcastID, logging.NodeAddr, addr, logging.Method, method)
 			return err
 		}
 		err = client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout)
-		r.log("router (reply): sending reply to client", err, "BroadcastID", broadcastID, "addr", addr, "method", method)
+		r.log("router (reply): sending reply to client", err, logging.BroadcastID, broadcastID, logging.NodeAddr, addr, logging.Method, method)
 		return err
 	}
 	// the server can receive a broadcast from another server before a client sends a direct message.
 	// it should thus wait for a potential message from the client. otherwise, it should be removed.
 	err := errors.New("not routed")
-	r.log("router (reply): could not find handler", err, "BroadcastID", broadcastID, "addr", addr, "method", method)
+	r.log("router (reply): could not find handler", err, logging.BroadcastID, broadcastID, logging.NodeAddr, addr, logging.Method, method)
 	return err
 }
 
@@ -144,10 +145,10 @@ func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
 func (r *BroadcastRouter) log(msg string, err error, args ...any) {
 	if r.logger != nil {
 		if err != nil {
-			args = append(args, "err", err.Error())
+			args = append(args, logging.Err, err.Error())
 			r.logger.Error(msg, args...)
 		} else {
-			args = append(args, "err", nil)
+			args = append(args, logging.Err, nil)
 			r.logger.Info(msg, args...)
 		}
 	}

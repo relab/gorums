@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums/broadcast"
+	"github.com/relab/gorums/logging"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -96,7 +97,7 @@ func (srv *ClientServer) AddRequest(broadcastID uint64, clientCtx context.Contex
 
 	var logger *slog.Logger
 	if srv.logger != nil {
-		logger = srv.logger.With(slog.Uint64("BroadcastID", broadcastID))
+		logger = srv.logger.With(slog.Uint64(logging.BroadcastID, broadcastID))
 	}
 	go createReq(ctx, clientCtx, cancel, in, doneChan, respChan, handler, logger)
 
@@ -113,7 +114,7 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 		case <-clientCtx.Done():
 			// client provided ctx
 			if logger != nil {
-				logger.Warn("clientserver: stopped by client", "cancelled", true)
+				logger.Warn("clientserver: stopped by client", logging.Cancelled, true)
 			}
 			return
 		case <-ctx.Done():
@@ -127,7 +128,7 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 			// goes down.
 			close(doneChan)
 			if logger != nil {
-				logger.Warn("clientserver: stopped by server", "cancelled", true)
+				logger.Warn("clientserver: stopped by server", logging.Cancelled, true)
 			}
 			return
 		case resp := <-respChan:
@@ -139,15 +140,15 @@ func createReq(ctx, clientCtx context.Context, cancel context.CancelFunc, req pr
 				select {
 				case doneChan <- response:
 					if logger != nil {
-						logger.Info("clientserver: req done", "cancelled", false)
+						logger.Info("clientserver: req done", logging.Cancelled, false)
 					}
 				case <-ctx.Done():
 					if logger != nil {
-						logger.Warn("clientserver: req done but stopped by server", "cancelled", true)
+						logger.Warn("clientserver: req done but stopped by server", logging.Cancelled, true)
 					}
 				case <-clientCtx.Done():
 					if logger != nil {
-						logger.Warn("clientserver: req done but cancelled by client", "cancelled", true)
+						logger.Warn("clientserver: req done but cancelled by client", logging.Cancelled, true)
 					}
 				}
 				close(doneChan)
@@ -170,7 +171,7 @@ func (srv *ClientServer) AddResponse(ctx context.Context, resp protoreflect.Prot
 		return fmt.Errorf("doesn't exist")
 	}
 	if srv.logger != nil {
-		srv.logger.Info("clientserver: got a reply", "BroadcastID", broadcastID)
+		srv.logger.Info("clientserver: got a reply", logging.BroadcastID, broadcastID)
 	}
 	select {
 	case <-ctx.Done():
@@ -224,7 +225,7 @@ func NewClientServer(lis net.Listener, opts ...ServerOption) *ClientServer {
 	}
 	var logger *slog.Logger
 	if serverOpts.logger != nil {
-		logger = serverOpts.logger.With(slog.Uint64("ClientID", serverOpts.machineID))
+		logger = serverOpts.logger.With(slog.Uint64(logging.MachineID, serverOpts.machineID))
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	srv := &ClientServer{
@@ -257,10 +258,13 @@ func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, e
 	// necessary to ensure correct marshalling and unmarshalling of gorums messages
 	// TODO: find a better solution
 	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(grpc.CallContentSubtype(ContentSubtype)))
+	opts := newManagerOptions()
+	opts.grpcDialOpts = dialOpts
 	mgr := &RawManager{
-		opts: managerOptions{
+		opts: opts,
+		/*opts: managerOptions{
 			grpcDialOpts: dialOpts,
-		},
+		},*/
 	}
 	node, err := NewRawNode(addr)
 	if err != nil {
@@ -284,7 +288,9 @@ func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, e
 			return node.LastErr()
 		},
 		Close: func() error {
-			return node.close()
+			mgr.Close()
+			node.close()
+			return nil
 		},
 	}, nil
 }

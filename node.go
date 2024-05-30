@@ -104,6 +104,10 @@ func (n *RawNode) newContext() context.Context {
 		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
 	}
 	//md = metadata.Join(md, metadata.Pairs("publicKey", n.mgr.publicKey))
+	if n.cancel != nil {
+		// make sure to close any old ctx
+		n.cancel()
+	}
 	var ctx context.Context
 	ctx, n.cancel = context.WithCancel(context.Background())
 	return metadata.NewOutgoingContext(ctx, md)

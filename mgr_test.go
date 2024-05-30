@@ -2,7 +2,7 @@ package gorums_test
 
 import (
 	"bytes"
-	"log"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -19,13 +19,13 @@ var (
 
 func TestManagerLogging(t *testing.T) {
 	var (
-		buf    bytes.Buffer
-		logger = log.New(&buf, "logger: ", log.Lshortfile)
+		buf bytes.Buffer
 	)
+
 	buf.WriteString("\n")
 	_ = gorums.NewRawManager(
 		gorums.WithNoConnect(),
-		gorums.WithLogger(logger),
+		gorums.WithLogger(slog.Default()),
 	)
 	t.Log(buf.String())
 }

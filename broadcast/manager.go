@@ -32,7 +32,7 @@ func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dia
 	router := NewRouter(logger, createClient, canceler)
 	state := NewState(logger, router, order)
 	router.registerState(state)
-	state.RunShards()
+	//state.RunShards()
 	return &manager{
 		state:  state,
 		router: router,
