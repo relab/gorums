@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -60,7 +61,7 @@ func (m *RawManager) closeNodeConns() {
 	for _, node := range m.nodes {
 		err := node.close()
 		if err != nil {
-			m.log("manager: error closing node", err, logging.NodeID, node.ID())
+			m.log("manager: error closing node", err, logging.NodeID(node.ID()))
 		}
 	}
 }
@@ -115,9 +116,9 @@ func (m *RawManager) AddNode(node *RawNode) error {
 		// Node IDs must be unique
 		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
 	}
-	m.log("manager: connecting to node", nil, logging.NodeID, node.id, logging.NodeAddr, node.addr)
+	m.log("manager: connecting to node", nil, logging.NodeID(node.ID()), logging.NodeAddr(node.Address()))
 	if err := node.connect(m); err != nil {
-		m.log("manager: failed to connect to node (retrying later)", err, logging.NodeID, node.id, logging.NodeAddr, node.addr)
+		m.log("manager: failed to connect to node (retrying later)", err, logging.NodeID(node.ID()), logging.NodeAddr(node.Address()))
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -135,13 +136,13 @@ func (m *RawManager) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)
 }
 
-func (m *RawManager) log(msg string, err error, args ...any) {
+func (m *RawManager) log(msg string, err error, args ...slog.Attr) {
 	if m.logger != nil {
-		args = append(args, logging.Err, err, logging.Type, "manager")
+		args = append(args, logging.Err(err), logging.Type("manager"))
+		level := slog.LevelError
 		if err != nil {
-			m.logger.Error(msg, args...)
-		} else {
-			m.logger.Info(msg, args...)
+			level = slog.LevelError
 		}
+		m.logger.LogAttrs(context.Background(), level, msg, args...)
 	}
 }

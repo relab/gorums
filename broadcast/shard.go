@@ -382,7 +382,7 @@ func (s *shard) addProcessor2(sendBuffer int, msg Content) (*BroadcastProcessor,
 	//req := &BroadcastRequest{
 	var logger *slog.Logger
 	if s.logger != nil {
-		logger = s.logger.With(slog.Uint64(logging.BroadcastID, msg.BroadcastID))
+		logger = s.logger.With(logging.BroadcastID(msg.BroadcastID))
 	}
 	req := &BroadcastProcessor{
 		ctx:        ctx,

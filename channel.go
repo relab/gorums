@@ -48,14 +48,14 @@ func (req request) relatedToBroadcast() bool {
 }
 
 // getLogArgs returns the args given to the structured logger.
-func (req request) getLogArgs(c *channel) []any {
+func (req request) getLogArgs(c *channel) []slog.Attr {
 	// no need to do processing if logging is not enabled
 	if c.logger == nil {
 		return nil
 	}
-	args := []any{logging.MsgID, req.msg.Metadata.MessageID, logging.Method, req.msg.Metadata.Method, logging.NumFailed, req.numFailed, logging.MaxRetries, c.maxSendRetries}
+	args := []slog.Attr{logging.MsgID(req.msg.Metadata.MessageID), logging.Method(req.msg.Metadata.Method), logging.NumFailed(req.numFailed), logging.MaxRetries(c.maxSendRetries)}
 	if req.relatedToBroadcast() {
-		args = append(args, logging.BroadcastID, req.msg.Metadata.BroadcastMsg.BroadcastID)
+		args = append(args, logging.BroadcastID(req.msg.Metadata.BroadcastMsg.BroadcastID))
 	}
 	return args
 }
@@ -158,7 +158,7 @@ func (c *channel) cancelPendingMsgs() {
 	defer c.responseMut.Unlock()
 	for msgID, router := range c.responseRouters {
 		router.c <- response{nid: c.node.ID(), err: streamDownErr}
-		c.log("channel: cancelling pending msg", streamDownErr, slog.LevelError, logging.MsgID, msgID)
+		c.log("channel: cancelling pending msg", streamDownErr, slog.LevelError, logging.MsgID(msgID))
 		// delete the router if we are only expecting a single reply message
 		if !router.streaming {
 			delete(c.responseRouters, msgID)
@@ -357,7 +357,7 @@ func (c *channel) receiver() {
 			// was sent and we are waiting for a reply. We thus need to respond
 			// with a stream is down error on all pending messages.
 			c.cancelPendingMsgs()
-			c.log("channel: lost connection", err, slog.LevelError, logging.Reconnect, true)
+			c.log("channel: lost connection", err, slog.LevelError, logging.Reconnect(true))
 			// attempt to reconnect indefinitely until the node is closed.
 			// This is necessary when streaming is enabled.
 			c.reconnect(-1)
@@ -366,9 +366,9 @@ func (c *channel) receiver() {
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
 			c.routeResponse(resp.Metadata.MessageID, response{nid: c.node.ID(), msg: resp.Message, err: err})
 			if err != nil {
-				c.log("channel: got response", err, slog.LevelError, "msgID", resp.Metadata.MessageID, "method", resp.Metadata.Method)
+				c.log("channel: got response", err, slog.LevelError, logging.MsgID(resp.Metadata.MessageID), logging.Method(resp.Metadata.Method))
 			} else {
-				c.log("channel: got response", nil, slog.LevelInfo, "msgID", resp.Metadata.MessageID, "method", resp.Metadata.Method)
+				c.log("channel: got response", nil, slog.LevelInfo, logging.MsgID(resp.Metadata.MessageID), logging.Method(resp.Metadata.Method))
 			}
 		}
 
@@ -452,7 +452,7 @@ func (c *channel) reconnect(maxRetries int) {
 			c.streamMut.Unlock()
 			return
 		}
-		c.log("channel: reconnection failed", err, slog.LevelWarn, logging.RetryNum, retries, logging.Reconnect, !(retries.exceeds(maxRetries) || retries.exceeds(c.maxConnRetries)))
+		c.log("channel: reconnection failed", err, slog.LevelWarn, logging.RetryNum(float64(retries)), logging.Reconnect(!(retries.exceeds(maxRetries) || retries.exceeds(c.maxConnRetries))))
 		c.cancelStream()
 		c.streamMut.Unlock()
 		c.setLastErr(err)
@@ -488,8 +488,8 @@ func (c *channel) retryMsg(req request, err error) {
 		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("max retries exceeded. err=%e", err)})
 		return
 	}
-	//delay := float64(c.backoffCfg.BaseDelay)
-	delay := float64(10 * time.Millisecond)
+	delay := float64(c.backoffCfg.BaseDelay)
+	//delay := float64(10 * time.Millisecond)
 	max := float64(c.backoffCfg.MaxDelay)
 	for r := req.numFailed; delay < max && r > 0; r-- {
 		delay *= c.backoffCfg.Multiplier
@@ -537,19 +537,10 @@ func (c *channel) isConnected() bool {
 	return c.connEstablished.get() && !c.streamBroken.get()
 }
 
-func (c *channel) log(msg string, err error, level slog.Level, args ...any) {
+func (c *channel) log(msg string, err error, level slog.Level, args ...slog.Attr) {
 	if c.logger != nil {
-		args = append(args, logging.Err, err, logging.Type, "channel")
-		switch level {
-		case slog.LevelDebug:
-			c.logger.Debug(msg, args...)
-		case slog.LevelInfo:
-			c.logger.Info(msg, args...)
-		case slog.LevelWarn:
-			c.logger.Warn(msg, args...)
-		case slog.LevelError:
-			c.logger.Error(msg, args...)
-		}
+		args = append(args, logging.Err(err), logging.Type("channel"))
+		c.logger.LogAttrs(context.Background(), level, msg, args...)
 	}
 }
 

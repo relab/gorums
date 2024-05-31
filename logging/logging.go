@@ -1,6 +1,9 @@
 package logging
 
-import "time"
+import (
+	"log/slog"
+	"time"
+)
 
 // the log entry used in slog with correct types and json mapping
 type LogEntry struct {
@@ -9,7 +12,7 @@ type LogEntry struct {
 	Msg             string    `json:"msg"`
 	MsgType         string    `json:"msgType"`
 	BroadcastID     uint64    `json:"BroadcastID"`
-	Err             error     `json:"err"`
+	Err             string    `json:"err"`
 	Method          string    `json:"method"`
 	From            string    `json:"from"`
 	Cancelled       bool      `json:"cancelled"`
@@ -20,34 +23,90 @@ type LogEntry struct {
 	Type            string    `json:"type"`
 	Reconnect       bool      `json:"reconnect"`
 	RetryNum        float64   `json:"retryNum"`
-	MaxRetries      string    `json:"maxRetries"`
-	NumFailed       string    `json:"numFailed"`
+	MaxRetries      int       `json:"maxRetries"`
+	NumFailed       int       `json:"numFailed"`
 	Stopping        bool      `json:"stopping"`
 	IsBroadcastCall bool      `json:"isBroadcastCall"`
 	Started         time.Time `json:"started"`
 	Ended           time.Time `json:"ended"`
 }
 
-// enum: used to get type safety on fields when logging
-const (
-	Msg             string = "msg"
-	MsgType         string = "msgType"
-	BroadcastID     string = "BroadcastID"
-	Err             string = "err"
-	Method          string = "method"
-	From            string = "from"
-	Cancelled       string = "cancelled"
-	MachineID       string = "MachineID"
-	MsgID           string = "msgID"
-	NodeID          string = "nodeID"
-	NodeAddr        string = "nodeAddr"
-	Type            string = "type"
-	Reconnect       string = "reconnect"
-	RetryNum        string = "retryNum"
-	MaxRetries      string = "maxRetries"
-	NumFailed       string = "numFailed"
-	Stopping        string = "stopping"
-	IsBroadcastCall string = "isBroadcastCall"
-	Started         string = "started"
-	Ended           string = "ended"
-)
+// funcs: used to get type safety on fields when logging
+func MsgType(msgType string) slog.Attr {
+	return slog.String("msgType", msgType)
+}
+
+func BroadcastID(broadcastID uint64) slog.Attr {
+	return slog.Uint64("BroadcastID", broadcastID)
+}
+
+func Err(err error) slog.Attr {
+	if err != nil {
+		return slog.String("err", err.Error())
+	}
+	return slog.String("err", "")
+}
+
+func Method(m string) slog.Attr {
+	return slog.String("method", m)
+}
+
+func From(from string) slog.Attr {
+	return slog.String("from", from)
+}
+
+func Cancelled(cancelled bool) slog.Attr {
+	return slog.Bool("cancelled", cancelled)
+}
+
+func MachineID(machineID uint64) slog.Attr {
+	return slog.Uint64("MachineID", machineID)
+}
+
+func MsgID(msgID uint64) slog.Attr {
+	return slog.Uint64("msgID", msgID)
+}
+
+func NodeID(nodeID uint32) slog.Attr {
+	return slog.Uint64("nodeID", uint64(nodeID))
+}
+
+func NodeAddr(nodeAddr string) slog.Attr {
+	return slog.String("nodeAddr", nodeAddr)
+}
+
+func Type(t string) slog.Attr {
+	return slog.String("type", t)
+}
+
+func Reconnect(reconnect bool) slog.Attr {
+	return slog.Bool("reconnect", reconnect)
+}
+
+func RetryNum(num float64) slog.Attr {
+	return slog.Float64("retryNum", num)
+}
+
+func MaxRetries(maxRetries int) slog.Attr {
+	return slog.Int("maxRetries", maxRetries)
+}
+
+func NumFailed(num int) slog.Attr {
+	return slog.Int("numFailed", num)
+}
+
+func Stopping(stopping bool) slog.Attr {
+	return slog.Bool("stopping", stopping)
+}
+
+func IsBroadcastCall(isBroadcastCall bool) slog.Attr {
+	return slog.Bool("isBroadcastCall", isBroadcastCall)
+}
+
+func Started(started time.Time) slog.Attr {
+	return slog.Time("started", started)
+}
+
+func Ended(ended time.Time) slog.Attr {
+	return slog.Time("ended", ended)
+}
