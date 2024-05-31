@@ -39,9 +39,9 @@ type testServer struct {
 func newtestServer(addr string, srvAddresses []string, _ int, withOrder ...bool) *testServer {
 	var osrv *Server
 	if len(withOrder) > 0 {
-		osrv = NewServer(gorums.WithOrder(BroadcastServicePrePrepare, BroadcastServicePrepare, BroadcastServiceCommit))
+		osrv = NewServer(gorums.WithListenAddr(addr), gorums.WithOrder(BroadcastServicePrePrepare, BroadcastServicePrepare, BroadcastServiceCommit))
 	} else {
-		osrv = NewServer()
+		osrv = NewServer(gorums.WithListenAddr(addr))
 	}
 	srv := testServer{
 		Server:   osrv,

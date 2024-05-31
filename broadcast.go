@@ -35,12 +35,20 @@ func (srv *Server) GetStats() broadcast.Metrics {
 }
 
 func newBroadcastServer(serverOpts *serverOptions) *broadcastServer {
+	if serverOpts.listenAddr == "" {
+		panic("The listen addr cannot be empty. Provide the WithListenAddr() option when creating the server.")
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(serverOpts.listenAddr))
+	id := h.Sum32()
 	srv := &broadcastServer{
+		id:        id,
 		addr:      serverOpts.listenAddr,
 		logger:    serverOpts.logger,
 		machineID: serverOpts.machineID,
 	}
 	srv.manager = broadcast.NewBroadcastManager(serverOpts.logger, createClient, srv.canceler, serverOpts.executionOrder)
+	srv.manager.AddAddr(srv.id, serverOpts.listenAddr, srv.machineID)
 	return srv
 }
 
@@ -50,18 +58,6 @@ func (srv *broadcastServer) stop() {
 
 type Snowflake interface {
 	NewBroadcastID() uint64
-}
-
-func (srv *broadcastServer) addAddr(addr string) {
-	srv.propertiesMutex.Lock()
-	defer srv.propertiesMutex.Unlock()
-	if srv.addr == "" {
-		srv.addr = addr
-	}
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(srv.addr))
-	srv.id = h.Sum32()
-	srv.manager.AddAddr(srv.id, srv.addr, srv.machineID)
 }
 
 const (

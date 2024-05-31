@@ -224,6 +224,9 @@ func NewClientServer(lis net.Listener, opts ...ServerOption) *ClientServer {
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
+	if serverOpts.listenAddr == "" {
+		panic("The listen addr cannot be empty. Provide the WithListenAddr() option to AddClientServer().")
+	}
 	var logger *slog.Logger
 	if serverOpts.logger != nil {
 		logger = serverOpts.logger.With(logging.MachineID(serverOpts.machineID))
