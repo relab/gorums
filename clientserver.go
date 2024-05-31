@@ -45,7 +45,8 @@ type csr struct {
 }
 
 type ClientServer struct {
-	id         uint64 // should correpond to the ID given to the manager
+	id         uint64 // should correpond to the MachineID given to the manager
+	addr       string
 	mu         sync.Mutex
 	csr        map[uint64]*csr
 	reqChan    chan *ClientRequest
@@ -78,7 +79,7 @@ func (srv *ClientServer) AddRequest(broadcastID uint64, clientCtx context.Contex
 
 		BroadcastID:       broadcastID,
 		IsBroadcastClient: true,
-		OriginAddr:        srv.lis.Addr().String(),
+		OriginAddr:        srv.addr,
 	}
 	// we expect one response when we are done
 	doneChan := make(chan protoreflect.ProtoMessage, 1)
@@ -215,7 +216,7 @@ func (s *ClientServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	}
 }
 
-// NewServer returns a new instance of GorumsServer.
+// NewClientServer returns a new instance of ClientServer.
 // This function is intended for internal Gorums use.
 // You should call `NewServer` in the generated code instead.
 func NewClientServer(lis net.Listener, opts ...ServerOption) *ClientServer {
@@ -230,6 +231,7 @@ func NewClientServer(lis net.Listener, opts ...ServerOption) *ClientServer {
 	ctx, cancel := context.WithCancel(context.Background())
 	srv := &ClientServer{
 		id:         serverOpts.machineID,
+		addr:       serverOpts.listenAddr,
 		ctx:        ctx,
 		cancelCtx:  cancel,
 		csr:        make(map[uint64]*csr),
@@ -251,6 +253,9 @@ func (srv *ClientServer) RegisterHandler(method string, handler requestHandler) 
 
 // Serve starts serving on the listener.
 func (srv *ClientServer) Serve(listener net.Listener) error {
+	if srv.addr == "" {
+		srv.addr = listener.Addr().String()
+	}
 	return srv.grpcServer.Serve(listener)
 }
 
@@ -262,9 +267,6 @@ func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, e
 	opts.grpcDialOpts = dialOpts
 	mgr := &RawManager{
 		opts: opts,
-		/*opts: managerOptions{
-			grpcDialOpts: dialOpts,
-		},*/
 	}
 	node, err := NewRawNode(addr)
 	if err != nil {
