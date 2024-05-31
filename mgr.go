@@ -139,7 +139,7 @@ func (m *RawManager) getMsgID() uint64 {
 func (m *RawManager) log(msg string, err error, args ...slog.Attr) {
 	if m.logger != nil {
 		args = append(args, logging.Err(err), logging.Type("manager"))
-		level := slog.LevelError
+		level := slog.LevelInfo
 		if err != nil {
 			level = slog.LevelError
 		}
