@@ -12,7 +12,7 @@ type LogEntry struct {
 	Msg             string    `json:"msg"`
 	MsgType         string    `json:"msgType"`
 	BroadcastID     uint64    `json:"BroadcastID"`
-	Err             string    `json:"err"`
+	Err             error     `json:"err"`
 	Method          string    `json:"method"`
 	From            string    `json:"from"`
 	Cancelled       bool      `json:"cancelled"`
@@ -41,10 +41,7 @@ func BroadcastID(broadcastID uint64) slog.Attr {
 }
 
 func Err(err error) slog.Attr {
-	if err != nil {
-		return slog.String("err", err.Error())
-	}
-	return slog.String("err", "")
+	return slog.Any("err", err)
 }
 
 func Method(m string) slog.Attr {
