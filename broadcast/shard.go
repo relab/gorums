@@ -30,9 +30,8 @@ type shard struct {
 	id  int
 	//sendChan      chan Content
 	//broadcastChan chan Msg
-	ctx        context.Context
-	cancelFunc context.CancelFunc
-	metrics    shardMetrics
+	parentCtx context.Context
+	metrics   shardMetrics
 	//reqs          map[uint64]*BroadcastRequest
 	reqs        map[uint64]*BroadcastProcessor
 	reqTTL      time.Duration
@@ -49,13 +48,11 @@ type shard struct {
 func createShards(ctx context.Context, shardBuffer, sendBuffer int, router Router, order map[string]int, reqTTL time.Duration, logger *slog.Logger) []*shard {
 	shards := make([]*shard, NumShards)
 	for i := range shards {
-		ctx, cancel := context.WithCancel(ctx)
 		shards[i] = &shard{
 			id: i,
 			//sendChan:      make(chan Content, shardBuffer),
 			//broadcastChan: make(chan Msg, shardBuffer),
-			ctx:        ctx,
-			cancelFunc: cancel,
+			parentCtx: ctx,
 			//reqs:             make(map[uint64]*BroadcastRequest, shardBuffer),
 			reqs:             make(map[uint64]*BroadcastProcessor, shardBuffer),
 			shardBuffer:      shardBuffer,
@@ -166,10 +163,6 @@ for {
 		}
 	}
 }*/
-
-func (s *shard) Close() {
-	s.cancelFunc()
-}
 
 func (s *shard) handleMsg(msg Content) shardResponse {
 	//s.metrics.numMsgs++
@@ -378,7 +371,7 @@ func (s *shard) addProcessor2(sendBuffer int, msg Content) (*BroadcastProcessor,
 	}
 	// check size of s.reqs. If too big, then perform necessary cleanup.
 	// should only affect the current shard and not the others.
-	ctx, cancel := context.WithTimeout(s.ctx, s.reqTTL)
+	ctx, cancel := context.WithTimeout(s.parentCtx, s.reqTTL)
 	//req := &BroadcastRequest{
 	var logger *slog.Logger
 	if s.logger != nil {

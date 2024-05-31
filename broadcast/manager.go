@@ -92,7 +92,7 @@ func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage,
 	// slow path: communicate with the shard first
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
-	shard := mgr.state.shards[shardID]
+	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
 	return nil
 }
@@ -141,7 +141,7 @@ func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMess
 	// slow path: communicate with the shard first
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
-	shard := mgr.state.shards[shardID]
+	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
 	return nil
 }
@@ -185,7 +185,7 @@ func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string, enqueueBroadca
 	}
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
-	shard := mgr.state.shards[shardID]
+	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
 	return nil
 }
@@ -221,7 +221,7 @@ func (mgr *manager) Done(broadcastID uint64, enqueueBroadcast func(Msg) error) {
 	}
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
-	shard := mgr.state.shards[shardID]
+	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
 	return
 }

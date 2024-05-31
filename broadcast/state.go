@@ -9,7 +9,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type CacheOption int
+//type CacheOption int
 
 /*
 redis:
@@ -36,6 +36,7 @@ const (
 
 type BroadcastState struct {
 	mut                 sync.Mutex
+	shardMut            sync.RWMutex // RW because we often read and very seldom write to the state
 	parentCtx           context.Context
 	parentCtxCancelFunc context.CancelFunc
 	logger              *slog.Logger
@@ -110,18 +111,19 @@ func (s *BroadcastState) Close() error {
 }*/
 
 func (s *BroadcastState) reset() {
-	s.mut.Lock()
-	defer s.mut.Unlock()
 	s.parentCtxCancelFunc()
-	ctx, cancel := context.WithCancel(context.Background())
-	s.parentCtx = ctx
-	s.parentCtxCancelFunc = cancel
-	s.shards = createShards(ctx, s.shardBuffer, s.sendBuffer, s.router, s.order, s.reqTTL, s.logger)
+	s.mut.Lock()
+	s.parentCtx, s.parentCtxCancelFunc = context.WithCancel(context.Background())
 	//s.RunShards()
 	for _, client := range s.clients {
 		client.Close()
 	}
 	s.clients = make(map[string]*Client)
+	shards := createShards(s.parentCtx, s.shardBuffer, s.sendBuffer, s.router, s.order, s.reqTTL, s.logger)
+	s.mut.Unlock()
+	s.shardMut.Lock()
+	s.shards = shards
+	s.shardMut.Unlock()
 }
 
 func (s *BroadcastState) getClient(addr string) (*Client, bool) {
@@ -135,6 +137,12 @@ func (s *BroadcastState) addClient(addr string, client *Client) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	s.clients[addr] = client
+}
+
+func (s *BroadcastState) getShard(i uint16) *shard {
+	s.shardMut.RLock()
+	defer s.shardMut.RUnlock()
+	return s.shards[i]
 }
 
 func (state *BroadcastState) getStats() shardMetrics {
