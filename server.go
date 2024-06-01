@@ -148,6 +148,19 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
+// WithOrder returns a ServerOption which defines the order of execution
+// of gRPC methods.
+//
+// E.g. in PBFT we can specify the order: PrePrepare, Prepare, and Commit.
+// Gorums will then make sure to only execute messages in this order.
+// The rules are defined as such:
+//  1. Messages to the first gRPC method (PrePrepare) will always be executed.
+//  2. Messages to gRPC methods not defined in the order will always be executed.
+//  3. Messages to gRPC methods appearing later in the order will be cached and executed later.
+//  4. Messages to gRPC methods appearing earlier than the current method will be executed immediately.
+//     E.g. if current method is Commit, then messages to PrePrepare and Prepare will be accepted.
+//  5. The server itself needs to call the next method in the order to progress to the next gRPC method.
+//     E.g. by calling broadcast.Prepare().
 func WithOrder(executionOrder ...string) ServerOption {
 	return func(o *serverOptions) {
 		o.executionOrder = make(map[string]int)
@@ -157,21 +170,37 @@ func WithOrder(executionOrder ...string) ServerOption {
 	}
 }
 
+// WithSLogger returns a ServerOption which sets an optional structured logger for
+// the Server. This will log internal events regarding broadcast requests. The
+// ManagerOption WithLogger() should be used when creating the manager in order
+// to log events related to transmission of messages.
 func WithSLogger(logger *slog.Logger) ServerOption {
 	return func(o *serverOptions) {
 		o.logger = logger
 	}
 }
 
+// WithSrvID sets the MachineID of the broadcast server. This ID is used to
+// generate BroadcastIDs. This method should be used if a replica needs to
+// initiate a broadcast request.
+//
+// An example use case is in Paxos:
+// The designated leader sends a prepare and receives some promises it has
+// never seen before. It thus needs to send accept messages correspondingly.
+// These accept messages are not part of any broadcast request and the server
+// is thus responsible for the origin of these requests.
 func WithSrvID(machineID uint64) ServerOption {
 	return func(o *serverOptions) {
 		o.machineID = machineID
 	}
 }
 
-func WithListenAddr(listenAddr string) ServerOption {
+// WithListenAddr sets the IP address of the broadcast server which will be used in messages
+// sent by the server. The network of the address has to be a TCP network name. Hence,
+// net.ResolveTCPAddr() can be used to obtain the net.Addr type of an address.
+func WithListenAddr(listenAddr net.Addr) ServerOption {
 	return func(o *serverOptions) {
-		o.listenAddr = listenAddr
+		o.listenAddr = listenAddr.String()
 	}
 }
 

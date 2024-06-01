@@ -5,7 +5,7 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastMetadata", "google.golang.org/grpc": "Server", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Listener"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastMetadata", "google.golang.org/grpc": "Server", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Addr"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
@@ -95,8 +95,15 @@ func (mgr *Manager) Close() {
 	}
 }
 
-func (mgr *Manager) AddClientServer(lis net.Listener, opts ...gorums.ServerOption) error {
-	srv := gorums.NewClientServer(lis, opts...)
+// AddClientServer starts a lightweight client-side server. This server only accepts responses
+// to broadcast requests sent by the client.
+//
+// It is important to provide the listenAddr because this will be used to advertise the IP the
+// servers should reply back to.
+func (mgr *Manager) AddClientServer(lis net.Listener, clientAddr net.Addr, opts ...gorums.ServerOption) error {
+	options := []gorums.ServerOption{gorums.WithListenAddr(clientAddr)}
+	options = append(options, opts...)
+	srv := gorums.NewClientServer(lis, options...)
 	srvImpl := &clientServerImpl{
 		ClientServer: srv,
 	}

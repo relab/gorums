@@ -57,8 +57,9 @@ func WithGrpcDialOptions(opts ...grpc.DialOption) ManagerOption {
 	}
 }
 
-// WithLogger returns a ManagerOption which sets an optional error logger for
-// the Manager.
+// WithLogger returns a ManagerOption which sets an optional structured logger for
+// the Manager. This will log events regarding creation of nodes and transmission
+// of messages.
 func WithLogger(logger *slog.Logger) ManagerOption {
 	return func(o *managerOptions) {
 		o.logger = logger

@@ -39,8 +39,15 @@ func (mgr *Manager) Close() {
 	}
 }
 
-func (mgr *Manager) AddClientServer(lis net.Listener, opts ...gorums.ServerOption) error {
-	srv := gorums.NewClientServer(lis, opts...)
+// AddClientServer starts a lightweight client-side server. This server only accepts responses
+// to broadcast requests sent by the client.
+//
+// It is important to provide the listenAddr because this will be used to advertise the IP the
+// servers should reply back to.
+func (mgr *Manager) AddClientServer(lis net.Listener, clientAddr net.Addr, opts ...gorums.ServerOption) error {
+	options := []gorums.ServerOption{gorums.WithListenAddr(clientAddr)}
+	options = append(options, opts...)
+	srv := gorums.NewClientServer(lis, options...)
 	srvImpl := &clientServerImpl{
 		ClientServer: srv,
 	}

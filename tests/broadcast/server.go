@@ -37,11 +37,15 @@ type testServer struct {
 }
 
 func newtestServer(addr string, srvAddresses []string, _ int, withOrder ...bool) *testServer {
+	address, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
 	var osrv *Server
 	if len(withOrder) > 0 {
-		osrv = NewServer(gorums.WithListenAddr(addr), gorums.WithOrder(BroadcastServicePrePrepare, BroadcastServicePrepare, BroadcastServiceCommit))
+		osrv = NewServer(gorums.WithListenAddr(address), gorums.WithOrder(BroadcastServicePrePrepare, BroadcastServicePrepare, BroadcastServiceCommit))
 	} else {
-		osrv = NewServer(gorums.WithListenAddr(addr))
+		osrv = NewServer(gorums.WithListenAddr(address))
 	}
 	srv := testServer{
 		Server:   osrv,
