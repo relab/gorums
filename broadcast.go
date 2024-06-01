@@ -35,9 +35,6 @@ func (srv *Server) GetStats() broadcast.Metrics {
 }
 
 func newBroadcastServer(serverOpts *serverOptions) *broadcastServer {
-	if serverOpts.listenAddr == "" {
-		panic("The listen addr cannot be empty. Provide the WithListenAddr() option when creating the server.")
-	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(serverOpts.listenAddr))
 	id := h.Sum32()

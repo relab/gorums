@@ -62,6 +62,9 @@ func (r *BroadcastRouter) registerState(state *BroadcastState) {
 }
 
 func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any) error {
+	if r.addr == "" {
+		panic("The listen addr on the broadcast server cannot be empty. Use the WithListenAddr() option when creating the server.")
+	}
 	switch val := req.(type) {
 	case *broadcastMsg:
 		return r.routeBroadcast(broadcastID, addr, method, val)
