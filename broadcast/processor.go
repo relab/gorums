@@ -300,23 +300,6 @@ func (m *metadata) hasReceivedClientRequest() bool {
 	return m.IsBroadcastClient && m.SendFn != nil
 }
 
-//func alreadyBroadcasted(methods []string, method string) bool {
-//for _, m := range methods {
-//if m == method {
-//return true
-//}
-//}
-//return false
-//}
-
-//func (c *Content) isBroadcastCall() bool {
-//return c.OriginAddr != ""
-//}
-
-//func (c *Content) hasReceivedClientRequest() bool {
-//return c.IsBroadcastClient && c.SendFn != nil
-//}
-
 func (p *BroadcastProcessor) emptyChannels(metadata *metadata) {
 	for {
 		select {

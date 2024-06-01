@@ -20,7 +20,7 @@ type Client struct {
 }
 
 type Router interface {
-	Send(broadcastID uint64, addr, method string, req any) error
+	Send(broadcastID uint64, addr, method string, req msg) error
 	Connect(addr string)
 }
 
@@ -61,7 +61,9 @@ func (r *BroadcastRouter) registerState(state *BroadcastState) {
 	r.state = state
 }
 
-func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req any) error {
+type msg interface{}
+
+func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req msg) error {
 	if r.addr == "" {
 		panic("The listen addr on the broadcast server cannot be empty. Use the WithListenAddr() option when creating the server.")
 	}

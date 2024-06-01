@@ -16,7 +16,7 @@ type slowRouter struct {
 	resp        protoreflect.ProtoMessage
 }
 
-func (r *slowRouter) Send(broadcastID uint64, addr, method string, req any) error {
+func (r *slowRouter) Send(broadcastID uint64, addr, method string, req msg) error {
 	time.Sleep(1 * time.Second)
 	switch val := req.(type) {
 	case *broadcastMsg:

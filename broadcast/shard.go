@@ -67,107 +67,10 @@ func createShards(ctx context.Context, shardBuffer, sendBuffer int, router Route
 	return shards
 }
 
-/*func (s *shard) run(sendBuffer int) {
-for {
-	select {
-	case <-s.ctx.Done():
-		// it is possible that GC is running concurrently in another goroutine
-		s.mut.Lock()
-		s.reqs = nil
-		s.mut.Unlock()
-		return
-	case msg := <-s.sendChan:
-		s.metrics.numMsgs++
-		if req, ok := s.getProcessor(msg.BroadcastID); ok {
-			// must check if the req is done first to prevent
-			// unecessarily running the server handler
-			select {
-			case <-req.ctx.Done():
-				s.metrics.droppedMsgs++
-				msg.ReceiveChan <- shardResponse{
-					err: AlreadyProcessedErr{},
-				}
-			default:
-			}
-			if msg.IsCancellation {
-				req.cancellationCtxCancel()
-				msg.ReceiveChan <- shardResponse{
-					err: nil,
-				}
-				continue
-			}
-			if !msg.IsBroadcastClient && !s.preserveOrdering {
-				// no need to send it to the broadcast request goroutine.
-				// the first request should contain all info needed
-				// except for the routing info given in the client req.
-				msg.ReceiveChan <- shardResponse{
-					err:              nil,
-					reqCtx:           req.cancellationCtx,
-					enqueueBroadcast: req.enqueueBroadcast,
-				}
-				continue
-			}
-			/*if msg.IsBroadcastClient {
-				// msg.Ctx will correspond to the streamCtx between the client and this server.
-				// We can thus listen to it and signal a cancellation if the client goes offline
-				// or cancels the request. We also have to listen to the req.ctx to prevent leaking
-				// the goroutine.
-				go func() {
-					select {
-					case <-req.ctx.Done():
-					case <-msg.Ctx.Done():
-					}
-					req.cancellationCtxCancel()
-				}()
-			}*/
-// must check if the req is done to prevent deadlock
-/*				select {
-				case <-req.ctx.Done():
-					s.metrics.droppedMsgs++
-					msg.ReceiveChan <- shardResponse{
-						err: AlreadyProcessedErr{},
-					}
-				case req.sendChan <- msg:
-				}
-			} else {
-				if msg.IsCancellation {
-					// ignore cancellations if a broadcast request
-					// has not been created yet
-					msg.ReceiveChan <- shardResponse{
-						err: MissingReqErr{},
-					}
-					continue
-				}
-				s.addProcessor(sendBuffer, msg)
-			}
-		case msg := <-s.broadcastChan:
-			s.metrics.numBroadcastMsgs++
-			if req, ok := s.getProcessor(msg.BroadcastID); ok {
-				if msg.Cancellation != nil {
-					if msg.Cancellation.end {
-						req.cancelFunc()
-						continue
-					}
-					if !req.sentCancellation {
-						req.sentCancellation = true
-						go s.router.Send(msg.BroadcastID, "", "", msg.Cancellation)
-					}
-					continue
-				}
-				select {
-				case <-req.ctx.Done():
-					s.metrics.droppedBroadcastMsgs++
-				case req.broadcastChan <- msg:
-				}
-			}
-		}
-	}
-}*/
-
 func (s *shard) handleMsg(msg Content) shardResponse {
 	//s.metrics.numMsgs++
 	// Optimization: first check with a read lock if the processor already exists
-	if p, ok := s.getProcessor2(msg.BroadcastID); ok {
+	if p, ok := s.getProcessor(msg.BroadcastID); ok {
 		return s.process(p, msg)
 	} else {
 		if msg.IsCancellation {
@@ -177,7 +80,7 @@ func (s *shard) handleMsg(msg Content) shardResponse {
 				err: MissingReqErr{},
 			}
 		}
-		proc, alreadyExists := s.addProcessor2(s.sendBuffer, msg)
+		proc, alreadyExists := s.addProcessor(msg)
 		if alreadyExists {
 			return s.process(proc, msg)
 		}
@@ -194,7 +97,7 @@ func (s *shard) handleMsg(msg Content) shardResponse {
 
 func (s *shard) process(p *BroadcastProcessor, msg Content) shardResponse {
 	// must check if the req is done first to prevent
-	// unecessarily running the server handler
+	// unecessarily running the server handler.
 	select {
 	case <-p.ctx.Done():
 		return shardResponse{
@@ -218,23 +121,6 @@ func (s *shard) process(p *BroadcastProcessor, msg Content) shardResponse {
 			enqueueBroadcast: p.enqueueBroadcast,
 		}
 	}
-	/*if msg.IsBroadcastClient {
-		// important to set this option to prevent duplicate client reqs.
-		// this can be the result if a server forwards the req but the
-		// leader has already received the client req.
-		req.hasReceivedClientReq = true
-		// msg.Ctx will correspond to the streamCtx between the client and this server.
-		// We can thus listen to it and signal a cancellation if the client goes offline
-		// or cancels the request. We also have to listen to the req.ctx to prevent leaking
-		// the goroutine.
-		go func() {
-			select {
-			case <-req.ctx.Done():
-			case <-msg.Ctx.Done():
-			}
-			req.cancellationCtxCancel()
-		}()
-	}*/
 	// must check if the req is done to prevent deadlock
 	select {
 	case <-p.ctx.Done():
@@ -257,21 +143,7 @@ func (s *shard) process(p *BroadcastProcessor, msg Content) shardResponse {
 
 func (s *shard) handleBMsg(msg Msg) {
 	//s.metrics.numBroadcastMsgs++
-	if req, ok := s.getProcessor2(msg.BroadcastID); ok {
-		/*if msg.Cancellation != nil {
-			if msg.Cancellation.end {
-				req.cancelFunc()
-				return
-			}
-			//if !req.sentCancellation {
-			//req.sentCancellation = true
-			//go s.router.Send(msg.BroadcastID, "", "", msg.Cancellation)
-			//}
-			//req.sendCancellation.Do(func() {
-			//go s.router.Send(msg.BroadcastID, "", "", msg.Cancellation)
-			//})
-			return
-		}*/
+	if req, ok := s.getProcessor(msg.BroadcastID); ok {
 		select {
 		case <-req.ctx.Done():
 			//s.metrics.droppedBroadcastMsgs++
@@ -280,76 +152,14 @@ func (s *shard) handleBMsg(msg Msg) {
 	}
 }
 
-/*func (s *shard) getProcessor(broadcastID uint64) (*BroadcastProcessor, bool) {
-	s.mut.RLock()
-	defer s.mut.RUnlock()
-	p, ok := s.reqs[broadcastID]
-	return p, ok
-}*/
-
-func (s *shard) getProcessor2(broadcastID uint64) (*BroadcastProcessor, bool) {
+func (s *shard) getProcessor(broadcastID uint64) (*BroadcastProcessor, bool) {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 	p, ok := s.reqs[broadcastID]
 	return p, ok
 }
 
-/*func (s *shard) addProcessor(sendBuffer int, msg Content) *BroadcastProcessor {
-	s.mut.RLock()
-	defer s.mut.RUnlock()
-	if time.Since(s.nextGC) > 0 {
-		// make sure the current request is done before running the GC.
-		// This is to prevent running the GC in vain.
-		t := s.reqTTL + 5*time.Second
-		s.nextGC = time.Now().Add(t)
-		go s.gc(t)
-	}
-	if msg.IsBroadcastClient {
-		// msg.Ctx will correspond to the streamCtx between the client and this server,
-		// meaning the ctx will cancel when the client cancels or disconnects.
-		msg.Ctx, msg.CancelCtx = context.WithCancel(msg.Ctx)
-	} else {
-		msg.Ctx, msg.CancelCtx = context.WithCancel(context.Background())
-	}
-	// check size of s.reqs. If too big, then perform necessary cleanup.
-	// should only affect the current shard and not the others.
-	ctx, cancel := context.WithTimeout(s.ctx, s.reqTTL)
-	//req := &BroadcastRequest{
-	req := &BroadcastProcessor{
-		ctx:        ctx,
-		cancelFunc: cancel,
-		// it is important to not buffer the channel. Otherwise,
-		// it will cause a deadlock on the receiver. Will
-		// happen in this scenario: A msg is queued/buffered but the
-		// listening goroutine is stopped. This is because a req is
-		// first processed by a shard and then sent to the goroutine.
-		// the original sender is only listening on the receive channel
-		// and not on the ctx of the request.
-		sendChan: make(chan Content),
-		// this channel can be buffered because there is no receive
-		// channel. The result is simply ignored.
-		broadcastChan:         make(chan Msg, sendBuffer),
-		started:               time.Now(),
-		router:                s.router,
-		cancellationCtx:       msg.Ctx,
-		cancellationCtxCancel: msg.CancelCtx,
-		executionOrder:        s.order,
-	}
-	s.reqs[msg.BroadcastID] = req
-	//go req.handle(s.router, msg.BroadcastID, msg)
-	go req.handle(msg)
-	//select {
-	//case <-req.ctx.Done():
-	//s.metrics.droppedMsgs++
-	//msg.ReceiveChan <- shardResponse{
-	//err: AlreadyProcessedErr{},
-	//}
-	//case req.sendChan <- msg:
-	//}
-	return req
-}*/
-
-func (s *shard) addProcessor2(sendBuffer int, msg Content) (*BroadcastProcessor, bool) {
+func (s *shard) addProcessor(msg Content) (*BroadcastProcessor, bool) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	if p, ok := s.reqs[msg.BroadcastID]; ok {
@@ -378,29 +188,18 @@ func (s *shard) addProcessor2(sendBuffer int, msg Content) (*BroadcastProcessor,
 		logger = s.logger.With(logging.BroadcastID(msg.BroadcastID))
 	}
 	req := &BroadcastProcessor{
-		ctx:        ctx,
-		cancelFunc: cancel,
-		// it is important to not buffer the channel. Otherwise,
-		// it will cause a deadlock on the receiver. Will
-		// happen in this scenario: A msg is queued/buffered but the
-		// listening goroutine is stopped. This is because a req is
-		// first processed by a shard and then sent to the goroutine.
-		// the original sender is only listening on the receive channel
-		// and not on the ctx of the request.
-		sendChan: make(chan Content, sendBuffer),
-		// this channel can be buffered because there is no receive
-		// channel. The result is simply ignored.
-		broadcastChan:         make(chan Msg, sendBuffer),
+		ctx:                   ctx,
+		cancelFunc:            cancel,
+		sendChan:              make(chan Content, s.sendBuffer),
+		broadcastChan:         make(chan Msg, s.sendBuffer),
 		started:               time.Now(),
 		router:                s.router,
 		cancellationCtx:       msg.Ctx,
 		cancellationCtxCancel: msg.CancelCtx,
 		executionOrder:        s.order,
-		//sendCancellation:      new(sync.Once),
-		logger: logger,
+		logger:                logger,
 	}
 	s.reqs[msg.BroadcastID] = req
-	//go req.handle(s.router, msg.BroadcastID, msg)
 	go req.handle(msg)
 	return req, false
 }

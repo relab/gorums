@@ -114,13 +114,13 @@ func (s *BroadcastState) reset() {
 	s.parentCtxCancelFunc()
 	s.mut.Lock()
 	s.parentCtx, s.parentCtxCancelFunc = context.WithCancel(context.Background())
-	//s.RunShards()
 	for _, client := range s.clients {
 		client.Close()
 	}
 	s.clients = make(map[string]*Client)
 	shards := createShards(s.parentCtx, s.shardBuffer, s.sendBuffer, s.router, s.order, s.reqTTL, s.logger)
 	s.mut.Unlock()
+	// unlocking because we don't want to end up with a deadlock.
 	s.shardMut.Lock()
 	s.shards = shards
 	s.shardMut.Unlock()
@@ -181,6 +181,7 @@ type Content struct {
 	IsCancellation    bool
 	OriginAddr        string
 	OriginMethod      string
+	ViewNumber        uint64
 	SenderAddr        string
 	CurrentMethod     string
 	ReceiveChan       chan shardResponse
@@ -194,9 +195,6 @@ func (c Content) send(resp protoreflect.ProtoMessage, err error) error {
 	if !c.hasReceivedClientRequest() {
 		return MissingClientReqErr{}
 	}
-	//if c.senderType != BroadcastClient {
-	//return errors.New("has not received client req yet")
-	//}
 	c.SendFn(resp, err)
 	return nil
 }
