@@ -88,7 +88,7 @@ func (r *BroadcastRouter) Connect(addr string) {
 func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string, msg *broadcastMsg) error {
 	if handler, ok := r.serverHandlers[msg.method]; ok {
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
-		// see (srv *broadcastServer) registerBroadcastFunc(method string).
+		// see: (srv *broadcastServer) registerBroadcastFunc(method string).
 		handler(msg.ctx, msg.request, broadcastID, addr, method, msg.options, r.id, r.addr)
 		return nil
 	}

@@ -208,6 +208,7 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			OriginAddr:        originAddr,
 			OriginMethod:      originMethod,
 			ServerAddresses:   options.ServerAddresses,
+			SkipSelf:          options.SkipSelf,
 		}
 		srv.viewMutex.RLock()
 		// drop request if a view change has occured

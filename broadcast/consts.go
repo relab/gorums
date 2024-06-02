@@ -14,6 +14,7 @@ type BroadcastOptions struct {
 	Deadline             time.Time
 	OmitUniquenessChecks bool
 	SkipSelf             bool
+	ProgressTo           string
 	RelatedToReq         uint64
 }
 

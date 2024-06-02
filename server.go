@@ -161,6 +161,7 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 //     E.g. if current method is Commit, then messages to PrePrepare and Prepare will be accepted.
 //  5. The server itself needs to call the next method in the order to progress to the next gRPC method.
 //     E.g. by calling broadcast.Prepare().
+//  6. If the BroadcastOption ProgressTo() is used, then it will progress to the given gRPC method.
 func WithOrder(executionOrder ...string) ServerOption {
 	return func(o *serverOptions) {
 		o.executionOrder = make(map[string]int)

@@ -19,6 +19,7 @@ type BroadcastCallData struct {
 	OriginAddr        string
 	OriginMethod      string
 	ServerAddresses   []string
+	SkipSelf          bool
 }
 
 // checks whether the given address is contained in the given subset
@@ -53,6 +54,10 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 	sentMsgs := 0
 	notEnqueued := make([]*RawNode, 0, len(c))
 	for _, n := range c {
+		if d.SkipSelf && n.Address() == d.SenderAddr {
+			// the node will not send the message to itself
+			continue
+		}
 		// skip nodes not specified in subset
 		if !d.inSubset(n.addr) {
 			continue

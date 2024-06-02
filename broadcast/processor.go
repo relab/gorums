@@ -215,10 +215,10 @@ func (p *BroadcastProcessor) handleBroadcast(bMsg *Msg, methods []string, metada
 	if alreadyBroadcasted(methods, bMsg.Method) {
 		return false
 	}
-	p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Msg)
-	p.log("broadcast: sending broadcast", nil, logging.MsgType(bMsg.MsgType.String()), logging.Method(bMsg.Method), logging.Stopping(false), logging.IsBroadcastCall(metadata.isBroadcastCall()))
+	err := p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Msg)
+	p.log("broadcast: sending broadcast", err, logging.MsgType(bMsg.MsgType.String()), logging.Method(bMsg.Method), logging.Stopping(false), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 
-	p.updateOrder(bMsg.Method)
+	p.updateOrder(bMsg.Method, bMsg.Msg.options.ProgressTo)
 	p.dispatchOutOfOrderMsgs()
 	return true
 }
@@ -375,10 +375,13 @@ func (r *BroadcastProcessor) addToOutOfOrder(msg *Content) {
 	r.outOfOrderMsgs[msg.CurrentMethod] = msgs
 }
 
-func (r *BroadcastProcessor) updateOrder(method string) {
+func (r *BroadcastProcessor) updateOrder(method string, progressTo string) {
 	// the implementer has not specified an execution order
 	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
 		return
+	}
+	if progressTo != "" {
+		method = progressTo
 	}
 	order, ok := r.executionOrder[method]
 	// do nothing for methods without specified order

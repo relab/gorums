@@ -141,6 +141,12 @@ func WithoutSelf() BroadcastOption {
 	}
 }
 
+func ProgressTo(method string) BroadcastOption {
+	return func(b *broadcast.BroadcastOptions) {
+		b.ProgressTo = method
+	}
+}
+
 func WithoutUniquenessChecks() BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
 		b.OmitUniquenessChecks = true
