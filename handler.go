@@ -55,7 +55,7 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 		}
 		// due to ordering we wrap the actual implementation function to be able to
 		// run it at a later time.
-		run := func(reqCtx context.Context, enqueueBroadcast func(broadcast.Msg) error) {
+		run := func(reqCtx context.Context, enqueueBroadcast func(*broadcast.Msg) error) {
 			// we need to pass in the reqCtx and broadcastChan because we can only retrieve
 			// them after we have gotten a response from the shard. The reqCtx
 			// is used for cancellations and broadcastChan for broadcasts.
@@ -72,7 +72,7 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 		// instead we want to check whether the client has cancelled the broadcast request
 		// and if so, we return a cancelled context. This enables the implementer to listen
 		// for cancels and do proper actions.
-		reqCtx, enqueueBroadcast, err := srv.broadcastSrv.manager.Process(msg)
+		reqCtx, enqueueBroadcast, err := srv.broadcastSrv.manager.Process(&msg)
 		if err != nil {
 			return
 		}
@@ -81,12 +81,15 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 	}
 }
 
-func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func(context.Context, func(broadcast.Msg) error)) {
+func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func(context.Context, func(*broadcast.Msg) error)) {
 	msg.BroadcastID = in.Metadata.BroadcastMsg.BroadcastID
 	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
 	msg.OriginAddr = in.Metadata.BroadcastMsg.OriginAddr
 	msg.OriginMethod = in.Metadata.BroadcastMsg.OriginMethod
 	msg.SenderAddr = in.Metadata.BroadcastMsg.SenderAddr
+	if msg.SenderAddr == "" && msg.IsBroadcastClient {
+		msg.SenderAddr = "client"
+	}
 	msg.CurrentMethod = in.Metadata.Method
 	msg.Ctx = ctx.Context
 	msg.Run = run

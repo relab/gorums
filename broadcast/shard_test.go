@@ -55,11 +55,11 @@ func TestShard(t *testing.T) {
 	//go shard.run(5)
 
 	var tests = []struct {
-		in  Content
+		in  *Content
 		out error
 	}{
 		{
-			in: Content{
+			in: &Content{
 				BroadcastID:       broadcastID,
 				OriginAddr:        "127.0.0.1:8080",
 				OriginMethod:      "testMethod",
@@ -70,7 +70,7 @@ func TestShard(t *testing.T) {
 			out: nil,
 		},
 		{
-			in: Content{
+			in: &Content{
 				BroadcastID:       broadcastID,
 				OriginAddr:        "127.0.0.1:8080",
 				OriginMethod:      "testMethod",
@@ -81,7 +81,7 @@ func TestShard(t *testing.T) {
 			out: nil,
 		},
 		{
-			in: Content{
+			in: &Content{
 				BroadcastID:       broadcastID,
 				OriginAddr:        "127.0.0.1:8080",
 				OriginMethod:      "testMethod",
@@ -100,7 +100,7 @@ func TestShard(t *testing.T) {
 		}
 	}
 
-	shard.handleBMsg(Msg{
+	shard.handleBMsg(&Msg{
 		MsgType: ReplyMsg,
 		Reply: &reply{
 			Response: mockResp{},
@@ -109,7 +109,7 @@ func TestShard(t *testing.T) {
 		BroadcastID: broadcastID,
 	})
 
-	clientMsg := Content{
+	clientMsg := &Content{
 		BroadcastID:       broadcastID,
 		OriginAddr:        "127.0.0.1:8080",
 		OriginMethod:      "testMethod",
@@ -123,7 +123,7 @@ func TestShard(t *testing.T) {
 	}
 
 	// wait for the request to finish
-	msgShouldBeDropped := Content{
+	msgShouldBeDropped := &Content{
 		BroadcastID:       broadcastID,
 		OriginAddr:        "127.0.0.1:8080",
 		OriginMethod:      "testMethod",

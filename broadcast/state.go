@@ -52,7 +52,7 @@ type BroadcastState struct {
 }
 
 func NewState(logger *slog.Logger, router Router, order map[string]int) *BroadcastState {
-	shardBuffer := 100
+	shardBuffer := 200
 	sendBuffer := 30
 	TTL := 5 * time.Minute
 	ctx, cancel := context.WithCancel(context.Background())
@@ -172,7 +172,7 @@ func (state *BroadcastState) getStats() shardMetrics {
 type shardResponse struct {
 	err              error
 	reqCtx           context.Context
-	enqueueBroadcast func(Msg) error
+	enqueueBroadcast func(*Msg) error
 }
 
 type Content struct {
@@ -188,7 +188,7 @@ type Content struct {
 	SendFn            func(resp protoreflect.ProtoMessage, err error) error
 	Ctx               context.Context
 	CancelCtx         context.CancelFunc
-	Run               func(context.Context, func(Msg) error)
+	Run               func(context.Context, func(*Msg) error)
 }
 
 func (c Content) send(resp protoreflect.ProtoMessage, err error) error {

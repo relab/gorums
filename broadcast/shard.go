@@ -67,7 +67,7 @@ func createShards(ctx context.Context, shardBuffer, sendBuffer int, router Route
 	return shards
 }
 
-func (s *shard) handleMsg(msg Content) shardResponse {
+func (s *shard) handleMsg(msg *Content) shardResponse {
 	//s.metrics.numMsgs++
 	// Optimization: first check with a read lock if the processor already exists
 	if p, ok := s.getProcessor(msg.BroadcastID); ok {
@@ -95,11 +95,12 @@ func (s *shard) handleMsg(msg Content) shardResponse {
 	}
 }
 
-func (s *shard) process(p *BroadcastProcessor, msg Content) shardResponse {
+func (s *shard) process(p *BroadcastProcessor, msg *Content) shardResponse {
 	// must check if the req is done first to prevent
 	// unecessarily running the server handler.
 	select {
 	case <-p.ctx.Done():
+		p.log("msg: already processed", AlreadyProcessedErr{}, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
 		return shardResponse{
 			err: AlreadyProcessedErr{},
 		}
@@ -112,6 +113,7 @@ func (s *shard) process(p *BroadcastProcessor, msg Content) shardResponse {
 		}
 	}
 	if !msg.IsBroadcastClient && !s.preserveOrdering {
+		p.log("msg: processed", nil, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
 		// no need to send it to the broadcast request goroutine.
 		// the first request should contain all info needed
 		// except for the routing info given in the client req.
@@ -141,7 +143,7 @@ func (s *shard) process(p *BroadcastProcessor, msg Content) shardResponse {
 
 }
 
-func (s *shard) handleBMsg(msg Msg) {
+func (s *shard) handleBMsg(msg *Msg) {
 	//s.metrics.numBroadcastMsgs++
 	if req, ok := s.getProcessor(msg.BroadcastID); ok {
 		select {
@@ -159,7 +161,7 @@ func (s *shard) getProcessor(broadcastID uint64) (*BroadcastProcessor, bool) {
 	return p, ok
 }
 
-func (s *shard) addProcessor(msg Content) (*BroadcastProcessor, bool) {
+func (s *shard) addProcessor(msg *Content) (*BroadcastProcessor, bool) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	if p, ok := s.reqs[msg.BroadcastID]; ok {
@@ -190,8 +192,8 @@ func (s *shard) addProcessor(msg Content) (*BroadcastProcessor, bool) {
 	req := &BroadcastProcessor{
 		ctx:                   ctx,
 		cancelFunc:            cancel,
-		sendChan:              make(chan Content, s.sendBuffer),
-		broadcastChan:         make(chan Msg, s.sendBuffer),
+		sendChan:              make(chan *Content, s.sendBuffer),
+		broadcastChan:         make(chan *Msg, s.sendBuffer),
 		started:               time.Now(),
 		router:                s.router,
 		cancellationCtx:       msg.Ctx,

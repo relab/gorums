@@ -12,8 +12,8 @@ import (
 type BroadcastProcessor struct {
 	broadcastID   uint64
 	router        Router
-	broadcastChan chan Msg
-	sendChan      chan Content
+	broadcastChan chan *Msg
+	sendChan      chan *Content
 	ctx           context.Context
 	cancelFunc    context.CancelFunc
 	started       time.Time
@@ -26,7 +26,7 @@ type BroadcastProcessor struct {
 	// ordering
 	executionOrder map[string]int
 	orderIndex     int
-	outOfOrderMsgs map[string][]Content
+	outOfOrderMsgs map[string][]*Content
 }
 
 type metadata struct {
@@ -41,7 +41,8 @@ type metadata struct {
 	HasReceivedClientReq bool
 }
 
-func (p *BroadcastProcessor) handle(msg Content) {
+func (p *BroadcastProcessor) handle(msg *Content) {
+	p.log("processor: started", nil, logging.Started(p.started))
 	p.broadcastID = msg.BroadcastID
 	// defining metadata and methods here to prevent allocation on the heap
 	metadata := &metadata{
@@ -81,10 +82,8 @@ func (p *BroadcastProcessor) handle(msg Content) {
 		p.outOfOrderMsgs = nil
 		// make sure the context is cancelled before closing the channels
 		<-p.ctx.Done()
-		//close(p.broadcastChan)
-		//close(p.sendChan)
 		p.emptyChannels(metadata)
-		p.log("processor stopped", nil, logging.Started(p.started), logging.Ended(p.ended))
+		p.log("processor: stopped", nil, logging.Started(p.started), logging.Ended(p.ended))
 	}()
 	for {
 		select {
@@ -197,7 +196,7 @@ func (p *BroadcastProcessor) handle(msg Content) {
 	}
 }
 
-func (p *BroadcastProcessor) handleCancellation(bMsg Msg, metadata *metadata) bool {
+func (p *BroadcastProcessor) handleCancellation(bMsg *Msg, metadata *metadata) bool {
 	if bMsg.Cancellation.end {
 		p.log("broadcast: broadcast.Done() called", nil, logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true))
 		return true
@@ -210,7 +209,7 @@ func (p *BroadcastProcessor) handleCancellation(bMsg Msg, metadata *metadata) bo
 	return false
 }
 
-func (p *BroadcastProcessor) handleBroadcast(bMsg Msg, methods []string, metadata *metadata) bool {
+func (p *BroadcastProcessor) handleBroadcast(bMsg *Msg, methods []string, metadata *metadata) bool {
 	// check if msg has already been broadcasted for this method
 	//if alreadyBroadcasted(p.metadata.Methods, bMsg.Method) {
 	if alreadyBroadcasted(methods, bMsg.Method) {
@@ -224,23 +223,12 @@ func (p *BroadcastProcessor) handleBroadcast(bMsg Msg, methods []string, metadat
 	return true
 }
 
-func (p *BroadcastProcessor) log(msg string, err error, args ...slog.Attr) {
-	if p.logger != nil {
-		args = append(args, logging.Err(err), logging.Type("broadcast processor"))
-		level := slog.LevelInfo
-		if err != nil {
-			level = slog.LevelError
-		}
-		p.logger.LogAttrs(context.Background(), level, msg, args...)
-	}
-}
-
-func (p *BroadcastProcessor) handleReply(bMsg Msg, metadata *metadata) bool {
+func (p *BroadcastProcessor) handleReply(bMsg *Msg, metadata *metadata) bool {
 	// BroadcastCall if origin addr is non-empty.
 	if metadata.isBroadcastCall() {
 		go p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Reply)
 		// the request is done becuase we have sent a reply to the client
-		p.log("broadcast: sending reply to client", nil, logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
+		p.log("broadcast: sending reply to client", nil, logging.Method(metadata.OriginMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 		return true
 	}
 	// QuorumCall if origin addr is empty.
@@ -260,15 +248,29 @@ func (p *BroadcastProcessor) handleReply(bMsg Msg, metadata *metadata) bool {
 		// the request is not done yet because we have not replied to
 		// the client.
 		//slog.Info("reply: late", "err", err, "id", p.broadcastID)
-		p.log("broadcast: failed to send reply to client", err, logging.MsgType(bMsg.MsgType.String()), logging.Stopping(false), logging.IsBroadcastCall(metadata.isBroadcastCall()))
-		return false
+		p.log("broadcast: failed to send reply to client", err, logging.Method(metadata.OriginMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(false), logging.IsBroadcastCall(metadata.isBroadcastCall()))
+		// we must stop the goroutine if we have received the client req. This can mean that
+		// the client no longer accepts replies or has gone offline. In any case, the operation
+		// is done.
+		return metadata.hasReceivedClientRequest()
 	}
 	// the request is done becuase we have sent a reply to the client
-	p.log("broadcast: sending reply to client", err, logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
+	p.log("broadcast: sending reply to client", err, logging.Method(metadata.OriginMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 	return true
 }
 
-func (m *metadata) update(new Content) {
+func (p *BroadcastProcessor) log(msg string, err error, args ...slog.Attr) {
+	if p.logger != nil {
+		args = append(args, logging.Err(err), logging.Type("broadcast processor"))
+		level := slog.LevelInfo
+		if err != nil {
+			level = slog.LevelError
+		}
+		p.logger.LogAttrs(context.Background(), level, msg, args...)
+	}
+}
+
+func (m *metadata) update(new *Content) {
 	if m.OriginAddr == "" && new.OriginAddr != "" {
 		m.OriginAddr = new.OriginAddr
 	}
@@ -336,7 +338,7 @@ func (r *BroadcastProcessor) initOrder() {
 	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
 		return
 	}
-	r.outOfOrderMsgs = make(map[string][]Content)
+	r.outOfOrderMsgs = make(map[string][]*Content)
 }
 
 func (r *BroadcastProcessor) isInOrder(method string) bool {
@@ -356,19 +358,19 @@ func (r *BroadcastProcessor) isInOrder(method string) bool {
 	return order <= r.orderIndex
 }
 
-func (r *BroadcastProcessor) addToOutOfOrder(msg Content) {
+func (r *BroadcastProcessor) addToOutOfOrder(msg *Content) {
 	// the implementer has not specified an execution order
 	if r.executionOrder == nil || len(r.executionOrder) <= 0 {
 		return
 	}
 	var (
-		msgs []Content
+		msgs []*Content
 		ok   bool
 	)
 	if msgs, ok = r.outOfOrderMsgs[msg.CurrentMethod]; ok {
 		msgs = append(msgs, msg)
 	} else {
-		msgs = []Content{msg}
+		msgs = []*Content{msg}
 	}
 	r.outOfOrderMsgs[msg.CurrentMethod] = msgs
 }
@@ -426,7 +428,7 @@ func (r *BroadcastProcessor) dispatchOutOfOrderMsgs() {
 // - BroadcastMsg
 // - ClientReply
 // - Cancellation
-func (p *BroadcastProcessor) enqueueBroadcast(msg Msg) error {
+func (p *BroadcastProcessor) enqueueBroadcast(msg *Msg) error {
 	// we want to prevent queueing messages on the buffered broadcastChan
 	// because it can potentially lead to concurrency bugs. These include:
 	//	- buffering a message on the channel and requiring that it is processed.
@@ -435,6 +437,7 @@ func (p *BroadcastProcessor) enqueueBroadcast(msg Msg) error {
 	//	  closing the broadcastChan at the same time. This will cause an error.
 	select {
 	case <-p.ctx.Done():
+		p.log("broadcast: already processed", AlreadyProcessedErr{}, logging.Method(msg.Method), logging.MsgType(msg.MsgType.String()))
 		return AlreadyProcessedErr{}
 	default:
 	}
@@ -443,6 +446,7 @@ func (p *BroadcastProcessor) enqueueBroadcast(msg Msg) error {
 	// ctx.Done() will be called before the msg is queued.
 	select {
 	case <-p.ctx.Done():
+		p.log("broadcast: already processed", AlreadyProcessedErr{}, logging.Method(msg.Method), logging.MsgType(msg.MsgType.String()))
 		return AlreadyProcessedErr{}
 	case p.broadcastChan <- msg:
 		return nil

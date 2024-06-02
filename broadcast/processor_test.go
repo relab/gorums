@@ -42,11 +42,11 @@ func TestHandleBroadcastOption1(t *testing.T) {
 	broadcastID := snowflake.NewBroadcastID()
 
 	var tests = []struct {
-		in  Content
+		in  *Content
 		out error
 	}{
 		{
-			in: Content{
+			in: &Content{
 				Ctx:               context.Background(),
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
@@ -55,7 +55,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 			out: nil,
 		},
 		{
-			in: Content{
+			in: &Content{
 				Ctx:               context.Background(),
 				BroadcastID:       snowflake.NewBroadcastID(),
 				IsBroadcastClient: false,
@@ -64,7 +64,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 			out: BroadcastIDErr{},
 		},
 		{
-			in: Content{
+			in: &Content{
 				Ctx:               context.Background(),
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
@@ -74,7 +74,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 		},
 	}
 
-	msg := Content{
+	msg := &Content{
 		Ctx:          context.Background(),
 		BroadcastID:  broadcastID,
 		OriginMethod: "testMethod",
@@ -92,8 +92,8 @@ func TestHandleBroadcastOption1(t *testing.T) {
 	req := &BroadcastProcessor{
 		ctx:                   ctx,
 		cancelFunc:            cancel,
-		sendChan:              make(chan Content),
-		broadcastChan:         make(chan Msg, 5),
+		sendChan:              make(chan *Content),
+		broadcastChan:         make(chan *Msg, 5),
 		started:               time.Now(),
 		cancellationCtx:       cancelCtx,
 		cancellationCtxCancel: cancelCancel,
@@ -119,7 +119,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 		t.Fatalf("the request is not done yet. SendToClient has not been called.")
 	}
 
-	req.broadcastChan <- Msg{
+	req.broadcastChan <- &Msg{
 		MsgType: ReplyMsg,
 		Reply: &reply{
 			Response: mockResp{},
@@ -134,7 +134,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 		t.Fatalf("the request is not done yet. SendToClient has been called, but the client request has not arrived yet.")
 	}
 
-	clientMsg := Content{
+	clientMsg := &Content{
 		Ctx:               context.Background(),
 		BroadcastID:       broadcastID,
 		IsBroadcastClient: true,
@@ -160,11 +160,11 @@ func TestHandleBroadcastCall1(t *testing.T) {
 	broadcastID := snowflake.NewBroadcastID()
 
 	var tests = []struct {
-		in  Content
+		in  *Content
 		out error
 	}{
 		{
-			in: Content{
+			in: &Content{
 				Ctx:               context.Background(),
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
@@ -173,7 +173,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 			out: nil,
 		},
 		{
-			in: Content{
+			in: &Content{
 				Ctx:               context.Background(),
 				BroadcastID:       snowflake.NewBroadcastID(),
 				IsBroadcastClient: false,
@@ -182,7 +182,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 			out: BroadcastIDErr{},
 		},
 		{
-			in: Content{
+			in: &Content{
 				Ctx:               context.Background(),
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: false,
@@ -192,7 +192,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 		},
 	}
 
-	msg := Content{
+	msg := &Content{
 		Ctx:               context.Background(),
 		BroadcastID:       broadcastID,
 		IsBroadcastClient: false,
@@ -212,8 +212,8 @@ func TestHandleBroadcastCall1(t *testing.T) {
 	req := &BroadcastProcessor{
 		ctx:                   ctx,
 		cancelFunc:            cancel,
-		sendChan:              make(chan Content),
-		broadcastChan:         make(chan Msg, 5),
+		sendChan:              make(chan *Content),
+		broadcastChan:         make(chan *Msg, 5),
 		started:               time.Now(),
 		cancellationCtx:       cancelCtx,
 		cancellationCtxCancel: cancelCancel,
@@ -239,7 +239,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 		t.Fatalf("the request is not done yet. SendToClient has not been called.")
 	}
 
-	req.broadcastChan <- Msg{
+	req.broadcastChan <- &Msg{
 		MsgType: ReplyMsg,
 		Reply: &reply{
 			Response: mockResp{},
@@ -254,7 +254,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 	case <-req.ctx.Done():
 	}
 
-	clientMsg := Content{
+	clientMsg := &Content{
 		BroadcastID:       broadcastID,
 		IsBroadcastClient: true,
 		OriginAddr:        "127.0.0.1:8080",
@@ -289,7 +289,7 @@ func BenchmarkHandleProcessor(b *testing.B) {
 	b.ResetTimer()
 	b.Run("ProcessorHandler", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			msg := Content{
+			msg := &Content{
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: true,
 				SendFn:            sendFn,
@@ -304,14 +304,14 @@ func BenchmarkHandleProcessor(b *testing.B) {
 				cancelFunc:            cancel,
 				cancellationCtx:       cancelCtx,
 				cancellationCtxCancel: cancelCancel,
-				sendChan:              make(chan Content),
-				broadcastChan:         make(chan Msg, 5),
+				sendChan:              make(chan *Content),
+				broadcastChan:         make(chan *Msg, 5),
 				started:               time.Now(),
 				router:                router,
 			}
 			go req.handle(msg)
 
-			req.broadcastChan <- resp
+			req.broadcastChan <- &resp
 
 			<-req.ctx.Done()
 			cancel()
