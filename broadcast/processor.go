@@ -78,11 +78,17 @@ func (p *BroadcastProcessor) handle(msg *Content) {
 		p.ended = time.Now()
 		p.cancelFunc()
 		p.cancellationCtxCancel()
-		// mark allocations ready for GC
-		p.outOfOrderMsgs = nil
 		// make sure the context is cancelled before closing the channels
 		<-p.ctx.Done()
 		p.emptyChannels(metadata)
+		// mark allocations ready for GC and minimize memory footprint of finished broadcast requests.
+		// this is safe to do because all send operations listen to the cancelled p.ctx thus preventing
+		// deadlocks/goroutine leaks.
+		p.outOfOrderMsgs = nil
+		p.executionOrder = nil
+		p.broadcastChan = nil
+		p.sendChan = nil
+		p.cancellationCtxCancel = nil
 		p.log("processor: stopped", nil, logging.Started(p.started), logging.Ended(p.ended))
 	}()
 	for {
@@ -153,7 +159,12 @@ func (p *BroadcastProcessor) handle(msg *Content) {
 					case <-p.ctx.Done():
 					case <-new.Ctx.Done():
 					}
-					p.cancellationCtxCancel()
+					// when the processor returns it sets p.cancellationCtxCancel = nil.
+					// Hence, it is important to check if it is nil. Also, the processor
+					// calls this function when it returns.
+					if p.cancellationCtxCancel != nil {
+						p.cancellationCtxCancel()
+					}
 				}()
 				p.log("msg: received client req", nil, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
 			}
@@ -173,7 +184,6 @@ func (p *BroadcastProcessor) handle(msg *Content) {
 				new.ReceiveChan <- shardResponse{
 					err: err,
 				}
-				//	slog.Info("receive: late", "err", err, "id", p.broadcastID)
 				p.log("msg: late msg", err, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
 				return
 			}
@@ -424,6 +434,23 @@ func (r *BroadcastProcessor) dispatchOutOfOrderMsgs() {
 	}
 }
 
+func alreadyBroadcasted(methods []string, method string) bool {
+	for _, m := range methods {
+		if m == method {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Content) isBroadcastCall() bool {
+	return c.OriginAddr != ""
+}
+
+func (c *Content) hasReceivedClientRequest() bool {
+	return c.IsBroadcastClient && c.SendFn != nil
+}
+
 // this method is used to enqueue messages onto the broadcast channel
 // of a broadcast processor. The messages enqueued are then transmitted
 // to the other servers or the client depending on the type of message.
@@ -454,21 +481,4 @@ func (p *BroadcastProcessor) enqueueBroadcast(msg *Msg) error {
 	case p.broadcastChan <- msg:
 		return nil
 	}
-}
-
-func alreadyBroadcasted(methods []string, method string) bool {
-	for _, m := range methods {
-		if m == method {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *Content) isBroadcastCall() bool {
-	return c.OriginAddr != ""
-}
-
-func (c *Content) hasReceivedClientRequest() bool {
-	return c.IsBroadcastClient && c.SendFn != nil
 }

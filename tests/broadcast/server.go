@@ -214,17 +214,18 @@ func (srv *testServer) Search(ctx gorums.ServerCtx, req *Request, broadcast *Bro
 	time.Sleep(1 * time.Millisecond)
 	select {
 	case <-ctx.Done():
+		broadcast.Cancel()
 		broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 0,
 		}, nil)
 	case <-time.After(srv.processingTime):
+		broadcast.Cancel()
 		broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 1,
 		}, nil)
 	}
-	broadcast.Cancel()
 }
 
 func (srv *testServer) LongRunningTask(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
