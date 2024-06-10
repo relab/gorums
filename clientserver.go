@@ -289,8 +289,8 @@ func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, e
 				Message:     msg,
 				BroadcastID: broadcastID,
 			}
-			node.Unicast(ctx, cd)
-			return node.LastErr()
+			_, err := node.RPCCall(ctx, cd)
+			return err
 		},
 		Close: func() error {
 			mgr.Close()

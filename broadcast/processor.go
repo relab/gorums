@@ -41,9 +41,7 @@ type metadata struct {
 	HasReceivedClientReq bool
 }
 
-func (p *BroadcastProcessor) handle(msg *Content) {
-	p.log("processor: started", nil, logging.Started(p.started))
-	p.broadcastID = msg.BroadcastID
+func (p *BroadcastProcessor) run(msg *Content) {
 	// defining metadata and methods here to prevent allocation on the heap
 	metadata := &metadata{
 		OriginAddr:        msg.OriginAddr,
@@ -53,73 +51,18 @@ func (p *BroadcastProcessor) handle(msg *Content) {
 		Sent:              false,
 		SentCancellation:  false,
 	}
+	// methods is placed here and not in the metadata as an optimization strategy.
+	// Testing shows that it does not allocate memory for it on the heap.
 	methods := make([]string, 0, 3)
-	p.initOrder()
-	// connect to client immediately to potentially save some time
-	go p.router.Connect(metadata.OriginAddr)
-	if msg.IsBroadcastClient {
-		// important to set this option to prevent duplicate client reqs.
-		// this can be the result if a server forwards the req but the
-		// leader has already received the client req.
-		metadata.HasReceivedClientReq = true
-		go func() {
-			// new.Ctx will correspond to the streamCtx between the client and this server.
-			// We can thus listen to it and signal a cancellation if the client goes offline
-			// or cancels the request. We also have to listen to the p.ctx to prevent leaking
-			// the goroutine.
-			select {
-			case <-p.ctx.Done():
-			case <-msg.Ctx.Done():
-			}
-			// when the processor returns it sets p.cancellationCtxCancel = nil.
-			// Hence, it is important to check if it is nil. Also, the processor
-			// calls this function when it returns.
-			if p.cancellationCtxCancel != nil {
-				p.cancellationCtxCancel()
-			}
-		}()
-		p.log("msg: received client req", nil, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
-	}
-	// all messages should always have a ReceiveChan
-	if msg.ReceiveChan != nil {
-		if !p.isInOrder(msg.CurrentMethod) {
-			// save the message and execute it later
-			p.addToOutOfOrder(msg)
-			msg.ReceiveChan <- shardResponse{
-				err: OutOfOrderErr{},
-			}
-			p.log("msg: out of order", OutOfOrderErr{}, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
-		} else {
-			msg.ReceiveChan <- shardResponse{
-				err:              nil,
-				reqCtx:           p.cancellationCtx,
-				enqueueBroadcast: p.enqueueBroadcast,
-			}
-			p.log("msg: processed", nil, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
-		}
-	}
-	defer func() {
-		p.ended = time.Now()
-		p.cancelFunc()
-		p.cancellationCtxCancel()
-		// make sure the context is cancelled before closing the channels
-		<-p.ctx.Done()
-		p.emptyChannels(metadata)
-		// mark allocations ready for GC and minimize memory footprint of finished broadcast requests.
-		// this is safe to do because all send operations listen to the cancelled p.ctx thus preventing
-		// deadlocks/goroutine leaks.
-		p.outOfOrderMsgs = nil
-		p.executionOrder = nil
-		p.broadcastChan = nil
-		p.sendChan = nil
-		p.cancellationCtxCancel = nil
-		p.log("processor: stopped", nil, logging.Started(p.started), logging.Ended(p.ended))
-	}()
+	p.initialize(msg, metadata)
+	defer p.cleanup(metadata)
 	for {
 		select {
 		case <-p.ctx.Done():
+			// processor is done
 			return
 		case bMsg := <-p.broadcastChan:
+			// we have received an outgoing message from a server handler
 			if p.broadcastID != bMsg.BroadcastID {
 				p.log("broadcast: wrong BroadcastID", BroadcastIDErr{}, logging.MsgType(bMsg.MsgType.String()), logging.Stopping(false))
 				continue
@@ -142,90 +85,10 @@ func (p *BroadcastProcessor) handle(msg *Content) {
 				}
 			}
 		case new := <-p.sendChan:
-			if p.broadcastID != new.BroadcastID {
-				new.ReceiveChan <- shardResponse{
-					err: BroadcastIDErr{},
-				}
-				p.log("msg: wrong BroadcastID", BroadcastIDErr{}, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
-				continue
-			}
-			if new.IsCancellation {
-				// the cancellation implementation is just an
-				// empty function and does not need the ctx or
-				// broadcastChan.
-				new.ReceiveChan <- shardResponse{
-					err: nil,
-				}
-				p.log("msg: received cancellation", nil, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
-				continue
-			}
-
-			if new.IsBroadcastClient {
-				if metadata.HasReceivedClientReq {
-					// this is a duplicate request, possibly from a forward operation.
-					// the req should simply be dropped.
-					new.ReceiveChan <- shardResponse{
-						err: ClientReqAlreadyReceivedErr{},
-					}
-					p.log("msg: duplicate client req", ClientReqAlreadyReceivedErr{}, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
-					continue
-				}
-				// important to set this option to prevent duplicate client reqs.
-				// this can be the result if a server forwards the req but the
-				// leader has already received the client req.
-				metadata.HasReceivedClientReq = true
-				go func() {
-					// new.Ctx will correspond to the streamCtx between the client and this server.
-					// We can thus listen to it and signal a cancellation if the client goes offline
-					// or cancels the request. We also have to listen to the p.ctx to prevent leaking
-					// the goroutine.
-					select {
-					case <-p.ctx.Done():
-					case <-new.Ctx.Done():
-					}
-					// when the processor returns it sets p.cancellationCtxCancel = nil.
-					// Hence, it is important to check if it is nil. Also, the processor
-					// calls this function when it returns.
-					if p.cancellationCtxCancel != nil {
-						p.cancellationCtxCancel()
-					}
-				}()
-				p.log("msg: received client req", nil, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
-			}
-
-			metadata.update(new)
-			// this only pertains to requests where the server has a
-			// direct connection to the client, e.g. QuorumCall.
-			if metadata.Sent && !metadata.isBroadcastCall() {
-				// we must return an error to prevent executing the implementation func.
-				// This is because the server has finished the request and tried to reply
-				// to the client previously. The msg we have just received is from the client,
-				// meaning we can finally return the cached response.
-				err := metadata.send(metadata.ResponseMsg, metadata.ResponseErr)
-				if err == nil {
-					err = AlreadyProcessedErr{}
-				}
-				new.ReceiveChan <- shardResponse{
-					err: err,
-				}
-				p.log("msg: late msg", err, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
+			// we have received an incoming message from a server or client
+			if p.handleMsg(new, metadata) {
 				return
 			}
-			if !p.isInOrder(new.CurrentMethod) {
-				// save the message and execute it later
-				p.addToOutOfOrder(new)
-				new.ReceiveChan <- shardResponse{
-					err: OutOfOrderErr{},
-				}
-				p.log("msg: out of order", OutOfOrderErr{}, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
-				continue
-			}
-			new.ReceiveChan <- shardResponse{
-				err:              nil,
-				reqCtx:           p.cancellationCtx,
-				enqueueBroadcast: p.enqueueBroadcast,
-			}
-			p.log("msg: processed", nil, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
 		}
 	}
 }
@@ -246,7 +109,7 @@ func (p *BroadcastProcessor) handleCancellation(bMsg *Msg, metadata *metadata) b
 func (p *BroadcastProcessor) handleBroadcast(bMsg *Msg, methods []string, metadata *metadata) bool {
 	// check if msg has already been broadcasted for this method
 	//if alreadyBroadcasted(p.metadata.Methods, bMsg.Method) {
-	if alreadyBroadcasted(methods, bMsg.Method) {
+	if !bMsg.Msg.options.AllowDuplication && alreadyBroadcasted(methods, bMsg.Method) {
 		return false
 	}
 	err := p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Msg)
@@ -291,6 +154,94 @@ func (p *BroadcastProcessor) handleReply(bMsg *Msg, metadata *metadata) bool {
 	// the request is done becuase we have sent a reply to the client
 	p.log("broadcast: sending reply to client", err, logging.Method(metadata.OriginMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 	return true
+}
+
+func (p *BroadcastProcessor) handleMsg(new *Content, metadata *metadata) bool {
+	if p.broadcastID != new.BroadcastID {
+		new.ReceiveChan <- shardResponse{
+			err: BroadcastIDErr{},
+		}
+		p.log("msg: wrong BroadcastID", BroadcastIDErr{}, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
+		return false
+	}
+	if new.IsCancellation {
+		// the cancellation implementation is just an
+		// empty function and does not need the ctx or
+		// broadcastChan.
+		new.ReceiveChan <- shardResponse{
+			err: nil,
+		}
+		p.log("msg: received cancellation", nil, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
+		return false
+	}
+
+	if new.IsBroadcastClient {
+		if metadata.HasReceivedClientReq {
+			// this is a duplicate request, possibly from a forward operation.
+			// the req should simply be dropped.
+			new.ReceiveChan <- shardResponse{
+				err: ClientReqAlreadyReceivedErr{},
+			}
+			p.log("msg: duplicate client req", ClientReqAlreadyReceivedErr{}, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
+			return false
+		}
+		// important to set this option to prevent duplicate client reqs.
+		// this can be the result if a server forwards the req but the
+		// leader has already received the client req.
+		metadata.HasReceivedClientReq = true
+		go func() {
+			// new.Ctx will correspond to the streamCtx between the client and this server.
+			// We can thus listen to it and signal a cancellation if the client goes offline
+			// or cancels the request. We also have to listen to the p.ctx to prevent leaking
+			// the goroutine.
+			select {
+			case <-p.ctx.Done():
+			case <-new.Ctx.Done():
+			}
+			// when the processor returns it sets p.cancellationCtxCancel = nil.
+			// Hence, it is important to check if it is nil. Also, the processor
+			// calls this function when it returns.
+			if p.cancellationCtxCancel != nil {
+				p.cancellationCtxCancel()
+			}
+		}()
+		p.log("msg: received client req", nil, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
+	}
+
+	metadata.update(new)
+	// this only pertains to requests where the server has a
+	// direct connection to the client, e.g. QuorumCall.
+	if metadata.Sent && !metadata.isBroadcastCall() {
+		// we must return an error to prevent executing the implementation func.
+		// This is because the server has finished the request and tried to reply
+		// to the client previously. The msg we have just received is from the client,
+		// meaning we can finally return the cached response.
+		err := metadata.send(metadata.ResponseMsg, metadata.ResponseErr)
+		if err == nil {
+			err = AlreadyProcessedErr{}
+		}
+		new.ReceiveChan <- shardResponse{
+			err: err,
+		}
+		p.log("msg: late msg", err, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
+		return true
+	}
+	if !p.isInOrder(new.CurrentMethod) {
+		// save the message and execute it later
+		p.addToOutOfOrder(new)
+		new.ReceiveChan <- shardResponse{
+			err: OutOfOrderErr{},
+		}
+		p.log("msg: out of order", OutOfOrderErr{}, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
+		return false
+	}
+	new.ReceiveChan <- shardResponse{
+		err:              nil,
+		reqCtx:           p.cancellationCtx,
+		enqueueBroadcast: p.enqueueBroadcast,
+	}
+	p.log("msg: processed", nil, logging.Method(new.CurrentMethod), logging.From(new.SenderAddr))
+	return false
 }
 
 func (p *BroadcastProcessor) log(msg string, err error, args ...slog.Attr) {
@@ -473,6 +424,85 @@ func (c *Content) isBroadcastCall() bool {
 
 func (c *Content) hasReceivedClientRequest() bool {
 	return c.IsBroadcastClient && c.SendFn != nil
+}
+
+func (p *BroadcastProcessor) initialize(msg *Content, metadata *metadata) {
+	p.log("processor: started", nil, logging.Started(p.started))
+	p.broadcastID = msg.BroadcastID
+	p.initOrder()
+	// connect to client immediately to potentially save some time
+	go p.router.Connect(metadata.OriginAddr)
+	if msg.IsBroadcastClient {
+		// important to set this option to prevent duplicate client reqs.
+		// this can be the result if a server forwards the req but the
+		// leader has already received the client req.
+		metadata.HasReceivedClientReq = true
+		go func() {
+			if msg.Ctx == nil {
+				return
+			}
+			// new.Ctx will correspond to the streamCtx between the client and this server.
+			// We can thus listen to it and signal a cancellation if the client goes offline
+			// or cancels the request. We also have to listen to the p.ctx to prevent leaking
+			// the goroutine.
+			select {
+			case <-p.ctx.Done():
+			case <-msg.Ctx.Done():
+			}
+			// when the processor returns it sets p.cancellationCtxCancel = nil.
+			// Hence, it is important to check if it is nil. Also, the processor
+			// calls this function when it returns.
+			if p.cancellationCtxCancel != nil {
+				p.cancellationCtxCancel()
+			}
+		}()
+		p.log("msg: received client req", nil, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
+	}
+	// all messages should always have a ReceiveChan
+	if msg.ReceiveChan != nil {
+		if !p.isInOrder(msg.CurrentMethod) {
+			// save the message and execute it later
+			p.addToOutOfOrder(msg)
+			msg.ReceiveChan <- shardResponse{
+				err: OutOfOrderErr{},
+			}
+			p.log("msg: out of order", OutOfOrderErr{}, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
+		} else {
+			msg.ReceiveChan <- shardResponse{
+				err:              nil,
+				reqCtx:           p.cancellationCtx,
+				enqueueBroadcast: p.enqueueBroadcast,
+			}
+			p.log("msg: processed", nil, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
+		}
+	}
+}
+
+func (p *BroadcastProcessor) cleanup(metadata *metadata) {
+	p.ended = time.Now()
+	p.cancelFunc()
+	p.cancellationCtxCancel()
+	// make sure the context is cancelled before closing the channels
+	<-p.ctx.Done()
+	p.emptyChannels(metadata)
+	// mark allocations ready for GC and minimize memory footprint of finished broadcast requests.
+	// this is safe to do because all send operations listen to the cancelled p.ctx thus preventing
+	// deadlocks/goroutine leaks.
+	p.outOfOrderMsgs = nil
+	p.executionOrder = nil
+	/*
+		These two lines would greatly impact the amount of memory used by a processor:
+		1. p.broadcastChan = nil
+		2. p.sendChan = nil
+
+		However, the shard uses them and thus we get a race condition when setting them to nil.
+		Using mutexes will remove the benefit of setting them to nil. It is safe to set them to
+		nil because sending on a nil channel will block forever. We always listen to ctx.Done(),
+		ensuring that we don't get deadlocks. Additionally, queued msgs will by dropped in any
+		case and new msgs will not even get enqueued. As a concluding remark, we comment the lines
+		out to not get hits when running tests with the race detector.
+	*/
+	p.log("processor: stopped", nil, logging.Started(p.started), logging.Ended(p.ended))
 }
 
 // this method is used to enqueue messages onto the broadcast channel
