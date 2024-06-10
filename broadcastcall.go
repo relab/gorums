@@ -37,6 +37,8 @@ func (bcd *BroadcastCallData) inSubset(addr string) bool {
 }
 
 // BroadcastCall performs a broadcast on the configuration.
+//
+// This method should be used by generated code only.
 func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData, opts ...CallOption) {
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
 		IsBroadcastClient: d.IsBroadcastClient,

@@ -901,7 +901,9 @@ func BenchmarkQCBroadcastOptionManyClients(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var wg sync.WaitGroup
 			for _, client := range clients {
+				wg.Add(1)
 				go func(i int, c *Configuration) {
+					defer wg.Done()
 					resp, err := c.QuorumCallWithBroadcast(context.Background(), &Request{Value: int64(i)})
 					if err != nil {
 						b.Error(err)
@@ -909,9 +911,7 @@ func BenchmarkQCBroadcastOptionManyClients(b *testing.B) {
 					if resp.GetResult() != int64(i) {
 						b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
 					}
-					wg.Done()
 				}(i, client)
-				wg.Add(1)
 			}
 			wg.Wait()
 		}
@@ -1200,10 +1200,6 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 			}
 		}
 	})
-	//pprof.StopCPUProfile()
-	//pprof.WriteHeapProfile(memProfile)
-	//cpuProfile.Close()
-	//memProfile.Close()
 }
 
 func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
@@ -1397,8 +1393,11 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	var wg1 sync.WaitGroup
 	for _, client := range clients {
 		init := 1
+		wg1.Add(1)
 		go func(client *Configuration) {
-			resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(init)})
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			resp, err := client.BroadcastCall(ctx, &Request{Value: int64(init)})
 			if err != nil {
 				t.Error(err)
 			}
@@ -1407,7 +1406,6 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 			}
 			wg1.Done()
 		}(client)
-		wg1.Add(1)
 	}
 	wg1.Wait()
 	time.Sleep(500 * time.Millisecond)
@@ -1415,7 +1413,8 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	var wg sync.WaitGroup
 	for r := 0; r < numReqs; r++ {
 		for i, client := range clients {
-			go func(i int) {
+			wg.Add(1)
+			go func(i int, client *Configuration) {
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
 				resp, err := client.BroadcastCall(ctx, &Request{Value: int64(i)})
@@ -1426,8 +1425,7 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 					t.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
 				}
 				wg.Done()
-			}(i)
-			wg.Add(1)
+			}(i, client)
 		}
 	}
 	wg.Wait()

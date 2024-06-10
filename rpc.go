@@ -20,7 +20,9 @@ type CallData struct {
 //
 // This method should be used by generated code only.
 func (n *RawNode) RPCCall(ctx context.Context, d CallData) (protoreflect.ProtoMessage, error) {
-	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
+	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{BroadcastID: d.BroadcastID}}
+
+	//md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
 	replyChan := make(chan response, 1)
 	n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}, replyChan, false)
 

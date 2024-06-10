@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
@@ -107,12 +108,16 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 }
 
 type serverOptions struct {
-	buffer          uint
-	grpcOpts        []grpc.ServerOption
-	connectCallback func(context.Context)
-	logger          *slog.Logger
-	executionOrder  map[string]int
-	machineID       uint64
+	buffer            uint
+	grpcOpts          []grpc.ServerOption
+	connectCallback   func(context.Context)
+	logger            *slog.Logger
+	executionOrder    map[string]int
+	machineID         uint64
+	clientDialTimeout time.Duration
+	reqTTL            time.Duration // the lifetime of a broadcast request
+	shardBuffer       int           // size of a newly initialized shard
+	sendBuffer        int           // buffer on the send and broadcast channels for a broadcast processor
 	// this is the address other nodes should connect to. Sometimes, e.g. when
 	// running in a docker container it is useful to listen to the loopback
 	// address and use forwarding from the host. If not this option is not given,
@@ -171,6 +176,41 @@ func WithOrder(executionOrder ...string) ServerOption {
 	}
 }
 
+// WithClientDialTimeout returns a ServerOption which sets the dial timeout
+// used to send replies back to the client in a BroadcastCall.
+func WithClientDialTimeout(dialTimeout time.Duration) ServerOption {
+	return func(o *serverOptions) {
+		o.clientDialTimeout = dialTimeout
+	}
+}
+
+// WithShardBuffer returns a ServerOption which sets the buffer size
+// of the shards. A higher shard size uses more memory but saves time
+// when the number of broadcast requests is large.
+func WithShardBuffer(shardBuffer int) ServerOption {
+	return func(o *serverOptions) {
+		o.shardBuffer = shardBuffer
+	}
+}
+
+// WithSendBuffer returns a ServerOption which sets the buffer size
+// of the sendChannel and broadcastChannel for a broadcast processor.
+// A higher sendBuffer uses more memory but saves time when the number
+// broadcast messages is large.
+func WithSendBuffer(sendBuffer int) ServerOption {
+	return func(o *serverOptions) {
+		o.sendBuffer = sendBuffer
+	}
+}
+
+// WithBroadcastReqTTL returns a ServerOption which sets the lifetime
+// used for the broadcast processors.
+func WithBroadcastReqTTL(reqTTL time.Duration) ServerOption {
+	return func(o *serverOptions) {
+		o.reqTTL = reqTTL
+	}
+}
+
 // WithSLogger returns a ServerOption which sets an optional structured logger for
 // the Server. This will log internal events regarding broadcast requests. The
 // ManagerOption WithLogger() should be used when creating the manager in order
@@ -217,6 +257,10 @@ type Server struct {
 // You should call `NewServer` in the generated code instead.
 func NewServer(opts ...ServerOption) *Server {
 	serverOpts := serverOptions{
+		clientDialTimeout: 10 * time.Second,
+		shardBuffer:       200,
+		sendBuffer:        30,
+		reqTTL:            5 * time.Minute,
 		// Provide an illegal machineID to avoid unintentional collisions.
 		// 0 is a valid MachineID and should not be used as default.
 		machineID: uint64(broadcast.MaxMachineID) + 1,

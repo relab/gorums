@@ -44,7 +44,7 @@ func newBroadcastServer(serverOpts *serverOptions) *broadcastServer {
 		logger:    serverOpts.logger,
 		machineID: serverOpts.machineID,
 	}
-	srv.manager = broadcast.NewBroadcastManager(serverOpts.logger, createClient, srv.canceler, serverOpts.executionOrder)
+	srv.manager = broadcast.NewBroadcastManager(serverOpts.logger, createClient, srv.canceler, serverOpts.executionOrder, serverOpts.clientDialTimeout, serverOpts.reqTTL, serverOpts.shardBuffer, serverOpts.sendBuffer)
 	srv.manager.AddAddr(srv.id, serverOpts.listenAddr, srv.machineID)
 	return srv
 }
@@ -116,25 +116,6 @@ func WithSubset(srvAddrs ...string) BroadcastOption {
 	}
 }
 
-func WithGossip(percentage float32, ttl int) BroadcastOption {
-	return func(b *broadcast.BroadcastOptions) {
-		b.GossipPercentage = percentage
-		b.TTL = ttl
-	}
-}
-
-func WithTTL(ttl int) BroadcastOption {
-	return func(b *broadcast.BroadcastOptions) {
-		b.TTL = ttl
-	}
-}
-
-func WithDeadline(deadline time.Time) BroadcastOption {
-	return func(b *broadcast.BroadcastOptions) {
-		b.Deadline = deadline
-	}
-}
-
 func WithoutSelf() BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
 		b.SkipSelf = true
@@ -147,9 +128,9 @@ func ProgressTo(method string) BroadcastOption {
 	}
 }
 
-func WithoutUniquenessChecks() BroadcastOption {
+func AllowDuplication() BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
-		b.OmitUniquenessChecks = true
+		b.AllowDuplication = true
 	}
 }
 

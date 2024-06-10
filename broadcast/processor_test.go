@@ -99,7 +99,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 		cancellationCtxCancel: cancelCancel,
 		router:                router,
 	}
-	go req.handle(msg)
+	go req.run(msg)
 	resp := <-msg.ReceiveChan
 	if resp.err != nil {
 		t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", nil, resp.err)
@@ -219,7 +219,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 		cancellationCtxCancel: cancelCancel,
 		router:                router,
 	}
-	go req.handle(msg)
+	go req.run(msg)
 	resp := <-msg.ReceiveChan
 	if resp.err != nil {
 		t.Fatalf("wrong error returned.\n\tgot: %v, want: %v", nil, resp.err)
@@ -278,6 +278,7 @@ func BenchmarkHandleProcessor(b *testing.B) {
 	// not using shards in this test
 	broadcastID := snowflake.NewBroadcastID()
 	resp := Msg{
+		MsgType: ReplyMsg,
 		Reply: &reply{
 			Response: mockResp{},
 			Err:      nil,
@@ -285,6 +286,7 @@ func BenchmarkHandleProcessor(b *testing.B) {
 		BroadcastID: broadcastID,
 	}
 	sendFn := func(resp protoreflect.ProtoMessage, err error) error { return nil }
+	ctx := context.Background()
 
 	b.ResetTimer()
 	b.Run("ProcessorHandler", func(b *testing.B) {
@@ -295,11 +297,12 @@ func BenchmarkHandleProcessor(b *testing.B) {
 				SendFn:            sendFn,
 				OriginMethod:      originMethod,
 				ReceiveChan:       nil,
+				Ctx:               ctx,
 			}
 
-			cancelCtx, cancelCancel := context.WithTimeout(context.Background(), 1*time.Minute)
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-			req := &BroadcastProcessor{
+			cancelCtx, cancelCancel := context.WithTimeout(ctx, 1*time.Minute)
+			ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+			proc := &BroadcastProcessor{
 				ctx:                   ctx,
 				cancelFunc:            cancel,
 				cancellationCtx:       cancelCtx,
@@ -309,11 +312,11 @@ func BenchmarkHandleProcessor(b *testing.B) {
 				started:               time.Now(),
 				router:                router,
 			}
-			go req.handle(msg)
+			go proc.run(msg)
 
-			req.broadcastChan <- &resp
+			proc.broadcastChan <- &resp
 
-			<-req.ctx.Done()
+			<-proc.ctx.Done()
 			cancel()
 			cancelCancel()
 		}

@@ -26,14 +26,11 @@ type shardMetrics struct {
 }
 
 type shard struct {
-	mut sync.RWMutex
-	id  int
-	//sendChan      chan Content
-	//broadcastChan chan Msg
-	parentCtx context.Context
-	metrics   shardMetrics
-	//reqs          map[uint64]*BroadcastRequest
-	reqs        map[uint64]*BroadcastProcessor
+	mut         sync.RWMutex
+	id          int
+	parentCtx   context.Context
+	metrics     shardMetrics
+	procs       map[uint64]*BroadcastProcessor
 	reqTTL      time.Duration
 	router      Router
 	nextGC      time.Time
@@ -49,12 +46,9 @@ func createShards(ctx context.Context, shardBuffer, sendBuffer int, router Route
 	shards := make([]*shard, NumShards)
 	for i := range shards {
 		shards[i] = &shard{
-			id: i,
-			//sendChan:      make(chan Content, shardBuffer),
-			//broadcastChan: make(chan Msg, shardBuffer),
-			parentCtx: ctx,
-			//reqs:             make(map[uint64]*BroadcastRequest, shardBuffer),
-			reqs:             make(map[uint64]*BroadcastProcessor, shardBuffer),
+			id:               i,
+			parentCtx:        ctx,
+			procs:            make(map[uint64]*BroadcastProcessor, shardBuffer),
 			shardBuffer:      shardBuffer,
 			sendBuffer:       sendBuffer,
 			reqTTL:           reqTTL,
@@ -157,14 +151,14 @@ func (s *shard) handleBMsg(msg *Msg) {
 func (s *shard) getProcessor(broadcastID uint64) (*BroadcastProcessor, bool) {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
-	p, ok := s.reqs[broadcastID]
+	p, ok := s.procs[broadcastID]
 	return p, ok
 }
 
 func (s *shard) addProcessor(msg *Content) (*BroadcastProcessor, bool) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-	if p, ok := s.reqs[msg.BroadcastID]; ok {
+	if p, ok := s.procs[msg.BroadcastID]; ok {
 		return p, true
 	}
 	if time.Since(s.nextGC) > 0 {
@@ -189,7 +183,7 @@ func (s *shard) addProcessor(msg *Content) (*BroadcastProcessor, bool) {
 	if s.logger != nil {
 		logger = s.logger.With(logging.BroadcastID(msg.BroadcastID))
 	}
-	req := &BroadcastProcessor{
+	proc := &BroadcastProcessor{
 		ctx:                   ctx,
 		cancelFunc:            cancel,
 		sendChan:              make(chan *Content, s.sendBuffer),
@@ -201,9 +195,9 @@ func (s *shard) addProcessor(msg *Content) (*BroadcastProcessor, bool) {
 		executionOrder:        s.order,
 		logger:                logger,
 	}
-	s.reqs[msg.BroadcastID] = req
-	go req.handle(msg)
-	return req, false
+	s.procs[msg.BroadcastID] = proc
+	go proc.run(msg)
+	return proc, false
 }
 
 func (s *shard) gc(nextGC time.Duration) {
@@ -212,7 +206,7 @@ func (s *shard) gc(nextGC time.Duration) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	newReqs := make(map[uint64]*BroadcastProcessor, s.shardBuffer)
-	for broadcastID, req := range s.reqs {
+	for broadcastID, req := range s.procs {
 		// stale requests should be cancelled and removed immediately
 		if time.Since(req.started) > s.reqTTL {
 			req.cancelFunc()
@@ -233,20 +227,20 @@ func (s *shard) gc(nextGC time.Duration) {
 		}
 		newReqs[broadcastID] = req
 	}
-	s.reqs = newReqs
+	s.procs = newReqs
 }
 
 func (s *shard) getStats() shardMetrics {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
-	s.metrics.numReqs = uint64(len(s.reqs))
-	s.metrics.lifetimes = make([][]time.Time, len(s.reqs))
+	s.metrics.numReqs = uint64(len(s.procs))
+	s.metrics.lifetimes = make([][]time.Time, len(s.procs))
 	s.metrics.totalMsgs = s.metrics.numBroadcastMsgs + s.metrics.numMsgs
 	minLifetime := 100 * time.Hour
 	maxLifetime := time.Duration(0)
 	totalLifetime := time.Duration(0)
 	i := 0
-	for _, req := range s.reqs {
+	for _, req := range s.procs {
 		select {
 		case <-req.ctx.Done():
 			s.metrics.finishedReqs++

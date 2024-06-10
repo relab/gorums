@@ -48,7 +48,7 @@ func TestShard(t *testing.T) {
 		//broadcastChan: make(chan Msg, shardBuffer),
 		parentCtx: ctx,
 		//reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
-		reqs:   make(map[uint64]*BroadcastProcessor, shardBuffer),
+		procs:  make(map[uint64]*BroadcastProcessor, shardBuffer),
 		router: router,
 		reqTTL: 5 * time.Minute,
 	}

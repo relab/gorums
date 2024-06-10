@@ -51,18 +51,15 @@ type BroadcastState struct {
 	shards []*shard
 }
 
-func NewState(logger *slog.Logger, router Router, order map[string]int) *BroadcastState {
-	shardBuffer := 200
-	sendBuffer := 30
-	TTL := 5 * time.Minute
+func NewState(logger *slog.Logger, router Router, order map[string]int, reqTTL time.Duration, shardBuffer, sendBuffer int) *BroadcastState {
 	ctx, cancel := context.WithCancel(context.Background())
-	shards := createShards(ctx, shardBuffer, sendBuffer, router, order, TTL, logger)
+	shards := createShards(ctx, shardBuffer, sendBuffer, router, order, reqTTL, logger)
 	state := &BroadcastState{
 		parentCtx:           ctx,
 		parentCtxCancelFunc: cancel,
 		shards:              shards,
 		logger:              logger,
-		reqTTL:              TTL,
+		reqTTL:              reqTTL,
 		sendBuffer:          sendBuffer,
 		shardBuffer:         shardBuffer,
 		router:              router,
