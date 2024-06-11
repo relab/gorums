@@ -237,6 +237,11 @@ func (c *channel) sendMsg(req request) (err error) {
 		// that is, waitForSend is true. Conversely, if the call option is set, the call type
 		// will not block on the response channel, and the "receiver" goroutine below will
 		// eventually clean up the responseRouter map by calling routeResponse.
+		//
+		// It is important to note that waitForSend() should NOT return true if a response
+		// is expected from the node at the other end, e.g. when using RPCCall or QuorumCall.
+		// CallOptions are not provided with the requests from these types and thus waitForSend()
+		// returns false. This design should maybe be revised?
 		if req.waitForSend() {
 			// unblock the caller and clean up the responseRouter map
 			c.routeResponse(req.msg.Metadata.MessageID, response{})
@@ -286,7 +291,6 @@ func (c *channel) sendMsg(req request) (err error) {
 			}
 		}
 	}()
-
 	err = c.gorumsStream.SendMsg(req.msg)
 	if err != nil {
 		c.setLastErr(err)
@@ -316,17 +320,14 @@ func (c *channel) sender() {
 				c.streamBroken.set()
 			}
 		}
-		// return error if stream is broken
+		// retry if stream is broken
 		if c.streamBroken.get() {
-			//c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: streamDownErr})
 			go c.retryMsg(req, streamDownErr)
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
-			// return the error
-			//c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: err})
 			go c.retryMsg(req, err)
 		} else {
 			c.log("channel: successfully sent msg", nil, slog.LevelInfo, req.getLogArgs(c)...)

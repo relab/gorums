@@ -2,6 +2,7 @@ package broadcast
 
 import (
 	"context"
+	"crypto/elliptic"
 	"errors"
 	"fmt"
 	net "net"
@@ -61,6 +62,41 @@ func newtestServer(addr string, srvAddresses []string, _ int, withOrder ...bool)
 		srv.processingTime = 100 * time.Millisecond
 	}
 	srv.mgr = NewManager(
+		gorums.WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	)
+	view, err := srv.mgr.NewConfiguration(gorums.WithNodeList(srv.peers))
+	if err != nil {
+		panic(err)
+	}
+	srv.SetView(view)
+	return &srv
+}
+
+func newAuthenticatedServer(addr string, srvAddresses []string) *testServer {
+	address, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		panic(err)
+	}
+	asrv := NewServer(gorums.WithListenAddr(address), gorums.EnforceAuthentication(elliptic.P256()))
+	srv := testServer{
+		Server:   asrv,
+		respChan: make(map[int64]response),
+		leader:   leader,
+	}
+	RegisterBroadcastServiceServer(srv.Server, &srv)
+	srv.peers = srvAddresses
+	srv.addr = addr
+	if addr != leader {
+		srv.processingTime = 100 * time.Millisecond
+	}
+	auth := gorums.NewAuth(elliptic.P256())
+	auth.GenerateKeys()
+	privKey, pubKey := auth.Keys()
+	auth.RegisterKeys(address, privKey, pubKey)
+	srv.mgr = NewManager(
+		gorums.WithAuthentication(auth),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
@@ -136,44 +172,14 @@ func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
 }
 
 func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	//srv.mu.Lock()
-	//srv.numMsg["BC"]++
-	//srv.mu.Unlock()
-	//md := broadcast.GetMetadata()
-	//slog.Warn("server received broadcast call", "srv", srv.addr, "bID", md.BroadcastID)
-	//time.Sleep(1 * time.Millisecond)
-	//broadcast.SendToClient(&Response{
-	//Result: req.Value,
-	//}, nil)
-	/*broadcast.SendToClient(&Response{
-		Result: req.Value,
-	}, nil)*/
-	//time.Sleep(1 * time.Millisecond)
 	broadcast.BroadcastIntermediate(req)
 }
 
 func (srv *testServer) BroadcastIntermediate(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	//srv.mu.Lock()
-	//srv.numMsg["BI"]++
-	//srv.mu.Unlock()
-	///md := broadcast.GetMetadata()
-	///slog.Warn("server received broadcast intermediate", "srv", srv.addr, "bID", md.BroadcastID)
-	//broadcast.SendToClient(&Response{
-	//Result: req.Value,
-	//}, nil)
-	//time.Sleep(1 * time.Millisecond)
-	//time.Sleep(1 * time.Millisecond)
 	broadcast.Broadcast(req)
 }
 
 func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	//srv.mu.Lock()
-	//srv.numMsg["B"]++
-	//srv.mu.Unlock()
-	///md := broadcast.GetMetadata()
-	///slog.Warn("server received broadcast", "srv", srv.addr, "bID", md.BroadcastID)
-	//time.Sleep(1 * time.Millisecond)
-	//time.Sleep(1 * time.Millisecond)
 	broadcast.SendToClient(&Response{
 		Result: req.Value,
 	}, nil)

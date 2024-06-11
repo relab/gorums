@@ -13,6 +13,35 @@ import (
 	"time"
 )
 
+func createAuthServers(numSrvs int) ([]*testServer, []string, func(), error) {
+	skip := 0
+	srvs := make([]*testServer, 0, numSrvs)
+	srvAddrs := make([]string, numSrvs)
+	for i := 0; i < numSrvs; i++ {
+		srvAddrs[i] = fmt.Sprintf("127.0.0.1:500%v", i)
+	}
+	for _, addr := range srvAddrs {
+		if skip > 0 {
+			skip--
+			continue
+		}
+		srv := newAuthenticatedServer(addr, srvAddrs)
+		lis, err := net.Listen("tcp4", srv.addr)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		srv.lis = lis
+		go srv.start(lis)
+		srvs = append(srvs, srv)
+	}
+	return srvs, srvAddrs, func() {
+		// stop the servers
+		for _, srv := range srvs {
+			srv.Stop()
+		}
+	}, nil
+}
+
 func createSrvs(numSrvs int, down ...int) ([]*testServer, []string, func(), error) {
 	ordering := false
 	skip := 0
@@ -1430,4 +1459,33 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	}
 	wg.Wait()
 	srvCleanup()
+}
+
+func TestAuthenticationBroadcastCall(t *testing.T) {
+	numSrvs := 3
+	numReqs := 10
+	_, srvAddrs, srvCleanup, err := createAuthServers(numSrvs)
+	if err != nil {
+		t.Error(err)
+	}
+	defer srvCleanup()
+
+	config, clientCleanup, err := newAuthClient(srvAddrs, "127.0.0.1:8080")
+	if err != nil {
+		t.Error(err)
+	}
+	defer clientCleanup()
+
+	for i := 1; i <= numReqs; i++ {
+		val := int64(i * 100)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		resp, err := config.BroadcastCall(ctx, &Request{Value: val})
+		if err != nil {
+			t.Error(err)
+		}
+		if resp.GetResult() != val {
+			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", val, resp.GetResult()))
+		}
+		cancel()
+	}
 }

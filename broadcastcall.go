@@ -47,6 +47,8 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		OriginAddr:        d.OriginAddr,
 		OriginMethod:      d.OriginMethod,
 	}}
+	msg := &Message{Metadata: md, Message: d.Message}
+	c.sign(msg)
 	o := getCallOptions(E_Broadcast, opts)
 
 	var replyChan chan response
@@ -65,7 +67,6 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 			continue
 		}
 		sentMsgs++
-		msg := d.Message
 		// do NOT enqueue in a goroutine. This inhibits ordering constraints.
 		// the message will only be enqueued if the channel has enough capacity
 		// or if the receiver is ready. This prevents a slow node from limiting the
@@ -74,7 +75,7 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		//
 		// NOTE: the slow path will be invoked even though we buffer the channel. Hence,
 		// the enqueueFast will provide a small performance benefit.
-		enqueued := n.channel.enqueueFast(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
+		enqueued := n.channel.enqueueFast(request{ctx: ctx, msg: msg, opts: o}, replyChan, false)
 		if !enqueued {
 			notEnqueued = append(notEnqueued, n)
 		}
@@ -85,8 +86,7 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 	// NOTE: enqueueFast() creates a responseRouter and thus it is not
 	// necessary to provide the replyChan to enqueueSlow().
 	for _, n := range notEnqueued {
-		msg := d.Message
-		n.channel.enqueueSlow(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o})
+		n.channel.enqueueSlow(request{ctx: ctx, msg: msg, opts: o})
 	}
 
 	// if noSendWaiting is set, we will not wait for confirmation from the channel before returning.

@@ -1,6 +1,7 @@
 package broadcast
 
 import (
+	"crypto/elliptic"
 	"log/slog"
 	net "net"
 
@@ -138,17 +139,60 @@ func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configurati
 		quorumSize = qsize[0]
 	}
 	mgr := NewManager(
-		gorums.WithPublicKey("client"),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
 	if listenAddr != "" {
-		//lis, err := net.Listen("tcp", "127.0.0.1:")
-		lis, err := net.Listen("tcp", listenAddr)
+		lis, err := net.Listen("tcp", "127.0.0.1:")
+		//lis, err := net.Listen("tcp", listenAddr)
 		if err != nil {
 			return nil, nil, err
 		}
+		err = mgr.AddClientServer(lis, lis.Addr())
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	config, err := mgr.NewConfiguration(
+		gorums.WithNodeList(srvAddrs),
+		newQSpec(quorumSize, quorumSize),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return config, func() {
+		mgr.Close()
+	}, nil
+}
+
+func newAuthClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configuration, func(), error) {
+	quorumSize := len(srvAddrs)
+	if len(qsize) > 0 {
+		quorumSize = qsize[0]
+	}
+	var (
+		lis net.Listener
+		err error
+	)
+	if listenAddr != "" {
+		lis, err = net.Listen("tcp", "127.0.0.1:")
+		//lis, err := net.Listen("tcp", listenAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	auth := gorums.NewAuth(elliptic.P256())
+	auth.GenerateKeys()
+	privKey, pubKey := auth.Keys()
+	auth.RegisterKeys(lis.Addr(), privKey, pubKey)
+	mgr := NewManager(
+		gorums.WithAuthentication(auth),
+		gorums.WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	)
+	if listenAddr != "" {
 		err = mgr.AddClientServer(lis, lis.Addr())
 		if err != nil {
 			return nil, nil, err

@@ -2,12 +2,14 @@ package gorums
 
 import (
 	"context"
+	"crypto/elliptic"
 	"hash/fnv"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/logging"
 	"github.com/relab/gorums/ordering"
@@ -16,6 +18,11 @@ import (
 
 // exposing the log entry struct used for structured logging to the user
 type LogEntry logging.LogEntry
+
+// exposing the ellipticCurve struct for the user
+func NewAuth(curve elliptic.Curve) *authentication.EllipticCurve {
+	return authentication.New(curve)
+}
 
 type broadcastServer struct {
 	propertiesMutex   sync.Mutex

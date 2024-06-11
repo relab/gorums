@@ -103,7 +103,6 @@ func (n *RawNode) newContext() context.Context {
 	if n.mgr.opts.perNodeMD != nil {
 		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
 	}
-	//md = metadata.Join(md, metadata.Pairs("publicKey", n.mgr.publicKey))
 	if n.cancel != nil {
 		// make sure to close any old ctx
 		n.cancel()

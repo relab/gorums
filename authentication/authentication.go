@@ -1,23 +1,23 @@
 package authentication
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/gob"
 	"encoding/pem"
+	"fmt"
+	"net"
 )
 
 // Elliptic Curve Cryptography (ECC) is a key-based technique for encrypting data.
 // ECC focuses on pairs of public and private keys for decryption and encryption of web traffic.
 // ECC is frequently discussed in the context of the Rivest–Shamir–Adleman (RSA) cryptographic algorithm.
-// EllipticCurve data struct
 //
 // https://pkg.go.dev/github.com/katzenpost/core/crypto/eddsa
 type EllipticCurve struct {
+	addr        net.Addr       // used to identify self
 	pubKeyCurve elliptic.Curve // http://golang.org/pkg/crypto/elliptic/#P256
 	privateKey  *ecdsa.PrivateKey
 	publicKey   *ecdsa.PublicKey
@@ -40,6 +40,23 @@ func (ec *EllipticCurve) GenerateKeys() error {
 	ec.privateKey = privKey
 	ec.publicKey = &privKey.PublicKey
 	return nil
+}
+
+// RegisterKeys EllipticCurve public and private keys
+func (ec *EllipticCurve) RegisterKeys(addr net.Addr, privKey *ecdsa.PrivateKey, pubKey *ecdsa.PublicKey) {
+	ec.addr = addr
+	ec.privateKey = privKey
+	ec.publicKey = pubKey
+}
+
+// Returns the EllipticCurve public and private keys
+func (ec *EllipticCurve) Keys() (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
+	return ec.privateKey, ec.publicKey
+}
+
+// Returns the address
+func (ec *EllipticCurve) Addr() string {
+	return ec.addr.String()
 }
 
 // EncodePrivate private key
@@ -74,6 +91,9 @@ func (ec *EllipticCurve) DecodePrivate(pemEncodedPriv string) (*ecdsa.PrivateKey
 // DecodePublic public key
 func (ec *EllipticCurve) DecodePublic(pemEncodedPub string) (*ecdsa.PublicKey, error) {
 	blockPub, _ := pem.Decode([]byte(pemEncodedPub))
+	if blockPub == nil {
+		return nil, fmt.Errorf("invalid publicKey")
+	}
 	x509EncodedPub := blockPub.Bytes
 	genericPublicKey, err := x509.ParsePKIXPublicKey(x509EncodedPub)
 	publicKey := genericPublicKey.(*ecdsa.PublicKey)
@@ -88,6 +108,12 @@ func (ec *EllipticCurve) Sign(msg []byte) ([]byte, error) {
 		return nil, err
 	}
 	return signature, nil
+}
+
+func (ec *EllipticCurve) Hash(msg []byte) []byte {
+	h := sha256.Sum256(msg)
+	hash := h[:]
+	return hash
 }
 
 // VerifySignature sign ecdsa style and verify signature
@@ -115,11 +141,13 @@ func (ec *EllipticCurve) SignAndVerify(privKey *ecdsa.PrivateKey, pubKey *ecdsa.
 }
 
 func (ec *EllipticCurve) EncodeMsg(msg any) ([]byte, error) {
-	var encodedMsg bytes.Buffer
+	return []byte(fmt.Sprintf("%v", msg)), nil
+	/*var encodedMsg bytes.Buffer
+	gob.Register(msg)
 	enc := gob.NewEncoder(&encodedMsg)
 	err := enc.Encode(msg)
 	if err != nil {
 		return nil, err
 	}
-	return encodedMsg.Bytes(), nil
+	return encodedMsg.Bytes(), nil*/
 }

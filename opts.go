@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/broadcast"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -19,10 +20,10 @@ type managerOptions struct {
 	sendBuffer      uint
 	metadata        metadata.MD
 	perNodeMD       func(uint32) metadata.MD
-	publicKey       string // used when authenticating msgs
-	machineID       uint64 // used for generating SnowflakeIDs
-	maxSendRetries  int    // number of times we try to resend a failed msg
-	maxConnRetries  int    // number of times we try to reconnect (in the background) to a node
+	machineID       uint64                        // used for generating SnowflakeIDs
+	maxSendRetries  int                           // number of times we try to resend a failed msg
+	maxConnRetries  int                           // number of times we try to reconnect (in the background) to a node
+	auth            *authentication.EllipticCurve // used when authenticating msgs
 }
 
 func newManagerOptions() managerOptions {
@@ -107,16 +108,17 @@ func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
 	}
 }
 
-func WithPublicKey(publicKey string) ManagerOption {
+// WithAuthentication returns a ManagerOptions that enables digital signatures for msgs.
+func WithAuthentication(auth *authentication.EllipticCurve) ManagerOption {
 	return func(o *managerOptions) {
-		o.publicKey = publicKey
+		o.auth = auth
 	}
 }
 
 // WithMachineID returns a ManagerOption that allows you to set a unique ID for the client.
 // This ID will be embedded in broadcast request sent from the client, making the requests
 // trackable by the whole cluster. A random ID will be generated if not set. This can cause
-// collisions if there are many clients. MaxID = 4096.
+// collisions if there are many clients. MinID = 0 and MaxID = 4095.
 func WithMachineID(id uint64) ManagerOption {
 	return func(o *managerOptions) {
 		o.machineID = id

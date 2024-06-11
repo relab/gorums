@@ -2,11 +2,14 @@ package gorums
 
 import (
 	"context"
+	"crypto/elliptic"
+	"fmt"
 	"log/slog"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
@@ -33,6 +36,59 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 		opts:     opts,
 	}
 	return s
+}
+
+func (s *orderingServer) encodeMsg(req *Message) ([]byte, error) {
+	// we must not consider the signature field when validating.
+	// also the msgType must be set to requestType.
+	signature := make([]byte, len(req.Metadata.AuthMsg.Signature))
+	copy(signature, req.Metadata.AuthMsg.Signature)
+	reqType := req.msgType
+	req.Metadata.AuthMsg.Signature = nil
+	req.msgType = 0
+	encodedMsg, err := s.opts.auth.EncodeMsg(*req)
+	req.Metadata.AuthMsg.Signature = make([]byte, len(signature))
+	copy(req.Metadata.AuthMsg.Signature, signature)
+	req.msgType = reqType
+	return encodedMsg, err
+}
+
+func (s *orderingServer) verify(req *Message) error {
+	if s.opts.auth == nil {
+		return nil
+	}
+	if req.Metadata.AuthMsg == nil {
+		return fmt.Errorf("missing authMsg")
+	}
+	if req.Metadata.AuthMsg.Signature == nil {
+		return fmt.Errorf("missing signature")
+	}
+	if req.Metadata.AuthMsg.PublicKey == "" {
+		return fmt.Errorf("missing publicKey")
+	}
+	auth := s.opts.auth
+	authMsg := req.Metadata.AuthMsg
+	if s.opts.allowList != nil {
+		pemEncodedPub, ok := s.opts.allowList[authMsg.Sender]
+		if !ok {
+			return fmt.Errorf("not allowed")
+		}
+		if pemEncodedPub != authMsg.PublicKey {
+			return fmt.Errorf("publicKey did not match")
+		}
+	}
+	encodedMsg, err := s.encodeMsg(req)
+	if err != nil {
+		return err
+	}
+	valid, err := auth.VerifySignature(authMsg.PublicKey, encodedMsg, authMsg.Signature)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("invalid signature")
+	}
+	return nil
 }
 
 // SendMessage attempts to send a message on a channel.
@@ -65,8 +121,6 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	var mut sync.Mutex // used to achieve mutex between request handlers
 	finished := make(chan *Message, s.opts.buffer)
 	ctx := srv.Context()
-	//md, _ := metadata.FromIncomingContext(ctx)
-	//slog.Error("NodeStream created", "publicKey", md.Get("publicKey"))
 
 	if s.opts.connectCallback != nil {
 		s.opts.connectCallback(ctx)
@@ -96,6 +150,10 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
+		err = s.verify(req)
+		if err != nil {
+			continue
+		}
 		if handler, ok := s.handlers[req.Metadata.Method]; ok {
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
@@ -123,6 +181,8 @@ type serverOptions struct {
 	// address and use forwarding from the host. If not this option is not given,
 	// the listen address used on the gRPC listener will be used instead.
 	listenAddr string
+	allowList  map[string]string
+	auth       *authentication.EllipticCurve
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -233,6 +293,34 @@ func WithSLogger(logger *slog.Logger) ServerOption {
 func WithSrvID(machineID uint64) ServerOption {
 	return func(o *serverOptions) {
 		o.machineID = machineID
+	}
+}
+
+// WithAllowList accepts (address, publicKey) pairs which is used to validate
+// messages. Only nodes added to the allow list are allowed to send msgs to
+// the server.
+func WithAllowList(curve elliptic.Curve, allowed ...string) ServerOption {
+	return func(o *serverOptions) {
+		o.allowList = make(map[string]string)
+		if len(allowed)%2 != 0 {
+			panic("must provide (address, publicKey) pairs to WithAllowList()")
+		}
+		for i := range allowed {
+			if i%2 != 0 {
+				continue
+			}
+			o.allowList[allowed[i]] = allowed[i+1]
+		}
+		o.auth = authentication.New(curve)
+	}
+}
+
+// EnforceAuthentication accepts an elliptic curve which is used to validate
+// messages. Only msgs with a pubKey and signature will be processed by the
+// server.
+func EnforceAuthentication(curve elliptic.Curve) ServerOption {
+	return func(o *serverOptions) {
+		o.auth = authentication.New(curve)
 	}
 }
 

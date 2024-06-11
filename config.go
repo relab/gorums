@@ -1,6 +1,10 @@
 package gorums
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/relab/gorums/ordering"
+)
 
 // RawConfiguration represents a static set of nodes on which quorum calls may be invoked.
 //
@@ -57,4 +61,34 @@ func (c RawConfiguration) Equal(b RawConfiguration) bool {
 
 func (c RawConfiguration) getMsgID() uint64 {
 	return c[0].mgr.getMsgID()
+}
+
+func (c RawConfiguration) sign(msg *Message) {
+	if c[0].mgr.opts.auth != nil {
+		encodedMsg, err := c.encodeMsg(msg)
+		if err != nil {
+			panic(err)
+		}
+		signature, err := c[0].mgr.opts.auth.Sign(encodedMsg)
+		if err != nil {
+			panic(err)
+		}
+		msg.Metadata.AuthMsg.Signature = signature
+		//digest := auth.Hash(encodedMsg)
+	}
+}
+
+func (c RawConfiguration) encodeMsg(msg *Message) ([]byte, error) {
+	// we do not want to include the signature field in the signature
+	auth := c[0].mgr.opts.auth
+	pubKey, err := auth.EncodePublic()
+	if err != nil {
+		panic(err)
+	}
+	msg.Metadata.AuthMsg = &ordering.AuthMsg{
+		PublicKey: pubKey,
+		Signature: nil,
+		Sender:    auth.Addr(),
+	}
+	return auth.EncodeMsg(*msg)
 }
