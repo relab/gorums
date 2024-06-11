@@ -36,10 +36,6 @@ type broadcastServer struct {
 	logger            *slog.Logger
 }
 
-func (srv *Server) GetStats() broadcast.Metrics {
-	return srv.broadcastSrv.manager.GetStats()
-}
-
 func newBroadcastServer(serverOpts *serverOptions) *broadcastServer {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(serverOpts.listenAddr))

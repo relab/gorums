@@ -20,7 +20,6 @@ type Manager interface {
 	AddHandler(method string, handler any)
 	Close() error
 	ResetState()
-	GetStats() Metrics
 }
 
 type manager struct {
@@ -162,21 +161,4 @@ func (mgr *manager) Close() error {
 
 func (mgr *manager) ResetState() {
 	mgr.state.reset()
-}
-
-func (mgr *manager) GetStats() Metrics {
-	m := mgr.state.getStats()
-	return Metrics{
-		TotalNum: uint64(m.totalMsgs),
-		Dropped:  m.droppedMsgs,
-		FinishedReqs: struct {
-			Total     uint64
-			Succesful uint64
-			Failed    uint64
-		}{
-			Total:     m.numReqs,
-			Succesful: m.finishedReqs,
-			Failed:    m.numReqs - m.finishedReqs,
-		},
-	}
 }

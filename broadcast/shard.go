@@ -11,25 +11,10 @@ import (
 
 const NumShards = 16
 
-type shardMetrics struct {
-	totalMsgs            uint64
-	numMsgs              uint64
-	droppedMsgs          uint64
-	numBroadcastMsgs     uint64
-	droppedBroadcastMsgs uint64
-	numReqs              uint64
-	finishedReqs         uint64
-	lifetimes            [][]time.Time
-	avgLifetime          time.Duration
-	minLifetime          time.Duration
-	maxLifetime          time.Duration
-}
-
 type shard struct {
 	mut         sync.RWMutex
 	id          int
 	parentCtx   context.Context
-	metrics     shardMetrics
 	procs       map[uint64]*BroadcastProcessor
 	reqTTL      time.Duration
 	router      Router
@@ -62,7 +47,6 @@ func createShards(ctx context.Context, shardBuffer, sendBuffer int, router Route
 }
 
 func (s *shard) handleMsg(msg *Content) shardResponse {
-	//s.metrics.numMsgs++
 	// Optimization: first check with a read lock if the processor already exists
 	if p, ok := s.getProcessor(msg.BroadcastID); ok {
 		return s.process(p, msg)
@@ -120,7 +104,6 @@ func (s *shard) process(p *BroadcastProcessor, msg *Content) shardResponse {
 	// must check if the req is done to prevent deadlock
 	select {
 	case <-p.ctx.Done():
-		//s.metrics.droppedMsgs++
 		return shardResponse{
 			err: AlreadyProcessedErr{},
 		}
@@ -138,11 +121,9 @@ func (s *shard) process(p *BroadcastProcessor, msg *Content) shardResponse {
 }
 
 func (s *shard) handleBMsg(msg *Msg) {
-	//s.metrics.numBroadcastMsgs++
 	if req, ok := s.getProcessor(msg.BroadcastID); ok {
 		select {
 		case <-req.ctx.Done():
-			//s.metrics.droppedBroadcastMsgs++
 		case req.broadcastChan <- msg:
 		}
 	}
@@ -178,7 +159,6 @@ func (s *shard) addProcessor(msg *Content) (*BroadcastProcessor, bool) {
 	// check size of s.reqs. If too big, then perform necessary cleanup.
 	// should only affect the current shard and not the others.
 	ctx, cancel := context.WithTimeout(s.parentCtx, s.reqTTL)
-	//req := &BroadcastRequest{
 	var logger *slog.Logger
 	if s.logger != nil {
 		logger = s.logger.With(logging.BroadcastID(msg.BroadcastID))
@@ -228,39 +208,4 @@ func (s *shard) gc(nextGC time.Duration) {
 		newReqs[broadcastID] = req
 	}
 	s.procs = newReqs
-}
-
-func (s *shard) getStats() shardMetrics {
-	s.mut.RLock()
-	defer s.mut.RUnlock()
-	s.metrics.numReqs = uint64(len(s.procs))
-	s.metrics.lifetimes = make([][]time.Time, len(s.procs))
-	s.metrics.totalMsgs = s.metrics.numBroadcastMsgs + s.metrics.numMsgs
-	minLifetime := 100 * time.Hour
-	maxLifetime := time.Duration(0)
-	totalLifetime := time.Duration(0)
-	i := 0
-	for _, req := range s.procs {
-		select {
-		case <-req.ctx.Done():
-			s.metrics.finishedReqs++
-		default:
-		}
-		s.metrics.lifetimes[i] = []time.Time{req.started, req.ended}
-		lifetime := req.ended.Sub(req.started)
-		if lifetime > 0 {
-			if lifetime < minLifetime {
-				minLifetime = lifetime
-			}
-			if lifetime > maxLifetime {
-				maxLifetime = lifetime
-			}
-			totalLifetime += lifetime
-		}
-		i++
-	}
-	s.metrics.minLifetime = minLifetime
-	s.metrics.maxLifetime = maxLifetime
-	s.metrics.avgLifetime = totalLifetime
-	return s.metrics
 }

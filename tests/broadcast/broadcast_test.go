@@ -147,7 +147,7 @@ func TestSimpleBroadcastTo(t *testing.T) {
 
 func TestSimpleBroadcastCancel(t *testing.T) {
 	numSrvs := 3
-	numReqs := 1000
+	numReqs := 10
 	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)

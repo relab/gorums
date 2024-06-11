@@ -96,30 +96,6 @@ func (s *BroadcastState) getShard(i uint16) *shard {
 	return s.shards[i]
 }
 
-func (state *BroadcastState) getStats() shardMetrics {
-	m := shardMetrics{
-		lifetimes: make([][]time.Time, 0),
-	}
-	for _, shard := range state.shards {
-		metric := shard.getStats()
-		m.totalMsgs += metric.totalMsgs
-		m.numMsgs += metric.numMsgs
-		m.droppedMsgs += metric.droppedMsgs
-		m.numBroadcastMsgs += metric.numBroadcastMsgs
-		m.droppedBroadcastMsgs += metric.droppedBroadcastMsgs
-		m.numReqs += metric.numReqs
-		m.finishedReqs += metric.finishedReqs
-		m.lifetimes = append(m.lifetimes, metric.lifetimes...)
-		m.avgLifetime += metric.avgLifetime
-		m.maxLifetime += metric.maxLifetime
-		m.minLifetime += metric.minLifetime
-	}
-	if m.numReqs > 0 {
-		m.avgLifetime /= time.Duration(m.numReqs)
-	}
-	return m
-}
-
 type shardResponse struct {
 	err              error
 	reqCtx           context.Context
