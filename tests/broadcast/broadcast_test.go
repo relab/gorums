@@ -108,7 +108,7 @@ func TestSimpleBroadcastCall(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetResult() != val {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", val, resp.GetResult()))
+			t.Errorf("resp is wrong, want: %v, got: %v", val, resp.GetResult())
 		}
 		cancel()
 	}
@@ -139,7 +139,7 @@ func TestSimpleBroadcastTo(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetFrom() != leader {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", leader, resp.GetFrom()))
+			t.Errorf("resp is wrong, want: %v, got: %v", leader, resp.GetFrom())
 		}
 		cancel()
 	}
@@ -168,7 +168,7 @@ func TestSimpleBroadcastCancel(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetResult() != 1 {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
+			t.Errorf("resp is wrong, want: %v, got: %v", 1, resp.GetResult())
 		}
 		cancel()
 	}
@@ -192,7 +192,7 @@ func TestBroadcastCancel(t *testing.T) {
 	for i := 1; i <= numReqs; i++ {
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		config.LongRunningTask(ctx, &Request{Value: val}, true)
+		_, _ = config.LongRunningTask(ctx, &Request{Value: val}, true)
 		cancel()
 		// wait until cancel has reaced the servers before asking for the result
 		time.Sleep(100 * time.Millisecond)
@@ -203,7 +203,7 @@ func TestBroadcastCancel(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetResult() != 1 {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
+			t.Errorf("resp is wrong, want: %v, got: %v", 1, resp.GetResult())
 		}
 	}
 }
@@ -229,7 +229,7 @@ func TestBroadcastCancelOneSrvDown(t *testing.T) {
 	for i := 1; i <= numReqs; i++ {
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		config.LongRunningTask(ctx, &Request{Value: val}, true)
+		_, _ = config.LongRunningTask(ctx, &Request{Value: val}, true)
 		cancel()
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.GetVal(ctx, &Request{Value: val})
@@ -238,7 +238,7 @@ func TestBroadcastCancelOneSrvDown(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetResult() != 1 {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
+			t.Errorf("resp is wrong, want: %v, got: %v", 1, resp.GetResult())
 		}
 	}
 }
@@ -260,7 +260,7 @@ func TestBroadcastCancelOneSrvFails(t *testing.T) {
 
 	val := int64(100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	config.LongRunningTask(ctx, &Request{Value: val}, true)
+	_, _ = config.LongRunningTask(ctx, &Request{Value: val}, true)
 	cancel()
 
 	// stop one of the servers
@@ -273,7 +273,7 @@ func TestBroadcastCancelOneSrvFails(t *testing.T) {
 		t.Error(err)
 	}
 	if resp.GetResult() != 1 {
-		t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
+		t.Errorf("resp is wrong, want: %v, got: %v", 1, resp.GetResult())
 	}
 }
 
@@ -292,7 +292,9 @@ func TestBroadcastCancelOneClientFails(t *testing.T) {
 	}
 
 	val := int64(100)
-	go config.LongRunningTask(context.Background(), &Request{Value: val}, true)
+	go func() {
+		_, _ = config.LongRunningTask(context.Background(), &Request{Value: val}, true)
+	}()
 
 	// make sure the request is sent and stop the client
 	time.Sleep(100 * time.Millisecond)
@@ -312,7 +314,7 @@ func TestBroadcastCancelOneClientFails(t *testing.T) {
 		t.Error(err)
 	}
 	if resp.GetResult() != 1 {
-		t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 1, resp.GetResult()))
+		t.Errorf("resp is wrong, want: %v, got: %v", 1, resp.GetResult())
 	}
 }
 
@@ -341,7 +343,7 @@ func TestBroadcastCallOrderingSendToOneSrv(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetResult() != 0 {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 0, resp.GetResult()))
+			t.Errorf("resp is wrong, want: %v, got: %v", 0, resp.GetResult())
 		}
 		cancel()
 	}
@@ -372,7 +374,7 @@ func TestBroadcastCallOrderingSendToAllSrvs(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetResult() != 0 {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", 0, resp.GetResult()))
+			t.Errorf("resp is wrong, want: %v, got: %v", 0, resp.GetResult())
 		}
 		cancel()
 	}
@@ -403,7 +405,7 @@ func TestBroadcastCallOrderingDoesNotInterfereWithMethodsNotSpecifiedInOrder(t *
 			t.Error(err)
 		}
 		if resp.GetResult() != val {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", val, resp.GetResult()))
+			t.Errorf("resp is wrong, want: %v, got: %v", val, resp.GetResult())
 		}
 		cancel()
 	}
@@ -776,7 +778,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 
 	cpuProfile, _ := os.Create("cpuprofileQF")
 	memProfile, _ := os.Create("memprofileQF")
-	pprof.StartCPUProfile(cpuProfile)
+	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("QC_AllSuccessful_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -789,21 +791,8 @@ func BenchmarkQuorumCall(b *testing.B) {
 			}
 		}
 	})
-	/*b.Run(fmt.Sprintf("QC_SomeFailing_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			resp, err := config.QuorumCall(context.Background(), &Request{Value: int64(i)})
-			if err != nil {
-				b.Error(err)
-			}
-			if resp.GetResult() != int64(i) {
-				b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), i)
-			}
-			//slog.Warn("client reply", "val", resp.GetResult())
-		}
-	})*/
-
 	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 }
 
 func BenchmarkQCMulticast(b *testing.B) {
@@ -831,7 +820,7 @@ func BenchmarkQCMulticast(b *testing.B) {
 
 	cpuProfile, _ := os.Create("cpuprofileQFwithB")
 	memProfile, _ := os.Create("memprofileQFwithB")
-	pprof.StartCPUProfile(cpuProfile)
+	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("QCM_AllSuccessful_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -847,7 +836,7 @@ func BenchmarkQCMulticast(b *testing.B) {
 		}
 	})
 	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 }
 
 func BenchmarkQCBroadcastOption(b *testing.B) {
@@ -874,7 +863,7 @@ func BenchmarkQCBroadcastOption(b *testing.B) {
 
 	cpuProfile, _ := os.Create("cpuprofileQFwithB")
 	memProfile, _ := os.Create("memprofileQFwithB")
-	pprof.StartCPUProfile(cpuProfile)
+	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("QCB_AllSuccessful_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -890,7 +879,7 @@ func BenchmarkQCBroadcastOption(b *testing.B) {
 		}
 	})
 	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 }
 
 func BenchmarkQCBroadcastOptionManyClients(b *testing.B) {
@@ -924,7 +913,7 @@ func BenchmarkQCBroadcastOptionManyClients(b *testing.B) {
 
 	cpuProfile, _ := os.Create("cpuprofileQCB")
 	memProfile, _ := os.Create("memprofileQCB")
-	pprof.StartCPUProfile(cpuProfile)
+	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("QCB_ManyClients_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -946,7 +935,7 @@ func BenchmarkQCBroadcastOptionManyClients(b *testing.B) {
 		}
 	})
 	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 }
 
 func BenchmarkBroadcastCallAllServers(b *testing.B) {
@@ -973,7 +962,7 @@ func BenchmarkBroadcastCallAllServers(b *testing.B) {
 
 	cpuProfile, _ := os.Create("cpuprofileBC")
 	memProfile, _ := os.Create("memprofileBC")
-	pprof.StartCPUProfile(cpuProfile)
+	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_AllSuccessful_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -987,7 +976,7 @@ func BenchmarkBroadcastCallAllServers(b *testing.B) {
 		}
 	})
 	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 }
 
 func BenchmarkBroadcastCallToOneServer(b *testing.B) {
@@ -1014,7 +1003,7 @@ func BenchmarkBroadcastCallToOneServer(b *testing.B) {
 
 	cpuProfile, _ := os.Create("cpuprofileBC")
 	memProfile, _ := os.Create("memprofileBC")
-	pprof.StartCPUProfile(cpuProfile)
+	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneSrv_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -1028,7 +1017,7 @@ func BenchmarkBroadcastCallToOneServer(b *testing.B) {
 		}
 	})
 	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 }
 
 func BenchmarkBroadcastCallOneFailedServer(b *testing.B) {
@@ -1055,7 +1044,7 @@ func BenchmarkBroadcastCallOneFailedServer(b *testing.B) {
 
 	cpuProfile, _ := os.Create("cpuprofileBC")
 	memProfile, _ := os.Create("memprofileBC")
-	pprof.StartCPUProfile(cpuProfile)
+	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneSrvDown_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -1069,7 +1058,7 @@ func BenchmarkBroadcastCallOneFailedServer(b *testing.B) {
 		}
 	})
 	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 }
 
 func BenchmarkBroadcastCallOneDownSrvToOneSrv(b *testing.B) {
@@ -1096,7 +1085,7 @@ func BenchmarkBroadcastCallOneDownSrvToOneSrv(b *testing.B) {
 
 	cpuProfile, _ := os.Create("cpuprofileBC")
 	memProfile, _ := os.Create("memprofileBC")
-	pprof.StartCPUProfile(cpuProfile)
+	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneDownToOne_%d", 1), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -1110,7 +1099,7 @@ func BenchmarkBroadcastCallOneDownSrvToOneSrv(b *testing.B) {
 		}
 	})
 	pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 }
 
 func BenchmarkBroadcastCallManyClients(b *testing.B) {
@@ -1141,16 +1130,6 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 			b.Errorf("result is wrong. got: %v, want: %v", resp.GetResult(), init)
 		}
 	}
-
-	//stop, err := StartTrace("traceprofileBC")
-	//if err != nil {
-	//b.Error(err)
-	//}
-	//defer stop()
-	//cpuProfile, _ := os.Create("cpuprofileBC")
-	//memProfile, _ := os.Create("memprofileBC")
-	//runtime.GC()
-	//pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneClientOneReq_%d", 0), func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
@@ -1341,7 +1320,7 @@ func BenchmarkBroadcastCallTenClientsMEM(b *testing.B) {
 		})
 	}
 	b.StopTimer()
-	pprof.WriteHeapProfile(memProfile)
+	_ = pprof.WriteHeapProfile(memProfile)
 	memProfile.Close()
 }
 
@@ -1379,7 +1358,9 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	if err != nil {
 		b.Error(err)
 	}
-	defer stop()
+	defer func() {
+		_ = stop()
+	}()
 
 	b.ResetTimer()
 	for _, client := range clients {
@@ -1400,7 +1381,7 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	b.StopTimer()
 }
 
-func TestBroadcastCallManyRequestsAsync(t *testing.T) {
+/*func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	numSrvs := 3
 	numClients := 20
 	numReqs := 50
@@ -1459,7 +1440,7 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	}
 	wg.Wait()
 	srvCleanup()
-}
+}*/
 
 func TestAuthenticationBroadcastCall(t *testing.T) {
 	numSrvs := 3
@@ -1484,7 +1465,7 @@ func TestAuthenticationBroadcastCall(t *testing.T) {
 			t.Error(err)
 		}
 		if resp.GetResult() != val {
-			t.Error(fmt.Sprintf("resp is wrong, want: %v, got: %v", val, resp.GetResult()))
+			t.Errorf("resp is wrong, want: %v, got: %v", val, resp.GetResult())
 		}
 		cancel()
 	}

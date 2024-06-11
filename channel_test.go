@@ -37,7 +37,7 @@ func dummySrv() *Server {
 		req := in.Message.(*mock.Request)
 		defer ctx.Release()
 		resp, err := mockSrv.Test(ctx, req)
-		SendMessage(ctx, finished, WrapMessage(in.Metadata, resp, err))
+		_ = SendMessage(ctx, finished, WrapMessage(in.Metadata, resp, err))
 	})
 	return srv
 }
@@ -50,7 +50,7 @@ func TestChannelCreation(t *testing.T) {
 	mgr := dummyMgr()
 	defer mgr.Close()
 	// a proper connection should NOT be established here
-	node.connect(mgr)
+	_ = node.connect(mgr)
 
 	replyChan := make(chan response, 1)
 	go func() {
@@ -123,7 +123,7 @@ func TestChannelReconnection(t *testing.T) {
 	mgr := dummyMgr()
 	defer mgr.Close()
 	// a proper connection should NOT be established here because server is not started
-	node.connect(mgr)
+	_ = node.connect(mgr)
 
 	// send first message when server is down
 	replyChan1 := make(chan response, 1)
@@ -195,7 +195,7 @@ func TestAuthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	auth := NewAuth(elliptic.P256())
-	auth.GenerateKeys()
+	_ = auth.GenerateKeys()
 	privKey, pubKey := auth.Keys()
 	auth.RegisterKeys(addr, privKey, pubKey)
 	mgr := NewRawManager(WithAuthentication(auth))

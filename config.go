@@ -74,7 +74,10 @@ func (c RawConfiguration) sign(msg *Message) {
 			panic(err)
 		}
 		msg.Metadata.AuthMsg.Signature = signature
-		//digest := auth.Hash(encodedMsg)
+		//if len(signOrigin) > 0 && signOrigin[0] {
+		//	digest := c[0].mgr.opts.auth.Hash(encodedMsg)
+		//	msg.Metadata.BroadcastMsg.
+		//}
 	}
 }
 

@@ -183,7 +183,7 @@ func newAuthClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configu
 		}
 	}
 	auth := gorums.NewAuth(elliptic.P256())
-	auth.GenerateKeys()
+	_ = auth.GenerateKeys()
 	privKey, pubKey := auth.Keys()
 	auth.RegisterKeys(lis.Addr(), privKey, pubKey)
 	mgr := NewManager(

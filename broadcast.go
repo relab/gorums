@@ -25,7 +25,6 @@ func NewAuth(curve elliptic.Curve) *authentication.EllipticCurve {
 }
 
 type broadcastServer struct {
-	propertiesMutex   sync.Mutex
 	viewMutex         sync.RWMutex
 	id                uint32
 	addr              string

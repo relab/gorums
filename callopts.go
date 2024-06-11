@@ -5,6 +5,7 @@ import "google.golang.org/protobuf/runtime/protoimpl"
 type callOptions struct {
 	callType      *protoimpl.ExtensionInfo
 	noSendWaiting bool
+	signOrigin    bool
 }
 
 // CallOption is a function that sets a value in the given callOptions struct
@@ -23,5 +24,13 @@ func getCallOptions(callType *protoimpl.ExtensionInfo, opts []CallOption) callOp
 func WithNoSendWaiting() CallOption {
 	return func(o *callOptions) {
 		o.noSendWaiting = true
+	}
+}
+
+// WithOriginAuthentication is a CallOption that makes BroadcastCall methods
+// digitally sign messages.
+func WithOriginAuthentication() CallOption {
+	return func(o *callOptions) {
+		o.signOrigin = true
 	}
 }

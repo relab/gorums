@@ -9,7 +9,7 @@ import (
 
 func TestAuthentication(t *testing.T) {
 	ec := New(elliptic.P256())
-	ec.GenerateKeys()
+	_ = ec.GenerateKeys()
 	err := ec.test()
 	if err != nil {
 		t.Error(err)
@@ -18,10 +18,16 @@ func TestAuthentication(t *testing.T) {
 
 func TestSignAndVerify(t *testing.T) {
 	ec1 := New(elliptic.P256())
-	ec1.GenerateKeys()
+	err := ec1.GenerateKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ec2 := New(elliptic.P256())
-	ec2.GenerateKeys()
+	err = ec2.GenerateKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	message := "This is a message"
 
@@ -53,10 +59,16 @@ func TestSignAndVerify(t *testing.T) {
 
 func TestVerifyWithWrongPubKey(t *testing.T) {
 	ec1 := New(elliptic.P256())
-	ec1.GenerateKeys()
+	err := ec1.GenerateKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ec2 := New(elliptic.P256())
-	ec2.GenerateKeys()
+	err = ec2.GenerateKeys()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	message := "This is a message"
 	encodedMsg1, err := ec1.EncodeMsg(message)

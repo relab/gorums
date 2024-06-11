@@ -25,19 +25,17 @@ type Router interface {
 }
 
 type BroadcastRouter struct {
-	mut               sync.RWMutex
-	id                uint32
-	addr              string
-	prevMethod        uint16
-	methodsConversion map[string]uint16
-	serverHandlers    map[string]ServerHandler // handlers on other servers
-	clientHandlers    map[string]struct{}      // specifies what handlers a client has implemented. Used only for BroadcastCalls.
-	createClient      func(addr string, dialOpts []grpc.DialOption) (*Client, error)
-	canceler          func(broadcastID uint64, srvAddrs []string)
-	dialOpts          []grpc.DialOption
-	dialTimeout       time.Duration
-	logger            *slog.Logger
-	state             *BroadcastState
+	mut            sync.RWMutex
+	id             uint32
+	addr           string
+	serverHandlers map[string]ServerHandler // handlers on other servers
+	clientHandlers map[string]struct{}      // specifies what handlers a client has implemented. Used only for BroadcastCalls.
+	createClient   func(addr string, dialOpts []grpc.DialOption) (*Client, error)
+	canceler       func(broadcastID uint64, srvAddrs []string)
+	dialOpts       []grpc.DialOption
+	dialTimeout    time.Duration
+	logger         *slog.Logger
+	state          *BroadcastState
 }
 
 func NewRouter(logger *slog.Logger, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string), dialTimeout time.Duration, dialOpts ...grpc.DialOption) *BroadcastRouter {
@@ -82,7 +80,7 @@ func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req msg)
 }
 
 func (r *BroadcastRouter) Connect(addr string) {
-	r.getClient(addr)
+	_, _ = r.getClient(addr)
 }
 
 func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string, msg *broadcastMsg) error {
@@ -212,10 +210,6 @@ type reply struct {
 
 func (r *reply) getResponse() protoreflect.ProtoMessage {
 	return r.Response
-}
-
-func (r *reply) getError() error {
-	return r.Err
 }
 
 type cancellation struct {

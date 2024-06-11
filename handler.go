@@ -14,7 +14,7 @@ func DefaultHandler[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage](im
 		req := in.Message.(T)
 		defer ctx.Release()
 		resp, err := impl(ctx, req)
-		SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
+		_ = SendMessage(ctx, finished, WrapMessage(in.Metadata, protoreflect.ProtoMessage(resp), err))
 	}
 }
 
@@ -23,7 +23,7 @@ func ClientHandler[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage](imp
 		defer ctx.Release()
 		req := in.Message.(T)
 		//err := status.FromProto(in.Metadata.GetStatus()).Err()
-		impl(ctx, req, in.Metadata.BroadcastMsg.BroadcastID)
+		_, _ = impl(ctx, req, in.Metadata.BroadcastMsg.BroadcastID)
 	}
 }
 

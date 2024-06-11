@@ -108,7 +108,9 @@ func (mgr *Manager) AddClientServer(lis net.Listener, clientAddr net.Addr, opts 
 		ClientServer: srv,
 	}
 	registerClientServerHandlers(srvImpl)
-	go srvImpl.Serve(lis)
+	go func() {
+		_ = srvImpl.Serve(lis)
+	}()
 	mgr.srv = srvImpl
 	return nil
 }
@@ -263,8 +265,8 @@ func (b *Broadcast) Done() {
 // the broadcast request, meaning subsequent messages related to the broadcast
 // request will be dropped. Either SendToClient() or Done() should be used at
 // the end of a broadcast request in order to free up resources.
-func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
-	b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err, b.enqueueBroadcast)
+func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) error {
+	return b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err, b.enqueueBroadcast)
 }
 
 // Cancel is a non-destructive method call that will transmit a cancellation
@@ -273,16 +275,16 @@ func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) {
 // cancellations.
 //
 // Could be used together with either SendToClient() or Done().
-func (b *Broadcast) Cancel() {
-	b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs, b.enqueueBroadcast)
+func (b *Broadcast) Cancel() error {
+	return b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs, b.enqueueBroadcast)
 }
 
 // SendToClient sends a message back to the calling client. It also terminates
 // the broadcast request, meaning subsequent messages related to the broadcast
 // request will be dropped. Either SendToClient() or Done() should be used at
 // the end of a broadcast request in order to free up resources.
-func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) {
-	srv.SendToClientHandler(resp, err, broadcastID, nil)
+func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) error {
+	return srv.SendToClientHandler(resp, err, broadcastID, nil)
 }
 
 `

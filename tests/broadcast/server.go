@@ -33,7 +33,6 @@ type testServer struct {
 	respChan       map[int64]response
 	processingTime time.Duration
 	val            int64
-	err            error
 	order          []string
 }
 
@@ -92,7 +91,7 @@ func newAuthenticatedServer(addr string, srvAddresses []string) *testServer {
 		srv.processingTime = 100 * time.Millisecond
 	}
 	auth := gorums.NewAuth(elliptic.P256())
-	auth.GenerateKeys()
+	_ = auth.GenerateKeys()
 	privKey, pubKey := auth.Keys()
 	auth.RegisterKeys(address, privKey, pubKey)
 	srv.mgr = NewManager(
@@ -110,7 +109,7 @@ func newAuthenticatedServer(addr string, srvAddresses []string) *testServer {
 }
 
 func (srv *testServer) start(lis net.Listener) {
-	srv.Serve(lis)
+	_ = srv.Serve(lis)
 }
 
 func (srv *testServer) Stop() {
@@ -121,29 +120,23 @@ func (srv *testServer) Stop() {
 func (srv *testServer) QuorumCall(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	srv.mut.Lock()
 	defer srv.mut.Unlock()
-	srv.numMsg["QC"]++
-	//slog.Warn("server received broadcast call")
 	return &Response{Result: req.Value}, nil
 }
 
 func (srv *testServer) QuorumCallWithBroadcast(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	srv.mut.Lock()
 	defer srv.mut.Unlock()
-	srv.numMsg["QCB"]++
-	//slog.Warn("server received quorum call with broadcast")
 	broadcast.BroadcastIntermediate(req)
 }
 
 func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	done := make(chan int64)
 	srv.mut.Lock()
-	srv.numMsg["QCM"]++
 	srv.respChan[req.Value] = response{
 		messageID: req.Value,
 		respChan:  done,
 	}
 	srv.mut.Unlock()
-	//slog.Warn("server received quorum call with broadcast")
 	srv.View.MulticastIntermediate(context.Background(), req, gorums.WithNoSendWaiting())
 	ctx.Release()
 	res := <-done
@@ -151,9 +144,6 @@ func (srv *testServer) QuorumCallWithMulticast(ctx gorums.ServerCtx, req *Reques
 }
 
 func (srv *testServer) MulticastIntermediate(ctx gorums.ServerCtx, req *Request) {
-	srv.mut.Lock()
-	srv.numMsg["M"]++
-	srv.mut.Unlock()
 	ctx.Release()
 	srv.View.Multicast(context.Background(), req, gorums.WithNoSendWaiting())
 }
@@ -162,13 +152,11 @@ func (srv *testServer) Multicast(ctx gorums.ServerCtx, req *Request) {
 	ctx.Release()
 	srv.mut.Lock()
 	defer srv.mut.Unlock()
-	srv.numMsg["M"]++
 	if response, ok := srv.respChan[req.Value]; ok {
 		response.respChan <- req.Value
 		close(response.respChan)
 		delete(srv.respChan, req.Value)
 	}
-	//slog.Warn("server received quorum call with broadcast")
 }
 
 func (srv *testServer) BroadcastCall(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
@@ -180,33 +168,25 @@ func (srv *testServer) BroadcastIntermediate(ctx gorums.ServerCtx, req *Request,
 }
 
 func (srv *testServer) Broadcast(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	broadcast.SendToClient(&Response{
+	_ = broadcast.SendToClient(&Response{
 		Result: req.Value,
 	}, nil)
 }
 
 func (srv *testServer) BroadcastCallForward(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	//srv.mu.Lock()
-	//srv.numMsg["BC"]++
-	//srv.mu.Unlock()
-	//slog.Warn("server received broadcast call")
 	if srv.addr != srv.leader {
-		broadcast.Forward(req, srv.leader)
+		_ = broadcast.Forward(req, srv.leader)
 		return
 	}
 	broadcast.Broadcast(req)
 }
 
 func (srv *testServer) BroadcastCallTo(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	//srv.mu.Lock()
-	//srv.numMsg["BC"]++
-	//srv.mu.Unlock()
-	//slog.Warn("server received broadcast call")
 	broadcast.To(srv.leader).BroadcastToResponse(req) // only broadcast to the leader
 }
 
 func (srv *testServer) BroadcastToResponse(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
-	broadcast.SendToClient(&Response{
+	_ = broadcast.SendToClient(&Response{
 		From: srv.addr,
 	}, nil)
 }
@@ -220,14 +200,14 @@ func (srv *testServer) Search(ctx gorums.ServerCtx, req *Request, broadcast *Bro
 	time.Sleep(1 * time.Millisecond)
 	select {
 	case <-ctx.Done():
-		broadcast.Cancel()
-		broadcast.SendToClient(&Response{
+		_ = broadcast.Cancel()
+		_ = broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 0,
 		}, nil)
 	case <-time.After(srv.processingTime):
-		broadcast.Cancel()
-		broadcast.SendToClient(&Response{
+		_ = broadcast.Cancel()
+		_ = broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 1,
 		}, nil)
@@ -249,7 +229,7 @@ func (srv *testServer) LongRunningTask(ctx gorums.ServerCtx, req *Request, broad
 func (srv *testServer) GetVal(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	srv.mut.Lock()
 	defer srv.mut.Unlock()
-	broadcast.SendToClient(&Response{
+	_ = broadcast.SendToClient(&Response{
 		From:   srv.addr,
 		Result: srv.val,
 	}, nil)
@@ -299,7 +279,7 @@ func (srv *testServer) PrePrepare(ctx gorums.ServerCtx, req *Request, broadcast 
 func (srv *testServer) Prepare(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	srv.mut.Lock()
 	if len(srv.order) <= 0 {
-		broadcast.SendToClient(&Response{
+		_ = broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 1,
 		}, errors.New("did not receive PrePrepare before Prepare"))
@@ -323,7 +303,7 @@ func (srv *testServer) Prepare(ctx gorums.ServerCtx, req *Request, broadcast *Br
 func (srv *testServer) Commit(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {
 	srv.mut.Lock()
 	if len(srv.order) <= 0 {
-		broadcast.SendToClient(&Response{
+		_ = broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 2,
 		}, errors.New("did not receive PrePrepare and Prepare before Commit"))
@@ -331,7 +311,7 @@ func (srv *testServer) Commit(ctx gorums.ServerCtx, req *Request, broadcast *Bro
 		return
 	}
 	if len(srv.order) <= 1 {
-		broadcast.SendToClient(&Response{
+		_ = broadcast.SendToClient(&Response{
 			From:   srv.addr,
 			Result: 3,
 		}, errors.New("did not receive Prepare before Commit"))
@@ -339,7 +319,7 @@ func (srv *testServer) Commit(ctx gorums.ServerCtx, req *Request, broadcast *Bro
 		return
 	}
 	srv.mut.Unlock()
-	broadcast.SendToClient(&Response{
+	_ = broadcast.SendToClient(&Response{
 		From:   srv.addr,
 		Result: 0,
 	}, nil)

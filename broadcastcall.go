@@ -48,8 +48,8 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		OriginMethod:      d.OriginMethod,
 	}}
 	msg := &Message{Metadata: md, Message: d.Message}
-	c.sign(msg)
 	o := getCallOptions(E_Broadcast, opts)
+	c.sign(msg)
 
 	var replyChan chan response
 	if !o.noSendWaiting {

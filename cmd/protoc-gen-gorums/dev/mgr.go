@@ -52,7 +52,9 @@ func (mgr *Manager) AddClientServer(lis net.Listener, clientAddr net.Addr, opts 
 		ClientServer: srv,
 	}
 	registerClientServerHandlers(srvImpl)
-	go srvImpl.Serve(lis)
+	go func() {
+		_ = srvImpl.Serve(lis)
+	}()
 	mgr.srv = srvImpl
 	return nil
 }

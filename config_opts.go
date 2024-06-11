@@ -3,6 +3,8 @@ package gorums
 import (
 	"fmt"
 	"sync"
+
+	"github.com/relab/gorums/logging"
 )
 
 // ConfigOption is a marker interface for options to NewConfiguration.
@@ -67,7 +69,7 @@ func (o nodeList) newConfig(mgr *RawManager) (nodes RawConfiguration, err error)
 			wg.Add(1)
 			go func() {
 				if err = mgr.AddNode(node); err != nil {
-					//return nil, err
+					mgr.log("manager: failed to add (retrying later)", err, logging.NodeID(node.ID()), logging.NodeAddr(node.Address()))
 				}
 				wg.Done()
 			}()

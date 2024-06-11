@@ -124,14 +124,15 @@ func (mgr *manager) Done(broadcastID uint64, enqueueBroadcast func(*Msg) error) 
 		BroadcastID: broadcastID,
 	}
 	if enqueueBroadcast != nil {
-		enqueueBroadcast(msg)
+		// no need to check error because the processor
+		// is stopped.
+		_ = enqueueBroadcast(msg)
 		return
 	}
 	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
 	shardID = shardID % NumShards
 	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
-	return
 }
 
 func (mgr *manager) NewBroadcastID() uint64 {

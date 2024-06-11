@@ -32,7 +32,7 @@ func Epoch() time.Time {
 }
 
 func NewSnowflake(id uint64) *Snowflake {
-	if id < 0 || id >= uint64(MaxMachineID) {
+	if id >= uint64(MaxMachineID) {
 		id = uint64(rand.Int31n(int32(MaxMachineID)))
 	}
 	return &Snowflake{

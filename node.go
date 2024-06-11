@@ -23,13 +23,12 @@ const nilAngleString = "<nil>"
 // You should use the generated `Node` struct instead.
 type RawNode struct {
 	// Only assigned at creation.
-	id            uint32
-	addr          string
-	conn          *grpc.ClientConn
-	cancel        func()
-	mgr           *RawManager
-	dialMut       sync.Mutex
-	connectionMut sync.Mutex
+	id      uint32
+	addr    string
+	conn    *grpc.ClientConn
+	cancel  func()
+	mgr     *RawManager
+	dialMut sync.Mutex
 
 	// the default channel
 	channel *channel

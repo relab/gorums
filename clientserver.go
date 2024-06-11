@@ -15,33 +15,12 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-//func init() {
-//if encoding.GetCodec(ContentSubtype) == nil {
-//encoding.RegisterCodec(NewCodec())
-//}
-//}
-
 type ReplySpecHandler func(req protoreflect.ProtoMessage, replies []protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
-
-type ClientResponse struct {
-	err error
-	msg protoreflect.ProtoMessage
-}
-
-type ClientRequest struct {
-	broadcastID string
-	doneChan    chan protoreflect.ProtoMessage
-	handler     ReplySpecHandler
-}
 
 type csr struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
-	req      protoreflect.ProtoMessage
-	resps    []protoreflect.ProtoMessage
-	doneChan chan protoreflect.ProtoMessage
 	respChan chan protoreflect.ProtoMessage
-	handler  ReplySpecHandler
 }
 
 type ClientServer struct {
@@ -49,11 +28,9 @@ type ClientServer struct {
 	addr       string
 	mu         sync.Mutex
 	csr        map[uint64]*csr
-	reqChan    chan *ClientRequest
 	lis        net.Listener
 	ctx        context.Context
 	cancelCtx  context.CancelFunc
-	inProgress uint64
 	grpcServer *grpc.Server
 	handlers   map[string]requestHandler
 	logger     *slog.Logger

@@ -9,31 +9,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-//type CacheOption int
-
-/*
-redis:
-
-  - noeviction: New values aren’t saved when memory limit is reached. When a database uses replication, this applies to the primary database
-  - allkeys-lru: Keeps most recently used keys; removes least recently used (LRU) keys
-  - allkeys-lfu: Keeps frequently used keys; removes least frequently used (LFU) keys
-  - volatile-lru: Removes least recently used keys with the expire field set to true.
-  - volatile-lfu: Removes least frequently used keys with the expire field set to true.
-  - allkeys-random: Randomly removes keys to make space for the new data added.
-  - volatile-random: Randomly removes keys with expire field set to true.
-  - volatile-ttl: Removes keys with expire field set to true and the shortest remaining time-to-live (TTL) value.
-const (
-	noeviction CacheOption = iota
-	allkeysLRU
-	allkeysLFU
-	volatileLRU
-	volatileLFU
-	allkeysRANDOM
-	volatileRANDOM
-	volatileTTL
-)
-*/
-
 type BroadcastState struct {
 	mut                 sync.Mutex
 	shardMut            sync.RWMutex // RW because we often read and very seldom write to the state
@@ -75,7 +50,6 @@ func (s *BroadcastState) Close() error {
 	if s.logger != nil {
 		s.logger.Debug("broadcast: closing state")
 	}
-	//s.debug()
 	s.parentCtxCancelFunc()
 	var err error
 	for _, client := range s.clients {
@@ -87,32 +61,12 @@ func (s *BroadcastState) Close() error {
 	return err
 }
 
-/*func (s *BroadcastState) debug() {
-	time.Sleep(1 * time.Second)
-	for _, shard := range s.shards {
-		for _, req := range shard.reqs {
-			select {
-			case <-req.ctx.Done():
-			default:
-				slog.Info("req not done", "req", req)
-			}
-		}
-	}
-}
-
-/*func (s *BroadcastState) RunShards() {
-	return
-	//for _, shard := range s.shards {
-	//go shard.run(s.sendBuffer)
-	//}
-}*/
-
 func (s *BroadcastState) reset() {
 	s.parentCtxCancelFunc()
 	s.mut.Lock()
 	s.parentCtx, s.parentCtxCancelFunc = context.WithCancel(context.Background())
 	for _, client := range s.clients {
-		client.Close()
+		_ = client.Close()
 	}
 	s.clients = make(map[string]*Client)
 	shards := createShards(s.parentCtx, s.shardBuffer, s.sendBuffer, s.router, s.order, s.reqTTL, s.logger)
@@ -186,12 +140,4 @@ type Content struct {
 	Ctx               context.Context
 	CancelCtx         context.CancelFunc
 	Run               func(context.Context, func(*Msg) error)
-}
-
-func (c Content) send(resp protoreflect.ProtoMessage, err error) error {
-	if !c.hasReceivedClientRequest() {
-		return MissingClientReqErr{}
-	}
-	c.SendFn(resp, err)
-	return nil
 }

@@ -101,7 +101,9 @@ func (p *BroadcastProcessor) handleCancellation(bMsg *Msg, metadata *metadata) b
 	if !metadata.SentCancellation {
 		p.log("broadcast: sent cancellation", nil, logging.MsgType(bMsg.MsgType.String()), logging.Stopping(false))
 		metadata.SentCancellation = true
-		go p.router.Send(p.broadcastID, "", "", bMsg.Cancellation)
+		go func(broadcastID uint64, cancellationMsg *cancellation) {
+			_ = p.router.Send(broadcastID, "", "", cancellationMsg)
+		}(p.broadcastID, bMsg.Cancellation)
 	}
 	return false
 }
@@ -123,7 +125,10 @@ func (p *BroadcastProcessor) handleBroadcast(bMsg *Msg, methods []string, metada
 func (p *BroadcastProcessor) handleReply(bMsg *Msg, metadata *metadata) bool {
 	// BroadcastCall if origin addr is non-empty.
 	if metadata.isBroadcastCall() {
-		go p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Reply)
+		go func(broadcastID uint64, originAddr, originMethod string, replyMsg *reply) {
+			err := p.router.Send(broadcastID, originAddr, originMethod, replyMsg)
+			p.log("broadcast: sent reply to client", err, logging.Method(originMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
+		}(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Reply)
 		// the request is done becuase we have sent a reply to the client
 		p.log("broadcast: sending reply to client", nil, logging.Method(metadata.OriginMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 		return true
@@ -416,14 +421,6 @@ func alreadyBroadcasted(methods []string, method string) bool {
 		}
 	}
 	return false
-}
-
-func (c *Content) isBroadcastCall() bool {
-	return c.OriginAddr != ""
-}
-
-func (c *Content) hasReceivedClientRequest() bool {
-	return c.IsBroadcastClient && c.SendFn != nil
 }
 
 func (p *BroadcastProcessor) initialize(msg *Content, metadata *metadata) {
