@@ -58,7 +58,7 @@ func newtestServer(addr string, srvAddresses []string, _ int, withOrder ...bool)
 	srv.peers = srvAddresses
 	srv.addr = addr
 	if addr != leader {
-		srv.processingTime = 100 * time.Millisecond
+		srv.processingTime = 1 * time.Second
 	}
 	srv.mgr = NewManager(
 		gorums.WithGrpcDialOptions(

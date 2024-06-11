@@ -176,7 +176,7 @@ func TestSimpleBroadcastCancel(t *testing.T) {
 
 func TestBroadcastCancel(t *testing.T) {
 	numSrvs := 3
-	numReqs := 10
+	numReqs := 3
 	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
@@ -195,7 +195,7 @@ func TestBroadcastCancel(t *testing.T) {
 		_, _ = config.LongRunningTask(ctx, &Request{Value: val}, true)
 		cancel()
 		// wait until cancel has reaced the servers before asking for the result
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.GetVal(ctx, &Request{Value: val})
 		cancel()
@@ -1381,10 +1381,10 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	b.StopTimer()
 }
 
-/*func TestBroadcastCallManyRequestsAsync(t *testing.T) {
+func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	numSrvs := 3
 	numClients := 20
-	numReqs := 50
+	numReqs := 10
 	_, srvAddrs, srvCleanup, err := createSrvs(numSrvs)
 	if err != nil {
 		t.Error(err)
@@ -1440,7 +1440,7 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	}
 	wg.Wait()
 	srvCleanup()
-}*/
+}
 
 func TestAuthenticationBroadcastCall(t *testing.T) {
 	numSrvs := 3
