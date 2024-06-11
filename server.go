@@ -180,9 +180,10 @@ type serverOptions struct {
 	// running in a docker container it is useful to listen to the loopback
 	// address and use forwarding from the host. If not this option is not given,
 	// the listen address used on the gRPC listener will be used instead.
-	listenAddr string
-	allowList  map[string]string
-	auth       *authentication.EllipticCurve
+	listenAddr   string
+	allowList    map[string]string
+	auth         *authentication.EllipticCurve
+	grpcDialOpts []grpc.DialOption
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -241,6 +242,15 @@ func WithOrder(executionOrder ...string) ServerOption {
 func WithClientDialTimeout(dialTimeout time.Duration) ServerOption {
 	return func(o *serverOptions) {
 		o.clientDialTimeout = dialTimeout
+	}
+}
+
+// WithServerGrpcDialOptions returns a ServerOption which sets any gRPC dial options
+// the Broadcast Router should use when connecting to each client.
+func WithServerGrpcDialOptions(opts ...grpc.DialOption) ServerOption {
+	return func(o *serverOptions) {
+		o.grpcDialOpts = make([]grpc.DialOption, 0, len(opts))
+		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
 	}
 }
 

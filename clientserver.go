@@ -306,7 +306,6 @@ func (srv *ClientServer) verify(req *Message) error {
 
 func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, error) {
 	// necessary to ensure correct marshalling and unmarshalling of gorums messages
-	// TODO: find a better solution
 	dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(grpc.CallContentSubtype(ContentSubtype)))
 	opts := newManagerOptions()
 	opts.grpcDialOpts = dialOpts

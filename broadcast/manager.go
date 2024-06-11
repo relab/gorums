@@ -28,8 +28,8 @@ type manager struct {
 	logger *slog.Logger
 }
 
-func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string), order map[string]int, dialTimeout, reqTTL time.Duration, shardBuffer, sendBuffer int) Manager {
-	router := NewRouter(logger, createClient, canceler, dialTimeout)
+func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string), order map[string]int, dialTimeout, reqTTL time.Duration, shardBuffer, sendBuffer int, dialOpts ...grpc.DialOption) Manager {
+	router := NewRouter(logger, createClient, canceler, dialTimeout, dialOpts...)
 	state := NewState(logger, router, order, reqTTL, shardBuffer, sendBuffer)
 	router.registerState(state)
 	return &manager{

@@ -46,7 +46,7 @@ func newBroadcastServer(serverOpts *serverOptions) *broadcastServer {
 		logger:    serverOpts.logger,
 		machineID: serverOpts.machineID,
 	}
-	srv.manager = broadcast.NewBroadcastManager(serverOpts.logger, createClient, srv.canceler, serverOpts.executionOrder, serverOpts.clientDialTimeout, serverOpts.reqTTL, serverOpts.shardBuffer, serverOpts.sendBuffer)
+	srv.manager = broadcast.NewBroadcastManager(serverOpts.logger, createClient, srv.canceler, serverOpts.executionOrder, serverOpts.clientDialTimeout, serverOpts.reqTTL, serverOpts.shardBuffer, serverOpts.sendBuffer, serverOpts.grpcDialOpts...)
 	srv.manager.AddAddr(srv.id, serverOpts.listenAddr, srv.machineID)
 	return srv
 }
@@ -112,30 +112,41 @@ func NewBroadcastOrchestrator(srv *Server) *BroadcastOrchestrator {
 
 type BroadcastOption func(*broadcast.BroadcastOptions)
 
+// WithSubset enables broadcasting to a subset of the servers in the view.
+// It has the same function as broadcast.To().
 func WithSubset(srvAddrs ...string) BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
 		b.ServerAddresses = srvAddrs
 	}
 }
 
+// WithoutSelf prevents the server from broadcasting to itself.
 func WithoutSelf() BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
 		b.SkipSelf = true
 	}
 }
 
+// ProgressTo allows the server to accept messages to the given method.
+// Should only be used if the ServerOption WithOrder() is used.
 func ProgressTo(method string) BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
 		b.ProgressTo = method
 	}
 }
 
+// AllowDuplication allows the server to broadcast more than once
+// to the same RPC method for a particular broadcast request.
 func AllowDuplication() BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
 		b.AllowDuplication = true
 	}
 }
 
+// WithRelationToRequest allows for broadcasting outside a
+// server handler related to a specific broadcastID.
+// It is not recommended to use this method. Use the broadcast
+// struct provided with a broadcast request instead.
 func WithRelationToRequest(broadcastID uint64) BroadcastOption {
 	return func(b *broadcast.BroadcastOptions) {
 		b.RelatedToReq = broadcastID
