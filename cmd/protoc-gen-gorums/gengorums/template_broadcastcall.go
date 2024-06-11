@@ -39,7 +39,7 @@ func (c *Configuration) {{.Method.GoName}}(ctx context.Context, in *{{in .GenFil
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.{{.Method.GoName}}QF), "{{.Method.Desc.FullName}}")
-	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting(), gorums.WithOriginAuthentication())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():

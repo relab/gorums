@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/logging"
 	"github.com/relab/gorums/ordering"
@@ -34,6 +35,8 @@ type ClientServer struct {
 	grpcServer *grpc.Server
 	handlers   map[string]requestHandler
 	logger     *slog.Logger
+	auth       *authentication.EllipticCurve
+	allowList  map[string]string
 	ordering.UnimplementedGorumsServer
 }
 
@@ -186,6 +189,10 @@ func (s *ClientServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 		if err != nil {
 			return err
 		}
+		err = s.verify(req)
+		if err != nil {
+			continue
+		}
 		if handler, ok := s.handlers[req.Metadata.Method]; ok {
 			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &mut}, req, nil)
 			mut.Lock()
@@ -221,6 +228,12 @@ func NewClientServer(lis net.Listener, opts ...ServerOption) *ClientServer {
 	}
 	ordering.RegisterGorumsServer(srv.grpcServer, srv)
 	srv.lis = lis
+	if serverOpts.auth != nil {
+		srv.auth = serverOpts.auth
+	}
+	if serverOpts.allowList != nil {
+		srv.allowList = serverOpts.allowList
+	}
 	return srv
 }
 
@@ -237,6 +250,58 @@ func (srv *ClientServer) Serve(listener net.Listener) error {
 		srv.addr = listener.Addr().String()
 	}
 	return srv.grpcServer.Serve(listener)
+}
+
+func (srv *ClientServer) encodeMsg(req *Message) ([]byte, error) {
+	// we must not consider the signature field when validating.
+	// also the msgType must be set to requestType.
+	signature := make([]byte, len(req.Metadata.AuthMsg.Signature))
+	copy(signature, req.Metadata.AuthMsg.Signature)
+	reqType := req.msgType
+	req.Metadata.AuthMsg.Signature = nil
+	req.msgType = 0
+	encodedMsg, err := srv.auth.EncodeMsg(*req)
+	req.Metadata.AuthMsg.Signature = make([]byte, len(signature))
+	copy(req.Metadata.AuthMsg.Signature, signature)
+	req.msgType = reqType
+	return encodedMsg, err
+}
+
+func (srv *ClientServer) verify(req *Message) error {
+	if srv.auth == nil {
+		return nil
+	}
+	if req.Metadata.AuthMsg == nil {
+		return fmt.Errorf("missing authMsg")
+	}
+	if req.Metadata.AuthMsg.Signature == nil {
+		return fmt.Errorf("missing signature")
+	}
+	if req.Metadata.AuthMsg.PublicKey == "" {
+		return fmt.Errorf("missing publicKey")
+	}
+	authMsg := req.Metadata.AuthMsg
+	if srv.allowList != nil {
+		pemEncodedPub, ok := srv.allowList[authMsg.Sender]
+		if !ok {
+			return fmt.Errorf("not allowed")
+		}
+		if pemEncodedPub != authMsg.PublicKey {
+			return fmt.Errorf("publicKey did not match")
+		}
+	}
+	encodedMsg, err := srv.encodeMsg(req)
+	if err != nil {
+		return err
+	}
+	valid, err := srv.auth.VerifySignature(authMsg.PublicKey, encodedMsg, authMsg.Signature)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("invalid signature")
+	}
+	return nil
 }
 
 func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, error) {
@@ -258,13 +323,16 @@ func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, e
 	}
 	return &broadcast.Client{
 		Addr: node.Address(),
-		SendMsg: func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration) error {
+		SendMsg: func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration, originDigest, originSignature []byte, originPubKey string) error {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			cd := CallData{
-				Method:      method,
-				Message:     msg,
-				BroadcastID: broadcastID,
+				Method:          method,
+				Message:         msg,
+				BroadcastID:     broadcastID,
+				OriginDigest:    originDigest,
+				OriginSignature: originSignature,
+				OriginPubKey:    originPubKey,
 			}
 			_, err := node.RPCCall(ctx, cd)
 			return err

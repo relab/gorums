@@ -413,7 +413,7 @@ func (c *Configuration) BroadcastCall(ctx context.Context, in *Request, cancelOn
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallQF), "broadcast.BroadcastService.BroadcastCall")
-	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting(), gorums.WithOriginAuthentication())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -467,7 +467,7 @@ func (c *Configuration) BroadcastCallForward(ctx context.Context, in *Request, c
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallForwardQF), "broadcast.BroadcastService.BroadcastCallForward")
-	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting(), gorums.WithOriginAuthentication())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -521,7 +521,7 @@ func (c *Configuration) BroadcastCallTo(ctx context.Context, in *Request, cancel
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.BroadcastCallToQF), "broadcast.BroadcastService.BroadcastCallTo")
-	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting(), gorums.WithOriginAuthentication())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -575,7 +575,7 @@ func (c *Configuration) Search(ctx context.Context, in *Request, cancelOnTimeout
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.SearchQF), "broadcast.BroadcastService.Search")
-	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting(), gorums.WithOriginAuthentication())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -629,7 +629,7 @@ func (c *Configuration) LongRunningTask(ctx context.Context, in *Request, cancel
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.LongRunningTaskQF), "broadcast.BroadcastService.LongRunningTask")
-	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting(), gorums.WithOriginAuthentication())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -683,7 +683,7 @@ func (c *Configuration) GetVal(ctx context.Context, in *Request, cancelOnTimeout
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.GetValQF), "broadcast.BroadcastService.GetVal")
-	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting(), gorums.WithOriginAuthentication())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():
@@ -737,7 +737,7 @@ func (c *Configuration) Order(ctx context.Context, in *Request, cancelOnTimeout 
 	}
 	broadcastID := c.snowflake.NewBroadcastID()
 	doneChan, cd := c.srv.AddRequest(broadcastID, ctx, in, gorums.ConvertToType(c.qspec.OrderQF), "broadcast.BroadcastService.Order")
-	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting())
+	c.RawConfiguration.BroadcastCall(ctx, cd, gorums.WithNoSendWaiting(), gorums.WithOriginAuthentication())
 	select {
 	case response, ok = <-doneChan:
 	case <-ctx.Done():

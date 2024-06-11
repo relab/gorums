@@ -39,6 +39,9 @@ type metadata struct {
 	IsBroadcastClient    bool
 	SentCancellation     bool
 	HasReceivedClientReq bool
+	OriginDigest         []byte
+	OriginPubKey         string
+	OriginSignature      []byte
 }
 
 func (p *BroadcastProcessor) run(msg *Content) {
@@ -50,6 +53,9 @@ func (p *BroadcastProcessor) run(msg *Content) {
 		SendFn:            msg.SendFn,
 		Sent:              false,
 		SentCancellation:  false,
+		OriginDigest:      msg.OriginDigest,
+		OriginSignature:   msg.OriginSignature,
+		OriginPubKey:      msg.OriginPubKey,
 	}
 	// methods is placed here and not in the metadata as an optimization strategy.
 	// Testing shows that it does not allocate memory for it on the heap.
@@ -102,7 +108,7 @@ func (p *BroadcastProcessor) handleCancellation(bMsg *Msg, metadata *metadata) b
 		p.log("broadcast: sent cancellation", nil, logging.MsgType(bMsg.MsgType.String()), logging.Stopping(false))
 		metadata.SentCancellation = true
 		go func(broadcastID uint64, cancellationMsg *cancellation) {
-			_ = p.router.Send(broadcastID, "", "", cancellationMsg)
+			_ = p.router.Send(broadcastID, "", "", nil, nil, "", cancellationMsg)
 		}(p.broadcastID, bMsg.Cancellation)
 	}
 	return false
@@ -114,7 +120,7 @@ func (p *BroadcastProcessor) handleBroadcast(bMsg *Msg, methods []string, metada
 	if !bMsg.Msg.options.AllowDuplication && alreadyBroadcasted(methods, bMsg.Method) {
 		return false
 	}
-	err := p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Msg)
+	err := p.router.Send(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, metadata.OriginDigest, metadata.OriginSignature, metadata.OriginPubKey, bMsg.Msg)
 	p.log("broadcast: sending broadcast", err, logging.MsgType(bMsg.MsgType.String()), logging.Method(bMsg.Method), logging.Stopping(false), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 
 	p.updateOrder(bMsg.Method, bMsg.Msg.options.ProgressTo)
@@ -126,7 +132,7 @@ func (p *BroadcastProcessor) handleReply(bMsg *Msg, metadata *metadata) bool {
 	// BroadcastCall if origin addr is non-empty.
 	if metadata.isBroadcastCall() {
 		go func(broadcastID uint64, originAddr, originMethod string, replyMsg *reply) {
-			err := p.router.Send(broadcastID, originAddr, originMethod, replyMsg)
+			err := p.router.Send(broadcastID, originAddr, originMethod, metadata.OriginDigest, metadata.OriginSignature, metadata.OriginPubKey, replyMsg)
 			p.log("broadcast: sent reply to client", err, logging.Method(originMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 		}(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Reply)
 		// the request is done becuase we have sent a reply to the client
@@ -266,6 +272,15 @@ func (m *metadata) update(new *Content) {
 	}
 	if m.OriginMethod == "" && new.OriginMethod != "" {
 		m.OriginMethod = new.OriginMethod
+	}
+	if m.OriginPubKey == "" && new.OriginPubKey != "" {
+		m.OriginPubKey = new.OriginPubKey
+	}
+	if m.OriginSignature == nil && new.OriginSignature != nil {
+		m.OriginSignature = new.OriginSignature
+	}
+	if m.OriginDigest == nil && new.OriginDigest != nil {
+		m.OriginDigest = new.OriginDigest
 	}
 	if m.SendFn == nil && new.SendFn != nil {
 		m.SendFn = new.SendFn

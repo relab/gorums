@@ -20,4 +20,4 @@ const (
 	ServerOriginAddr string = "server"
 )
 
-type ServerHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string)
+type ServerHandler func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options BroadcastOptions, id uint32, addr string, originDigest, originSignature []byte, originPubKey string)

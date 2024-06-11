@@ -1,6 +1,7 @@
 package authentication
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -150,4 +151,27 @@ func (ec *EllipticCurve) EncodeMsg(msg any) ([]byte, error) {
 		return nil, err
 	}
 	return encodedMsg.Bytes(), nil*/
+}
+
+func encodeMsg(msg any) ([]byte, error) {
+	return []byte(fmt.Sprintf("%v", msg)), nil
+}
+
+func Verify(pemEncodedPub string, signature, digest []byte, msg any) (bool, error) {
+	encodedMsg, err := encodeMsg(msg)
+	if err != nil {
+		return false, err
+	}
+	ec := New(elliptic.P256())
+	h := sha256.Sum256(encodedMsg)
+	hash := h[:]
+	if !bytes.Equal(hash, digest) {
+		return false, fmt.Errorf("wrong digest")
+	}
+	pubKey, err := ec.DecodePublic(pemEncodedPub)
+	if err != nil {
+		return false, err
+	}
+	ok := ecdsa.VerifyASN1(pubKey, hash, signature)
+	return ok, nil
 }

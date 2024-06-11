@@ -18,6 +18,9 @@ type BroadcastCallData struct {
 	SenderAddr        string
 	OriginAddr        string
 	OriginMethod      string
+	OriginPubKey      string
+	OriginSignature   []byte
+	OriginDigest      []byte
 	ServerAddresses   []string
 	SkipSelf          bool
 }
@@ -46,10 +49,13 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		SenderAddr:        d.SenderAddr,
 		OriginAddr:        d.OriginAddr,
 		OriginMethod:      d.OriginMethod,
+		OriginPubKey:      d.OriginPubKey,
+		OriginSignature:   d.OriginSignature,
+		OriginDigest:      d.OriginDigest,
 	}}
 	msg := &Message{Metadata: md, Message: d.Message}
 	o := getCallOptions(E_Broadcast, opts)
-	c.sign(msg)
+	c.sign(msg, o.signOrigin)
 
 	var replyChan chan response
 	if !o.noSendWaiting {

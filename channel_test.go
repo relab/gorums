@@ -113,7 +113,7 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 }
 
 func TestChannelReconnection(t *testing.T) {
-	srvAddr := "127.0.0.1:5000"
+	srvAddr := "127.0.0.1:5005"
 	// wait to start the server
 	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
 	node, err := NewRawNode(srvAddr)

@@ -161,11 +161,13 @@ type BroadcastMetadata struct {
 	OriginAddr        string    // address of the origin
 	OriginMethod      string    // the first method called by the origin
 	Method            string    // the current method
-	Digest            []byte    // digest of original message sent by client
 	Timestamp         time.Time // timestamp in seconds when the broadcast request was issued by the client/server
 	ShardID           uint16    // ID of the shard handling the broadcast request
 	MachineID         uint16    // ID of the client/server that issued the broadcast request
 	SequenceNo        uint32    // sequence number of the broadcast request from that particular client/server. Will roll over when reaching max.
+	OriginDigest      []byte
+	OriginSignature   []byte
+	OriginPubKey      string
 }
 
 func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
@@ -184,10 +186,17 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 		SenderAddr:        md.BroadcastMsg.SenderAddr,
 		OriginAddr:        md.BroadcastMsg.OriginAddr,
 		OriginMethod:      md.BroadcastMsg.OriginMethod,
+		OriginDigest:      md.BroadcastMsg.OriginDigest,
+		OriginSignature:   md.BroadcastMsg.OriginSignature,
+		OriginPubKey:      md.BroadcastMsg.OriginPubKey,
 		Method:            m,
 		Timestamp:         broadcast.Epoch().Add(time.Duration(timestamp) * time.Second),
 		ShardID:           shardID,
 		MachineID:         machineID,
 		SequenceNo:        sequenceNo,
 	}
+}
+
+func (md BroadcastMetadata) Verify(msg protoreflect.ProtoMessage) (bool, error) {
+	return authentication.Verify(md.OriginPubKey, md.OriginSignature, md.OriginDigest, msg)
 }

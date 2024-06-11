@@ -90,6 +90,15 @@ func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished 
 	if msg.SenderAddr == "" && msg.IsBroadcastClient {
 		msg.SenderAddr = "client"
 	}
+	if in.Metadata.BroadcastMsg.OriginDigest != nil {
+		msg.OriginDigest = in.Metadata.BroadcastMsg.OriginDigest
+	}
+	if in.Metadata.BroadcastMsg.OriginSignature != nil {
+		msg.OriginSignature = in.Metadata.BroadcastMsg.OriginSignature
+	}
+	if in.Metadata.BroadcastMsg.OriginPubKey != "" {
+		msg.OriginPubKey = in.Metadata.BroadcastMsg.OriginPubKey
+	}
 	msg.CurrentMethod = in.Metadata.Method
 	msg.Ctx = ctx.Context
 	msg.Run = run
@@ -125,8 +134,6 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	if in.Metadata.BroadcastMsg.BroadcastID <= 0 {
 		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.BroadcastMsg.BroadcastID)
 	}
-	// check and update TTL
-	// check deadline
 	return nil
 }
 
@@ -198,7 +205,7 @@ func (srv *Server) SendToClientHandler(resp protoreflect.ProtoMessage, err error
 }
 
 func (srv *broadcastServer) registerBroadcastFunc(method string) {
-	srv.manager.AddHandler(method, broadcast.ServerHandler(func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string) {
+	srv.manager.AddHandler(method, broadcast.ServerHandler(func(ctx context.Context, in protoreflect.ProtoMessage, broadcastID uint64, originAddr, originMethod string, options broadcast.BroadcastOptions, id uint32, addr string, originDigest, originSignature []byte, originPubKey string) {
 		cd := BroadcastCallData{
 			Message:           in,
 			Method:            method,
@@ -209,6 +216,9 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			OriginMethod:      originMethod,
 			ServerAddresses:   options.ServerAddresses,
 			SkipSelf:          options.SkipSelf,
+			OriginDigest:      originDigest,
+			OriginSignature:   originSignature,
+			OriginPubKey:      originPubKey,
 		}
 		srv.viewMutex.RLock()
 		// drop request if a view change has occured

@@ -132,6 +132,9 @@ type Content struct {
 	IsCancellation    bool
 	OriginAddr        string
 	OriginMethod      string
+	OriginPubKey      string
+	OriginSignature   []byte
+	OriginDigest      []byte
 	ViewNumber        uint64
 	SenderAddr        string
 	CurrentMethod     string

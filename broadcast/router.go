@@ -15,12 +15,12 @@ import (
 
 type Client struct {
 	Addr    string
-	SendMsg func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration) error
+	SendMsg func(broadcastID uint64, method string, msg protoreflect.ProtoMessage, timeout time.Duration, originDigest, originSignature []byte, originPubKey string) error
 	Close   func() error
 }
 
 type Router interface {
-	Send(broadcastID uint64, addr, method string, req msg) error
+	Send(broadcastID uint64, addr, method string, originDigest, originSignature []byte, originPubKey string, req msg) error
 	Connect(addr string)
 }
 
@@ -61,15 +61,15 @@ func (r *BroadcastRouter) registerState(state *BroadcastState) {
 
 type msg interface{}
 
-func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, req msg) error {
+func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, originDigest, originSignature []byte, originPubKey string, req msg) error {
 	if r.addr == "" {
 		panic("The listen addr on the broadcast server cannot be empty. Use the WithListenAddr() option when creating the server.")
 	}
 	switch val := req.(type) {
 	case *broadcastMsg:
-		return r.routeBroadcast(broadcastID, addr, method, val)
+		return r.routeBroadcast(broadcastID, addr, method, val, originDigest, originSignature, originPubKey)
 	case *reply:
-		return r.routeClientReply(broadcastID, addr, method, val)
+		return r.routeClientReply(broadcastID, addr, method, val, originDigest, originSignature, originPubKey)
 	case *cancellation:
 		r.canceler(broadcastID, val.srvAddrs)
 		return nil
@@ -83,11 +83,11 @@ func (r *BroadcastRouter) Connect(addr string) {
 	_, _ = r.getClient(addr)
 }
 
-func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string, msg *broadcastMsg) error {
+func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string, msg *broadcastMsg, originDigest, originSignature []byte, originPubKey string) error {
 	if handler, ok := r.serverHandlers[msg.method]; ok {
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see: (srv *broadcastServer) registerBroadcastFunc(method string).
-		handler(msg.ctx, msg.request, broadcastID, addr, method, msg.options, r.id, r.addr)
+		handler(msg.ctx, msg.request, broadcastID, addr, method, msg.options, r.id, r.addr, originDigest, originSignature, originPubKey)
 		return nil
 	}
 	err := errors.New("handler not found")
@@ -95,7 +95,7 @@ func (r *BroadcastRouter) routeBroadcast(broadcastID uint64, addr, method string
 	return err
 }
 
-func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method string, resp *reply) error {
+func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method string, resp *reply, originDigest, originSignature []byte, originPubKey string) error {
 	// the client has initiated a broadcast call and the reply should be sent as an RPC
 	if _, ok := r.clientHandlers[method]; ok && addr != "" {
 		client, err := r.getClient(addr)
@@ -103,7 +103,7 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 			r.log("router (reply): could not get client", err, logging.BroadcastID(broadcastID), logging.NodeAddr(addr), logging.Method(method))
 			return err
 		}
-		err = client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout)
+		err = client.SendMsg(broadcastID, method, resp.getResponse(), r.dialTimeout, originDigest, originSignature, originPubKey)
 		r.log("router (reply): sending reply to client", err, logging.BroadcastID(broadcastID), logging.NodeAddr(addr), logging.Method(method))
 		return err
 	}

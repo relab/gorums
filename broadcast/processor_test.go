@@ -21,7 +21,7 @@ type mockRouter struct {
 	resp        protoreflect.ProtoMessage
 }
 
-func (r *mockRouter) Send(broadcastID uint64, addr, method string, req msg) error {
+func (r *mockRouter) Send(broadcastID uint64, addr, method string, originDigest, originSignature []byte, originPubKey string, req msg) error {
 	switch val := req.(type) {
 	case *broadcastMsg:
 		r.reqType = "Broadcast"

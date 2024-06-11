@@ -63,8 +63,26 @@ func (c RawConfiguration) getMsgID() uint64 {
 	return c[0].mgr.getMsgID()
 }
 
-func (c RawConfiguration) sign(msg *Message) {
+func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
 	if c[0].mgr.opts.auth != nil {
+		if len(signOrigin) > 0 && signOrigin[0] {
+			originMsg, err := c[0].mgr.opts.auth.EncodeMsg(msg.Message)
+			if err != nil {
+				panic(err)
+			}
+			digest := c[0].mgr.opts.auth.Hash(originMsg)
+			originSignature, err := c[0].mgr.opts.auth.Sign(originMsg)
+			if err != nil {
+				panic(err)
+			}
+			pubKey, err := c[0].mgr.opts.auth.EncodePublic()
+			if err != nil {
+				panic(err)
+			}
+			msg.Metadata.BroadcastMsg.OriginDigest = digest
+			msg.Metadata.BroadcastMsg.OriginPubKey = pubKey
+			msg.Metadata.BroadcastMsg.OriginSignature = originSignature
+		}
 		encodedMsg, err := c.encodeMsg(msg)
 		if err != nil {
 			panic(err)
@@ -74,10 +92,6 @@ func (c RawConfiguration) sign(msg *Message) {
 			panic(err)
 		}
 		msg.Metadata.AuthMsg.Signature = signature
-		//if len(signOrigin) > 0 && signOrigin[0] {
-		//	digest := c[0].mgr.opts.auth.Hash(encodedMsg)
-		//	msg.Metadata.BroadcastMsg.
-		//}
 	}
 }
 
