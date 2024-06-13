@@ -160,7 +160,6 @@ func (srv *broadcastServer) forwardHandler(req protoreflect.ProtoMessage, method
 		ServerAddresses:   []string{forwardAddr},
 	}
 	srv.viewMutex.RLock()
-	// drop request if a view change has occured
 	srv.view.BroadcastCall(context.Background(), cd)
 	srv.viewMutex.RUnlock()
 }
@@ -181,7 +180,6 @@ func (srv *broadcastServer) canceler(broadcastID uint64, srvAddrs []string) {
 		ServerAddresses: srvAddrs,
 	}
 	srv.viewMutex.RLock()
-	// drop request if a view change has occured
 	srv.view.BroadcastCall(context.Background(), cd)
 	srv.viewMutex.RUnlock()
 }
@@ -195,7 +193,6 @@ func (srv *broadcastServer) serverBroadcastHandler(method string, req protorefle
 		IsBroadcastClient: false,
 	}
 	srv.viewMutex.RLock()
-	// drop request if a view change has occured
 	srv.view.BroadcastCall(context.Background(), cd)
 	srv.viewMutex.RUnlock()
 }
@@ -221,25 +218,17 @@ func (srv *broadcastServer) registerBroadcastFunc(method string) {
 			OriginPubKey:      originPubKey,
 		}
 		srv.viewMutex.RLock()
-		// drop request if a view change has occured
 		srv.view.BroadcastCall(ctx, cd)
 		srv.viewMutex.RUnlock()
 	}))
 }
 
 func (srv *broadcastServer) registerSendToClientHandler(method string) {
-	//srv.manager.AddClientHandler(method)
 	srv.manager.AddHandler(method, nil)
 }
 
 func (srv *Server) RegisterConfig(config RawConfiguration) {
-	// temporarily stop the broadcast server to prevent queueing
-	// broadcast messages. Otherwise, beacuse the broadcast queueing
-	// method holds a read lock and can thus prevent this method
-	// from running.
-	// handle all queued broadcast messages before changing the view
 	srv.broadcastSrv.viewMutex.Lock()
-	// delete all client requests. This resets all broadcast requests.
 	srv.broadcastSrv.manager.ResetState()
 	srv.broadcastSrv.view = config
 	srv.broadcastSrv.viewMutex.Unlock()

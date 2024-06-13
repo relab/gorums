@@ -41,8 +41,11 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 	for _, opt := range opts {
 		opt(&m.opts)
 	}
+	snowflake := broadcast.NewSnowflake(m.opts.machineID)
 	if m.opts.logger != nil {
-		m.logger = m.opts.logger.With(slog.Uint64("MachineID", m.opts.machineID))
+		// a random machineID will be generated if m.opts.machineID is invalid
+		mID := snowflake.MachineID
+		m.logger = m.opts.logger.With(slog.Uint64("MachineID", mID))
 	}
 	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
 		grpc.CallContentSubtype(ContentSubtype),
@@ -53,7 +56,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 		))
 	}
 	m.log("manager: ready", nil)
-	m.snowflake = broadcast.NewSnowflake(m.opts.machineID)
+	m.snowflake = snowflake
 	return m
 }
 

@@ -177,7 +177,6 @@ func ConvertToType[T, U protoreflect.ProtoMessage](handler func(U, []T) (T, bool
 // NodeStream handles a connection to a single client. The stream is aborted if there
 // is any error with sending or receiving.
 func (s *ClientServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
-	//slog.Info("clientserver: connected to client", "addr", s.lis.Addr().String())
 	var mut sync.Mutex // used to achieve mutex between request handlers
 	ctx := srv.Context()
 	// Start with a locked mutex

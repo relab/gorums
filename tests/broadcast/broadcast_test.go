@@ -100,7 +100,6 @@ func TestSimpleBroadcastCall(t *testing.T) {
 	defer clientCleanup()
 
 	for i := 1; i <= numReqs; i++ {
-		//slog.Info("req", "no", i)
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.BroadcastCall(ctx, &Request{Value: val})
@@ -131,7 +130,6 @@ func TestSimpleBroadcastTo(t *testing.T) {
 	defer clientCleanup()
 
 	for i := 1; i <= numReqs; i++ {
-		//slog.Info("req", "no", i)
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.BroadcastCallTo(ctx, &Request{Value: val})
@@ -335,7 +333,6 @@ func TestBroadcastCallOrderingSendToOneSrv(t *testing.T) {
 	defer clientCleanup()
 
 	for i := 1; i <= numReqs; i++ {
-		//slog.Info("req", "no", i)
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.Order(ctx, &Request{Value: val})
@@ -366,7 +363,6 @@ func TestBroadcastCallOrderingSendToAllSrvs(t *testing.T) {
 	defer clientCleanup()
 
 	for i := 1; i <= numReqs; i++ {
-		//slog.Info("req", "no", i)
 		val := int64(i * 100)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.Order(ctx, &Request{Value: val})
@@ -796,7 +792,6 @@ func BenchmarkQuorumCall(b *testing.B) {
 }
 
 func BenchmarkQCMulticast(b *testing.B) {
-	// go test -bench=BenchmarkBroadcastOption -benchmem -count=5 -run=^# -benchtime=5x
 	_, srvAddrs, srvCleanup, err := createSrvs(3)
 	if err != nil {
 		b.Error(err)

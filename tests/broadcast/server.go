@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/elliptic"
 	"errors"
-	"fmt"
 	net "net"
 	"sync"
 	"time"
@@ -29,7 +28,6 @@ type testServer struct {
 	peers          []string
 	lis            net.Listener
 	mgr            *Manager
-	numMsg         map[string]int
 	respChan       map[int64]response
 	processingTime time.Duration
 	val            int64
@@ -49,7 +47,6 @@ func newtestServer(addr string, srvAddresses []string, _ int, withOrder ...bool)
 	}
 	srv := testServer{
 		Server:   osrv,
-		numMsg:   map[string]int{"BC": 0, "QC": 0, "QCB": 0, "QCM": 0, "M": 0, "BI": 0, "B": 0},
 		respChan: make(map[int64]response),
 		leader:   leader,
 		order:    make([]string, 0),
@@ -233,20 +230,6 @@ func (srv *testServer) GetVal(ctx gorums.ServerCtx, req *Request, broadcast *Bro
 		From:   srv.addr,
 		Result: srv.val,
 	}, nil)
-}
-
-func (srv *testServer) GetMsgs() string {
-	srv.mut.Lock()
-	defer srv.mut.Unlock()
-	res := "Srv " + srv.addr
-	res += fmt.Sprintf(" -> QC: %d, QCB: %d, QCM: %d, M: %d, BC: %d, BI: %d, B: %d", srv.numMsg["QC"], srv.numMsg["QCB"], srv.numMsg["QCM"], srv.numMsg["M"], srv.numMsg["BC"], srv.numMsg["BI"], srv.numMsg["B"])
-	return res
-}
-
-func (srv *testServer) GetNumMsgs() int {
-	srv.mut.Lock()
-	defer srv.mut.Unlock()
-	return srv.numMsg["BC"] + srv.numMsg["B"] + srv.numMsg["BI"]
 }
 
 func (srv *testServer) Order(ctx gorums.ServerCtx, req *Request, broadcast *Broadcast) {

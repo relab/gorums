@@ -46,7 +46,7 @@ func newBroadcastServer(serverOpts *serverOptions) *broadcastServer {
 		logger:    serverOpts.logger,
 		machineID: serverOpts.machineID,
 	}
-	srv.manager = broadcast.NewBroadcastManager(serverOpts.logger, createClient, srv.canceler, serverOpts.executionOrder, serverOpts.clientDialTimeout, serverOpts.reqTTL, serverOpts.shardBuffer, serverOpts.sendBuffer, serverOpts.grpcDialOpts...)
+	srv.manager = broadcast.NewBroadcastManager(serverOpts.logger, createClient, srv.canceler, serverOpts.executionOrder, serverOpts.clientDialTimeout, serverOpts.reqTTL, serverOpts.shardBuffer, serverOpts.sendBuffer, serverOpts.allowList, serverOpts.grpcDialOpts...)
 	srv.manager.AddAddr(srv.id, serverOpts.listenAddr, srv.machineID)
 	return srv
 }

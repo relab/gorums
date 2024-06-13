@@ -23,7 +23,6 @@ func newQSpec(qSize, broadcastSize int) QuorumSpec {
 }
 
 func (qs *testQSpec) QuorumCallQF(in *Request, replies map[uint32]*Response) (*Response, bool) {
-	//slog.Warn("client received reply")
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {
 			return resp, true
@@ -33,7 +32,6 @@ func (qs *testQSpec) QuorumCallQF(in *Request, replies map[uint32]*Response) (*R
 }
 
 func (qs *testQSpec) QuorumCallWithBroadcastQF(in *Request, replies map[uint32]*Response) (*Response, bool) {
-	//slog.Warn("client received reply")
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {
 			return resp, true
@@ -43,7 +41,6 @@ func (qs *testQSpec) QuorumCallWithBroadcastQF(in *Request, replies map[uint32]*
 }
 
 func (qs *testQSpec) QuorumCallWithMulticastQF(in *Request, replies map[uint32]*Response) (*Response, bool) {
-	//slog.Warn("client received reply")
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {
 			return resp, true
@@ -53,7 +50,6 @@ func (qs *testQSpec) QuorumCallWithMulticastQF(in *Request, replies map[uint32]*
 }
 
 func (qs *testQSpec) BroadcastCallQF(in *Request, replies []*Response) (*Response, bool) {
-	//slog.Warn("client received reply", "val", in.Value, "resps", len(replies))
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {
 			return resp, true
@@ -63,7 +59,6 @@ func (qs *testQSpec) BroadcastCallQF(in *Request, replies []*Response) (*Respons
 }
 
 func (qs *testQSpec) BroadcastCallForwardQF(in *Request, replies []*Response) (*Response, bool) {
-	//slog.Warn("client received reply", "resps", len(replies))
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {
 			return resp, true
@@ -73,7 +68,6 @@ func (qs *testQSpec) BroadcastCallForwardQF(in *Request, replies []*Response) (*
 }
 
 func (qs *testQSpec) BroadcastCallToQF(in *Request, replies []*Response) (*Response, bool) {
-	//slog.Warn("client received reply", "resps", len(replies))
 	if len(replies) >= qs.quorumSize {
 		for _, resp := range replies {
 			return resp, true
@@ -145,7 +139,6 @@ func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configurati
 	)
 	if listenAddr != "" {
 		lis, err := net.Listen("tcp", "127.0.0.1:")
-		//lis, err := net.Listen("tcp", listenAddr)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -177,7 +170,6 @@ func newAuthClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configu
 	)
 	if listenAddr != "" {
 		lis, err = net.Listen("tcp", "127.0.0.1:")
-		//lis, err := net.Listen("tcp", listenAddr)
 		if err != nil {
 			return nil, nil, err
 		}

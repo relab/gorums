@@ -43,16 +43,12 @@ func TestShard(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	shard := &shard{
-		id: 0,
-		//sendChan:      make(chan Content, shardBuffer),
-		//broadcastChan: make(chan Msg, shardBuffer),
+		id:        0,
 		parentCtx: ctx,
-		//reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
-		procs:  make(map[uint64]*BroadcastProcessor, shardBuffer),
-		router: router,
-		reqTTL: 5 * time.Minute,
+		procs:     make(map[uint64]*BroadcastProcessor, shardBuffer),
+		router:    router,
+		reqTTL:    5 * time.Minute,
 	}
-	//go shard.run(5)
 
 	var tests = []struct {
 		in  *Content
@@ -136,93 +132,4 @@ func TestShard(t *testing.T) {
 	if !errors.Is(resp.err, AlreadyProcessedErr{}) {
 		t.Fatalf("the request should have been stopped. SendToClient has been called.")
 	}
-	//select {
-	//case resp := <-msgShouldBeDropped.ReceiveChan:
-	//if resp.err == nil {
-	//t.Fatalf("the request should have been stopped. SendToClient has been called.")
-	//}
-	//case <-time.After(3 * time.Second):
-	//t.Fatalf("a deadlock has most probably occured due to NOT buffering the receiveChan on the message.")
-	//}
-
-	//select {
-	//case resp := <-clientMsg.ReceiveChan:
-	//	if resp.err == nil {
-	//		t.Fatalf("the request should have been stopped. SendToClient has been called.")
-	//	}
-	//case <-time.After(3 * time.Second):
-	//	t.Fatalf("a deadlock has most probably occured due to buffering the sendChan on a request and not cleaning up afterwards.")
-	//}
 }
-
-/*func BenchmarkShard(b *testing.B) {
-	snowflake := NewSnowflake(0)
-	router := &slowRouter{
-		returnError: false,
-	}
-	shardBuffer := 100
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	shard := &shard{
-		id: 0,
-		//sendChan:      make(chan Content, shardBuffer),
-		//broadcastChan: make(chan Msg, shardBuffer),
-		ctx:        ctx,
-		cancelFunc: cancel,
-		//reqs:          make(map[uint64]*BroadcastRequest, shardBuffer),
-		reqs:   make(map[uint64]*BroadcastProcessor, shardBuffer),
-		router: router,
-		reqTTL: 5 * time.Minute,
-	}
-	//go shard.run(5)
-
-	originMethod := "test"
-	originAddr := "127.0.0.1:8080"
-	msgs := make([]Content, 10)
-	for i := 0; i < 10; i++ {
-		msg := Content{
-			BroadcastID:       snowflake.NewBroadcastID(),
-			IsBroadcastClient: false,
-			OriginAddr:        originAddr,
-			OriginMethod:      originMethod,
-			ReceiveChan:       make(chan shardResponse, 1),
-			Ctx:               context.Background(),
-		}
-		msgs[i] = msg
-		//		shard.sendChan <- msg
-		<-msg.ReceiveChan
-	}
-	//resp := Msg{
-	//Reply: &reply{
-	//Response: mockResp{},
-	//Err:      nil,
-	//},
-	//BroadcastID: broadcastID,
-	//}
-
-	b.ResetTimer()
-	b.Run("run", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			var msg Content
-			// every 5 msgs is a new broadcast request
-			if i%5 == 0 {
-				msg = Content{
-					BroadcastID:       snowflake.NewBroadcastID(),
-					IsBroadcastClient: true,
-					OriginAddr:        originAddr,
-					OriginMethod:      originMethod,
-					ReceiveChan:       make(chan shardResponse, 1),
-					Ctx:               context.Background(),
-				}
-			} else {
-				msg = msgs[i%10]
-			}
-
-			shard.sendChan <- msg
-			<-msg.ReceiveChan
-		}
-	})
-	b.StopTimer()
-	shard.Close()
-}
-*/

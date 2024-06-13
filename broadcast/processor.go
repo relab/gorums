@@ -155,7 +155,6 @@ func (p *BroadcastProcessor) handleReply(bMsg *Msg, metadata *metadata) bool {
 		}
 		// the request is not done yet because we have not replied to
 		// the client.
-		//slog.Info("reply: late", "err", err, "id", p.broadcastID)
 		p.log("broadcast: failed to send reply to client", err, logging.Method(metadata.OriginMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(false), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 		// we must stop the goroutine if we have received the client req. This can mean that
 		// the client no longer accepts replies or has gone offline. In any case, the operation

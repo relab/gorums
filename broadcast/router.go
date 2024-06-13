@@ -36,9 +36,10 @@ type BroadcastRouter struct {
 	dialTimeout    time.Duration
 	logger         *slog.Logger
 	state          *BroadcastState
+	allowList      map[string]string // whitelist of (address, pubKey) pairs the server can reply to
 }
 
-func NewRouter(logger *slog.Logger, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string), dialTimeout time.Duration, dialOpts ...grpc.DialOption) *BroadcastRouter {
+func NewRouter(logger *slog.Logger, createClient func(addr string, dialOpts []grpc.DialOption) (*Client, error), canceler func(broadcastID uint64, srvAddrs []string), dialTimeout time.Duration, allowList map[string]string, dialOpts ...grpc.DialOption) *BroadcastRouter {
 	if len(dialOpts) <= 0 {
 		dialOpts = []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -52,6 +53,7 @@ func NewRouter(logger *slog.Logger, createClient func(addr string, dialOpts []gr
 		dialOpts:       dialOpts,
 		dialTimeout:    dialTimeout,
 		logger:         logger,
+		allowList:      allowList,
 	}
 }
 
@@ -114,8 +116,22 @@ func (r *BroadcastRouter) routeClientReply(broadcastID uint64, addr, method stri
 	return err
 }
 
+func (r *BroadcastRouter) validAddr(addr string) bool {
+	if addr == "" {
+		return false
+	}
+	if addr == ServerOriginAddr {
+		return false
+	}
+	if r.allowList != nil {
+		_, ok := r.allowList[addr]
+		return ok
+	}
+	return true
+}
+
 func (r *BroadcastRouter) getClient(addr string) (*Client, error) {
-	if addr == "" || addr == ServerOriginAddr {
+	if !r.validAddr(addr) {
 		return nil, InvalidAddrErr{addr: addr}
 	}
 	// fast path:
