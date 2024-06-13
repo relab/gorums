@@ -254,8 +254,7 @@ We have implemented a set of options that can be used to configure the broadcast
 
 #### Authentication
 
-- `WithAllowList(allowed) ServerOption`: Enables the user to provide a list of (address, publicKey) pairs which will be used to validate messages.
-- `the allow list are permitted to send messages to the server, and the server is only allowed to send replies to nodes on the allow list.
+- `WithAllowList(allowed) ServerOption`: Enables the user to provide a list of (address, publicKey) pairs which will be used to validate messages. Only nodes on the allow list are permitted to send messages to the server, and the server is only allowed to send replies to nodes on the allow list.
 - `EnforceAuthentication() ServerOption`: Requires that messages are signed and validated; otherwise, the server will drop them.
 - `WithAuthentication() ManagerOption`: Enables digital signatures for messages.
 
