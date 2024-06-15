@@ -7,6 +7,7 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -22,11 +23,12 @@ const nilAngleString = "<nil>"
 // You should use the generated `Node` struct instead.
 type RawNode struct {
 	// Only assigned at creation.
-	id     uint32
-	addr   string
-	conn   *grpc.ClientConn
-	cancel func()
-	mgr    *RawManager
+	id      uint32
+	addr    string
+	conn    *grpc.ClientConn
+	cancel  func()
+	mgr     *RawManager
+	dialMut sync.Mutex
 
 	// the default channel
 	channel *channel
@@ -73,6 +75,8 @@ func (n *RawNode) connect(mgr *RawManager) error {
 
 // dial the node and close the current connection.
 func (n *RawNode) dial() error {
+	n.dialMut.Lock()
+	defer n.dialMut.Unlock()
 	if n.conn != nil {
 		// close the current connection before dialing again.
 		n.conn.Close()
@@ -92,9 +96,15 @@ func (n *RawNode) dial() error {
 // fresh contexts. Reusing contexts could result in reusing
 // a cancelled context.
 func (n *RawNode) newContext() context.Context {
+	n.dialMut.Lock()
+	defer n.dialMut.Unlock()
 	md := n.mgr.opts.metadata.Copy()
 	if n.mgr.opts.perNodeMD != nil {
 		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
+	}
+	if n.cancel != nil {
+		// make sure to close any old ctx
+		n.cancel()
 	}
 	var ctx context.Context
 	ctx, n.cancel = context.WithCancel(context.Background())
@@ -103,6 +113,8 @@ func (n *RawNode) newContext() context.Context {
 
 // close this node.
 func (n *RawNode) close() error {
+	n.dialMut.Lock()
+	defer n.dialMut.Unlock()
 	// important to cancel first to stop goroutines
 	n.cancel()
 	if n.conn == nil {

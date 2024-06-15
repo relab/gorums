@@ -112,6 +112,12 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	// get method descriptor from registry
 	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(msg.Metadata.Method))
 	if err != nil {
+		// Cancellation is a special method that is not specified in the proto file.
+		// it is used by the broadcast server to cancel a broadcast request and is
+		// the msg.Message is empty and does not need marshalling.
+		if msg.Metadata.Method == Cancellation {
+			return nil
+		}
 		return err
 	}
 	methodDesc := desc.(protoreflect.MethodDescriptor)

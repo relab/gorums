@@ -2,6 +2,7 @@ package dev
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc/encoding"
@@ -17,6 +18,7 @@ func init() {
 // which quorum calls can be performed.
 type Manager struct {
 	*gorums.RawManager
+	srv *clientServerImpl
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -26,6 +28,35 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 	return &Manager{
 		RawManager: gorums.NewRawManager(opts...),
 	}
+}
+
+func (mgr *Manager) Close() {
+	if mgr.RawManager != nil {
+		mgr.RawManager.Close()
+	}
+	if mgr.srv != nil {
+		mgr.srv.stop()
+	}
+}
+
+// AddClientServer starts a lightweight client-side server. This server only accepts responses
+// to broadcast requests sent by the client.
+//
+// It is important to provide the listenAddr because this will be used to advertise the IP the
+// servers should reply back to.
+func (mgr *Manager) AddClientServer(lis net.Listener, clientAddr net.Addr, opts ...gorums.ServerOption) error {
+	options := []gorums.ServerOption{gorums.WithListenAddr(clientAddr)}
+	options = append(options, opts...)
+	srv := gorums.NewClientServer(lis, options...)
+	srvImpl := &clientServerImpl{
+		ClientServer: srv,
+	}
+	registerClientServerHandlers(srvImpl)
+	go func() {
+		_ = srvImpl.Serve(lis)
+	}()
+	mgr.srv = srvImpl
+	return nil
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes (required)
@@ -54,11 +85,16 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			return nil, fmt.Errorf("config: unknown option type: %v", v)
 		}
 	}
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
+	// register the client server if it exists.
+	// used to collect responses in BroadcastCalls
+	if m.srv != nil {
+		c.srv = m.srv
 	}
+	c.snowflake = m.Snowflake()
+	//var test interface{} = struct{}{}
+	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+	//	return nil, fmt.Errorf("config: missing required QuorumSpec")
+	//}
 	// initialize the nodes slice
 	c.nodes = make([]*Node, c.Size())
 	for i, n := range c.RawConfiguration {

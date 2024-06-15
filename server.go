@@ -2,9 +2,15 @@ package gorums
 
 import (
 	"context"
+	"crypto/elliptic"
+	"fmt"
+	"log/slog"
 	"net"
 	"sync"
+	"time"
 
+	"github.com/relab/gorums/authentication"
+	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -30,6 +36,59 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 		opts:     opts,
 	}
 	return s
+}
+
+func (s *orderingServer) encodeMsg(req *Message) ([]byte, error) {
+	// we must not consider the signature field when validating.
+	// also the msgType must be set to requestType.
+	signature := make([]byte, len(req.Metadata.AuthMsg.Signature))
+	copy(signature, req.Metadata.AuthMsg.Signature)
+	reqType := req.msgType
+	req.Metadata.AuthMsg.Signature = nil
+	req.msgType = 0
+	encodedMsg, err := s.opts.auth.EncodeMsg(*req)
+	req.Metadata.AuthMsg.Signature = make([]byte, len(signature))
+	copy(req.Metadata.AuthMsg.Signature, signature)
+	req.msgType = reqType
+	return encodedMsg, err
+}
+
+func (s *orderingServer) verify(req *Message) error {
+	if s.opts.auth == nil {
+		return nil
+	}
+	if req.Metadata.AuthMsg == nil {
+		return fmt.Errorf("missing authMsg")
+	}
+	if req.Metadata.AuthMsg.Signature == nil {
+		return fmt.Errorf("missing signature")
+	}
+	if req.Metadata.AuthMsg.PublicKey == "" {
+		return fmt.Errorf("missing publicKey")
+	}
+	auth := s.opts.auth
+	authMsg := req.Metadata.AuthMsg
+	if s.opts.allowList != nil {
+		pemEncodedPub, ok := s.opts.allowList[authMsg.Sender]
+		if !ok {
+			return fmt.Errorf("not allowed")
+		}
+		if pemEncodedPub != authMsg.PublicKey {
+			return fmt.Errorf("publicKey did not match")
+		}
+	}
+	encodedMsg, err := s.encodeMsg(req)
+	if err != nil {
+		return err
+	}
+	valid, err := auth.VerifySignature(authMsg.PublicKey, encodedMsg, authMsg.Signature)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("invalid signature")
+	}
+	return nil
 }
 
 // SendMessage attempts to send a message on a channel.
@@ -91,6 +150,10 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
+		err = s.verify(req)
+		if err != nil {
+			continue
+		}
 		if handler, ok := s.handlers[req.Metadata.Method]; ok {
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
@@ -103,9 +166,24 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 }
 
 type serverOptions struct {
-	buffer          uint
-	grpcOpts        []grpc.ServerOption
-	connectCallback func(context.Context)
+	buffer            uint
+	grpcOpts          []grpc.ServerOption
+	connectCallback   func(context.Context)
+	logger            *slog.Logger
+	executionOrder    map[string]int
+	machineID         uint64
+	clientDialTimeout time.Duration
+	reqTTL            time.Duration // the lifetime of a broadcast request
+	shardBuffer       int           // size of a newly initialized shard
+	sendBuffer        int           // buffer on the send and broadcast channels for a broadcast processor
+	// this is the address other nodes should connect to. Sometimes, e.g. when
+	// running in a docker container it is useful to listen to the loopback
+	// address and use forwarding from the host. If not this option is not given,
+	// the listen address used on the gRPC listener will be used instead.
+	listenAddr   string
+	allowList    map[string]string
+	auth         *authentication.EllipticCurve
+	grpcDialOpts []grpc.DialOption
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -136,23 +214,162 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
+// WithOrder returns a ServerOption which defines the order of execution
+// of gRPC methods.
+//
+// E.g. in PBFT we can specify the order: PrePrepare, Prepare, and Commit.
+// Gorums will then make sure to only execute messages in this order.
+// The rules are defined as such:
+//  1. Messages to the first gRPC method (PrePrepare) will always be executed.
+//  2. Messages to gRPC methods not defined in the order will always be executed.
+//  3. Messages to gRPC methods appearing later in the order will be cached and executed later.
+//  4. Messages to gRPC methods appearing earlier than the current method will be executed immediately.
+//     E.g. if current method is Commit, then messages to PrePrepare and Prepare will be accepted.
+//  5. The server itself needs to call the next method in the order to progress to the next gRPC method.
+//     E.g. by calling broadcast.Prepare().
+//  6. If the BroadcastOption ProgressTo() is used, then it will progress to the given gRPC method.
+func WithOrder(executionOrder ...string) ServerOption {
+	return func(o *serverOptions) {
+		o.executionOrder = make(map[string]int)
+		for i, method := range executionOrder {
+			o.executionOrder[method] = i
+		}
+	}
+}
+
+// WithClientDialTimeout returns a ServerOption which sets the dial timeout
+// used to send replies back to the client in a BroadcastCall.
+func WithClientDialTimeout(dialTimeout time.Duration) ServerOption {
+	return func(o *serverOptions) {
+		o.clientDialTimeout = dialTimeout
+	}
+}
+
+// WithServerGrpcDialOptions returns a ServerOption which sets any gRPC dial options
+// the Broadcast Router should use when connecting to each client.
+func WithServerGrpcDialOptions(opts ...grpc.DialOption) ServerOption {
+	return func(o *serverOptions) {
+		o.grpcDialOpts = make([]grpc.DialOption, 0, len(opts))
+		o.grpcDialOpts = append(o.grpcDialOpts, opts...)
+	}
+}
+
+// WithShardBuffer returns a ServerOption which sets the buffer size
+// of the shards. A higher shard size uses more memory but saves time
+// when the number of broadcast requests is large.
+func WithShardBuffer(shardBuffer int) ServerOption {
+	return func(o *serverOptions) {
+		o.shardBuffer = shardBuffer
+	}
+}
+
+// WithSendBuffer returns a ServerOption which sets the buffer size
+// of the sendChannel and broadcastChannel for a broadcast processor.
+// A higher sendBuffer uses more memory but saves time when the number
+// broadcast messages is large.
+func WithSendBuffer(sendBuffer int) ServerOption {
+	return func(o *serverOptions) {
+		o.sendBuffer = sendBuffer
+	}
+}
+
+// WithBroadcastReqTTL returns a ServerOption which sets the lifetime
+// used for the broadcast processors.
+func WithBroadcastReqTTL(reqTTL time.Duration) ServerOption {
+	return func(o *serverOptions) {
+		o.reqTTL = reqTTL
+	}
+}
+
+// WithSLogger returns a ServerOption which sets an optional structured logger for
+// the Server. This will log internal events regarding broadcast requests. The
+// ManagerOption WithLogger() should be used when creating the manager in order
+// to log events related to transmission of messages.
+func WithSLogger(logger *slog.Logger) ServerOption {
+	return func(o *serverOptions) {
+		o.logger = logger
+	}
+}
+
+// WithSrvID sets the MachineID of the broadcast server. This ID is used to
+// generate BroadcastIDs. This method should be used if a replica needs to
+// initiate a broadcast request.
+//
+// An example use case is in Paxos:
+// The designated leader sends a prepare and receives some promises it has
+// never seen before. It thus needs to send accept messages correspondingly.
+// These accept messages are not part of any broadcast request and the server
+// is thus responsible for the origin of these requests.
+func WithSrvID(machineID uint64) ServerOption {
+	return func(o *serverOptions) {
+		o.machineID = machineID
+	}
+}
+
+// WithAllowList accepts (address, publicKey) pairs which is used to validate
+// messages. Only nodes added to the allow list are allowed to send msgs to
+// the server.
+func WithAllowList(curve elliptic.Curve, allowed ...string) ServerOption {
+	return func(o *serverOptions) {
+		o.allowList = make(map[string]string)
+		if len(allowed)%2 != 0 {
+			panic("must provide (address, publicKey) pairs to WithAllowList()")
+		}
+		for i := range allowed {
+			if i%2 != 0 {
+				continue
+			}
+			o.allowList[allowed[i]] = allowed[i+1]
+		}
+		o.auth = authentication.New(curve)
+	}
+}
+
+// EnforceAuthentication accepts an elliptic curve which is used to validate
+// messages. Only msgs with a pubKey and signature will be processed by the
+// server.
+func EnforceAuthentication(curve elliptic.Curve) ServerOption {
+	return func(o *serverOptions) {
+		o.auth = authentication.New(curve)
+	}
+}
+
+// WithListenAddr sets the IP address of the broadcast server which will be used in messages
+// sent by the server. The network of the address has to be a TCP network name. Hence,
+// net.ResolveTCPAddr() can be used to obtain the net.Addr type of an address.
+func WithListenAddr(listenAddr net.Addr) ServerOption {
+	return func(o *serverOptions) {
+		o.listenAddr = listenAddr.String()
+	}
+}
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	srv        *orderingServer
-	grpcServer *grpc.Server
+	srv          *orderingServer
+	grpcServer   *grpc.Server
+	broadcastSrv *broadcastServer
 }
 
 // NewServer returns a new instance of GorumsServer.
 // This function is intended for internal Gorums use.
 // You should call `NewServer` in the generated code instead.
 func NewServer(opts ...ServerOption) *Server {
-	var serverOpts serverOptions
+	serverOpts := serverOptions{
+		clientDialTimeout: 10 * time.Second,
+		shardBuffer:       200,
+		sendBuffer:        30,
+		reqTTL:            5 * time.Minute,
+		// Provide an illegal machineID to avoid unintentional collisions.
+		// 0 is a valid MachineID and should not be used as default.
+		machineID: uint64(broadcast.MaxMachineID) + 1,
+	}
 	for _, opt := range opts {
 		opt(&serverOpts)
 	}
 	s := &Server{
-		srv:        newOrderingServer(&serverOpts),
-		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
+		srv:          newOrderingServer(&serverOpts),
+		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
+		broadcastSrv: newBroadcastServer(&serverOpts),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
@@ -162,7 +379,12 @@ func NewServer(opts ...ServerOption) *Server {
 //
 // This function should only be used by generated code.
 func (s *Server) RegisterHandler(method string, handler requestHandler) {
+	s.broadcastSrv.registerBroadcastFunc(method)
 	s.srv.handlers[method] = handler
+}
+
+func (s *Server) RegisterClientHandler(method string) {
+	s.broadcastSrv.registerSendToClientHandler(method)
 }
 
 // Serve starts serving on the listener.
@@ -172,11 +394,17 @@ func (s *Server) Serve(listener net.Listener) error {
 
 // GracefulStop waits for all RPCs to finish before stopping.
 func (s *Server) GracefulStop() {
+	if s.broadcastSrv != nil {
+		s.broadcastSrv.stop()
+	}
 	s.grpcServer.GracefulStop()
 }
 
 // Stop stops the server immediately.
 func (s *Server) Stop() {
+	if s.broadcastSrv != nil {
+		s.broadcastSrv.stop()
+	}
 	s.grpcServer.Stop()
 }
 

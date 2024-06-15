@@ -1,0 +1,77 @@
+// Test to benchmark quorum functions with and without the request parameter.
+syntax = "proto3";
+package broadcast;
+option go_package = "github.com/relab/gorums/tests/broadcast";
+
+import "gorums.proto";
+
+service BroadcastService {
+  rpc QuorumCall(Request) returns (Response) { 
+    option (gorums.quorumcall) = true; 
+  }
+  rpc QuorumCallWithBroadcast(Request) returns (Response) { 
+    option (gorums.quorumcall) = true; 
+    option (gorums.broadcast) = true; 
+  }
+  rpc QuorumCallWithMulticast(Request) returns (Response) { 
+    option (gorums.quorumcall) = true; 
+  }
+  rpc Multicast(Request) returns (Empty) { 
+    option (gorums.multicast) = true; 
+  }
+  rpc MulticastIntermediate(Request) returns (Empty) { 
+    option (gorums.multicast) = true; 
+  }
+  rpc BroadcastCall(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc BroadcastIntermediate(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+  rpc Broadcast(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+  rpc BroadcastCallForward(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc BroadcastCallTo(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc BroadcastToResponse(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+  rpc Search(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc LongRunningTask(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc GetVal(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc Order(Request) returns (Response) { 
+    option (gorums.broadcastcall) = true; 
+  }
+  rpc PrePrepare(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+  rpc Prepare(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+  rpc Commit(Request) returns (Empty) { 
+    option (gorums.broadcast) = true; 
+  }
+}
+
+message Request { 
+  int64 Value = 1; 
+  string From = 2;
+}
+
+message Response { 
+  int64 Result = 1;
+  int64 Replies = 2;
+  string From = 3;
+}
+
+message Empty {}
