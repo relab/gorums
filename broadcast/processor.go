@@ -175,6 +175,9 @@ func (p *BroadcastProcessor) handleMsg(new *Content, metadata *metadata) bool {
 		return false
 	}
 	if new.IsCancellation {
+		if p.cancellationCtxCancel != nil {
+			p.cancellationCtxCancel()
+		}
 		// the cancellation implementation is just an
 		// empty function and does not need the ctx or
 		// broadcastChan.
