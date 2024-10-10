@@ -44,8 +44,9 @@ func TestChannelCreation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//the node should be closed manually because it isn't added to the configuration
+	defer node.close()
 	mgr := dummyMgr()
-	defer mgr.Close()
 	// a proper connection should NOT be established here
 	node.connect(mgr)
 
@@ -117,8 +118,9 @@ func TestChannelReconnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//the node should be closed manually because it isn't added to the configuration
+	defer node.close()
 	mgr := dummyMgr()
-	defer mgr.Close()
 	// a proper connection should NOT be established here because server is not started
 	node.connect(mgr)
 
