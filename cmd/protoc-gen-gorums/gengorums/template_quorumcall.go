@@ -47,6 +47,10 @@ var qcVar = `
 var quorumCallBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
+		{{if isBroadcast .Method}}
+		BroadcastID: c.snowflake.NewBroadcastID(),
+		IsBroadcastClient:  true,
+		{{end -}}
 	}
 	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
 		r := make(map[uint32]*{{$out}}, len(replies))

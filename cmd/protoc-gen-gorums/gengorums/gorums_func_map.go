@@ -33,6 +33,8 @@ var importMap = map[string]protogen.GoImportPath{
 	"gorums":       protogen.GoImportPath("github.com/relab/gorums"),
 	"ordering":     protogen.GoImportPath("github.com/relab/gorums/ordering"),
 	"protoreflect": protogen.GoImportPath("google.golang.org/protobuf/reflect/protoreflect"),
+	"uuid":         protogen.GoImportPath("github.com/google/uuid"),
+	"metadata":     protogen.GoImportPath("google.golang.org/grpc/metadata"),
 }
 
 func addImport(path, ident string, g *protogen.GeneratedFile) string {
@@ -105,6 +107,15 @@ var funcMap = template.FuncMap{
 	},
 	"isOneway": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
+	},
+	"isBroadcast": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Broadcast, gorums.E_Broadcastcall)
+	},
+	"isBroadcastOption": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Broadcast)
+	},
+	"isBroadcastCall": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Broadcastcall)
 	},
 	"methods": func(services []*protogen.Service) (methods []*protogen.Method) {
 		for _, s := range services {
