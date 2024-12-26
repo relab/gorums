@@ -5,18 +5,20 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "ConfigOption", "google.golang.org/grpc/encoding": "GetCodec"}
+var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "BroadcastMetadata", "google.golang.org/grpc": "Server", "google.golang.org/grpc/encoding": "GetCodec", "google.golang.org/protobuf/reflect/protoreflect": "ProtoMessage", "net": "Addr"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Configuration", "Manager", "Node", "QuorumSpec"}
+var reservedIdents = []string{"Broadcast", "Configuration", "Manager", "Node", "QuorumSpec", "Server"}
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	qspec QuorumSpec
-	nodes []*Node
+	qspec     QuorumSpec
+	srv       *clientServerImpl
+	snowflake gorums.Snowflake
+	nodes     []*Node
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -72,6 +74,7 @@ func init() {
 // which quorum calls can be performed.
 type Manager struct {
 	*gorums.RawManager
+	srv *clientServerImpl
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -81,6 +84,35 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 	return &Manager{
 		RawManager: gorums.NewRawManager(opts...),
 	}
+}
+
+func (mgr *Manager) Close() {
+	if mgr.RawManager != nil {
+		mgr.RawManager.Close()
+	}
+	if mgr.srv != nil {
+		mgr.srv.stop()
+	}
+}
+
+// AddClientServer starts a lightweight client-side server. This server only accepts responses
+// to broadcast requests sent by the client.
+//
+// It is important to provide the listenAddr because this will be used to advertise the IP the
+// servers should reply back to.
+func (mgr *Manager) AddClientServer(lis net.Listener, clientAddr net.Addr, opts ...gorums.ServerOption) error {
+	options := []gorums.ServerOption{gorums.WithListenAddr(clientAddr)}
+	options = append(options, opts...)
+	srv := gorums.NewClientServer(lis, options...)
+	srvImpl := &clientServerImpl{
+		ClientServer: srv,
+	}
+	registerClientServerHandlers(srvImpl)
+	go func() {
+		_ = srvImpl.Serve(lis)
+	}()
+	mgr.srv = srvImpl
+	return nil
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes (required)
@@ -109,11 +141,16 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 			return nil, fmt.Errorf("config: unknown option type: %v", v)
 		}
 	}
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
+	// register the client server if it exists.
+	// used to collect responses in BroadcastCalls
+	if m.srv != nil {
+		c.srv = m.srv
 	}
+	c.snowflake = m.Snowflake()
+	//var test interface{} = struct{}{}
+	//if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+	//	return nil, fmt.Errorf("config: missing required QuorumSpec")
+	//}
 	// initialize the nodes slice
 	c.nodes = make([]*Node, c.Size())
 	for i, n := range c.RawConfiguration {
@@ -137,6 +174,117 @@ func (m *Manager) Nodes() []*Node {
 // can be performed.
 type Node struct {
 	*gorums.RawNode
+}
+
+type Server struct {
+	*gorums.Server
+	broadcast *Broadcast
+	View      *Configuration
+}
+
+func NewServer(opts ...gorums.ServerOption) *Server {
+	srv := &Server{
+		Server: gorums.NewServer(opts...),
+	}
+	b := &Broadcast{
+		orchestrator: gorums.NewBroadcastOrchestrator(srv.Server),
+	}
+	srv.broadcast = b
+	srv.RegisterBroadcaster(newBroadcaster)
+	return srv
+}
+
+func newBroadcaster(m gorums.BroadcastMetadata, o *gorums.BroadcastOrchestrator, e gorums.EnqueueBroadcast) gorums.Broadcaster {
+	return &Broadcast{
+		orchestrator:     o,
+		metadata:         m,
+		srvAddrs:         make([]string, 0),
+		enqueueBroadcast: e,
+	}
+}
+
+func (srv *Server) SetView(config *Configuration) {
+	srv.View = config
+	srv.RegisterConfig(config.RawConfiguration)
+}
+
+type Broadcast struct {
+	orchestrator     *gorums.BroadcastOrchestrator
+	metadata         gorums.BroadcastMetadata
+	srvAddrs         []string
+	enqueueBroadcast gorums.EnqueueBroadcast
+}
+
+// Returns a readonly struct of the metadata used in the broadcast.
+//
+// Note: Some of the data are equal across the cluster, such as BroadcastID.
+// Other fields are local, such as SenderAddr.
+func (b *Broadcast) GetMetadata() gorums.BroadcastMetadata {
+	return b.metadata
+}
+
+type clientServerImpl struct {
+	*gorums.ClientServer
+	grpcServer *grpc.Server
+}
+
+func (c *clientServerImpl) stop() {
+	c.ClientServer.Stop()
+	if c.grpcServer != nil {
+		c.grpcServer.Stop()
+	}
+}
+
+func (b *Broadcast) To(addrs ...string) *Broadcast {
+	if len(addrs) <= 0 {
+		return b
+	}
+	b.srvAddrs = append(b.srvAddrs, addrs...)
+	return b
+}
+
+func (b *Broadcast) Forward(req protoreflect.ProtoMessage, addr string) error {
+	if addr == "" {
+		return fmt.Errorf("cannot forward to empty addr, got: %s", addr)
+	}
+	if !b.metadata.IsBroadcastClient {
+		return fmt.Errorf("can only forward client requests")
+	}
+	go b.orchestrator.ForwardHandler(req, b.metadata.OriginMethod, b.metadata.BroadcastID, addr, b.metadata.OriginAddr)
+	return nil
+}
+
+// Done signals the end of a broadcast request. It is necessary to call
+// either Done() or SendToClient() to properly terminate a broadcast request
+// and free up resources. Otherwise, it could cause poor performance.
+func (b *Broadcast) Done() {
+	b.orchestrator.DoneHandler(b.metadata.BroadcastID, b.enqueueBroadcast)
+}
+
+// SendToClient sends a message back to the calling client. It also terminates
+// the broadcast request, meaning subsequent messages related to the broadcast
+// request will be dropped. Either SendToClient() or Done() should be used at
+// the end of a broadcast request in order to free up resources.
+func (b *Broadcast) SendToClient(resp protoreflect.ProtoMessage, err error) error {
+	return b.orchestrator.SendToClientHandler(b.metadata.BroadcastID, resp, err, b.enqueueBroadcast)
+}
+
+// Cancel is a non-destructive method call that will transmit a cancellation
+// to all servers in the view. It will not stop the execution but will cause
+// the given ServerCtx to be cancelled, making it possible to listen for
+// cancellations.
+//
+// Could be used together with either SendToClient() or Done().
+func (b *Broadcast) Cancel() error {
+	return b.orchestrator.CancelHandler(b.metadata.BroadcastID, b.srvAddrs, b.enqueueBroadcast)
+}
+
+// SendToClient sends a message back to the calling client. It also terminates
+// the broadcast request, meaning subsequent messages related to the broadcast
+// request will be dropped. Either SendToClient() or Done() should be used at
+// the end of a broadcast request in order to free up resources.
+func (srv *Server) SendToClient(resp protoreflect.ProtoMessage, err error, broadcastID uint64) error {
+	return srv.SendToClientHandler(resp, err, broadcastID, nil)
 }
 
 `
