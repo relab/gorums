@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"log"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
