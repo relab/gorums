@@ -25,7 +25,6 @@ func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration
 	mgr := NewManager(
 		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

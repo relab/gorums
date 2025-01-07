@@ -19,7 +19,6 @@ func runClient(addresses []string) {
 	mgr := proto.NewManager(
 		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(), // block until connections are made
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)

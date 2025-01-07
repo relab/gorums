@@ -75,7 +75,6 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	mgr := gorums.NewRawManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

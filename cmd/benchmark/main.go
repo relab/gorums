@@ -191,7 +191,6 @@ func main() {
 
 	mgrOpts := []gorums.ManagerOption{
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 		gorums.WithDialTimeout(10 * time.Second),

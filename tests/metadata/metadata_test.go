@@ -63,7 +63,6 @@ func TestMetadata(t *testing.T) {
 		gorums.WithMetadata(md),
 		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -97,7 +96,6 @@ func TestPerNodeMetadata(t *testing.T) {
 		gorums.WithPerNodeMetadata(perNodeMD),
 		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -125,7 +123,6 @@ func TestCanGetPeerInfo(t *testing.T) {
 	mgr := NewManager(
 		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

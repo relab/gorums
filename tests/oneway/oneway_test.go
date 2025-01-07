@@ -65,7 +65,6 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 	mgr := oneway.NewManager(
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

@@ -39,7 +39,6 @@ func TestServerCallback(t *testing.T) {
 		gorums.WithDialTimeout(time.Second),
 		gorums.WithMetadata(md),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
