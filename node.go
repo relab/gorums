@@ -78,9 +78,7 @@ func (n *RawNode) dial() error {
 		n.conn.Close()
 	}
 	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
-	defer cancel()
-	n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
+	n.conn, err = grpc.NewClient(n.addr, n.mgr.opts.grpcDialOpts...)
 	return err
 }
 
