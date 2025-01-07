@@ -50,7 +50,6 @@ func TestTLS(t *testing.T) {
 		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
-			grpc.WithReturnConnectionError(),
 		),
 	)
 	_, err = mgr.NewConfiguration(gorums.WithNodeList(addrs))
