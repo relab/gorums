@@ -87,7 +87,6 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 		return srv
 	})
 	mgr := NewManager(
-		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),

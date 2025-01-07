@@ -23,7 +23,6 @@ func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),

@@ -229,7 +229,6 @@ import (
 
 func ExampleStorageClient() {
   mgr := NewManager(
-    gorums.WithDialTimeout(500*time.Millisecond),
     gorums.WithGrpcDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
@@ -403,7 +402,6 @@ func ExampleStorageClient() {
   }
 
   mgr := NewManager(
-    gorums.WithDialTimeout(50*time.Millisecond),
     gorums.WithGrpcDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
