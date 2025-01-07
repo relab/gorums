@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
@@ -196,7 +195,6 @@ func BenchmarkFullStackQF(b *testing.B) {
 			return srv
 		})
 		mgr := NewManager(
-			gorums.WithDialTimeout(10*time.Second),
 			gorums.WithGrpcDialOptions(
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 			),

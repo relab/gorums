@@ -106,7 +106,7 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 		t.Fatal("the node was not added to the configuration")
 	}
 	if node.conn == nil {
-		t.Fatal("connection should not be nil when NOT using WithBlock()")
+		t.Fatal("connection should not be nil")
 	}
 }
 

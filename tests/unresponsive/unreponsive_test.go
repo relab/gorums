@@ -29,9 +29,7 @@ func TestUnresponsive(t *testing.T) {
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

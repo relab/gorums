@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/examples/storage/proto"
@@ -17,9 +16,7 @@ func runClient(addresses []string) {
 
 	// init gorums manager
 	mgr := proto.NewManager(
-		gorums.WithDialTimeout(1*time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(), // block until connections are made
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)
