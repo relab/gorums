@@ -71,6 +71,8 @@ func (r *router) Connect(addr string) {
 }
 
 func (r *router) Broadcast(dto *dtos.BroadcastMsg) error {
+	// it is important to update the sender addr on the message before sending it:
+	dto.Info.Addr = r.addr
 	if handler, ok := r.serverHandlers[dto.Info.Method]; ok {
 		// it runs an interceptor prior to broadcastCall, hence a different signature.
 		// see: (srv *broadcastServer) registerBroadcastFunc(method string).
@@ -83,6 +85,8 @@ func (r *router) Broadcast(dto *dtos.BroadcastMsg) error {
 }
 
 func (r *router) ReplyToClient(dto *dtos.ReplyMsg) error {
+	// it is important to update the sender addr on the message before sending it:
+	dto.Info.Addr = r.addr
 	// the client has initiated a broadcast call and the reply should be sent as an RPC
 	if _, ok := r.clientHandlers[dto.Info.Method]; ok && dto.ClientAddr != "" {
 		client, err := r.getClient(dto.ClientAddr)
