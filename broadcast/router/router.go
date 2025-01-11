@@ -20,6 +20,7 @@ type Router interface {
 	ReplyToClient(dto *dtos.ReplyMsg) error
 	Connect(addr string)
 	Close() error
+	AddHandler(method string, handler any)
 }
 
 type router struct {
@@ -46,7 +47,7 @@ type Config struct {
 	DialOpts     []grpc.DialOption
 }
 
-func NewRouter(config *Config) *router {
+func NewRouter(config *Config) Router {
 	if len(config.DialOpts) <= 0 {
 		config.DialOpts = []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
