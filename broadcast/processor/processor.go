@@ -489,10 +489,6 @@ func (p *Processor) enqueueMsg(msg dtos.Msg) error {
 	}
 }
 
-func (p *Processor) GetEnqueueMsgFunc() EnqueueMsg {
-	return p.enqueueMsg
-}
-
 func (p *Processor) IsFinished(msg *RequestDto) bool {
 	select {
 	case <-p.ctx.Done():
