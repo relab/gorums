@@ -70,14 +70,6 @@ func (s *Shard) process(p *processor.Processor, msg *processor.RequestDto) {
 	if p.IsFinished(msg) {
 		return
 	}
-	if msg.IsServer && !s.preserveOrdering {
-		s.log("msg: processed", nil, logging.Method(msg.CurrentMethod), logging.From(msg.SenderAddr))
-		// no need to send it to the broadcast request goroutine.
-		// the first request should contain all info needed
-		// except for the routing info given in the client req.
-		msg.Run(p.GetEnqueueMsgFunc())
-		return
-	}
 	p.EnqueueExternalMsg(msg)
 }
 
@@ -94,13 +86,13 @@ func (s *Shard) addProcessor(msg *processor.RequestDto) (*processor.Processor, b
 	if p, ok := s.processors[msg.BroadcastID]; ok {
 		return p, true
 	}
-	if time.Since(s.nextGC) > 0 {
-		// make sure the current request is done before running the GC.
-		// This is to prevent running the GC in vain.
-		t := s.reqTTL + 5*time.Second
-		s.nextGC = time.Now().Add(t)
-		//go s.gc(t)
-	}
+	//if time.Since(s.nextGC) > 0 {
+	//	// make sure the current request is done before running the GC.
+	//	// This is to prevent running the GC in vain.
+	//	t := s.reqTTL + 5*time.Second
+	//	s.nextGC = time.Now().Add(t)
+	//	go s.gc(t)
+	//}
 	if !msg.IsServer {
 		// msg.Ctx will correspond to the streamCtx between the client and this server,
 		// meaning the ctx will cancel when the client cancels or disconnects.
