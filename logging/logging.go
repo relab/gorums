@@ -11,12 +11,12 @@ type LogEntry struct {
 	Level           string    `json:"level"`
 	Msg             string    `json:"msg"`
 	MsgType         string    `json:"msgType"`
-	BroadcastID     uint64    `json:"BroadcastID"`
+	BroadcastID     uint64    `json:"broadcastID"`
 	Err             error     `json:"err"`
 	Method          string    `json:"method"`
 	From            string    `json:"from"`
 	Cancelled       bool      `json:"cancelled"`
-	MachineID       uint64    `json:"MachineID"`
+	MachineID       uint64    `json:"machineID"`
 	MsgID           uint64    `json:"msgID"`
 	NodeID          uint64    `json:"nodeID"`
 	NodeAddr        string    `json:"nodeAddr"`
@@ -38,7 +38,7 @@ func MsgType(msgType string) slog.Attr {
 }
 
 func BroadcastID(broadcastID uint64) slog.Attr {
-	return slog.Uint64("BroadcastID", broadcastID)
+	return slog.Uint64("broadcastID", broadcastID)
 }
 
 func Err(err error) slog.Attr {
@@ -58,7 +58,7 @@ func Cancelled(cancelled bool) slog.Attr {
 }
 
 func MachineID(machineID uint64) slog.Attr {
-	return slog.Uint64("MachineID", machineID)
+	return slog.Uint64("machineID", machineID)
 }
 
 func MsgID(msgID uint64) slog.Attr {
