@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/examples/storage/proto"
+	pb "github.com/relab/gorums/examples/storage/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -29,7 +29,7 @@ func startServer(address string) (*gorums.Server, string) {
 	// create Gorums server
 	srv := gorums.NewServer()
 	// register server implementation with Gorums server
-	proto.RegisterStorageServer(srv, storage)
+	pb.RegisterStorageServer(srv, storage)
 	// handle requests on listener
 	go func() {
 		err := srv.Serve(lis)
@@ -60,7 +60,7 @@ type state struct {
 	Time  time.Time
 }
 
-// storageServer is an implementation of proto.Storage
+// storageServer is an implementation of pb.Storage
 type storageServer struct {
 	storage map[string]state
 	mut     sync.RWMutex
@@ -74,26 +74,26 @@ func newStorageServer() *storageServer {
 }
 
 // ReadRPC is an RPC handler
-func (s *storageServer) ReadRPC(_ gorums.ServerCtx, req *proto.ReadRequest) (resp *proto.ReadResponse, err error) {
+func (s *storageServer) ReadRPC(_ gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	return s.Read(req)
 }
 
 // WriteRPC is an RPC handler
-func (s *storageServer) WriteRPC(_ gorums.ServerCtx, req *proto.WriteRequest) (resp *proto.WriteResponse, err error) {
+func (s *storageServer) WriteRPC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	return s.Write(req)
 }
 
 // ReadQC is an RPC handler for a quorum call
-func (s *storageServer) ReadQC(_ gorums.ServerCtx, req *proto.ReadRequest) (resp *proto.ReadResponse, err error) {
+func (s *storageServer) ReadQC(_ gorums.ServerCtx, req *pb.ReadRequest) (resp *pb.ReadResponse, err error) {
 	return s.Read(req)
 }
 
 // WriteQC is an RPC handler for a quorum call
-func (s *storageServer) WriteQC(_ gorums.ServerCtx, req *proto.WriteRequest) (resp *proto.WriteResponse, err error) {
+func (s *storageServer) WriteQC(_ gorums.ServerCtx, req *pb.WriteRequest) (resp *pb.WriteResponse, err error) {
 	return s.Write(req)
 }
 
-func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *proto.WriteRequest) {
+func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *pb.WriteRequest) {
 	_, err := s.Write(req)
 	if err != nil {
 		s.logger.Printf("Write error: %v", err)
@@ -101,26 +101,26 @@ func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *proto.WriteReque
 }
 
 // Read reads a value from storage
-func (s *storageServer) Read(req *proto.ReadRequest) (*proto.ReadResponse, error) {
+func (s *storageServer) Read(req *pb.ReadRequest) (*pb.ReadResponse, error) {
 	s.logger.Printf("Read '%s'\n", req.GetKey())
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 	state, ok := s.storage[req.GetKey()]
 	if !ok {
-		return &proto.ReadResponse{OK: false}, nil
+		return pb.ReadResponse_builder{OK: false}.Build(), nil
 	}
-	return &proto.ReadResponse{OK: true, Value: state.Value, Time: timestamppb.New(state.Time)}, nil
+	return pb.ReadResponse_builder{OK: true, Value: state.Value, Time: timestamppb.New(state.Time)}.Build(), nil
 }
 
 // Write writes a new value to storage if it is newer than the old value
-func (s *storageServer) Write(req *proto.WriteRequest) (*proto.WriteResponse, error) {
+func (s *storageServer) Write(req *pb.WriteRequest) (*pb.WriteResponse, error) {
 	s.logger.Printf("Write '%s' = '%s'\n", req.GetKey(), req.GetValue())
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	oldState, ok := s.storage[req.GetKey()]
 	if ok && oldState.Time.After(req.GetTime().AsTime()) {
-		return &proto.WriteResponse{New: false}, nil
+		return pb.WriteResponse_builder{New: false}.Build(), nil
 	}
 	s.storage[req.GetKey()] = state{Value: req.GetValue(), Time: req.GetTime().AsTime()}
-	return &proto.WriteResponse{New: true}, nil
+	return pb.WriteResponse_builder{New: true}.Build(), nil
 }

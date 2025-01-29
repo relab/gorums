@@ -13,7 +13,7 @@ import (
 func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
-	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
+	md := ordering.Metadata_builder{MessageID: n.mgr.getMsgID(), Method: d.Method}.Build()
 	req := request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	if o.noSendWaiting {

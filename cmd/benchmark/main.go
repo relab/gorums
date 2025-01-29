@@ -95,15 +95,15 @@ func printResults(results []*benchmark.Result, options benchmark.Options, server
 	fmt.Fprintln(resultWriter)
 	for _, r := range results {
 		if !serverStats && options.Remote {
-			for _, s := range r.ServerStats {
-				r.MemPerOp += s.Memory / r.TotalOps
-				r.AllocsPerOp += s.Allocs / r.TotalOps
+			for _, s := range r.GetServerStats() {
+				r.SetMemPerOp(r.GetMemPerOp() + s.GetMemory()/r.GetTotalOps())
+				r.SetAllocsPerOp(r.GetAllocsPerOp() + s.GetAllocs()/r.GetTotalOps())
 			}
 		}
 		fmt.Fprint(resultWriter, r.Format())
 		if serverStats && options.Remote {
-			for _, s := range r.ServerStats {
-				fmt.Fprintf(resultWriter, "%d B/op\t%d allocs/op\t", s.Memory/r.TotalOps, s.Allocs/r.TotalOps)
+			for _, s := range r.GetServerStats() {
+				fmt.Fprintf(resultWriter, "%d B/op\t%d allocs/op\t", s.GetMemory()/r.GetTotalOps(), s.GetAllocs()/r.GetTotalOps())
 			}
 		}
 		fmt.Fprintln(resultWriter)

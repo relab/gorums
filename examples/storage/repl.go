@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/examples/storage/proto"
+	pb "github.com/relab/gorums/examples/storage/proto"
 	"golang.org/x/term"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -52,12 +52,12 @@ The command performs the write quorum call on node 0 and 2
 `
 
 type repl struct {
-	mgr  *proto.Manager
-	cfg  *proto.Configuration
+	mgr  *pb.Manager
+	cfg  *pb.Configuration
 	term *term.Terminal
 }
 
-func newRepl(mgr *proto.Manager, cfg *proto.Configuration) *repl {
+func newRepl(mgr *pb.Manager, cfg *pb.Configuration) *repl {
 	return &repl{
 		mgr: mgr,
 		cfg: cfg,
@@ -90,7 +90,7 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the manager and configuration.
-func Repl(mgr *proto.Manager, defaultCfg *proto.Configuration) {
+func Repl(mgr *pb.Manager, defaultCfg *pb.Configuration) {
 	r := newRepl(mgr, defaultCfg)
 
 	fmt.Println(help)
@@ -174,7 +174,7 @@ func (r repl) multicast(args []string) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	r.cfg.WriteMulticast(ctx, &proto.WriteRequest{Key: args[0], Value: args[1]})
+	r.cfg.WriteMulticast(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
 	cancel()
 	fmt.Println("Multicast OK: (server output not synchronized)")
 }
@@ -210,13 +210,13 @@ func (r repl) qcCfg(args []string) {
 	}
 }
 
-func (repl) readRPC(args []string, node *proto.Node) {
+func (repl) readRPC(args []string, node *pb.Node) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := node.ReadRPC(ctx, &proto.ReadRequest{Key: args[0]})
+	resp, err := node.ReadRPC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -229,13 +229,13 @@ func (repl) readRPC(args []string, node *proto.Node) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeRPC(args []string, node *proto.Node) {
+func (repl) writeRPC(args []string, node *pb.Node) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := node.WriteRPC(ctx, &proto.WriteRequest{Key: args[0], Value: args[1], Time: timestamppb.Now()})
+	resp, err := node.WriteRPC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -248,13 +248,13 @@ func (repl) writeRPC(args []string, node *proto.Node) {
 	fmt.Println("Write OK")
 }
 
-func (repl) readQC(args []string, cfg *proto.Configuration) {
+func (repl) readQC(args []string, cfg *pb.Configuration) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.ReadQC(ctx, &proto.ReadRequest{Key: args[0]})
+	resp, err := cfg.ReadQC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -267,13 +267,13 @@ func (repl) readQC(args []string, cfg *proto.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeQC(args []string, cfg *proto.Configuration) {
+func (repl) writeQC(args []string, cfg *pb.Configuration) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.WriteQC(ctx, &proto.WriteRequest{Key: args[0], Value: args[1], Time: timestamppb.Now()})
+	resp, err := cfg.WriteQC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -286,7 +286,7 @@ func (repl) writeQC(args []string, cfg *proto.Configuration) {
 	fmt.Println("Write OK")
 }
 
-func (r repl) parseConfiguration(cfgStr string) (cfg *proto.Configuration) {
+func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 	// configuration using range syntax
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int

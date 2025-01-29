@@ -4,7 +4,7 @@
 // 	protoc        v5.29.2
 // source: benchmark/benchmark.proto
 
-//go:build !protoopaque
+//go:build protoopaque
 
 package benchmark
 
@@ -24,10 +24,10 @@ const (
 )
 
 type Echo struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
-	Payload       []byte                 `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Payload []byte                 `protobuf:"bytes,1,opt,name=payload,proto3"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Echo) Reset() {
@@ -57,7 +57,7 @@ func (x *Echo) ProtoReflect() protoreflect.Message {
 
 func (x *Echo) GetPayload() []byte {
 	if x != nil {
-		return x.Payload
+		return x.xxx_hidden_Payload
 	}
 	return nil
 }
@@ -66,7 +66,7 @@ func (x *Echo) SetPayload(v []byte) {
 	if v == nil {
 		v = []byte{}
 	}
-	x.Payload = v
+	x.xxx_hidden_Payload = v
 }
 
 type Echo_builder struct {
@@ -79,16 +79,16 @@ func (b0 Echo_builder) Build() *Echo {
 	m0 := &Echo{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.Payload = b.Payload
+	x.xxx_hidden_Payload = b.Payload
 	return m0
 }
 
 type TimedMsg struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
-	SendTime      int64                  `protobuf:"varint,1,opt,name=SendTime,proto3" json:"SendTime,omitempty"`
-	Payload       []byte                 `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state               protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_SendTime int64                  `protobuf:"varint,1,opt,name=SendTime,proto3"`
+	xxx_hidden_Payload  []byte                 `protobuf:"bytes,2,opt,name=payload,proto3"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *TimedMsg) Reset() {
@@ -118,27 +118,27 @@ func (x *TimedMsg) ProtoReflect() protoreflect.Message {
 
 func (x *TimedMsg) GetSendTime() int64 {
 	if x != nil {
-		return x.SendTime
+		return x.xxx_hidden_SendTime
 	}
 	return 0
 }
 
 func (x *TimedMsg) GetPayload() []byte {
 	if x != nil {
-		return x.Payload
+		return x.xxx_hidden_Payload
 	}
 	return nil
 }
 
 func (x *TimedMsg) SetSendTime(v int64) {
-	x.SendTime = v
+	x.xxx_hidden_SendTime = v
 }
 
 func (x *TimedMsg) SetPayload(v []byte) {
 	if v == nil {
 		v = []byte{}
 	}
-	x.Payload = v
+	x.xxx_hidden_Payload = v
 }
 
 type TimedMsg_builder struct {
@@ -152,13 +152,13 @@ func (b0 TimedMsg_builder) Build() *TimedMsg {
 	m0 := &TimedMsg{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.SendTime = b.SendTime
-	x.Payload = b.Payload
+	x.xxx_hidden_SendTime = b.SendTime
+	x.xxx_hidden_Payload = b.Payload
 	return m0
 }
 
 type StartRequest struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -201,7 +201,7 @@ func (b0 StartRequest_builder) Build() *StartRequest {
 }
 
 type StartResponse struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -244,7 +244,7 @@ func (b0 StartResponse_builder) Build() *StartResponse {
 }
 
 type StopRequest struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -287,18 +287,18 @@ func (b0 StopRequest_builder) Build() *StopRequest {
 }
 
 type Result struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=Name,proto3" json:"Name,omitempty"`
-	TotalOps      uint64                 `protobuf:"varint,2,opt,name=TotalOps,proto3" json:"TotalOps,omitempty"`
-	TotalTime     int64                  `protobuf:"varint,3,opt,name=TotalTime,proto3" json:"TotalTime,omitempty"`
-	Throughput    float64                `protobuf:"fixed64,4,opt,name=Throughput,proto3" json:"Throughput,omitempty"`
-	LatencyAvg    float64                `protobuf:"fixed64,5,opt,name=LatencyAvg,proto3" json:"LatencyAvg,omitempty"`
-	LatencyVar    float64                `protobuf:"fixed64,6,opt,name=LatencyVar,proto3" json:"LatencyVar,omitempty"`
-	AllocsPerOp   uint64                 `protobuf:"varint,7,opt,name=AllocsPerOp,proto3" json:"AllocsPerOp,omitempty"`
-	MemPerOp      uint64                 `protobuf:"varint,8,opt,name=MemPerOp,proto3" json:"MemPerOp,omitempty"`
-	ServerStats   []*MemoryStat          `protobuf:"bytes,9,rep,name=ServerStats,proto3" json:"ServerStats,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Name        string                 `protobuf:"bytes,1,opt,name=Name,proto3"`
+	xxx_hidden_TotalOps    uint64                 `protobuf:"varint,2,opt,name=TotalOps,proto3"`
+	xxx_hidden_TotalTime   int64                  `protobuf:"varint,3,opt,name=TotalTime,proto3"`
+	xxx_hidden_Throughput  float64                `protobuf:"fixed64,4,opt,name=Throughput,proto3"`
+	xxx_hidden_LatencyAvg  float64                `protobuf:"fixed64,5,opt,name=LatencyAvg,proto3"`
+	xxx_hidden_LatencyVar  float64                `protobuf:"fixed64,6,opt,name=LatencyVar,proto3"`
+	xxx_hidden_AllocsPerOp uint64                 `protobuf:"varint,7,opt,name=AllocsPerOp,proto3"`
+	xxx_hidden_MemPerOp    uint64                 `protobuf:"varint,8,opt,name=MemPerOp,proto3"`
+	xxx_hidden_ServerStats *[]*MemoryStat         `protobuf:"bytes,9,rep,name=ServerStats,proto3"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *Result) Reset() {
@@ -328,101 +328,103 @@ func (x *Result) ProtoReflect() protoreflect.Message {
 
 func (x *Result) GetName() string {
 	if x != nil {
-		return x.Name
+		return x.xxx_hidden_Name
 	}
 	return ""
 }
 
 func (x *Result) GetTotalOps() uint64 {
 	if x != nil {
-		return x.TotalOps
+		return x.xxx_hidden_TotalOps
 	}
 	return 0
 }
 
 func (x *Result) GetTotalTime() int64 {
 	if x != nil {
-		return x.TotalTime
+		return x.xxx_hidden_TotalTime
 	}
 	return 0
 }
 
 func (x *Result) GetThroughput() float64 {
 	if x != nil {
-		return x.Throughput
+		return x.xxx_hidden_Throughput
 	}
 	return 0
 }
 
 func (x *Result) GetLatencyAvg() float64 {
 	if x != nil {
-		return x.LatencyAvg
+		return x.xxx_hidden_LatencyAvg
 	}
 	return 0
 }
 
 func (x *Result) GetLatencyVar() float64 {
 	if x != nil {
-		return x.LatencyVar
+		return x.xxx_hidden_LatencyVar
 	}
 	return 0
 }
 
 func (x *Result) GetAllocsPerOp() uint64 {
 	if x != nil {
-		return x.AllocsPerOp
+		return x.xxx_hidden_AllocsPerOp
 	}
 	return 0
 }
 
 func (x *Result) GetMemPerOp() uint64 {
 	if x != nil {
-		return x.MemPerOp
+		return x.xxx_hidden_MemPerOp
 	}
 	return 0
 }
 
 func (x *Result) GetServerStats() []*MemoryStat {
 	if x != nil {
-		return x.ServerStats
+		if x.xxx_hidden_ServerStats != nil {
+			return *x.xxx_hidden_ServerStats
+		}
 	}
 	return nil
 }
 
 func (x *Result) SetName(v string) {
-	x.Name = v
+	x.xxx_hidden_Name = v
 }
 
 func (x *Result) SetTotalOps(v uint64) {
-	x.TotalOps = v
+	x.xxx_hidden_TotalOps = v
 }
 
 func (x *Result) SetTotalTime(v int64) {
-	x.TotalTime = v
+	x.xxx_hidden_TotalTime = v
 }
 
 func (x *Result) SetThroughput(v float64) {
-	x.Throughput = v
+	x.xxx_hidden_Throughput = v
 }
 
 func (x *Result) SetLatencyAvg(v float64) {
-	x.LatencyAvg = v
+	x.xxx_hidden_LatencyAvg = v
 }
 
 func (x *Result) SetLatencyVar(v float64) {
-	x.LatencyVar = v
+	x.xxx_hidden_LatencyVar = v
 }
 
 func (x *Result) SetAllocsPerOp(v uint64) {
-	x.AllocsPerOp = v
+	x.xxx_hidden_AllocsPerOp = v
 }
 
 func (x *Result) SetMemPerOp(v uint64) {
-	x.MemPerOp = v
+	x.xxx_hidden_MemPerOp = v
 }
 
 func (x *Result) SetServerStats(v []*MemoryStat) {
-	x.ServerStats = v
+	x.xxx_hidden_ServerStats = &v
 }
 
 type Result_builder struct {
@@ -443,24 +445,24 @@ func (b0 Result_builder) Build() *Result {
 	m0 := &Result{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.Name = b.Name
-	x.TotalOps = b.TotalOps
-	x.TotalTime = b.TotalTime
-	x.Throughput = b.Throughput
-	x.LatencyAvg = b.LatencyAvg
-	x.LatencyVar = b.LatencyVar
-	x.AllocsPerOp = b.AllocsPerOp
-	x.MemPerOp = b.MemPerOp
-	x.ServerStats = b.ServerStats
+	x.xxx_hidden_Name = b.Name
+	x.xxx_hidden_TotalOps = b.TotalOps
+	x.xxx_hidden_TotalTime = b.TotalTime
+	x.xxx_hidden_Throughput = b.Throughput
+	x.xxx_hidden_LatencyAvg = b.LatencyAvg
+	x.xxx_hidden_LatencyVar = b.LatencyVar
+	x.xxx_hidden_AllocsPerOp = b.AllocsPerOp
+	x.xxx_hidden_MemPerOp = b.MemPerOp
+	x.xxx_hidden_ServerStats = &b.ServerStats
 	return m0
 }
 
 type MemoryStat struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
-	Allocs        uint64                 `protobuf:"varint,1,opt,name=Allocs,proto3" json:"Allocs,omitempty"`
-	Memory        uint64                 `protobuf:"varint,2,opt,name=Memory,proto3" json:"Memory,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Allocs uint64                 `protobuf:"varint,1,opt,name=Allocs,proto3"`
+	xxx_hidden_Memory uint64                 `protobuf:"varint,2,opt,name=Memory,proto3"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *MemoryStat) Reset() {
@@ -490,24 +492,24 @@ func (x *MemoryStat) ProtoReflect() protoreflect.Message {
 
 func (x *MemoryStat) GetAllocs() uint64 {
 	if x != nil {
-		return x.Allocs
+		return x.xxx_hidden_Allocs
 	}
 	return 0
 }
 
 func (x *MemoryStat) GetMemory() uint64 {
 	if x != nil {
-		return x.Memory
+		return x.xxx_hidden_Memory
 	}
 	return 0
 }
 
 func (x *MemoryStat) SetAllocs(v uint64) {
-	x.Allocs = v
+	x.xxx_hidden_Allocs = v
 }
 
 func (x *MemoryStat) SetMemory(v uint64) {
-	x.Memory = v
+	x.xxx_hidden_Memory = v
 }
 
 type MemoryStat_builder struct {
@@ -521,16 +523,16 @@ func (b0 MemoryStat_builder) Build() *MemoryStat {
 	m0 := &MemoryStat{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.Allocs = b.Allocs
-	x.Memory = b.Memory
+	x.xxx_hidden_Allocs = b.Allocs
+	x.xxx_hidden_Memory = b.Memory
 	return m0
 }
 
 type MemoryStatList struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
-	MemoryStats   []*MemoryStat          `protobuf:"bytes,1,rep,name=MemoryStats,proto3" json:"MemoryStats,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_MemoryStats *[]*MemoryStat         `protobuf:"bytes,1,rep,name=MemoryStats,proto3"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *MemoryStatList) Reset() {
@@ -560,13 +562,15 @@ func (x *MemoryStatList) ProtoReflect() protoreflect.Message {
 
 func (x *MemoryStatList) GetMemoryStats() []*MemoryStat {
 	if x != nil {
-		return x.MemoryStats
+		if x.xxx_hidden_MemoryStats != nil {
+			return *x.xxx_hidden_MemoryStats
+		}
 	}
 	return nil
 }
 
 func (x *MemoryStatList) SetMemoryStats(v []*MemoryStat) {
-	x.MemoryStats = v
+	x.xxx_hidden_MemoryStats = &v
 }
 
 type MemoryStatList_builder struct {
@@ -579,7 +583,7 @@ func (b0 MemoryStatList_builder) Build() *MemoryStatList {
 	m0 := &MemoryStatList{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.MemoryStats = b.MemoryStats
+	x.xxx_hidden_MemoryStats = &b.MemoryStats
 	return m0
 }
 

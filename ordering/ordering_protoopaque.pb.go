@@ -4,7 +4,7 @@
 // 	protoc        v5.29.2
 // source: ordering/ordering.proto
 
-//go:build !protoopaque
+//go:build protoopaque
 
 package ordering
 
@@ -25,12 +25,12 @@ const (
 // Metadata is sent together with application-specific message types,
 // and contains information necessary for Gorums to handle the messages.
 type Metadata struct {
-	state         protoimpl.MessageState `protogen:"hybrid.v1"`
-	MessageID     uint64                 `protobuf:"varint,1,opt,name=MessageID,proto3" json:"MessageID,omitempty"`
-	Method        string                 `protobuf:"bytes,2,opt,name=Method,proto3" json:"Method,omitempty"`
-	Status        *status.Status         `protobuf:"bytes,3,opt,name=Status,proto3" json:"Status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_MessageID uint64                 `protobuf:"varint,1,opt,name=MessageID,proto3"`
+	xxx_hidden_Method    string                 `protobuf:"bytes,2,opt,name=Method,proto3"`
+	xxx_hidden_Status    *status.Status         `protobuf:"bytes,3,opt,name=Status,proto3"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *Metadata) Reset() {
@@ -60,46 +60,46 @@ func (x *Metadata) ProtoReflect() protoreflect.Message {
 
 func (x *Metadata) GetMessageID() uint64 {
 	if x != nil {
-		return x.MessageID
+		return x.xxx_hidden_MessageID
 	}
 	return 0
 }
 
 func (x *Metadata) GetMethod() string {
 	if x != nil {
-		return x.Method
+		return x.xxx_hidden_Method
 	}
 	return ""
 }
 
 func (x *Metadata) GetStatus() *status.Status {
 	if x != nil {
-		return x.Status
+		return x.xxx_hidden_Status
 	}
 	return nil
 }
 
 func (x *Metadata) SetMessageID(v uint64) {
-	x.MessageID = v
+	x.xxx_hidden_MessageID = v
 }
 
 func (x *Metadata) SetMethod(v string) {
-	x.Method = v
+	x.xxx_hidden_Method = v
 }
 
 func (x *Metadata) SetStatus(v *status.Status) {
-	x.Status = v
+	x.xxx_hidden_Status = v
 }
 
 func (x *Metadata) HasStatus() bool {
 	if x == nil {
 		return false
 	}
-	return x.Status != nil
+	return x.xxx_hidden_Status != nil
 }
 
 func (x *Metadata) ClearStatus() {
-	x.Status = nil
+	x.xxx_hidden_Status = nil
 }
 
 type Metadata_builder struct {
@@ -114,9 +114,9 @@ func (b0 Metadata_builder) Build() *Metadata {
 	m0 := &Metadata{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.MessageID = b.MessageID
-	x.Method = b.Method
-	x.Status = b.Status
+	x.xxx_hidden_MessageID = b.MessageID
+	x.xxx_hidden_Method = b.Method
+	x.xxx_hidden_Status = b.Status
 	return m0
 }
 

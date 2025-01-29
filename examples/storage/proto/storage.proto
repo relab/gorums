@@ -4,6 +4,8 @@ package storage;
 
 option go_package = "github.com/relab/gorums/examples/storage/proto";
 
+option features.field_presence = IMPLICIT;
+
 import "gorums.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
@@ -29,18 +31,18 @@ service Storage {
   }
 }
 
-message ReadRequest { string Key = 1 [features.field_presence = IMPLICIT]; }
+message ReadRequest { string Key = 1; }
 
 message ReadResponse {
-  bool OK = 1 [features.field_presence = IMPLICIT];
-  string Value = 2 [features.field_presence = IMPLICIT];
+  bool OK = 1;
+  string Value = 2;
   google.protobuf.Timestamp Time = 3;
 }
 
 message WriteRequest {
-  string Key = 1 [features.field_presence = IMPLICIT];
-  string Value = 2 [features.field_presence = IMPLICIT];
+  string Key = 1;
+  string Value = 2;
   google.protobuf.Timestamp Time = 3;
 }
 
-message WriteResponse { bool New = 1 [features.field_presence = IMPLICIT]; }
+message WriteResponse { bool New = 1; }

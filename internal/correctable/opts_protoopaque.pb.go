@@ -4,7 +4,7 @@
 // 	protoc        v5.29.2
 // source: internal/correctable/opts.proto
 
-//go:build !protoopaque
+//go:build protoopaque
 
 package correctable
 

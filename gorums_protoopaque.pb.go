@@ -4,7 +4,7 @@
 // 	protoc        v5.29.2
 // source: gorums.proto
 
-//go:build !protoopaque
+//go:build protoopaque
 
 package gorums
 

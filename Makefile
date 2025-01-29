@@ -19,6 +19,7 @@ dev: installgorums ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 	@protoc -I=$(proto_path) \
 		--go_out=:. \
 		--gorums_out=dev=true:. \
+		--go_opt=default_api_level=API_HYBRID \
 		$(zorums_proto)
 
 benchmark: installgorums $(benchmark_deps)
@@ -29,13 +30,17 @@ $(static_file): $(static_files)
 	@protoc-gen-gorums --bundle=$(static_file)
 
 %.pb.go : %.proto
-	@protoc -I=$(proto_path) --go_out=paths=source_relative:. $^
+	@protoc -I=$(proto_path) \
+		--go_opt=default_api_level=API_HYBRID \
+	  --go_out=paths=source_relative:. $^
 
 %_grpc.pb.go : %.proto
-	@protoc -I=$(proto_path) --go-grpc_out=paths=source_relative:. $^
+	@protoc -I=$(proto_path) \
+	  --go-grpc_out=paths=source_relative:. $^
 
 %_gorums.pb.go : %.proto
-	@protoc -I=$(proto_path) --gorums_out=paths=source_relative:. $^
+	@protoc -I=$(proto_path) \
+	  --gorums_out=paths=source_relative:. $^
 
 tools:
 	@go mod download
