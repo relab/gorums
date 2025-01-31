@@ -90,23 +90,23 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the manager and configuration.
-func Repl(mgr *pb.Manager, defaultCfg *pb.Configuration) {
+func Repl(mgr *pb.Manager, defaultCfg *pb.Configuration) error {
 	r := newRepl(mgr, defaultCfg)
 
 	fmt.Println(help)
 	for {
 		l, err := r.ReadLine()
 		if errors.Is(err, io.EOF) {
-			return
+			return nil
 		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to read line: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		args, err := shlex.Split(l)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to split command: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 		if len(args) < 1 {
 			continue
@@ -116,7 +116,7 @@ func Repl(mgr *pb.Manager, defaultCfg *pb.Configuration) {
 		case "exit":
 			fallthrough
 		case "quit":
-			return
+			return nil
 		case "help":
 			fmt.Println(help)
 		case "rpc":

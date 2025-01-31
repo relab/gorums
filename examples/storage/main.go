@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/relab/gorums"
@@ -36,5 +37,7 @@ func main() {
 		}()
 	}
 
-	runClient(addrs)
+	if runClient(addrs) != nil {
+		os.Exit(1)
+	}
 }

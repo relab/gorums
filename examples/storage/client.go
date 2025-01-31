@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func runClient(addresses []string) {
+func runClient(addresses []string) error {
 	if len(addresses) < 1 {
 		log.Fatalln("No addresses provided!")
 	}
@@ -26,7 +26,7 @@ func runClient(addresses []string) {
 		log.Fatal(err)
 	}
 
-	Repl(mgr, cfg)
+	return Repl(mgr, cfg)
 }
 
 type qspec struct {
