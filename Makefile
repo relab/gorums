@@ -32,15 +32,13 @@ $(static_file): $(static_files)
 %.pb.go : %.proto
 	@protoc -I=$(proto_path) \
 		--go_opt=default_api_level=API_HYBRID \
-	  --go_out=paths=source_relative:. $^
+		--go_out=paths=source_relative:. $^
 
 %_grpc.pb.go : %.proto
-	@protoc -I=$(proto_path) \
-	  --go-grpc_out=paths=source_relative:. $^
+	@protoc -I=$(proto_path) --go-grpc_out=paths=source_relative:. $^
 
 %_gorums.pb.go : %.proto
-	@protoc -I=$(proto_path) \
-	  --gorums_out=paths=source_relative:. $^
+	@protoc -I=$(proto_path) --gorums_out=paths=source_relative:. $^
 
 tools:
 	@go mod download
