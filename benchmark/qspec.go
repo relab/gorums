@@ -58,7 +58,7 @@ func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies map[uint32]*Re
 	for _, reply := range replies {
 		resp.SetLatencyVar(resp.GetLatencyVar() + float64(reply.GetTotalOps()-1)*reply.GetLatencyVar())
 	}
-	resp.SetLatencyVar(resp.GetLatencyVar()/float64(resp.GetTotalOps()) - float64(len(replies)))
+	resp.SetLatencyVar(resp.GetLatencyVar() / (float64(resp.GetTotalOps()) - float64(len(replies))))
 	resp.SetTotalOps(resp.GetTotalOps() / uint64(len(replies)))
 	resp.SetTotalTime(resp.GetTotalTime() / int64(len(replies)))
 	resp.SetThroughput(resp.GetThroughput() / float64(len(replies)))
