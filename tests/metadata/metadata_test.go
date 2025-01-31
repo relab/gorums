@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
@@ -61,9 +60,7 @@ func TestMetadata(t *testing.T) {
 
 	mgr := NewManager(
 		gorums.WithMetadata(md),
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -95,9 +92,7 @@ func TestPerNodeMetadata(t *testing.T) {
 
 	mgr := NewManager(
 		gorums.WithPerNodeMetadata(perNodeMD),
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -123,9 +118,7 @@ func TestCanGetPeerInfo(t *testing.T) {
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

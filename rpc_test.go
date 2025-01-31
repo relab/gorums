@@ -105,9 +105,7 @@ func initServer() *gorums.Server {
 
 func gorumsTestMgr() *dummy.Manager {
 	mgr := dummy.NewManager(
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

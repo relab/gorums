@@ -4,7 +4,6 @@ import (
 	"context"
 	fmt "fmt"
 	"testing"
-	"time"
 
 	gorums "github.com/relab/gorums"
 	"google.golang.org/grpc"
@@ -86,9 +85,7 @@ func TestConfig(t *testing.T) {
 		}
 	}
 	mgr := NewManager(
-		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

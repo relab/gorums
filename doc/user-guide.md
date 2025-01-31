@@ -221,7 +221,6 @@ package gorumsexample
 
 import (
   "log"
-  "time"
 
   "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -229,9 +228,7 @@ import (
 
 func ExampleStorageClient() {
   mgr := NewManager(
-    gorums.WithDialTimeout(500*time.Millisecond),
     gorums.WithGrpcDialOptions(
-      grpc.WithBlock(),
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
@@ -404,9 +401,7 @@ func ExampleStorageClient() {
   }
 
   mgr := NewManager(
-    gorums.WithDialTimeout(50*time.Millisecond),
     gorums.WithGrpcDialOptions(
-      grpc.WithBlock(),
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
