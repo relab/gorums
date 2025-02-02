@@ -1,6 +1,9 @@
-syntax = "proto3";
+edition = "2023";
+
 package oneway;
 option go_package = "github.com/relab/gorums/tests/oneway";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 

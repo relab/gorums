@@ -1,8 +1,10 @@
-syntax = "proto3";
+edition = "2023";
 
 package benchmark;
 
 option go_package = "github.com/relab/gorums/benchmark";
+
+option features.field_presence = IMPLICIT;
 
 import "google/protobuf/empty.proto";
 

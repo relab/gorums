@@ -1,8 +1,11 @@
 // Copy of dev/zorums.proto
 
-syntax = "proto3";
+edition = "2023";
+
 package gorums.testprotos.calltypes.zorums;
 option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/zorums";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 import "google/protobuf/empty.proto";

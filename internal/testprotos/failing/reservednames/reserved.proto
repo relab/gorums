@@ -1,9 +1,12 @@
 // Test that Gorums will stop code generation if one of the
 // reserved Gorums types are used as a message type.
 
-syntax = "proto3";
+edition = "2023";
+
 package gorums.testprotos.failing.reservednames;
 option go_package = "github.com/relab/gorums/internal/testprotos/failing/reservednames";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 

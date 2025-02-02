@@ -23,7 +23,7 @@ const (
 
 type Echo struct {
 	state              protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Payload []byte                 `protobuf:"bytes,1,opt,name=payload,proto3"`
+	xxx_hidden_Payload []byte                 `protobuf:"bytes,1,opt,name=payload"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -83,8 +83,8 @@ func (b0 Echo_builder) Build() *Echo {
 
 type TimedMsg struct {
 	state               protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_SendTime int64                  `protobuf:"varint,1,opt,name=SendTime,proto3"`
-	xxx_hidden_Payload  []byte                 `protobuf:"bytes,2,opt,name=payload,proto3"`
+	xxx_hidden_SendTime int64                  `protobuf:"varint,1,opt,name=SendTime"`
+	xxx_hidden_Payload  []byte                 `protobuf:"bytes,2,opt,name=payload"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -286,15 +286,15 @@ func (b0 StopRequest_builder) Build() *StopRequest {
 
 type Result struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Name        string                 `protobuf:"bytes,1,opt,name=Name,proto3"`
-	xxx_hidden_TotalOps    uint64                 `protobuf:"varint,2,opt,name=TotalOps,proto3"`
-	xxx_hidden_TotalTime   int64                  `protobuf:"varint,3,opt,name=TotalTime,proto3"`
-	xxx_hidden_Throughput  float64                `protobuf:"fixed64,4,opt,name=Throughput,proto3"`
-	xxx_hidden_LatencyAvg  float64                `protobuf:"fixed64,5,opt,name=LatencyAvg,proto3"`
-	xxx_hidden_LatencyVar  float64                `protobuf:"fixed64,6,opt,name=LatencyVar,proto3"`
-	xxx_hidden_AllocsPerOp uint64                 `protobuf:"varint,7,opt,name=AllocsPerOp,proto3"`
-	xxx_hidden_MemPerOp    uint64                 `protobuf:"varint,8,opt,name=MemPerOp,proto3"`
-	xxx_hidden_ServerStats *[]*MemoryStat         `protobuf:"bytes,9,rep,name=ServerStats,proto3"`
+	xxx_hidden_Name        string                 `protobuf:"bytes,1,opt,name=Name"`
+	xxx_hidden_TotalOps    uint64                 `protobuf:"varint,2,opt,name=TotalOps"`
+	xxx_hidden_TotalTime   int64                  `protobuf:"varint,3,opt,name=TotalTime"`
+	xxx_hidden_Throughput  float64                `protobuf:"fixed64,4,opt,name=Throughput"`
+	xxx_hidden_LatencyAvg  float64                `protobuf:"fixed64,5,opt,name=LatencyAvg"`
+	xxx_hidden_LatencyVar  float64                `protobuf:"fixed64,6,opt,name=LatencyVar"`
+	xxx_hidden_AllocsPerOp uint64                 `protobuf:"varint,7,opt,name=AllocsPerOp"`
+	xxx_hidden_MemPerOp    uint64                 `protobuf:"varint,8,opt,name=MemPerOp"`
+	xxx_hidden_ServerStats *[]*MemoryStat         `protobuf:"bytes,9,rep,name=ServerStats"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -457,8 +457,8 @@ func (b0 Result_builder) Build() *Result {
 
 type MemoryStat struct {
 	state             protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Allocs uint64                 `protobuf:"varint,1,opt,name=Allocs,proto3"`
-	xxx_hidden_Memory uint64                 `protobuf:"varint,2,opt,name=Memory,proto3"`
+	xxx_hidden_Allocs uint64                 `protobuf:"varint,1,opt,name=Allocs"`
+	xxx_hidden_Memory uint64                 `protobuf:"varint,2,opt,name=Memory"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -528,7 +528,7 @@ func (b0 MemoryStat_builder) Build() *MemoryStat {
 
 type MemoryStatList struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_MemoryStats *[]*MemoryStat         `protobuf:"bytes,1,rep,name=MemoryStats,proto3"`
+	xxx_hidden_MemoryStats *[]*MemoryStat         `protobuf:"bytes,1,rep,name=MemoryStats"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -665,9 +665,10 @@ var file_benchmark_benchmark_proto_rawDesc = []byte{
 	0x12, 0x13, 0x2e, 0x62, 0x65, 0x6e, 0x63, 0x68, 0x6d, 0x61, 0x72, 0x6b, 0x2e, 0x54, 0x69, 0x6d,
 	0x65, 0x64, 0x4d, 0x73, 0x67, 0x1a, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70,
 	0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x22, 0x04, 0x98,
-	0xb5, 0x18, 0x01, 0x42, 0x23, 0x5a, 0x21, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f,
+	0xb5, 0x18, 0x01, 0x42, 0x28, 0x5a, 0x21, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f,
 	0x6d, 0x2f, 0x72, 0x65, 0x6c, 0x61, 0x62, 0x2f, 0x67, 0x6f, 0x72, 0x75, 0x6d, 0x73, 0x2f, 0x62,
-	0x65, 0x6e, 0x63, 0x68, 0x6d, 0x61, 0x72, 0x6b, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x6e, 0x63, 0x68, 0x6d, 0x61, 0x72, 0x6b, 0x92, 0x03, 0x02, 0x08, 0x02, 0x62, 0x08, 0x65,
+	0x64, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x70, 0xe8, 0x07,
 }
 
 var file_benchmark_benchmark_proto_msgTypes = make([]protoimpl.MessageInfo, 8)

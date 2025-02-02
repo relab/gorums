@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto3";
+edition = "2023";
 
 package google.rpc;
+
+option features.field_presence = IMPLICIT;
 
 import "google/protobuf/any.proto";
 
