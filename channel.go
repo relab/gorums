@@ -139,14 +139,14 @@ func (c *channel) routeResponse(msgID uint64, resp response) {
 func (c *channel) enqueue(req request, responseChan chan<- response, streaming bool) {
 	if responseChan != nil {
 		c.responseMut.Lock()
-		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, streaming}
+		c.responseRouters[req.msg.Metadata.GetMessageID()] = responseRouter{responseChan, streaming}
 		c.responseMut.Unlock()
 	}
 	// either enqueue the request on the sendQ or respond
 	// with error if the node is closed
 	select {
 	case <-c.parentCtx.Done():
-		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
 		return
 	case c.sendQ <- req:
 	}
@@ -168,7 +168,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// eventually clean up the responseRouter map by calling routeResponse.
 		if req.waitForSend() {
 			// unblock the caller and clean up the responseRouter map
-			c.routeResponse(req.msg.Metadata.MessageID, response{})
+			c.routeResponse(req.msg.Metadata.GetMessageID(), response{})
 		}
 	}()
 
@@ -230,14 +230,14 @@ func (c *channel) sender() {
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: streamDownErr})
+			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: streamDownErr})
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
 			// return the error
-			c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: err})
+			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: err})
 		}
 	}
 }
@@ -261,7 +261,7 @@ func (c *channel) receiver() {
 		} else {
 			c.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			c.routeResponse(resp.Metadata.MessageID, response{nid: c.node.ID(), msg: resp.Message, err: err})
+			c.routeResponse(resp.Metadata.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
 		}
 
 		select {

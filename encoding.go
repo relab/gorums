@@ -110,7 +110,7 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	}
 
 	// get method descriptor from registry
-	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(msg.Metadata.Method))
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(msg.Metadata.GetMethod()))
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,9 @@
-syntax = "proto3";
+edition = "2023";
+
 package unresponsive;
 option go_package = "github.com/relab/gorums/tests/unresponsive";
+
+option features.field_presence = IMPLICIT;
 
 service Unresponsive {
   rpc TestUnresponsive(Empty) returns (Empty) {}

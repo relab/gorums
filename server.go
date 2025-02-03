@@ -52,7 +52,7 @@ func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err erro
 	if !ok {
 		errStatus = status.New(codes.Unknown, err.Error())
 	}
-	md.Status = errStatus.Proto()
+	md.SetStatus(errStatus.Proto())
 	return &Message{Metadata: md, Message: resp}
 }
 
@@ -91,7 +91,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
-		if handler, ok := s.handlers[req.Metadata.Method]; ok {
+		if handler, ok := s.handlers[req.Metadata.GetMethod()]; ok {
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.

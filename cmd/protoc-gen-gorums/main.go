@@ -11,14 +11,17 @@ import (
 	"github.com/relab/gorums/internal/version"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
 const (
-	bundleLen         = len("--bundle=")
-	genGorumsDocURL   = "https://github.com/relab/gorums/blob/master/doc/user-guide.md"
-	genGoDocURL       = "https://developers.google.com/protocol-buffers/docs/reference/go-generated"
-	supportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
+	bundleLen                = len("--bundle=")
+	genGorumsDocURL          = "https://github.com/relab/gorums/blob/master/doc/user-guide.md"
+	genGoDocURL              = "https://developers.google.com/protocol-buffers/docs/reference/go-generated"
+	supportedFeatures        = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL) | uint64(pluginpb.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
+	supportedEditionsMinimum = descriptorpb.Edition_EDITION_PROTO2
+	supportedEditionsMaximum = descriptorpb.Edition_EDITION_2023
 )
 
 func main() {
@@ -51,6 +54,9 @@ func main() {
 	)
 
 	opts.Run(func(gen *protogen.Plugin) error {
+		gen.SupportedFeatures = supportedFeatures
+		gen.SupportedEditionsMinimum = supportedEditionsMinimum
+		gen.SupportedEditionsMaximum = supportedEditionsMaximum
 		for _, f := range gen.Files {
 			if f.Generate {
 				switch {
@@ -61,7 +67,6 @@ func main() {
 				}
 			}
 		}
-		gen.SupportedFeatures = supportedFeatures
 		return nil
 	})
 }

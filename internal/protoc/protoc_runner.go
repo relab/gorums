@@ -10,6 +10,7 @@ import (
 func Run(compileType string, args ...string) (string, error) {
 	cmd := exec.Command("protoc", "-I.:"+repoRoot())
 	cmd.Args = append(cmd.Args, protoArgs[compileType]...)
+	cmd.Args = append(cmd.Args, "--go_opt=default_api_level=API_OPAQUE")
 	cmd.Args = append(cmd.Args, args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err

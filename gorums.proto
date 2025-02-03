@@ -1,6 +1,9 @@
-syntax = "proto3";
+edition = "2023";
+
 package gorums;
 option go_package = "github.com/relab/gorums";
+
+option features.field_presence = IMPLICIT;
 
 import "google/protobuf/descriptor.proto";
 

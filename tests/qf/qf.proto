@@ -1,7 +1,10 @@
 // Test to benchmark quorum functions with and without the request parameter.
-syntax = "proto3";
+edition = "2023";
+
 package qf;
 option go_package = "github.com/relab/gorums/tests/qf";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 

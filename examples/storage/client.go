@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func runClient(addresses []string) {
+func runClient(addresses []string) error {
 	if len(addresses) < 1 {
 		log.Fatalln("No addresses provided!")
 	}
@@ -26,7 +26,7 @@ func runClient(addresses []string) {
 		log.Fatal(err)
 	}
 
-	Repl(mgr, cfg)
+	return Repl(mgr, cfg)
 }
 
 type qspec struct {
@@ -54,15 +54,15 @@ func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies map[uint32]*proto.ReadResp
 // you should implement your quorum function with '_ *WriteRequest'.
 func (q qspec) WriteQCQF(in *proto.WriteRequest, replies map[uint32]*proto.WriteResponse) (*proto.WriteResponse, bool) {
 	// wait until at least half of the replicas have responded and have updated their value
-	if numUpdated(replies) <= q.cfgSize/2 {
-		// if all replicas have responded, there must have been another write before ours
-		// that had a newer timestamp
-		if len(replies) == q.cfgSize {
-			return &proto.WriteResponse{New: false}, true
-		}
-		return nil, false
+	if numUpdated(replies) > q.cfgSize/2 {
+		return proto.WriteResponse_builder{New: true}.Build(), true
 	}
-	return &proto.WriteResponse{New: true}, true
+	// if all replicas have responded, there must have been another write before ours
+	// that had a newer timestamp
+	if len(replies) == q.cfgSize {
+		return proto.WriteResponse_builder{New: false}.Build(), true
+	}
+	return nil, false
 }
 
 // newestValue returns the reply that had the most recent timestamp

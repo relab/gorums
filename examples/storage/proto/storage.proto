@@ -1,8 +1,10 @@
-syntax = "proto3";
+edition = "2023";
 
 package storage;
 
 option go_package = "github.com/relab/gorums/examples/storage/proto";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 import "google/protobuf/timestamp.proto";

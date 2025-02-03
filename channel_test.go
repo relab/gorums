@@ -52,7 +52,7 @@ func TestChannelCreation(t *testing.T) {
 
 	replyChan := make(chan response, 1)
 	go func() {
-		md := &ordering.Metadata{MessageID: 1, Method: handlerName}
+		md := ordering.Metadata_builder{MessageID: 1, Method: handlerName}.Build()
 		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan, false)
 	}()
@@ -127,7 +127,7 @@ func TestChannelReconnection(t *testing.T) {
 	// send first message when server is down
 	replyChan1 := make(chan response, 1)
 	go func() {
-		md := &ordering.Metadata{MessageID: 1, Method: handlerName}
+		md := ordering.Metadata_builder{MessageID: 1, Method: handlerName}.Build()
 		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan1, false)
 	}()
@@ -147,7 +147,7 @@ func TestChannelReconnection(t *testing.T) {
 	// send second message when server is up
 	replyChan2 := make(chan response, 1)
 	go func() {
-		md := &ordering.Metadata{MessageID: 2, Method: handlerName}
+		md := ordering.Metadata_builder{MessageID: 2, Method: handlerName}.Build()
 		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
 		node.channel.enqueue(req, replyChan2, false)
 	}()
@@ -167,7 +167,7 @@ func TestChannelReconnection(t *testing.T) {
 	// send third message when server has been previously up but is now down
 	replyChan3 := make(chan response, 1)
 	go func() {
-		md := &ordering.Metadata{MessageID: 3, Method: handlerName}
+		md := ordering.Metadata_builder{MessageID: 3, Method: handlerName}.Build()
 		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan3, false)
 	}()

@@ -1,8 +1,10 @@
-syntax = "proto3";
+edition = "2023";
 
 package dev;
 
 option go_package = "cmd/protoc-gen-gorums/dev";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 import "google/protobuf/empty.proto";

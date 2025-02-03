@@ -1,7 +1,9 @@
-syntax = "proto3";
+edition = "2023";
 
 package correctable;
 option go_package = "github.com/relab/gorums/internal/correctable";
+
+option features.field_presence = IMPLICIT;
 
 import "google/protobuf/descriptor.proto";
 

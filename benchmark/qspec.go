@@ -42,26 +42,26 @@ func (qspec *QSpec) StopServerBenchmarkQF(_ *StopRequest, replies map[uint32]*Re
 	// combine results, calculating averages and pooled variance
 	resp := &Result{}
 	for _, reply := range replies {
-		if resp.Name != "" {
-			resp.Name = reply.Name
+		if resp.GetName() != "" {
+			resp.SetName(reply.GetName())
 		}
-		resp.TotalOps += reply.TotalOps
-		resp.TotalTime += reply.TotalTime
-		resp.Throughput += reply.Throughput
-		resp.LatencyAvg += reply.LatencyAvg * float64(reply.TotalOps)
-		resp.ServerStats = append(resp.ServerStats, &MemoryStat{
-			Allocs: reply.AllocsPerOp * resp.TotalOps,
-			Memory: reply.MemPerOp * resp.TotalOps,
-		})
+		resp.SetTotalOps(resp.GetTotalOps() + reply.GetTotalOps())
+		resp.SetTotalTime(resp.GetTotalTime() + reply.GetTotalTime())
+		resp.SetThroughput(resp.GetThroughput() + reply.GetThroughput())
+		resp.SetLatencyAvg(resp.GetLatencyAvg() + reply.GetLatencyAvg()*float64(reply.GetTotalOps()))
+		resp.SetServerStats(append(resp.GetServerStats(), MemoryStat_builder{
+			Allocs: reply.GetAllocsPerOp() * resp.GetTotalOps(),
+			Memory: reply.GetMemPerOp() * resp.GetTotalOps(),
+		}.Build()))
 	}
-	resp.LatencyAvg /= float64(resp.TotalOps)
+	resp.SetLatencyAvg(resp.GetLatencyAvg() / float64(resp.GetTotalOps()))
 	for _, reply := range replies {
-		resp.LatencyVar += float64(reply.TotalOps-1) * reply.LatencyVar
+		resp.SetLatencyVar(resp.GetLatencyVar() + float64(reply.GetTotalOps()-1)*reply.GetLatencyVar())
 	}
-	resp.LatencyVar /= float64(resp.TotalOps) - float64(len(replies))
-	resp.TotalOps /= uint64(len(replies))
-	resp.TotalTime /= int64(len(replies))
-	resp.Throughput /= float64(len(replies))
+	resp.SetLatencyVar(resp.GetLatencyVar() / (float64(resp.GetTotalOps()) - float64(len(replies))))
+	resp.SetTotalOps(resp.GetTotalOps() / uint64(len(replies)))
+	resp.SetTotalTime(resp.GetTotalTime() / int64(len(replies)))
+	resp.SetThroughput(resp.GetThroughput() / float64(len(replies)))
 	return resp, true
 }
 
@@ -90,7 +90,7 @@ func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies map[uint32]*MemorySt
 	for _, v := range replies {
 		replyList = append(replyList, v)
 	}
-	return &MemoryStatList{MemoryStats: replyList}, true
+	return MemoryStatList_builder{MemoryStats: replyList}.Build(), true
 }
 
 // QuorumCallQF is the quorum function for the QuorumCall quorumcall
