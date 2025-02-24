@@ -20,7 +20,7 @@ func TestRPCCallSuccess(t *testing.T) {
 
 	mgr := gorumsTestMgr()
 
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList[uint32](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 	})
 	mgr := gorumsTestMgr()
 
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList[uint32](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 	node := mgr.Nodes()[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	response, err := node.RPCCall(ctx, gorums.CallData{
+	response, err := node.RawNode.RPCCall(ctx, gorums.CallData{
 		Message: &dummy.Empty{},
 		Method:  "dummy.Dummy.Test",
 	})
@@ -76,7 +76,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 
 	mgr := gorumsTestMgr()
 
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList[uint32](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 0*time.Second)
 	time.Sleep(50 * time.Millisecond)
 	defer cancel()
-	response, err := node.RPCCall(ctx, gorums.CallData{
+	response, err := node.RawNode.RPCCall(ctx, gorums.CallData{
 		Message: &dummy.Empty{},
 		Method:  "dummy.Dummy.Test",
 	})
@@ -105,7 +105,7 @@ func initServer() *gorums.Server {
 
 func gorumsTestMgr() *dummy.Manager {
 	mgr := dummy.NewManager(
-		gorums.WithGrpcDialOptions(
+		gorums.WithGrpcDialOptions[uint32](
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

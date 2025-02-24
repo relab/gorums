@@ -36,14 +36,14 @@ func TestServerCallback(t *testing.T) {
 	md := metadata.New(map[string]string{"message": "hello"})
 
 	mgr := gorums.NewRawManager(
-		gorums.WithMetadata(md),
-		gorums.WithGrpcDialOptions(
+		gorums.WithMetadata[uint32](md),
+		gorums.WithGrpcDialOptions[uint32](
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
 	defer mgr.Close()
 
-	node, err := gorums.NewRawNode(lis.Addr().String())
+	node, err := gorums.NewRawNode[uint32](lis.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
