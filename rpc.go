@@ -18,9 +18,9 @@ type CallData struct {
 // RPCCall executes a remote procedure call on the node.
 //
 // This method should be used by generated code only.
-func (n *RawNode) RPCCall(ctx context.Context, d CallData) (protoreflect.ProtoMessage, error) {
+func (n *RawNode[idType]) RPCCall(ctx context.Context, d CallData) (protoreflect.ProtoMessage, error) {
 	md := ordering.Metadata_builder{MessageID: n.mgr.getMsgID(), Method: d.Method}.Build()
-	replyChan := make(chan response, 1)
+	replyChan := make(chan response[idType], 1)
 	n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}, replyChan, false)
 
 	select {

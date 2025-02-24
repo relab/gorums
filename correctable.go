@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"context"
 	"sync"
 
@@ -82,29 +83,29 @@ func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error,
 // CorrectableCallData contains data for making a correctable quorum call.
 //
 // This struct should only be used by generated code.
-type CorrectableCallData struct {
+type CorrectableCallData[idType cmp.Ordered] struct {
 	Message        protoreflect.ProtoMessage
 	Method         string
-	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
-	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool)
+	PerNodeArgFn   func(protoreflect.ProtoMessage, idType) protoreflect.ProtoMessage
+	QuorumFunction func(protoreflect.ProtoMessage, map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool)
 	ServerStream   bool
 }
 
-type correctableCallState struct {
+type correctableCallState[idType cmp.Ordered] struct {
 	md              *ordering.Metadata
-	data            CorrectableCallData
-	replyChan       <-chan response
+	data            CorrectableCallData[idType]
+	replyChan       <-chan response[idType]
 	expectedReplies int
 }
 
 // CorrectableCall starts a new correctable quorum call and returns a new Correctable object.
 //
 // This method should only be used by generated code.
-func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
+func (c RawConfiguration[idType]) CorrectableCall(ctx context.Context, d CorrectableCallData[idType]) *Correctable {
 	expectedReplies := len(c)
 	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
 
-	replyChan := make(chan response, expectedReplies)
+	replyChan := make(chan response[idType], expectedReplies)
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
@@ -119,7 +120,7 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
 
-	go c.handleCorrectableCall(ctx, corr, correctableCallState{
+	go c.handleCorrectableCall(ctx, corr, correctableCallState[idType]{
 		md:              md,
 		data:            d,
 		replyChan:       replyChan,
@@ -129,14 +130,14 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 	return corr
 }
 
-func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
+func (c RawConfiguration[idType]) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState[idType]) {
 	var (
 		resp    protoreflect.ProtoMessage
-		errs    []nodeError
+		errs    []nodeError[idType]
 		rlevel  int
 		clevel  = LevelNotSet
 		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
+		replies = make(map[idType]protoreflect.ProtoMessage)
 	)
 
 	if state.data.ServerStream {
@@ -149,7 +150,7 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 		select {
 		case r := <-state.replyChan:
 			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
+				errs = append(errs, nodeError[idType]{nodeID: r.nid, cause: r.err})
 				break
 			}
 			replies[r.nid] = r.msg
@@ -164,12 +165,12 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 				}
 			}
 		case <-ctx.Done():
-			corr.set(resp, clevel, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}, true)
+			corr.set(resp, clevel, QuorumCallError[idType]{cause: ctx.Err(), errors: errs, replies: len(replies)}, true)
 			return
 		}
 		if (state.data.ServerStream && len(errs) == state.expectedReplies) ||
 			(!state.data.ServerStream && len(errs)+len(replies) == state.expectedReplies) {
-			corr.set(resp, clevel, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}, true)
+			corr.set(resp, clevel, QuorumCallError[idType]{cause: Incomplete, errors: errs, replies: len(replies)}, true)
 			return
 		}
 	}

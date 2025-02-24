@@ -13,8 +13,8 @@ import (
 
 func TestNewConfigurationEmptyNodeList(t *testing.T) {
 	wantErr := errors.New("config: missing required node addresses")
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList([]string{}))
+	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32]([]string{}))
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, wantErr)
 	}
@@ -24,8 +24,8 @@ func TestNewConfigurationEmptyNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeList(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(nodes))
+	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestNewConfigurationNodeList(t *testing.T) {
 		t.Errorf("cfg.Size() = %d, expected %d", cfg.Size(), len(nodes))
 	}
 
-	contains := func(nodes []*gorums.RawNode, addr string) bool {
+	contains := func(nodes []*gorums.RawNode[uint32], addr string) bool {
 		for _, node := range nodes {
 			if addr == node.Address() {
 				return true
@@ -60,7 +60,7 @@ func TestNewConfigurationNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeMap(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
+	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
 	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
@@ -84,8 +84,8 @@ func TestNewConfigurationNodeMap(t *testing.T) {
 }
 
 func TestNewConfigurationNodeIDs(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(nodes))
+	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,13 +120,13 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 }
 
 func TestNewConfigurationAnd(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(nodes))
+	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
 	c2Nodes := []string{"127.0.0.1:8080"}
-	c2, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(c2Nodes))
+	c2, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](c2Nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestNewConfigurationAnd(t *testing.T) {
 	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
 	c3, err := gorums.NewRawConfiguration(
 		mgr,
-		c1.WithNewNodes(gorums.WithNodeList(newNodes)),
+		c1.WithNewNodes(gorums.WithNodeList[uint32](newNodes)),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -172,8 +172,8 @@ func TestNewConfigurationAnd(t *testing.T) {
 }
 
 func TestNewConfigurationExcept(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(nodes))
+	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestNewConfigurationExcept(t *testing.T) {
 	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
 	c3, err := gorums.NewRawConfiguration(
 		mgr,
-		c1.WithNewNodes(gorums.WithNodeList(newNodes)),
+		c1.WithNewNodes(gorums.WithNodeList[uint32](newNodes)),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +215,7 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	defer teardown()
 
 	mgr := gorumsTestMgr()
-	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	cfg, err := mgr.NewConfiguration(gorums.WithNodeList[uint32](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

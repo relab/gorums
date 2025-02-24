@@ -17,9 +17,9 @@ func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
 	return nil, nil
 }
 
-func dummyMgr() *RawManager {
+func dummyMgr() *RawManager[uint32] {
 	return NewRawManager(
-		WithGrpcDialOptions(
+		WithGrpcDialOptions[uint32](
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -40,7 +40,7 @@ func dummySrv() *Server {
 }
 
 func TestChannelCreation(t *testing.T) {
-	node, err := NewRawNode("127.0.0.1:5000")
+	node, err := NewRawNode[uint32]("127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestChannelCreation(t *testing.T) {
 	// a proper connection should NOT be established here
 	node.connect(mgr)
 
-	replyChan := make(chan response, 1)
+	replyChan := make(chan response[uint32], 1)
 	go func() {
 		md := ordering.Metadata_builder{MessageID: 1, Method: handlerName}.Build()
 		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
@@ -70,7 +70,7 @@ func TestChannelSuccessfulConnection(t *testing.T) {
 	defer teardown()
 	mgr := dummyMgr()
 	defer mgr.Close()
-	node, err := NewRawNode(addrs[0])
+	node, err := NewRawNode[uint32](addrs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 	mgr := dummyMgr()
 	defer mgr.Close()
 	// no servers are listening on the given address
-	node, err := NewRawNode("127.0.0.1:5000")
+	node, err := NewRawNode[uint32]("127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestChannelReconnection(t *testing.T) {
 	srvAddr := "127.0.0.1:5000"
 	// wait to start the server
 	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
-	node, err := NewRawNode(srvAddr)
+	node, err := NewRawNode[uint32](srvAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestChannelReconnection(t *testing.T) {
 	node.connect(mgr)
 
 	// send first message when server is down
-	replyChan1 := make(chan response, 1)
+	replyChan1 := make(chan response[uint32], 1)
 	go func() {
 		md := ordering.Metadata_builder{MessageID: 1, Method: handlerName}.Build()
 		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
@@ -145,7 +145,7 @@ func TestChannelReconnection(t *testing.T) {
 	startServer()
 
 	// send second message when server is up
-	replyChan2 := make(chan response, 1)
+	replyChan2 := make(chan response[uint32], 1)
 	go func() {
 		md := ordering.Metadata_builder{MessageID: 2, Method: handlerName}.Build()
 		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
@@ -165,7 +165,7 @@ func TestChannelReconnection(t *testing.T) {
 	stopServer()
 
 	// send third message when server has been previously up but is now down
-	replyChan3 := make(chan response, 1)
+	replyChan3 := make(chan response[uint32], 1)
 	go func() {
 		md := ordering.Metadata_builder{MessageID: 3, Method: handlerName}.Build()
 		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}

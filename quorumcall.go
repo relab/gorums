@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"context"
 
 	"github.com/relab/gorums/ordering"
@@ -12,21 +13,21 @@ import (
 // supported by Gorums.
 //
 // This struct should be used by generated code only.
-type QuorumCallData struct {
+type QuorumCallData[idType cmp.Ordered] struct {
 	Message        protoreflect.ProtoMessage
 	Method         string
-	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
-	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
+	PerNodeArgFn   func(protoreflect.ProtoMessage, idType) protoreflect.ProtoMessage
+	QuorumFunction func(protoreflect.ProtoMessage, map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
 }
 
 // QuorumCall performs a quorum call on the configuration.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
+func (c RawConfiguration[idType]) QuorumCall(ctx context.Context, d QuorumCallData[idType]) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(c)
 	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
 
-	replyChan := make(chan response, expectedReplies)
+	replyChan := make(chan response[idType], expectedReplies)
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
@@ -40,16 +41,16 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 	}
 
 	var (
-		errs    []nodeError
+		errs    []nodeError[idType]
 		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
+		replies = make(map[idType]protoreflect.ProtoMessage)
 	)
 
 	for {
 		select {
 		case r := <-replyChan:
 			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
+				errs = append(errs, nodeError[idType]{nodeID: r.nid, cause: r.err})
 				break
 			}
 			replies[r.nid] = r.msg
@@ -57,10 +58,10 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 				return resp, nil
 			}
 		case <-ctx.Done():
-			return resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
+			return resp, QuorumCallError[idType]{cause: ctx.Err(), errors: errs, replies: len(replies)}
 		}
 		if len(errs)+len(replies) == expectedReplies {
-			return resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
+			return resp, QuorumCallError[idType]{cause: Incomplete, errors: errs, replies: len(replies)}
 		}
 	}
 }

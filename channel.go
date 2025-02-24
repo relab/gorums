@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"math"
@@ -30,20 +31,20 @@ func (req request) waitForSend() bool {
 	return req.opts.callType != nil && !req.opts.noSendWaiting
 }
 
-type response struct {
-	nid uint32
+type response[idType cmp.Ordered] struct {
+	nid idType
 	msg protoreflect.ProtoMessage
 	err error
 }
 
-type responseRouter struct {
-	c         chan<- response
+type responseRouter[idType cmp.Ordered] struct {
+	c         chan<- response[idType]
 	streaming bool
 }
 
-type channel struct {
+type channel[idType cmp.Ordered] struct {
 	sendQ           chan request
-	node            *RawNode
+	node            *RawNode[idType]
 	mu              sync.Mutex
 	lastError       error
 	latency         time.Duration
@@ -57,7 +58,7 @@ type channel struct {
 	parentCtx       context.Context
 	streamCtx       context.Context
 	cancelStream    context.CancelFunc
-	responseRouters map[uint64]responseRouter
+	responseRouters map[uint64]responseRouter[idType]
 	responseMut     sync.Mutex
 }
 
@@ -67,14 +68,14 @@ type channel struct {
 // connection has not yet been established. This is to prevent
 // deadlock when invoking a call type, as the goroutine will
 // block on the sendQ until a connection has been established.
-func newChannel(n *RawNode) *channel {
-	c := &channel{
+func newChannel[idType cmp.Ordered](n *RawNode[idType]) *channel[idType] {
+	c := &channel[idType]{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,
 		node:            n,
 		latency:         -1 * time.Second,
 		rand:            rand.New(rand.NewSource(time.Now().UnixNano())),
-		responseRouters: make(map[uint64]responseRouter),
+		responseRouters: make(map[uint64]responseRouter[idType]),
 	}
 	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = n.newContext()
@@ -87,7 +88,7 @@ func newChannel(n *RawNode) *channel {
 // Note that the stream could fail even though conn != nil due
 // to the non-blocking dial. Hence, we need to try to connect
 // to the node before starting the receiving goroutine.
-func (c *channel) newNodeStream(conn *grpc.ClientConn) error {
+func (c *channel[idType]) newNodeStream(conn *grpc.ClientConn) error {
 	if conn == nil {
 		// no need to proceed if dial failed
 		return fmt.Errorf("connection is nil")
@@ -112,11 +113,11 @@ func (c *channel) newNodeStream(conn *grpc.ClientConn) error {
 	return nil
 }
 
-func (c *channel) cancelPendingMsgs() {
+func (c *channel[idType]) cancelPendingMsgs() {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	for msgID, router := range c.responseRouters {
-		router.c <- response{nid: c.node.ID(), err: streamDownErr}
+		router.c <- response[idType]{nid: c.node.ID(), err: streamDownErr}
 		// delete the router if we are only expecting a single reply message
 		if !router.streaming {
 			delete(c.responseRouters, msgID)
@@ -124,7 +125,7 @@ func (c *channel) cancelPendingMsgs() {
 	}
 }
 
-func (c *channel) routeResponse(msgID uint64, resp response) {
+func (c *channel[idType]) routeResponse(msgID uint64, resp response[idType]) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	if router, ok := c.responseRouters[msgID]; ok {
@@ -136,29 +137,29 @@ func (c *channel) routeResponse(msgID uint64, resp response) {
 	}
 }
 
-func (c *channel) enqueue(req request, responseChan chan<- response, streaming bool) {
+func (c *channel[idType]) enqueue(req request, responseChan chan<- response[idType], streaming bool) {
 	if responseChan != nil {
 		c.responseMut.Lock()
-		c.responseRouters[req.msg.Metadata.GetMessageID()] = responseRouter{responseChan, streaming}
+		c.responseRouters[req.msg.Metadata.GetMessageID()] = responseRouter[idType]{responseChan, streaming}
 		c.responseMut.Unlock()
 	}
 	// either enqueue the request on the sendQ or respond
 	// with error if the node is closed
 	select {
 	case <-c.parentCtx.Done():
-		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		c.routeResponse(req.msg.Metadata.GetMessageID(), response[idType]{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
 		return
 	case c.sendQ <- req:
 	}
 }
 
-func (c *channel) deleteRouter(msgID uint64) {
+func (c *channel[idType]) deleteRouter(msgID uint64) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	delete(c.responseRouters, msgID)
 }
 
-func (c *channel) sendMsg(req request) (err error) {
+func (c *channel[idType]) sendMsg(req request) (err error) {
 	defer func() {
 		// While the default is to block the caller until the message has been sent, we
 		// can provide the WithNoSendWaiting call option to more quickly unblock the caller.
@@ -168,7 +169,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// eventually clean up the responseRouter map by calling routeResponse.
 		if req.waitForSend() {
 			// unblock the caller and clean up the responseRouter map
-			c.routeResponse(req.msg.Metadata.GetMessageID(), response{})
+			c.routeResponse(req.msg.Metadata.GetMessageID(), response[idType]{})
 		}
 	}()
 
@@ -214,7 +215,7 @@ func (c *channel) sendMsg(req request) (err error) {
 	return err
 }
 
-func (c *channel) sender() {
+func (c *channel[idType]) sender() {
 	var req request
 	for {
 		select {
@@ -230,19 +231,19 @@ func (c *channel) sender() {
 		}
 		// return error if stream is broken
 		if c.streamBroken.get() {
-			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: streamDownErr})
+			c.routeResponse(req.msg.Metadata.GetMessageID(), response[idType]{nid: c.node.ID(), err: streamDownErr})
 			continue
 		}
 		// else try to send message
 		err := c.sendMsg(req)
 		if err != nil {
 			// return the error
-			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: err})
+			c.routeResponse(req.msg.Metadata.GetMessageID(), response[idType]{nid: c.node.ID(), err: err})
 		}
 	}
 }
 
-func (c *channel) receiver() {
+func (c *channel[idType]) receiver() {
 	for {
 		resp := newMessage(responseType)
 		c.streamMut.RLock()
@@ -261,7 +262,7 @@ func (c *channel) receiver() {
 		} else {
 			c.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			c.routeResponse(resp.Metadata.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
+			c.routeResponse(resp.Metadata.GetMessageID(), response[idType]{nid: c.node.ID(), msg: resp.Message, err: err})
 		}
 
 		select {
@@ -272,7 +273,7 @@ func (c *channel) receiver() {
 	}
 }
 
-func (c *channel) connect() error {
+func (c *channel[idType]) connect() error {
 	if !c.connEstablished.get() {
 		// a connection has not yet been established; i.e.,
 		// a previous dial attempt could have failed.
@@ -299,7 +300,7 @@ func (c *channel) connect() error {
 
 // reconnect tries to reconnect to the node using an exponential backoff strategy.
 // maxRetries = -1 represents infinite retries.
-func (c *channel) reconnect(maxRetries float64) {
+func (c *channel[idType]) reconnect(maxRetries float64) {
 	backoffCfg := c.backoffCfg
 
 	var retries float64
@@ -342,28 +343,28 @@ func (c *channel) reconnect(maxRetries float64) {
 	}
 }
 
-func (c *channel) setLastErr(err error) {
+func (c *channel[idType]) setLastErr(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lastError = err
 }
 
 // lastErr returns the last error encountered (if any) when using this channel.
-func (c *channel) lastErr() error {
+func (c *channel[idType]) lastErr() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.lastError
 }
 
 // channelLatency returns the latency between the client and this channel.
-func (c *channel) channelLatency() time.Duration {
+func (c *channel[idType]) channelLatency() time.Duration {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.latency
 }
 
 // isConnected returns true if the channel has an active connection to the node.
-func (c *channel) isConnected() bool {
+func (c *channel[idType]) isConnected() bool {
 	// streamBroken.get() is initially false and NodeStream could be down
 	// even though node.conn is not nil. Hence, we need connEstablished
 	// to make sure a proper connection has been made.

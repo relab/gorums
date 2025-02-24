@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,21 +12,21 @@ import (
 var Incomplete = errors.New("incomplete call")
 
 // QuorumCallError reports on a failed quorum call.
-type QuorumCallError struct {
+type QuorumCallError[idType cmp.Ordered] struct {
 	cause   error
-	errors  []nodeError
+	errors  []nodeError[idType]
 	replies int
 }
 
 // Is reports whether the target error is the same as the cause of the QuorumCallError.
-func (e QuorumCallError) Is(target error) bool {
-	if t, ok := target.(QuorumCallError); ok {
+func (e QuorumCallError[idType]) Is(target error) bool {
+	if t, ok := target.(QuorumCallError[idType]); ok {
 		return e.cause == t.cause
 	}
 	return e.cause == target
 }
 
-func (e QuorumCallError) Error() string {
+func (e QuorumCallError[idType]) Error() string {
 	s := fmt.Sprintf("quorum call error: %s (errors: %d, replies: %d)", e.cause, len(e.errors), e.replies)
 	var b strings.Builder
 	b.WriteString(s)
@@ -42,11 +43,11 @@ func (e QuorumCallError) Error() string {
 }
 
 // nodeError reports on a failed RPC call.
-type nodeError struct {
+type nodeError[idType cmp.Ordered] struct {
 	cause  error
-	nodeID uint32
+	nodeID idType
 }
 
-func (e nodeError) Error() string {
+func (e nodeError[idType]) Error() string {
 	return fmt.Sprintf("node %d: %v", e.nodeID, e.cause)
 }

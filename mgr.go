@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"fmt"
 	"log"
 	"sync"
@@ -15,13 +16,13 @@ import (
 //
 // This struct is intended to be used by generated code.
 // You should use the generated `Manager` struct instead.
-type RawManager struct {
+type RawManager[idType cmp.Ordered] struct {
 	mu        sync.Mutex
-	nodes     []*RawNode
-	lookup    map[uint32]*RawNode
+	nodes     []*RawNode[idType]
+	lookup    map[idType]*RawNode[idType]
 	closeOnce sync.Once
 	logger    *log.Logger
-	opts      managerOptions
+	opts      managerOptions[idType]
 	nextMsgID uint64
 }
 
@@ -29,10 +30,10 @@ type RawManager struct {
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager. This function is meant for internal use.
 // You should use the `NewManager` function in the generated code instead.
-func NewRawManager(opts ...ManagerOption) *RawManager {
-	m := &RawManager{
-		lookup: make(map[uint32]*RawNode),
-		opts:   newManagerOptions(),
+func NewRawManager[idType cmp.Ordered](opts ...ManagerOption[idType]) *RawManager[idType] {
+	m := &RawManager[idType]{
+		lookup: make(map[idType]*RawNode[idType]),
+		opts:   newManagerOptions[idType](),
 	}
 	for _, opt := range opts {
 		opt(&m.opts)
@@ -54,7 +55,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 	return m
 }
 
-func (m *RawManager) closeNodeConns() {
+func (m *RawManager[idType]) closeNodeConns() {
 	for _, node := range m.nodes {
 		err := node.close()
 		if err != nil && m.logger != nil {
@@ -64,7 +65,7 @@ func (m *RawManager) closeNodeConns() {
 }
 
 // Close closes all node connections and any client streams.
-func (m *RawManager) Close() {
+func (m *RawManager[idType]) Close() {
 	m.closeOnce.Do(func() {
 		if m.logger != nil {
 			m.logger.Printf("closing")
@@ -75,10 +76,10 @@ func (m *RawManager) Close() {
 
 // NodeIDs returns the identifier of each available node. IDs are returned in
 // the same order as they were provided in the creation of the Manager.
-func (m *RawManager) NodeIDs() []uint32 {
+func (m *RawManager[idType]) NodeIDs() []idType {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	ids := make([]uint32, 0, len(m.nodes))
+	ids := make([]idType, 0, len(m.nodes))
 	for _, node := range m.nodes {
 		ids = append(ids, node.ID())
 	}
@@ -86,7 +87,7 @@ func (m *RawManager) NodeIDs() []uint32 {
 }
 
 // Node returns the node with the given identifier if present.
-func (m *RawManager) Node(id uint32) (node *RawNode, found bool) {
+func (m *RawManager[idType]) Node(id idType) (node *RawNode[idType], found bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	node, found = m.lookup[id]
@@ -95,14 +96,14 @@ func (m *RawManager) Node(id uint32) (node *RawNode, found bool) {
 
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
-func (m *RawManager) Nodes() []*RawNode {
+func (m *RawManager[idType]) Nodes() []*RawNode[idType] {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.nodes
 }
 
 // Size returns the number of nodes in the Manager.
-func (m *RawManager) Size() (nodes int) {
+func (m *RawManager[idType]) Size() (nodes int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.nodes)
@@ -110,7 +111,7 @@ func (m *RawManager) Size() (nodes int) {
 
 // AddNode adds the node to the manager's node pool
 // and establishes a connection to the node.
-func (m *RawManager) AddNode(node *RawNode) error {
+func (m *RawManager[idType]) AddNode(node *RawNode[idType]) error {
 	if _, found := m.Node(node.ID()); found {
 		// Node IDs must be unique
 		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
@@ -132,6 +133,6 @@ func (m *RawManager) AddNode(node *RawNode) error {
 }
 
 // getMsgID returns a unique message ID.
-func (m *RawManager) getMsgID() uint64 {
+func (m *RawManager[idType]) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)
 }

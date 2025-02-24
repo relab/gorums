@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"context"
 
 	"github.com/relab/gorums/ordering"
@@ -34,20 +35,20 @@ func (f *Async) Done() bool {
 	}
 }
 
-type asyncCallState struct {
+type asyncCallState[idType cmp.Ordered] struct {
 	md              *ordering.Metadata
-	data            QuorumCallData
-	replyChan       <-chan response
+	data            QuorumCallData[idType]
+	replyChan       <-chan response[idType]
 	expectedReplies int
 }
 
 // AsyncCall starts an asynchronous quorum call, returning an Async object that can be used to retrieve the results.
 //
 // This function should only be used by generated code.
-func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
+func (c RawConfiguration[idType]) AsyncCall(ctx context.Context, d QuorumCallData[idType]) *Async {
 	expectedReplies := len(c)
 	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
-	replyChan := make(chan response, expectedReplies)
+	replyChan := make(chan response[idType], expectedReplies)
 
 	for _, n := range c {
 		msg := d.Message
@@ -63,7 +64,7 @@ func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Asyn
 
 	fut := &Async{c: make(chan struct{}, 1)}
 
-	go c.handleAsyncCall(ctx, fut, asyncCallState{
+	go c.handleAsyncCall(ctx, fut, asyncCallState[idType]{
 		md:              md,
 		data:            d,
 		replyChan:       replyChan,
@@ -73,21 +74,21 @@ func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Asyn
 	return fut
 }
 
-func (c RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
+func (c RawConfiguration[idType]) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState[idType]) {
 	defer close(fut.c)
 
 	var (
 		resp    protoreflect.ProtoMessage
-		errs    []nodeError
+		errs    []nodeError[idType]
 		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
+		replies = make(map[idType]protoreflect.ProtoMessage)
 	)
 
 	for {
 		select {
 		case r := <-state.replyChan:
 			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
+				errs = append(errs, nodeError[idType]{nodeID: r.nid, cause: r.err})
 				break
 			}
 			replies[r.nid] = r.msg
@@ -96,11 +97,11 @@ func (c RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state
 				return
 			}
 		case <-ctx.Done():
-			fut.reply, fut.err = resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
+			fut.reply, fut.err = resp, QuorumCallError[idType]{cause: ctx.Err(), errors: errs, replies: len(replies)}
 			return
 		}
 		if len(errs)+len(replies) == state.expectedReplies {
-			fut.reply, fut.err = resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
+			fut.reply, fut.err = resp, QuorumCallError[idType]{cause: Incomplete, errors: errs, replies: len(replies)}
 			return
 		}
 	}

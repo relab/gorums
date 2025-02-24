@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"hash/fnv"
@@ -20,59 +21,60 @@ const nilAngleString = "<nil>"
 //
 // This struct is intended to be used by generated code.
 // You should use the generated `Node` struct instead.
-type RawNode struct {
+type RawNode[idType cmp.Ordered] struct {
 	// Only assigned at creation.
-	id     uint32
+	id     idType
 	addr   string
 	conn   *grpc.ClientConn
 	cancel func()
-	mgr    *RawManager
+	mgr    *RawManager[idType]
 
 	// the default channel
-	channel *channel
+	channel *channel[idType]
 }
 
 // NewRawNode returns a new node for the provided address.
-func NewRawNode(addr string) (*RawNode, error) {
+func NewRawNode[idType cmp.Ordered](addr string) (*RawNode[idType], error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
-	return &RawNode{
-		id:   h.Sum32(),
+	var id idType
+	return &RawNode[idType]{
+		id:   id, // h.Sum32()
 		addr: tcpAddr.String(),
 	}, nil
 }
 
 // NewRawNodeWithID returns a new node for the provided address and id.
-func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
+func NewRawNodeWithID[idType cmp.Ordered](addr string, id idType) (*RawNode[idType], error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	return &RawNode{
+	return &RawNode[idType]{
 		id:   id,
 		addr: tcpAddr.String(),
 	}, nil
 }
 
 // connect to this node and associate it with the manager.
-func (n *RawNode) connect(mgr *RawManager) error {
+func (n *RawNode[idType]) connect(mgr *RawManager[idType]) error {
 	n.mgr = mgr
 	if n.mgr.opts.noConnect {
 		return nil
 	}
 	n.channel = newChannel(n)
 	if err := n.channel.connect(); err != nil {
-		return nodeError{nodeID: n.id, cause: err}
+		return nodeError[idType]{nodeID: n.id, cause: err}
 	}
 	return nil
 }
 
 // dial the node and close the current connection.
-func (n *RawNode) dial() error {
+func (n *RawNode[idType]) dial() error {
 	if n.conn != nil {
 		// close the current connection before dialing again.
 		n.conn.Close()
@@ -89,7 +91,7 @@ func (n *RawNode) dial() error {
 // This method must be called for each connection to ensure
 // fresh contexts. Reusing contexts could result in reusing
 // a cancelled context.
-func (n *RawNode) newContext() context.Context {
+func (n *RawNode[idType]) newContext() context.Context {
 	md := n.mgr.opts.metadata.Copy()
 	if n.mgr.opts.perNodeMD != nil {
 		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
@@ -100,28 +102,29 @@ func (n *RawNode) newContext() context.Context {
 }
 
 // close this node.
-func (n *RawNode) close() error {
+func (n *RawNode[idType]) close() error {
 	// important to cancel first to stop goroutines
 	n.cancel()
 	if n.conn == nil {
 		return nil
 	}
 	if err := n.conn.Close(); err != nil {
-		return nodeError{nodeID: n.id, cause: err}
+		return nodeError[idType]{nodeID: n.id, cause: err}
 	}
 	return nil
 }
 
 // ID returns the ID of n.
-func (n *RawNode) ID() uint32 {
+func (n *RawNode[idType]) ID() idType {
 	if n != nil {
 		return n.id
 	}
-	return 0
+	var zero idType
+	return zero
 }
 
 // Address returns network address of n.
-func (n *RawNode) Address() string {
+func (n *RawNode[idType]) Address() string {
 	if n != nil {
 		return n.addr
 	}
@@ -129,7 +132,7 @@ func (n *RawNode) Address() string {
 }
 
 // Host returns the network host of n.
-func (n *RawNode) Host() string {
+func (n *RawNode[idType]) Host() string {
 	if n == nil {
 		return nilAngleString
 	}
@@ -138,7 +141,7 @@ func (n *RawNode) Host() string {
 }
 
 // Port returns network port of n.
-func (n *RawNode) Port() string {
+func (n *RawNode[idType]) Port() string {
 	if n != nil {
 		_, port, _ := net.SplitHostPort(n.addr)
 		return port
@@ -146,7 +149,7 @@ func (n *RawNode) Port() string {
 	return nilAngleString
 }
 
-func (n *RawNode) String() string {
+func (n *RawNode[idType]) String() string {
 	if n != nil {
 		return fmt.Sprintf("addr: %s", n.addr)
 	}
@@ -155,53 +158,53 @@ func (n *RawNode) String() string {
 
 // FullString returns a more descriptive string representation of n that
 // includes id, network address and latency information.
-func (n *RawNode) FullString() string {
+func (n *RawNode[idType]) FullString() string {
 	if n != nil {
-		return fmt.Sprintf("node %d | addr: %s", n.id, n.addr)
+		return fmt.Sprintf("node %v | addr: %s", n.id, n.addr)
 	}
 	return nilAngleString
 }
 
 // LastErr returns the last error encountered (if any) for this node.
-func (n *RawNode) LastErr() error {
+func (n *RawNode[idType]) LastErr() error {
 	return n.channel.lastErr()
 }
 
 // Latency returns the latency between the client and this node.
-func (n *RawNode) Latency() time.Duration {
+func (n *RawNode[idType]) Latency() time.Duration {
 	return n.channel.channelLatency()
 }
 
-type lessFunc func(n1, n2 *RawNode) bool
+type lessFunc[idType cmp.Ordered] func(n1, n2 *RawNode[idType]) bool
 
 // MultiSorter implements the Sort interface, sorting the nodes within.
-type MultiSorter struct {
-	nodes []*RawNode
-	less  []lessFunc
+type MultiSorter[idType cmp.Ordered] struct {
+	nodes []*RawNode[idType]
+	less  []lessFunc[idType]
 }
 
 // Sort sorts the argument slice according to the less functions passed to
 // OrderedBy.
-func (ms *MultiSorter) Sort(nodes []*RawNode) {
+func (ms *MultiSorter[idType]) Sort(nodes []*RawNode[idType]) {
 	ms.nodes = nodes
 	sort.Sort(ms)
 }
 
 // OrderedBy returns a Sorter that sorts using the less functions, in order.
 // Call its Sort method to sort the data.
-func OrderedBy(less ...lessFunc) *MultiSorter {
-	return &MultiSorter{
+func OrderedBy[idType cmp.Ordered](less ...lessFunc[idType]) *MultiSorter[idType] {
+	return &MultiSorter[idType]{
 		less: less,
 	}
 }
 
 // Len is part of sort.Interface.
-func (ms *MultiSorter) Len() int {
+func (ms *MultiSorter[idType]) Len() int {
 	return len(ms.nodes)
 }
 
 // Swap is part of sort.Interface.
-func (ms *MultiSorter) Swap(i, j int) {
+func (ms *MultiSorter[idType]) Swap(i, j int) {
 	ms.nodes[i], ms.nodes[j] = ms.nodes[j], ms.nodes[i]
 }
 
@@ -210,7 +213,7 @@ func (ms *MultiSorter) Swap(i, j int) {
 // Less. Note that it can call the less functions twice per call. We
 // could change the functions to return -1, 0, 1 and reduce the
 // number of calls for greater efficiency: an exercise for the reader.
-func (ms *MultiSorter) Less(i, j int) bool {
+func (ms *MultiSorter[idType]) Less(i, j int) bool {
 	p, q := ms.nodes[i], ms.nodes[j]
 	// Try all but the last comparison.
 	var k int
@@ -232,13 +235,13 @@ func (ms *MultiSorter) Less(i, j int) bool {
 }
 
 // ID sorts nodes by their identifier in increasing order.
-var ID = func(n1, n2 *RawNode) bool {
+func ID[idType cmp.Ordered](n1, n2 *RawNode[idType]) bool {
 	return n1.id < n2.id
 }
 
 // Port sorts nodes by their port number in increasing order.
 // Warning: This function may be removed in the future.
-var Port = func(n1, n2 *RawNode) bool {
+func Port[idType cmp.Ordered](n1, n2 *RawNode[idType]) bool {
 	p1, _ := strconv.Atoi(n1.Port())
 	p2, _ := strconv.Atoi(n2.Port())
 	return p1 < p2
@@ -246,7 +249,7 @@ var Port = func(n1, n2 *RawNode) bool {
 
 // LastNodeError sorts nodes by their LastErr() status in increasing order. A
 // node with LastErr() != nil is larger than a node with LastErr() == nil.
-var LastNodeError = func(n1, n2 *RawNode) bool {
+func LastNodeError[idType cmp.Ordered](n1, n2 *RawNode[idType]) bool {
 	if n1.channel.lastErr() != nil && n2.channel.lastErr() == nil {
 		return false
 	}
