@@ -1,6 +1,7 @@
 package dev
 
 import (
+	"cmp"
 	"fmt"
 
 	"github.com/relab/gorums"
@@ -8,10 +9,10 @@ import (
 
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
-type Configuration struct {
-	gorums.RawConfiguration
-	qspec QuorumSpec
-	nodes []*Node
+type Configuration[idType cmp.Ordered] struct {
+	gorums.RawConfiguration[idType]
+	qspec QuorumSpec[idType]
+	nodes []*Node[idType]
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -20,20 +21,20 @@ type Configuration struct {
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
+func ConfigurationFromRaw[idType cmp.Ordered](rawCfg gorums.RawConfiguration[idType], qspec QuorumSpec[idType]) (*Configuration[idType], error) {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
+	if _, empty := test.(QuorumSpec[idType]); !empty && qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
-	newCfg := &Configuration{
+	newCfg := &Configuration[idType]{
 		RawConfiguration: rawCfg,
 		qspec:            qspec,
 	}
 	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, newCfg.Size())
+	newCfg.nodes = make([]*Node[idType], newCfg.Size())
 	for i, n := range rawCfg {
-		newCfg.nodes[i] = &Node{n}
+		newCfg.nodes[i] = &Node[idType]{n}
 	}
 	return newCfg, nil
 }
@@ -42,17 +43,17 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Co
 // order as they were provided in the creation of the Manager.
 //
 // NOTE: mutating the returned slice is not supported.
-func (c *Configuration) Nodes() []*Node {
+func (c *Configuration[idType]) Nodes() []*Node[idType] {
 	return c.nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+func (c Configuration[idType]) And(d *Configuration[idType]) gorums.NodeListOption[idType] {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+func (c Configuration[idType]) Except(rm *Configuration[idType]) gorums.NodeListOption[idType] {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }

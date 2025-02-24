@@ -96,7 +96,7 @@ func (o nodeIDs[idType]) newConfig(mgr *RawManager[idType]) (nodes RawConfigurat
 		node, found := mgr.Node(id)
 		if !found {
 			// Node IDs must have been registered previously
-			return nil, fmt.Errorf("config: node %d not found", id)
+			return nil, fmt.Errorf("config: node %v not found", id)
 		}
 		nodes = append(nodes, node)
 	}

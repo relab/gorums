@@ -21,7 +21,7 @@ const (
 
 // Unicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (n *Node) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+func (n *Node[idType]) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
 	cd := gorums.CallData{
 		Message: in,
 		Method:  "dev.ZorumsService.Unicast",
@@ -35,7 +35,7 @@ var _ emptypb.Empty
 
 // Unicast2 is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (n *Node) Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+func (n *Node[idType]) Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
 	cd := gorums.CallData{
 		Message: in,
 		Method:  "dev.ZorumsService.Unicast2",

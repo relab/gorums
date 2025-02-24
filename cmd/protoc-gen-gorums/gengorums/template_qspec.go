@@ -6,11 +6,12 @@ import (
 )
 
 var qspecInterface = `
+{{$cmpOrdered := use "cmp.Ordered" .GenFile}}
 {{$genFile := .GenFile}}
 {{$configOpt := use "gorums.ConfigOption" .GenFile}}
 {{- range qspecServices .Services}}
 // QuorumSpec is the interface of quorum functions for {{.GoName}}.
-type QuorumSpec interface {
+type QuorumSpec[idType {{$cmpOrdered}}] interface {
 	{{$configOpt}}
 
 {{range qspecMethods .Methods -}}
@@ -24,7 +25,7 @@ type QuorumSpec interface {
 	// supplied to the {{$method}} method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *{{$in}}'.
-	{{$method}}QF(in *{{$in}}, replies map[uint32]*{{$out}}) (*{{$customOut}}{{withCorrectable . ", int"}}, bool)
+	{{$method}}QF(in *{{$in}}, replies map[idType]*{{$out}}) (*{{$customOut}}{{withCorrectable . ", int"}}, bool)
 {{end}}
 }
 {{end}}

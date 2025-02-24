@@ -1,9 +1,10 @@
 package gengorums
 
 var internalOutDataType = `
+{{$cmpOrdered := use "cmp.Ordered" .GenFile}}
 {{range $intOut, $out := mapInternalOutType .GenFile .Services}}
-type {{$intOut}} struct {
-	nid   uint32
+type {{$intOut}}[idType {{$cmpOrdered}}] struct {
+	nid   idType
 	reply *{{$out}}
 	err   error
 }

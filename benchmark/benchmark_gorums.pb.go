@@ -7,6 +7,7 @@
 package benchmark
 
 import (
+	cmp "cmp"
 	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
@@ -24,10 +25,10 @@ const (
 
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
-type Configuration struct {
-	gorums.RawConfiguration
-	qspec QuorumSpec
-	nodes []*Node
+type Configuration[idType cmp.Ordered] struct {
+	gorums.RawConfiguration[idType]
+	qspec QuorumSpec[idType]
+	nodes []*Node[idType]
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -36,20 +37,20 @@ type Configuration struct {
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
+func ConfigurationFromRaw[idType cmp.Ordered](rawCfg gorums.RawConfiguration[idType], qspec QuorumSpec[idType]) (*Configuration[idType], error) {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
+	if _, empty := test.(QuorumSpec[idType]); !empty && qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
-	newCfg := &Configuration{
+	newCfg := &Configuration[idType]{
 		RawConfiguration: rawCfg,
 		qspec:            qspec,
 	}
 	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, newCfg.Size())
+	newCfg.nodes = make([]*Node[idType], newCfg.Size())
 	for i, n := range rawCfg {
-		newCfg.nodes[i] = &Node{n}
+		newCfg.nodes[i] = &Node[idType]{n}
 	}
 	return newCfg, nil
 }
@@ -58,18 +59,18 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Co
 // order as they were provided in the creation of the Manager.
 //
 // NOTE: mutating the returned slice is not supported.
-func (c *Configuration) Nodes() []*Node {
+func (c *Configuration[idType]) Nodes() []*Node[idType] {
 	return c.nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+func (c Configuration[idType]) And(d *Configuration[idType]) gorums.NodeListOption[idType] {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+func (c Configuration[idType]) Except(rm *Configuration[idType]) gorums.NodeListOption[idType] {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
 
@@ -81,15 +82,15 @@ func init() {
 
 // Manager maintains a connection pool of nodes on
 // which quorum calls can be performed.
-type Manager struct {
-	*gorums.RawManager
+type Manager[idType cmp.Ordered] struct {
+	*gorums.RawManager[idType]
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
-func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return &Manager{
+func NewManager[idType cmp.Ordered](opts ...gorums.ManagerOption[idType]) *Manager[idType] {
+	return &Manager[idType]{
 		RawManager: gorums.NewRawManager(opts...),
 	}
 }
@@ -101,19 +102,19 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
+func (m *Manager[idType]) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration[idType], err error) {
 	if len(opts) < 1 || len(opts) > 2 {
 		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
 	}
-	c = &Configuration{}
+	c = &Configuration[idType]{}
 	for _, opt := range opts {
 		switch v := opt.(type) {
-		case gorums.NodeListOption:
+		case gorums.NodeListOption[idType]:
 			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
 			if err != nil {
 				return nil, err
 			}
-		case QuorumSpec:
+		case QuorumSpec[idType]:
 			// Must be last since v may match QuorumSpec if it is interface{}
 			c.qspec = v
 		default:
@@ -122,44 +123,44 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	}
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+	if _, empty := test.(QuorumSpec[idType]); !empty && c.qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
 	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
+	c.nodes = make([]*Node[idType], c.Size())
 	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
+		c.nodes[i] = &Node[idType]{n}
 	}
 	return c, nil
 }
 
 // Nodes returns a slice of available nodes on this manager.
 // IDs are returned in the order they were added at creation of the manager.
-func (m *Manager) Nodes() []*Node {
+func (m *Manager[idType]) Nodes() []*Node[idType] {
 	gorumsNodes := m.RawManager.Nodes()
-	nodes := make([]*Node, len(gorumsNodes))
+	nodes := make([]*Node[idType], len(gorumsNodes))
 	for i, n := range gorumsNodes {
-		nodes[i] = &Node{n}
+		nodes[i] = &Node[idType]{n}
 	}
 	return nodes
 }
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
-type Node struct {
-	*gorums.RawNode
+type Node[idType cmp.Ordered] struct {
+	*gorums.RawNode[idType]
 }
 
 // AsyncQuorumCall asynchronously invokes a quorum call on configuration c
 // and returns a AsyncEcho, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "benchmark.Benchmark.AsyncQuorumCall",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Echo, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Echo, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Echo)
 		}
@@ -175,8 +176,8 @@ var _ emptypb.Empty
 
 // Multicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "benchmark.Benchmark.Multicast",
 	}
@@ -185,7 +186,7 @@ func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg, opts ...gor
 }
 
 // QuorumSpec is the interface of quorum functions for Benchmark.
-type QuorumSpec interface {
+type QuorumSpec[idType cmp.Ordered] interface {
 	gorums.ConfigOption
 
 	// StartServerBenchmarkQF is the quorum function for the StartServerBenchmark
@@ -193,60 +194,60 @@ type QuorumSpec interface {
 	// supplied to the StartServerBenchmark method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *StartRequest'.
-	StartServerBenchmarkQF(in *StartRequest, replies map[uint32]*StartResponse) (*StartResponse, bool)
+	StartServerBenchmarkQF(in *StartRequest, replies map[idType]*StartResponse) (*StartResponse, bool)
 
 	// StopServerBenchmarkQF is the quorum function for the StopServerBenchmark
 	// quorum call method. The in parameter is the request object
 	// supplied to the StopServerBenchmark method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *StopRequest'.
-	StopServerBenchmarkQF(in *StopRequest, replies map[uint32]*Result) (*Result, bool)
+	StopServerBenchmarkQF(in *StopRequest, replies map[idType]*Result) (*Result, bool)
 
 	// StartBenchmarkQF is the quorum function for the StartBenchmark
 	// quorum call method. The in parameter is the request object
 	// supplied to the StartBenchmark method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *StartRequest'.
-	StartBenchmarkQF(in *StartRequest, replies map[uint32]*StartResponse) (*StartResponse, bool)
+	StartBenchmarkQF(in *StartRequest, replies map[idType]*StartResponse) (*StartResponse, bool)
 
 	// StopBenchmarkQF is the quorum function for the StopBenchmark
 	// quorum call method. The in parameter is the request object
 	// supplied to the StopBenchmark method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *StopRequest'.
-	StopBenchmarkQF(in *StopRequest, replies map[uint32]*MemoryStat) (*MemoryStatList, bool)
+	StopBenchmarkQF(in *StopRequest, replies map[idType]*MemoryStat) (*MemoryStatList, bool)
 
 	// QuorumCallQF is the quorum function for the QuorumCall
 	// quorum call method. The in parameter is the request object
 	// supplied to the QuorumCall method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Echo'.
-	QuorumCallQF(in *Echo, replies map[uint32]*Echo) (*Echo, bool)
+	QuorumCallQF(in *Echo, replies map[idType]*Echo) (*Echo, bool)
 
 	// AsyncQuorumCallQF is the quorum function for the AsyncQuorumCall
 	// asynchronous quorum call method. The in parameter is the request object
 	// supplied to the AsyncQuorumCall method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Echo'.
-	AsyncQuorumCallQF(in *Echo, replies map[uint32]*Echo) (*Echo, bool)
+	AsyncQuorumCallQF(in *Echo, replies map[idType]*Echo) (*Echo, bool)
 
 	// SlowServerQF is the quorum function for the SlowServer
 	// quorum call method. The in parameter is the request object
 	// supplied to the SlowServer method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Echo'.
-	SlowServerQF(in *Echo, replies map[uint32]*Echo) (*Echo, bool)
+	SlowServerQF(in *Echo, replies map[idType]*Echo) (*Echo, bool)
 }
 
 // StartServerBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) StartServerBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "benchmark.Benchmark.StartServerBenchmark",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*StartResponse, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*StartResponse, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*StartResponse)
 		}
@@ -262,13 +263,13 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 
 // StopServerBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *Result, err error) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *Result, err error) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "benchmark.Benchmark.StopServerBenchmark",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Result, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Result, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Result)
 		}
@@ -284,13 +285,13 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 
 // StartBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) StartBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "benchmark.Benchmark.StartBenchmark",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*StartResponse, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*StartResponse, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*StartResponse)
 		}
@@ -306,13 +307,13 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest) (r
 
 // StopBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (resp *MemoryStatList, err error) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) StopBenchmark(ctx context.Context, in *StopRequest) (resp *MemoryStatList, err error) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "benchmark.Benchmark.StopBenchmark",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*MemoryStat, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*MemoryStat, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*MemoryStat)
 		}
@@ -327,13 +328,13 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest) (res
 }
 
 // benchmarks
-func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, err error) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, err error) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "benchmark.Benchmark.QuorumCall",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Echo, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Echo, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Echo)
 		}
@@ -349,13 +350,13 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo) (resp *Echo, e
 
 // SlowServer is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) SlowServer(ctx context.Context, in *Echo) (resp *Echo, err error) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) SlowServer(ctx context.Context, in *Echo) (resp *Echo, err error) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "benchmark.Benchmark.SlowServer",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Echo, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Echo, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Echo)
 		}
@@ -431,26 +432,26 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl Benchmark) {
 	})
 }
 
-type internalEcho struct {
-	nid   uint32
+type internalEcho[idType cmp.Ordered] struct {
+	nid   idType
 	reply *Echo
 	err   error
 }
 
-type internalMemoryStat struct {
-	nid   uint32
+type internalMemoryStat[idType cmp.Ordered] struct {
+	nid   idType
 	reply *MemoryStat
 	err   error
 }
 
-type internalResult struct {
-	nid   uint32
+type internalResult[idType cmp.Ordered] struct {
+	nid   idType
 	reply *Result
 	err   error
 }
 
-type internalStartResponse struct {
-	nid   uint32
+type internalStartResponse[idType cmp.Ordered] struct {
+	nid   idType
 	reply *StartResponse
 	err   error
 }

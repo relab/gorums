@@ -37,7 +37,7 @@ type (
 	serverFunc  func(context.Context, *TimedMsg)
 )
 
-func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error) {
+func runQCBenchmark(opts Options, cfg *Configuration[uint32], f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -103,7 +103,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 	return result, nil
 }
 
-func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Result, error) {
+func runAsyncQCBenchmark(opts Options, cfg *Configuration[uint32], f asyncQCFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -187,7 +187,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	return result, nil
 }
 
-func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result, error) {
+func runServerBenchmark(opts Options, cfg *Configuration[uint32], f serverFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	payload := make([]byte, opts.Payload)
@@ -241,7 +241,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 }
 
 // GetBenchmarks returns a list of Benchmarks that can be performed on the configuration
-func GetBenchmarks(cfg *Configuration) []Bench {
+func GetBenchmarks(cfg *Configuration[uint32]) []Bench {
 	m := []Bench{
 		{
 			Name:        "QuorumCall",
@@ -270,7 +270,7 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 }
 
 // RunBenchmarks runs all the benchmarks that match the given regex with the given options
-func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg *Configuration) ([]*Result, error) {
+func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg *Configuration[uint32]) ([]*Result, error) {
 	benchmarks := GetBenchmarks(cfg)
 	var results []*Result
 	for _, b := range benchmarks {

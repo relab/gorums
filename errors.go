@@ -49,5 +49,5 @@ type nodeError[idType cmp.Ordered] struct {
 }
 
 func (e nodeError[idType]) Error() string {
-	return fmt.Sprintf("node %d: %v", e.nodeID, e.cause)
+	return fmt.Sprintf("node %v: %v", e.nodeID, e.cause)
 }

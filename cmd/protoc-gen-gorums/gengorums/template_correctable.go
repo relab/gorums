@@ -27,13 +27,13 @@ var correctableCallComment = `
 var correctableVar = `
 {{$correctableOut := outType .Method $customOut}}
 {{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
-{{$callData := use "gorums.CorrectableCallData" .GenFile}}
+{{$callData := use "gorums.CorrectableCallData[idType]" .GenFile}}
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
 {{$context := use "context.Context" .GenFile}}
 `
 
-var correctableSignature = `func (c *Configuration) {{$method}}(` +
+var correctableSignature = `func (c *Configuration[idType]) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
 	`*{{$correctableOut}} {`
@@ -43,15 +43,15 @@ var correctableBody = `	cd := {{$callData}}{
 		Method:  "{{$fullName}}",
 		ServerStream: {{correctableStream .Method}},
 	}
-	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, int, bool) {
-		r := make(map[uint32]*{{$out}}, len(replies))
+	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[idType]{{$protoMessage}}) ({{$protoMessage}}, int, bool) {
+		r := make(map[idType]*{{$out}}, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*{{$out}})
 		}
 		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
 	}
 {{- if hasPerNodeArg .Method}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid idType) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}
 {{- end}}

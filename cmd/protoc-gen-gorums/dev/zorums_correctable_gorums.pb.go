@@ -21,14 +21,14 @@ const (
 )
 
 // Correctable plain.
-func (c *Configuration) Correctable(ctx context.Context, in *Request) *CorrectableResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) Correctable(ctx context.Context, in *Request) *CorrectableResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.Correctable",
 		ServerStream: false,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
@@ -40,20 +40,20 @@ func (c *Configuration) Correctable(ctx context.Context, in *Request) *Correctab
 }
 
 // CorrectablePerNodeArg with per_node_arg option.
-func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectablePerNodeArg(ctx context.Context, in *Request, f func(*Request, idType) *Request) *CorrectableResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectablePerNodeArg",
 		ServerStream: false,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
 		return c.qspec.CorrectablePerNodeArgQF(req.(*Request), r)
 	}
-	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid idType) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
 	}
 
@@ -62,14 +62,14 @@ func (c *Configuration) CorrectablePerNodeArg(ctx context.Context, in *Request, 
 }
 
 // CorrectableCustomReturnType with custom_return_type option.
-func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Request) *CorrectableMyResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableCustomReturnType(ctx context.Context, in *Request) *CorrectableMyResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableCustomReturnType",
 		ServerStream: false,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
@@ -81,20 +81,20 @@ func (c *Configuration) CorrectableCustomReturnType(ctx context.Context, in *Req
 }
 
 // CorrectableCombo with all supported options.
-func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableMyResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableCombo(ctx context.Context, in *Request, f func(*Request, idType) *Request) *CorrectableMyResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableCombo",
 		ServerStream: false,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
 		return c.qspec.CorrectableComboQF(req.(*Request), r)
 	}
-	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid idType) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
 	}
 
@@ -103,14 +103,14 @@ func (c *Configuration) CorrectableCombo(ctx context.Context, in *Request, f fun
 }
 
 // CorrectableEmpty for testing imported message type.
-func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *CorrectableEmpty {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableEmpty(ctx context.Context, in *Request) *CorrectableEmpty {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableEmpty",
 		ServerStream: false,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*emptypb.Empty, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*emptypb.Empty, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*emptypb.Empty)
 		}
@@ -123,14 +123,14 @@ func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *Corr
 
 // CorrectableEmpty2 for testing imported message type; with same return
 // type as Correctable: Response.
-func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableEmpty2",
 		ServerStream: false,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
@@ -142,14 +142,14 @@ func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty
 }
 
 // CorrectableStream plain.
-func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *CorrectableStreamResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableStream(ctx context.Context, in *Request) *CorrectableStreamResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStream",
 		ServerStream: true,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
@@ -161,20 +161,20 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *Cor
 }
 
 // CorrectablePerNodeArg with per_node_arg option.
-func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableStreamResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, idType) *Request) *CorrectableStreamResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamPerNodeArg",
 		ServerStream: true,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
 		return c.qspec.CorrectableStreamPerNodeArgQF(req.(*Request), r)
 	}
-	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid idType) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
 	}
 
@@ -183,14 +183,14 @@ func (c *Configuration) CorrectableStreamPerNodeArg(ctx context.Context, in *Req
 }
 
 // CorrectableCustomReturnType with custom_return_type option.
-func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, in *Request) *CorrectableStreamMyResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableStreamCustomReturnType(ctx context.Context, in *Request) *CorrectableStreamMyResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamCustomReturnType",
 		ServerStream: true,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
@@ -202,20 +202,20 @@ func (c *Configuration) CorrectableStreamCustomReturnType(ctx context.Context, i
 }
 
 // CorrectableCombo with all supported options.
-func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableStreamMyResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableStreamCombo(ctx context.Context, in *Request, f func(*Request, idType) *Request) *CorrectableStreamMyResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamCombo",
 		ServerStream: true,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
 		return c.qspec.CorrectableStreamComboQF(req.(*Request), r)
 	}
-	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid idType) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
 	}
 
@@ -224,14 +224,14 @@ func (c *Configuration) CorrectableStreamCombo(ctx context.Context, in *Request,
 }
 
 // CorrectableEmpty for testing imported message type.
-func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request) *CorrectableStreamEmpty {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableStreamEmpty(ctx context.Context, in *Request) *CorrectableStreamEmpty {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamEmpty",
 		ServerStream: true,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*emptypb.Empty, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*emptypb.Empty, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*emptypb.Empty)
 		}
@@ -244,14 +244,14 @@ func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request)
 
 // CorrectableEmpty2 for testing imported message type; with same return
 // type as Correctable: Response.
-func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "dev.ZorumsService.CorrectableStreamEmpty2",
 		ServerStream: true,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}

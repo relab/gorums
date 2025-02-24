@@ -59,12 +59,12 @@ func TestMetadata(t *testing.T) {
 	})
 
 	mgr := NewManager(
-		gorums.WithMetadata(md),
-		gorums.WithGrpcDialOptions(
+		gorums.WithMetadata[uint32](md),
+		gorums.WithGrpcDialOptions[uint32](
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList[uint32](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,11 +92,11 @@ func TestPerNodeMetadata(t *testing.T) {
 
 	mgr := NewManager(
 		gorums.WithPerNodeMetadata(perNodeMD),
-		gorums.WithGrpcDialOptions(
+		gorums.WithGrpcDialOptions[uint32](
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList[uint32](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,11 +118,11 @@ func TestCanGetPeerInfo(t *testing.T) {
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
+		gorums.WithGrpcDialOptions[uint32](
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList[uint32](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

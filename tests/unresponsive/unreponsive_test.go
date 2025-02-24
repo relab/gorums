@@ -29,11 +29,11 @@ func TestUnresponsive(t *testing.T) {
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
+		gorums.WithGrpcDialOptions[uint32](
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	_, err := mgr.NewConfiguration(gorums.WithNodeList[uint32](addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

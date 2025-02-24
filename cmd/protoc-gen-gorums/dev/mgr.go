@@ -1,6 +1,7 @@
 package dev
 
 import (
+	"cmp"
 	"fmt"
 
 	"github.com/relab/gorums"
@@ -15,15 +16,15 @@ func init() {
 
 // Manager maintains a connection pool of nodes on
 // which quorum calls can be performed.
-type Manager struct {
-	*gorums.RawManager
+type Manager[idType cmp.Ordered] struct {
+	*gorums.RawManager[idType]
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
-func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return &Manager{
+func NewManager[idType cmp.Ordered](opts ...gorums.ManagerOption[idType]) *Manager[idType] {
+	return &Manager[idType]{
 		RawManager: gorums.NewRawManager(opts...),
 	}
 }
@@ -35,19 +36,19 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
+func (m *Manager[idType]) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration[idType], err error) {
 	if len(opts) < 1 || len(opts) > 2 {
 		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
 	}
-	c = &Configuration{}
+	c = &Configuration[idType]{}
 	for _, opt := range opts {
 		switch v := opt.(type) {
-		case gorums.NodeListOption:
+		case gorums.NodeListOption[idType]:
 			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
 			if err != nil {
 				return nil, err
 			}
-		case QuorumSpec:
+		case QuorumSpec[idType]:
 			// Must be last since v may match QuorumSpec if it is interface{}
 			c.qspec = v
 		default:
@@ -56,24 +57,24 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	}
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+	if _, empty := test.(QuorumSpec[idType]); !empty && c.qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
 	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
+	c.nodes = make([]*Node[idType], c.Size())
 	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
+		c.nodes[i] = &Node[idType]{n}
 	}
 	return c, nil
 }
 
 // Nodes returns a slice of available nodes on this manager.
 // IDs are returned in the order they were added at creation of the manager.
-func (m *Manager) Nodes() []*Node {
+func (m *Manager[idType]) Nodes() []*Node[idType] {
 	gorumsNodes := m.RawManager.Nodes()
-	nodes := make([]*Node, len(gorumsNodes))
+	nodes := make([]*Node[idType], len(gorumsNodes))
 	for i, n := range gorumsNodes {
-		nodes[i] = &Node{n}
+		nodes[i] = &Node[idType]{n}
 	}
 	return nodes
 }

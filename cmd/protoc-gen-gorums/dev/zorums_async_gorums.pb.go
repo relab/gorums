@@ -21,13 +21,13 @@ const (
 )
 
 // QuorumCallAsync plain.
-func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request) *AsyncResponse {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) QuorumCallAsync(ctx context.Context, in *Request) *AsyncResponse {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsync",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
@@ -39,19 +39,19 @@ func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request) *Async
 }
 
 // QuorumCallAsyncPerNodeArg with per_node_arg option.
-func (c *Configuration) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *AsyncResponse {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Request, f func(*Request, idType) *Request) *AsyncResponse {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncPerNodeArg",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
 		return c.qspec.QuorumCallAsyncPerNodeArgQF(req.(*Request), r)
 	}
-	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid idType) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
 	}
 
@@ -60,13 +60,13 @@ func (c *Configuration) QuorumCallAsyncPerNodeArg(ctx context.Context, in *Reque
 }
 
 // QuorumCallAsyncCustomReturnType with custom_return_type option.
-func (c *Configuration) QuorumCallAsyncCustomReturnType(ctx context.Context, in *Request) *AsyncMyResponse {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) QuorumCallAsyncCustomReturnType(ctx context.Context, in *Request) *AsyncMyResponse {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncCustomReturnType",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
@@ -78,19 +78,19 @@ func (c *Configuration) QuorumCallAsyncCustomReturnType(ctx context.Context, in 
 }
 
 // QuorumCallAsyncCombo with all supported options.
-func (c *Configuration) QuorumCallAsyncCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *AsyncMyResponse {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) QuorumCallAsyncCombo(ctx context.Context, in *Request, f func(*Request, idType) *Request) *AsyncMyResponse {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncCombo",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
 		return c.qspec.QuorumCallAsyncComboQF(req.(*Request), r)
 	}
-	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid idType) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
 	}
 
@@ -99,13 +99,13 @@ func (c *Configuration) QuorumCallAsyncCombo(ctx context.Context, in *Request, f
 }
 
 // QuorumCallAsync2 plain; with same return type: Response.
-func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request) *AsyncResponse {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) QuorumCallAsync2(ctx context.Context, in *Request) *AsyncResponse {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsync2",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}
@@ -117,13 +117,13 @@ func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request) *Asyn
 }
 
 // QuorumCallAsyncEmpty for testing imported message type.
-func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *AsyncEmpty {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *AsyncEmpty {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncEmpty",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*emptypb.Empty, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*emptypb.Empty, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*emptypb.Empty)
 		}
@@ -136,13 +136,13 @@ func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *
 
 // QuorumCallAsyncEmpty2 for testing imported message type; with same return
 // type as QuorumCallAsync: Response.
-func (c *Configuration) QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) *AsyncResponse {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) *AsyncResponse {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.QuorumCallAsyncEmpty2",
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
-		r := make(map[uint32]*Response, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool) {
+		r := make(map[idType]*Response, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*Response)
 		}

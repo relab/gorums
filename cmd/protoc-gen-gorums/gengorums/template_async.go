@@ -21,7 +21,7 @@ var asyncCallComment = `
 {{end -}}
 `
 
-var asyncSignature = `func (c *Configuration) {{$method}}(` +
+var asyncSignature = `func (c *Configuration[idType]) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
 	`*{{$asyncOut}} {`
@@ -34,15 +34,15 @@ var asyncBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
 	}
-	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
-		r := make(map[uint32]*{{$out}}, len(replies))
+	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[idType]{{$protoMessage}}) ({{$protoMessage}}, bool) {
+		r := make(map[idType]*{{$out}}, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*{{$out}})
 		}
 		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
 	}
 {{- if hasPerNodeArg .Method}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid idType) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}
 {{- end}}

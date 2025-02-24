@@ -1,6 +1,6 @@
 package gengorums
 
-var rpcSignature = `func (n *Node) {{$method}}(` +
+var rpcSignature = `func (n *Node[idType]) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$customOut}}, err error) {
 `
@@ -18,7 +18,7 @@ var rpcBody = `	cd := {{$callData}}{
 	}
 {{- if hasPerNodeArg .Method}}
 	{{$protoMessage := use "protoreflect.ProtoMessage" $genFile}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid idType) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}
 {{- end}}

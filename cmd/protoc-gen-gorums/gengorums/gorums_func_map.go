@@ -24,6 +24,7 @@ var importMap = map[string]protogen.GoImportPath{
 	"sync":         protogen.GoImportPath("sync"),
 	"atomic":       protogen.GoImportPath("sync/atomic"),
 	"context":      protogen.GoImportPath("context"),
+	"cmp":          protogen.GoImportPath("cmp"),
 	"trace":        protogen.GoImportPath("golang.org/x/net/trace"),
 	"grpc":         protogen.GoImportPath("google.golang.org/grpc"),
 	"codes":        protogen.GoImportPath("google.golang.org/grpc/codes"),
@@ -72,7 +73,7 @@ var funcMap = template.FuncMap{
 	"perNodeFnType": func(g *protogen.GeneratedFile, method *protogen.Method, arg string) string {
 		if hasMethodOption(method, gorums.E_PerNodeArg) {
 			inType := g.QualifiedGoIdent(method.Input.GoIdent)
-			return arg + " func(*" + inType + ", uint32) *" + inType
+			return arg + " func(*" + inType + ", idType) *" + inType
 		}
 		return ""
 	},

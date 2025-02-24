@@ -21,8 +21,8 @@ const (
 )
 
 // Multicast plain. Response type is not needed here.
-func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.Multicast",
 	}
@@ -31,13 +31,13 @@ func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...goru
 }
 
 // MulticastPerNodeArg with per_node_arg option.
-func (c *Configuration) MulticastPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...gorums.CallOption) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) MulticastPerNodeArg(ctx context.Context, in *Request, f func(*Request, idType) *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.MulticastPerNodeArg",
 	}
 
-	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid idType) protoreflect.ProtoMessage {
 		return f(req.(*Request), nid)
 	}
 
@@ -45,8 +45,8 @@ func (c *Configuration) MulticastPerNodeArg(ctx context.Context, in *Request, f 
 }
 
 // Multicast2 is testing whether multiple streams work.
-func (c *Configuration) Multicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) Multicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.Multicast2",
 	}
@@ -58,8 +58,8 @@ func (c *Configuration) Multicast2(ctx context.Context, in *Request, opts ...gor
 var _ emptypb.Empty
 
 // Multicast3 is testing imported message type.
-func (c *Configuration) Multicast3(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) Multicast3(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.Multicast3",
 	}
@@ -71,8 +71,8 @@ func (c *Configuration) Multicast3(ctx context.Context, in *Request, opts ...gor
 var _ emptypb.Empty
 
 // Multicast4 is testing imported message type.
-func (c *Configuration) Multicast4(ctx context.Context, in *emptypb.Empty, opts ...gorums.CallOption) {
-	cd := gorums.QuorumCallData{
+func (c *Configuration[idType]) Multicast4(ctx context.Context, in *emptypb.Empty, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData[idType]{
 		Message: in,
 		Method:  "dev.ZorumsService.Multicast4",
 	}

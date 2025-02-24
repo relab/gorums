@@ -7,6 +7,7 @@
 package dev
 
 import (
+	cmp "cmp"
 	gorums "github.com/relab/gorums"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
@@ -18,14 +19,14 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 7)
 )
 
-type internalEmpty struct {
-	nid   uint32
+type internalEmpty[idType cmp.Ordered] struct {
+	nid   idType
 	reply *emptypb.Empty
 	err   error
 }
 
-type internalResponse struct {
-	nid   uint32
+type internalResponse[idType cmp.Ordered] struct {
+	nid   idType
 	reply *Response
 	err   error
 }

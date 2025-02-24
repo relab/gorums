@@ -189,11 +189,11 @@ func main() {
 		options.QuorumSize = *qSize
 	}
 
-	mgrOpts := []gorums.ManagerOption{
-		gorums.WithGrpcDialOptions(
+	mgrOpts := []gorums.ManagerOption[uint32]{
+		gorums.WithGrpcDialOptions[uint32](
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
-		gorums.WithSendBufferSize(*sendBuffer),
+		gorums.WithSendBufferSize[uint32](*sendBuffer),
 	}
 
 	mgr := benchmark.NewManager(mgrOpts...)
@@ -204,7 +204,7 @@ func main() {
 		CfgSize: options.NumNodes,
 	}
 
-	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(remotes[:options.NumNodes]))
+	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList[uint32](remotes[:options.NumNodes]))
 	checkf("Failed to create configuration: %v", err)
 
 	results, err := benchmark.RunBenchmarks(benchReg, options, cfg)

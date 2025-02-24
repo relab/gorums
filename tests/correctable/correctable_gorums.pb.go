@@ -7,6 +7,7 @@
 package correctable
 
 import (
+	cmp "cmp"
 	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
@@ -25,10 +26,10 @@ const (
 
 // A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
-type Configuration struct {
-	gorums.RawConfiguration
-	qspec QuorumSpec
-	nodes []*Node
+type Configuration[idType cmp.Ordered] struct {
+	gorums.RawConfiguration[idType]
+	qspec QuorumSpec[idType]
+	nodes []*Node[idType]
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -37,20 +38,20 @@ type Configuration struct {
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
+func ConfigurationFromRaw[idType cmp.Ordered](rawCfg gorums.RawConfiguration[idType], qspec QuorumSpec[idType]) (*Configuration[idType], error) {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
+	if _, empty := test.(QuorumSpec[idType]); !empty && qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
-	newCfg := &Configuration{
+	newCfg := &Configuration[idType]{
 		RawConfiguration: rawCfg,
 		qspec:            qspec,
 	}
 	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, newCfg.Size())
+	newCfg.nodes = make([]*Node[idType], newCfg.Size())
 	for i, n := range rawCfg {
-		newCfg.nodes[i] = &Node{n}
+		newCfg.nodes[i] = &Node[idType]{n}
 	}
 	return newCfg, nil
 }
@@ -59,18 +60,18 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Co
 // order as they were provided in the creation of the Manager.
 //
 // NOTE: mutating the returned slice is not supported.
-func (c *Configuration) Nodes() []*Node {
+func (c *Configuration[idType]) Nodes() []*Node[idType] {
 	return c.nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+func (c Configuration[idType]) And(d *Configuration[idType]) gorums.NodeListOption[idType] {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+func (c Configuration[idType]) Except(rm *Configuration[idType]) gorums.NodeListOption[idType] {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
 
@@ -82,15 +83,15 @@ func init() {
 
 // Manager maintains a connection pool of nodes on
 // which quorum calls can be performed.
-type Manager struct {
-	*gorums.RawManager
+type Manager[idType cmp.Ordered] struct {
+	*gorums.RawManager[idType]
 }
 
 // NewManager returns a new Manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
-func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return &Manager{
+func NewManager[idType cmp.Ordered](opts ...gorums.ManagerOption[idType]) *Manager[idType] {
+	return &Manager[idType]{
 		RawManager: gorums.NewRawManager(opts...),
 	}
 }
@@ -102,19 +103,19 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
+func (m *Manager[idType]) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration[idType], err error) {
 	if len(opts) < 1 || len(opts) > 2 {
 		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
 	}
-	c = &Configuration{}
+	c = &Configuration[idType]{}
 	for _, opt := range opts {
 		switch v := opt.(type) {
-		case gorums.NodeListOption:
+		case gorums.NodeListOption[idType]:
 			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
 			if err != nil {
 				return nil, err
 			}
-		case QuorumSpec:
+		case QuorumSpec[idType]:
 			// Must be last since v may match QuorumSpec if it is interface{}
 			c.qspec = v
 		default:
@@ -123,45 +124,45 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 	}
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
 	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
+	if _, empty := test.(QuorumSpec[idType]); !empty && c.qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
 	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
+	c.nodes = make([]*Node[idType], c.Size())
 	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
+		c.nodes[i] = &Node[idType]{n}
 	}
 	return c, nil
 }
 
 // Nodes returns a slice of available nodes on this manager.
 // IDs are returned in the order they were added at creation of the manager.
-func (m *Manager) Nodes() []*Node {
+func (m *Manager[idType]) Nodes() []*Node[idType] {
 	gorumsNodes := m.RawManager.Nodes()
-	nodes := make([]*Node, len(gorumsNodes))
+	nodes := make([]*Node[idType], len(gorumsNodes))
 	for i, n := range gorumsNodes {
-		nodes[i] = &Node{n}
+		nodes[i] = &Node[idType]{n}
 	}
 	return nodes
 }
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
-type Node struct {
-	*gorums.RawNode
+type Node[idType cmp.Ordered] struct {
+	*gorums.RawNode[idType]
 }
 
 // Correctable asynchronously invokes a correctable quorum call on each node
 // in configuration c and returns a CorrectableCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
-func (c *Configuration) Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "correctable.CorrectableTest.Correctable",
 		ServerStream: false,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*CorrectableResponse, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*CorrectableResponse, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*CorrectableResponse)
 		}
@@ -176,14 +177,14 @@ func (c *Configuration) Correctable(ctx context.Context, in *CorrectableRequest)
 // in configuration c and returns a CorrectableStreamCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
 // This method supports server-side preliminary replies (correctable stream).
-func (c *Configuration) CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse {
-	cd := gorums.CorrectableCallData{
+func (c *Configuration[idType]) CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse {
+	cd := gorums.CorrectableCallData[idType]{
 		Message:      in,
 		Method:       "correctable.CorrectableTest.CorrectableStream",
 		ServerStream: true,
 	}
-	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
-		r := make(map[uint32]*CorrectableResponse, len(replies))
+	cd.QuorumFunction = func(req protoreflect.ProtoMessage, replies map[idType]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool) {
+		r := make(map[idType]*CorrectableResponse, len(replies))
 		for k, v := range replies {
 			r[k] = v.(*CorrectableResponse)
 		}
@@ -195,7 +196,7 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *CorrectableRe
 }
 
 // QuorumSpec is the interface of quorum functions for CorrectableTest.
-type QuorumSpec interface {
+type QuorumSpec[idType cmp.Ordered] interface {
 	gorums.ConfigOption
 
 	// CorrectableQF is the quorum function for the Correctable
@@ -203,14 +204,14 @@ type QuorumSpec interface {
 	// supplied to the Correctable method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *CorrectableRequest'.
-	CorrectableQF(in *CorrectableRequest, replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool)
+	CorrectableQF(in *CorrectableRequest, replies map[idType]*CorrectableResponse) (*CorrectableResponse, int, bool)
 
 	// CorrectableStreamQF is the quorum function for the CorrectableStream
 	// correctable stream quorum call method. The in parameter is the request object
 	// supplied to the CorrectableStream method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *CorrectableRequest'.
-	CorrectableStreamQF(in *CorrectableRequest, replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool)
+	CorrectableStreamQF(in *CorrectableRequest, replies map[idType]*CorrectableResponse) (*CorrectableResponse, int, bool)
 }
 
 // CorrectableTest is the server-side API for the CorrectableTest Service
@@ -240,8 +241,8 @@ func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTest) {
 	})
 }
 
-type internalCorrectableResponse struct {
-	nid   uint32
+type internalCorrectableResponse[idType cmp.Ordered] struct {
+	nid   idType
 	reply *CorrectableResponse
 	err   error
 }
