@@ -33,17 +33,26 @@ type RawNode[idType cmp.Ordered] struct {
 	channel *channel[idType]
 }
 
+/*
+type Ordered interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 |
+		~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
+		~float32 | ~float64 |
+		~string
+}
+*/
+
 // NewRawNode returns a new node for the provided address.
-func NewRawNode[idType cmp.Ordered](addr string) (*RawNode[idType], error) {
+func NewRawNode[idType uint32 | int32](addr string) (*RawNode[idType], error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
+
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
-	var id idType
 	return &RawNode[idType]{
-		id:   id, // h.Sum32()
+		id:   idType(h.Sum32()),
 		addr: tcpAddr.String(),
 	}, nil
 }

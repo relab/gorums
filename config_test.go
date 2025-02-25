@@ -3,6 +3,7 @@ package gorums_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -24,8 +25,15 @@ func TestNewConfigurationEmptyNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeList(t *testing.T) {
+
+	fmt.Println(nodes)
+
 	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
 	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
+
+	fmt.Print("3: ")
+	fmt.Println(cfg.Nodes())
+
 	if err != nil {
 		t.Fatal(err)
 	}
