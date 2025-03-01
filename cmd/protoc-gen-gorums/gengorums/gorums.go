@@ -242,6 +242,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"qspec":  {template: qspecInterface},
 	"types":  {template: dataTypes},
 	"server": {template: server},
+	"client": {template: client},
 
 	callTypeName(gorums.E_Rpc): {
 		extInfo:  gorums.E_Rpc,
