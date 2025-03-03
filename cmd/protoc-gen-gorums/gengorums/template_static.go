@@ -9,9 +9,14 @@ var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": 
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Configuration", "Manager", "Node", "QuorumSpec"}
+var reservedIdents = []string{"Configuration", "Manager", "Node", "QuorumSpec", "ZorumsServiceConfigurationClient", "ZorumsServiceNodeClient"}
 
-var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
+var staticCode = `// enforce interface compliance
+var _ ZorumsServiceConfigurationClient = (*Configuration)(nil)
+
+var _ ZorumsServiceNodeClient = (*Node)(nil)
+
+// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration

@@ -79,6 +79,9 @@ var funcMap = template.FuncMap{
 	"correctableStream": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer()
 	},
+	"isCorrectable": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Correctable)
+	},
 	"withCorrectable": func(method *protogen.Method, arg string) string {
 		if hasMethodOption(method, gorums.E_Correctable) {
 			return arg
@@ -105,6 +108,12 @@ var funcMap = template.FuncMap{
 	},
 	"isOneway": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
+	},
+	"isAsync": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Async)
+	},
+	"isConfigurationCall": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Quorumcall, gorums.E_Correctable, gorums.E_Async)
 	},
 	"methods": func(services []*protogen.Service) (methods []*protogen.Method) {
 		for _, s := range services {

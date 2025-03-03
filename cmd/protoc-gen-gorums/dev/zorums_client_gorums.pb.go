@@ -19,39 +19,43 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 7)
 )
 
-// ZorumsService is the client-side API for the ZorumsService Service
-type ZorumsServiceClient interface {
-	GRPCCall(ctx context.Context, in *Request) (resp *Response, err error)
+// ZorumsService is the client-side Configuration API for the ZorumsService Service
+type ZorumsServiceConfigurationClient interface {
 	QuorumCall(ctx context.Context, in *Request) (resp *Response, err error)
-	QuorumCallPerNodeArg(ctx context.Context, in *Request) (resp *Response, err error)
-	QuorumCallCustomReturnType(ctx context.Context, in *Request) (resp *Response, err error)
-	QuorumCallCombo(ctx context.Context, in *Request) (resp *Response, err error)
+	QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error)
+	QuorumCallCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error)
+	QuorumCallCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *MyResponse, err error)
 	QuorumCallEmpty(ctx context.Context, in *emptypb.Empty) (resp *Response, err error)
 	QuorumCallEmpty2(ctx context.Context, in *Request) (resp *emptypb.Empty, err error)
-	Multicast(ctx context.Context, in *Request) (resp *Response, err error)
-	MulticastPerNodeArg(ctx context.Context, in *Request) (resp *Response, err error)
-	Multicast2(ctx context.Context, in *Request) (resp *Response, err error)
-	Multicast3(ctx context.Context, in *Request) (resp *emptypb.Empty, err error)
-	Multicast4(ctx context.Context, in *emptypb.Empty) (resp *emptypb.Empty, err error)
-	QuorumCallAsync(ctx context.Context, in *Request) (resp *Response, err error)
-	QuorumCallAsyncPerNodeArg(ctx context.Context, in *Request) (resp *Response, err error)
-	QuorumCallAsyncCustomReturnType(ctx context.Context, in *Request) (resp *Response, err error)
-	QuorumCallAsyncCombo(ctx context.Context, in *Request) (resp *Response, err error)
-	QuorumCallAsync2(ctx context.Context, in *Request) (resp *Response, err error)
-	QuorumCallAsyncEmpty(ctx context.Context, in *Request) (resp *emptypb.Empty, err error)
-	QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) (resp *Response, err error)
-	Correctable(ctx context.Context, in *Request) (resp *Response, err error)
-	CorrectablePerNodeArg(ctx context.Context, in *Request) (resp *Response, err error)
-	CorrectableCustomReturnType(ctx context.Context, in *Request) (resp *Response, err error)
-	CorrectableCombo(ctx context.Context, in *Request) (resp *Response, err error)
-	CorrectableEmpty(ctx context.Context, in *Request) (resp *emptypb.Empty, err error)
-	CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) (resp *Response, err error)
-	CorrectableStream(ctx context.Context, in *Request) (resp *Response, err error)
-	CorrectableStreamPerNodeArg(ctx context.Context, in *Request) (resp *Response, err error)
-	CorrectableStreamCustomReturnType(ctx context.Context, in *Request) (resp *Response, err error)
-	CorrectableStreamCombo(ctx context.Context, in *Request) (resp *Response, err error)
-	CorrectableStreamEmpty(ctx context.Context, in *Request) (resp *emptypb.Empty, err error)
-	CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) (resp *Response, err error)
-	Unicast(ctx context.Context, in *Request) (resp *Response, err error)
-	Unicast2(ctx context.Context, in *Request) (resp *emptypb.Empty, err error)
+	Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	MulticastPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...gorums.CallOption)
+	Multicast2(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	Multicast3(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	Multicast4(ctx context.Context, in *emptypb.Empty, opts ...gorums.CallOption)
+	QuorumCallAsync(ctx context.Context, in *Request) *AsyncResponse
+	QuorumCallAsyncPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *AsyncResponse
+	QuorumCallAsyncCustomReturnType(ctx context.Context, in *Request) *AsyncMyResponse
+	QuorumCallAsyncCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *AsyncMyResponse
+	QuorumCallAsync2(ctx context.Context, in *Request) *AsyncResponse
+	QuorumCallAsyncEmpty(ctx context.Context, in *Request) *AsyncEmpty
+	QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) *AsyncResponse
+	Correctable(ctx context.Context, in *Request) *CorrectableResponse
+	CorrectablePerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableResponse
+	CorrectableCustomReturnType(ctx context.Context, in *Request) *CorrectableMyResponse
+	CorrectableCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableMyResponse
+	CorrectableEmpty(ctx context.Context, in *Request) *CorrectableEmpty
+	CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableResponse
+	CorrectableStream(ctx context.Context, in *Request) *CorrectableStreamResponse
+	CorrectableStreamPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableStreamResponse
+	CorrectableStreamCustomReturnType(ctx context.Context, in *Request) *CorrectableStreamMyResponse
+	CorrectableStreamCombo(ctx context.Context, in *Request, f func(*Request, uint32) *Request) *CorrectableStreamMyResponse
+	CorrectableStreamEmpty(ctx context.Context, in *Request) *CorrectableStreamEmpty
+	CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse
+}
+
+// ZorumsService is the client-side Node API for the ZorumsService Service
+type ZorumsServiceNodeClient interface {
+	GRPCCall(ctx context.Context, in *Request) (resp *Response, err error)
+	Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption)
 }
