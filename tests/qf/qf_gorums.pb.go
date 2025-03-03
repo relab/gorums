@@ -149,6 +149,22 @@ type Node struct {
 	*gorums.RawNode
 }
 
+// QuorumFunction is the client-side Configuration API for the QuorumFunction Service
+type QuorumFunctionConfigurationClient interface {
+	UseReq(ctx context.Context, in *Request) (resp *Response, err error)
+	IgnoreReq(ctx context.Context, in *Request) (resp *Response, err error)
+}
+
+// enforce interface compliance
+var _ QuorumFunctionConfigurationClient = (*Configuration)(nil)
+
+// QuorumFunction is the client-side Node API for the QuorumFunction Service
+type QuorumFunctionNodeClient interface {
+}
+
+// enforce interface compliance
+var _ QuorumFunctionNodeClient = (*Node)(nil)
+
 // QuorumSpec is the interface of quorum functions for QuorumFunction.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -213,12 +229,12 @@ func (c *Configuration) IgnoreReq(ctx context.Context, in *Request) (resp *Respo
 }
 
 // QuorumFunction is the server-side API for the QuorumFunction Service
-type QuorumFunction interface {
+type QuorumFunctionServer interface {
 	UseReq(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	IgnoreReq(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
-func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunction) {
+func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunctionServer) {
 	srv.RegisterHandler("qf.QuorumFunction.UseReq", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()

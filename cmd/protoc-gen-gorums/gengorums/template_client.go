@@ -29,6 +29,8 @@ type {{$service}}ConfigurationClient interface {
 		{{- end}}
 	{{- end}}
 }
+// enforce interface compliance
+var _ {{$service}}ConfigurationClient = (*Configuration)(nil)
 {{- end}}
 `
 
@@ -50,6 +52,8 @@ type {{$service}}NodeClient interface {
 		{{- end}}
 	{{- end}}
 }
+// enforce interface compliance
+var _ {{$service}}NodeClient = (*Node)(nil)
 {{- end}}
 `
 

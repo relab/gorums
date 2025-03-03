@@ -151,6 +151,22 @@ type Node struct {
 	*gorums.RawNode
 }
 
+// CorrectableTest is the client-side Configuration API for the CorrectableTest Service
+type CorrectableTestConfigurationClient interface {
+	Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse
+	CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse
+}
+
+// enforce interface compliance
+var _ CorrectableTestConfigurationClient = (*Configuration)(nil)
+
+// CorrectableTest is the client-side Node API for the CorrectableTest Service
+type CorrectableTestNodeClient interface {
+}
+
+// enforce interface compliance
+var _ CorrectableTestNodeClient = (*Node)(nil)
+
 // Correctable asynchronously invokes a correctable quorum call on each node
 // in configuration c and returns a CorrectableCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
@@ -214,12 +230,12 @@ type QuorumSpec interface {
 }
 
 // CorrectableTest is the server-side API for the CorrectableTest Service
-type CorrectableTest interface {
+type CorrectableTestServer interface {
 	Correctable(ctx gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error)
 	CorrectableStream(ctx gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error
 }
 
-func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTest) {
+func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServer) {
 	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*CorrectableRequest)
 		defer ctx.Release()

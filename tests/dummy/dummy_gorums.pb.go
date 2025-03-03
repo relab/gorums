@@ -148,6 +148,21 @@ type Node struct {
 	*gorums.RawNode
 }
 
+// Dummy is the client-side Configuration API for the Dummy Service
+type DummyConfigurationClient interface {
+}
+
+// enforce interface compliance
+var _ DummyConfigurationClient = (*Configuration)(nil)
+
+// Dummy is the client-side Node API for the Dummy Service
+type DummyNodeClient interface {
+	Test(ctx context.Context, in *Empty) (resp *Empty, err error)
+}
+
+// enforce interface compliance
+var _ DummyNodeClient = (*Node)(nil)
+
 // QuorumSpec is the interface of quorum functions for Dummy.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -169,11 +184,11 @@ func (n *Node) Test(ctx context.Context, in *Empty) (resp *Empty, err error) {
 }
 
 // Dummy is the server-side API for the Dummy Service
-type Dummy interface {
+type DummyServer interface {
 	Test(ctx gorums.ServerCtx, request *Empty) (response *Empty, err error)
 }
 
-func RegisterDummyServer(srv *gorums.Server, impl Dummy) {
+func RegisterDummyServer(srv *gorums.Server, impl DummyServer) {
 	srv.RegisterHandler("dummy.Dummy.Test", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Empty)
 		defer ctx.Release()

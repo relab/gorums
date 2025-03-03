@@ -53,9 +53,15 @@ type ZorumsServiceConfigurationClient interface {
 	CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse
 }
 
+// enforce interface compliance
+var _ ZorumsServiceConfigurationClient = (*Configuration)(nil)
+
 // ZorumsService is the client-side Node API for the ZorumsService Service
 type ZorumsServiceNodeClient interface {
 	GRPCCall(ctx context.Context, in *Request) (resp *Response, err error)
 	Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
 	Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption)
 }
+
+// enforce interface compliance
+var _ ZorumsServiceNodeClient = (*Node)(nil)

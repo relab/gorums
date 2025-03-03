@@ -148,6 +148,21 @@ type Node struct {
 	*gorums.RawNode
 }
 
+// TLS is the client-side Configuration API for the TLS Service
+type TLSConfigurationClient interface {
+}
+
+// enforce interface compliance
+var _ TLSConfigurationClient = (*Configuration)(nil)
+
+// TLS is the client-side Node API for the TLS Service
+type TLSNodeClient interface {
+	TestTLS(ctx context.Context, in *Request) (resp *Response, err error)
+}
+
+// enforce interface compliance
+var _ TLSNodeClient = (*Node)(nil)
+
 // QuorumSpec is the interface of quorum functions for TLS.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -169,11 +184,11 @@ func (n *Node) TestTLS(ctx context.Context, in *Request) (resp *Response, err er
 }
 
 // TLS is the server-side API for the TLS Service
-type TLS interface {
+type TLSServer interface {
 	TestTLS(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
-func RegisterTLSServer(srv *gorums.Server, impl TLS) {
+func RegisterTLSServer(srv *gorums.Server, impl TLSServer) {
 	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
