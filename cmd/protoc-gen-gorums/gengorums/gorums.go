@@ -345,6 +345,10 @@ func hasGorumsCallType(method *protogen.Method) bool {
 	return hasMethodOption(method, gorumsCallTypes...)
 }
 
+func hasConfigurationCallType(method *protogen.Method) bool {
+	return hasGorumsCallType(method) && !hasMethodOption(method, gorums.E_Unicast)
+}
+
 // hasMethodOption returns true if the method has one of the given method options.
 func hasMethodOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
 	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()

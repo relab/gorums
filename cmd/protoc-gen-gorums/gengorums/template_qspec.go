@@ -8,7 +8,7 @@ import (
 var qspecInterface = `
 {{$genFile := .GenFile}}
 {{$configOpt := use "gorums.ConfigOption" .GenFile}}
-{{- range qspecServices .Services}}
+{{- range .Services}}
 // QuorumSpec is the interface of quorum functions for {{.GoName}}.
 type QuorumSpec interface {
 	{{$configOpt}}
@@ -39,20 +39,6 @@ func qspecMethods(methods []*protogen.Method) (s []*protogen.Method) {
 			continue
 		}
 		s = append(s, method)
-	}
-	return s
-}
-
-// qspecServices returns all services that have Gorums methods.
-func qspecServices(services []*protogen.Service) (s []*protogen.Service) {
-	for _, service := range services {
-		for _, method := range service.Methods {
-			if !hasGorumsCallType(method) {
-				// ignore services without Gorums methods
-				continue
-			}
-		}
-		s = append(s, service)
 	}
 	return s
 }

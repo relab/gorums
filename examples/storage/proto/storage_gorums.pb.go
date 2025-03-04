@@ -150,6 +150,25 @@ type Node struct {
 	*gorums.RawNode
 }
 
+// Storage is the client-side Configuration API for the Storage Service
+type StorageConfigurationClient interface {
+	ReadQC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error)
+	WriteQC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error)
+	WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption)
+}
+
+// enforce interface compliance
+var _ StorageConfigurationClient = (*Configuration)(nil)
+
+// Storage is the client-side Node API for the Storage Service
+type StorageNodeClient interface {
+	ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error)
+	WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error)
+}
+
+// enforce interface compliance
+var _ StorageNodeClient = (*Node)(nil)
+
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
@@ -256,7 +275,7 @@ func (n *Node) WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteRespo
 }
 
 // Storage is the server-side API for the Storage Service
-type Storage interface {
+type StorageServer interface {
 	ReadRPC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
 	WriteRPC(ctx gorums.ServerCtx, request *WriteRequest) (response *WriteResponse, err error)
 	ReadQC(ctx gorums.ServerCtx, request *ReadRequest) (response *ReadResponse, err error)
@@ -264,7 +283,7 @@ type Storage interface {
 	WriteMulticast(ctx gorums.ServerCtx, request *WriteRequest)
 }
 
-func RegisterStorageServer(srv *gorums.Server, impl Storage) {
+func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
 	srv.RegisterHandler("storage.Storage.ReadRPC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*ReadRequest)
 		defer ctx.Release()
