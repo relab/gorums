@@ -12,6 +12,7 @@ To cut a release you will need additional tools:
 1. Check and upgrade dependencies:
 
    ```shell
+   % git switch -c meling/issueXXX/v0.4.0-devel
    % make tools
    % protoc --version
    libprotoc 3.15.6
@@ -38,7 +39,7 @@ To cut a release you will need additional tools:
 
 3. Edit `internal/version/version.go`
 
-4. Edit `version.go`
+4. Edit `version.go` (`MinVersion` should be kept as is, since otherwise `make dev` below will fail)
 
 5. Install new version of `protoc-gen-gorums`:
 
@@ -48,7 +49,9 @@ To cut a release you will need additional tools:
    protoc-gen-gorums v0.4.0-devel
    ```
 
-6. Recompile `_gorums.pb.go` files:
+6. Now `version.go` can be updated to reflect the new version number, if necessary.
+
+7. Recompile `_gorums.pb.go` files:
 
    ```shell
    % make -B
@@ -59,45 +62,37 @@ To cut a release you will need additional tools:
    % cd ..
    ```
 
-7. Run tests:
+8. Run tests:
 
    ```shell
    % make test
    % make testrace
    ```
 
-8. Edit gorums dependency to be v0.4.0 in example/go.mod:
+9. Edit gorums dependency to be v0.4.0 in example/go.mod:
 
    ```shell
    % vim examples/go.mod
    ```
 
-9. Add and commit changes due to upgrades and recompilation:
+10. Add and commit changes due to upgrades and recompilation:
 
    ```shell
    % git add
    % git commit -m "Gorums release v0.4.0"
-   # Synchronize master branch
-   % git push
+   % gh pr create --title "Gorums release v0.4.0"
    ```
 
-10. Publish the release with release notes:
+11. Publish the release with release notes:
 
     ```shell
     # Prepare release notes in release-notes.md
     % gh release create v0.4.0 --prerelease -F release-notes.md --title "Main changes in release"
     ```
 
-    Without the `gh` tool:
-
-    ```shell
-    % git tag v0.4.0
-    % git push origin v0.4.0
-    ```
-
     Now other projects can depend on `v0.4.0` of `github.com/relab/gorums`.
 
-11. To check that the new version is available (after a bit of time):
+12. To check that the new version is available (after a bit of time):
 
     ```shell
     % go list -m github.com/relab/gorums@v0.4.0
