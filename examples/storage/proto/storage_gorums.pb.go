@@ -150,17 +150,17 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// Storage is the client-side Configuration API for the Storage Service
-type StorageConfigurationClient interface {
+// StorageClient is the client interface for the Storage service.
+type StorageClient interface {
 	ReadQC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error)
 	WriteQC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error)
 	WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption)
 }
 
 // enforce interface compliance
-var _ StorageConfigurationClient = (*Configuration)(nil)
+var _ StorageClient = (*Configuration)(nil)
 
-// Storage is the client-side Node API for the Storage Service
+// StorageNodeClient is the single node client interface for the Storage service.
 type StorageNodeClient interface {
 	ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error)
 	WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error)
