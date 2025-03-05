@@ -169,16 +169,16 @@ func (c *Configuration) QCAsync(ctx context.Context, in *Request) *AsyncResponse
 	return &AsyncResponse{fut}
 }
 
-// GorumsTest is the client-side Configuration API for the GorumsTest Service
-type GorumsTestConfigurationClient interface {
+// GorumsTestClient is the client interface for the GorumsTest service.
+type GorumsTestClient interface {
 	QC(ctx context.Context, in *Request) (resp *Response, err error)
 	QCAsync(ctx context.Context, in *Request) *AsyncResponse
 }
 
 // enforce interface compliance
-var _ GorumsTestConfigurationClient = (*Configuration)(nil)
+var _ GorumsTestClient = (*Configuration)(nil)
 
-// GorumsTest is the client-side Node API for the GorumsTest Service
+// GorumsTestNodeClient is the single node client interface for the GorumsTest service.
 type GorumsTestNodeClient interface {
 	UnaryRPC(ctx context.Context, in *Request) (resp *Response, err error)
 }

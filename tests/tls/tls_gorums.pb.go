@@ -148,14 +148,7 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// TLS is the client-side Configuration API for the TLS Service
-type TLSConfigurationClient interface {
-}
-
-// enforce interface compliance
-var _ TLSConfigurationClient = (*Configuration)(nil)
-
-// TLS is the client-side Node API for the TLS Service
+// TLSNodeClient is the single node client interface for the TLS service.
 type TLSNodeClient interface {
 	TestTLS(ctx context.Context, in *Request) (resp *Response, err error)
 }
@@ -163,10 +156,8 @@ type TLSNodeClient interface {
 // enforce interface compliance
 var _ TLSNodeClient = (*Node)(nil)
 
-// QuorumSpec is the interface of quorum functions for TLS.
-type QuorumSpec interface {
-	gorums.ConfigOption
-}
+// There are no quorum calls.
+type QuorumSpec interface{}
 
 // TestTLS is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.

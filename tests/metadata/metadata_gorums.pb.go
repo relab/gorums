@@ -149,14 +149,7 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// MetadataTest is the client-side Configuration API for the MetadataTest Service
-type MetadataTestConfigurationClient interface {
-}
-
-// enforce interface compliance
-var _ MetadataTestConfigurationClient = (*Configuration)(nil)
-
-// MetadataTest is the client-side Node API for the MetadataTest Service
+// MetadataTestNodeClient is the single node client interface for the MetadataTest service.
 type MetadataTestNodeClient interface {
 	IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, err error)
 	WhatIP(ctx context.Context, in *emptypb.Empty) (resp *IPAddr, err error)
@@ -165,10 +158,8 @@ type MetadataTestNodeClient interface {
 // enforce interface compliance
 var _ MetadataTestNodeClient = (*Node)(nil)
 
-// QuorumSpec is the interface of quorum functions for MetadataTest.
-type QuorumSpec interface {
-	gorums.ConfigOption
-}
+// There are no quorum calls.
+type QuorumSpec interface{}
 
 // IDFromMD returns the 'id' field from the metadata.
 func (n *Node) IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, err error) {

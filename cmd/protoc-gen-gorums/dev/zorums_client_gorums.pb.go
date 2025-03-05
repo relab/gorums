@@ -19,8 +19,8 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 7)
 )
 
-// ZorumsService is the client-side Configuration API for the ZorumsService Service
-type ZorumsServiceConfigurationClient interface {
+// ZorumsServiceClient is the client interface for the ZorumsService service.
+type ZorumsServiceClient interface {
 	QuorumCall(ctx context.Context, in *Request) (resp *Response, err error)
 	QuorumCallPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request) (resp *Response, err error)
 	QuorumCallCustomReturnType(ctx context.Context, in *Request) (resp *MyResponse, err error)
@@ -54,9 +54,9 @@ type ZorumsServiceConfigurationClient interface {
 }
 
 // enforce interface compliance
-var _ ZorumsServiceConfigurationClient = (*Configuration)(nil)
+var _ ZorumsServiceClient = (*Configuration)(nil)
 
-// ZorumsService is the client-side Node API for the ZorumsService Service
+// ZorumsServiceNodeClient is the single node client interface for the ZorumsService service.
 type ZorumsServiceNodeClient interface {
 	GRPCCall(ctx context.Context, in *Request) (resp *Response, err error)
 	Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption)

@@ -170,8 +170,8 @@ func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEch
 	return &AsyncEcho{fut}
 }
 
-// Benchmark is the client-side Configuration API for the Benchmark Service
-type BenchmarkConfigurationClient interface {
+// BenchmarkClient is the client interface for the Benchmark service.
+type BenchmarkClient interface {
 	StartServerBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error)
 	StopServerBenchmark(ctx context.Context, in *StopRequest) (resp *Result, err error)
 	StartBenchmark(ctx context.Context, in *StartRequest) (resp *StartResponse, err error)
@@ -183,14 +183,7 @@ type BenchmarkConfigurationClient interface {
 }
 
 // enforce interface compliance
-var _ BenchmarkConfigurationClient = (*Configuration)(nil)
-
-// Benchmark is the client-side Node API for the Benchmark Service
-type BenchmarkNodeClient interface {
-}
-
-// enforce interface compliance
-var _ BenchmarkNodeClient = (*Node)(nil)
+var _ BenchmarkClient = (*Configuration)(nil)
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty

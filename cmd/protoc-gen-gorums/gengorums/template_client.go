@@ -12,11 +12,12 @@ var clientVariables = `
 `
 
 var clientConfigurationInterface = `
-{{$genFile := .GenFile}}
+{{- $genFile := .GenFile}}
 {{- range configurationsServices .Services}}
-	{{$service := .GoName}}
-	// {{$service}} is the client-side Configuration API for the {{$service}} Service
-	type {{$service}}ConfigurationClient interface {
+	{{- $service := .GoName}}
+	{{- $interfaceName := printf "%sClient" $service}}
+	// {{$interfaceName}} is the client interface for the {{$service}} service.
+	type {{$interfaceName}} interface {
 		{{- range configurationMethods .Methods}}
 			{{- $method := .GoName}}
 			{{- if isOneway .}}
@@ -31,34 +32,45 @@ var clientConfigurationInterface = `
 		{{- end}}
 	}
 	// enforce interface compliance
-	var _ {{$service}}ConfigurationClient = (*Configuration)(nil)
+	var _ {{$interfaceName}} = (*Configuration)(nil)
 {{- end}}
 `
 
 var clientNodeInterface = `
-{{$genFile := .GenFile}}
+{{- $genFile := .GenFile}}
 {{- range nodeServices .Services}}
-{{$service := .GoName}}
-// {{$service}} is the client-side Node API for the {{$service}} Service
-type {{$service}}NodeClient interface {
-	{{- range nodeMethods .Methods}}
-		{{- $method := .GoName}}
-		{{- if isOneway .}}
-			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
-		{{- else}}
-			{{- $customOut := customOut $genFile .}}
-			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
+	{{- $service := .GoName}}
+	{{- $interfaceName := printf "%sNodeClient" $service}}
+	// {{$interfaceName}} is the single node client interface for the {{$service}} service.
+	type {{$interfaceName}} interface {
+		{{- range nodeMethods .Methods}}
+			{{- $method := .GoName}}
+			{{- if isOneway .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
+			{{- else}}
+				{{- $customOut := customOut $genFile .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
+			{{- end}}
 		{{- end}}
-	{{- end}}
-}
-// enforce interface compliance
-var _ {{$service}}NodeClient = (*Node)(nil)
+	}
+	// enforce interface compliance
+	var _ {{$interfaceName}} = (*Node)(nil)
 {{- end}}
 `
 
 var client = clientVariables + clientConfigurationInterface + clientNodeInterface
 
-// gorumsMethods returns all Gorums-specific methods, such as multicast, quorumcall, correctable, and async methods.
+// configurationsServices returns all services containing at least one multi node method.
+func configurationsServices(services []*protogen.Service) (s []*protogen.Service) {
+	for _, service := range services {
+		if len(configurationMethods(service.Methods)) > 0 {
+			s = append(s, service)
+		}
+	}
+	return s
+}
+
+// configurationMethods returns all multi node methods, such as multicast, quorumcall, correctable, and async methods.
 func configurationMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	for _, method := range methods {
 		if hasConfigurationCallType(method) {
@@ -68,37 +80,21 @@ func configurationMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	return s
 }
 
-// nodeOnlyServices returns all node-only services, such as services with only unicast and plain gRPC methods.
+// nodeServices returns all services containing at least one single node method.
 func nodeServices(services []*protogen.Service) (s []*protogen.Service) {
 	for _, service := range services {
-		for _, method := range service.Methods {
-			if !hasConfigurationCallType(method) {
-				s = append(s, service)
-				break
-			}
+		if len(nodeMethods(service.Methods)) > 0 {
+			s = append(s, service)
 		}
 	}
 	return s
 }
 
-// nodeMethods returns all node-specific methods, such as unicast and plain gRPC methods.
+// nodeMethods returns all single node methods, such as unicast and plain gRPC methods.
 func nodeMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	for _, method := range methods {
 		if !hasConfigurationCallType(method) {
 			s = append(s, method)
-		}
-	}
-	return s
-}
-
-// gorumsServices returns all services that have Gorums methods.
-func configurationsServices(services []*protogen.Service) (s []*protogen.Service) {
-	for _, service := range services {
-		for _, method := range service.Methods {
-			if hasConfigurationCallType(method) {
-				s = append(s, service)
-				break
-			}
 		}
 	}
 	return s

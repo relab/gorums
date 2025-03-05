@@ -148,14 +148,7 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// Dummy is the client-side Configuration API for the Dummy Service
-type DummyConfigurationClient interface {
-}
-
-// enforce interface compliance
-var _ DummyConfigurationClient = (*Configuration)(nil)
-
-// Dummy is the client-side Node API for the Dummy Service
+// DummyNodeClient is the single node client interface for the Dummy service.
 type DummyNodeClient interface {
 	Test(ctx context.Context, in *Empty) (resp *Empty, err error)
 }
@@ -163,10 +156,8 @@ type DummyNodeClient interface {
 // enforce interface compliance
 var _ DummyNodeClient = (*Node)(nil)
 
-// QuorumSpec is the interface of quorum functions for Dummy.
-type QuorumSpec interface {
-	gorums.ConfigOption
-}
+// There are no quorum calls.
+type QuorumSpec interface{}
 
 // Test is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.

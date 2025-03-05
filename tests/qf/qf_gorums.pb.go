@@ -149,21 +149,14 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// QuorumFunction is the client-side Configuration API for the QuorumFunction Service
-type QuorumFunctionConfigurationClient interface {
+// QuorumFunctionClient is the client interface for the QuorumFunction service.
+type QuorumFunctionClient interface {
 	UseReq(ctx context.Context, in *Request) (resp *Response, err error)
 	IgnoreReq(ctx context.Context, in *Request) (resp *Response, err error)
 }
 
 // enforce interface compliance
-var _ QuorumFunctionConfigurationClient = (*Configuration)(nil)
-
-// QuorumFunction is the client-side Node API for the QuorumFunction Service
-type QuorumFunctionNodeClient interface {
-}
-
-// enforce interface compliance
-var _ QuorumFunctionNodeClient = (*Node)(nil)
+var _ QuorumFunctionClient = (*Configuration)(nil)
 
 // QuorumSpec is the interface of quorum functions for QuorumFunction.
 type QuorumSpec interface {

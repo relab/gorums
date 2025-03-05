@@ -148,14 +148,7 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// Unresponsive is the client-side Configuration API for the Unresponsive Service
-type UnresponsiveConfigurationClient interface {
-}
-
-// enforce interface compliance
-var _ UnresponsiveConfigurationClient = (*Configuration)(nil)
-
-// Unresponsive is the client-side Node API for the Unresponsive Service
+// UnresponsiveNodeClient is the single node client interface for the Unresponsive service.
 type UnresponsiveNodeClient interface {
 	TestUnresponsive(ctx context.Context, in *Empty) (resp *Empty, err error)
 }
@@ -163,10 +156,8 @@ type UnresponsiveNodeClient interface {
 // enforce interface compliance
 var _ UnresponsiveNodeClient = (*Node)(nil)
 
-// QuorumSpec is the interface of quorum functions for Unresponsive.
-type QuorumSpec interface {
-	gorums.ConfigOption
-}
+// There are no quorum calls.
+type QuorumSpec interface{}
 
 // TestUnresponsive is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.

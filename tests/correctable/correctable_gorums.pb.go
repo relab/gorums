@@ -151,21 +151,14 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// CorrectableTest is the client-side Configuration API for the CorrectableTest Service
-type CorrectableTestConfigurationClient interface {
+// CorrectableTestClient is the client interface for the CorrectableTest service.
+type CorrectableTestClient interface {
 	Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse
 	CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse
 }
 
 // enforce interface compliance
-var _ CorrectableTestConfigurationClient = (*Configuration)(nil)
-
-// CorrectableTest is the client-side Node API for the CorrectableTest Service
-type CorrectableTestNodeClient interface {
-}
-
-// enforce interface compliance
-var _ CorrectableTestNodeClient = (*Node)(nil)
+var _ CorrectableTestClient = (*Configuration)(nil)
 
 // Correctable asynchronously invokes a correctable quorum call on each node
 // in configuration c and returns a CorrectableCorrectableResponse, which can be used
