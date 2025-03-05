@@ -21,7 +21,7 @@ const (
 )
 
 // ZorumsService is the server-side API for the ZorumsService Service
-type ZorumsService interface {
+type ZorumsServiceServer interface {
 	GRPCCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	QuorumCallPerNodeArg(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
@@ -57,7 +57,7 @@ type ZorumsService interface {
 	Unicast2(ctx gorums.ServerCtx, request *Request)
 }
 
-func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsService) {
+func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()

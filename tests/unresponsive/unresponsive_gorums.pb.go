@@ -148,10 +148,16 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// QuorumSpec is the interface of quorum functions for Unresponsive.
-type QuorumSpec interface {
-	gorums.ConfigOption
+// UnresponsiveNodeClient is the single node client interface for the Unresponsive service.
+type UnresponsiveNodeClient interface {
+	TestUnresponsive(ctx context.Context, in *Empty) (resp *Empty, err error)
 }
+
+// enforce interface compliance
+var _ UnresponsiveNodeClient = (*Node)(nil)
+
+// There are no quorum calls.
+type QuorumSpec interface{}
 
 // TestUnresponsive is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
@@ -169,11 +175,11 @@ func (n *Node) TestUnresponsive(ctx context.Context, in *Empty) (resp *Empty, er
 }
 
 // Unresponsive is the server-side API for the Unresponsive Service
-type Unresponsive interface {
+type UnresponsiveServer interface {
 	TestUnresponsive(ctx gorums.ServerCtx, request *Empty) (response *Empty, err error)
 }
 
-func RegisterUnresponsiveServer(srv *gorums.Server, impl Unresponsive) {
+func RegisterUnresponsiveServer(srv *gorums.Server, impl UnresponsiveServer) {
 	srv.RegisterHandler("unresponsive.Unresponsive.TestUnresponsive", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Empty)
 		defer ctx.Release()

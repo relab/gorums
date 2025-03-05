@@ -149,6 +149,23 @@ type Node struct {
 	*gorums.RawNode
 }
 
+// OnewayTestClient is the client interface for the OnewayTest service.
+type OnewayTestClient interface {
+	Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	MulticastPerNode(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...gorums.CallOption)
+}
+
+// enforce interface compliance
+var _ OnewayTestClient = (*Configuration)(nil)
+
+// OnewayTestNodeClient is the single node client interface for the OnewayTest service.
+type OnewayTestNodeClient interface {
+	Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
+}
+
+// enforce interface compliance
+var _ OnewayTestNodeClient = (*Node)(nil)
+
 // Multicast is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
 func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
@@ -178,19 +195,17 @@ func (c *Configuration) MulticastPerNode(ctx context.Context, in *Request, f fun
 	c.RawConfiguration.Multicast(ctx, cd, opts...)
 }
 
-// QuorumSpec is the interface of quorum functions for OnewayTest.
-type QuorumSpec interface {
-	gorums.ConfigOption
-}
+// There are no quorum calls.
+type QuorumSpec interface{}
 
 // OnewayTest is the server-side API for the OnewayTest Service
-type OnewayTest interface {
+type OnewayTestServer interface {
 	Unicast(ctx gorums.ServerCtx, request *Request)
 	Multicast(ctx gorums.ServerCtx, request *Request)
 	MulticastPerNode(ctx gorums.ServerCtx, request *Request)
 }
 
-func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTest) {
+func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTestServer) {
 	srv.RegisterHandler("oneway.OnewayTest.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()

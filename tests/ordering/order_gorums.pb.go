@@ -169,6 +169,23 @@ func (c *Configuration) QCAsync(ctx context.Context, in *Request) *AsyncResponse
 	return &AsyncResponse{fut}
 }
 
+// GorumsTestClient is the client interface for the GorumsTest service.
+type GorumsTestClient interface {
+	QC(ctx context.Context, in *Request) (resp *Response, err error)
+	QCAsync(ctx context.Context, in *Request) *AsyncResponse
+}
+
+// enforce interface compliance
+var _ GorumsTestClient = (*Configuration)(nil)
+
+// GorumsTestNodeClient is the single node client interface for the GorumsTest service.
+type GorumsTestNodeClient interface {
+	UnaryRPC(ctx context.Context, in *Request) (resp *Response, err error)
+}
+
+// enforce interface compliance
+var _ GorumsTestNodeClient = (*Node)(nil)
+
 // QuorumSpec is the interface of quorum functions for GorumsTest.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -226,13 +243,13 @@ func (n *Node) UnaryRPC(ctx context.Context, in *Request) (resp *Response, err e
 }
 
 // GorumsTest is the server-side API for the GorumsTest Service
-type GorumsTest interface {
+type GorumsTestServer interface {
 	QC(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	QCAsync(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	UnaryRPC(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
-func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTest) {
+func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTestServer) {
 	srv.RegisterHandler("ordering.GorumsTest.QC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()

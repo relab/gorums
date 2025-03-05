@@ -79,6 +79,9 @@ var funcMap = template.FuncMap{
 	"correctableStream": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer()
 	},
+	"isCorrectable": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Correctable)
+	},
 	"withCorrectable": func(method *protogen.Method, arg string) string {
 		if hasMethodOption(method, gorums.E_Correctable) {
 			return arg
@@ -106,24 +109,25 @@ var funcMap = template.FuncMap{
 	"isOneway": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
-	"methods": func(services []*protogen.Service) (methods []*protogen.Method) {
-		for _, s := range services {
-			methods = append(methods, s.Methods...)
-		}
-		return
+	"isAsync": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Async)
 	},
-	"out":                   out,
-	"outType":               outType,
-	"internalOut":           internalOut,
-	"customOut":             customOut,
-	"mapInternalOutType":    mapInternalOutType,
-	"mapCorrectableOutType": mapCorrectableOutType,
-	"mapAsyncOutType":       mapAsyncOutType,
-	"qspecServices":         qspecServices,
-	"qspecMethods":          qspecMethods,
-	"unexport":              unexport,
-	"contains":              strings.Contains,
-	"field":                 field,
+	"out":                    out,
+	"outType":                outType,
+	"internalOut":            internalOut,
+	"customOut":              customOut,
+	"mapInternalOutType":     mapInternalOutType,
+	"mapCorrectableOutType":  mapCorrectableOutType,
+	"mapAsyncOutType":        mapAsyncOutType,
+	"qspecMethods":           qspecMethods,
+	"qspecServices":          qspecServices,
+	"unexport":               unexport,
+	"contains":               strings.Contains,
+	"field":                  field,
+	"configurationsServices": configurationsServices,
+	"configurationMethods":   configurationMethods,
+	"nodeServices":           nodeServices,
+	"nodeMethods":            nodeMethods,
 }
 
 type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)

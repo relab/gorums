@@ -149,10 +149,17 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// QuorumSpec is the interface of quorum functions for MetadataTest.
-type QuorumSpec interface {
-	gorums.ConfigOption
+// MetadataTestNodeClient is the single node client interface for the MetadataTest service.
+type MetadataTestNodeClient interface {
+	IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, err error)
+	WhatIP(ctx context.Context, in *emptypb.Empty) (resp *IPAddr, err error)
 }
+
+// enforce interface compliance
+var _ MetadataTestNodeClient = (*Node)(nil)
+
+// There are no quorum calls.
+type QuorumSpec interface{}
 
 // IDFromMD returns the 'id' field from the metadata.
 func (n *Node) IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, err error) {
@@ -183,12 +190,12 @@ func (n *Node) WhatIP(ctx context.Context, in *emptypb.Empty) (resp *IPAddr, err
 }
 
 // MetadataTest is the server-side API for the MetadataTest Service
-type MetadataTest interface {
+type MetadataTestServer interface {
 	IDFromMD(ctx gorums.ServerCtx, request *emptypb.Empty) (response *NodeID, err error)
 	WhatIP(ctx gorums.ServerCtx, request *emptypb.Empty) (response *IPAddr, err error)
 }
 
-func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTest) {
+func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTestServer) {
 	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*emptypb.Empty)
 		defer ctx.Release()

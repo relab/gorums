@@ -9,7 +9,7 @@ var serverInterface = `
 {{range .Services -}}
 {{$service := .GoName}}
 // {{$service}} is the server-side API for the {{$service}} Service
-type {{$service}} interface {
+type {{$service}}Server interface {
 	{{- range .Methods}}
 	{{- if isOneway .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
@@ -30,7 +30,7 @@ var registerInterface = `
 {{$sendMessage := use "gorums.SendMessage" $genFile}}
 {{range .Services -}}
 {{$service := .GoName}}
-func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}) {
+func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}Server) {
 	{{- range .Methods}}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})

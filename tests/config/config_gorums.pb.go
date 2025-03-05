@@ -149,6 +149,14 @@ type Node struct {
 	*gorums.RawNode
 }
 
+// ConfigTestClient is the client interface for the ConfigTest service.
+type ConfigTestClient interface {
+	Config(ctx context.Context, in *Request) (resp *Response, err error)
+}
+
+// enforce interface compliance
+var _ ConfigTestClient = (*Configuration)(nil)
+
 // QuorumSpec is the interface of quorum functions for ConfigTest.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -184,11 +192,11 @@ func (c *Configuration) Config(ctx context.Context, in *Request) (resp *Response
 }
 
 // ConfigTest is the server-side API for the ConfigTest Service
-type ConfigTest interface {
+type ConfigTestServer interface {
 	Config(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
-func RegisterConfigTestServer(srv *gorums.Server, impl ConfigTest) {
+func RegisterConfigTestServer(srv *gorums.Server, impl ConfigTestServer) {
 	srv.RegisterHandler("config.ConfigTest.Config", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()

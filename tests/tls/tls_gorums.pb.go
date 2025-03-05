@@ -148,10 +148,16 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// QuorumSpec is the interface of quorum functions for TLS.
-type QuorumSpec interface {
-	gorums.ConfigOption
+// TLSNodeClient is the single node client interface for the TLS service.
+type TLSNodeClient interface {
+	TestTLS(ctx context.Context, in *Request) (resp *Response, err error)
 }
+
+// enforce interface compliance
+var _ TLSNodeClient = (*Node)(nil)
+
+// There are no quorum calls.
+type QuorumSpec interface{}
 
 // TestTLS is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
@@ -169,11 +175,11 @@ func (n *Node) TestTLS(ctx context.Context, in *Request) (resp *Response, err er
 }
 
 // TLS is the server-side API for the TLS Service
-type TLS interface {
+type TLSServer interface {
 	TestTLS(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
-func RegisterTLSServer(srv *gorums.Server, impl TLS) {
+func RegisterTLSServer(srv *gorums.Server, impl TLSServer) {
 	srv.RegisterHandler("tls.TLS.TestTLS", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
