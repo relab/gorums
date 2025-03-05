@@ -83,9 +83,11 @@ To cut a release you will need additional tools:
    % gh pr create --title "Gorums release v0.4.0"
    ```
 
-11. Publish the release with release notes:
+11. Merge the PR and publish the release with release notes:
 
     ```shell
+    % git switch main
+    % git pull
     # Prepare release notes in release-notes.md
     % gh release create v0.4.0 --prerelease -F release-notes.md --title "Main changes in release"
     ```
