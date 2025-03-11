@@ -11,7 +11,7 @@ import (
 // Steps for cutting a new release is described in doc/release-guide.md.
 const (
 	Major      = 0
-	Minor      = 7
+	Minor      = 8
 	Patch      = 0
 	PreRelease = "devel"
 )
@@ -19,6 +19,7 @@ const (
 // String formats the version string for this module in semver format.
 //
 // Examples:
+//
 //	v1.20.1
 //	v1.21.0-rc.1
 func String() string {
