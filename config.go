@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"errors"
 	"fmt"
 )
 
@@ -39,9 +38,6 @@ func (c *RawConfiguration) SubRawConfiguration(cfg NodeListOption) (nodes RawCon
 
 // Close closes a raw configuration created from the NewRawConfiguration method
 func (c *RawConfiguration) Close() error {
-	if c.RawManager == nil {
-		return errors.New("RawConfiguration.Close: RawManager is nil, cannot close a sub-configuration")
-	}
 	c.RawManager.Close()
 	return nil
 }
