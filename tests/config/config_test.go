@@ -86,7 +86,7 @@ func TestConfig(t *testing.T) {
 	}
 	cfg, err := NewConfiguration(
 		&cfgQSpec{},
-		gorums.WithNodeList([]string{}),
+		gorums.RawConfiguration{}.And(gorums.RawConfiguration{}),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),

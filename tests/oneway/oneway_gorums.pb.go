@@ -30,9 +30,6 @@ type Configuration struct {
 }
 
 func NewConfiguration(qspec QuorumSpec, cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *Configuration, err error) {
-	if qspec == nil {
-		return nil, fmt.Errorf("config: QuorumSpec cannot be nil")
-	}
 	c = &Configuration{
 		qspec: qspec,
 	}
@@ -72,9 +69,6 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Co
 }
 
 func (c *Configuration) SubConfiguration(qspec QuorumSpec, cfg gorums.NodeListOption) (subCfg *Configuration, err error) {
-	if qspec == nil {
-		return nil, fmt.Errorf("config: QuorumSpec cannot be nil")
-	}
 	subCfg = &Configuration{
 		qspec: qspec,
 	}
