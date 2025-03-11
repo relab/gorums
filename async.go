@@ -45,11 +45,11 @@ type asyncCallState struct {
 //
 // This function should only be used by generated code.
 func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
-	expectedReplies := len(c)
+	expectedReplies := len(c.RawNodes)
 	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
 	replyChan := make(chan response, expectedReplies)
 
-	for _, n := range c {
+	for _, n := range c.RawNodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)

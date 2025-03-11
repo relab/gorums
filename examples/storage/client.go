@@ -14,19 +14,19 @@ func runClient(addresses []string) error {
 		log.Fatalln("No addresses provided!")
 	}
 
-	// init gorums manager
-	mgr := proto.NewManager(
+	// create configuration containing all nodes
+	cfg, err := proto.NewConfiguration(
+		&qspec{cfgSize: len(addresses)},
+		gorums.WithNodeList(addresses),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)
-	// create configuration containing all nodes
-	cfg, err := mgr.NewConfiguration(&qspec{cfgSize: len(addresses)}, gorums.WithNodeList(addresses))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return Repl(mgr, cfg)
+	return Repl(cfg)
 }
 
 type qspec struct {

@@ -1,6 +1,9 @@
 package gorums
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // RawConfiguration represents a static set of nodes on which quorum calls may be invoked.
 //
@@ -8,23 +11,43 @@ import "fmt"
 //
 // This type is intended to be used by generated code.
 // You should use the generated `Configuration` type instead.
-type RawConfiguration []*RawNode
+type RawConfiguration struct {
+	RawNodes []*RawNode
+	*RawManager
+}
 
 // NewRawConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func NewRawConfiguration(mgr *RawManager, opt NodeListOption) (nodes RawConfiguration, err error) {
-	if opt == nil {
-		return nil, fmt.Errorf("config: missing required node list")
+func NewRawConfiguration(cfg NodeListOption, opts ...ManagerOption) (nodes RawConfiguration, err error) {
+	if cfg == nil {
+		return RawConfiguration{}, fmt.Errorf("config: missing required node list")
 	}
-	return opt.newConfig(mgr)
+	mgr := NewRawManager(opts...)
+	return cfg.newConfig(mgr)
+}
+
+func (c *RawConfiguration) SubRawConfiguration(cfg NodeListOption) (nodes RawConfiguration, err error) {
+	if cfg == nil {
+		return RawConfiguration{}, fmt.Errorf("config: missing required node list")
+	}
+	return cfg.newConfig(c.RawManager)
+}
+
+// Close closes a raw configuration created from the NewRawConfiguration method
+func (c *RawConfiguration) Close() error {
+	if c.RawManager == nil {
+		return errors.New("RawConfiguration.Close: RawManager is nil, cannot close a sub-configuration")
+	}
+	c.RawManager.Close()
+	return nil
 }
 
 // NodeIDs returns a slice of this configuration's Node IDs.
 func (c RawConfiguration) NodeIDs() []uint32 {
-	ids := make([]uint32, len(c))
-	for i, node := range c {
+	ids := make([]uint32, len(c.RawNodes))
+	for i, node := range c.RawNodes {
 		ids[i] = node.ID()
 	}
 	return ids
@@ -34,21 +57,21 @@ func (c RawConfiguration) NodeIDs() []uint32 {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c RawConfiguration) Nodes() []*RawNode {
-	return c
+	return c.RawNodes
 }
 
 // Size returns the number of nodes in this configuration.
 func (c RawConfiguration) Size() int {
-	return len(c)
+	return len(c.RawNodes)
 }
 
 // Equal returns true if configurations b and c have the same set of nodes.
 func (c RawConfiguration) Equal(b RawConfiguration) bool {
-	if len(c) != len(b) {
+	if len(c.RawNodes) != len(b.RawNodes) {
 		return false
 	}
-	for i := range c {
-		if c[i].ID() != b[i].ID() {
+	for i := range c.RawNodes {
+		if c.RawNodes[i].ID() != b.RawNodes[i].ID() {
 			return false
 		}
 	}
@@ -56,5 +79,5 @@ func (c RawConfiguration) Equal(b RawConfiguration) bool {
 }
 
 func (c RawConfiguration) getMsgID() uint64 {
-	return c[0].mgr.getMsgID()
+	return c.RawNodes[0].mgr.getMsgID()
 }

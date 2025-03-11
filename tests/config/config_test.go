@@ -45,7 +45,7 @@ func (q cfgQSpec) ConfigQF(_ *Request, replies map[uint32]*Response) (*Response,
 // setup returns a new configuration of cfgSize and a corresponding teardown function.
 // Calling setup multiple times will return a different configuration with different
 // sets of nodes.
-func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, mainCfg *Configuration, cfgSize int) (cfg *Configuration, teardown func()) {
 	t.Helper()
 	srvs := make([]*cfgSrv, cfgSize)
 	for i := range srvs {
@@ -59,12 +59,12 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 	for i := range srvs {
 		srvs[i].name = addrs[i]
 	}
-	cfg, err := mgr.NewConfiguration(newQSpec(cfgSize), gorums.WithNodeList(addrs))
+	cfg, err := mainCfg.SubConfiguration(newQSpec(cfgSize), gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 	teardown = func() {
-		mgr.Close()
+		mainCfg.Close()
 		closeServers()
 	}
 	return cfg, teardown
@@ -84,23 +84,28 @@ func TestConfig(t *testing.T) {
 			}
 		}
 	}
-	mgr := NewManager(
+	cfg, err := NewConfiguration(
+		&cfgQSpec{},
+		gorums.WithNodeList([]string{}),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	c1, teardown1 := setup(t, mgr, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c1, teardown1 := setup(t, cfg, 4)
 	defer teardown1()
 	fmt.Println("--- c1 ", c1.Nodes())
 	callRPC(c1)
 
-	c2, teardown2 := setup(t, mgr, 2)
+	c2, teardown2 := setup(t, cfg, 2)
 	defer teardown2()
 	fmt.Println("--- c2 ", c2.Nodes())
 	callRPC(c2)
 
 	newNodeList := c1.And(c2)
-	c3, err := mgr.NewConfiguration(
+	c3, err := cfg.SubConfiguration(
 		newQSpec(c1.Size()+c2.Size()),
 		newNodeList,
 	)
@@ -111,7 +116,7 @@ func TestConfig(t *testing.T) {
 	callRPC(c3)
 
 	rmNodeList := c3.Except(c1)
-	c4, err := mgr.NewConfiguration(
+	c4, err := cfg.SubConfiguration(
 		newQSpec(c2.Size()),
 		rmNodeList,
 	)
