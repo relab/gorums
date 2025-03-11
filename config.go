@@ -17,9 +17,7 @@ type RawConfiguration struct {
 }
 
 // NewRawConfiguration returns a configuration based on the provided list of nodes.
-// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
-// A new configuration can also be created from an existing configuration,
-// using the And, WithNewNodes, Except, and WithoutNodes methods.
+// Nodes can be supplied using WithNodeMap or WithNodeList.
 func NewRawConfiguration(cfg NodeListOption, opts ...ManagerOption) (nodes RawConfiguration, err error) {
 	if cfg == nil {
 		return RawConfiguration{}, fmt.Errorf("config: missing required node list")
@@ -28,6 +26,10 @@ func NewRawConfiguration(cfg NodeListOption, opts ...ManagerOption) (nodes RawCo
 	return cfg.newConfig(mgr)
 }
 
+// SubRawConfiguration returns a configuration from another configuration and a list of nodes.
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *RawConfiguration) SubRawConfiguration(cfg NodeListOption) (nodes RawConfiguration, err error) {
 	if cfg == nil {
 		return RawConfiguration{}, fmt.Errorf("config: missing required node list")

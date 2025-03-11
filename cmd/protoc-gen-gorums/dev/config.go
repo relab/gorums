@@ -14,6 +14,13 @@ type Configuration struct {
 	nodes []*Node
 }
 
+// NewConfiguration returns a configuration based on the provided list of nodes (required)
+// and an optional quorum specification. The QuorumSpec is necessary for call types that
+// must process replies. For configurations only used for unicast or multicast call types,
+// a QuorumSpec is not needed.
+// Nodes can be supplied using WithNodeMap or WithNodeList.
+// Using any other type of NodeListOption will not work.
+// The ManagerOption list controls how the nodes in the configuration are created.
 func NewConfiguration(qspec QuorumSpec, cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *Configuration, err error) {
 	c = &Configuration{
 		qspec: qspec,
@@ -29,7 +36,7 @@ func NewConfiguration(qspec QuorumSpec, cfg gorums.NodeListOption, opts ...gorum
 	return c, nil
 }
 
-// ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
+// ConfigurationFromRaw returns a new configuration from the given raw configuration and QuorumSpec.
 //
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
 //
@@ -53,6 +60,11 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Co
 	return newCfg, nil
 }
 
+// SubConfiguration allows for making a new Configuration from the ManagerOption list and
+// node list of another configuration,
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *Configuration) SubConfiguration(qspec QuorumSpec, cfg gorums.NodeListOption) (subCfg *Configuration, err error) {
 	subCfg = &Configuration{
 		qspec: qspec,
@@ -70,7 +82,8 @@ func (c *Configuration) SubConfiguration(qspec QuorumSpec, cfg gorums.NodeListOp
 
 // Close closes a configuration created from the NewConfiguration method
 //
-// NOTE: A configuration created with ConfigurationFromRaw is closed when the original configuration is closed
+// NOTE: A configuration created with ConfigurationFromRaw or SubConfiguration closes and
+// is closed when the original configuration or any of the subconfigurations are closed.
 // If you want the configurations to be independent you need to use NewConfiguration
 func (c *Configuration) Close() error {
 	return c.RawConfiguration.Close()
