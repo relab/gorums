@@ -101,11 +101,11 @@ type correctableCallState struct {
 //
 // This method should only be used by generated code.
 func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
-	expectedReplies := len(c)
+	expectedReplies := len(c.RawNodes)
 	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
 
 	replyChan := make(chan response, expectedReplies)
-	for _, n := range c {
+	for _, n := range c.RawNodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)
@@ -140,7 +140,7 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 	)
 
 	if state.data.ServerStream {
-		for _, n := range c {
+		for _, n := range c.RawNodes {
 			defer n.channel.deleteRouter(state.md.GetMessageID())
 		}
 	}

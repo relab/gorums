@@ -22,13 +22,13 @@ func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration
 	})
 	defer teardown()
 
-	mgr := NewManager(
+	cfg, err := NewConfiguration(
+		qspec{div, n},
+		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-
-	cfg, err := mgr.NewConfiguration(qspec{div, n}, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

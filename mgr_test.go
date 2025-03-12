@@ -30,8 +30,8 @@ func TestManagerLogging(t *testing.T) {
 }
 
 func TestManagerAddNode(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap(nodeMap))
+	cfg, err := gorums.NewRawConfiguration(gorums.WithNodeMap(nodeMap), gorums.WithNoConnect())
+	mgr := cfg.RawManager
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,17 +71,19 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		return srv
 	})
 	defer teardown()
-	mgr := gorums.NewRawManager(
+
+	ctx, err := gorums.NewRawConfiguration(gorums.WithNodeList(addrs[:2]),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	defer mgr.Close()
-
-	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs[:2]))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer ctx.Close()
+
+	mgr := ctx.RawManager
+
 	if mgr.Size() != len(addrs)-1 {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs)-1)
 	}

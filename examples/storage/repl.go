@@ -52,14 +52,12 @@ The command performs the write quorum call on node 0 and 2
 `
 
 type repl struct {
-	mgr  *pb.Manager
 	cfg  *pb.Configuration
 	term *term.Terminal
 }
 
-func newRepl(mgr *pb.Manager, cfg *pb.Configuration) *repl {
+func newRepl(cfg *pb.Configuration) *repl {
 	return &repl{
-		mgr: mgr,
 		cfg: cfg,
 		term: term.NewTerminal(struct {
 			io.Reader
@@ -90,8 +88,8 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the manager and configuration.
-func Repl(mgr *pb.Manager, defaultCfg *pb.Configuration) error {
-	r := newRepl(mgr, defaultCfg)
+func Repl(cfg *pb.Configuration) error {
+	r := newRepl(cfg)
 
 	fmt.Println(help)
 	for {
@@ -131,7 +129,7 @@ func Repl(mgr *pb.Manager, defaultCfg *pb.Configuration) error {
 			r.multicast(args[1:])
 		case "nodes":
 			fmt.Println("Nodes: ")
-			for i, n := range mgr.Nodes() {
+			for i, n := range cfg.RawManager.Nodes() {
 				fmt.Printf("%d: %s\n", i, n.Address())
 			}
 		default:
@@ -291,7 +289,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
 		var err error
-		numNodes := r.mgr.Size()
+		numNodes := r.cfg.RawManager.Size()
 		if i == 0 {
 			start = 0
 		} else {
@@ -315,10 +313,10 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 			return nil
 		}
 		nodes := make([]string, 0)
-		for _, node := range r.mgr.Nodes()[start:stop] {
+		for _, node := range r.cfg.RawManager.Nodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
+		cfg, err = r.cfg.SubConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -328,7 +326,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 	// configuration using list of indices
 	if indices := strings.Split(cfgStr, ","); len(indices) > 0 {
 		selectedNodes := make([]string, 0, len(indices))
-		nodes := r.mgr.Nodes()
+		nodes := r.cfg.RawManager.Nodes()
 		for _, index := range indices {
 			i, err := strconv.Atoi(index)
 			if err != nil {
@@ -341,7 +339,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
+		cfg, err := r.cfg.SubConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

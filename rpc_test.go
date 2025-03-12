@@ -18,14 +18,12 @@ func TestRPCCallSuccess(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := gorumsTestMgr()
-
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	cfg, err := dummy.NewConfiguration(nil, gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	node := mgr.Nodes()[0]
+	node := cfg.Nodes()[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	response, err := node.RPCCall(ctx, gorums.CallData{
@@ -44,16 +42,15 @@ func TestRPCCallDownedNode(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
 		return initServer()
 	})
-	mgr := gorumsTestMgr()
 
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	cfg, err := dummy.NewConfiguration(nil, gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	teardown()                         // stop all servers on purpose
 	time.Sleep(300 * time.Millisecond) // servers are not stopped immediately
-	node := mgr.Nodes()[0]
+	node := cfg.Nodes()[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	response, err := node.RPCCall(ctx, gorums.CallData{
@@ -74,14 +71,12 @@ func TestRPCCallTimedOut(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := gorumsTestMgr()
-
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	cfg, err := dummy.NewConfiguration(nil, gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	node := mgr.Nodes()[0]
+	node := cfg.Nodes()[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 0*time.Second)
 	time.Sleep(50 * time.Millisecond)
 	defer cancel()
@@ -103,13 +98,11 @@ func initServer() *gorums.Server {
 	return srv
 }
 
-func gorumsTestMgr() *dummy.Manager {
-	mgr := dummy.NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	return mgr
+func gorumsTestMgrOpts() []gorums.ManagerOption {
+	opts := []gorums.ManagerOption{gorums.WithGrpcDialOptions(
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)}
+	return opts
 }
 
 type testSrv struct{}
