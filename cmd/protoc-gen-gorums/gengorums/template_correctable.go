@@ -33,7 +33,7 @@ var correctableVar = `
 {{$context := use "context.Context" .GenFile}}
 `
 
-var correctableSignature = `func (c *Configuration) {{$method}}(` +
+var correctableSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
 	`*{{$correctableOut}} {`

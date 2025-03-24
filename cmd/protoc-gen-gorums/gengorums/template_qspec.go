@@ -9,13 +9,11 @@ var qspecInterface = `
 {{$genFile := .GenFile}}
 {{$configOpt := use "gorums.ConfigOption" .GenFile}}
 {{- $services := qspecServices .Services}}
-{{- if eq (len $services) 0}}
-	// There are no quorum calls.
-	type QuorumSpec interface{}
-{{- end}}
 {{- range $services}}
-	// QuorumSpec is the interface of quorum functions for {{.GoName}}.
-	type QuorumSpec interface {
+	{{- $service := .GoName}}
+	{{- $qspecName := printf "%sQuorumSpec" $service}}
+	// {{$qspecName}} is the interface of quorum functions for {{.GoName}}.
+	type {{$qspecName}} interface {
 		{{$configOpt}}
 
 		{{range qspecMethods .Methods -}}

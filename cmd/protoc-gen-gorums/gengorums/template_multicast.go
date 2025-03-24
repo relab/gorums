@@ -15,7 +15,7 @@ var mcVar = `
 {{$callOpt := use "gorums.CallOption" .GenFile}}
 `
 
-var multicastSignature = `func (c *Configuration) {{$method}}(` +
+var multicastSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}},` +
 	`opts ...{{$callOpt}}) {

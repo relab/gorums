@@ -10,6 +10,9 @@ var commonVariables = `
 {{$customOut := customOut .GenFile .Method}}
 {{$customOutField := field $customOut}}
 {{$unexportOutput := unexport .Method.Output.GoIdent.GoName}}
+{{$serviceName := .Method.Parent.GoName}}
+{{$nodeName := printf "%sNode" $serviceName}}
+{{$configurationName := printf "%sConfiguration" $serviceName}}
 `
 
 var quorumCallComment = `
@@ -30,7 +33,7 @@ var quorumCallComment = `
 {{end -}}
 `
 
-var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
+var quorumCallSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}})` +
 	`(resp *{{$customOut}}, err error) {

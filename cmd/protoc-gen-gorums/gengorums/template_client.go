@@ -16,6 +16,7 @@ var clientConfigurationInterface = `
 {{- range configurationsServices .Services}}
 	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sClient" $service}}
+	{{- $configurationName := printf "%sConfiguration" $service}}
 	// {{$interfaceName}} is the client interface for the {{$service}} service.
 	type {{$interfaceName}} interface {
 		{{- range configurationMethods .Methods}}
@@ -32,7 +33,7 @@ var clientConfigurationInterface = `
 		{{- end}}
 	}
 	// enforce interface compliance
-	var _ {{$interfaceName}} = (*Configuration)(nil)
+	var _ {{$interfaceName}} = (*{{$configurationName}})(nil)
 {{- end}}
 `
 
@@ -40,6 +41,7 @@ var clientNodeInterface = `
 {{- $genFile := .GenFile}}
 {{- range nodeServices .Services}}
 	{{- $service := .GoName}}
+	{{- $nodeName := printf "%sNode" $service}}
 	{{- $interfaceName := printf "%sNodeClient" $service}}
 	// {{$interfaceName}} is the single node client interface for the {{$service}} service.
 	type {{$interfaceName}} interface {
@@ -54,7 +56,7 @@ var clientNodeInterface = `
 		{{- end}}
 	}
 	// enforce interface compliance
-	var _ {{$interfaceName}} = (*Node)(nil)
+	var _ {{$interfaceName}} = (*{{$nodeName}})(nil)
 {{- end}}
 `
 

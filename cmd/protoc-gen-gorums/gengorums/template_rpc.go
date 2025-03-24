@@ -1,15 +1,15 @@
 package gengorums
 
-var rpcSignature = `func (n *Node) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$customOut}}, err error) {
-`
-
 var rpcVar = `
 {{$callData := use "gorums.CallData" .GenFile}}
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
 {{$context := use "context.Context" .GenFile}}
+`
+
+var rpcSignature = `func (n *{{$nodeName}}) {{$method}}(` +
+	`ctx {{$context}}, in *{{$in}}` +
+	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$customOut}}, err error) {
 `
 
 var rpcBody = `	cd := {{$callData}}{

@@ -21,7 +21,7 @@ var asyncCallComment = `
 {{end -}}
 `
 
-var asyncSignature = `func (c *Configuration) {{$method}}(` +
+var asyncSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
 	`*{{$asyncOut}} {`
