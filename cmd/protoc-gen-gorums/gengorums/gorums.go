@@ -78,12 +78,6 @@ func gorumsGuard(file *protogen.File) bool {
 		// there is nothing for this plugin to do
 		return false
 	}
-	if len(file.Services) > 1 {
-		// To build multiple services, make separate proto files and
-		// run the plugin separately for each proto file.
-		// These cannot share the same Go package.
-		log.Fatalln("Gorums does not support multiple services in the same proto file.")
-	}
 	// fail generator if a Gorums reserved identifier is used as a message name.
 	for _, msg := range file.Messages {
 		msgName := fmt.Sprintf("%v", msg.Desc.Name())
