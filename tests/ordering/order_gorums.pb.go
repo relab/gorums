@@ -10,6 +10,7 @@ import (
 	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
+	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -19,6 +20,12 @@ const (
 	// Verify that the gorums runtime is sufficiently up-to-date.
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 8)
 )
+
+func init() {
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
+}
 
 // QCAsync asynchronously invokes a quorum call on configuration c
 // and returns a AsyncResponse, which can be used to inspect the quorum call

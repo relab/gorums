@@ -5,10 +5,16 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{}
+var pkgIdentMap = map[string]string{"github.com/relab/gorums": "ContentSubtype", "google.golang.org/grpc/encoding": "GetCodec"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
 var reservedIdents = []string(nil)
 
-var staticCode = ``
+var staticCode = `func init() {
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
+}
+
+`

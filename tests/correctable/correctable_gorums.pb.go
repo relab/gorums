@@ -11,6 +11,7 @@ import (
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	ordering "github.com/relab/gorums/ordering"
+	encoding "google.golang.org/grpc/encoding"
 	proto "google.golang.org/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -21,6 +22,12 @@ const (
 	// Verify that the gorums runtime is sufficiently up-to-date.
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 8)
 )
+
+func init() {
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
+}
 
 // CorrectableTestClient is the client interface for the CorrectableTest service.
 type CorrectableTestClient interface {

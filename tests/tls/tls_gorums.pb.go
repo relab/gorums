@@ -9,6 +9,7 @@ package tls
 import (
 	context "context"
 	gorums "github.com/relab/gorums"
+	encoding "google.golang.org/grpc/encoding"
 )
 
 const (
@@ -17,6 +18,12 @@ const (
 	// Verify that the gorums runtime is sufficiently up-to-date.
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 8)
 )
+
+func init() {
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
+}
 
 // TLSNodeClient is the single node client interface for the TLS service.
 type TLSNodeClient interface {
