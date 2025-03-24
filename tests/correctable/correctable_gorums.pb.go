@@ -11,7 +11,6 @@ import (
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	ordering "github.com/relab/gorums/ordering"
-	encoding "google.golang.org/grpc/encoding"
 	proto "google.golang.org/protobuf/proto"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -23,34 +22,40 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 8)
 )
 
-// A Configuration represents a static set of nodes on which quorum remote
-// procedure calls may be invoked.
-type Configuration struct {
-	gorums.RawConfiguration
-	qspec QuorumSpec
-	nodes []*Node
+// CorrectableTestClient is the client interface for the CorrectableTest service.
+type CorrectableTestClient interface {
+	Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse
+	CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse
 }
 
-// ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
+// enforce interface compliance
+var _ CorrectableTestClient = (*CorrectableTestConfiguration)(nil)
+
+// A CorrectableTestConfiguration represents a static set of nodes on which quorum remote
+// procedure calls may be invoked.
+type CorrectableTestConfiguration struct {
+	gorums.RawConfiguration
+	qspec CorrectableTestQuorumSpec
+	nodes []*CorrectableTestNode
+} // CorrectableTestQuorumSpecFromRaw returns a new CorrectableTestQuorumSpec from the given raw configuration and QuorumSpec.
 //
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
+func CorrectableTestConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec CorrectableTestQuorumSpec) (*CorrectableTestConfiguration, error) {
+	// return an error if qspec is nil.
+	if qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
-	newCfg := &Configuration{
+	newCfg := &CorrectableTestConfiguration{
 		RawConfiguration: rawCfg,
 		qspec:            qspec,
 	}
 	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, newCfg.Size())
+	newCfg.nodes = make([]*CorrectableTestNode, newCfg.Size())
 	for i, n := range rawCfg {
-		newCfg.nodes[i] = &Node{n}
+		newCfg.nodes[i] = &CorrectableTestNode{n}
 	}
 	return newCfg, nil
 }
@@ -59,111 +64,25 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Co
 // order as they were provided in the creation of the Manager.
 //
 // NOTE: mutating the returned slice is not supported.
-func (c *Configuration) Nodes() []*Node {
+func (c *CorrectableTestConfiguration) Nodes() []*CorrectableTestNode {
 	return c.nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+func (c CorrectableTestConfiguration) And(d *CorrectableTestConfiguration) gorums.NodeListOption {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+func (c CorrectableTestConfiguration) Except(rm *CorrectableTestConfiguration) gorums.NodeListOption {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
-
-func init() {
-	if encoding.GetCodec(gorums.ContentSubtype) == nil {
-		encoding.RegisterCodec(gorums.NewCodec())
-	}
-}
-
-// Manager maintains a connection pool of nodes on
-// which quorum calls can be performed.
-type Manager struct {
-	*gorums.RawManager
-}
-
-// NewManager returns a new Manager for managing connection to nodes added
-// to the manager. This function accepts manager options used to configure
-// various aspects of the manager.
-func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return &Manager{
-		RawManager: gorums.NewRawManager(opts...),
-	}
-}
-
-// NewConfiguration returns a configuration based on the provided list of nodes (required)
-// and an optional quorum specification. The QuorumSpec is necessary for call types that
-// must process replies. For configurations only used for unicast or multicast call types,
-// a QuorumSpec is not needed. The QuorumSpec interface is also a ConfigOption.
-// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
-// A new configuration can also be created from an existing configuration,
-// using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	if len(opts) < 1 || len(opts) > 2 {
-		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
-	}
-	c = &Configuration{}
-	for _, opt := range opts {
-		switch v := opt.(type) {
-		case gorums.NodeListOption:
-			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
-			if err != nil {
-				return nil, err
-			}
-		case QuorumSpec:
-			// Must be last since v may match QuorumSpec if it is interface{}
-			c.qspec = v
-		default:
-			return nil, fmt.Errorf("config: unknown option type: %v", v)
-		}
-	}
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
-	}
-	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
-	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
-	}
-	return c, nil
-}
-
-// Nodes returns a slice of available nodes on this manager.
-// IDs are returned in the order they were added at creation of the manager.
-func (m *Manager) Nodes() []*Node {
-	gorumsNodes := m.RawManager.Nodes()
-	nodes := make([]*Node, len(gorumsNodes))
-	for i, n := range gorumsNodes {
-		nodes[i] = &Node{n}
-	}
-	return nodes
-}
-
-// Node encapsulates the state of a node on which a remote procedure call
-// can be performed.
-type Node struct {
-	*gorums.RawNode
-}
-
-// CorrectableTestClient is the client interface for the CorrectableTest service.
-type CorrectableTestClient interface {
-	Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse
-	CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse
-}
-
-// enforce interface compliance
-var _ CorrectableTestClient = (*Configuration)(nil)
 
 // Correctable asynchronously invokes a correctable quorum call on each node
 // in configuration c and returns a CorrectableCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
-func (c *Configuration) Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse {
+func (c *CorrectableTestConfiguration) Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse {
 	cd := gorums.CorrectableCallData{
 		Message:      in,
 		Method:       "correctable.CorrectableTest.Correctable",
@@ -185,7 +104,7 @@ func (c *Configuration) Correctable(ctx context.Context, in *CorrectableRequest)
 // in configuration c and returns a CorrectableStreamCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
 // This method supports server-side preliminary replies (correctable stream).
-func (c *Configuration) CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse {
+func (c *CorrectableTestConfiguration) CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse {
 	cd := gorums.CorrectableCallData{
 		Message:      in,
 		Method:       "correctable.CorrectableTest.CorrectableStream",
@@ -203,13 +122,62 @@ func (c *Configuration) CorrectableStream(ctx context.Context, in *CorrectableRe
 	return &CorrectableStreamCorrectableResponse{corr}
 }
 
+// CorrectableTestManager maintains a connection pool of nodes on
+// which quorum calls can be performed.
+type CorrectableTestManager struct {
+	*gorums.RawManager
+}
+
+// NewCorrectableTestManager returns a new CorrectableTestManager for managing connection to nodes added
+// to the manager. This function accepts manager options used to configure
+// various aspects of the manager.
+func NewCorrectableTestManager(opts ...gorums.ManagerOption) *CorrectableTestManager {
+	return &CorrectableTestManager{
+		RawManager: gorums.NewRawManager(opts...),
+	}
+} // NewCorrectableTestConfiguration returns a CorrectableTestConfiguration based on the provided list of nodes (required)
+// and a quorum specification
+// .
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
+func (m *CorrectableTestManager) NewConfiguration(cfg gorums.NodeListOption, qspec CorrectableTestQuorumSpec) (c *CorrectableTestConfiguration, err error) {
+	c = &CorrectableTestConfiguration{}
+	c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, cfg)
+	if err != nil {
+		return nil, err
+	}
+	// return an error if qspec is nil.
+	if qspec == nil {
+		return nil, fmt.Errorf("config: missing required CorrectableTestQuorumSpec")
+	}
+	c.qspec = qspec
+	// initialize the nodes slice
+	c.nodes = make([]*CorrectableTestNode, c.Size())
+	for i, n := range c.RawConfiguration {
+		c.nodes[i] = &CorrectableTestNode{n}
+	}
+	return c, nil
+}
+
+// Nodes returns a slice of available nodes on this manager.
+// IDs are returned in the order they were added at creation of the manager.
+func (m *CorrectableTestManager) Nodes() []*CorrectableTestNode {
+	gorumsNodes := m.RawManager.Nodes()
+	nodes := make([]*CorrectableTestNode, len(gorumsNodes))
+	for i, n := range gorumsNodes {
+		nodes[i] = &CorrectableTestNode{n}
+	}
+	return nodes
+}
+
 // CorrectableTestNode holds the node specific methods for the CorrectableTest service.
 type CorrectableTestNode struct {
 	*gorums.RawNode
 }
 
-// QuorumSpec is the interface of quorum functions for CorrectableTest.
-type QuorumSpec interface {
+// CorrectableTestQuorumSpec is the interface of quorum functions for CorrectableTest.
+type CorrectableTestQuorumSpec interface {
 	gorums.ConfigOption
 
 	// CorrectableQF is the quorum function for the Correctable

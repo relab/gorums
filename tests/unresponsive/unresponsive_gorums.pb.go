@@ -8,9 +8,7 @@ package unresponsive
 
 import (
 	context "context"
-	fmt "fmt"
 	gorums "github.com/relab/gorums"
-	encoding "google.golang.org/grpc/encoding"
 )
 
 const (
@@ -20,134 +18,6 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 8)
 )
 
-// A Configuration represents a static set of nodes on which quorum remote
-// procedure calls may be invoked.
-type Configuration struct {
-	gorums.RawConfiguration
-	qspec QuorumSpec
-	nodes []*Node
-}
-
-// ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
-//
-// This function may for example be used to "clone" a configuration but install a different QuorumSpec:
-//
-//	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
-//	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
-	}
-	newCfg := &Configuration{
-		RawConfiguration: rawCfg,
-		qspec:            qspec,
-	}
-	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, newCfg.Size())
-	for i, n := range rawCfg {
-		newCfg.nodes[i] = &Node{n}
-	}
-	return newCfg, nil
-}
-
-// Nodes returns a slice of each available node. IDs are returned in the same
-// order as they were provided in the creation of the Manager.
-//
-// NOTE: mutating the returned slice is not supported.
-func (c *Configuration) Nodes() []*Node {
-	return c.nodes
-}
-
-// And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
-}
-
-// Except returns a NodeListOption that can be used to create a new configuration
-// from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
-}
-
-func init() {
-	if encoding.GetCodec(gorums.ContentSubtype) == nil {
-		encoding.RegisterCodec(gorums.NewCodec())
-	}
-}
-
-// Manager maintains a connection pool of nodes on
-// which quorum calls can be performed.
-type Manager struct {
-	*gorums.RawManager
-}
-
-// NewManager returns a new Manager for managing connection to nodes added
-// to the manager. This function accepts manager options used to configure
-// various aspects of the manager.
-func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return &Manager{
-		RawManager: gorums.NewRawManager(opts...),
-	}
-}
-
-// NewConfiguration returns a configuration based on the provided list of nodes (required)
-// and an optional quorum specification. The QuorumSpec is necessary for call types that
-// must process replies. For configurations only used for unicast or multicast call types,
-// a QuorumSpec is not needed. The QuorumSpec interface is also a ConfigOption.
-// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
-// A new configuration can also be created from an existing configuration,
-// using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	if len(opts) < 1 || len(opts) > 2 {
-		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
-	}
-	c = &Configuration{}
-	for _, opt := range opts {
-		switch v := opt.(type) {
-		case gorums.NodeListOption:
-			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
-			if err != nil {
-				return nil, err
-			}
-		case QuorumSpec:
-			// Must be last since v may match QuorumSpec if it is interface{}
-			c.qspec = v
-		default:
-			return nil, fmt.Errorf("config: unknown option type: %v", v)
-		}
-	}
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
-	}
-	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
-	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
-	}
-	return c, nil
-}
-
-// Nodes returns a slice of available nodes on this manager.
-// IDs are returned in the order they were added at creation of the manager.
-func (m *Manager) Nodes() []*Node {
-	gorumsNodes := m.RawManager.Nodes()
-	nodes := make([]*Node, len(gorumsNodes))
-	for i, n := range gorumsNodes {
-		nodes[i] = &Node{n}
-	}
-	return nodes
-}
-
-// Node encapsulates the state of a node on which a remote procedure call
-// can be performed.
-type Node struct {
-	*gorums.RawNode
-}
-
 // UnresponsiveNodeClient is the single node client interface for the Unresponsive service.
 type UnresponsiveNodeClient interface {
 	TestUnresponsive(ctx context.Context, in *Empty) (resp *Empty, err error)
@@ -156,13 +26,95 @@ type UnresponsiveNodeClient interface {
 // enforce interface compliance
 var _ UnresponsiveNodeClient = (*UnresponsiveNode)(nil)
 
+// A UnresponsiveConfiguration represents a static set of nodes on which quorum remote
+// procedure calls may be invoked.
+type UnresponsiveConfiguration struct {
+	gorums.RawConfiguration
+	nodes []*UnresponsiveNode
+} // UnresponsiveQuorumSpecFromRaw returns a new UnresponsiveQuorumSpec from the given raw configuration.
+//
+// This function may for example be used to "clone" a configuration but install a different QuorumSpec:
+//
+//	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
+//	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
+func UnresponsiveConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*UnresponsiveConfiguration, error) {
+	newCfg := &UnresponsiveConfiguration{
+		RawConfiguration: rawCfg,
+	}
+	// initialize the nodes slice
+	newCfg.nodes = make([]*UnresponsiveNode, newCfg.Size())
+	for i, n := range rawCfg {
+		newCfg.nodes[i] = &UnresponsiveNode{n}
+	}
+	return newCfg, nil
+}
+
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Manager.
+//
+// NOTE: mutating the returned slice is not supported.
+func (c *UnresponsiveConfiguration) Nodes() []*UnresponsiveNode {
+	return c.nodes
+}
+
+// And returns a NodeListOption that can be used to create a new configuration combining c and d.
+func (c UnresponsiveConfiguration) And(d *UnresponsiveConfiguration) gorums.NodeListOption {
+	return c.RawConfiguration.And(d.RawConfiguration)
+}
+
+// Except returns a NodeListOption that can be used to create a new configuration
+// from c without the nodes in rm.
+func (c UnresponsiveConfiguration) Except(rm *UnresponsiveConfiguration) gorums.NodeListOption {
+	return c.RawConfiguration.Except(rm.RawConfiguration)
+}
+
+// UnresponsiveManager maintains a connection pool of nodes on
+// which quorum calls can be performed.
+type UnresponsiveManager struct {
+	*gorums.RawManager
+}
+
+// NewUnresponsiveManager returns a new UnresponsiveManager for managing connection to nodes added
+// to the manager. This function accepts manager options used to configure
+// various aspects of the manager.
+func NewUnresponsiveManager(opts ...gorums.ManagerOption) *UnresponsiveManager {
+	return &UnresponsiveManager{
+		RawManager: gorums.NewRawManager(opts...),
+	}
+} // NewUnresponsiveConfiguration returns a UnresponsiveConfiguration based on the provided list of nodes (required)
+// .
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
+func (m *UnresponsiveManager) NewConfiguration(cfg gorums.NodeListOption) (c *UnresponsiveConfiguration, err error) {
+	c = &UnresponsiveConfiguration{}
+	c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, cfg)
+	if err != nil {
+		return nil, err
+	}
+	// initialize the nodes slice
+	c.nodes = make([]*UnresponsiveNode, c.Size())
+	for i, n := range c.RawConfiguration {
+		c.nodes[i] = &UnresponsiveNode{n}
+	}
+	return c, nil
+}
+
+// Nodes returns a slice of available nodes on this manager.
+// IDs are returned in the order they were added at creation of the manager.
+func (m *UnresponsiveManager) Nodes() []*UnresponsiveNode {
+	gorumsNodes := m.RawManager.Nodes()
+	nodes := make([]*UnresponsiveNode, len(gorumsNodes))
+	for i, n := range gorumsNodes {
+		nodes[i] = &UnresponsiveNode{n}
+	}
+	return nodes
+}
+
 // UnresponsiveNode holds the node specific methods for the Unresponsive service.
 type UnresponsiveNode struct {
 	*gorums.RawNode
 }
-
-// There are no quorum calls.
-type QuorumSpec interface{}
 
 // TestUnresponsive is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.

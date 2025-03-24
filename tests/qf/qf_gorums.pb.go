@@ -10,7 +10,6 @@ import (
 	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
-	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -21,34 +20,40 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 8)
 )
 
-// A Configuration represents a static set of nodes on which quorum remote
-// procedure calls may be invoked.
-type Configuration struct {
-	gorums.RawConfiguration
-	qspec QuorumSpec
-	nodes []*Node
+// QuorumFunctionClient is the client interface for the QuorumFunction service.
+type QuorumFunctionClient interface {
+	UseReq(ctx context.Context, in *Request) (resp *Response, err error)
+	IgnoreReq(ctx context.Context, in *Request) (resp *Response, err error)
 }
 
-// ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
+// enforce interface compliance
+var _ QuorumFunctionClient = (*QuorumFunctionConfiguration)(nil)
+
+// A QuorumFunctionConfiguration represents a static set of nodes on which quorum remote
+// procedure calls may be invoked.
+type QuorumFunctionConfiguration struct {
+	gorums.RawConfiguration
+	qspec QuorumFunctionQuorumSpec
+	nodes []*QuorumFunctionNode
+} // QuorumFunctionQuorumSpecFromRaw returns a new QuorumFunctionQuorumSpec from the given raw configuration and QuorumSpec.
 //
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
+func QuorumFunctionConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumFunctionQuorumSpec) (*QuorumFunctionConfiguration, error) {
+	// return an error if qspec is nil.
+	if qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
-	newCfg := &Configuration{
+	newCfg := &QuorumFunctionConfiguration{
 		RawConfiguration: rawCfg,
 		qspec:            qspec,
 	}
 	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, newCfg.Size())
+	newCfg.nodes = make([]*QuorumFunctionNode, newCfg.Size())
 	for i, n := range rawCfg {
-		newCfg.nodes[i] = &Node{n}
+		newCfg.nodes[i] = &QuorumFunctionNode{n}
 	}
 	return newCfg, nil
 }
@@ -57,114 +62,77 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Co
 // order as they were provided in the creation of the Manager.
 //
 // NOTE: mutating the returned slice is not supported.
-func (c *Configuration) Nodes() []*Node {
+func (c *QuorumFunctionConfiguration) Nodes() []*QuorumFunctionNode {
 	return c.nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+func (c QuorumFunctionConfiguration) And(d *QuorumFunctionConfiguration) gorums.NodeListOption {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+func (c QuorumFunctionConfiguration) Except(rm *QuorumFunctionConfiguration) gorums.NodeListOption {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
 
-func init() {
-	if encoding.GetCodec(gorums.ContentSubtype) == nil {
-		encoding.RegisterCodec(gorums.NewCodec())
-	}
-}
-
-// Manager maintains a connection pool of nodes on
+// QuorumFunctionManager maintains a connection pool of nodes on
 // which quorum calls can be performed.
-type Manager struct {
+type QuorumFunctionManager struct {
 	*gorums.RawManager
 }
 
-// NewManager returns a new Manager for managing connection to nodes added
+// NewQuorumFunctionManager returns a new QuorumFunctionManager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
-func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return &Manager{
+func NewQuorumFunctionManager(opts ...gorums.ManagerOption) *QuorumFunctionManager {
+	return &QuorumFunctionManager{
 		RawManager: gorums.NewRawManager(opts...),
 	}
-}
-
-// NewConfiguration returns a configuration based on the provided list of nodes (required)
-// and an optional quorum specification. The QuorumSpec is necessary for call types that
-// must process replies. For configurations only used for unicast or multicast call types,
-// a QuorumSpec is not needed. The QuorumSpec interface is also a ConfigOption.
+} // NewQuorumFunctionConfiguration returns a QuorumFunctionConfiguration based on the provided list of nodes (required)
+// and a quorum specification
+// .
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	if len(opts) < 1 || len(opts) > 2 {
-		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
+func (m *QuorumFunctionManager) NewConfiguration(cfg gorums.NodeListOption, qspec QuorumFunctionQuorumSpec) (c *QuorumFunctionConfiguration, err error) {
+	c = &QuorumFunctionConfiguration{}
+	c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, cfg)
+	if err != nil {
+		return nil, err
 	}
-	c = &Configuration{}
-	for _, opt := range opts {
-		switch v := opt.(type) {
-		case gorums.NodeListOption:
-			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
-			if err != nil {
-				return nil, err
-			}
-		case QuorumSpec:
-			// Must be last since v may match QuorumSpec if it is interface{}
-			c.qspec = v
-		default:
-			return nil, fmt.Errorf("config: unknown option type: %v", v)
-		}
+	// return an error if qspec is nil.
+	if qspec == nil {
+		return nil, fmt.Errorf("config: missing required QuorumFunctionQuorumSpec")
 	}
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
-	}
+	c.qspec = qspec
 	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
+	c.nodes = make([]*QuorumFunctionNode, c.Size())
 	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
+		c.nodes[i] = &QuorumFunctionNode{n}
 	}
 	return c, nil
 }
 
 // Nodes returns a slice of available nodes on this manager.
 // IDs are returned in the order they were added at creation of the manager.
-func (m *Manager) Nodes() []*Node {
+func (m *QuorumFunctionManager) Nodes() []*QuorumFunctionNode {
 	gorumsNodes := m.RawManager.Nodes()
-	nodes := make([]*Node, len(gorumsNodes))
+	nodes := make([]*QuorumFunctionNode, len(gorumsNodes))
 	for i, n := range gorumsNodes {
-		nodes[i] = &Node{n}
+		nodes[i] = &QuorumFunctionNode{n}
 	}
 	return nodes
 }
-
-// Node encapsulates the state of a node on which a remote procedure call
-// can be performed.
-type Node struct {
-	*gorums.RawNode
-}
-
-// QuorumFunctionClient is the client interface for the QuorumFunction service.
-type QuorumFunctionClient interface {
-	UseReq(ctx context.Context, in *Request) (resp *Response, err error)
-	IgnoreReq(ctx context.Context, in *Request) (resp *Response, err error)
-}
-
-// enforce interface compliance
-var _ QuorumFunctionClient = (*Configuration)(nil)
 
 // QuorumFunctionNode holds the node specific methods for the QuorumFunction service.
 type QuorumFunctionNode struct {
 	*gorums.RawNode
 }
 
-// QuorumSpec is the interface of quorum functions for QuorumFunction.
-type QuorumSpec interface {
+// QuorumFunctionQuorumSpec is the interface of quorum functions for QuorumFunction.
+type QuorumFunctionQuorumSpec interface {
 	gorums.ConfigOption
 
 	// UseReqQF is the quorum function for the UseReq
@@ -184,7 +152,7 @@ type QuorumSpec interface {
 
 // UseReq is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) UseReq(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *QuorumFunctionConfiguration) UseReq(ctx context.Context, in *Request) (resp *Response, err error) {
 	cd := gorums.QuorumCallData{
 		Message: in,
 		Method:  "qf.QuorumFunction.UseReq",
@@ -206,7 +174,7 @@ func (c *Configuration) UseReq(ctx context.Context, in *Request) (resp *Response
 
 // IgnoreReq is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) IgnoreReq(ctx context.Context, in *Request) (resp *Response, err error) {
+func (c *QuorumFunctionConfiguration) IgnoreReq(ctx context.Context, in *Request) (resp *Response, err error) {
 	cd := gorums.QuorumCallData{
 		Message: in,
 		Method:  "qf.QuorumFunction.IgnoreReq",

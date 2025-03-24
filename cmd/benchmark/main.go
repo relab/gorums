@@ -196,7 +196,7 @@ func main() {
 		gorums.WithSendBufferSize(*sendBuffer),
 	}
 
-	mgr := benchmark.NewManager(mgrOpts...)
+	mgr := benchmark.NewBenchmarkManager(mgrOpts...)
 	defer mgr.Close()
 
 	qspec := &benchmark.QSpec{
@@ -204,7 +204,7 @@ func main() {
 		CfgSize: options.NumNodes,
 	}
 
-	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(remotes[:options.NumNodes]))
+	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(remotes[:options.NumNodes]), qspec)
 	checkf("Failed to create configuration: %v", err)
 
 	results, err := benchmark.RunBenchmarks(benchReg, options, cfg)

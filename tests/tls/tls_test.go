@@ -45,7 +45,7 @@ func TestTLS(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := NewManager(
+	mgr := NewTLSManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
 		),

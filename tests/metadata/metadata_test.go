@@ -58,7 +58,7 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	mgr := NewManager(
+	mgr := NewMetadataTestManager(
 		gorums.WithMetadata(md),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -90,7 +90,7 @@ func TestPerNodeMetadata(t *testing.T) {
 		})
 	}
 
-	mgr := NewManager(
+	mgr := NewMetadataTestManager(
 		gorums.WithPerNodeMetadata(perNodeMD),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -117,7 +117,7 @@ func TestCanGetPeerInfo(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer(t) })
 	defer teardown()
 
-	mgr := NewManager(
+	mgr := NewMetadataTestManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),

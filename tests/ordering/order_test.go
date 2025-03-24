@@ -79,19 +79,19 @@ func (q testQSpec) AsyncHandlerQF(_ *Request, replies map[uint32]*Response) (*Re
 	return q.qf(replies)
 }
 
-func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, cfgSize int) (cfg *GorumsTestConfiguration, teardown func()) {
 	t.Helper()
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	mgr := NewManager(
+	mgr := NewGorumsTestManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList(addrs))
+	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addrs), &testQSpec{cfgSize})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(len(nodes))
 		for _, node := range nodes {
-			go func(node *Node) {
+			go func(node *GorumsTestNode) {
 				defer wg.Done()
 				resp, err := node.UnaryRPC(context.Background(), &Request{Num: uint64(i)})
 				if err != nil {

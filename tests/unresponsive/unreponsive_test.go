@@ -28,7 +28,7 @@ func TestUnresponsive(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := NewManager(
+	mgr := NewUnresponsiveManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),

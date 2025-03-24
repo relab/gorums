@@ -41,8 +41,9 @@ var managerNewConfiguration = `
 	{{- $service := .GoName}}
 	{{- $managerName := printf "%sManager" $service}}
 	{{- $configurationName := printf "%sConfiguration" $service}}
-	{{- $qspecName := printf "%sConfiguration" $service}}
-	{{- $isQspec ne (len (qspecMethods .Methods))	0 -}}
+	{{- $qspecName := printf "%sQuorumSpec" $service}}
+	{{- $nodeName := printf "%sNode" $service}}
+	{{- $isQspec := ne (len (qspecMethods .Methods))	0 -}}
 	// New{{$configurationName}} returns a {{$configurationName}} based on the provided list of nodes (required)
 	{{- if $isQspec}}
 		// and a quorum specification
@@ -51,7 +52,7 @@ var managerNewConfiguration = `
 	// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 	// A new configuration can also be created from an existing configuration,
 	// using the And, WithNewNodes, Except, and WithoutNodes methods.
-	func (m *Manager) NewConfiguration(cfg gorums.NodeListOption, {{if $isQspec}}spec {{$qspecName}}{{end}}) (c *{{$configurationName}}, err error) {
+	func (m *{{$managerName}}) NewConfiguration(cfg gorums.NodeListOption{{if $isQspec}}, qspec {{$qspecName}}{{end}}) (c *{{$configurationName}}, err error) {
 		c = &{{$configurationName}}{}
 		c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, cfg)
 		if err != nil {
@@ -60,14 +61,14 @@ var managerNewConfiguration = `
 		{{- if $isQspec}}
 			// return an error if qspec is nil.
 			if qspec == nil {
-				return nil, fmt.Errorf("config: missing required {{$qspecName}}")
+				return nil, {{use "fmt.Errorf" $genFile}}("config: missing required {{$qspecName}}")
 			}
-			c.qspec = spec
+			c.qspec = qspec
 		{{- end}}
 		// initialize the nodes slice
-		c.nodes = make([]*Node, c.Size())
+		c.nodes = make([]*{{$nodeName}}, c.Size())
 		for i, n := range c.RawConfiguration {
-			c.nodes[i] = &Node{n}
+			c.nodes[i] = &{{$nodeName}}{n}
 		}
 		return c, nil
 	}
@@ -93,4 +94,4 @@ var managerMethodNodes = `
 {{- end}}
 `
 
-var manager = managerVariables + managerStructs + managerConstructor + managerMethodNodes
+var manager = managerVariables + managerStructs + managerConstructor + managerNewConfiguration + managerMethodNodes

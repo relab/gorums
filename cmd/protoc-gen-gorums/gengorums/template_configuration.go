@@ -3,7 +3,6 @@ package gengorums
 var configurationVars = `
 {{$rawConfiguration := use "gorums.RawConfiguration" .GenFile}}
 {{$nodeListOptions := use "gorums.NodeListOption" .GenFile}}
-{{$errorf := use "fmt.Errorf" .GenFile}}
 `
 
 var configurationStruct = `
@@ -47,7 +46,7 @@ var configurationFromRaw = `
 		{{- if $isQspec}}
 			// return an error if qspec is nil.
 			if qspec == nil {
-				return nil, {{$errorf}}("config: missing required QuorumSpec")
+				return nil, {{use "fmt.Errorf" $genFile}}("config: missing required QuorumSpec")
 			}
 		{{- end}}
 		newCfg := &{{$configurationName}}{

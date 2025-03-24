@@ -194,14 +194,14 @@ func BenchmarkFullStackQF(b *testing.B) {
 			RegisterQuorumFunctionServer(srv, &testSrv{})
 			return srv
 		})
-		mgr := NewManager(
+		mgr := NewQuorumFunctionManager(
 			gorums.WithGrpcDialOptions(
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 			),
 		)
 		c, err := mgr.NewConfiguration(
-			&testQSpec{quorum: n / 2},
 			gorums.WithNodeList([]string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}), // dummy node list; won't actually be used in test
+			&testQSpec{quorum: n / 2},
 		)
 		if err != nil {
 			b.Fatal(err)

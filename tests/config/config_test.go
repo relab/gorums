@@ -45,7 +45,7 @@ func (q cfgQSpec) ConfigQF(_ *Request, replies map[uint32]*Response) (*Response,
 // setup returns a new configuration of cfgSize and a corresponding teardown function.
 // Calling setup multiple times will return a different configuration with different
 // sets of nodes.
-func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, mgr *ConfigTestManager, cfgSize int) (cfg *ConfigTestConfiguration, teardown func()) {
 	t.Helper()
 	srvs := make([]*cfgSrv, cfgSize)
 	for i := range srvs {
@@ -59,7 +59,7 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 	for i := range srvs {
 		srvs[i].name = addrs[i]
 	}
-	cfg, err := mgr.NewConfiguration(newQSpec(cfgSize), gorums.WithNodeList(addrs))
+	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addrs), newQSpec(cfgSize))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	callRPC := func(cfg *Configuration) {
+	callRPC := func(cfg *ConfigTestConfiguration) {
 		for i := 0; i < 5; i++ {
 			resp, err := cfg.Config(context.Background(), &Request{Num: uint64(i)})
 			if err != nil {
@@ -84,7 +84,7 @@ func TestConfig(t *testing.T) {
 			}
 		}
 	}
-	mgr := NewManager(
+	mgr := NewConfigTestManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
@@ -101,8 +101,8 @@ func TestConfig(t *testing.T) {
 
 	newNodeList := c1.And(c2)
 	c3, err := mgr.NewConfiguration(
-		newQSpec(c1.Size()+c2.Size()),
 		newNodeList,
+		newQSpec(c1.Size()+c2.Size()),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -112,8 +112,8 @@ func TestConfig(t *testing.T) {
 
 	rmNodeList := c3.Except(c1)
 	c4, err := mgr.NewConfiguration(
-		newQSpec(c2.Size()),
 		rmNodeList,
+		newQSpec(c2.Size()),
 	)
 	if err != nil {
 		t.Fatal(err)

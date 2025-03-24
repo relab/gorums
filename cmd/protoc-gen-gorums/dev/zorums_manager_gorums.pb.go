@@ -7,6 +7,7 @@
 package dev
 
 import (
+	fmt "fmt"
 	gorums "github.com/relab/gorums"
 )
 
@@ -30,6 +31,29 @@ func NewZorumsServiceManager(opts ...gorums.ManagerOption) *ZorumsServiceManager
 	return &ZorumsServiceManager{
 		RawManager: gorums.NewRawManager(opts...),
 	}
+} // NewZorumsServiceConfiguration returns a ZorumsServiceConfiguration based on the provided list of nodes (required)
+// and a quorum specification
+// .
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
+func (m *ZorumsServiceManager) NewConfiguration(cfg gorums.NodeListOption, qspec ZorumsServiceQuorumSpec) (c *ZorumsServiceConfiguration, err error) {
+	c = &ZorumsServiceConfiguration{}
+	c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, cfg)
+	if err != nil {
+		return nil, err
+	}
+	// return an error if qspec is nil.
+	if qspec == nil {
+		return nil, fmt.Errorf("config: missing required ZorumsServiceQuorumSpec")
+	}
+	c.qspec = qspec
+	// initialize the nodes slice
+	c.nodes = make([]*ZorumsServiceNode, c.Size())
+	for i, n := range c.RawConfiguration {
+		c.nodes[i] = &ZorumsServiceNode{n}
+	}
+	return c, nil
 }
 
 // Nodes returns a slice of available nodes on this manager.

@@ -27,7 +27,7 @@ benchmark: installgorums $(benchmark_deps)
 
 $(static_file): $(static_files)
 	@cp $(static_file) $(static_file).bak
-#	@protoc-gen-gorums --bundle=$(static_file)
+	@protoc-gen-gorums --bundle=$(static_file)
 
 %.pb.go : %.proto
 	@protoc -I=$(proto_path) \
