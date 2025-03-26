@@ -41,3 +41,26 @@ func (n *ZorumsServiceNode) Unicast2(ctx context.Context, in *Request, opts ...g
 
 	n.RawNode.Unicast(ctx, cd, opts...)
 }
+
+// Unicast is a one-way call; no replies are processed.
+func (n *ZorumsNoQspecServiceNode) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.CallData{
+		Message: in,
+		Method:  "dev.ZorumsNoQspecService.Unicast",
+	}
+
+	n.RawNode.Unicast(ctx, cd, opts...)
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ emptypb.Empty
+
+// Unicast2 is a one-way call; no replies are processed.
+func (n *ZorumsNoQspecServiceNode) Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.CallData{
+		Message: in,
+		Method:  "dev.ZorumsNoQspecService.Unicast2",
+	}
+
+	n.RawNode.Unicast(ctx, cd, opts...)
+}

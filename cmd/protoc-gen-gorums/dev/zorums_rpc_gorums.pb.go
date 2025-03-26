@@ -32,3 +32,18 @@ func (n *ZorumsServiceNode) GRPCCall(ctx context.Context, in *Request) (resp *Re
 	}
 	return res.(*Response), err
 }
+
+// GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
+// they are added to the _grpc.pb.go generated file.
+func (n *ZorumsNoQspecServiceNode) GRPCCall(ctx context.Context, in *Request) (resp *Response, err error) {
+	cd := gorums.CallData{
+		Message: in,
+		Method:  "dev.ZorumsNoQspecService.GRPCCall",
+	}
+
+	res, err := n.RawNode.RPCCall(ctx, cd)
+	if err != nil {
+		return nil, err
+	}
+	return res.(*Response), err
+}

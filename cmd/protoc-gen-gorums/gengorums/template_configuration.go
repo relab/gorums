@@ -13,7 +13,8 @@ var configurationStruct = `
 	{{- $configurationName := printf "%sConfiguration" $service}}
 	{{- $qspecName := printf "%sQuorumSpec" $service}}
 	{{- $nodeName := printf "%sNode" $service}}
-	{{- $isQspec := ne (len (qspecMethods .Methods))	0 -}}
+	{{- $isQspec := ne (len (qspecMethods .Methods))	0}}
+
 	// A {{$configurationName}} represents a static set of nodes on which quorum remote
 	// procedure calls may be invoked.
 	type {{$configurationName}} struct {
@@ -23,6 +24,7 @@ var configurationStruct = `
 		{{- end}}
 		nodes []*{{$nodeName}}
 	}
+	
 {{- end}}
 `
 
@@ -34,7 +36,7 @@ var configurationFromRaw = `
 	{{- $configurationName := printf "%sConfiguration" $service}}
 	{{- $qspecName := printf "%sQuorumSpec" $service}}
 	{{- $nodeName := printf "%sNode" $service}}
-	{{- $isQspec := ne (len (qspecMethods .Methods))	0 -}}
+	{{- $isQspec := ne (len (qspecMethods .Methods))	0}}
 
 	// {{$qspecName}}FromRaw returns a new {{$qspecName}} from the given raw configuration{{if $isQspec}} and QuorumSpec{{end}}.
 	//

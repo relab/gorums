@@ -43,12 +43,9 @@ var managerNewConfiguration = `
 	{{- $configurationName := printf "%sConfiguration" $service}}
 	{{- $qspecName := printf "%sQuorumSpec" $service}}
 	{{- $nodeName := printf "%sNode" $service}}
-	{{- $isQspec := ne (len (qspecMethods .Methods))	0 -}}
-	// New{{$configurationName}} returns a {{$configurationName}} based on the provided list of nodes (required)
-	{{- if $isQspec}}
-		// and a quorum specification
-	{{- end}}
-	// .
+	{{- $isQspec := ne (len (qspecMethods .Methods))	0}}
+
+	// New{{$configurationName}} returns a {{$configurationName}} based on the provided list of nodes (required) {{- if $isQspec}}and a quorum specification{{- end}}.
 	// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 	// A new configuration can also be created from an existing configuration,
 	// using the And, WithNewNodes, Except, and WithoutNodes methods.

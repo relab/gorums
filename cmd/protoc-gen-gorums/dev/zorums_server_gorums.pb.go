@@ -57,6 +57,18 @@ type ZorumsServiceServer interface {
 	Unicast2(ctx gorums.ServerCtx, request *Request)
 }
 
+// ZorumsNoQspecService is the server-side API for the ZorumsNoQspecService Service
+type ZorumsNoQspecServiceServer interface {
+	GRPCCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	Multicast(ctx gorums.ServerCtx, request *Request)
+	MulticastPerNodeArg(ctx gorums.ServerCtx, request *Request)
+	Multicast2(ctx gorums.ServerCtx, request *Request)
+	Multicast3(ctx gorums.ServerCtx, request *Request)
+	Multicast4(ctx gorums.ServerCtx, request *emptypb.Empty)
+	Unicast(ctx gorums.ServerCtx, request *Request)
+	Unicast2(ctx gorums.ServerCtx, request *Request)
+}
+
 func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
 		req := in.Message.(*Request)
@@ -281,6 +293,49 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 		impl.Unicast(ctx, req)
 	})
 	srv.RegisterHandler("dev.ZorumsService.Unicast2", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		impl.Unicast2(ctx, req)
+	})
+}
+func RegisterZorumsNoQspecServiceServer(srv *gorums.Server, impl ZorumsNoQspecServiceServer) {
+	srv.RegisterHandler("dev.ZorumsNoQspecService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		resp, err := impl.GRPCCall(ctx, req)
+		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+	})
+	srv.RegisterHandler("dev.ZorumsNoQspecService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		impl.Multicast(ctx, req)
+	})
+	srv.RegisterHandler("dev.ZorumsNoQspecService.MulticastPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		impl.MulticastPerNodeArg(ctx, req)
+	})
+	srv.RegisterHandler("dev.ZorumsNoQspecService.Multicast2", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		impl.Multicast2(ctx, req)
+	})
+	srv.RegisterHandler("dev.ZorumsNoQspecService.Multicast3", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		impl.Multicast3(ctx, req)
+	})
+	srv.RegisterHandler("dev.ZorumsNoQspecService.Multicast4", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*emptypb.Empty)
+		defer ctx.Release()
+		impl.Multicast4(ctx, req)
+	})
+	srv.RegisterHandler("dev.ZorumsNoQspecService.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+		req := in.Message.(*Request)
+		defer ctx.Release()
+		impl.Unicast(ctx, req)
+	})
+	srv.RegisterHandler("dev.ZorumsNoQspecService.Unicast2", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		impl.Unicast2(ctx, req)

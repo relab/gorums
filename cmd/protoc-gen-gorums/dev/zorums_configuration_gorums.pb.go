@@ -24,7 +24,16 @@ type ZorumsServiceConfiguration struct {
 	gorums.RawConfiguration
 	qspec ZorumsServiceQuorumSpec
 	nodes []*ZorumsServiceNode
-} // ZorumsServiceQuorumSpecFromRaw returns a new ZorumsServiceQuorumSpec from the given raw configuration and QuorumSpec.
+}
+
+// A ZorumsNoQspecServiceConfiguration represents a static set of nodes on which quorum remote
+// procedure calls may be invoked.
+type ZorumsNoQspecServiceConfiguration struct {
+	gorums.RawConfiguration
+	nodes []*ZorumsNoQspecServiceNode
+}
+
+// ZorumsServiceQuorumSpecFromRaw returns a new ZorumsServiceQuorumSpec from the given raw configuration and QuorumSpec.
 //
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
 //
@@ -47,6 +56,24 @@ func ZorumsServiceConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec Zor
 	return newCfg, nil
 }
 
+// ZorumsNoQspecServiceQuorumSpecFromRaw returns a new ZorumsNoQspecServiceQuorumSpec from the given raw configuration.
+//
+// This function may for example be used to "clone" a configuration but install a different QuorumSpec:
+//
+//	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
+//	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
+func ZorumsNoQspecServiceConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*ZorumsNoQspecServiceConfiguration, error) {
+	newCfg := &ZorumsNoQspecServiceConfiguration{
+		RawConfiguration: rawCfg,
+	}
+	// initialize the nodes slice
+	newCfg.nodes = make([]*ZorumsNoQspecServiceNode, newCfg.Size())
+	for i, n := range rawCfg {
+		newCfg.nodes[i] = &ZorumsNoQspecServiceNode{n}
+	}
+	return newCfg, nil
+}
+
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
 //
@@ -63,5 +90,24 @@ func (c ZorumsServiceConfiguration) And(d *ZorumsServiceConfiguration) gorums.No
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c ZorumsServiceConfiguration) Except(rm *ZorumsServiceConfiguration) gorums.NodeListOption {
+	return c.RawConfiguration.Except(rm.RawConfiguration)
+}
+
+// Nodes returns a slice of each available node. IDs are returned in the same
+// order as they were provided in the creation of the Manager.
+//
+// NOTE: mutating the returned slice is not supported.
+func (c *ZorumsNoQspecServiceConfiguration) Nodes() []*ZorumsNoQspecServiceNode {
+	return c.nodes
+}
+
+// And returns a NodeListOption that can be used to create a new configuration combining c and d.
+func (c ZorumsNoQspecServiceConfiguration) And(d *ZorumsNoQspecServiceConfiguration) gorums.NodeListOption {
+	return c.RawConfiguration.And(d.RawConfiguration)
+}
+
+// Except returns a NodeListOption that can be used to create a new configuration
+// from c without the nodes in rm.
+func (c ZorumsNoQspecServiceConfiguration) Except(rm *ZorumsNoQspecServiceConfiguration) gorums.NodeListOption {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }

@@ -24,6 +24,12 @@ type ZorumsServiceManager struct {
 	*gorums.RawManager
 }
 
+// ZorumsNoQspecServiceManager maintains a connection pool of nodes on
+// which quorum calls can be performed.
+type ZorumsNoQspecServiceManager struct {
+	*gorums.RawManager
+}
+
 // NewZorumsServiceManager returns a new ZorumsServiceManager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
@@ -31,9 +37,18 @@ func NewZorumsServiceManager(opts ...gorums.ManagerOption) *ZorumsServiceManager
 	return &ZorumsServiceManager{
 		RawManager: gorums.NewRawManager(opts...),
 	}
-} // NewZorumsServiceConfiguration returns a ZorumsServiceConfiguration based on the provided list of nodes (required)
-// and a quorum specification
-// .
+}
+
+// NewZorumsNoQspecServiceManager returns a new ZorumsNoQspecServiceManager for managing connection to nodes added
+// to the manager. This function accepts manager options used to configure
+// various aspects of the manager.
+func NewZorumsNoQspecServiceManager(opts ...gorums.ManagerOption) *ZorumsNoQspecServiceManager {
+	return &ZorumsNoQspecServiceManager{
+		RawManager: gorums.NewRawManager(opts...),
+	}
+}
+
+// NewZorumsServiceConfiguration returns a ZorumsServiceConfiguration based on the provided list of nodes and a quorum specification.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
@@ -56,6 +71,24 @@ func (m *ZorumsServiceManager) NewConfiguration(cfg gorums.NodeListOption, qspec
 	return c, nil
 }
 
+// NewZorumsNoQspecServiceConfiguration returns a ZorumsNoQspecServiceConfiguration based on the provided list of nodes.
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
+func (m *ZorumsNoQspecServiceManager) NewConfiguration(cfg gorums.NodeListOption) (c *ZorumsNoQspecServiceConfiguration, err error) {
+	c = &ZorumsNoQspecServiceConfiguration{}
+	c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, cfg)
+	if err != nil {
+		return nil, err
+	}
+	// initialize the nodes slice
+	c.nodes = make([]*ZorumsNoQspecServiceNode, c.Size())
+	for i, n := range c.RawConfiguration {
+		c.nodes[i] = &ZorumsNoQspecServiceNode{n}
+	}
+	return c, nil
+}
+
 // Nodes returns a slice of available nodes on this manager.
 // IDs are returned in the order they were added at creation of the manager.
 func (m *ZorumsServiceManager) Nodes() []*ZorumsServiceNode {
@@ -63,6 +96,17 @@ func (m *ZorumsServiceManager) Nodes() []*ZorumsServiceNode {
 	nodes := make([]*ZorumsServiceNode, len(gorumsNodes))
 	for i, n := range gorumsNodes {
 		nodes[i] = &ZorumsServiceNode{n}
+	}
+	return nodes
+}
+
+// Nodes returns a slice of available nodes on this manager.
+// IDs are returned in the order they were added at creation of the manager.
+func (m *ZorumsNoQspecServiceManager) Nodes() []*ZorumsNoQspecServiceNode {
+	gorumsNodes := m.RawManager.Nodes()
+	nodes := make([]*ZorumsNoQspecServiceNode, len(gorumsNodes))
+	for i, n := range gorumsNodes {
+		nodes[i] = &ZorumsNoQspecServiceNode{n}
 	}
 	return nodes
 }

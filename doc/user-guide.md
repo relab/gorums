@@ -300,8 +300,8 @@ service QCStorage {
 The generated methods have the following client-side interface:
 
 ```go
-func (c *Configuration) Read(ctx context.Context, in *ReadRequest) (*State, error)
-func (c *Configuration) Write(ctx context.Context, in *State) (*WriteResponse, error)
+func (c *QCStorageConfiguration) Read(ctx context.Context, in *ReadRequest) (*State, error)
+func (c *QCStorageConfiguration) Write(ctx context.Context, in *State) (*WriteResponse, error)
 ```
 
 ## The QuorumSpec Interface with Quorum Functions
@@ -400,15 +400,15 @@ func ExampleStorageClient() {
     "127.0.0.1:8082",
   }
 
-  mgr := NewManager(
+  mgr := NewQCStorageManager(
     gorums.WithGrpcDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
   // Create a configuration including all nodes
   allNodesConfig, err := mgr.NewConfiguration(
-    &QSpec{2},
     gorums.WithNodeList(addrs),
+    &QSpec{2},
   )
   if err != nil {
     log.Fatalln("error creating read config:", err)
@@ -417,7 +417,7 @@ func ExampleStorageClient() {
   // Invoke read quorum call:
   ctx, cancel := context.WithCancel(context.Background())
   reply, err := allNodesConfig.Read(ctx, &ReadRequest{})
-  if err != nil {
+  if err != nil {QCStorage
     log.Fatalln("read rpc returned error:", err)
   }
   cancel()

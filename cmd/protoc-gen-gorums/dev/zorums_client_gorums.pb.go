@@ -56,6 +56,18 @@ type ZorumsServiceClient interface {
 // enforce interface compliance
 var _ ZorumsServiceClient = (*ZorumsServiceConfiguration)(nil)
 
+// ZorumsNoQspecServiceClient is the client interface for the ZorumsNoQspecService service.
+type ZorumsNoQspecServiceClient interface {
+	Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	MulticastPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...gorums.CallOption)
+	Multicast2(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	Multicast3(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	Multicast4(ctx context.Context, in *emptypb.Empty, opts ...gorums.CallOption)
+}
+
+// enforce interface compliance
+var _ ZorumsNoQspecServiceClient = (*ZorumsNoQspecServiceConfiguration)(nil)
+
 // ZorumsServiceNodeClient is the single node client interface for the ZorumsService service.
 type ZorumsServiceNodeClient interface {
 	GRPCCall(ctx context.Context, in *Request) (resp *Response, err error)
@@ -65,3 +77,13 @@ type ZorumsServiceNodeClient interface {
 
 // enforce interface compliance
 var _ ZorumsServiceNodeClient = (*ZorumsServiceNode)(nil)
+
+// ZorumsNoQspecServiceNodeClient is the single node client interface for the ZorumsNoQspecService service.
+type ZorumsNoQspecServiceNodeClient interface {
+	GRPCCall(ctx context.Context, in *Request) (resp *Response, err error)
+	Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
+	Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption)
+}
+
+// enforce interface compliance
+var _ ZorumsNoQspecServiceNodeClient = (*ZorumsNoQspecServiceNode)(nil)

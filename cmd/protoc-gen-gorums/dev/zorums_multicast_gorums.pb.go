@@ -79,3 +79,63 @@ func (c *ZorumsServiceConfiguration) Multicast4(ctx context.Context, in *emptypb
 
 	c.RawConfiguration.Multicast(ctx, cd, opts...)
 }
+
+// Multicast plain. Response type is not needed here.
+func (c *ZorumsNoQspecServiceConfiguration) Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "dev.ZorumsNoQspecService.Multicast",
+	}
+
+	c.RawConfiguration.Multicast(ctx, cd, opts...)
+}
+
+// MulticastPerNodeArg with per_node_arg option.
+func (c *ZorumsNoQspecServiceConfiguration) MulticastPerNodeArg(ctx context.Context, in *Request, f func(*Request, uint32) *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "dev.ZorumsNoQspecService.MulticastPerNodeArg",
+	}
+
+	cd.PerNodeArgFn = func(req protoreflect.ProtoMessage, nid uint32) protoreflect.ProtoMessage {
+		return f(req.(*Request), nid)
+	}
+
+	c.RawConfiguration.Multicast(ctx, cd, opts...)
+}
+
+// Multicast2 is testing whether multiple streams work.
+func (c *ZorumsNoQspecServiceConfiguration) Multicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "dev.ZorumsNoQspecService.Multicast2",
+	}
+
+	c.RawConfiguration.Multicast(ctx, cd, opts...)
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ emptypb.Empty
+
+// Multicast3 is testing imported message type.
+func (c *ZorumsNoQspecServiceConfiguration) Multicast3(ctx context.Context, in *Request, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "dev.ZorumsNoQspecService.Multicast3",
+	}
+
+	c.RawConfiguration.Multicast(ctx, cd, opts...)
+}
+
+// Reference imports to suppress errors if they are not otherwise used.
+var _ emptypb.Empty
+
+// Multicast4 is testing imported message type.
+func (c *ZorumsNoQspecServiceConfiguration) Multicast4(ctx context.Context, in *emptypb.Empty, opts ...gorums.CallOption) {
+	cd := gorums.QuorumCallData{
+		Message: in,
+		Method:  "dev.ZorumsNoQspecService.Multicast4",
+	}
+
+	c.RawConfiguration.Multicast(ctx, cd, opts...)
+}

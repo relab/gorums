@@ -21,3 +21,8 @@ const (
 type ZorumsServiceNode struct {
 	*gorums.RawNode
 }
+
+// ZorumsNoQspecServiceNode holds the node specific methods for the ZorumsNoQspecService service.
+type ZorumsNoQspecServiceNode struct {
+	*gorums.RawNode
+}
