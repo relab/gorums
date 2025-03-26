@@ -31,6 +31,27 @@ service Storage {
   }
 }
 
+service Storage2 {
+  // ReadRPC executes the Read RPC on a single Node
+  rpc ReadRPC(ReadRequest) returns (ReadResponse) {}
+  // WriteRPC executes the Write RPC on a single Node
+  rpc WriteRPC(WriteRequest) returns (WriteResponse) {}
+  // ReadQC executes the Read Quorum Call on a configuration
+  // of Nodes and returns the most recent value.
+  rpc ReadQC(ReadRequest) returns (ReadResponse) {
+    option (gorums.quorumcall) = true;
+  }
+  // WriteQC executes the Write Quorum Call on a configuration
+  // of Nodes and returns true if a majority of Nodes were updated.
+  rpc WriteQC(WriteRequest) returns (WriteResponse) {
+    option (gorums.quorumcall) = true;
+  }
+
+  rpc WriteMulticast(WriteRequest) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
+}
+
 message ReadRequest { string Key = 1; }
 
 message ReadResponse {

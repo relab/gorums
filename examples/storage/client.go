@@ -15,13 +15,13 @@ func runClient(addresses []string) error {
 	}
 
 	// init gorums manager
-	mgr := proto.NewManager(
+	mgr := proto.NewStorageManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)
 	// create configuration containing all nodes
-	cfg, err := mgr.NewConfiguration(&qspec{cfgSize: len(addresses)}, gorums.WithNodeList(addresses))
+	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addresses), &qspec{cfgSize: len(addresses)})
 	if err != nil {
 		log.Fatal(err)
 	}
