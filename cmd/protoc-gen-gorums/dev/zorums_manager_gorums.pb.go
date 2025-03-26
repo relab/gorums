@@ -48,7 +48,7 @@ func NewZorumsNoQspecServiceManager(opts ...gorums.ManagerOption) *ZorumsNoQspec
 	}
 }
 
-// NewZorumsServiceConfiguration returns a ZorumsServiceConfiguration based on the provided list of nodes and a quorum specification.
+// NewZorumsServiceConfiguration returns a ZorumsServiceConfiguration based on the provided list of nodes (required)and a quorum specification.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
@@ -71,7 +71,7 @@ func (m *ZorumsServiceManager) NewConfiguration(cfg gorums.NodeListOption, qspec
 	return c, nil
 }
 
-// NewZorumsNoQspecServiceConfiguration returns a ZorumsNoQspecServiceConfiguration based on the provided list of nodes.
+// NewZorumsNoQspecServiceConfiguration returns a ZorumsNoQspecServiceConfiguration based on the provided list of nodes (required).
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
