@@ -106,13 +106,14 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	mdBuf, mdLen := protowire.ConsumeBytes(b)
 	err = c.unmarshaler.Unmarshal(mdBuf, msg.Metadata)
 	if err != nil {
-		return err
+		return fmt.Errorf("gorums: could not unmarshal metadata: %w", err)
 	}
 
 	// get method descriptor from registry
 	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(msg.Metadata.GetMethod()))
 	if err != nil {
-		return err
+		// err is a NotFound error with no method name information; return a more informative error
+		return fmt.Errorf("gorums: could not find method descriptor for %s", msg.Metadata.GetMethod())
 	}
 	methodDesc := desc.(protoreflect.MethodDescriptor)
 
@@ -130,7 +131,8 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	// now get the message type from the types registry
 	msgType, err := protoregistry.GlobalTypes.FindMessageByName(messageName)
 	if err != nil {
-		return err
+		// err is a NotFound error with no message name information; return a more informative error
+		return fmt.Errorf("gorums: could not find message type %s", messageName)
 	}
 	msg.Message = msgType.New().Interface()
 
