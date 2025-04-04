@@ -24,7 +24,7 @@ type QuorumCallData struct {
 // This method should be used by generated code only.
 func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
 	expectedReplies := len(c)
-	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
 	replyChan := make(chan response, expectedReplies)
 	for _, n := range c {

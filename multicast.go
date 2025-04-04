@@ -12,7 +12,7 @@ import (
 // before the message has been sent.
 func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 	sentMsgs := 0
 
 	var replyChan chan response

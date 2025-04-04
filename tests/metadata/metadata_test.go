@@ -21,15 +21,15 @@ type testSrv struct{}
 func (srv testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeID, err error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, status.Error(codes.NotFound, "Metadata unavailable")
+		return nil, status.Error(codes.NotFound, "metadata unavailable")
 	}
 	v := md.Get("id")
 	if len(v) < 1 {
-		return nil, status.Error(codes.NotFound, "ID field missing")
+		return nil, status.Error(codes.NotFound, "missing metadata field: id")
 	}
 	id, err := strconv.Atoi(v[0])
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "Got '%s', but could not convert to integer", v[0])
+		return nil, status.Errorf(codes.InvalidArgument, "value of id field: %q is not a number: %v", v[0], err)
 	}
 	return &NodeID{ID: uint32(id)}, nil
 }
@@ -71,6 +71,38 @@ func TestMetadata(t *testing.T) {
 
 	node := mgr.Nodes()[0]
 	resp, err := node.IDFromMD(context.Background(), &emptypb.Empty{})
+	if err != nil {
+		t.Fatalf("RPC error: %v", err)
+	}
+
+	if resp.GetID() != want {
+		t.Fatalf("IDFromMD() == %d, want %d", resp.GetID(), want)
+	}
+}
+
+func TestPerMessageMetadata(t *testing.T) {
+	want := uint32(1)
+
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer(t) })
+	defer teardown()
+
+	mgr := NewManager(
+		gorums.WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	)
+	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	node := mgr.Nodes()[0]
+
+	md := metadata.New(map[string]string{
+		"id": fmt.Sprint(want),
+	})
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	resp, err := node.IDFromMD(ctx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}
