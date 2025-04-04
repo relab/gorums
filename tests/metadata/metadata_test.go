@@ -42,7 +42,7 @@ func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr,
 	return &IPAddr{Addr: peerInfo.Addr.String()}, nil
 }
 
-func initServer(t *testing.T) *gorums.Server {
+func initServer() *gorums.Server {
 	srv := gorums.NewServer()
 	RegisterMetadataTestServer(srv, &testSrv{})
 	return srv
@@ -51,7 +51,7 @@ func initServer(t *testing.T) *gorums.Server {
 func TestMetadata(t *testing.T) {
 	want := uint32(1)
 
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer(t) })
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
 	md := metadata.New(map[string]string{
@@ -83,7 +83,7 @@ func TestMetadata(t *testing.T) {
 func TestPerMessageMetadata(t *testing.T) {
 	want := uint32(1)
 
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer(t) })
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
 	mgr := NewManager(
@@ -113,7 +113,7 @@ func TestPerMessageMetadata(t *testing.T) {
 }
 
 func TestPerNodeMetadata(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 2, func(_ int) gorums.ServerIface { return initServer(t) })
+	addrs, teardown := gorums.TestSetup(t, 2, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
 	perNodeMD := func(nid uint32) metadata.MD {
@@ -146,7 +146,7 @@ func TestPerNodeMetadata(t *testing.T) {
 }
 
 func TestCanGetPeerInfo(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer(t) })
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
 	mgr := NewManager(
