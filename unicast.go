@@ -10,6 +10,8 @@ import (
 // By default this function returns once the message has been sent.
 // Providing the call option WithNoSendWaiting, the function may return
 // before the message has been sent.
+//
+// This method should be used by generated code only.
 func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
