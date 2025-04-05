@@ -100,7 +100,7 @@ func BenchmarkQF(b *testing.B) {
 		request := &Request{Value: 1}
 
 		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				replies := make(map[uint32]*Response, mapSize)
 				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
@@ -112,7 +112,7 @@ func BenchmarkQF(b *testing.B) {
 			}
 		})
 		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				replies := make(map[uint32]*Response, mapSize)
 				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
@@ -124,7 +124,7 @@ func BenchmarkQF(b *testing.B) {
 			}
 		})
 		b.Run(fmt.Sprintf("WithoutReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				replies := make(map[uint32]*Response, mapSize)
 				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
@@ -139,7 +139,7 @@ func BenchmarkQF(b *testing.B) {
 		// Slice versions
 
 		b.Run(fmt.Sprintf("SliceUseReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				replies := make([]*Response, n)
 				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
@@ -151,7 +151,7 @@ func BenchmarkQF(b *testing.B) {
 			}
 		})
 		b.Run(fmt.Sprintf("SliceIgnoreReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				replies := make([]*Response, n)
 				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
@@ -163,7 +163,7 @@ func BenchmarkQF(b *testing.B) {
 			}
 		})
 		b.Run(fmt.Sprintf("SliceWithoutReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				replies := make([]*Response, n)
 				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
@@ -211,7 +211,7 @@ func BenchmarkFullStackQF(b *testing.B) {
 		b.ResetTimer()
 
 		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				resp, err := c.UseReq(context.Background(), &Request{Value: int64(requestValue)})
 				if err != nil {
 					b.Fatalf("UseReq error: %v", err)
@@ -220,7 +220,7 @@ func BenchmarkFullStackQF(b *testing.B) {
 			}
 		})
 		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				resp, err := c.IgnoreReq(context.Background(), &Request{Value: int64(requestValue)})
 				if err != nil {
 					b.Fatalf("IgnoreReq error: %v", err)
