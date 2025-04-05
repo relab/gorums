@@ -3,6 +3,7 @@ package version
 
 import (
 	"fmt"
+	"runtime/debug"
 	"strings"
 )
 
@@ -12,7 +13,7 @@ import (
 const (
 	Major      = 0
 	Minor      = 8
-	Patch      = 0
+	Patch      = 2
 	PreRelease = "devel"
 )
 
@@ -22,16 +23,22 @@ const (
 //
 //	v1.20.1
 //	v1.21.0-rc.1
+//	v1.21.0-devel+<commit-hash>
 func String() string {
 	v := fmt.Sprintf("v%d.%d.%d", Major, Minor, Patch)
 	if PreRelease != "" {
 		v += "-" + PreRelease
 
-		// TODO: Add metadata about the commit or build hash.
-		// See https://golang.org/issue/29814
-		// See https://golang.org/issue/33533
-		// See https://github.com/golang/go/issues/37475
+		bi, ok := debug.ReadBuildInfo()
 		var metadata string
+		if ok {
+			for _, setting := range bi.Settings {
+				if setting.Key == "vcs.revision" {
+					metadata = setting.Value
+					break
+				}
+			}
+		}
 		if strings.Contains(PreRelease, "devel") && metadata != "" {
 			v += "+" + metadata
 		}
