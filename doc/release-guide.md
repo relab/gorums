@@ -12,7 +12,7 @@ To cut a release you will need additional tools:
 1. Check and upgrade dependencies:
 
    ```shell
-   % git switch -c meling/issueXXX/v0.4.0-devel
+   % git switch -c meling/release/v0.8.2-devel
    % make tools
    % protoc --version
    libprotoc 3.15.6
@@ -46,7 +46,7 @@ To cut a release you will need additional tools:
    ```shell
    % make dev
    % protoc-gen-gorums --version
-   protoc-gen-gorums v0.4.0-devel
+   protoc-gen-gorums v0.8.2-devel
    ```
 
 6. Now `version.go` can be updated to reflect the new version number, if necessary.
@@ -69,7 +69,7 @@ To cut a release you will need additional tools:
    % make testrace
    ```
 
-9. Edit gorums dependency to be v0.4.0 in example/go.mod:
+9. Edit gorums dependency to be v0.8.2 in example/go.mod:
 
    ```shell
    % vim examples/go.mod
@@ -79,8 +79,8 @@ To cut a release you will need additional tools:
 
    ```shell
    % git add
-   % git commit -m "Gorums release v0.4.0"
-   % gh pr create --title "Gorums release v0.4.0"
+   % git commit -m "Gorums release v0.8.2"
+   % gh pr create --title "Gorums release v0.8.2"
    ```
 
 11. Merge the PR and publish the release with release notes:
@@ -89,13 +89,13 @@ To cut a release you will need additional tools:
     % git switch main
     % git pull
     # Prepare release notes in release-notes.md
-    % gh release create v0.4.0 --prerelease -F release-notes.md --title "Main changes in release"
+    % gh release create v0.8.2 --prerelease -F release-notes.md --title "Main changes in release"
     ```
 
-    Now other projects can depend on `v0.4.0` of `github.com/relab/gorums`.
+    Now other projects can depend on `v0.8.0` of `github.com/relab/gorums`.
 
 12. To check that the new version is available (after a bit of time):
 
     ```shell
-    % go list -m github.com/relab/gorums@v0.4.0
+    % go list -m github.com/relab/gorums@v0.8.2
     ```

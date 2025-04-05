@@ -34,7 +34,7 @@ func String() string {
 		if ok {
 			for _, setting := range bi.Settings {
 				if setting.Key == "vcs.revision" {
-					metadata = setting.Value
+					metadata = setting.Value[0:8]
 					break
 				}
 			}
