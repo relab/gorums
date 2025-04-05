@@ -5,6 +5,7 @@ calltype
 calltypes
 checkf
 clevel
+compiletests
 cpuprofile
 descriptorpb
 devel
@@ -25,6 +26,7 @@ GOPATH
 gopls
 gorelease
 goroutines
+gorums
 Gorums
 gorumsexample
 grpc
@@ -46,6 +48,7 @@ memprofile
 multicast
 naddr
 obj's
+oneway
 Paxos
 Pedersen
 pkgs
@@ -64,15 +67,19 @@ qspec
 quorumcall
 Reconf
 relab
+reservednames
 rlevel
 RPC's
 RPCs
 semver
 shlex
 srvs
+stressdev
+stressgen
 struct
 syncrq
 testprotos
+testrace
 timestamppb
 tmpl
 Tormod

@@ -31,3 +31,4 @@ all-to-all.md
 
 # jetbrains IDE files
 .idea/
+go.work.sum
