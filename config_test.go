@@ -222,7 +222,7 @@ func TestConfigConcurrentAccess(t *testing.T) {
 
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		wg.Add(1)
 		go func() {
 			node := cfg.Nodes()[0]

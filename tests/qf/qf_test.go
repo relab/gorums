@@ -102,7 +102,7 @@ func BenchmarkQF(b *testing.B) {
 		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				replies := make(map[uint32]*Response, mapSize)
-				for j := 0; j < n; j++ {
+				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
 					resp, q := qspec.UseReqQF(request, replies)
 					if q {
@@ -114,7 +114,7 @@ func BenchmarkQF(b *testing.B) {
 		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				replies := make(map[uint32]*Response, mapSize)
-				for j := 0; j < n; j++ {
+				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
 					resp, q := qspec.IgnoreReqQF(request, replies)
 					if q {
@@ -126,7 +126,7 @@ func BenchmarkQF(b *testing.B) {
 		b.Run(fmt.Sprintf("WithoutReq_%d", n), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				replies := make(map[uint32]*Response, mapSize)
-				for j := 0; j < n; j++ {
+				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
 					resp, q := qspec.WithoutReqQF(replies)
 					if q {
@@ -141,7 +141,7 @@ func BenchmarkQF(b *testing.B) {
 		b.Run(fmt.Sprintf("SliceUseReq_%d", n), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				replies := make([]*Response, n)
-				for j := 0; j < n; j++ {
+				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
 					resp, q := qspec.SliceUseReqQF(request, replies)
 					if q {
@@ -153,7 +153,7 @@ func BenchmarkQF(b *testing.B) {
 		b.Run(fmt.Sprintf("SliceIgnoreReq_%d", n), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				replies := make([]*Response, n)
-				for j := 0; j < n; j++ {
+				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
 					resp, q := qspec.SliceIgnoreReqQF(request, replies)
 					if q {
@@ -165,7 +165,7 @@ func BenchmarkQF(b *testing.B) {
 		b.Run(fmt.Sprintf("SliceWithoutReq_%d", n), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				replies := make([]*Response, n)
-				for j := 0; j < n; j++ {
+				for j := range n {
 					replies[uint32(j)] = &Response{Result: request.Value}
 					resp, q := qspec.SliceWithoutReqQF(replies)
 					if q {
