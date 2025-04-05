@@ -8,17 +8,6 @@ _obj
 _test
 
 # Architecture specific extensions/prefixes
-*.[568vq]
-[568vq].out
-
-*.cgo1.go
-*.cgo2.c
-_cgo_defun.c
-_cgo_gotypes.go
-_cgo_export.*
-
-_testmain.go
-
 *.exe
 *.test
 *.prof
@@ -36,11 +25,9 @@ Session.vim
 
 # binary files
 cmd/benchmark/benchmark
-
-ideas.txt
-
 cmd/protoc-gen-gorums/gengorums/template_static.go.bak
+ideas.txt
+all-to-all.md
 
 # jetbrains IDE files
 .idea/
-all-to-all.md
