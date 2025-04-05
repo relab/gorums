@@ -20,4 +20,11 @@ message Metadata {
   uint64 MessageID = 1;
   string Method = 2;
   google.rpc.Status Status = 3;
+  // per message client-generated metadata
+  repeated MetadataEntry Entry = 4;
+}
+
+message MetadataEntry {
+  string Key = 1;
+  string Value = 2;
 }
