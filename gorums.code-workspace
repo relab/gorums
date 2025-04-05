@@ -20,14 +20,15 @@
 			]
 		},
 		"cSpell.words": [
-			"Idxs",
-			"Lmsgprefix",
-			"QCQF",
 			"emptypb",
 			"extendee",
 			"gorums",
+			"Idxs",
+			"Lmsgprefix",
 			"mcast",
+			"protoc",
 			"protoimpl",
+			"QCQF",
 			"qspec",
 			"relab",
 			"shlex",

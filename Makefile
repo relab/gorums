@@ -41,8 +41,7 @@ $(static_file): $(static_files)
 	@protoc -I=$(proto_path) --gorums_out=paths=source_relative:. $^
 
 tools:
-	@go mod download
-	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % go install %
+	@go install tool
 
 installgorums: bootstrapgorums $(gen_files) $(plugin_deps) Makefile
 	@go install $(PLUGIN_PATH)
