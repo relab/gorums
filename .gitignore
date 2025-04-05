@@ -43,3 +43,4 @@ cmd/protoc-gen-gorums/gengorums/template_static.go.bak
 
 # jetbrains IDE files
 .idea/
+all-to-all.md
