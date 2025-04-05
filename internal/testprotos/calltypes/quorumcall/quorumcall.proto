@@ -10,10 +10,14 @@ option features.field_presence = IMPLICIT;
 import "gorums.proto";
 
 service QuorumCall {
-  rpc QuorumCall(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-  }
+    rpc QuorumCall(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
 }
 
-message Request { string Value = 1; }
-message Response { int64 Result = 1; }
+message Request {
+    string Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}
