@@ -79,7 +79,7 @@ func ignore(g string) bool {
 func interestingGoroutines() (gs []string) {
 	buf := make([]byte, 2<<20)
 	buf = buf[:runtime.Stack(buf, true)]
-	for _, g := range strings.Split(string(buf), "\n\n") {
+	for g := range strings.SplitSeq(string(buf), "\n\n") {
 		if !ignore(g) {
 			gs = append(gs, g)
 		}
