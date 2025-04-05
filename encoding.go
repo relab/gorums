@@ -59,7 +59,7 @@ func (c Codec) String() string {
 }
 
 // Marshal marshals the message m into a byte slice.
-func (c Codec) Marshal(m interface{}) (b []byte, err error) {
+func (c Codec) Marshal(m any) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *Message:
 		return c.gorumsMarshal(msg)
@@ -89,7 +89,7 @@ func (c Codec) gorumsMarshal(msg *Message) (b []byte, err error) {
 }
 
 // Unmarshal unmarshals a byte slice into m.
-func (c Codec) Unmarshal(b []byte, m interface{}) (err error) {
+func (c Codec) Unmarshal(b []byte, m any) (err error) {
 	switch msg := m.(type) {
 	case *Message:
 		return c.gorumsUnmarshal(b, msg)

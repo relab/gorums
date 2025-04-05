@@ -5,7 +5,7 @@ import (
 )
 
 // ConfigOption is a marker interface for options to NewConfiguration.
-type ConfigOption interface{}
+type ConfigOption any
 
 // NodeListOption must be implemented by node providers.
 type NodeListOption interface {
