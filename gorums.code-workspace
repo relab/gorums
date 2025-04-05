@@ -8,6 +8,9 @@
 		}
 	],
 	"settings": {
+		"git.inputValidation": true,
+		"git.inputValidationSubjectLength": 72,
+		"git.inputValidationLength": 72,
 		"protoc": {
 			"compile_on_save": false,
 			"options": [
