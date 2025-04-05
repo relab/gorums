@@ -12,8 +12,8 @@ import (
 // Steps for cutting a new release is described in doc/release-guide.md.
 const (
 	Major      = 0
-	Minor      = 8
-	Patch      = 2
+	Minor      = 9
+	Patch      = 0
 	PreRelease = "devel"
 )
 

@@ -17,6 +17,7 @@ extendee
 Frausing's
 fset
 gengorums
+genproto
 GOBIN
 godoc
 golangci

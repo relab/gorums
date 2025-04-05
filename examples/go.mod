@@ -4,7 +4,7 @@ go 1.24.1
 
 require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/relab/gorums v0.8.1
+	github.com/relab/gorums v0.9.0
 	golang.org/x/term v0.30.0
 	google.golang.org/grpc v1.71.1
 	google.golang.org/protobuf v1.36.6

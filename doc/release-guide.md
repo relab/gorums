@@ -12,7 +12,7 @@ To cut a release you will need additional tools:
 1. Check and upgrade dependencies:
 
    ```shell
-   % git switch -c meling/release/v0.8.2-devel
+   % git switch -c meling/release/v0.9.0-devel
    % make tools
    % protoc --version
    libprotoc 3.15.6
@@ -33,8 +33,8 @@ To cut a release you will need additional tools:
 
    ```text
    ... (list of compatability changes) ...
-   Inferred base version: v0.3.0
-   Suggested version: v0.4.0
+   Inferred base version: v0.8.1
+   Suggested version: v0.9.0
    ```
 
 3. Edit `internal/version/version.go`
@@ -46,7 +46,7 @@ To cut a release you will need additional tools:
    ```shell
    % make dev
    % protoc-gen-gorums --version
-   protoc-gen-gorums v0.8.2-devel
+   protoc-gen-gorums v0.9.0-devel
    ```
 
 6. Now `version.go` can be updated to reflect the new version number, if necessary.
@@ -69,7 +69,7 @@ To cut a release you will need additional tools:
    % make testrace
    ```
 
-9. Edit gorums dependency to be v0.8.2 in example/go.mod:
+9. Edit gorums dependency to be v0.9.0 in example/go.mod:
 
    ```shell
    % vim examples/go.mod
@@ -79,8 +79,8 @@ To cut a release you will need additional tools:
 
    ```shell
    % git add
-   % git commit -m "Gorums release v0.8.2"
-   % gh pr create --title "Gorums release v0.8.2"
+   % git commit -m "Gorums release v0.9.0"
+   % gh pr create --title "Gorums release v0.9.0"
    ```
 
 11. Merge the PR and publish the release with release notes:
@@ -89,7 +89,7 @@ To cut a release you will need additional tools:
     % git switch main
     % git pull
     # Prepare release notes in release-notes.md
-    % gh release create v0.8.2 --prerelease -F release-notes.md --title "Main changes in release"
+    % gh release create v0.9.0 --prerelease -F release-notes.md --title "Main changes in release"
     ```
 
     Now other projects can depend on `v0.8.0` of `github.com/relab/gorums`.
@@ -97,5 +97,5 @@ To cut a release you will need additional tools:
 12. To check that the new version is available (after a bit of time):
 
     ```shell
-    % go list -m github.com/relab/gorums@v0.8.2
+    % go list -m github.com/relab/gorums@v0.9.0
     ```
