@@ -27,7 +27,7 @@ type Configuration struct {
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
 func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
+	var test any = struct{}{}
 	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}
@@ -110,7 +110,7 @@ func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuratio
 		}
 	}
 	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test interface{} = struct{}{}
+	var test any = struct{}{}
 	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
 		return nil, fmt.Errorf("config: missing required QuorumSpec")
 	}

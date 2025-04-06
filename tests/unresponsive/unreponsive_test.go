@@ -40,7 +40,7 @@ func TestUnresponsive(t *testing.T) {
 
 	node := mgr.Nodes()[0]
 
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		_, err = node.TestUnresponsive(ctx, &Empty{})
 		if err != nil && errors.Is(err, context.Canceled) {

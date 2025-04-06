@@ -102,7 +102,7 @@ type correctableCallState struct {
 // This method should only be used by generated code.
 func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(c)
-	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
 	replyChan := make(chan response, expectedReplies)
 	for _, n := range c {

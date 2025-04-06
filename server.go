@@ -95,7 +95,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &mut}, req, finished)
+			go handler(ServerCtx{Context: req.Metadata.AppendToIncomingContext(ctx), once: new(sync.Once), mut: &mut}, req, finished)
 			// Wait until the handler releases the mutex.
 			mut.Lock()
 		}
@@ -142,9 +142,7 @@ type Server struct {
 	grpcServer *grpc.Server
 }
 
-// NewServer returns a new instance of GorumsServer.
-// This function is intended for internal Gorums use.
-// You should call `NewServer` in the generated code instead.
+// NewServer returns a new instance of [gorums.Server].
 func NewServer(opts ...ServerOption) *Server {
 	var serverOpts serverOptions
 	for _, opt := range opts {

@@ -10,10 +10,12 @@ import (
 // By default this function returns once the message has been sent.
 // Providing the call option WithNoSendWaiting, the function may return
 // before the message has been sent.
+//
+// This method should be used by generated code only.
 func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
-	md := ordering.Metadata_builder{MessageID: n.mgr.getMsgID(), Method: d.Method}.Build()
+	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
 	req := request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	if o.noSendWaiting {
