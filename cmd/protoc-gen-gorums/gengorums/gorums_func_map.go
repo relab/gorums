@@ -22,6 +22,7 @@ var importMap = map[string]protogen.GoImportPath{
 	"math":         protogen.GoImportPath("math"),
 	"rand":         protogen.GoImportPath("math/rand"),
 	"sync":         protogen.GoImportPath("sync"),
+	"iter":         protogen.GoImportPath("iter"),
 	"atomic":       protogen.GoImportPath("sync/atomic"),
 	"context":      protogen.GoImportPath("context"),
 	"trace":        protogen.GoImportPath("golang.org/x/net/trace"),

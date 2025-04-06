@@ -23,7 +23,7 @@ type QuorumCallData struct {
 // QuorumCall performs a quorum call on the configuration.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) iter.Seq2[protoreflect.ProtoMessage, error] {
+func QuorumCall[responseType protoreflect.ProtoMessage](ctx context.Context, c RawConfiguration, d QuorumCallData) iter.Seq2[responseType, error] {
 	expectedReplies := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
@@ -41,24 +41,24 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) iter
 	}
 
 	replies := int(0)
+	var noResponse responseType
 
-	return func(yield func(K protoreflect.ProtoMessage, V error) bool) {
+	return func(yield func(K responseType, V error) bool) {
 		for {
 			select {
 			case r := <-replyChan:
 				replies++
-				if !yield(r.msg, r.err) {
+				if !yield(r.msg.(responseType), r.err) {
 					return
 				}
 			case <-ctx.Done():
-				yield(nil, QuorumCallError{cause: ctx.Err()})
+				yield(noResponse, QuorumCallError{cause: ctx.Err()})
 				return
 			}
 			if replies >= expectedReplies {
-				yield(nil, QuorumCallError{cause: Incomplete})
+				yield(noResponse, QuorumCallError{cause: Incomplete})
 				return
 			}
 		}
 	}
-
 }

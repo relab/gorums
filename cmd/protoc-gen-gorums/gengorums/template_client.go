@@ -9,6 +9,7 @@ var clientVariables = `
 {{$context := use "context.Context" .GenFile}}
 {{$_ := use "gorums.EnforceVersion" .GenFile}}
 {{$callOpt := use "gorums.CallOption" .GenFile}}
+{{$iterator := use "iter.Seq2" .GenFile}}
 `
 
 var clientConfigurationInterface = `
@@ -27,7 +28,7 @@ var clientConfigurationInterface = `
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) *{{$customOut}}
 			{{- else}}
 				{{- $customOut := customOut $genFile .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) {{$iterator}}[*{{$customOut}}, error]
 			{{- end}}
 		{{- end}}
 	}

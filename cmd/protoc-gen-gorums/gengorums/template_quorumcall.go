@@ -12,6 +12,11 @@ var commonVariables = `
 {{$unexportOutput := unexport .Method.Output.GoIdent.GoName}}
 `
 
+// Common variables used in several template functions.
+var quorumCallVariables = `
+{{$iterator := use "iter.Seq2" .GenFile}}
+`
+
 var quorumCallComment = `
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
@@ -33,7 +38,7 @@ var quorumCallComment = `
 var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}})` +
-	`(resp *{{$customOut}}, err error) {
+	`{{$iterator}}[*{{$customOut}}, error] {
 `
 
 var qcVar = `
@@ -48,28 +53,18 @@ var quorumCallBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
 	}
-	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
-		r := make(map[uint32]*{{$out}}, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*{{$out}})
-		}
-		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
-	}
 {{- if hasPerNodeArg .Method}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}
 {{- end}}
 
-	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
-	if err != nil {
-		return nil, err
-	}
-	return res.(*{{$customOut}}), err
+	return gorums.QuorumCall[*{{$customOut}}](ctx, c.RawConfiguration, cd)
 }
 `
 
 var quorumCall = commonVariables +
+	quorumCallVariables +
 	qcVar +
 	quorumCallComment +
 	quorumCallSignature +
