@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"iter"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -22,7 +23,7 @@ type QuorumCallData struct {
 // QuorumCall performs a quorum call on the configuration.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
+func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) iter.Seq2[protoreflect.ProtoMessage, error] {
 	expectedReplies := len(c)
 	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
 
@@ -39,28 +40,25 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan, false)
 	}
 
-	var (
-		errs    []nodeError
-		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
-	)
+	replies := int(0)
 
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
-				break
+	return func(yield func(K protoreflect.ProtoMessage, V error) bool) {
+		for {
+			select {
+			case r := <-replyChan:
+				replies++
+				if !yield(r.msg, r.err) {
+					return
+				}
+			case <-ctx.Done():
+				yield(nil, QuorumCallError{cause: ctx.Err()})
+				return
 			}
-			replies[r.nid] = r.msg
-			if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
-				return resp, nil
+			if replies >= expectedReplies {
+				yield(nil, QuorumCallError{cause: Incomplete})
+				return
 			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
-		}
-		if len(errs)+len(replies) == expectedReplies {
-			return resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
 		}
 	}
+
 }
