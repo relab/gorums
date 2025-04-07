@@ -8,14 +8,14 @@ option features.field_presence = IMPLICIT;
 import "google/protobuf/descriptor.proto";
 
 extend google.protobuf.MethodOptions {
-  // call types
-  bool rpc = 50001;
-  bool unicast = 50002;
-  bool multicast = 50003;
-  bool quorumcall = 50004;
-  bool correctable = 50005;
-  // options for call types
-  bool async = 50010;
-  bool per_node_arg = 50020;
-  string custom_return_type = 50030;
+    // call types
+    bool rpc         = 50001;
+    bool unicast     = 50002;
+    bool multicast   = 50003;
+    bool quorumcall  = 50004;
+    bool correctable = 50005;
+    // options for call types
+    bool async                = 50010;
+    bool per_node_arg         = 50020;
+    string custom_return_type = 50030;
 }

@@ -74,7 +74,7 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
 	callRPC := func(cfg *Configuration) {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			resp, err := cfg.Config(context.Background(), &Request{Num: uint64(i)})
 			if err != nil {
 				t.Fatal(err)

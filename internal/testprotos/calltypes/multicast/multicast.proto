@@ -11,14 +11,18 @@ import "gorums.proto";
 import "google/protobuf/empty.proto";
 
 service Multicast {
-  rpc Multicast(stream Request) returns (Response) {
-    option (gorums.multicast) = true;
-  }
-  // MulticastEmpty is testing imported message type.
-  rpc MulticastEmpty(stream Request) returns (google.protobuf.Empty) {
-    option (gorums.multicast) = true;
-  }
+    rpc Multicast(stream Request) returns (Response) {
+        option (gorums.multicast) = true;
+    }
+    // MulticastEmpty is testing imported message type.
+    rpc MulticastEmpty(stream Request) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+    }
 }
 
-message Request { string Value = 1; }
-message Response { int64 Result = 1; }
+message Request {
+    string Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}

@@ -20,7 +20,7 @@ download:
 	@go mod download
 
 tools: download
-	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % go install %
+	@go install tool
 
 %.pb.go %_gorums.pb.go : %.proto
 	@protoc -I=$(proto_include):. \

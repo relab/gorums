@@ -1,14 +1,6 @@
 {
-    "protoc": {
-        "compile_on_save": false,
-        "options": [
-            "--proto_path=${workspaceRoot}",
-            "--proto_path=${workspaceRoot}/cmd/protoc-gen-gorums/dev",
-            "--proto_path=${workspaceRoot}/third_party"
-        ]
-    },
+    "breadcrumbs.enabled": true,
     "cSpell.enabled": true,
-    "cSpell.showStatus": true,
     "cSpell.languageSettings": [
         {
             // use with Markdown files
@@ -19,15 +11,71 @@
             ]
         }
     ],
-    "cSpell.customWorkspaceDictionaries": [
-        {
-            "addWords": true,
-            "name": "gorums",
-            "path": "${workspaceRoot}/.vscode/gorums.txt"
-        }
+    "cSpell.ignorePaths": [
+        "vscode-extension",
+        ".git/{info,lfs,logs,refs,objects}/**",
+        ".git/{index,*refs,*HEAD}",
+        ".vscode",
+        ".vscode-insiders",
+        "go.mod",
+        "go.sum",
+        "go.work.sum",
+        "**/**/*.pb.go"
     ],
+    "editor.formatOnPaste": true,
+    "editor.formatOnSave": true,
+    "editor.inlineSuggest.enabled": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit"
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.DS_Store": true,
+    },
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "files.trimTrailingWhitespace": true,
+    "git.inputValidation": true,
+    "git.inputValidationSubjectLength": 72,
+    "git.inputValidationLength": 72,
     "go.lintTool": "golangci-lint",
     "go.lintFlags": [
-        "--fast",
-    ]
+        "--fast"
+    ],
+    "go.useLanguageServer": true,
+    "gopls": {
+        "formatting.gofumpt": true,
+        "build.directoryFilters": [
+            "-doc",
+            "-x",
+        ],
+        // Add parameter placeholders when completing a function.
+        "usePlaceholders": true,
+        "staticcheck": false
+    },
+    "protoc": {
+        "compile_on_save": false,
+        "options": [
+            "--proto_path=${workspaceRoot}",
+            "--proto_path=${workspaceRoot}/cmd/protoc-gen-gorums/dev",
+            "--proto_path=${workspaceRoot}/third_party"
+        ]
+    },
+    "clang-format.executable": "/usr/bin/clang-format",
+    "clang-format.style": "{ IndentWidth: 4, BasedOnStyle: google, AlignConsecutiveAssignments: true, ColumnLimit: 120 }",
+    "[proto3]": {
+        "editor.defaultFormatter": "zxh404.vscode-proto3"
+    },
+    "markdownlint.config": {
+        "MD024": false,
+        "default": true,
+        "no-hard-tabs": {
+            "code_blocks": false
+        }
+    },
+    "yaml.format.enable": true,
+    "[yaml]": {
+        "editor.tabSize": 4,
+        "editor.formatOnSave": true,
+    }
 }

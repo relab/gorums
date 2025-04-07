@@ -44,7 +44,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 	s := &Stats{}
 	var g errgroup.Group
 
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		g.Go(func() error {
 			warmupEnd := time.Now().Add(opts.Warmup)
 			for !time.Now().After(warmupEnd) {
@@ -70,7 +70,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 	}
 
 	s.Start()
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		g.Go(func() error {
 			endTime := time.Now().Add(opts.Duration)
 			for !time.Now().After(endTime) {
@@ -130,7 +130,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 		return nil
 	}
 
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		g.Go(warmupFunc)
 	}
 	err := g.Wait()
@@ -166,7 +166,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	}
 
 	s.Start()
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		g.Go(benchmarkFunc)
 	}
 	err = g.Wait()
@@ -203,7 +203,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	}
 
 	warmupEnd := time.Now().Add(opts.Warmup)
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		go benchmarkFunc(warmupEnd)
 	}
 	err := g.Wait()
@@ -218,7 +218,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 
 	runtime.ReadMemStats(&start)
 	endTime := time.Now().Add(opts.Duration)
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		benchmarkFunc(endTime)
 	}
 	err = g.Wait()

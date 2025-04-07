@@ -47,7 +47,7 @@ type testQSpec struct{}
 func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*onewaySrv, teardown func()) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
-	for i := 0; i < cfgSize; i++ {
+	for i := range cfgSize {
 		srvs[i] = &onewaySrv{received: make(chan *oneway.Request, numCalls)}
 	}
 
@@ -106,7 +106,7 @@ func TestOnewayCalls(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s/Servers=%d", test.name, test.servers), func(t *testing.T) {
 			cfg, srvs, teardown := setup(t, test.servers)
-			for i := 0; i < len(srvs); i++ {
+			for i := range srvs {
 				srvs[i].wg.Add(test.calls)
 			}
 
@@ -120,7 +120,7 @@ func TestOnewayCalls(t *testing.T) {
 			}
 
 			// Check that each server received expected oneway messages
-			for i := 0; i < len(srvs); i++ {
+			for i := range srvs {
 				srvs[i].wg.Wait()
 				close(srvs[i].received)
 				expected := uint64(1)
@@ -188,7 +188,7 @@ func TestMulticastPerNode(t *testing.T) {
 			// set the ignoreNodes variable used by the ignore() function
 			ignoreNodes = test.ignoreNodes
 
-			for i := 0; i < len(srvs); i++ {
+			for i := range srvs {
 				if ignore(nodeIDs[i]) {
 					continue // don't check ignored nodes
 				}
@@ -205,7 +205,7 @@ func TestMulticastPerNode(t *testing.T) {
 			}
 
 			// Check that each server received expected oneway messages
-			for i := 0; i < len(srvs); i++ {
+			for i := range srvs {
 				if ignore(nodeIDs[i]) {
 					continue // don't check ignored nodes
 				}
