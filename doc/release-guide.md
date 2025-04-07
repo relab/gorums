@@ -77,11 +77,11 @@ To cut a release you will need additional tools:
 
 10. Add and commit changes due to upgrades and recompilation:
 
-   ```shell
-   % git add
-   % git commit -m "Gorums release v0.9.0"
-   % gh pr create --title "Gorums release v0.9.0"
-   ```
+    ```shell
+    % git add
+    % git commit -m "Gorums release v0.9.0"
+    % gh pr create --title "Gorums release v0.9.0"
+    ```
 
 11. Merge the PR and publish the release with release notes:
 
@@ -89,10 +89,11 @@ To cut a release you will need additional tools:
     % git switch main
     % git pull
     # Prepare release notes in release-notes.md
-    % gh release create v0.9.0 --prerelease -F release-notes.md --title "Main changes in release"
+    % gh release create v0.9.0 --prerelease --title "Main changes in release"
+    # Select generated release notes from template
     ```
 
-    Now other projects can depend on `v0.8.0` of `github.com/relab/gorums`.
+    Now other projects can depend on `v0.9.0` of `github.com/relab/gorums`.
 
 12. To check that the new version is available (after a bit of time):
 
