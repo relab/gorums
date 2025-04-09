@@ -8,10 +8,15 @@ import (
 var qspecInterface = `
 {{$genFile := .GenFile}}
 {{$configOpt := use "gorums.ConfigOption" .GenFile}}
-{{- range qspecServices .Services}}
-// QuorumSpec is the interface of quorum functions for {{.GoName}}.
-type QuorumSpec interface {
-	{{$configOpt}}
+{{- $services := qspecServices .Services}}
+{{- if eq (len $services) 0}}
+	// There are no quorum calls.
+	type QuorumSpec interface{}
+{{- end}}
+{{- range $services}}
+	// QuorumSpec is the interface of quorum functions for {{.GoName}}.
+	type QuorumSpec interface {
+		{{$configOpt}}
 
 {{range qspecMethods .Methods -}}
 	{{/* Below . is the method object */}}
@@ -35,11 +40,11 @@ type QuorumSpec interface {
 `
 
 // qspecMethods returns all Gorums methods that require
-// a quorum function; that is, all except multicast and plain gRPC methods.
+// a quorum function; that is, all except multicast, unicast and plain gRPC methods.
 func qspecMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	for _, method := range methods {
 		if hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast) || !hasGorumsCallType(method) {
-			// ignore multicast and non-Gorums methods
+			// ignore multicast, unicast and non-Gorums methods
 			continue
 		}
 		s = append(s, method)
@@ -47,16 +52,12 @@ func qspecMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	return s
 }
 
-// qspecServices returns all services that have Gorums methods.
+// qspecServices returns all services that have qspec methods.
 func qspecServices(services []*protogen.Service) (s []*protogen.Service) {
 	for _, service := range services {
-		for _, method := range service.Methods {
-			if !hasGorumsCallType(method) {
-				// ignore services without Gorums methods
-				continue
-			}
+		if len(qspecMethods(service.Methods)) > 0 {
+			s = append(s, service)
 		}
-		s = append(s, service)
 	}
 	return s
 }

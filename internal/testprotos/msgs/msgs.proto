@@ -1,8 +1,16 @@
-syntax = "proto3";
+edition = "2023";
 
 package gorums.testprotos.msgs;
 option go_package = "github.com/relab/gorums/internal/testprotos/msgs";
 
-message Request { string Value = 1; }
-message Response { int64 Result = 1; }
-message MyResponse { string Value = 1; }
+option features.field_presence = IMPLICIT;
+
+message Request {
+    string Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}
+message MyResponse {
+    string Value = 1;
+}

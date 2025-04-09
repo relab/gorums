@@ -1,21 +1,27 @@
 module github.com/relab/gorums
 
-go 1.22.1
+go 1.24.1
 
 require (
-	github.com/golang/protobuf v1.5.4
-	github.com/google/go-cmp v0.6.0
-	golang.org/x/sync v0.6.0
-	golang.org/x/tools v0.19.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237
-	google.golang.org/grpc v1.62.1
-	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0
-	google.golang.org/protobuf v1.33.0
+	github.com/google/go-cmp v0.7.0
+	go.uber.org/goleak v1.3.0
+	golang.org/x/sync v0.13.0
+	golang.org/x/tools v0.31.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250404141209-ee84b53bf3d0
+	google.golang.org/grpc v1.71.1
+	google.golang.org/protobuf v1.36.6
 )
 
 require (
-	golang.org/x/mod v0.16.0 // indirect
-	golang.org/x/net v0.22.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/mod v0.24.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1 // indirect
+)
+
+tool (
+	golang.org/x/tools/cmd/stress
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc
+	google.golang.org/protobuf/cmd/protoc-gen-go
 )

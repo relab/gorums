@@ -111,7 +111,7 @@ func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err erro
 	if !ok {
 		errStatus = status.New(codes.Unknown, err.Error())
 	}
-	md.Status = errStatus.Proto()
+	md.SetStatus(errStatus.Proto())
 	return &Message{Metadata: md, Message: resp}
 }
 
@@ -154,11 +154,11 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			continue
 		}
-		if handler, ok := s.handlers[req.Metadata.Method]; ok {
+		if handler, ok := s.handlers[req.Metadata.GetMethod()]; ok {
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &mut}, req, finished)
+			go handler(ServerCtx{Context: req.Metadata.AppendToIncomingContext(ctx), once: new(sync.Once), mut: &mut}, req, finished)
 			// Wait until the handler releases the mutex.
 			mut.Lock()
 		}
@@ -350,9 +350,7 @@ type Server struct {
 	broadcastSrv *broadcastServer
 }
 
-// NewServer returns a new instance of GorumsServer.
-// This function is intended for internal Gorums use.
-// You should call `NewServer` in the generated code instead.
+// NewServer returns a new instance of [gorums.Server].
 func NewServer(opts ...ServerOption) *Server {
 	serverOpts := serverOptions{
 		clientDialTimeout: 10 * time.Second,

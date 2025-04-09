@@ -11,7 +11,7 @@ var serverInterface = `
 {{range .Services -}}
 {{$service := .GoName}}
 // {{$service}} is the server-side API for the {{$service}} Service
-type {{$service}} interface {
+type {{$service}}Server interface {
 	{{- range .Methods}}
 	{{- if isBroadcast  .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, broadcast *Broadcast)
@@ -61,7 +61,7 @@ var registerInterface = `
 {{$sendMessage := use "gorums.SendMessage" $genFile}}
 {{range .Services -}}
 {{$service := .GoName}}
-func Register{{$service}}Server(srv *Server, impl {{$service}}) {
+func Register{{$service}}Server(srv *Server, impl {{$service}}Server) {
 	{{- range .Methods}}
 	{{- if isBroadcast .}}
 	srv.RegisterHandler("{{.Desc.FullName}}", gorums.BroadcastHandler(impl.{{.GoName}}, srv.Server))

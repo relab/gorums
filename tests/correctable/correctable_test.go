@@ -23,9 +23,7 @@ func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -107,7 +105,7 @@ type testSrv struct {
 }
 
 func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error {
-	for i := 0; i < srv.n; i++ {
+	for i := range srv.n {
 		err := send(&CorrectableResponse{Level: int32(i + 1)})
 		if err != nil {
 			return err

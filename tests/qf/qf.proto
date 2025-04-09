@@ -1,16 +1,25 @@
 // Test to benchmark quorum functions with and without the request parameter.
-syntax = "proto3";
+edition = "2023";
+
 package qf;
 option go_package = "github.com/relab/gorums/tests/qf";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 
 service QuorumFunction {
-  rpc UseReq(Request) returns (Response) { option (gorums.quorumcall) = true; }
-  rpc IgnoreReq(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-  }
+    rpc UseReq(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+    rpc IgnoreReq(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
 }
 
-message Request { int64 Value = 1; }
-message Response { int64 Result = 1; }
+message Request {
+    int64 Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}

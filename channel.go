@@ -181,7 +181,7 @@ func (c *channel) routeResponse(msgID uint64, resp response) {
 func (c *channel) enqueue(req request, responseChan chan<- response, streaming bool) {
 	if responseChan != nil {
 		c.responseMut.Lock()
-		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, streaming}
+		c.responseRouters[req.msg.Metadata.GetMessageID()] = responseRouter{responseChan, streaming}
 		c.responseMut.Unlock()
 	}
 	// either enqueue the request on the sendQ or respond
@@ -217,7 +217,7 @@ func (c *channel) enqueueSlow(req request) {
 	// with error if the node is closed.
 	select {
 	case <-c.parentCtx.Done():
-		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
 		return
 	case c.sendQ <- req:
 	}
@@ -244,7 +244,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// returns false. This design should maybe be revised?
 		if req.waitForSend() {
 			// unblock the caller and clean up the responseRouter map
-			c.routeResponse(req.msg.Metadata.MessageID, response{})
+			c.routeResponse(req.msg.Metadata.GetMessageID(), response{})
 		}
 	}()
 
@@ -285,9 +285,9 @@ func (c *channel) sendMsg(req request) (err error) {
 				// the stream is taken down.
 
 				// trigger reconnect
-				//c.streamMut.Lock()
-				//c.cancelStream()
-				//c.streamMut.Unlock()
+				// c.streamMut.Lock()
+				// c.cancelStream()
+				// c.streamMut.Unlock()
 			}
 		}
 	}()
@@ -365,7 +365,7 @@ func (c *channel) receiver() {
 		} else {
 			c.streamMut.RUnlock()
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			c.routeResponse(resp.Metadata.MessageID, response{nid: c.node.ID(), msg: resp.Message, err: err})
+			c.routeResponse(resp.Metadata.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
 			if err != nil {
 				c.log("channel: got response", err, slog.LevelError, logging.MsgID(resp.Metadata.MessageID), logging.Method(resp.Metadata.Method))
 			} else {
@@ -490,7 +490,7 @@ func (c *channel) retryMsg(req request, err error) {
 		return
 	}
 	delay := float64(c.backoffCfg.BaseDelay)
-	//delay := float64(10 * time.Millisecond)
+	// delay := float64(10 * time.Millisecond)
 	max := float64(c.backoffCfg.MaxDelay)
 	for r := req.numFailed; delay < max && r > 0; r-- {
 		delay *= c.backoffCfg.Multiplier

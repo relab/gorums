@@ -30,6 +30,7 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
 		IsBroadcastClient: d.IsBroadcastClient, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
 	}}
+	// md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
 	replyChan := make(chan response, expectedReplies)
 	for _, n := range c {

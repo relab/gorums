@@ -1,11 +1,16 @@
-syntax = "proto3";
+edition = "2023";
+
 package tls;
 option go_package = "github.com/relab/gorums/tests/tls";
 
+option features.field_presence = IMPLICIT;
+
 service TLS {
-  rpc TestTLS(Request) returns (Response) {}
+    rpc TestTLS(Request) returns (Response) {}
 }
 
 message Request {}
 
-message Response { bool OK = 1; }
+message Response {
+    bool OK = 1;
+}

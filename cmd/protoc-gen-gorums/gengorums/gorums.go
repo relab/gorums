@@ -242,6 +242,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"qspec":        {template: qspecInterface},
 	"types":        {template: dataTypes},
 	"server":       {template: server},
+	"client":       {template: client},
 	"clientserver": {template: clientServer},
 
 	callTypeName(gorums.E_Rpc): {
@@ -360,6 +361,10 @@ var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
 // one of the call types supported by Gorums.
 func hasGorumsCallType(method *protogen.Method) bool {
 	return hasMethodOption(method, gorumsCallTypes...)
+}
+
+func hasConfigurationCallType(method *protogen.Method) bool {
+	return hasGorumsCallType(method) && !hasMethodOption(method, gorums.E_Unicast)
 }
 
 // hasMethodOption returns true if the method has one of the given method options.

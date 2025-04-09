@@ -1,21 +1,28 @@
 // Test that Gorums can generate a single multicast method.
 
-syntax = "proto3";
+edition = "2023";
+
 package gorums.testprotos.calltypes.multicast;
 option go_package = "github.com/relab/gorums/internal/testprotos/calltypes/multicast";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 import "google/protobuf/empty.proto";
 
 service Multicast {
-  rpc Multicast(stream Request) returns (Response) {
-    option (gorums.multicast) = true;
-  }
-  // MulticastEmpty is testing imported message type.
-  rpc MulticastEmpty(stream Request) returns (google.protobuf.Empty) {
-    option (gorums.multicast) = true;
-  }
+    rpc Multicast(stream Request) returns (Response) {
+        option (gorums.multicast) = true;
+    }
+    // MulticastEmpty is testing imported message type.
+    rpc MulticastEmpty(stream Request) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+    }
 }
 
-message Request { string Value = 1; }
-message Response { int64 Result = 1; }
+message Request {
+    string Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}

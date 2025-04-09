@@ -29,7 +29,7 @@ func (srv *server) SlowServer(ctx gorums.ServerCtx, in *Echo) (resp *Echo, err e
 }
 
 func (srv *server) Multicast(_ gorums.ServerCtx, msg *TimedMsg) {
-	latency := time.Now().UnixNano() - msg.SendTime
+	latency := time.Now().UnixNano() - msg.GetSendTime()
 	srv.stats.AddLatency(time.Duration(latency))
 }
 
@@ -52,10 +52,10 @@ func (srv *server) StartBenchmark(_ gorums.ServerCtx, _ *StartRequest) (resp *St
 
 func (srv *server) StopBenchmark(_ gorums.ServerCtx, _ *StopRequest) (resp *MemoryStat, err error) {
 	srv.stats.End()
-	return &MemoryStat{
+	return MemoryStat_builder{
 		Allocs: srv.stats.endMs.Mallocs - srv.stats.startMs.Mallocs,
 		Memory: srv.stats.endMs.TotalAlloc - srv.stats.startMs.TotalAlloc,
-	}, nil
+	}.Build(), nil
 }
 
 // Server is a unified server for both ordered and unordered methods

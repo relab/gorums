@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
@@ -22,15 +21,15 @@ type testSrv struct{}
 func (srv testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeID, err error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, status.Error(codes.NotFound, "Metadata unavailable")
+		return nil, status.Error(codes.NotFound, "metadata unavailable")
 	}
 	v := md.Get("id")
 	if len(v) < 1 {
-		return nil, status.Error(codes.NotFound, "ID field missing")
+		return nil, status.Error(codes.NotFound, "missing metadata field: id")
 	}
 	id, err := strconv.Atoi(v[0])
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "Got '%s', but could not convert to integer", v[0])
+		return nil, status.Errorf(codes.InvalidArgument, "value of id field: %q is not a number: %v", v[0], err)
 	}
 	return &NodeID{ID: uint32(id)}, nil
 }
@@ -43,7 +42,7 @@ func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr,
 	return &IPAddr{Addr: peerInfo.Addr.String()}, nil
 }
 
-func initServer(t *testing.T) *gorums.Server {
+func initServer() *gorums.Server {
 	srv := gorums.NewServer()
 	RegisterMetadataTestServer(srv, &testSrv{})
 	return srv
@@ -52,7 +51,7 @@ func initServer(t *testing.T) *gorums.Server {
 func TestMetadata(t *testing.T) {
 	want := uint32(1)
 
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer(t) })
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
 	md := metadata.New(map[string]string{
@@ -61,9 +60,7 @@ func TestMetadata(t *testing.T) {
 
 	mgr := NewManager(
 		gorums.WithMetadata(md),
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -83,8 +80,40 @@ func TestMetadata(t *testing.T) {
 	}
 }
 
+func TestPerMessageMetadata(t *testing.T) {
+	want := uint32(1)
+
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
+	defer teardown()
+
+	mgr := NewManager(
+		gorums.WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	)
+	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	node := mgr.Nodes()[0]
+
+	md := metadata.New(map[string]string{
+		"id": fmt.Sprint(want),
+	})
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	resp, err := node.IDFromMD(ctx, &emptypb.Empty{})
+	if err != nil {
+		t.Fatalf("RPC error: %v", err)
+	}
+
+	if resp.GetID() != want {
+		t.Fatalf("IDFromMD() == %d, want %d", resp.GetID(), want)
+	}
+}
+
 func TestPerNodeMetadata(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 2, func(_ int) gorums.ServerIface { return initServer(t) })
+	addrs, teardown := gorums.TestSetup(t, 2, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
 	perNodeMD := func(nid uint32) metadata.MD {
@@ -95,9 +124,7 @@ func TestPerNodeMetadata(t *testing.T) {
 
 	mgr := NewManager(
 		gorums.WithPerNodeMetadata(perNodeMD),
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -119,13 +146,11 @@ func TestPerNodeMetadata(t *testing.T) {
 }
 
 func TestCanGetPeerInfo(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer(t) })
+	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

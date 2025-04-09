@@ -20,10 +20,11 @@ download:
 	@go mod download
 
 tools: download
-	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % go install %
+	@go install tool
 
 %.pb.go %_gorums.pb.go : %.proto
 	@protoc -I=$(proto_include):. \
 		--go_out=paths=source_relative:. \
 		--gorums_out=paths=source_relative:. \
+		--go_opt=default_api_level=API_OPAQUE \
 		$<

@@ -102,7 +102,7 @@ type correctableCallState struct {
 // This method should only be used by generated code.
 func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
 	expectedReplies := len(c)
-	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method}
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
 	replyChan := make(chan response, expectedReplies)
 	for _, n := range c {
@@ -141,7 +141,7 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 
 	if state.data.ServerStream {
 		for _, n := range c {
-			defer n.channel.deleteRouter(state.md.MessageID)
+			defer n.channel.deleteRouter(state.md.GetMessageID())
 		}
 	}
 

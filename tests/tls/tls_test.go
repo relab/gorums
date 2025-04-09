@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums"
 	"google.golang.org/grpc"
@@ -47,11 +46,8 @@ func TestTLS(t *testing.T) {
 	defer teardown()
 
 	mgr := NewManager(
-		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
-			grpc.WithReturnConnectionError(),
 		),
 	)
 	_, err = mgr.NewConfiguration(gorums.WithNodeList(addrs))

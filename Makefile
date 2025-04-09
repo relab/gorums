@@ -8,17 +8,19 @@ static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -no
 proto_path 				:= $(dev_path):third_party:.
 
 plugin_deps				:= gorums.pb.go internal/correctable/opts.pb.go $(static_file)
+runtime_deps			:= ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_gorums.pb.go
 
 .PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests
 
 all: dev benchmark compiletests
 
-dev: installgorums ordering/ordering.pb.go ordering/ordering_grpc.pb.go
+dev: installgorums $(runtime_deps)
 	@rm -f $(dev_path)/zorums*.pb.go
 	@protoc -I=$(proto_path) \
 		--go_out=:. \
 		--gorums_out=dev=true:. \
+		--go_opt=default_api_level=API_OPAQUE \
 		$(zorums_proto)
 
 benchmark: installgorums $(benchmark_deps)
@@ -29,7 +31,9 @@ $(static_file): $(static_files)
 	@protoc-gen-gorums --bundle=$(static_file)
 
 %.pb.go : %.proto
-	@protoc -I=$(proto_path) --go_out=paths=source_relative:. $^
+	@protoc -I=$(proto_path) \
+		--go_opt=default_api_level=API_OPAQUE \
+		--go_out=paths=source_relative:. $^
 
 %_grpc.pb.go : %.proto
 	@protoc -I=$(proto_path) --go-grpc_out=paths=source_relative:. $^
@@ -38,8 +42,7 @@ $(static_file): $(static_files)
 	@protoc -I=$(proto_path) --gorums_out=paths=source_relative:. $^
 
 tools:
-	@go mod download
-	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -I % go install %
+	@go install tool
 
 installgorums: bootstrapgorums $(gen_files) $(plugin_deps) Makefile
 	@go install $(PLUGIN_PATH)

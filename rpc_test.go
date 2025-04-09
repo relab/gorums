@@ -61,7 +61,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 		Method:  "dummy.Dummy.Test",
 	})
 	if err == nil {
-		t.Fatalf("Unexpected error, got: %v, want: %v", err, fmt.Errorf("rpc error: code = Unavailable desc = stream is down"))
+		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("rpc error: code = Unavailable desc = stream is down"))
 	}
 	if response != nil {
 		t.Fatalf("Unexpected response, got: %v, want: %v", response, nil)
@@ -90,7 +90,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 		Method:  "dummy.Dummy.Test",
 	})
 	if err == nil {
-		t.Fatalf("Unexpected error, got: %v, want: %v", err, fmt.Errorf("context deadline exceeded"))
+		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("context deadline exceeded"))
 	}
 	if response != nil {
 		t.Fatalf("Unexpected response, got: %v, want: %v", response, nil)
@@ -105,9 +105,7 @@ func initServer() *gorums.Server {
 
 func gorumsTestMgr() *dummy.Manager {
 	mgr := dummy.NewManager(
-		gorums.WithDialTimeout(time.Second),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

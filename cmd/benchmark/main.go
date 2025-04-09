@@ -95,15 +95,15 @@ func printResults(results []*benchmark.Result, options benchmark.Options, server
 	fmt.Fprintln(resultWriter)
 	for _, r := range results {
 		if !serverStats && options.Remote {
-			for _, s := range r.ServerStats {
-				r.MemPerOp += s.Memory / r.TotalOps
-				r.AllocsPerOp += s.Allocs / r.TotalOps
+			for _, s := range r.GetServerStats() {
+				r.SetMemPerOp(r.GetMemPerOp() + s.GetMemory()/r.GetTotalOps())
+				r.SetAllocsPerOp(r.GetAllocsPerOp() + s.GetAllocs()/r.GetTotalOps())
 			}
 		}
 		fmt.Fprint(resultWriter, r.Format())
 		if serverStats && options.Remote {
-			for _, s := range r.ServerStats {
-				fmt.Fprintf(resultWriter, "%d B/op\t%d allocs/op\t", s.Memory/r.TotalOps, s.Allocs/r.TotalOps)
+			for _, s := range r.GetServerStats() {
+				fmt.Fprintf(resultWriter, "%d B/op\t%d allocs/op\t", s.GetMemory()/r.GetTotalOps(), s.GetAllocs()/r.GetTotalOps())
 			}
 		}
 		fmt.Fprintln(resultWriter)
@@ -191,10 +191,8 @@ func main() {
 
 	mgrOpts := []gorums.ManagerOption{
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
-		gorums.WithDialTimeout(10 * time.Second),
 		gorums.WithSendBufferSize(*sendBuffer),
 	}
 
@@ -215,7 +213,7 @@ func main() {
 	printResults(results, options, *serverStats)
 }
 
-func checkf(format string, args ...interface{}) {
+func checkf(format string, args ...any) {
 	for _, arg := range args {
 		if err, _ := arg.(error); err != nil {
 			fmt.Fprintf(os.Stderr, format, args...)

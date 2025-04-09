@@ -1,20 +1,29 @@
-syntax = "proto3";
+edition = "2023";
+
 package ordering;
 option go_package = "github.com/relab/gorums/tests/ordering";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 
 service GorumsTest {
-  rpc QC(Request) returns (Response) { option (gorums.quorumcall) = true; }
+    rpc QC(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
 
-  rpc QCAsync(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-  }
+    rpc QCAsync(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+        option (gorums.async)      = true;
+    }
 
-  rpc UnaryRPC(Request) returns (Response) {}
+    rpc UnaryRPC(Request) returns (Response) {}
 }
 
-message Request { uint64 Num = 1; }
+message Request {
+    uint64 Num = 1;
+}
 
-message Response { bool InOrder = 1; }
+message Response {
+    bool InOrder = 1;
+}

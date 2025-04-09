@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"log/slog"
-	"time"
 
 	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/broadcast"
@@ -12,25 +11,23 @@ import (
 )
 
 type managerOptions struct {
-	grpcDialOpts    []grpc.DialOption
-	nodeDialTimeout time.Duration
-	logger          *slog.Logger
-	noConnect       bool
-	backoff         backoff.Config
-	sendBuffer      uint
-	metadata        metadata.MD
-	perNodeMD       func(uint32) metadata.MD
-	machineID       uint64                        // used for generating SnowflakeIDs
-	maxSendRetries  int                           // number of times we try to resend a failed msg
-	maxConnRetries  int                           // number of times we try to reconnect (in the background) to a node
-	auth            *authentication.EllipticCurve // used when authenticating msgs
+	grpcDialOpts   []grpc.DialOption
+	logger         *slog.Logger
+	noConnect      bool
+	backoff        backoff.Config
+	sendBuffer     uint
+	metadata       metadata.MD
+	perNodeMD      func(uint32) metadata.MD
+	machineID      uint64                        // used for generating SnowflakeIDs
+	maxSendRetries int                           // number of times we try to resend a failed msg
+	maxConnRetries int                           // number of times we try to reconnect (in the background) to a node
+	auth           *authentication.EllipticCurve // used when authenticating msgs
 }
 
 func newManagerOptions() managerOptions {
 	return managerOptions{
-		backoff:         backoff.DefaultConfig,
-		sendBuffer:      100,
-		nodeDialTimeout: 50 * time.Millisecond,
+		backoff:    backoff.DefaultConfig,
+		sendBuffer: 100,
 		// Provide an illegal machineID to avoid unintentional collisions.
 		// 0 is a valid MachineID and should not be used as default.
 		machineID:      uint64(broadcast.MaxMachineID) + 1,
@@ -41,14 +38,6 @@ func newManagerOptions() managerOptions {
 
 // ManagerOption provides a way to set different options on a new Manager.
 type ManagerOption func(*managerOptions)
-
-// WithDialTimeout returns a ManagerOption which is used to set the dial
-// context timeout to be used when initially connecting to each node in its pool.
-func WithDialTimeout(timeout time.Duration) ManagerOption {
-	return func(o *managerOptions) {
-		o.nodeDialTimeout = timeout
-	}
-}
 
 // WithGrpcDialOptions returns a ManagerOption which sets any gRPC dial options
 // the Manager should use when initially connecting to each node in its pool.

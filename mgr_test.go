@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"log/slog"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/tests/dummy"
@@ -73,9 +72,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	})
 	defer teardown()
 	mgr := gorums.NewRawManager(
-		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

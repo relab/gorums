@@ -82,9 +82,7 @@ func (n *RawNode) dial() error {
 		n.conn.Close()
 	}
 	var err error
-	ctx, cancel := context.WithTimeout(context.Background(), n.mgr.opts.nodeDialTimeout)
-	defer cancel()
-	n.conn, err = grpc.DialContext(ctx, n.addr, n.mgr.opts.grpcDialOpts...)
+	n.conn, err = grpc.NewClient(n.addr, n.mgr.opts.grpcDialOpts...)
 	return err
 }
 
@@ -228,7 +226,7 @@ func (ms *MultiSorter) Less(i, j int) bool {
 	p, q := ms.nodes[i], ms.nodes[j]
 	// Try all but the last comparison.
 	var k int
-	for k = 0; k < len(ms.less)-1; k++ {
+	for k = range len(ms.less) - 1 {
 		less := ms.less[k]
 		switch {
 		case less(p, q):

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/leakcheck"
+	"go.uber.org/goleak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -87,9 +87,7 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 		return srv
 	})
 	mgr := NewManager(
-		gorums.WithDialTimeout(100*time.Millisecond),
 		gorums.WithGrpcDialOptions(
-			grpc.WithBlock(),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
@@ -105,7 +103,7 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 }
 
 func TestUnaryRPCOrdering(t *testing.T) {
-	defer leakcheck.Check(t)
+	defer goleak.VerifyNone(t)
 	cfg, teardown := setup(t, 1)
 	defer teardown()
 	node := cfg.Nodes()[0]
@@ -128,7 +126,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 }
 
 func TestQCOrdering(t *testing.T) {
-	defer leakcheck.Check(t)
+	defer goleak.VerifyNone(t)
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	// begin test
@@ -150,7 +148,7 @@ func TestQCOrdering(t *testing.T) {
 }
 
 func TestQCAsyncOrdering(t *testing.T) {
-	defer leakcheck.Check(t)
+	defer goleak.VerifyNone(t)
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -184,7 +182,7 @@ func TestQCAsyncOrdering(t *testing.T) {
 }
 
 func TestMixedOrdering(t *testing.T) {
-	defer leakcheck.Check(t)
+	defer goleak.VerifyNone(t)
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	nodes := cfg.Nodes()

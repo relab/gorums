@@ -12,12 +12,12 @@ import (
 // Format returns a tab formatted string representation of the result
 func (r *Result) Format() string {
 	b := new(strings.Builder)
-	fmt.Fprintf(b, "%s\t", r.Name)
-	fmt.Fprintf(b, "%.2f ops/sec\t", r.Throughput)
-	fmt.Fprintf(b, "%.2f ms\t", r.LatencyAvg/float64(time.Millisecond))
-	fmt.Fprintf(b, "%.2f ms\t", math.Sqrt(r.LatencyVar)/float64(time.Millisecond))
-	fmt.Fprintf(b, "%d B/op\t", r.MemPerOp)
-	fmt.Fprintf(b, "%d allocs/op\t", r.AllocsPerOp)
+	fmt.Fprintf(b, "%s\t", r.GetName())
+	fmt.Fprintf(b, "%.2f ops/sec\t", r.GetThroughput())
+	fmt.Fprintf(b, "%.2f ms\t", r.GetLatencyAvg()/float64(time.Millisecond))
+	fmt.Fprintf(b, "%.2f ms\t", math.Sqrt(r.GetLatencyVar())/float64(time.Millisecond))
+	fmt.Fprintf(b, "%d B/op\t", r.GetMemPerOp())
+	fmt.Fprintf(b, "%d allocs/op\t", r.GetAllocsPerOp())
 	return b.String()
 }
 
@@ -70,15 +70,15 @@ func (s *Stats) GetResult() *Result {
 	defer s.mut.Unlock()
 
 	r := &Result{}
-	r.TotalOps = s.count
-	r.TotalTime = int64(s.endTime.Sub(s.startTime))
-	r.Throughput = float64(r.TotalOps) / float64(time.Duration(r.TotalTime).Seconds())
-	r.LatencyAvg = s.mean
+	r.SetTotalOps(s.count)
+	r.SetTotalTime(int64(s.endTime.Sub(s.startTime)))
+	r.SetThroughput(float64(r.GetTotalOps()) / float64(time.Duration(r.GetTotalTime()).Seconds()))
+	r.SetLatencyAvg(s.mean)
 	if s.count > 2 {
-		r.LatencyVar = s.m2 / float64(s.count-1)
+		r.SetLatencyVar(s.m2 / float64(s.count-1))
 	}
-	r.AllocsPerOp = (s.endMs.Mallocs - s.startMs.Mallocs) / r.TotalOps
-	r.MemPerOp = (s.endMs.TotalAlloc - s.startMs.TotalAlloc) / r.TotalOps
+	r.SetAllocsPerOp((s.endMs.Mallocs - s.startMs.Mallocs) / r.GetTotalOps())
+	r.SetMemPerOp((s.endMs.TotalAlloc - s.startMs.TotalAlloc) / r.GetTotalOps())
 	return r
 }
 

@@ -81,6 +81,9 @@ var funcMap = template.FuncMap{
 	"correctableStream": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer()
 	},
+	"isCorrectable": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Correctable)
+	},
 	"withCorrectable": func(method *protogen.Method, arg string) string {
 		if hasMethodOption(method, gorums.E_Correctable) {
 			return arg
@@ -123,18 +126,25 @@ var funcMap = template.FuncMap{
 		}
 		return
 	},
-	"out":                   out,
-	"outType":               outType,
-	"internalOut":           internalOut,
-	"customOut":             customOut,
-	"mapInternalOutType":    mapInternalOutType,
-	"mapCorrectableOutType": mapCorrectableOutType,
-	"mapAsyncOutType":       mapAsyncOutType,
-	"qspecServices":         qspecServices,
-	"qspecMethods":          qspecMethods,
-	"unexport":              unexport,
-	"contains":              strings.Contains,
-	"field":                 field,
+	"isAsync": func(method *protogen.Method) bool {
+		return hasMethodOption(method, gorums.E_Async)
+	},
+	"out":                    out,
+	"outType":                outType,
+	"internalOut":            internalOut,
+	"customOut":              customOut,
+	"mapInternalOutType":     mapInternalOutType,
+	"mapCorrectableOutType":  mapCorrectableOutType,
+	"mapAsyncOutType":        mapAsyncOutType,
+	"qspecMethods":           qspecMethods,
+	"qspecServices":          qspecServices,
+	"unexport":               unexport,
+	"contains":               strings.Contains,
+	"field":                  field,
+	"configurationsServices": configurationsServices,
+	"configurationMethods":   configurationMethods,
+	"nodeServices":           nodeServices,
+	"nodeMethods":            nodeMethods,
 }
 
 type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
@@ -218,7 +228,7 @@ func parseTemplate(name, tmpl string) *template.Template {
 	return template.Must(template.New(name).Funcs(funcMap).Parse(tmpl))
 }
 
-func mustExecute(t *template.Template, data interface{}) string {
+func mustExecute(t *template.Template, data any) string {
 	var b bytes.Buffer
 	if err := t.Execute(&b, data); err != nil {
 		panic(err)

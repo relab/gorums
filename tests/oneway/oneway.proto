@@ -1,23 +1,26 @@
-syntax = "proto3";
+edition = "2023";
+
 package oneway;
 option go_package = "github.com/relab/gorums/tests/oneway";
+
+option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 
 service OnewayTest {
-  rpc Unicast(Request) returns (Empty) {
-    option (gorums.unicast) = true;
-  }
-  rpc Multicast(Request) returns (Empty) {
-    option (gorums.multicast) = true;
-  }
-  rpc MulticastPerNode(Request) returns (Empty) {
-    option (gorums.multicast) = true;
-    option (gorums.per_node_arg) = true;
-  }
+    rpc Unicast(Request) returns (Empty) {
+        option (gorums.unicast) = true;
+    }
+    rpc Multicast(Request) returns (Empty) {
+        option (gorums.multicast) = true;
+    }
+    rpc MulticastPerNode(Request) returns (Empty) {
+        option (gorums.multicast)    = true;
+        option (gorums.per_node_arg) = true;
+    }
 }
 
 message Request {
-  uint64 Num = 1;
+    uint64 Num = 1;
 }
 message Empty {}

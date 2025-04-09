@@ -40,11 +40,11 @@ type (
 func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	msg := &Echo{Payload: make([]byte, opts.Payload)}
+	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
 
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		g.Go(func() error {
 			warmupEnd := time.Now().Add(opts.Warmup)
 			for !time.Now().After(warmupEnd) {
@@ -70,7 +70,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 	}
 
 	s.Start()
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		g.Go(func() error {
 			endTime := time.Now().Add(opts.Duration)
 			for !time.Now().After(endTime) {
@@ -97,7 +97,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 		if err != nil {
 			return nil, err
 		}
-		result.ServerStats = memStats.MemoryStats
+		result.SetServerStats(memStats.GetMemoryStats())
 	}
 
 	return result, nil
@@ -106,7 +106,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	msg := &Echo{Payload: make([]byte, opts.Payload)}
+	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
 
@@ -130,7 +130,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 		return nil
 	}
 
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		g.Go(warmupFunc)
 	}
 	err := g.Wait()
@@ -166,7 +166,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	}
 
 	s.Start()
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		g.Go(benchmarkFunc)
 	}
 	err = g.Wait()
@@ -181,7 +181,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 		if err != nil {
 			return nil, err
 		}
-		result.ServerStats = memStats.MemoryStats
+		result.SetServerStats(memStats.GetMemoryStats())
 	}
 
 	return result, nil
@@ -197,13 +197,13 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 
 	benchmarkFunc := func(stopTime time.Time) {
 		for !time.Now().After(stopTime) {
-			msg := &TimedMsg{SendTime: time.Now().UnixNano(), Payload: payload}
+			msg := TimedMsg_builder{SendTime: time.Now().UnixNano(), Payload: payload}.Build()
 			f(ctx, msg)
 		}
 	}
 
 	warmupEnd := time.Now().Add(opts.Warmup)
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		go benchmarkFunc(warmupEnd)
 	}
 	err := g.Wait()
@@ -218,7 +218,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 
 	runtime.ReadMemStats(&start)
 	endTime := time.Now().Add(opts.Duration)
-	for n := 0; n < opts.Concurrent; n++ {
+	for range opts.Concurrent {
 		benchmarkFunc(endTime)
 	}
 	err = g.Wait()
@@ -232,11 +232,11 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 		return nil, err
 	}
 
-	clientAllocs := (end.Mallocs - start.Mallocs) / resp.TotalOps
-	clientMem := (end.TotalAlloc - start.TotalAlloc) / resp.TotalOps
+	clientAllocs := (end.Mallocs - start.Mallocs) / resp.GetTotalOps()
+	clientMem := (end.TotalAlloc - start.TotalAlloc) / resp.GetTotalOps()
 
-	resp.AllocsPerOp = clientAllocs
-	resp.MemPerOp = clientMem
+	resp.SetAllocsPerOp(clientAllocs)
+	resp.SetMemPerOp(clientMem)
 	return resp, nil
 }
 
@@ -279,9 +279,9 @@ func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg *Configuratio
 			if err != nil {
 				return nil, err
 			}
-			result.Name = b.Name
+			result.SetName(b.Name)
 			i := sort.Search(len(results), func(i int) bool {
-				return results[i].Name >= result.Name
+				return results[i].GetName() >= result.GetName()
 			})
 			results = append(results, nil)
 			copy(results[i+1:], results[i:])

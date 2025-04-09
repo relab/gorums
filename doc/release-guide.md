@@ -12,6 +12,7 @@ To cut a release you will need additional tools:
 1. Check and upgrade dependencies:
 
    ```shell
+   % git switch -c meling/release/v0.9.0-devel
    % make tools
    % protoc --version
    libprotoc 3.15.6
@@ -32,23 +33,25 @@ To cut a release you will need additional tools:
 
    ```text
    ... (list of compatability changes) ...
-   Inferred base version: v0.3.0
-   Suggested version: v0.4.0
+   Inferred base version: v0.8.1
+   Suggested version: v0.9.0
    ```
 
 3. Edit `internal/version/version.go`
 
-4. Edit `version.go`
+4. Edit `version.go` (`MinVersion` should be kept as is, since otherwise `make dev` below will fail)
 
 5. Install new version of `protoc-gen-gorums`:
 
    ```shell
    % make dev
    % protoc-gen-gorums --version
-   protoc-gen-gorums v0.4.0-devel
+   protoc-gen-gorums v0.9.0-devel
    ```
 
-6. Recompile `_gorums.pb.go` files:
+6. Now `version.go` can be updated to reflect the new version number, if necessary.
+
+7. Recompile `_gorums.pb.go` files:
 
    ```shell
    % make -B
@@ -59,46 +62,41 @@ To cut a release you will need additional tools:
    % cd ..
    ```
 
-7. Run tests:
+8. Run tests:
 
    ```shell
    % make test
    % make testrace
    ```
 
-8. Edit gorums dependency to be v0.4.0 in example/go.mod:
+9. Edit gorums dependency to be v0.9.0 in example/go.mod:
 
    ```shell
    % vim examples/go.mod
    ```
 
-9. Add and commit changes due to upgrades and recompilation:
-
-   ```shell
-   % git add
-   % git commit -m "Gorums release v0.4.0"
-   # Synchronize master branch
-   % git push
-   ```
-
-10. Publish the release with release notes:
+10. Add and commit changes due to upgrades and recompilation:
 
     ```shell
+    % git add
+    % git commit -m "Gorums release v0.9.0"
+    % gh pr create --title "Gorums release v0.9.0"
+    ```
+
+11. Merge the PR and publish the release with release notes:
+
+    ```shell
+    % git switch main
+    % git pull
     # Prepare release notes in release-notes.md
-    % gh release create v0.4.0 --prerelease -F release-notes.md --title "Main changes in release"
+    % gh release create v0.9.0 --prerelease --title "Main changes in release"
+    # Select generated release notes from template
     ```
 
-    Without the `gh` tool:
+    Now other projects can depend on `v0.9.0` of `github.com/relab/gorums`.
+
+12. To check that the new version is available (after a bit of time):
 
     ```shell
-    % git tag v0.4.0
-    % git push origin v0.4.0
-    ```
-
-    Now other projects can depend on `v0.4.0` of `github.com/relab/gorums`.
-
-11. To check that the new version is available (after a bit of time):
-
-    ```shell
-    % go list -m github.com/relab/gorums@v0.4.0
+    % go list -m github.com/relab/gorums@v0.9.0
     ```

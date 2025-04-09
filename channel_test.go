@@ -47,15 +47,17 @@ func TestChannelCreation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the node should be closed manually because it isn't added to the configuration
+	defer node.close()
 	mgr := dummyMgr()
-	defer mgr.Close()
 	// a proper connection should NOT be established here
 	_ = node.connect(mgr)
 
 	replyChan := make(chan response, 1)
 	go func() {
-		md := &ordering.Metadata{MessageID: 1, Method: handlerName}
-		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
+		ctx := context.Background()
+		md := ordering.NewGorumsMetadata(ctx, 1, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan, false)
 	}()
 	select {
@@ -108,7 +110,7 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 		t.Fatal("the node was not added to the configuration")
 	}
 	if node.conn == nil {
-		t.Fatal("connection should not be nil when NOT using WithBlock()")
+		t.Fatal("connection should not be nil")
 	}
 }
 
@@ -120,16 +122,18 @@ func TestChannelReconnection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// the node should be closed manually because it isn't added to the configuration
+	defer node.close()
 	mgr := dummyMgr()
-	defer mgr.Close()
 	// a proper connection should NOT be established here because server is not started
 	_ = node.connect(mgr)
 
 	// send first message when server is down
 	replyChan1 := make(chan response, 1)
 	go func() {
-		md := &ordering.Metadata{MessageID: 1, Method: handlerName}
-		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
+		ctx := context.Background()
+		md := ordering.NewGorumsMetadata(ctx, 1, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan1, false)
 	}()
 
@@ -148,8 +152,9 @@ func TestChannelReconnection(t *testing.T) {
 	// send second message when server is up
 	replyChan2 := make(chan response, 1)
 	go func() {
-		md := &ordering.Metadata{MessageID: 2, Method: handlerName}
-		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
+		ctx := context.Background()
+		md := ordering.NewGorumsMetadata(ctx, 2, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
 		node.channel.enqueue(req, replyChan2, false)
 	}()
 
@@ -168,8 +173,9 @@ func TestChannelReconnection(t *testing.T) {
 	// send third message when server has been previously up but is now down
 	replyChan3 := make(chan response, 1)
 	go func() {
-		md := &ordering.Metadata{MessageID: 3, Method: handlerName}
-		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
+		ctx := context.Background()
+		md := ordering.NewGorumsMetadata(ctx, 3, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan3, false)
 	}()
 

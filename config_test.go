@@ -2,6 +2,7 @@ package gorums_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -9,6 +10,18 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/tests/dummy"
 )
+
+func TestNewConfigurationEmptyNodeList(t *testing.T) {
+	wantErr := errors.New("config: missing required node addresses")
+	mgr := gorums.NewRawManager(gorums.WithNoConnect())
+	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList([]string{}))
+	if err == nil {
+		t.Fatalf("Expected error, got: %v, want: %v", err, wantErr)
+	}
+	if err.Error() != wantErr.Error() {
+		t.Errorf("Error = %q, expected %q", err.Error(), wantErr)
+	}
+}
 
 func TestNewConfigurationNodeList(t *testing.T) {
 	mgr := gorums.NewRawManager(gorums.WithNoConnect())
@@ -209,7 +222,7 @@ func TestConfigConcurrentAccess(t *testing.T) {
 
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		wg.Add(1)
 		go func() {
 			node := cfg.Nodes()[0]

@@ -30,7 +30,8 @@ func (n *RawNode) RPCCall(ctx context.Context, d CallData) (protoreflect.ProtoMe
 		OriginSignature: d.OriginSignature,
 	}}
 
-	//md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
+	// md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method}
+	// md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
 	replyChan := make(chan response, 1)
 	n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}, replyChan, false)
 
