@@ -48,6 +48,7 @@ func (s *orderingServer) encodeMsg(req *Message) ([]byte, error) {
 	req.msgType = 0
 	encodedMsg, err := s.opts.auth.EncodeMsg(*req)
 	req.Metadata.GetAuthMsg().SetSignature(make([]byte, len(signature)))
+	// TODO(meling): I think this is incorrect and should be done differently.
 	copy(req.Metadata.GetAuthMsg().GetSignature(), signature)
 	req.msgType = reqType
 	return encodedMsg, err
