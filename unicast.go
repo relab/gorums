@@ -15,8 +15,9 @@ import (
 func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
-	md := &ordering.Metadata{MessageID: n.mgr.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{BroadcastID: d.BroadcastID}}
-	// md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
+	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
+	broadcastMsg := ordering.BroadcastMsg_builder{BroadcastID: d.BroadcastID}.Build()
+	md.SetBroadcastMsg(broadcastMsg)
 	req := request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	if o.noSendWaiting {

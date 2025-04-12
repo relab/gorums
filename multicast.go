@@ -14,10 +14,14 @@ import (
 // This method should be used by generated code only.
 func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
-		IsBroadcastClient: d.IsBroadcastClient, BroadcastID: d.BroadcastID, OriginAddr: d.OriginAddr,
-	}}
-	// md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
+	broadcastMsg := ordering.BroadcastMsg_builder{
+		IsBroadcastClient: d.IsBroadcastClient,
+		BroadcastID:       d.BroadcastID,
+		OriginAddr:        d.OriginAddr,
+	}.Build()
+	md.SetBroadcastMsg(broadcastMsg)
+
 	sentMsgs := 0
 
 	var replyChan chan response
