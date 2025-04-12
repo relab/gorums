@@ -21,7 +21,7 @@ func (srv testSrv) TestUnresponsive(ctx gorums.ServerCtx, _ *Empty) (resp *Empty
 // TestUnresponsive checks that the client is not blocked when the server is not receiving messages
 func TestUnresponsive(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
-		gorumsSrv := gorums.NewServer()
+		gorumsSrv := NewServer()
 		srv := &testSrv{}
 		RegisterUnresponsiveServer(gorumsSrv, srv)
 		return gorumsSrv

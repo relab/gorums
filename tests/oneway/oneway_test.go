@@ -52,7 +52,7 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 	}
 
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(i int) gorums.ServerIface {
-		srv := gorums.NewServer()
+		srv := oneway.NewServer()
 		oneway.RegisterOnewayTestServer(srv, srvs[i])
 		return srv
 	})

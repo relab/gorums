@@ -97,8 +97,8 @@ func TestRPCCallTimedOut(t *testing.T) {
 	}
 }
 
-func initServer() *gorums.Server {
-	srv := gorums.NewServer()
+func initServer() *dummy.Server {
+	srv := dummy.NewServer()
 	dummy.RegisterDummyServer(srv, &testSrv{})
 	return srv
 }

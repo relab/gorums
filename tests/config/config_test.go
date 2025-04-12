@@ -52,7 +52,7 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 		srvs[i] = &cfgSrv{}
 	}
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(i int) gorums.ServerIface {
-		srv := gorums.NewServer()
+		srv := NewServer()
 		RegisterConfigTestServer(srv, srvs[i])
 		return srv
 	})

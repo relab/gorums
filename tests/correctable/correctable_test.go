@@ -16,7 +16,7 @@ import (
 // by dividing the sum of levels from the servers with the divider.
 func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration) *gorums.Correctable) {
 	addrs, teardown := gorums.TestSetup(t, n, func(i int) gorums.ServerIface {
-		gorumsSrv := gorums.NewServer()
+		gorumsSrv := NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
 	})

@@ -39,7 +39,7 @@ func TestTLS(t *testing.T) {
 	}
 
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
-		srv := gorums.NewServer(gorums.WithGRPCServerOptions(grpc.Creds(credentials.NewServerTLSFromCert(&tlsCert))))
+		srv := NewServer(gorums.WithGRPCServerOptions(grpc.Creds(credentials.NewServerTLSFromCert(&tlsCert))))
 		RegisterTLSServer(srv, &testSrv{})
 		return srv
 	})

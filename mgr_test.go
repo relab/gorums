@@ -17,9 +17,7 @@ var (
 )
 
 func TestManagerLogging(t *testing.T) {
-	var (
-		buf bytes.Buffer
-	)
+	var buf bytes.Buffer
 
 	buf.WriteString("\n")
 	_ = gorums.NewRawManager(
@@ -66,7 +64,7 @@ func (dummySrv) Test(ctx gorums.ServerCtx, _ *dummy.Empty) (resp *dummy.Empty, e
 
 func TestManagerAddNodeWithConn(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
-		srv := gorums.NewServer()
+		srv := dummy.NewServer()
 		dummy.RegisterDummyServer(srv, &dummySrv{})
 		return srv
 	})

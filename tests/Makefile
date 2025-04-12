@@ -11,6 +11,8 @@ ordering: ordering/order.pb.go ordering/order_gorums.pb.go
 
 metadata: metadata/metadata.pb.go metadata/metadata_gorums.pb.go
 
+metadata: mock/mock.pb.go
+
 tls: tls/tls.pb.go tls/tls_gorums.pb.go
 
 unresponsive: unresponsive/unresponsive.pb.go unresponsive/unresponsive_gorums.pb.go
