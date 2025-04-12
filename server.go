@@ -41,14 +41,14 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 func (s *orderingServer) encodeMsg(req *Message) ([]byte, error) {
 	// we must not consider the signature field when validating.
 	// also the msgType must be set to requestType.
-	signature := make([]byte, len(req.Metadata.AuthMsg.Signature))
-	copy(signature, req.Metadata.AuthMsg.Signature)
+	signature := make([]byte, len(req.Metadata.GetAuthMsg().GetSignature()))
+	copy(signature, req.Metadata.GetAuthMsg().GetSignature())
 	reqType := req.msgType
-	req.Metadata.AuthMsg.Signature = nil
+	req.Metadata.GetAuthMsg().SetSignature(nil)
 	req.msgType = 0
 	encodedMsg, err := s.opts.auth.EncodeMsg(*req)
-	req.Metadata.AuthMsg.Signature = make([]byte, len(signature))
-	copy(req.Metadata.AuthMsg.Signature, signature)
+	req.Metadata.GetAuthMsg().SetSignature(make([]byte, len(signature)))
+	copy(req.Metadata.GetAuthMsg().GetSignature(), signature)
 	req.msgType = reqType
 	return encodedMsg, err
 }
@@ -57,23 +57,23 @@ func (s *orderingServer) verify(req *Message) error {
 	if s.opts.auth == nil {
 		return nil
 	}
-	if req.Metadata.AuthMsg == nil {
+	if req.Metadata.GetAuthMsg() == nil {
 		return fmt.Errorf("missing authMsg")
 	}
-	if req.Metadata.AuthMsg.Signature == nil {
+	if req.Metadata.GetAuthMsg().GetSignature() == nil {
 		return fmt.Errorf("missing signature")
 	}
-	if req.Metadata.AuthMsg.PublicKey == "" {
+	if req.Metadata.GetAuthMsg().GetPublicKey() == "" {
 		return fmt.Errorf("missing publicKey")
 	}
 	auth := s.opts.auth
-	authMsg := req.Metadata.AuthMsg
+	authMsg := req.Metadata.GetAuthMsg()
 	if s.opts.allowList != nil {
-		pemEncodedPub, ok := s.opts.allowList[authMsg.Sender]
+		pemEncodedPub, ok := s.opts.allowList[authMsg.GetSender()]
 		if !ok {
 			return fmt.Errorf("not allowed")
 		}
-		if pemEncodedPub != authMsg.PublicKey {
+		if pemEncodedPub != authMsg.GetPublicKey() {
 			return fmt.Errorf("publicKey did not match")
 		}
 	}
@@ -81,7 +81,7 @@ func (s *orderingServer) verify(req *Message) error {
 	if err != nil {
 		return err
 	}
-	valid, err := auth.VerifySignature(authMsg.PublicKey, encodedMsg, authMsg.Signature)
+	valid, err := auth.VerifySignature(authMsg.GetPublicKey(), encodedMsg, authMsg.GetSignature())
 	if err != nil {
 		return err
 	}
