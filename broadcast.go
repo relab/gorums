@@ -63,16 +63,20 @@ const (
 	BroadcastID string = "broadcastID"
 )
 
-type BroadcastHandlerFunc func(method string, req protoreflect.ProtoMessage, broadcastID uint64, enqueueBroadcast EnqueueBroadcast, options ...broadcast.BroadcastOptions) error
-type BroadcastForwardHandlerFunc func(req protoreflect.ProtoMessage, method string, broadcastID uint64, forwardAddr, originAddr string)
-type BroadcastServerHandlerFunc func(method string, req protoreflect.ProtoMessage, options ...broadcast.BroadcastOptions)
-type BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast EnqueueBroadcast) error
-type CancelHandlerFunc func(broadcastID uint64, srvAddrs []string, enqueueBroadcast EnqueueBroadcast) error
-type DoneHandlerFunc func(broadcastID uint64, enqueueBroadcast EnqueueBroadcast)
-type EnqueueBroadcast func(*broadcast.Msg) error
+type (
+	BroadcastHandlerFunc             func(method string, req protoreflect.ProtoMessage, broadcastID uint64, enqueueBroadcast EnqueueBroadcast, options ...broadcast.BroadcastOptions) error
+	BroadcastForwardHandlerFunc      func(req protoreflect.ProtoMessage, method string, broadcastID uint64, forwardAddr, originAddr string)
+	BroadcastServerHandlerFunc       func(method string, req protoreflect.ProtoMessage, options ...broadcast.BroadcastOptions)
+	BroadcastSendToClientHandlerFunc func(broadcastID uint64, resp protoreflect.ProtoMessage, err error, enqueueBroadcast EnqueueBroadcast) error
+	CancelHandlerFunc                func(broadcastID uint64, srvAddrs []string, enqueueBroadcast EnqueueBroadcast) error
+	DoneHandlerFunc                  func(broadcastID uint64, enqueueBroadcast EnqueueBroadcast)
+	EnqueueBroadcast                 func(*broadcast.Msg) error
+)
 
-type defaultImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(ServerCtx, T) (V, error)
-type clientImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(context.Context, T, uint64) (V, error)
+type (
+	defaultImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(ServerCtx, T) (V, error)
+	clientImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage]  func(context.Context, T, uint64) (V, error)
+)
 
 type implementationFunc[T protoreflect.ProtoMessage, V Broadcaster] func(ServerCtx, T, V)
 
@@ -181,21 +185,21 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	if md == nil {
 		return BroadcastMetadata{}
 	}
-	tmp := strings.Split(md.Method, ".")
+	tmp := strings.Split(md.GetMethod(), ".")
 	m := ""
 	if len(tmp) >= 1 {
 		m = tmp[len(tmp)-1]
 	}
-	timestamp, shardID, machineID, sequenceNo := broadcast.DecodeBroadcastID(md.BroadcastMsg.BroadcastID)
+	timestamp, shardID, machineID, sequenceNo := broadcast.DecodeBroadcastID(md.GetBroadcastMsg().GetBroadcastID())
 	return BroadcastMetadata{
-		BroadcastID:       md.BroadcastMsg.BroadcastID,
-		IsBroadcastClient: md.BroadcastMsg.IsBroadcastClient,
-		SenderAddr:        md.BroadcastMsg.SenderAddr,
-		OriginAddr:        md.BroadcastMsg.OriginAddr,
-		OriginMethod:      md.BroadcastMsg.OriginMethod,
-		OriginDigest:      md.BroadcastMsg.OriginDigest,
-		OriginSignature:   md.BroadcastMsg.OriginSignature,
-		OriginPubKey:      md.BroadcastMsg.OriginPubKey,
+		BroadcastID:       md.GetBroadcastMsg().GetBroadcastID(),
+		IsBroadcastClient: md.GetBroadcastMsg().GetIsBroadcastClient(),
+		SenderAddr:        md.GetBroadcastMsg().GetSenderAddr(),
+		OriginAddr:        md.GetBroadcastMsg().GetOriginAddr(),
+		OriginMethod:      md.GetBroadcastMsg().GetOriginMethod(),
+		OriginDigest:      md.GetBroadcastMsg().GetOriginDigest(),
+		OriginSignature:   md.GetBroadcastMsg().GetOriginSignature(),
+		OriginPubKey:      md.GetBroadcastMsg().GetOriginPubKey(),
 		Method:            m,
 		Timestamp:         broadcast.Epoch().Add(time.Duration(timestamp) * time.Second),
 		ShardID:           shardID,

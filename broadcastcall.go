@@ -43,7 +43,8 @@ func (bcd *BroadcastCallData) inSubset(addr string) bool {
 //
 // This method should be used by generated code only.
 func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData, opts ...CallOption) {
-	md := &ordering.Metadata{MessageID: c.getMsgID(), Method: d.Method, BroadcastMsg: &ordering.BroadcastMsg{
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
+	broadcastMsg := ordering.BroadcastMsg_builder{
 		IsBroadcastClient: d.IsBroadcastClient,
 		BroadcastID:       d.BroadcastID,
 		SenderAddr:        d.SenderAddr,
@@ -52,7 +53,9 @@ func (c RawConfiguration) BroadcastCall(ctx context.Context, d BroadcastCallData
 		OriginPubKey:      d.OriginPubKey,
 		OriginSignature:   d.OriginSignature,
 		OriginDigest:      d.OriginDigest,
-	}}
+	}.Build()
+	md.SetBroadcastMsg(broadcastMsg)
+
 	msg := &Message{Metadata: md, Message: d.Message}
 	o := getCallOptions(E_Broadcast, opts)
 	c.sign(msg, o.signOrigin)
