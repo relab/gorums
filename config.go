@@ -79,9 +79,9 @@ func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
 			if err != nil {
 				panic(err)
 			}
-			msg.Metadata.BroadcastMsg.OriginDigest = digest
-			msg.Metadata.BroadcastMsg.OriginPubKey = pubKey
-			msg.Metadata.BroadcastMsg.OriginSignature = originSignature
+			msg.Metadata.GetBroadcastMsg().SetOriginDigest(digest)
+			msg.Metadata.GetBroadcastMsg().SetOriginPubKey(pubKey)
+			msg.Metadata.GetBroadcastMsg().SetOriginSignature(originSignature)
 		}
 		encodedMsg, err := c.encodeMsg(msg)
 		if err != nil {
@@ -91,7 +91,7 @@ func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
 		if err != nil {
 			panic(err)
 		}
-		msg.Metadata.AuthMsg.Signature = signature
+		msg.Metadata.GetAuthMsg().SetSignature(signature)
 	}
 }
 
@@ -102,10 +102,10 @@ func (c RawConfiguration) encodeMsg(msg *Message) ([]byte, error) {
 	if err != nil {
 		panic(err)
 	}
-	msg.Metadata.AuthMsg = &ordering.AuthMsg{
+	msg.Metadata.SetAuthMsg(ordering.AuthMsg_builder{
 		PublicKey: pubKey,
 		Signature: nil,
 		Sender:    auth.Addr(),
-	}
+	}.Build())
 	return auth.EncodeMsg(*msg)
 }

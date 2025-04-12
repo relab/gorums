@@ -115,7 +115,7 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 		// Cancellation is a special method that is not specified in the proto file.
 		// it is used by the broadcast server to cancel a broadcast request and is
 		// the msg.Message is empty and does not need marshalling.
-		if msg.Metadata.Method == Cancellation {
+		if msg.Metadata.GetMethod() == Cancellation {
 			return nil
 		}
 		// err is a NotFound error with no method name information; return a more informative error
