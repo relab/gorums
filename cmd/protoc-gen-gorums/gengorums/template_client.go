@@ -1,6 +1,7 @@
 package gengorums
 
 import (
+	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
@@ -25,6 +26,9 @@ var clientConfigurationInterface = `
 			{{- else if or (isCorrectable .) (isAsync .)}}
 				{{- $customOut := outType . (customOut $genFile .)}}
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) *{{$customOut}}
+			{{- else if isBroadcastCall .}}
+				{{- $customOut := customOut $genFile .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, cancelOnTimeout ...bool) (resp *{{$customOut}}, err error)
 			{{- else}}
 				{{- $customOut := customOut $genFile .}}
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
@@ -93,7 +97,8 @@ func nodeServices(services []*protogen.Service) (s []*protogen.Service) {
 // nodeMethods returns all single node methods, such as unicast and plain gRPC methods.
 func nodeMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	for _, method := range methods {
-		if !hasConfigurationCallType(method) {
+		// ignore internal broadcast methods
+		if !hasConfigurationCallType(method) && !hasMethodOption(method, gorums.E_Broadcast) {
 			s = append(s, method)
 		}
 	}
