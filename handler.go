@@ -22,8 +22,8 @@ func ClientHandler[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage](imp
 	return func(ctx ServerCtx, in *Message, _ chan<- *Message) {
 		defer ctx.Release()
 		req := in.Message.(T)
-		//err := status.FromProto(in.Metadata.GetStatus()).Err()
-		_, _ = impl(ctx, req, in.Metadata.BroadcastMsg.BroadcastID)
+		// err := status.FromProto(in.Metadata.GetStatus()).Err()
+		_, _ = impl(ctx, req, in.Metadata.GetBroadcastMsg().GetBroadcastID())
 	}
 }
 
@@ -46,12 +46,12 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 		// this happens when Cancellations arrive because the proto message is nil but
 		// we still want to process the message.
 		req, ok := in.Message.(T)
-		if !ok && in.Metadata.Method != Cancellation {
+		if !ok && in.Metadata.GetMethod() != Cancellation {
 			return
 		}
-		if in.Metadata.BroadcastMsg.IsBroadcastClient {
+		if in.Metadata.GetBroadcastMsg().GetIsBroadcastClient() {
 			// keep track of the method called by the user
-			in.Metadata.BroadcastMsg.OriginMethod = in.Metadata.Method
+			in.Metadata.GetBroadcastMsg().SetOriginMethod(in.Metadata.GetMethod())
 		}
 		// due to ordering we wrap the actual implementation function to be able to
 		// run it at a later time.
@@ -82,40 +82,37 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 }
 
 func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func(context.Context, func(*broadcast.Msg) error)) {
-	msg.BroadcastID = in.Metadata.BroadcastMsg.BroadcastID
-	msg.IsBroadcastClient = in.Metadata.BroadcastMsg.IsBroadcastClient
-	msg.OriginAddr = in.Metadata.BroadcastMsg.OriginAddr
-	msg.OriginMethod = in.Metadata.BroadcastMsg.OriginMethod
-	msg.SenderAddr = in.Metadata.BroadcastMsg.SenderAddr
+	msg.BroadcastID = in.Metadata.GetBroadcastMsg().GetBroadcastID()
+	msg.IsBroadcastClient = in.Metadata.GetBroadcastMsg().GetIsBroadcastClient()
+	msg.OriginAddr = in.Metadata.GetBroadcastMsg().GetOriginAddr()
+	msg.OriginMethod = in.Metadata.GetBroadcastMsg().GetOriginMethod()
+	msg.SenderAddr = in.Metadata.GetBroadcastMsg().GetSenderAddr()
 	if msg.SenderAddr == "" && msg.IsBroadcastClient {
 		msg.SenderAddr = "client"
 	}
-	if in.Metadata.BroadcastMsg.OriginDigest != nil {
-		msg.OriginDigest = in.Metadata.BroadcastMsg.OriginDigest
+	if in.Metadata.GetBroadcastMsg().GetOriginDigest() != nil {
+		msg.OriginDigest = in.Metadata.GetBroadcastMsg().GetOriginDigest()
 	}
-	if in.Metadata.BroadcastMsg.OriginSignature != nil {
-		msg.OriginSignature = in.Metadata.BroadcastMsg.OriginSignature
+	if in.Metadata.GetBroadcastMsg().GetOriginSignature() != nil {
+		msg.OriginSignature = in.Metadata.GetBroadcastMsg().GetOriginSignature()
 	}
-	if in.Metadata.BroadcastMsg.OriginPubKey != "" {
-		msg.OriginPubKey = in.Metadata.BroadcastMsg.OriginPubKey
+	if in.Metadata.GetBroadcastMsg().GetOriginPubKey() != "" {
+		msg.OriginPubKey = in.Metadata.GetBroadcastMsg().GetOriginPubKey()
 	}
-	msg.CurrentMethod = in.Metadata.Method
+	msg.CurrentMethod = in.Metadata.GetMethod()
 	msg.Ctx = ctx.Context
 	msg.Run = run
 	if msg.OriginAddr == "" && msg.IsBroadcastClient {
-		msg.SendFn = createSendFn(in.Metadata.MessageID, in.Metadata.Method, finished, ctx)
+		msg.SendFn = createSendFn(in.Metadata.GetMessageID(), in.Metadata.GetMethod(), finished, ctx)
 	}
-	if in.Metadata.Method == Cancellation {
+	if in.Metadata.GetMethod() == Cancellation {
 		msg.IsCancellation = true
 	}
 }
 
 func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx ServerCtx) func(resp protoreflect.ProtoMessage, err error) error {
 	return func(resp protoreflect.ProtoMessage, err error) error {
-		md := &ordering.Metadata{
-			MessageID: msgID,
-			Method:    method,
-		}
+		md := ordering.NewGorumsMetadata(ctx, msgID, method)
 		msg := WrapMessage(md, resp, err)
 		return SendMessage(ctx, finished, msg)
 	}
@@ -128,11 +125,11 @@ func (srv *broadcastServer) validateMessage(in *Message) error {
 	if in.Metadata == nil {
 		return fmt.Errorf("metadata cannot be empty. got: %v", in.Metadata)
 	}
-	if in.Metadata.BroadcastMsg == nil {
-		return fmt.Errorf("broadcastMsg cannot be empty. got: %v", in.Metadata.BroadcastMsg)
+	if in.Metadata.GetBroadcastMsg() == nil {
+		return fmt.Errorf("broadcastMsg cannot be empty. got: %v", in.Metadata.GetBroadcastMsg())
 	}
-	if in.Metadata.BroadcastMsg.BroadcastID <= 0 {
-		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.BroadcastMsg.BroadcastID)
+	if in.Metadata.GetBroadcastMsg().GetBroadcastID() <= 0 {
+		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.GetBroadcastMsg().GetBroadcastID())
 	}
 	return nil
 }
