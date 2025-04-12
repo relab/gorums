@@ -210,13 +210,16 @@ func TestAuthentication(t *testing.T) {
 	config := make(RawConfiguration, 0)
 	config = append(config, node)
 
-	md := &ordering.Metadata{MessageID: 0, Method: "test", BroadcastMsg: &ordering.BroadcastMsg{
+	ctx := context.Background()
+	md := ordering.NewGorumsMetadata(ctx, 0, "test")
+	broadcastMsg := ordering.BroadcastMsg_builder{
 		IsBroadcastClient: true,
 		BroadcastID:       0,
 		SenderAddr:        "127.0.0.1:5000",
 		OriginAddr:        "127.0.0.1:5000",
 		OriginMethod:      "test",
-	}}
+	}.Build()
+	md.SetBroadcastMsg(broadcastMsg)
 	msg := &Message{Metadata: md, Message: &mock.Request{}}
 	msg1 := &Message{Metadata: md, Message: &mock.Request{}}
 
@@ -250,8 +253,8 @@ func TestAuthentication(t *testing.T) {
 
 	config.sign(msg)
 
-	if pemEncodedPub != msg.Metadata.AuthMsg.PublicKey {
-		t.Fatalf("wrong pub key. want: %s, got: %s", pemEncodedPub, msg.Metadata.AuthMsg.PublicKey)
+	if pemEncodedPub != msg.Metadata.GetAuthMsg().GetPublicKey() {
+		t.Fatalf("wrong pub key. want: %s, got: %s", pemEncodedPub, msg.Metadata.GetAuthMsg().GetPublicKey())
 	}
 
 	if err := srv.srv.verify(msg); err != nil {

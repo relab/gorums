@@ -38,10 +38,10 @@ func (req request) relatedToBroadcast() bool {
 	if req.msg.Metadata == nil {
 		return false
 	}
-	if req.msg.Metadata.BroadcastMsg == nil {
+	if req.msg.Metadata.GetBroadcastMsg() == nil {
 		return false
 	}
-	if req.msg.Metadata.BroadcastMsg.BroadcastID <= 0 {
+	if req.msg.Metadata.GetBroadcastMsg().GetBroadcastID() <= 0 {
 		return false
 	}
 	return true
@@ -53,9 +53,9 @@ func (req request) getLogArgs(c *channel) []slog.Attr {
 	if c.logger == nil {
 		return nil
 	}
-	args := []slog.Attr{logging.MsgID(req.msg.Metadata.MessageID), logging.Method(req.msg.Metadata.Method), logging.NumFailed(req.numFailed), logging.MaxRetries(c.maxSendRetries)}
+	args := []slog.Attr{logging.MsgID(req.msg.Metadata.GetMessageID()), logging.Method(req.msg.Metadata.GetMethod()), logging.NumFailed(req.numFailed), logging.MaxRetries(c.maxSendRetries)}
 	if req.relatedToBroadcast() {
-		args = append(args, logging.BroadcastID(req.msg.Metadata.BroadcastMsg.BroadcastID))
+		args = append(args, logging.BroadcastID(req.msg.Metadata.GetBroadcastMsg().GetBroadcastID()))
 	}
 	return args
 }
@@ -188,7 +188,7 @@ func (c *channel) enqueue(req request, responseChan chan<- response, streaming b
 	// with error if the node is closed.
 	select {
 	case <-c.parentCtx.Done():
-		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
 		return
 	case c.sendQ <- req:
 	}
@@ -197,14 +197,14 @@ func (c *channel) enqueue(req request, responseChan chan<- response, streaming b
 func (c *channel) enqueueFast(req request, responseChan chan<- response, streaming bool) bool {
 	if responseChan != nil {
 		c.responseMut.Lock()
-		c.responseRouters[req.msg.Metadata.MessageID] = responseRouter{responseChan, streaming}
+		c.responseRouters[req.msg.Metadata.GetMessageID()] = responseRouter{responseChan, streaming}
 		c.responseMut.Unlock()
 	}
 	// only enqueue the request on the sendQ if it is available and
 	// the node is not closed.
 	select {
 	case <-c.parentCtx.Done():
-		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
 	case c.sendQ <- req:
 	default:
 		return false
@@ -367,9 +367,9 @@ func (c *channel) receiver() {
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
 			c.routeResponse(resp.Metadata.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
 			if err != nil {
-				c.log("channel: got response", err, slog.LevelError, logging.MsgID(resp.Metadata.MessageID), logging.Method(resp.Metadata.Method))
+				c.log("channel: got response", err, slog.LevelError, logging.MsgID(resp.Metadata.GetMessageID()), logging.Method(resp.Metadata.GetMethod()))
 			} else {
-				c.log("channel: got response", nil, slog.LevelInfo, logging.MsgID(resp.Metadata.MessageID), logging.Method(resp.Metadata.Method))
+				c.log("channel: got response", nil, slog.LevelInfo, logging.MsgID(resp.Metadata.GetMessageID()), logging.Method(resp.Metadata.GetMethod()))
 			}
 		}
 
@@ -486,7 +486,7 @@ func (c *channel) retryMsg(req request, err error) {
 	c.log("channel: failed to send msg", err, slog.LevelError, req.getLogArgs(c)...)
 	// c.maxRetries = -1, is the same as infinite retries.
 	if req.numFailed > c.maxSendRetries && c.maxSendRetries != -1 {
-		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("max retries exceeded. err=%e", err)})
+		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("max retries exceeded. err=%e", err)})
 		return
 	}
 	delay := float64(c.backoffCfg.BaseDelay)
@@ -499,10 +499,10 @@ func (c *channel) retryMsg(req request, err error) {
 	delay *= 1 + c.backoffCfg.Jitter*(rand.Float64()*2-1)
 	select {
 	case <-c.parentCtx.Done():
-		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
 		return
 	case <-req.ctx.Done():
-		c.routeResponse(req.msg.Metadata.MessageID, response{nid: c.node.ID(), err: fmt.Errorf("context cancelled")})
+		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("context cancelled")})
 		return
 	case <-time.After(time.Duration(delay)):
 		// enqueue the request again
