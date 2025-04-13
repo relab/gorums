@@ -68,7 +68,7 @@ func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
 	if c[0].mgr.opts.auth != nil {
 		if len(signOrigin) > 0 && signOrigin[0] {
 			originMsg := authentication.EncodeMsg(msg.Message)
-			digest := c[0].mgr.opts.auth.Hash(originMsg)
+			digest := authentication.Hash(originMsg)
 			originSignature, err := c[0].mgr.opts.auth.Sign(originMsg)
 			if err != nil {
 				panic(err)

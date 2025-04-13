@@ -102,30 +102,25 @@ func (ec *EllipticCurve) DecodePublic(pemEncodedPub string) (*ecdsa.PublicKey, e
 }
 
 func (ec *EllipticCurve) Sign(msg []byte) ([]byte, error) {
-	h := sha256.Sum256(msg)
-	hash := h[:]
-	signature, err := ecdsa.SignASN1(rand.Reader, ec.privateKey, hash)
+	signature, err := ecdsa.SignASN1(rand.Reader, ec.privateKey, Hash(msg))
 	if err != nil {
 		return nil, err
 	}
 	return signature, nil
 }
 
-func (ec *EllipticCurve) Hash(msg []byte) []byte {
-	h := sha256.Sum256(msg)
-	hash := h[:]
-	return hash
+func Hash(msg []byte) []byte {
+	hash := sha256.Sum256(msg)
+	return hash[:]
 }
 
 // VerifySignature sign ecdsa style and verify signature
 func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []byte) (bool, error) {
-	h := sha256.Sum256(msg)
-	hash := h[:]
 	pubKey, err := ec.DecodePublic(pemEncodedPub)
 	if err != nil {
 		return false, err
 	}
-	ok := ecdsa.VerifyASN1(pubKey, hash, signature)
+	ok := ecdsa.VerifyASN1(pubKey, Hash(msg), signature)
 	return ok, nil
 }
 
@@ -136,8 +131,7 @@ func EncodeMsg(msg any) []byte {
 func Verify(pemEncodedPub string, signature, digest []byte, msg any) (bool, error) {
 	encodedMsg := EncodeMsg(msg)
 	ec := New(elliptic.P256())
-	h := sha256.Sum256(encodedMsg)
-	hash := h[:]
+	hash := Hash(encodedMsg)
 	if !bytes.Equal(hash, digest) {
 		return false, fmt.Errorf("wrong digest")
 	}
