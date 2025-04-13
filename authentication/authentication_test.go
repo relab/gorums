@@ -31,10 +31,7 @@ func TestSignAndVerify(t *testing.T) {
 
 	message := "This is a message"
 
-	encodedMsg1, err := ec1.EncodeMsg(message)
-	if err != nil {
-		t.Error(err)
-	}
+	encodedMsg1 := EncodeMsg(message)
 	signature, err := ec1.Sign(encodedMsg1)
 	if err != nil {
 		t.Error(err)
@@ -44,10 +41,7 @@ func TestSignAndVerify(t *testing.T) {
 		t.Error(err)
 	}
 
-	encodedMsg2, err := ec2.EncodeMsg(message)
-	if err != nil {
-		t.Error(err)
-	}
+	encodedMsg2 := EncodeMsg(message)
 	ok, err := ec2.VerifySignature(pemEncodedPub, encodedMsg2, signature)
 	if err != nil {
 		t.Error(err)
@@ -71,10 +65,7 @@ func TestVerifyWithWrongPubKey(t *testing.T) {
 	}
 
 	message := "This is a message"
-	encodedMsg1, err := ec1.EncodeMsg(message)
-	if err != nil {
-		t.Error(err)
-	}
+	encodedMsg1 := EncodeMsg(message)
 	signature, err := ec1.Sign(encodedMsg1)
 	if err != nil {
 		t.Error(err)
@@ -86,10 +77,7 @@ func TestVerifyWithWrongPubKey(t *testing.T) {
 		t.Error(err)
 	}
 
-	encodedMsg2, err := ec2.EncodeMsg(message)
-	if err != nil {
-		t.Error(err)
-	}
+	encodedMsg2 := EncodeMsg(message)
 	ok, err := ec2.VerifySignature(pemEncodedPub, encodedMsg2, signature)
 	if err != nil {
 		t.Error(err)

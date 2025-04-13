@@ -3,6 +3,7 @@ package gorums
 import (
 	"fmt"
 
+	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/ordering"
 )
 
@@ -66,10 +67,7 @@ func (c RawConfiguration) getMsgID() uint64 {
 func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
 	if c[0].mgr.opts.auth != nil {
 		if len(signOrigin) > 0 && signOrigin[0] {
-			originMsg, err := c[0].mgr.opts.auth.EncodeMsg(msg.Message)
-			if err != nil {
-				panic(err)
-			}
+			originMsg := authentication.EncodeMsg(msg.Message)
 			digest := c[0].mgr.opts.auth.Hash(originMsg)
 			originSignature, err := c[0].mgr.opts.auth.Sign(originMsg)
 			if err != nil {
@@ -83,10 +81,7 @@ func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
 			msg.Metadata.GetBroadcastMsg().SetOriginPubKey(pubKey)
 			msg.Metadata.GetBroadcastMsg().SetOriginSignature(originSignature)
 		}
-		encodedMsg, err := c.encodeMsg(msg)
-		if err != nil {
-			panic(err)
-		}
+		encodedMsg := c.encodeMsg(msg)
 		signature, err := c[0].mgr.opts.auth.Sign(encodedMsg)
 		if err != nil {
 			panic(err)
@@ -95,7 +90,7 @@ func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
 	}
 }
 
-func (c RawConfiguration) encodeMsg(msg *Message) ([]byte, error) {
+func (c RawConfiguration) encodeMsg(msg *Message) []byte {
 	// we do not want to include the signature field in the signature
 	auth := c[0].mgr.opts.auth
 	pubKey, err := auth.EncodePublic()
@@ -107,5 +102,5 @@ func (c RawConfiguration) encodeMsg(msg *Message) ([]byte, error) {
 		Signature: nil,
 		Sender:    auth.Addr(),
 	}.Build())
-	return auth.EncodeMsg(*msg)
+	return authentication.EncodeMsg(*msg)
 }
