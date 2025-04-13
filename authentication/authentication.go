@@ -131,14 +131,6 @@ func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []
 
 func (ec *EllipticCurve) EncodeMsg(msg any) ([]byte, error) {
 	return []byte(fmt.Sprintf("%v", msg)), nil
-	/*var encodedMsg bytes.Buffer
-	gob.Register(msg)
-	enc := gob.NewEncoder(&encodedMsg)
-	err := enc.Encode(msg)
-	if err != nil {
-		return nil, err
-	}
-	return encodedMsg.Bytes(), nil*/
 }
 
 func encodeMsg(msg any) ([]byte, error) {
