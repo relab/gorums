@@ -129,18 +129,6 @@ func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []
 	return ok, nil
 }
 
-// VerifySignature sign ecdsa style and verify signature
-func (ec *EllipticCurve) SignAndVerify(privKey *ecdsa.PrivateKey, pubKey *ecdsa.PublicKey) ([]byte, bool, error) {
-	h := sha256.Sum256([]byte("test"))
-	hash := h[:]
-	signature, err := ecdsa.SignASN1(rand.Reader, privKey, hash)
-	if err != nil {
-		return nil, false, err
-	}
-	ok := ecdsa.VerifyASN1(pubKey, hash, signature)
-	return signature, ok, nil
-}
-
 func (ec *EllipticCurve) EncodeMsg(msg any) ([]byte, error) {
 	return []byte(fmt.Sprintf("%v", msg)), nil
 	/*var encodedMsg bytes.Buffer
