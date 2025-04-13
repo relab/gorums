@@ -38,22 +38,6 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
-func (s *orderingServer) encodeMsg(req *Message) []byte {
-	// we must not consider the signature field when validating.
-	// also the msgType must be set to requestType.
-	signature := make([]byte, len(req.Metadata.GetAuthMsg().GetSignature()))
-	copy(signature, req.Metadata.GetAuthMsg().GetSignature())
-	reqType := req.msgType
-	req.Metadata.GetAuthMsg().SetSignature(nil)
-	req.msgType = 0
-	encodedMsg := authentication.EncodeMsg(*req)
-	req.Metadata.GetAuthMsg().SetSignature(make([]byte, len(signature)))
-	// TODO(meling): I think this is incorrect and should be done differently.
-	copy(req.Metadata.GetAuthMsg().GetSignature(), signature)
-	req.msgType = reqType
-	return encodedMsg
-}
-
 func (s *orderingServer) verify(req *Message) error {
 	if s.opts.auth == nil {
 		return nil
@@ -78,8 +62,7 @@ func (s *orderingServer) verify(req *Message) error {
 			return fmt.Errorf("publicKey did not match")
 		}
 	}
-	encodedMsg := s.encodeMsg(req)
-	valid, err := auth.VerifySignature(authMsg.GetPublicKey(), encodedMsg, authMsg.GetSignature())
+	valid, err := auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 	if err != nil {
 		return err
 	}

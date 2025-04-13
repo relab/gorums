@@ -3,6 +3,7 @@ package gorums
 import (
 	"fmt"
 
+	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
@@ -33,6 +34,30 @@ type Message struct {
 // msgType specifies the message type to be unmarshaled.
 func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
+}
+
+// Encode returns an encoded byte representation of the Message
+// ignoring the message type and signature in the Auth message.
+func (m *Message) Encode() []byte {
+	authMsg := m.Metadata.GetAuthMsg()
+
+	// save the original signature and msgType.
+	origSignature := authMsg.GetSignature()
+	sigCopy := make([]byte, len(origSignature))
+	copy(sigCopy, origSignature)
+	origMsgType := m.msgType
+
+	// prepare for encoding: remove the signature and set msgType to 0
+	authMsg.SetSignature(nil)
+	m.msgType = 0
+
+	encoded := authentication.EncodeMsg(*m)
+
+	// restore the original values
+	authMsg.SetSignature(sigCopy)
+	m.msgType = origMsgType
+
+	return encoded
 }
 
 // Codec is the gRPC codec used by gorums.

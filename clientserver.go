@@ -250,22 +250,6 @@ func (srv *ClientServer) Serve(listener net.Listener) error {
 	return srv.grpcServer.Serve(listener)
 }
 
-func (srv *ClientServer) encodeMsg(req *Message) []byte {
-	// we must not consider the signature field when validating.
-	// also the msgType must be set to requestType.
-	signature := make([]byte, len(req.Metadata.GetAuthMsg().GetSignature()))
-	copy(signature, req.Metadata.GetAuthMsg().GetSignature())
-	reqType := req.msgType
-	req.Metadata.GetAuthMsg().SetSignature(nil)
-	req.msgType = 0
-	encodedMsg := authentication.EncodeMsg(*req)
-	req.Metadata.GetAuthMsg().SetSignature(make([]byte, len(signature)))
-	// TODO(meling): I think this is incorrect and should be done differently.
-	copy(req.Metadata.GetAuthMsg().GetSignature(), signature)
-	req.msgType = reqType
-	return encodedMsg
-}
-
 func (srv *ClientServer) verify(req *Message) error {
 	if srv.auth == nil {
 		return nil
@@ -289,8 +273,7 @@ func (srv *ClientServer) verify(req *Message) error {
 			return fmt.Errorf("publicKey did not match")
 		}
 	}
-	encodedMsg := srv.encodeMsg(req)
-	valid, err := srv.auth.VerifySignature(authMsg.GetPublicKey(), encodedMsg, authMsg.GetSignature())
+	valid, err := srv.auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 	if err != nil {
 		return err
 	}

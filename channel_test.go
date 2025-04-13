@@ -224,7 +224,7 @@ func TestAuthentication(t *testing.T) {
 	msg1 := &Message{Metadata: md, Message: &mock.Request{}}
 
 	chEncodedMsg := config.encodeMsg(msg1)
-	srvEncodedMsg := srv.srv.encodeMsg(msg1)
+	srvEncodedMsg := msg1.Encode()
 	if !bytes.Equal(chEncodedMsg, srvEncodedMsg) {
 		t.Fatalf("wrong encoding. want: %x, got: %x", chEncodedMsg, srvEncodedMsg)
 	}
