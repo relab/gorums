@@ -133,15 +133,12 @@ func (ec *EllipticCurve) EncodeMsg(msg any) ([]byte, error) {
 	return []byte(fmt.Sprintf("%v", msg)), nil
 }
 
-func encodeMsg(msg any) ([]byte, error) {
-	return []byte(fmt.Sprintf("%v", msg)), nil
+func encodeMsg(msg any) []byte {
+	return fmt.Appendf(nil, "%v", msg)
 }
 
 func Verify(pemEncodedPub string, signature, digest []byte, msg any) (bool, error) {
-	encodedMsg, err := encodeMsg(msg)
-	if err != nil {
-		return false, err
-	}
+	encodedMsg := encodeMsg(msg)
 	ec := New(elliptic.P256())
 	h := sha256.Sum256(encodedMsg)
 	hash := h[:]
