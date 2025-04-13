@@ -65,15 +65,16 @@ func (c RawConfiguration) getMsgID() uint64 {
 }
 
 func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
-	if c[0].mgr.opts.auth != nil {
+	auth := c[0].mgr.opts.auth
+	if auth != nil {
 		if len(signOrigin) > 0 && signOrigin[0] {
 			originMsg := authentication.EncodeMsg(msg.Message)
 			digest := authentication.Hash(originMsg)
-			originSignature, err := c[0].mgr.opts.auth.Sign(originMsg)
+			originSignature, err := auth.Sign(originMsg)
 			if err != nil {
 				panic(err)
 			}
-			pubKey, err := c[0].mgr.opts.auth.EncodePublic()
+			pubKey, err := auth.EncodePublic()
 			if err != nil {
 				panic(err)
 			}
@@ -82,7 +83,7 @@ func (c RawConfiguration) sign(msg *Message, signOrigin ...bool) {
 			msg.Metadata.GetBroadcastMsg().SetOriginSignature(originSignature)
 		}
 		encodedMsg := c.encodeMsg(msg)
-		signature, err := c[0].mgr.opts.auth.Sign(encodedMsg)
+		signature, err := auth.Sign(encodedMsg)
 		if err != nil {
 			panic(err)
 		}
