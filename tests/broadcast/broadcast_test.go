@@ -777,7 +777,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("QC_AllSuccessful_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			resp, err := config.QuorumCall(context.Background(), &Request{Value: int64(i)})
 			if err != nil {
 				b.Error(err)
@@ -818,7 +818,7 @@ func BenchmarkQCMulticast(b *testing.B) {
 	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("QCM_AllSuccessful_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 			resp, err := config.QuorumCallWithMulticast(ctx, &Request{Value: int64(i)})
 			if err != nil {
@@ -861,7 +861,7 @@ func BenchmarkQCBroadcastOption(b *testing.B) {
 	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("QCB_AllSuccessful_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 			resp, err := config.QuorumCallWithBroadcast(ctx, &Request{Value: int64(i)})
 			if err != nil {
@@ -911,7 +911,7 @@ func BenchmarkQCBroadcastOptionManyClients(b *testing.B) {
 	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("QCB_ManyClients_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			var wg sync.WaitGroup
 			for _, client := range clients {
 				wg.Add(1)
@@ -960,7 +960,7 @@ func BenchmarkBroadcastCallAllServers(b *testing.B) {
 	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_AllSuccessful_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(i)})
 			if err != nil {
 				b.Error(err)
@@ -1001,7 +1001,7 @@ func BenchmarkBroadcastCallToOneServer(b *testing.B) {
 	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneSrv_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(i)})
 			if err != nil {
 				b.Error(err)
@@ -1042,7 +1042,7 @@ func BenchmarkBroadcastCallOneFailedServer(b *testing.B) {
 	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneSrvDown_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(i)})
 			if err != nil {
 				b.Error(err)
@@ -1083,7 +1083,7 @@ func BenchmarkBroadcastCallOneDownSrvToOneSrv(b *testing.B) {
 	_ = pprof.StartCPUProfile(cpuProfile)
 
 	b.Run(fmt.Sprintf("BC_OneDownToOne_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			resp, err := config.BroadcastCall(context.Background(), &Request{Value: int64(i)})
 			if err != nil {
 				b.Error(err)
@@ -1127,7 +1127,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 	}
 
 	b.Run(fmt.Sprintf("BC_OneClientOneReq_%d", 0), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			resp, err := clients[0].BroadcastCall(context.Background(), &Request{Value: int64(i)})
 			if err != nil {
 				b.Error(err)
@@ -1138,7 +1138,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 		}
 	})
 	b.Run(fmt.Sprintf("BC_OneClientAsync_%d", 1), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			var wg sync.WaitGroup
 			for j := range clients {
 				go func(i, j int, c *Configuration) {
@@ -1158,7 +1158,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 		}
 	})
 	b.Run(fmt.Sprintf("BC_OneClientSync_%d", 2), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			for j := range clients {
 				val := i*100 + j
 				resp, err := clients[0].BroadcastCall(context.Background(), &Request{Value: int64(val)})
@@ -1172,7 +1172,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 		}
 	})
 	b.Run(fmt.Sprintf("BC_ManyClientsAsync_%d", 3), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			var wg sync.WaitGroup
 			for _, client := range clients {
 				go func(i int, c *Configuration) {
@@ -1191,7 +1191,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 		}
 	})
 	b.Run(fmt.Sprintf("BC_ManyClientsSync_%d", 4), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			for _, client := range clients {
 				resp, err := client.BroadcastCall(context.Background(), &Request{Value: int64(i)})
 				if err != nil {
@@ -1242,7 +1242,7 @@ func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
 
 	b.ResetTimer()
 	b.Run(fmt.Sprintf("BC_%d", 3), func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for i := 0; b.Loop(); i++ {
 			var wg sync.WaitGroup
 			for _, client := range clients {
 				go func(i int, c *Configuration) {
