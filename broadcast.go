@@ -162,7 +162,7 @@ func NewBroadcastOptions() broadcast.BroadcastOptions {
 	}
 }
 
-type Broadcaster interface{}
+type Broadcaster any
 
 type BroadcastMetadata struct {
 	BroadcastID       uint64
