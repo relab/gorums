@@ -236,19 +236,15 @@ func TestAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	valid, err := auth.VerifySignature(pemEncodedPub, chEncodedMsg, signature)
+	err = auth.VerifySignature(pemEncodedPub, chEncodedMsg, signature)
 	if err != nil {
-		t.Fatal(err)
+		// channel encoded msg not valid
+		t.Fatalf("VerifySignature() = %v, want nil", err)
 	}
-	if !valid {
-		t.Fatal("channel encoded msg not valid")
-	}
-	valid, err = auth.VerifySignature(pemEncodedPub, srvEncodedMsg, signature)
+	err = auth.VerifySignature(pemEncodedPub, srvEncodedMsg, signature)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if !valid {
-		t.Fatal("srv encoded msg not valid")
+		// srv encoded msg not valid
+		t.Fatalf("VerifySignature() = %v, want nil", err)
 	}
 
 	config.sign(msg)

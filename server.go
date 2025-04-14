@@ -50,14 +50,7 @@ func (s *orderingServer) verify(req *Message) error {
 	if err := s.opts.allowList.Check(authMsg.GetSender(), authMsg.GetPublicKey()); err != nil {
 		return err
 	}
-	valid, err := auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
-	if err != nil {
-		return err
-	}
-	if !valid {
-		return fmt.Errorf("invalid signature")
-	}
-	return nil
+	return auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 }
 
 // SendMessage attempts to send a message on a channel.

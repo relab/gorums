@@ -261,14 +261,7 @@ func (srv *ClientServer) verify(req *Message) error {
 	if err := srv.allowList.Check(authMsg.GetSender(), authMsg.GetPublicKey()); err != nil {
 		return err
 	}
-	valid, err := srv.auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
-	if err != nil {
-		return err
-	}
-	if !valid {
-		return fmt.Errorf("invalid signature")
-	}
-	return nil
+	return srv.auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 }
 
 func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, error) {

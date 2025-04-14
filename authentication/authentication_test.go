@@ -42,12 +42,9 @@ func TestSignAndVerify(t *testing.T) {
 	}
 
 	encodedMsg2 := EncodeMsg(message)
-	ok, err := ec2.VerifySignature(pemEncodedPub, encodedMsg2, signature)
+	err = ec2.VerifySignature(pemEncodedPub, encodedMsg2, signature)
 	if err != nil {
-		t.Error(err)
-	}
-	if !ok {
-		t.Error("signature not ok!")
+		t.Errorf("VerifySignature() = %v, want nil", err)
 	}
 }
 
@@ -78,12 +75,13 @@ func TestVerifyWithWrongPubKey(t *testing.T) {
 	}
 
 	encodedMsg2 := EncodeMsg(message)
-	ok, err := ec2.VerifySignature(pemEncodedPub, encodedMsg2, signature)
-	if err != nil {
-		t.Error(err)
-	}
-	if ok {
-		t.Error("signature should not be ok!")
+	err = ec2.VerifySignature(pemEncodedPub, encodedMsg2, signature)
+	if err == nil {
+		t.Errorf("VerifySignature() = nil, want %v", InvalidSignatureErr)
+	} else {
+		if !errors.Is(err, InvalidSignatureErr) {
+			t.Errorf("VerifySignature() = %v, want %v", err, InvalidSignatureErr)
+		}
 	}
 }
 

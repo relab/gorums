@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 )
@@ -93,7 +94,7 @@ func (ec *EllipticCurve) DecodePrivate(pemEncodedPriv string) (*ecdsa.PrivateKey
 func (ec *EllipticCurve) DecodePublic(pemEncodedPub string) (*ecdsa.PublicKey, error) {
 	blockPub, _ := pem.Decode([]byte(pemEncodedPub))
 	if blockPub == nil {
-		return nil, fmt.Errorf("invalid publicKey")
+		return nil, errors.New("invalid public key")
 	}
 	x509EncodedPub := blockPub.Bytes
 	genericPublicKey, err := x509.ParsePKIXPublicKey(x509EncodedPub)
@@ -114,14 +115,20 @@ func Hash(msg []byte) []byte {
 	return hash[:]
 }
 
-// VerifySignature sign ecdsa style and verify signature
-func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []byte) (bool, error) {
+var InvalidSignatureErr = errors.New("invalid signature")
+
+// VerifySignature verifies the signature of the message's hash using the given PEM encoded
+// public key. It returns an error if the signature is invalid or if there is an error
+// decoding the public key.
+func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []byte) error {
 	pubKey, err := ec.DecodePublic(pemEncodedPub)
 	if err != nil {
-		return false, err
+		return err
 	}
-	ok := ecdsa.VerifyASN1(pubKey, Hash(msg), signature)
-	return ok, nil
+	if valid := ecdsa.VerifyASN1(pubKey, Hash(msg), signature); !valid {
+		return InvalidSignatureErr
+	}
+	return nil
 }
 
 func EncodeMsg(msg any) []byte {
@@ -133,7 +140,7 @@ func Verify(pemEncodedPub string, signature, digest []byte, msg any) (bool, erro
 	ec := New(elliptic.P256())
 	hash := Hash(encodedMsg)
 	if !bytes.Equal(hash, digest) {
-		return false, fmt.Errorf("wrong digest")
+		return false, errors.New("invalid digest for message")
 	}
 	pubKey, err := ec.DecodePublic(pemEncodedPub)
 	if err != nil {
