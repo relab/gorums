@@ -480,14 +480,8 @@ func TestBroadcastCallOneServerIsDown(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	start := skip
-	if start < 0 {
-		start = 0
-	}
-	end := numSrvs - 1
-	if end > len(srvAddrs) {
-		end = len(srvAddrs)
-	}
+	start := max(skip, 0)
+	end := min(numSrvs-1, len(srvAddrs))
 	config, clientCleanup, err := newClient(srvAddrs[start:end], "127.0.0.1:8080")
 	if err != nil {
 		t.Error(err)
