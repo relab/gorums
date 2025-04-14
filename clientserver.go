@@ -36,7 +36,7 @@ type ClientServer struct {
 	handlers   map[string]requestHandler
 	logger     *slog.Logger
 	auth       *authentication.EllipticCurve
-	allowList  map[string]string
+	allowList  allowList
 	ordering.UnimplementedGorumsServer
 }
 
@@ -258,14 +258,8 @@ func (srv *ClientServer) verify(req *Message) error {
 	if err != nil {
 		return err
 	}
-	if srv.allowList != nil {
-		pemEncodedPub, ok := srv.allowList[authMsg.GetSender()]
-		if !ok {
-			return fmt.Errorf("not allowed")
-		}
-		if pemEncodedPub != authMsg.GetPublicKey() {
-			return fmt.Errorf("publicKey did not match")
-		}
+	if err := srv.allowList.Check(authMsg.GetSender(), authMsg.GetPublicKey()); err != nil {
+		return err
 	}
 	valid, err := srv.auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 	if err != nil {

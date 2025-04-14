@@ -47,14 +47,8 @@ func (s *orderingServer) verify(req *Message) error {
 		return err
 	}
 	auth := s.opts.auth
-	if s.opts.allowList != nil {
-		pemEncodedPub, ok := s.opts.allowList[authMsg.GetSender()]
-		if !ok {
-			return fmt.Errorf("not allowed")
-		}
-		if pemEncodedPub != authMsg.GetPublicKey() {
-			return fmt.Errorf("publicKey did not match")
-		}
+	if err := s.opts.allowList.Check(authMsg.GetSender(), authMsg.GetPublicKey()); err != nil {
+		return err
 	}
 	valid, err := auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 	if err != nil {
@@ -156,9 +150,30 @@ type serverOptions struct {
 	// address and use forwarding from the host. If not this option is not given,
 	// the listen address used on the gRPC listener will be used instead.
 	listenAddr   string
-	allowList    map[string]string
+	allowList    allowList
 	auth         *authentication.EllipticCurve
 	grpcDialOpts []grpc.DialOption
+}
+
+// allowList is a map of (address, public key) pairs.
+type allowList map[string]string
+
+// Check checks if the address and public key are in the allow list.
+// If the address is not in the allow list or the public key does not match,
+// an error is returned. If the allow list is nil, no check is performed.
+func (al allowList) Check(addr string, publicKey string) error {
+	if al == nil {
+		// bypass if no allow list specified
+		return nil
+	}
+	pemEncodedPub, ok := al[addr]
+	if !ok {
+		return fmt.Errorf("not allowed: %s", addr)
+	}
+	if pemEncodedPub != publicKey {
+		return fmt.Errorf("public key mismatch")
+	}
+	return nil
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -286,7 +301,7 @@ func WithSrvID(machineID uint64) ServerOption {
 // the server.
 func WithAllowList(curve elliptic.Curve, allowed ...string) ServerOption {
 	return func(o *serverOptions) {
-		o.allowList = make(map[string]string)
+		o.allowList = make(allowList)
 		if len(allowed)%2 != 0 {
 			panic("must provide (address, publicKey) pairs to WithAllowList()")
 		}
