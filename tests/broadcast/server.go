@@ -11,6 +11,7 @@ import (
 	gorums "github.com/relab/gorums"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"slices"
 )
 
 var leader = "127.0.0.1:5000"
@@ -245,13 +246,7 @@ func (srv *testServer) PrePrepare(ctx gorums.ServerCtx, req *Request, broadcast 
 		time.Sleep(200 * time.Millisecond)
 	}
 	srv.mut.Lock()
-	added := false
-	for _, m := range srv.order {
-		if m == "PrePrepare" {
-			added = true
-			break
-		}
-	}
+	added := slices.Contains(srv.order, "PrePrepare")
 	if !added {
 		srv.order = append(srv.order, "PrePrepare")
 	}
@@ -269,13 +264,7 @@ func (srv *testServer) Prepare(ctx gorums.ServerCtx, req *Request, broadcast *Br
 		srv.mut.Unlock()
 		return
 	}
-	added := false
-	for _, m := range srv.order {
-		if m == "Prepare" {
-			added = true
-			break
-		}
-	}
+	added := slices.Contains(srv.order, "Prepare")
 	if !added {
 		srv.order = append(srv.order, "Prepare")
 	}
