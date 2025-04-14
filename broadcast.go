@@ -75,10 +75,9 @@ type (
 
 type (
 	defaultImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(ServerCtx, T) (V, error)
+	implementationFunc[T protoreflect.ProtoMessage, V Broadcaster]                      func(ServerCtx, T, V)
 	clientImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage]  func(context.Context, T, uint64) (V, error)
 )
-
-type implementationFunc[T protoreflect.ProtoMessage, V Broadcaster] func(ServerCtx, T, V)
 
 func CancelFunc(ServerCtx, protoreflect.ProtoMessage, Broadcaster) {}
 

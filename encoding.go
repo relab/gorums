@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/relab/gorums/authentication"
@@ -34,6 +35,24 @@ type Message struct {
 // msgType specifies the message type to be unmarshaled.
 func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
+}
+
+// isValid returns an error if the Message is an invalid broadcast message.
+func (m *Message) isValid() error {
+	if m == nil {
+		return errors.New("message cannot be nil")
+	}
+	if m.Metadata == nil {
+		return errors.New("message metadata cannot be nil")
+	}
+	broadcastMsg := m.Metadata.GetBroadcastMsg()
+	if broadcastMsg == nil {
+		return errors.New("broadcast message cannot be nil")
+	}
+	if broadcastMsg.GetBroadcastID() == 0 {
+		return errors.New("broadcastID cannot be 0")
+	}
+	return nil
 }
 
 // Encode returns an encoded byte representation of the Message

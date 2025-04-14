@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
@@ -35,9 +34,9 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
-		if err := srv.broadcastSrv.validateMessage(in); err != nil {
+		if err := in.isValid(); err != nil {
 			if srv.broadcastSrv.logger != nil {
-				srv.broadcastSrv.logger.Debug("broadcast request not valid", "metadata", in.Metadata, "err", err)
+				srv.broadcastSrv.logger.Debug("invalid broadcast request", "metadata", in.Metadata, "err", err)
 			}
 			return
 		}
@@ -116,22 +115,6 @@ func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx Ser
 		msg := WrapMessage(md, resp, err)
 		return SendMessage(ctx, finished, msg)
 	}
-}
-
-func (srv *broadcastServer) validateMessage(in *Message) error {
-	if in == nil {
-		return fmt.Errorf("message cannot be empty. got: %v", in)
-	}
-	if in.Metadata == nil {
-		return fmt.Errorf("metadata cannot be empty. got: %v", in.Metadata)
-	}
-	if in.Metadata.GetBroadcastMsg() == nil {
-		return fmt.Errorf("broadcastMsg cannot be empty. got: %v", in.Metadata.GetBroadcastMsg())
-	}
-	if in.Metadata.GetBroadcastMsg().GetBroadcastID() <= 0 {
-		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.GetBroadcastMsg().GetBroadcastID())
-	}
-	return nil
 }
 
 func (srv *Server) RegisterBroadcaster(broadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator, e EnqueueBroadcast) Broadcaster) {
