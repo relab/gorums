@@ -254,16 +254,10 @@ func (srv *ClientServer) verify(req *Message) error {
 	if srv.auth == nil {
 		return nil
 	}
-	if req.Metadata.GetAuthMsg() == nil {
-		return fmt.Errorf("missing authMsg")
+	authMsg, err := req.Metadata.GetValidAuthMsg()
+	if err != nil {
+		return err
 	}
-	if req.Metadata.GetAuthMsg().GetSignature() == nil {
-		return fmt.Errorf("missing signature")
-	}
-	if req.Metadata.GetAuthMsg().GetPublicKey() == "" {
-		return fmt.Errorf("missing publicKey")
-	}
-	authMsg := req.Metadata.GetAuthMsg()
 	if srv.allowList != nil {
 		pemEncodedPub, ok := srv.allowList[authMsg.GetSender()]
 		if !ok {

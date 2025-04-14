@@ -2,6 +2,7 @@ package ordering
 
 import (
 	"context"
+	"errors"
 
 	"google.golang.org/grpc/metadata"
 )
@@ -37,4 +38,21 @@ func (x *Metadata) AppendToIncomingContext(ctx context.Context) context.Context 
 		newMD.Append(entry.GetKey(), entry.GetValue())
 	}
 	return metadata.NewIncomingContext(ctx, newMD)
+}
+
+func (x *Metadata) GetValidAuthMsg() (*AuthMsg, error) {
+	if x == nil {
+		return nil, errors.New("metadata cannot be nil")
+	}
+	authMsg := x.GetAuthMsg()
+	if authMsg == nil {
+		return nil, errors.New("missing AuthMsg")
+	}
+	if authMsg.GetSignature() == nil {
+		return nil, errors.New("missing signature")
+	}
+	if authMsg.GetPublicKey() == "" {
+		return nil, errors.New("missing publicKey")
+	}
+	return authMsg, nil
 }

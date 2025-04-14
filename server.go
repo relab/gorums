@@ -42,17 +42,11 @@ func (s *orderingServer) verify(req *Message) error {
 	if s.opts.auth == nil {
 		return nil
 	}
-	if req.Metadata.GetAuthMsg() == nil {
-		return fmt.Errorf("missing authMsg")
-	}
-	if req.Metadata.GetAuthMsg().GetSignature() == nil {
-		return fmt.Errorf("missing signature")
-	}
-	if req.Metadata.GetAuthMsg().GetPublicKey() == "" {
-		return fmt.Errorf("missing publicKey")
+	authMsg, err := req.Metadata.GetValidAuthMsg()
+	if err != nil {
+		return err
 	}
 	auth := s.opts.auth
-	authMsg := req.Metadata.GetAuthMsg()
 	if s.opts.allowList != nil {
 		pemEncodedPub, ok := s.opts.allowList[authMsg.GetSender()]
 		if !ok {
