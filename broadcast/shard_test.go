@@ -40,8 +40,7 @@ func TestShard(t *testing.T) {
 		returnError: false,
 	}
 	shardBuffer := 100
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	shard := &shard{
 		id:        0,
 		parentCtx: ctx,
