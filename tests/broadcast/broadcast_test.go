@@ -17,7 +17,7 @@ func createAuthServers(numSrvs int) ([]*testServer, []string, func(), error) {
 	skip := 0
 	srvs := make([]*testServer, 0, numSrvs)
 	srvAddrs := make([]string, numSrvs)
-	for i := 0; i < numSrvs; i++ {
+	for i := range numSrvs {
 		srvAddrs[i] = fmt.Sprintf("127.0.0.1:500%v", i)
 	}
 	for _, addr := range srvAddrs {
@@ -54,7 +54,7 @@ func createSrvs(numSrvs int, down ...int) ([]*testServer, []string, func(), erro
 	}
 	srvs := make([]*testServer, 0, numSrvs)
 	srvAddrs := make([]string, numSrvs)
-	for i := 0; i < numSrvs; i++ {
+	for i := range numSrvs {
 		srvAddrs[i] = fmt.Sprintf("127.0.0.1:500%v", i)
 	}
 	for i, addr := range srvAddrs {
@@ -520,7 +520,7 @@ func TestBroadcastCallForward(t *testing.T) {
 	}
 	defer clientCleanup()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		resp, err := config.BroadcastCallForward(ctx, &Request{Value: int64(i)})
@@ -546,7 +546,7 @@ func TestBroadcastCallForwardMultiple(t *testing.T) {
 	}
 	defer clientCleanup()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		resp, err := config.BroadcastCallForward(context.Background(), &Request{Value: int64(i)})
 		if err != nil {
 			t.Error(err)
@@ -633,7 +633,7 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 
 	numClients := 10
 	clients := make([]*Configuration, numClients)
-	for c := 0; c < numClients; c++ {
+	for c := range numClients {
 		config, clientCleanup, err := newClient(srvAddrs, fmt.Sprintf("127.0.0.1:808%v", c), 3)
 		if err != nil {
 			t.Error(err)
@@ -656,7 +656,7 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 1; i++ {
+	for i := range 1 {
 		for _, client := range clients {
 			go func(j int, c *Configuration) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -697,7 +697,7 @@ func TestQCBroadcastOptionRace(t *testing.T) {
 	if resp.GetResult() != val {
 		t.Fatalf("resp is wrong, got: %v, want: %v", resp.GetResult(), val)
 	}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		resp, err := config.QuorumCallWithBroadcast(ctx, &Request{Value: int64(i)})
 		if err != nil {
@@ -731,7 +731,7 @@ func TestQCMulticastRace(t *testing.T) {
 	if resp.GetResult() != val {
 		t.Fatal("resp is wrong")
 	}
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		resp, err := config.QuorumCallWithMulticast(ctx, &Request{Value: int64(i)})
 		if err != nil {
@@ -880,7 +880,7 @@ func BenchmarkQCBroadcastOptionManyClients(b *testing.B) {
 
 	numClients := 10
 	clients := make([]*Configuration, numClients)
-	for c := 0; c < numClients; c++ {
+	for c := range numClients {
 		config, clientCleanup, err := newClient(srvAddrs, fmt.Sprintf("127.0.0.1:808%v", c), 3)
 		if err != nil {
 			b.Error(err)
@@ -1100,7 +1100,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 
 	numClients := 10
 	clients := make([]*Configuration, numClients)
-	for c := 0; c < numClients; c++ {
+	for c := range numClients {
 		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
 		if err != nil {
 			b.Error(err)
@@ -1208,7 +1208,7 @@ func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
 
 	numClients := 10
 	clients := make([]*Configuration, numClients)
-	for c := 0; c < numClients; c++ {
+	for c := range numClients {
 		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
 		if err != nil {
 			b.Error(err)
@@ -1269,7 +1269,7 @@ func BenchmarkBroadcastCallTenClientsMEM(b *testing.B) {
 
 	numClients := 1
 	clients := make([]*Configuration, numClients)
-	for c := 0; c < numClients; c++ {
+	for c := range numClients {
 		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
 		if err != nil {
 			b.Error(err)
@@ -1323,7 +1323,7 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 
 	numClients := 1
 	clients := make([]*Configuration, numClients)
-	for c := 0; c < numClients; c++ {
+	for c := range numClients {
 		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
 		if err != nil {
 			b.Error(err)
@@ -1380,7 +1380,7 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	}
 
 	clients := make([]*Configuration, numClients)
-	for c := 0; c < numClients; c++ {
+	for c := range numClients {
 		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
 		if err != nil {
 			t.Error(err)
@@ -1410,7 +1410,7 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	var wg sync.WaitGroup
-	for r := 0; r < numReqs; r++ {
+	for range numReqs {
 		for i, client := range clients {
 			wg.Add(1)
 			go func(i int, client *Configuration) {
