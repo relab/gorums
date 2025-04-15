@@ -207,6 +207,7 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	}
 }
 
-func (md BroadcastMetadata) Verify(msg protoreflect.ProtoMessage) (bool, error) {
+// TODO(meling): this method is never called
+func (md BroadcastMetadata) Verify(msg protoreflect.ProtoMessage) error {
 	return authentication.Verify(md.OriginPubKey, md.OriginSignature, md.OriginDigest, msg)
 }

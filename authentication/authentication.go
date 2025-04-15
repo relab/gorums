@@ -131,17 +131,12 @@ func EncodeMsg(msg any) []byte {
 	return fmt.Appendf(nil, "%v", msg)
 }
 
-func Verify(pemEncodedPub string, signature, digest []byte, msg any) (bool, error) {
+func Verify(pemEncodedPub string, signature, digest []byte, msg any) error {
 	encodedMsg := EncodeMsg(msg)
 	ec := New(elliptic.P256())
 	hash := Hash(encodedMsg)
 	if !bytes.Equal(hash, digest) {
-		return false, errors.New("invalid digest for message")
+		return errors.New("invalid digest for message")
 	}
-	pubKey, err := ec.DecodePublic(pemEncodedPub)
-	if err != nil {
-		return false, err
-	}
-	ok := ecdsa.VerifyASN1(pubKey, hash, signature)
-	return ok, nil
+	return ec.VerifySignature(pemEncodedPub, encodedMsg, signature)
 }
