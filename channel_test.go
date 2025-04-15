@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/ordering"
 	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
@@ -200,10 +201,10 @@ func TestAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth := NewAuth(elliptic.P256())
-	_ = auth.GenerateKeys()
-	privKey, pubKey := auth.Keys()
-	auth.RegisterKeys(addr, privKey, pubKey)
+	auth, err := authentication.NewWithAddr(elliptic.P256(), addr)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mgr := NewRawManager(WithAuthentication(auth))
 	defer mgr.Close()
 	node.mgr = mgr
@@ -223,8 +224,8 @@ func TestAuthentication(t *testing.T) {
 	msg := &Message{Metadata: md, Message: &mock.Request{}}
 	msg1 := &Message{Metadata: md, Message: &mock.Request{}}
 
-	chEncodedMsg, _ := config.encodeMsg(msg1)
-	srvEncodedMsg, _ := srv.srv.encodeMsg(msg1)
+	chEncodedMsg := config.encodeMsg(msg1)
+	srvEncodedMsg := msg1.Encode()
 	if !bytes.Equal(chEncodedMsg, srvEncodedMsg) {
 		t.Fatalf("wrong encoding. want: %x, got: %x", chEncodedMsg, srvEncodedMsg)
 	}
@@ -236,19 +237,15 @@ func TestAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	valid, err := auth.VerifySignature(pemEncodedPub, chEncodedMsg, signature)
+	err = auth.VerifySignature(pemEncodedPub, chEncodedMsg, signature)
 	if err != nil {
-		t.Fatal(err)
+		// channel encoded msg not valid
+		t.Fatalf("VerifySignature() = %v, want nil", err)
 	}
-	if !valid {
-		t.Fatal("channel encoded msg not valid")
-	}
-	valid, err = auth.VerifySignature(pemEncodedPub, srvEncodedMsg, signature)
+	err = auth.VerifySignature(pemEncodedPub, srvEncodedMsg, signature)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if !valid {
-		t.Fatal("srv encoded msg not valid")
+		// srv encoded msg not valid
+		t.Fatalf("VerifySignature() = %v, want nil", err)
 	}
 
 	config.sign(msg)

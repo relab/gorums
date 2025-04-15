@@ -36,7 +36,7 @@ type ClientServer struct {
 	handlers   map[string]requestHandler
 	logger     *slog.Logger
 	auth       *authentication.EllipticCurve
-	allowList  map[string]string
+	allowList  allowList
 	ordering.UnimplementedGorumsServer
 }
 
@@ -250,57 +250,18 @@ func (srv *ClientServer) Serve(listener net.Listener) error {
 	return srv.grpcServer.Serve(listener)
 }
 
-func (srv *ClientServer) encodeMsg(req *Message) ([]byte, error) {
-	// we must not consider the signature field when validating.
-	// also the msgType must be set to requestType.
-	signature := make([]byte, len(req.Metadata.GetAuthMsg().GetSignature()))
-	copy(signature, req.Metadata.GetAuthMsg().GetSignature())
-	reqType := req.msgType
-	req.Metadata.GetAuthMsg().SetSignature(nil)
-	req.msgType = 0
-	encodedMsg, err := srv.auth.EncodeMsg(*req)
-	req.Metadata.GetAuthMsg().SetSignature(make([]byte, len(signature)))
-	// TODO(meling): I think this is incorrect and should be done differently.
-	copy(req.Metadata.GetAuthMsg().GetSignature(), signature)
-	req.msgType = reqType
-	return encodedMsg, err
-}
-
 func (srv *ClientServer) verify(req *Message) error {
 	if srv.auth == nil {
 		return nil
 	}
-	if req.Metadata.GetAuthMsg() == nil {
-		return fmt.Errorf("missing authMsg")
-	}
-	if req.Metadata.GetAuthMsg().GetSignature() == nil {
-		return fmt.Errorf("missing signature")
-	}
-	if req.Metadata.GetAuthMsg().GetPublicKey() == "" {
-		return fmt.Errorf("missing publicKey")
-	}
-	authMsg := req.Metadata.GetAuthMsg()
-	if srv.allowList != nil {
-		pemEncodedPub, ok := srv.allowList[authMsg.GetSender()]
-		if !ok {
-			return fmt.Errorf("not allowed")
-		}
-		if pemEncodedPub != authMsg.GetPublicKey() {
-			return fmt.Errorf("publicKey did not match")
-		}
-	}
-	encodedMsg, err := srv.encodeMsg(req)
+	authMsg, err := req.Metadata.GetValidAuthMsg()
 	if err != nil {
 		return err
 	}
-	valid, err := srv.auth.VerifySignature(authMsg.GetPublicKey(), encodedMsg, authMsg.GetSignature())
-	if err != nil {
+	if err := srv.allowList.Check(authMsg.GetSender(), authMsg.GetPublicKey()); err != nil {
 		return err
 	}
-	if !valid {
-		return fmt.Errorf("invalid signature")
-	}
-	return nil
+	return srv.auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 }
 
 func createClient(addr string, dialOpts []grpc.DialOption) (*broadcast.Client, error) {

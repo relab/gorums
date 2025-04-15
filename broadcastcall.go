@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"slices"
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -25,18 +26,13 @@ type BroadcastCallData struct {
 	SkipSelf          bool
 }
 
-// checks whether the given address is contained in the given subset
+// inSubset returns true if the given address is in the given subset
 // of server addresses. Will return true if a subset is not given.
 func (bcd *BroadcastCallData) inSubset(addr string) bool {
-	if bcd.ServerAddresses == nil || len(bcd.ServerAddresses) <= 0 {
+	if bcd == nil || len(bcd.ServerAddresses) <= 0 {
 		return true
 	}
-	for _, srvAddr := range bcd.ServerAddresses {
-		if addr == srvAddr {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(bcd.ServerAddresses, addr)
 }
 
 // BroadcastCall performs a broadcast on the configuration.

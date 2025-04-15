@@ -41,7 +41,7 @@ func TestHandleBroadcastOption1(t *testing.T) {
 	snowflake := NewSnowflake(0)
 	broadcastID := snowflake.NewBroadcastID()
 
-	var tests = []struct {
+	tests := []struct {
 		in  *Content
 		out error
 	}{
@@ -159,7 +159,7 @@ func TestHandleBroadcastCall1(t *testing.T) {
 	snowflake := NewSnowflake(0)
 	broadcastID := snowflake.NewBroadcastID()
 
-	var tests = []struct {
+	tests := []struct {
 		in  *Content
 		out error
 	}{
@@ -290,7 +290,7 @@ func BenchmarkHandleProcessor(b *testing.B) {
 
 	b.ResetTimer()
 	b.Run("ProcessorHandler", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			msg := &Content{
 				BroadcastID:       broadcastID,
 				IsBroadcastClient: true,

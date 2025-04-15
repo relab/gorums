@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
@@ -35,9 +34,9 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 		// guard:
 		// - A broadcastID should be non-empty:
 		// - Maybe the request should be unique? Remove duplicates of the same broadcast? <- Most likely no (up to the implementer)
-		if err := srv.broadcastSrv.validateMessage(in); err != nil {
+		if err := in.isValid(); err != nil {
 			if srv.broadcastSrv.logger != nil {
-				srv.broadcastSrv.logger.Debug("broadcast request not valid", "metadata", in.Metadata, "err", err)
+				srv.broadcastSrv.logger.Debug("invalid broadcast request", "metadata", in.Metadata, "err", err)
 			}
 			return
 		}
@@ -65,14 +64,13 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 			impl(ctx, req, broadcaster)
 		}
 
-		msg := broadcast.Content{}
-		createRequest(&msg, ctx, in, finished, run)
+		msg := createRequest(ctx, in.Metadata, finished, run)
 
 		// we are not interested in the server context as this is tied to the previous hop.
 		// instead we want to check whether the client has cancelled the broadcast request
 		// and if so, we return a cancelled context. This enables the implementer to listen
 		// for cancels and do proper actions.
-		reqCtx, enqueueBroadcast, err := srv.broadcastSrv.manager.Process(&msg)
+		reqCtx, enqueueBroadcast, err := srv.broadcastSrv.manager.Process(msg)
 		if err != nil {
 			return
 		}
@@ -81,33 +79,31 @@ func BroadcastHandler[T protoreflect.ProtoMessage, V Broadcaster](impl implement
 	}
 }
 
-func createRequest(msg *broadcast.Content, ctx ServerCtx, in *Message, finished chan<- *Message, run func(context.Context, func(*broadcast.Msg) error)) {
-	msg.BroadcastID = in.Metadata.GetBroadcastMsg().GetBroadcastID()
-	msg.IsBroadcastClient = in.Metadata.GetBroadcastMsg().GetIsBroadcastClient()
-	msg.OriginAddr = in.Metadata.GetBroadcastMsg().GetOriginAddr()
-	msg.OriginMethod = in.Metadata.GetBroadcastMsg().GetOriginMethod()
-	msg.SenderAddr = in.Metadata.GetBroadcastMsg().GetSenderAddr()
+func createRequest(ctx ServerCtx, md *ordering.Metadata, finished chan<- *Message, run func(context.Context, func(*broadcast.Msg) error)) *broadcast.Content {
+	broadcastMsg := md.GetBroadcastMsg()
+	msg := &broadcast.Content{
+		BroadcastID:       broadcastMsg.GetBroadcastID(),
+		IsBroadcastClient: broadcastMsg.GetIsBroadcastClient(),
+		OriginAddr:        broadcastMsg.GetOriginAddr(),
+		OriginMethod:      broadcastMsg.GetOriginMethod(),
+		SenderAddr:        broadcastMsg.GetSenderAddr(),
+		OriginDigest:      broadcastMsg.GetOriginDigest(),
+		OriginSignature:   broadcastMsg.GetOriginSignature(),
+		OriginPubKey:      broadcastMsg.GetOriginPubKey(),
+		CurrentMethod:     md.GetMethod(),
+		Ctx:               ctx.Context,
+		Run:               run,
+	}
 	if msg.SenderAddr == "" && msg.IsBroadcastClient {
 		msg.SenderAddr = "client"
 	}
-	if in.Metadata.GetBroadcastMsg().GetOriginDigest() != nil {
-		msg.OriginDigest = in.Metadata.GetBroadcastMsg().GetOriginDigest()
-	}
-	if in.Metadata.GetBroadcastMsg().GetOriginSignature() != nil {
-		msg.OriginSignature = in.Metadata.GetBroadcastMsg().GetOriginSignature()
-	}
-	if in.Metadata.GetBroadcastMsg().GetOriginPubKey() != "" {
-		msg.OriginPubKey = in.Metadata.GetBroadcastMsg().GetOriginPubKey()
-	}
-	msg.CurrentMethod = in.Metadata.GetMethod()
-	msg.Ctx = ctx.Context
-	msg.Run = run
 	if msg.OriginAddr == "" && msg.IsBroadcastClient {
-		msg.SendFn = createSendFn(in.Metadata.GetMessageID(), in.Metadata.GetMethod(), finished, ctx)
+		msg.SendFn = createSendFn(md.GetMessageID(), md.GetMethod(), finished, ctx)
 	}
-	if in.Metadata.GetMethod() == Cancellation {
+	if md.GetMethod() == Cancellation {
 		msg.IsCancellation = true
 	}
+	return msg
 }
 
 func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx ServerCtx) func(resp protoreflect.ProtoMessage, err error) error {
@@ -116,22 +112,6 @@ func createSendFn(msgID uint64, method string, finished chan<- *Message, ctx Ser
 		msg := WrapMessage(md, resp, err)
 		return SendMessage(ctx, finished, msg)
 	}
-}
-
-func (srv *broadcastServer) validateMessage(in *Message) error {
-	if in == nil {
-		return fmt.Errorf("message cannot be empty. got: %v", in)
-	}
-	if in.Metadata == nil {
-		return fmt.Errorf("metadata cannot be empty. got: %v", in.Metadata)
-	}
-	if in.Metadata.GetBroadcastMsg() == nil {
-		return fmt.Errorf("broadcastMsg cannot be empty. got: %v", in.Metadata.GetBroadcastMsg())
-	}
-	if in.Metadata.GetBroadcastMsg().GetBroadcastID() <= 0 {
-		return fmt.Errorf("broadcastID cannot be empty. got: %v", in.Metadata.GetBroadcastMsg().GetBroadcastID())
-	}
-	return nil
 }
 
 func (srv *Server) RegisterBroadcaster(broadcaster func(m BroadcastMetadata, o *BroadcastOrchestrator, e EnqueueBroadcast) Broadcaster) {
