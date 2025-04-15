@@ -5,13 +5,14 @@ import (
 	"crypto/elliptic"
 	"errors"
 	net "net"
+	"slices"
 	"sync"
 	"time"
 
 	gorums "github.com/relab/gorums"
+	"github.com/relab/gorums/authentication"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"slices"
 )
 
 var leader = "127.0.0.1:5000"
@@ -88,10 +89,10 @@ func newAuthenticatedServer(addr string, srvAddresses []string) *testServer {
 	if addr != leader {
 		srv.processingTime = 100 * time.Millisecond
 	}
-	auth := gorums.NewAuth(elliptic.P256())
-	_ = auth.GenerateKeys()
-	privKey, pubKey := auth.Keys()
-	auth.RegisterKeys(address, privKey, pubKey)
+	auth, err := authentication.NewWithAddr(elliptic.P256(), address)
+	if err != nil {
+		panic(err)
+	}
 	srv.mgr = NewManager(
 		gorums.WithAuthentication(auth),
 		gorums.WithGrpcDialOptions(

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/authentication"
 	"github.com/relab/gorums/ordering"
 	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
@@ -200,10 +201,10 @@ func TestAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	auth := NewAuth(elliptic.P256())
-	_ = auth.GenerateKeys()
-	privKey, pubKey := auth.Keys()
-	auth.RegisterKeys(addr, privKey, pubKey)
+	auth, err := authentication.NewWithAddr(elliptic.P256(), addr)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mgr := NewRawManager(WithAuthentication(auth))
 	defer mgr.Close()
 	node.mgr = mgr

@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"crypto/elliptic"
 	"hash/fnv"
 	"log/slog"
 	"strings"
@@ -18,11 +17,6 @@ import (
 
 // exposing the log entry struct used for structured logging to the user
 type LogEntry logging.LogEntry
-
-// exposing the ellipticCurve struct for the user
-func NewAuth(curve elliptic.Curve) *authentication.EllipticCurve {
-	return authentication.New(curve)
-}
 
 type broadcastServer struct {
 	viewMutex         sync.RWMutex

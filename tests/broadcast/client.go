@@ -6,6 +6,7 @@ import (
 	net "net"
 
 	gorums "github.com/relab/gorums"
+	"github.com/relab/gorums/authentication"
 	grpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -174,10 +175,10 @@ func newAuthClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configu
 			return nil, nil, err
 		}
 	}
-	auth := gorums.NewAuth(elliptic.P256())
-	_ = auth.GenerateKeys()
-	privKey, pubKey := auth.Keys()
-	auth.RegisterKeys(lis.Addr(), privKey, pubKey)
+	auth, err := authentication.NewWithAddr(elliptic.P256(), lis.Addr())
+	if err != nil {
+		return nil, nil, err
+	}
 	mgr := NewManager(
 		gorums.WithAuthentication(auth),
 		gorums.WithGrpcDialOptions(

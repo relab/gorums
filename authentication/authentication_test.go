@@ -3,34 +3,41 @@ package authentication
 import (
 	"crypto/elliptic"
 	"errors"
+	"net"
 	"reflect"
 	"testing"
 )
 
 func TestAuthentication(t *testing.T) {
-	ec := New(elliptic.P256())
-	_ = ec.GenerateKeys()
-	err := ec.test()
+	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:5000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ec, err := NewWithAddr(elliptic.P256(), addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = ec.test()
 	if err != nil {
 		t.Error(err)
 	}
 }
 
 func TestSignAndVerify(t *testing.T) {
-	ec1 := New(elliptic.P256())
-	err := ec1.GenerateKeys()
+	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	ec2 := New(elliptic.P256())
-	err = ec2.GenerateKeys()
+	ec1, err := NewWithAddr(elliptic.P256(), addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ec2, err := NewWithAddr(elliptic.P256(), addr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	message := "This is a message"
-
 	encodedMsg1 := EncodeMsg(message)
 	signature, err := ec1.Sign(encodedMsg1)
 	if err != nil {
@@ -49,14 +56,15 @@ func TestSignAndVerify(t *testing.T) {
 }
 
 func TestVerifyWithWrongPubKey(t *testing.T) {
-	ec1 := New(elliptic.P256())
-	err := ec1.GenerateKeys()
+	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	ec2 := New(elliptic.P256())
-	err = ec2.GenerateKeys()
+	ec1, err := NewWithAddr(elliptic.P256(), addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ec2, err := NewWithAddr(elliptic.P256(), addr)
 	if err != nil {
 		t.Fatal(err)
 	}

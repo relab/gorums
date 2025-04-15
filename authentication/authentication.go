@@ -13,47 +13,38 @@ import (
 	"net"
 )
 
-// Elliptic Curve Cryptography (ECC) is a key-based technique for encrypting data.
-// ECC focuses on pairs of public and private keys for decryption and encryption of web traffic.
-// ECC is frequently discussed in the context of the Rivest–Shamir–Adleman (RSA) cryptographic algorithm.
-//
-// https://pkg.go.dev/github.com/katzenpost/core/crypto/eddsa
+// EllipticCurve represents an elliptic curve instance used for message authentication.
 type EllipticCurve struct {
-	addr        net.Addr       // used to identify self
-	pubKeyCurve elliptic.Curve // http://golang.org/pkg/crypto/elliptic/#P256
-	privateKey  *ecdsa.PrivateKey
-	publicKey   *ecdsa.PublicKey
+	addr       net.Addr // used to identify self
+	curve      elliptic.Curve
+	privateKey *ecdsa.PrivateKey
+	publicKey  *ecdsa.PublicKey
 }
 
 // New EllipticCurve instance
 func New(curve elliptic.Curve) *EllipticCurve {
 	return &EllipticCurve{
-		pubKeyCurve: curve,
-		privateKey:  new(ecdsa.PrivateKey),
+		curve:      curve,
+		privateKey: new(ecdsa.PrivateKey),
 	}
 }
 
-// GenerateKeys EllipticCurve public and private keys
-func (ec *EllipticCurve) GenerateKeys() error {
-	privKey, err := ecdsa.GenerateKey(ec.pubKeyCurve, rand.Reader)
+// NewWithAddr returns a new EllipticCurve instance with the given address.
+// It generates a new public-private key pair for the specified elliptic curve.
+func NewWithAddr(curve elliptic.Curve, addr net.Addr) (*EllipticCurve, error) {
+	if addr == nil {
+		return nil, errors.New("address cannot be nil")
+	}
+	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ec.privateKey = privKey
-	ec.publicKey = &privKey.PublicKey
-	return nil
-}
-
-// RegisterKeys EllipticCurve public and private keys
-func (ec *EllipticCurve) RegisterKeys(addr net.Addr, privKey *ecdsa.PrivateKey, pubKey *ecdsa.PublicKey) {
-	ec.addr = addr
-	ec.privateKey = privKey
-	ec.publicKey = pubKey
-}
-
-// Returns the EllipticCurve public and private keys
-func (ec *EllipticCurve) Keys() (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
-	return ec.privateKey, ec.publicKey
+	return &EllipticCurve{
+		addr:       addr,
+		curve:      curve,
+		privateKey: priv,
+		publicKey:  &priv.PublicKey,
+	}, nil
 }
 
 // Returns the address
