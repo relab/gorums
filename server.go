@@ -46,11 +46,10 @@ func (s *orderingServer) verify(req *Message) error {
 	if err != nil {
 		return err
 	}
-	auth := s.opts.auth
 	if err := s.opts.allowList.Check(authMsg.GetSender(), authMsg.GetPublicKey()); err != nil {
 		return err
 	}
-	return auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
+	return s.opts.auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 }
 
 // SendMessage attempts to send a message on a channel.
@@ -289,14 +288,18 @@ func WithSrvID(machineID uint64) ServerOption {
 	}
 }
 
-// WithAllowList accepts (address, publicKey) pairs which is used to validate
+// WithAllowList accepts (address, public-key) pairs which is used to authenticate
 // messages. Only nodes added to the allow list are allowed to send msgs to
 // the server.
 func WithAllowList(curve elliptic.Curve, allowed ...string) ServerOption {
 	return func(o *serverOptions) {
+		if len(allowed) == 0 {
+			o.auth = authentication.New(curve)
+			return
+		}
 		o.allowList = make(allowList)
 		if len(allowed)%2 != 0 {
-			panic("must provide (address, publicKey) pairs to WithAllowList()")
+			panic("must provide (address, public-key) pairs to WithAllowList()")
 		}
 		for i := range allowed {
 			if i%2 != 0 {
