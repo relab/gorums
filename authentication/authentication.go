@@ -103,11 +103,7 @@ func (ec *EllipticCurve) DecodePublic(pemEncodedPub string) (*ecdsa.PublicKey, e
 }
 
 func (ec *EllipticCurve) Sign(msg []byte) ([]byte, error) {
-	signature, err := ecdsa.SignASN1(rand.Reader, ec.privateKey, Hash(msg))
-	if err != nil {
-		return nil, err
-	}
-	return signature, nil
+	return ecdsa.SignASN1(rand.Reader, ec.privateKey, Hash(msg))
 }
 
 func Hash(msg []byte) []byte {
