@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 // requestHandler is used to fetch a response message based on the request.
@@ -47,7 +47,7 @@ func SendMessage(ctx context.Context, c chan<- *Message, msg *Message) error {
 // WrapMessage wraps the metadata, response and error status in a gorumsMessage
 //
 // This function should be used by generated code only.
-func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *Message {
+func WrapMessage(md *ordering.Metadata, resp proto.Message, err error) *Message {
 	errStatus, ok := status.FromError(err)
 	if !ok {
 		errStatus = status.New(codes.Unknown, err.Error())

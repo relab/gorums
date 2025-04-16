@@ -1,8 +1,6 @@
 package dev
 
 import (
-	"fmt"
-
 	"github.com/relab/gorums"
 )
 
@@ -10,7 +8,6 @@ import (
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	qspec QuorumSpec
 	nodes []*Node
 }
 
@@ -20,15 +17,9 @@ type Configuration struct {
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test any = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
-	}
+func ConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Configuration, error) {
 	newCfg := &Configuration{
 		RawConfiguration: rawCfg,
-		qspec:            qspec,
 	}
 	// initialize the nodes slice
 	newCfg.nodes = make([]*Node, newCfg.Size())

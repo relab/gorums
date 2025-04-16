@@ -7,14 +7,12 @@ var commonVariables = `
 {{$in := in .GenFile .Method}}
 {{$out := out .GenFile .Method}}
 {{$intOut := internalOut $out}}
-{{$customOut := customOut .GenFile .Method}}
-{{$customOutField := field $customOut}}
 {{$unexportOutput := unexport .Method.Output.GoIdent.GoName}}
 `
 
 // Common variables used in several template functions.
 var quorumCallVariables = `
-{{$iterator := use "iter.Seq2" .GenFile}}
+{{$iterator := use "gorums.Iterator" .GenFile}}
 `
 
 var quorumCallComment = `
@@ -30,7 +28,7 @@ var quorumCallComment = `
 // The function f must be thread-safe.
 {{else}}
 // {{$method}} is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
+// with the same argument in, and returns a combined result. test
 {{end -}}
 {{end -}}
 `
@@ -38,11 +36,10 @@ var quorumCallComment = `
 var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}})` +
-	`{{$iterator}}[*{{$customOut}}, error] {
+	`{{$iterator}}[*{{$out}}] {
 `
 
 var qcVar = `
-{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
 {{$callData := use "gorums.QuorumCallData" .GenFile}}
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
@@ -52,14 +49,16 @@ var qcVar = `
 var quorumCallBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
+		ServerStream: {{isStream .Method}},
 	}
 {{- if hasPerNodeArg .Method}}
+	{{- $protoMessage := use "proto.Message" .GenFile}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}
 {{- end}}
 
-	return gorums.QuorumCall[*{{$customOut}}](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*{{$out}}](ctx, c.RawConfiguration, cd)
 }
 `
 

@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 var streamDownErr = status.Error(codes.Unavailable, "stream is down")
@@ -32,7 +32,7 @@ func (req request) waitForSend() bool {
 
 type response struct {
 	nid uint32
-	msg protoreflect.ProtoMessage
+	msg proto.Message
 	err error
 }
 
@@ -50,7 +50,7 @@ type channel struct {
 	backoffCfg      backoff.Config
 	rand            *rand.Rand
 	gorumsClient    ordering.GorumsClient
-	gorumsStream    ordering.Gorums_NodeStreamClient
+	gorumsStream    grpc.BidiStreamingClient[ordering.Metadata, ordering.Metadata]
 	streamMut       sync.RWMutex
 	streamBroken    atomicFlag
 	connEstablished atomicFlag

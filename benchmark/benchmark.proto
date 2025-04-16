@@ -60,8 +60,7 @@ service Benchmark {
     }
 
     rpc StopBenchmark(StopRequest) returns (MemoryStat) {
-        option (gorums.quorumcall)         = true;
-        option (gorums.custom_return_type) = "MemoryStatList";
+        option (gorums.quorumcall) = true;
     }
 
     // benchmarks
@@ -71,7 +70,6 @@ service Benchmark {
 
     rpc AsyncQuorumCall(Echo) returns (Echo) {
         option (gorums.quorumcall) = true;
-        option (gorums.async)      = true;
     }
 
     rpc SlowServer(Echo) returns (Echo) {

@@ -21,7 +21,7 @@ func runClient(addresses []string) error {
 		),
 	)
 	// create configuration containing all nodes
-	cfg, err := mgr.NewConfiguration(&qspec{cfgSize: len(addresses)}, gorums.WithNodeList(addresses))
+	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addresses))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -38,7 +38,10 @@ type qspec struct {
 // supplied to the ReadQC method at call time, and may or may not
 // be used by the quorum function. If the in parameter is not needed
 // you should implement your quorum function with '_ *ReadRequest'.
-func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies map[uint32]*proto.ReadResponse) (*proto.ReadResponse, bool) {
+func (q qspec) ReadQCQF(
+	_ *proto.ReadRequest,
+	replies map[uint32]*proto.ReadResponse,
+) (*proto.ReadResponse, bool) {
 	// wait until at least half of the replicas have responded
 	if len(replies) <= q.cfgSize/2 {
 		return nil, false
@@ -77,6 +80,25 @@ func newestValue(values map[uint32]*proto.ReadResponse) *proto.ReadResponse {
 		}
 	}
 	return newest
+}
+
+// newestValue returns the reply that had the most recent timestamp
+func newestValueOfTwo(v1, v2 *proto.ReadResponse) *proto.ReadResponse {
+	if v1 == nil {
+		return v2
+	} else if v2 == nil {
+		return v1
+	}
+	if v1.GetTime().AsTime().After(v2.GetTime().AsTime()) {
+		return v1
+	} else {
+		return v2
+	}
+}
+
+// numUpdated returns the number of replicas that updated their value
+func isUpdated(r *proto.WriteResponse) bool {
+	return r.GetNew()
 }
 
 // numUpdated returns the number of replicas that updated their value

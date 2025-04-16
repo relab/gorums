@@ -2,6 +2,7 @@ package qf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -92,18 +93,55 @@ func (q testQSpec) WithoutReqQF(replies map[uint32]*Response) (*Response, bool) 
 	return reply, true
 }
 
+func UseReq(ctx context.Context, cfg *Configuration, quorum int, req *Request) (*Response, error) {
+	replies := int(0)
+	for response := range cfg.UseReq(ctx, req) {
+		msg, err, _ := response.Unpack()
+		if err != nil {
+			return nil, err
+		}
+		replies++
+		if replies < quorum {
+			continue
+		}
+		_ = req.GetValue()
+		return msg, nil
+	}
+	return nil, errors.New("UseReq: quorum not found")
+}
+
+func IgnoreReq(ctx context.Context, cfg *Configuration, quorum int, req *Request) (*Response, error) {
+	replies := 0
+	var firstMsg *Response
+	for response := range cfg.IgnoreReq(ctx, req) {
+		msg, err, _ := response.Unpack()
+		if err != nil {
+			return nil, err
+		}
+		if firstMsg == nil {
+			firstMsg = msg
+		}
+		replies++
+		if replies < quorum {
+			continue
+		}
+		return firstMsg, nil
+	}
+	return nil, errors.New("IgnoreReq: quorum not found")
+}
+
 func BenchmarkQF(b *testing.B) {
 	for n := 3; n < 20; n += 2 {
 		quorum := n / 2
 		mapSize := n << 1
 		qspec := &testQSpec{quorum: quorum}
-		request := &Request{Value: 1}
+		request := Request_builder{Value: 1}.Build()
 
 		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
 			for b.Loop() {
 				replies := make(map[uint32]*Response, mapSize)
 				for j := range n {
-					replies[uint32(j)] = &Response{Result: request.Value}
+					replies[uint32(j)] = Response_builder{Result: request.GetValue()}.Build()
 					resp, q := qspec.UseReqQF(request, replies)
 					if q {
 						_ = resp.GetResult()
@@ -115,7 +153,7 @@ func BenchmarkQF(b *testing.B) {
 			for b.Loop() {
 				replies := make(map[uint32]*Response, mapSize)
 				for j := range n {
-					replies[uint32(j)] = &Response{Result: request.Value}
+					replies[uint32(j)] = Response_builder{Result: request.GetValue()}.Build()
 					resp, q := qspec.IgnoreReqQF(request, replies)
 					if q {
 						_ = resp.GetResult()
@@ -127,7 +165,7 @@ func BenchmarkQF(b *testing.B) {
 			for b.Loop() {
 				replies := make(map[uint32]*Response, mapSize)
 				for j := range n {
-					replies[uint32(j)] = &Response{Result: request.Value}
+					replies[uint32(j)] = Response_builder{Result: request.GetValue()}.Build()
 					resp, q := qspec.WithoutReqQF(replies)
 					if q {
 						_ = resp.GetResult()
@@ -142,7 +180,7 @@ func BenchmarkQF(b *testing.B) {
 			for b.Loop() {
 				replies := make([]*Response, n)
 				for j := range n {
-					replies[uint32(j)] = &Response{Result: request.Value}
+					replies[uint32(j)] = Response_builder{Result: request.GetValue()}.Build()
 					resp, q := qspec.SliceUseReqQF(request, replies)
 					if q {
 						_ = resp.GetResult()
@@ -154,7 +192,7 @@ func BenchmarkQF(b *testing.B) {
 			for b.Loop() {
 				replies := make([]*Response, n)
 				for j := range n {
-					replies[uint32(j)] = &Response{Result: request.Value}
+					replies[uint32(j)] = Response_builder{Result: request.GetValue()}.Build()
 					resp, q := qspec.SliceIgnoreReqQF(request, replies)
 					if q {
 						_ = resp.GetResult()
@@ -166,7 +204,7 @@ func BenchmarkQF(b *testing.B) {
 			for b.Loop() {
 				replies := make([]*Response, n)
 				for j := range n {
-					replies[uint32(j)] = &Response{Result: request.Value}
+					replies[uint32(j)] = Response_builder{Result: request.GetValue()}.Build()
 					resp, q := qspec.SliceWithoutReqQF(replies)
 					if q {
 						_ = resp.GetResult()
@@ -180,11 +218,11 @@ func BenchmarkQF(b *testing.B) {
 type testSrv struct{}
 
 func (s testSrv) UseReq(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return &Response{Result: req.GetValue()}, nil
+	return Response_builder{Result: req.GetValue()}.Build(), nil
 }
 
 func (s testSrv) IgnoreReq(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return &Response{Result: req.GetValue()}, nil
+	return Response_builder{Result: req.GetValue()}.Build(), nil
 }
 
 func BenchmarkFullStackQF(b *testing.B) {
@@ -200,7 +238,6 @@ func BenchmarkFullStackQF(b *testing.B) {
 			),
 		)
 		c, err := mgr.NewConfiguration(
-			&testQSpec{quorum: n / 2},
 			gorums.WithNodeList([]string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}), // dummy node list; won't actually be used in test
 		)
 		if err != nil {
@@ -210,9 +247,11 @@ func BenchmarkFullStackQF(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 
+		quorum := n / 2
+
 		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
 			for b.Loop() {
-				resp, err := c.UseReq(context.Background(), &Request{Value: int64(requestValue)})
+				resp, err := UseReq(context.Background(), c, quorum, Request_builder{Value: int64(requestValue)}.Build())
 				if err != nil {
 					b.Fatalf("UseReq error: %v", err)
 				}
@@ -221,7 +260,7 @@ func BenchmarkFullStackQF(b *testing.B) {
 		})
 		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
 			for b.Loop() {
-				resp, err := c.IgnoreReq(context.Background(), &Request{Value: int64(requestValue)})
+				resp, err := IgnoreReq(context.Background(), c, quorum, Request_builder{Value: int64(requestValue)}.Build())
 				if err != nil {
 					b.Fatalf("IgnoreReq error: %v", err)
 				}

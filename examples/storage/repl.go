@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/examples/storage/proto"
 	pb "github.com/relab/gorums/examples/storage/proto"
 	"golang.org/x/term"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -248,13 +249,35 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 	fmt.Println("Write OK")
 }
 
+func readqc(cfg *pb.Configuration, ctx context.Context, req *pb.ReadRequest) (*pb.ReadResponse, error) {
+	cfgSize := cfg.Size()
+
+	var newest *pb.ReadResponse
+	replies := int(0)
+	for response := range cfg.ReadQC(ctx, req) {
+		msg, err, _ := response.Unpack()
+		if err != nil {
+			return nil, err
+		}
+		replies++
+		newest = newestValueOfTwo(msg, newest)
+		if replies <= cfgSize/2 {
+			continue
+		}
+		return newest, nil
+	}
+	return nil, errors.New("storage.readqc: Error unreachable")
+}
+
 func (repl) readQC(args []string, cfg *pb.Configuration) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.ReadQC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+
+	resp, err := readqc(cfg, ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -267,13 +290,40 @@ func (repl) readQC(args []string, cfg *pb.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
+func writeqc(cfg *pb.Configuration, ctx context.Context, req *pb.WriteRequest) (*pb.WriteResponse, error) {
+	cfgSize := cfg.Size()
+
+	replies := int(0)
+	updated := int(0)
+	for response := range cfg.WriteQC(ctx, req) {
+		msg, err, _ := response.Unpack()
+
+		if err != nil {
+			return nil, err
+		}
+		replies++
+		if isUpdated(msg) {
+			updated++
+		}
+		if updated > cfgSize/2 {
+			return proto.WriteResponse_builder{New: true}.Build(), nil
+		}
+		// if all replicas have responded, there must have been another write before ours
+		// that had a newer timestamp
+		if replies == cfgSize {
+			return proto.WriteResponse_builder{New: false}.Build(), nil
+		}
+	}
+	return nil, errors.New("storage.writeqc: Error unreachable")
+}
+
 func (repl) writeQC(args []string, cfg *pb.Configuration) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.WriteQC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	resp, err := writeqc(cfg, ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -318,7 +368,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 		for _, node := range r.mgr.Nodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
+		cfg, err = r.mgr.NewConfiguration(gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -341,7 +391,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
+		cfg, err := r.mgr.NewConfiguration(gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

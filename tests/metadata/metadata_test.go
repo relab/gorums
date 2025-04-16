@@ -31,7 +31,7 @@ func (srv testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeI
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "value of id field: %q is not a number: %v", v[0], err)
 	}
-	return &NodeID{ID: uint32(id)}, nil
+	return NodeID_builder{ID: uint32(id)}.Build(), nil
 }
 
 func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr, err error) {
@@ -39,7 +39,7 @@ func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr,
 	if !ok {
 		return nil, status.Error(codes.NotFound, "Peer info unavailable")
 	}
-	return &IPAddr{Addr: peerInfo.Addr.String()}, nil
+	return IPAddr_builder{Addr: peerInfo.Addr.String()}.Build(), nil
 }
 
 func initServer() *gorums.Server {

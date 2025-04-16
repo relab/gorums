@@ -1,11 +1,10 @@
 package gorums
 
 import (
-	"context"
+	"iter"
 	"sync"
 
-	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 // LevelNotSet is the zero value level used to indicate that no level (and
@@ -20,9 +19,9 @@ type watcher struct {
 // Correctable encapsulates the state of a correctable quorum call.
 //
 // This struct should be used by generated code only.
-type Correctable struct {
+type Correctable[resultType any] struct {
 	mu       sync.Mutex
-	reply    protoreflect.ProtoMessage
+	reply    resultType
 	level    int
 	err      error
 	done     bool
@@ -31,19 +30,19 @@ type Correctable struct {
 }
 
 // Get returns the latest response, the current level, and the last error.
-func (c *Correctable) Get() (protoreflect.ProtoMessage, int, error) {
+func (c *Correctable[resultType]) Get() (resultType, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
 }
 
 // Done returns a channel that will close when the correctable call is completed.
-func (c *Correctable) Done() <-chan struct{} {
+func (c *Correctable[resultType]) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that will close when the correctable call has reached a specified level.
-func (c *Correctable) Watch(level int) <-chan struct{} {
+func (c *Correctable[resultType]) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -55,7 +54,7 @@ func (c *Correctable) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error, done bool) {
+func (c *Correctable[resultType]) set(reply resultType, level int, err error, done bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
@@ -79,98 +78,23 @@ func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error,
 	}
 }
 
-// CorrectableCallData contains data for making a correctable quorum call.
-//
-// This struct should only be used by generated code.
-type CorrectableCallData struct {
-	Message        protoreflect.ProtoMessage
-	Method         string
-	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
-	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool)
-	ServerStream   bool
-}
-
-type correctableCallState struct {
-	md              *ordering.Metadata
-	data            CorrectableCallData
-	replyChan       <-chan response
-	expectedReplies int
-}
-
-// CorrectableCall starts a new correctable quorum call and returns a new Correctable object.
-//
-// This method should only be used by generated code.
-func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
-	expectedReplies := len(c)
-	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
-
-	replyChan := make(chan response, expectedReplies)
-	for _, n := range c {
-		msg := d.Message
-		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
-			if !msg.ProtoReflect().IsValid() {
-				expectedReplies--
-				continue // don't send if no msg
+func IterToCorrectable[responseType proto.Message, dataType any, resultType any](
+	iter Iterator[responseType],
+	data dataType,
+	corrFunction func(Iterator[responseType], dataType) iter.Seq2[resultType, int],
+) *Correctable[resultType] {
+	corr := &Correctable[resultType]{donech: make(chan struct{}, 1)}
+	go func() {
+		for result, level := range corrFunction(iter, data) {
+			corr.set(result, level, nil, false)
+		}
+		corr.done = true
+		close(corr.donech)
+		for _, watcher := range corr.watchers {
+			if watcher != nil {
+				close(watcher.ch)
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan, d.ServerStream)
-	}
-
-	corr := &Correctable{donech: make(chan struct{}, 1)}
-
-	go c.handleCorrectableCall(ctx, corr, correctableCallState{
-		md:              md,
-		data:            d,
-		replyChan:       replyChan,
-		expectedReplies: expectedReplies,
-	})
-
+	}()
 	return corr
-}
-
-func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
-	var (
-		resp    protoreflect.ProtoMessage
-		errs    []nodeError
-		rlevel  int
-		clevel  = LevelNotSet
-		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
-	)
-
-	if state.data.ServerStream {
-		for _, n := range c {
-			defer n.channel.deleteRouter(state.md.GetMessageID())
-		}
-	}
-
-	for {
-		select {
-		case r := <-state.replyChan:
-			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
-				break
-			}
-			replies[r.nid] = r.msg
-			if resp, rlevel, quorum = state.data.QuorumFunction(state.data.Message, replies); quorum {
-				if quorum {
-					corr.set(r.msg, rlevel, nil, true)
-					return
-				}
-				if rlevel > clevel {
-					clevel = rlevel
-					corr.set(r.msg, rlevel, nil, false)
-				}
-			}
-		case <-ctx.Done():
-			corr.set(resp, clevel, QuorumCallError{cause: ctx.Err()}, true)
-			return
-		}
-		if (state.data.ServerStream && len(errs) == state.expectedReplies) ||
-			(!state.data.ServerStream && len(errs)+len(replies) == state.expectedReplies) {
-			corr.set(resp, clevel, QuorumCallError{cause: Incomplete}, true)
-			return
-		}
-	}
 }

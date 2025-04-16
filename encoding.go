@@ -25,7 +25,7 @@ const (
 // This struct should be used by generated code only.
 type Message struct {
 	Metadata *ordering.Metadata
-	Message  protoreflect.ProtoMessage
+	Message  proto.Message
 	msgType  gorumsMsgType
 }
 
@@ -63,7 +63,7 @@ func (c Codec) Marshal(m any) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *Message:
 		return c.gorumsMarshal(msg)
-	case protoreflect.ProtoMessage:
+	case proto.Message:
 		return c.marshaler.Marshal(msg)
 	default:
 		return nil, fmt.Errorf("gorums: cannot marshal message of type '%T'", m)
@@ -93,7 +93,7 @@ func (c Codec) Unmarshal(b []byte, m any) (err error) {
 	switch msg := m.(type) {
 	case *Message:
 		return c.gorumsUnmarshal(b, msg)
-	case protoreflect.ProtoMessage:
+	case proto.Message:
 		return c.unmarshaler.Unmarshal(b, msg)
 	default:
 		return fmt.Errorf("gorums: cannot unmarshal message of type '%T'", m)
