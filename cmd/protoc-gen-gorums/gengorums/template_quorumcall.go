@@ -20,15 +20,18 @@ var quorumCallComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-{{if hasPerNodeArg .Method}}
 // {{$method}} is a quorum call invoked on each node in configuration c,
-// with the argument returned by the provided function f, and returns the combined result.
+{{if hasPerNodeArg .Method}}
+// with the argument returned by the provided function f,
+// it returns the responses as an iterator.
 // The per node function f receives a copy of the {{$in}} request argument and
 // returns a {{$in}} manipulated to be passed to the given nodeID.
 // The function f must be thread-safe.
 {{else}}
-// {{$method}} is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result. test
+// with the same argument in, and returns the responses as an iterator.
+{{end -}}
+{{if isStream .Method}}
+// This is a streaming quorum call, so each can respond with any amount of responses.
 {{end -}}
 {{end -}}
 `

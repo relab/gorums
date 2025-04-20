@@ -15,7 +15,6 @@ var staticCode = `// A Configuration represents a static set of nodes on which q
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	nodes []*Node
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -28,11 +27,6 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Configuration, error
 	newCfg := &Configuration{
 		RawConfiguration: rawCfg,
 	}
-	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, newCfg.Size())
-	for i, n := range rawCfg {
-		newCfg.nodes[i] = &Node{n}
-	}
 	return newCfg, nil
 }
 
@@ -41,7 +35,11 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Configuration, error
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *Configuration) Nodes() []*Node {
-	return c.nodes
+	nodes := make([]*Node, c.Size())
+	for i, n := range c.RawConfiguration {
+		nodes[i] = &Node{n}
+	}
+	return nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
@@ -88,12 +86,6 @@ func (m *Manager) NewConfiguration(nodeList gorums.NodeListOption) (c *Configura
 	c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, nodeList)
 	if err != nil {
 		return nil, err
-	}
-
-	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
-	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
 	}
 	return c, nil
 }

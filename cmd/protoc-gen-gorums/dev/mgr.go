@@ -39,12 +39,6 @@ func (m *Manager) NewConfiguration(nodeList gorums.NodeListOption) (c *Configura
 	if err != nil {
 		return nil, err
 	}
-
-	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
-	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
-	}
 	return c, nil
 }
 
