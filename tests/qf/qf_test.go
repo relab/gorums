@@ -93,15 +93,12 @@ func (q testQSpec) WithoutReqQF(replies map[uint32]*Response) (*Response, bool) 
 	return reply, true
 }
 
-func UseReq(ctx context.Context, cfg *Configuration, quorum int, req *Request) (*Response, error) {
-	replies := int(0)
-	for response := range cfg.UseReq(ctx, req) {
-		msg, err, _ := response.Unpack()
-		if err != nil {
-			return nil, err
-		}
-		replies++
-		if replies < quorum {
+func IterUseReq(replies gorums.Iterator[*Response], quorum int, req *Request) (*Response, error) {
+	replyCount := 0
+	for reply := range replies.IgnoreErrors() {
+		msg := reply.Msg
+		replyCount++
+		if replyCount < quorum {
 			continue
 		}
 		_ = req.GetValue()
@@ -110,19 +107,16 @@ func UseReq(ctx context.Context, cfg *Configuration, quorum int, req *Request) (
 	return nil, errors.New("UseReq: quorum not found")
 }
 
-func IgnoreReq(ctx context.Context, cfg *Configuration, quorum int, req *Request) (*Response, error) {
-	replies := 0
+func IterIgnoreReq(replies gorums.Iterator[*Response], quorum int) (*Response, error) {
+	replyCount := 0
 	var firstMsg *Response
-	for response := range cfg.IgnoreReq(ctx, req) {
-		msg, err, _ := response.Unpack()
-		if err != nil {
-			return nil, err
-		}
+	for reply := range replies.IgnoreErrors() {
+		msg := reply.Msg
 		if firstMsg == nil {
 			firstMsg = msg
 		}
-		replies++
-		if replies < quorum {
+		replyCount++
+		if replyCount < quorum {
 			continue
 		}
 		return firstMsg, nil
@@ -212,6 +206,46 @@ func BenchmarkQF(b *testing.B) {
 				}
 			}
 		})
+
+		b.Run(fmt.Sprintf("IterUseReq_%d", n), func(b *testing.B) {
+			for b.Loop() {
+				iterator := func(yield func(gorums.Response[*Response]) bool) {
+					for j := range n {
+						response := gorums.NewResponse(
+							Response_builder{Result: request.GetValue()}.Build(),
+							nil,
+							uint32(j),
+						)
+						if !yield(response) {
+							return
+						}
+					}
+				}
+
+				resp, _ := IterUseReq(iterator, qspec.quorum, request)
+				_ = resp.GetResult()
+			}
+		})
+
+		b.Run(fmt.Sprintf("IterIgnoreReq_%d", n), func(b *testing.B) {
+			for b.Loop() {
+				iterator := func(yield func(gorums.Response[*Response]) bool) {
+					for j := range n {
+						response := gorums.NewResponse(
+							Response_builder{Result: request.GetValue()}.Build(),
+							nil,
+							uint32(j),
+						)
+						if !yield(response) {
+							return
+						}
+					}
+				}
+
+				resp, _ := IterIgnoreReq(iterator, qspec.quorum)
+				_ = resp.GetResult()
+			}
+		})
 	}
 }
 
@@ -251,7 +285,8 @@ func BenchmarkFullStackQF(b *testing.B) {
 
 		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
 			for b.Loop() {
-				resp, err := UseReq(context.Background(), c, quorum, Request_builder{Value: int64(requestValue)}.Build())
+				req := Request_builder{Value: int64(requestValue)}.Build()
+				resp, err := IterUseReq(c.UseReq(context.Background(), req), quorum, req)
 				if err != nil {
 					b.Fatalf("UseReq error: %v", err)
 				}
@@ -260,7 +295,8 @@ func BenchmarkFullStackQF(b *testing.B) {
 		})
 		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
 			for b.Loop() {
-				resp, err := IgnoreReq(context.Background(), c, quorum, Request_builder{Value: int64(requestValue)}.Build())
+				req := Request_builder{Value: int64(requestValue)}.Build()
+				resp, err := IterIgnoreReq(c.IgnoreReq(context.Background(), req), quorum)
 				if err != nil {
 					b.Fatalf("IgnoreReq error: %v", err)
 				}

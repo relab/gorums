@@ -18,6 +18,7 @@ type Response[messageType proto.Message] struct {
 }
 
 // NewResponse initialized a response struct without needing to specify the message type
+// the function can be private
 func NewResponse[messageType proto.Message](msg messageType, err error, nid uint32) Response[messageType] {
 	return Response[messageType]{
 		Msg: msg,
@@ -33,12 +34,12 @@ func (r Response[messageType]) Unpack() (messageType, error, uint32) {
 
 type Iterator[messageType proto.Message] iter.Seq[Response[messageType]]
 
-// this method uses a function to keep/remove messages from a quorum call
-// this can be used to verify the responses from servers before any further computation
-func (iterator Iterator[messageType]) Filter(forward func(Response[messageType]) bool) Iterator[messageType] {
+// Filter uses a function to keep/remove messages from a quorum call
+// can be used to verify/filter responses from servers before computing quorum
+func (iterator Iterator[messageType]) Filter(keep func(Response[messageType]) bool) Iterator[messageType] {
 	return func(yield func(Response[messageType]) bool) {
 		for resp := range iterator {
-			if forward(resp) {
+			if keep(resp) {
 				if !yield(resp) {
 					return
 				}
@@ -47,23 +48,22 @@ func (iterator Iterator[messageType]) Filter(forward func(Response[messageType])
 	}
 }
 
-// this method uses a function to keep/remove messages from a quorum call
-// this can be used to verify the responses from servers before any further computation
+// IgnoreErrors removes the errors from the iterator
 func (iterator Iterator[messageType]) IgnoreErrors() Iterator[messageType] {
 	return func(yield func(Response[messageType]) bool) {
 		for resp := range iterator {
-			if resp.Err == nil {
-				if !yield(resp) {
-					return
-				}
+			if resp.Err != nil {
+				continue
+			}
+			if !yield(resp) {
+				return
 			}
 		}
 	}
 }
 
-// If you expect all servers to send the same reply,
-// you can use GetQuorum to find the first message to occur
-// a specified amount of times
+// GetQuorum is an example function for an iterator method
+// it returns a message if it occurs more than a specified amount of times
 func (iterator Iterator[messageType]) GetQuorum(quorum int) (messageType, error) {
 	type replyFreq struct {
 		val  messageType

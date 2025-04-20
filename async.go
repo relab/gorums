@@ -29,6 +29,7 @@ func (f *Async[resultType]) Done() bool {
 	}
 }
 
+// IterAsync lets you use a quorum call as an async call.
 func IterAsync[responseType proto.Message, resultType any](
 	iter Iterator[responseType],
 	asyncFunc func(Iterator[responseType]) resultType,
@@ -39,7 +40,6 @@ func IterAsync[responseType proto.Message, resultType any](
 
 	go func() {
 		async.reply = asyncFunc(iter)
-
 		close(async.c)
 	}()
 

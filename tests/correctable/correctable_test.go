@@ -2,7 +2,6 @@ package correctable
 
 import (
 	"context"
-	"iter"
 	"testing"
 	"time"
 
@@ -55,22 +54,24 @@ func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration
 	}
 }
 
-func qcorr(responses gorums.Iterator[*CorrectableResponse], q qspec) iter.Seq2[int, int] {
-	return func(yield func(int, int) bool) {
-		sum := 0
-		for response := range responses {
-			reply, err, _ := response.Unpack()
-			if err != nil {
-				continue
-			}
-			sum += int(reply.GetLevel())
-			level := sum / q.div
-			if !yield(level, level) {
-				return
-			}
-			if level >= q.doneLevel {
-				return
-			}
+type qspec struct {
+	div       int
+	doneLevel int
+}
+
+func (q qspec) corrQF(responses gorums.Iterator[*CorrectableResponse], levelSet func(int, int, error)) {
+	sum := 0
+	for response := range responses {
+		msg, err, _ := response.Unpack()
+		if err != nil {
+			levelSet(0, 0, err)
+			continue
+		}
+		sum += int(msg.GetLevel())
+		level := sum / q.div
+		levelSet(level, level, nil)
+		if level >= q.doneLevel {
+			return
 		}
 	}
 }
@@ -78,20 +79,17 @@ func qcorr(responses gorums.Iterator[*CorrectableResponse], q qspec) iter.Seq2[i
 func TestCorrectable(t *testing.T) {
 	run(t, 4, 1, func(ctx context.Context, c *Configuration, n int, div int) *gorums.Correctable[int] {
 		corr := c.Correctable(ctx, &CorrectableRequest{})
-		return gorums.IterToCorrectable(corr, qspec{div, n}, qcorr)
+		qspec := qspec{div, n}
+		return gorums.IterCorrectable(corr, qspec.corrQF)
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
 	run(t, 4, 4, func(ctx context.Context, c *Configuration, n int, div int) *gorums.Correctable[int] {
 		corr := c.CorrectableStream(ctx, &CorrectableRequest{})
-		return gorums.IterToCorrectable(corr, qspec{div, n}, qcorr)
+		qspec := qspec{div, n}
+		return gorums.IterCorrectable(corr, qspec.corrQF)
 	})
-}
-
-type qspec struct {
-	div       int
-	doneLevel int
 }
 
 type testSrv struct {

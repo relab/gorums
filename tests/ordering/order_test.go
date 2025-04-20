@@ -46,7 +46,7 @@ func (s *testSrv) UnaryRPC(_ gorums.ServerCtx, req *Request) (resp *Response, er
 	}.Build(), nil
 }
 
-func qfiter(ctx context.Context, responses gorums.Iterator[*Response], quorum int) (*Response, error) {
+func orderQF(ctx context.Context, responses gorums.Iterator[*Response], quorum int) (*Response, error) {
 	replyCount := 0
 	var orderMsg *Response
 	var firstMsg *Response
@@ -75,7 +75,7 @@ func qfiter(ctx context.Context, responses gorums.Iterator[*Response], quorum in
 	if err != nil {
 		return nil, err
 	}
-	return nil, errors.New("qfiter: quorum not found")
+	return nil, errors.New("orderQF: quorum not found")
 }
 
 func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
@@ -135,7 +135,7 @@ func TestQCOrdering(t *testing.T) {
 		i++
 		ctx := context.Background()
 		req := Request_builder{Num: uint64(i)}.Build()
-		resp, err := qfiter(ctx, cfg.QC(ctx, req), 4)
+		resp, err := orderQF(ctx, cfg.QC(ctx, req), 4)
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
 		}
@@ -163,7 +163,7 @@ func TestQCAsyncOrdering(t *testing.T) {
 		wg.Add(1)
 		go func(responses gorums.Iterator[*Response]) {
 			defer wg.Done()
-			resp, err := qfiter(ctx, responses, 4)
+			resp, err := orderQF(ctx, responses, 4)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return
@@ -193,7 +193,7 @@ func TestMixedOrdering(t *testing.T) {
 	for time.Now().Before(stopTime) {
 		req := Request_builder{Num: uint64(i)}.Build()
 		ctx := context.Background()
-		resp, err := qfiter(ctx, cfg.QC(ctx, req), 4)
+		resp, err := orderQF(ctx, cfg.QC(ctx, req), 4)
 		i++
 		if err != nil {
 			t.Fatalf("QC error: %v", err)

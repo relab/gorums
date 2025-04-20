@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"errors"
 	fmt "fmt"
 	"testing"
 
@@ -52,16 +51,16 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 
 func configQF(cfg *Configuration, req *Request) (*Response, error) {
 	quorum := cfg.Size()/2 + 1
-	replies := int(0)
-	responses := cfg.Config(context.Background(), req)
-	for response := range responses {
-		msg, _, _ := response.Unpack()
-		replies++
-		if replies >= quorum {
-			return msg, nil
+	replyCount := int(0)
+	replies := cfg.Config(context.Background(), req)
+	for reply := range replies.IgnoreErrors() {
+		replyCount++
+		if replyCount < quorum {
+			continue
 		}
+		return reply.Msg, nil
 	}
-	return nil, errors.New("configQF: no quorum")
+	return nil, fmt.Errorf("configQF: no quorum got: %d, want (at least): %d", replyCount, quorum)
 }
 
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
