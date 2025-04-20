@@ -47,6 +47,20 @@ func (iterator Iterator[messageType]) Filter(forward func(Response[messageType])
 	}
 }
 
+// this method uses a function to keep/remove messages from a quorum call
+// this can be used to verify the responses from servers before any further computation
+func (iterator Iterator[messageType]) IgnoreErrors() Iterator[messageType] {
+	return func(yield func(Response[messageType]) bool) {
+		for resp := range iterator {
+			if resp.Err == nil {
+				if !yield(resp) {
+					return
+				}
+			}
+		}
+	}
+}
+
 // If you expect all servers to send the same reply,
 // you can use GetQuorum to find the first message to occur
 // a specified amount of times

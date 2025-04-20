@@ -58,7 +58,7 @@ func (f *listFlag) Get() []string {
 
 func listBenchmarks() {
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-	benchmarks := benchmark.GetBenchmarks(nil, benchmark.QSpec{})
+	benchmarks := benchmark.GetBenchmarks(nil, 0)
 	for _, b := range benchmarks {
 		fmt.Fprintf(tw, "%s:\t%s\n", b.Name, b.Description)
 	}
@@ -199,15 +199,10 @@ func main() {
 	mgr := benchmark.NewManager(mgrOpts...)
 	defer mgr.Close()
 
-	qspec := benchmark.QSpec{
-		QSize:   options.QuorumSize,
-		CfgSize: options.NumNodes,
-	}
-
 	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(remotes[:options.NumNodes]))
 	checkf("Failed to create configuration: %v", err)
 
-	results, err := benchmark.RunBenchmarks(benchReg, options, cfg, qspec)
+	results, err := benchmark.RunBenchmarks(benchReg, options, cfg, options.QuorumSize)
 	checkf("Error running benchmarks: %v", err)
 
 	printResults(results, options, *serverStats)

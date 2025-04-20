@@ -27,17 +27,17 @@ func QuorumCall[responseType proto.Message](
 	c RawConfiguration,
 	d QuorumCallData,
 ) Iterator[responseType] {
-	expectedReplies := len(c)
+	nodes := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
-	replyChan := make(chan response, expectedReplies)
+	replyChan := make(chan response, nodes)
 
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)
 			if !msg.ProtoReflect().IsValid() {
-				expectedReplies--
+				nodes--
 				continue // don't send if no msg
 			}
 		}
@@ -57,20 +57,29 @@ func QuorumCall[responseType proto.Message](
 	}
 
 	replies := int(0)
+	errors := int(0)
 
 	return func(yield func(Response[responseType]) bool) {
 		for {
+			if d.ServerStream {
+				if errors >= nodes {
+					return
+				}
+			} else {
+				if replies >= nodes {
+					return
+				}
+			}
 			select {
 			case r := <-replyChan:
 				replies++
+				if r.err != nil {
+					errors++
+				}
 				if !yield(NewResponse(r.msg.(responseType), r.err, r.nid)) {
 					return
 				}
 			case <-ctx.Done():
-				return
-			}
-			// for streaming just wait for context timeout/cancel
-			if d.ServerStream && replies >= expectedReplies {
 				return
 			}
 		}
