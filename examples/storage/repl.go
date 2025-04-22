@@ -249,24 +249,18 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 	fmt.Println("Write OK")
 }
 
-func readqc(cfg *pb.Configuration, ctx context.Context, req *pb.ReadRequest) (*pb.ReadResponse, error) {
-	cfgSize := cfg.Size()
-
+func readQF(replies gorums.Iterator[*pb.ReadResponse], quorum int) (*pb.ReadResponse, error) {
 	var newest *pb.ReadResponse
-	replies := int(0)
-	for response := range cfg.ReadQC(ctx, req) {
-		msg, err, _ := response.Unpack()
-		if err != nil {
-			return nil, err
-		}
-		replies++
-		newest = newestValueOfTwo(msg, newest)
-		if replies <= cfgSize/2 {
+	replyCount := int(0)
+	for reply := range replies.IgnoreErrors() {
+		newest = newestValueOfTwo(newest, reply.Msg)
+		replyCount++
+		if replyCount <= quorum {
 			continue
 		}
 		return newest, nil
 	}
-	return nil, errors.New("storage.readqc: Error unreachable")
+	return nil, errors.New("storage.readqc: quorum not found")
 }
 
 func (repl) readQC(args []string, cfg *pb.Configuration) {
@@ -276,7 +270,8 @@ func (repl) readQC(args []string, cfg *pb.Configuration) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
-	resp, err := readqc(cfg, ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+	req := pb.ReadRequest_builder{Key: args[0]}.Build()
+	resp, err := readQF(cfg.ReadQC(ctx, req), cfg.Size()/2)
 
 	cancel()
 	if err != nil {
@@ -290,19 +285,12 @@ func (repl) readQC(args []string, cfg *pb.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func writeqc(cfg *pb.Configuration, ctx context.Context, req *pb.WriteRequest) (*pb.WriteResponse, error) {
-	cfgSize := cfg.Size()
-
-	replies := int(0)
+func writeQF(replies gorums.Iterator[*pb.WriteResponse], cfgSize int) (*pb.WriteResponse, error) {
+	replyCount := int(0)
 	updated := int(0)
-	for response := range cfg.WriteQC(ctx, req) {
-		msg, err, _ := response.Unpack()
-
-		if err != nil {
-			return nil, err
-		}
-		replies++
-		if isUpdated(msg) {
+	for response := range replies.IgnoreErrors() {
+		replyCount++
+		if isUpdated(response.Msg) {
 			updated++
 		}
 		if updated > cfgSize/2 {
@@ -310,11 +298,11 @@ func writeqc(cfg *pb.Configuration, ctx context.Context, req *pb.WriteRequest) (
 		}
 		// if all replicas have responded, there must have been another write before ours
 		// that had a newer timestamp
-		if replies == cfgSize {
+		if replyCount == cfgSize {
 			return proto.WriteResponse_builder{New: false}.Build(), nil
 		}
 	}
-	return nil, errors.New("storage.writeqc: Error unreachable")
+	return nil, errors.New("storage.writeqc: incomplete response")
 }
 
 func (repl) writeQC(args []string, cfg *pb.Configuration) {
@@ -323,7 +311,8 @@ func (repl) writeQC(args []string, cfg *pb.Configuration) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := writeqc(cfg, ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	req := pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()
+	resp, err := writeQF(cfg.WriteQC(ctx, req), cfg.Size())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
