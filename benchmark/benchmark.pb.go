@@ -527,65 +527,6 @@ func (b0 MemoryStat_builder) Build() *MemoryStat {
 	return m0
 }
 
-type MemoryStatList struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_MemoryStats *[]*MemoryStat         `protobuf:"bytes,1,rep,name=MemoryStats"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
-}
-
-func (x *MemoryStatList) Reset() {
-	*x = MemoryStatList{}
-	mi := &file_benchmark_benchmark_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *MemoryStatList) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*MemoryStatList) ProtoMessage() {}
-
-func (x *MemoryStatList) ProtoReflect() protoreflect.Message {
-	mi := &file_benchmark_benchmark_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-func (x *MemoryStatList) GetMemoryStats() []*MemoryStat {
-	if x != nil {
-		if x.xxx_hidden_MemoryStats != nil {
-			return *x.xxx_hidden_MemoryStats
-		}
-	}
-	return nil
-}
-
-func (x *MemoryStatList) SetMemoryStats(v []*MemoryStat) {
-	x.xxx_hidden_MemoryStats = &v
-}
-
-type MemoryStatList_builder struct {
-	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
-
-	MemoryStats []*MemoryStat
-}
-
-func (b0 MemoryStatList_builder) Build() *MemoryStatList {
-	m0 := &MemoryStatList{}
-	b, x := &b0, m0
-	_, _ = b, x
-	x.xxx_hidden_MemoryStats = &b.MemoryStats
-	return m0
-}
-
 var File_benchmark_benchmark_proto protoreflect.FileDescriptor
 
 const file_benchmark_benchmark_proto_rawDesc = "" +
@@ -618,9 +559,7 @@ const file_benchmark_benchmark_proto_rawDesc = "" +
 	"\n" +
 	"MemoryStat\x12\x16\n" +
 	"\x06Allocs\x18\x01 \x01(\x04R\x06Allocs\x12\x16\n" +
-	"\x06Memory\x18\x02 \x01(\x04R\x06Memory\"I\n" +
-	"\x0eMemoryStatList\x127\n" +
-	"\vMemoryStats\x18\x01 \x03(\v2\x15.benchmark.MemoryStatR\vMemoryStats2\x9c\x04\n" +
+	"\x06Memory\x18\x02 \x01(\x04R\x06Memory2\x9c\x04\n" +
 	"\tBenchmark\x12O\n" +
 	"\x14StartServerBenchmark\x12\x17.benchmark.StartRequest\x1a\x18.benchmark.StartResponse\"\x04\xa0\xb5\x18\x01\x12F\n" +
 	"\x13StopServerBenchmark\x12\x16.benchmark.StopRequest\x1a\x11.benchmark.Result\"\x04\xa0\xb5\x18\x01\x12I\n" +
@@ -633,42 +572,40 @@ const file_benchmark_benchmark_proto_rawDesc = "" +
 	"SlowServer\x12\x0f.benchmark.Echo\x1a\x0f.benchmark.Echo\"\x04\xa0\xb5\x18\x01\x12>\n" +
 	"\tMulticast\x12\x13.benchmark.TimedMsg\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01B(Z!github.com/relab/gorums/benchmark\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
-var file_benchmark_benchmark_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_benchmark_benchmark_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_benchmark_benchmark_proto_goTypes = []any{
-	(*Echo)(nil),           // 0: benchmark.Echo
-	(*TimedMsg)(nil),       // 1: benchmark.TimedMsg
-	(*StartRequest)(nil),   // 2: benchmark.StartRequest
-	(*StartResponse)(nil),  // 3: benchmark.StartResponse
-	(*StopRequest)(nil),    // 4: benchmark.StopRequest
-	(*Result)(nil),         // 5: benchmark.Result
-	(*MemoryStat)(nil),     // 6: benchmark.MemoryStat
-	(*MemoryStatList)(nil), // 7: benchmark.MemoryStatList
-	(*emptypb.Empty)(nil),  // 8: google.protobuf.Empty
+	(*Echo)(nil),          // 0: benchmark.Echo
+	(*TimedMsg)(nil),      // 1: benchmark.TimedMsg
+	(*StartRequest)(nil),  // 2: benchmark.StartRequest
+	(*StartResponse)(nil), // 3: benchmark.StartResponse
+	(*StopRequest)(nil),   // 4: benchmark.StopRequest
+	(*Result)(nil),        // 5: benchmark.Result
+	(*MemoryStat)(nil),    // 6: benchmark.MemoryStat
+	(*emptypb.Empty)(nil), // 7: google.protobuf.Empty
 }
 var file_benchmark_benchmark_proto_depIdxs = []int32{
-	6,  // 0: benchmark.Result.ServerStats:type_name -> benchmark.MemoryStat
-	6,  // 1: benchmark.MemoryStatList.MemoryStats:type_name -> benchmark.MemoryStat
-	2,  // 2: benchmark.Benchmark.StartServerBenchmark:input_type -> benchmark.StartRequest
-	4,  // 3: benchmark.Benchmark.StopServerBenchmark:input_type -> benchmark.StopRequest
-	2,  // 4: benchmark.Benchmark.StartBenchmark:input_type -> benchmark.StartRequest
-	4,  // 5: benchmark.Benchmark.StopBenchmark:input_type -> benchmark.StopRequest
-	0,  // 6: benchmark.Benchmark.QuorumCall:input_type -> benchmark.Echo
-	0,  // 7: benchmark.Benchmark.AsyncQuorumCall:input_type -> benchmark.Echo
-	0,  // 8: benchmark.Benchmark.SlowServer:input_type -> benchmark.Echo
-	1,  // 9: benchmark.Benchmark.Multicast:input_type -> benchmark.TimedMsg
-	3,  // 10: benchmark.Benchmark.StartServerBenchmark:output_type -> benchmark.StartResponse
-	5,  // 11: benchmark.Benchmark.StopServerBenchmark:output_type -> benchmark.Result
-	3,  // 12: benchmark.Benchmark.StartBenchmark:output_type -> benchmark.StartResponse
-	6,  // 13: benchmark.Benchmark.StopBenchmark:output_type -> benchmark.MemoryStat
-	0,  // 14: benchmark.Benchmark.QuorumCall:output_type -> benchmark.Echo
-	0,  // 15: benchmark.Benchmark.AsyncQuorumCall:output_type -> benchmark.Echo
-	0,  // 16: benchmark.Benchmark.SlowServer:output_type -> benchmark.Echo
-	8,  // 17: benchmark.Benchmark.Multicast:output_type -> google.protobuf.Empty
-	10, // [10:18] is the sub-list for method output_type
-	2,  // [2:10] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	6, // 0: benchmark.Result.ServerStats:type_name -> benchmark.MemoryStat
+	2, // 1: benchmark.Benchmark.StartServerBenchmark:input_type -> benchmark.StartRequest
+	4, // 2: benchmark.Benchmark.StopServerBenchmark:input_type -> benchmark.StopRequest
+	2, // 3: benchmark.Benchmark.StartBenchmark:input_type -> benchmark.StartRequest
+	4, // 4: benchmark.Benchmark.StopBenchmark:input_type -> benchmark.StopRequest
+	0, // 5: benchmark.Benchmark.QuorumCall:input_type -> benchmark.Echo
+	0, // 6: benchmark.Benchmark.AsyncQuorumCall:input_type -> benchmark.Echo
+	0, // 7: benchmark.Benchmark.SlowServer:input_type -> benchmark.Echo
+	1, // 8: benchmark.Benchmark.Multicast:input_type -> benchmark.TimedMsg
+	3, // 9: benchmark.Benchmark.StartServerBenchmark:output_type -> benchmark.StartResponse
+	5, // 10: benchmark.Benchmark.StopServerBenchmark:output_type -> benchmark.Result
+	3, // 11: benchmark.Benchmark.StartBenchmark:output_type -> benchmark.StartResponse
+	6, // 12: benchmark.Benchmark.StopBenchmark:output_type -> benchmark.MemoryStat
+	0, // 13: benchmark.Benchmark.QuorumCall:output_type -> benchmark.Echo
+	0, // 14: benchmark.Benchmark.AsyncQuorumCall:output_type -> benchmark.Echo
+	0, // 15: benchmark.Benchmark.SlowServer:output_type -> benchmark.Echo
+	7, // 16: benchmark.Benchmark.Multicast:output_type -> google.protobuf.Empty
+	9, // [9:17] is the sub-list for method output_type
+	1, // [1:9] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_benchmark_benchmark_proto_init() }
@@ -682,7 +619,7 @@ func file_benchmark_benchmark_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_benchmark_benchmark_proto_rawDesc), len(file_benchmark_benchmark_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

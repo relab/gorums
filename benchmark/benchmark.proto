@@ -42,10 +42,6 @@ message MemoryStat {
     uint64 Memory = 2;
 }
 
-message MemoryStatList {
-    repeated MemoryStat MemoryStats = 1;
-}
-
 service Benchmark {
     rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
         option (gorums.quorumcall) = true;
