@@ -11,56 +11,61 @@ var clientVariables = `
 {{$callOpt := use "gorums.CallOption" .GenFile}}
 `
 
-var clientConfigurationInterface = `
+var clientServicesBegin = `
 {{- $genFile := .GenFile}}
 {{- range configurationsServices .Services}}
 	{{- $service := .GoName}}
-	{{- $interfaceName := printf "%sClient" $service}}
-	{{- $configurationName := printf "%sConfiguration" $service}}
-	// {{$interfaceName}} is the client interface for the {{$service}} service.
-	type {{$interfaceName}} interface {
-		{{- range configurationMethods .Methods}}
-			{{- $method := .GoName}}
-			{{- if isOneway .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
-			{{- else if or (isCorrectable .) (isAsync .)}}
-				{{- $customOut := outType . (customOut $genFile .)}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) *{{$customOut}}
-			{{- else}}
-				{{- $customOut := customOut $genFile .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
-			{{- end}}
-		{{- end}}
-	}
-	// enforce interface compliance
-	var _ {{$interfaceName}} = (*{{$configurationName}})(nil)
+`
+
+var clientServicesEnd = `
 {{- end}}
+`
+
+var clientConfigurationInterface = `
+{{- $interfaceName := printf "%sClient" $service}}
+{{- $configurationName := printf "%sConfiguration" $service}}
+// {{$interfaceName}} is the client interface for the {{$service}} service.
+type {{$interfaceName}} interface {
+	{{- range configurationMethods .Methods}}
+		{{- $method := .GoName}}
+		{{- if isOneway .}}
+			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
+		{{- else if or (isCorrectable .) (isAsync .)}}
+			{{- $customOut := outType . (customOut $genFile .)}}
+			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) *{{$customOut}}
+		{{- else}}
+			{{- $customOut := customOut $genFile .}}
+			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
+		{{- end}}
+	{{- end}}
+}
+// enforce interface compliance
+var _ {{$interfaceName}} = (*{{$configurationName}})(nil)
 `
 
 var clientNodeInterface = `
-{{- $genFile := .GenFile}}
-{{- range nodeServices .Services}}
-	{{- $service := .GoName}}
-	{{- $nodeName := printf "%sNode" $service}}
-	{{- $interfaceName := printf "%sNodeClient" $service}}
-	// {{$interfaceName}} is the single node client interface for the {{$service}} service.
-	type {{$interfaceName}} interface {
-		{{- range nodeMethods .Methods}}
-			{{- $method := .GoName}}
-			{{- if isOneway .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
-			{{- else}}
-				{{- $customOut := customOut $genFile .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
-			{{- end}}
+{{- $interfaceName := printf "%sNodeClient" $service}}
+{{- $nodeName := printf "%sNode" $service}}
+// {{$interfaceName}} is the single node client interface for the {{$service}} service.
+type {{$interfaceName}} interface {
+	{{- range nodeMethods .Methods}}
+		{{- $method := .GoName}}
+		{{- if isOneway .}}
+			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
+		{{- else}}
+			{{- $customOut := customOut $genFile .}}
+			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
 		{{- end}}
-	}
-	// enforce interface compliance
-	var _ {{$interfaceName}} = (*{{$nodeName}})(nil)
-{{- end}}
+	{{- end}}
+}
+// enforce interface compliance
+var _ {{$interfaceName}} = (*{{$nodeName}})(nil)
 `
 
-var client = clientVariables + clientConfigurationInterface + clientNodeInterface
+var client = clientVariables +
+	clientServicesBegin +
+	clientConfigurationInterface + clientNodeInterface +
+	clientServicesEnd
 
 // configurationsServices returns all services containing at least one multi node method.
 func configurationsServices(services []*protogen.Service) (s []*protogen.Service) {
