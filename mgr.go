@@ -22,7 +22,7 @@ type RawManager[idType cmp.Ordered] struct {
 	lookup    map[idType]*RawNode[idType]
 	closeOnce sync.Once
 	logger    *log.Logger
-	opts      managerOptions[idType]
+	opts      managerOptions
 	nextMsgID uint64
 }
 
@@ -30,10 +30,10 @@ type RawManager[idType cmp.Ordered] struct {
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager. This function is meant for internal use.
 // You should use the `NewManager` function in the generated code instead.
-func NewRawManager[idType cmp.Ordered](opts ...ManagerOption[idType]) *RawManager[idType] {
+func NewRawManager[idType cmp.Ordered](opts ...ManagerOption) *RawManager[idType] {
 	m := &RawManager[idType]{
 		lookup: make(map[idType]*RawNode[idType]),
-		opts:   newManagerOptions[idType](),
+		opts:   newManagerOptions(),
 	}
 	for _, opt := range opts {
 		opt(&m.opts)
