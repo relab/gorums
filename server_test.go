@@ -35,9 +35,9 @@ func TestServerCallback(t *testing.T) {
 
 	md := metadata.New(map[string]string{"message": "hello"})
 
-	mgr := gorums.NewRawManager(
-		gorums.WithMetadata[uint32](md),
-		gorums.WithGrpcDialOptions[uint32](
+	mgr := gorums.NewRawManager[uint32](
+		gorums.WithMetadata(md),
+		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

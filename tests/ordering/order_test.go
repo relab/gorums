@@ -86,8 +86,8 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration[uint32], teardown func
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions[uint32](
+	mgr := NewManager[uint32](
+		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

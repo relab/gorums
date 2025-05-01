@@ -61,8 +61,8 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration[uint32], srvs [
 		nodeMap[addr] = uint32(i)
 	}
 
-	mgr := oneway.NewManager(
-		gorums.WithGrpcDialOptions[uint32](
+	mgr := oneway.NewManager[uint32](
+		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

@@ -22,8 +22,8 @@ func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration
 	})
 	defer teardown()
 
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions[uint32](
+	mgr := NewManager[uint32](
+		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

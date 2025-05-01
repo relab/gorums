@@ -84,8 +84,8 @@ func TestConfig(t *testing.T) {
 			}
 		}
 	}
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions[uint32](
+	mgr := NewManager[uint32](
+		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

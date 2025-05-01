@@ -52,12 +52,12 @@ The command performs the write quorum call on node 0 and 2
 `
 
 type repl struct {
-	mgr  *pb.Manager
-	cfg  *pb.Configuration
+	mgr  *pb.Manager[uint32]
+	cfg  *pb.Configuration[uint32]
 	term *term.Terminal
 }
 
-func newRepl(mgr *pb.Manager, cfg *pb.Configuration) *repl {
+func newRepl(mgr *pb.Manager[uint32], cfg *pb.Configuration[uint32]) *repl {
 	return &repl{
 		mgr: mgr,
 		cfg: cfg,
@@ -90,7 +90,7 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the manager and configuration.
-func Repl(mgr *pb.Manager, defaultCfg *pb.Configuration) error {
+func Repl(mgr *pb.Manager[uint32], defaultCfg *pb.Configuration[uint32]) error {
 	r := newRepl(mgr, defaultCfg)
 
 	fmt.Println(help)
@@ -210,7 +210,7 @@ func (r repl) qcCfg(args []string) {
 	}
 }
 
-func (repl) readRPC(args []string, node *pb.Node) {
+func (repl) readRPC(args []string, node *pb.Node[uint32]) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -229,7 +229,7 @@ func (repl) readRPC(args []string, node *pb.Node) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeRPC(args []string, node *pb.Node) {
+func (repl) writeRPC(args []string, node *pb.Node[uint32]) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
@@ -248,7 +248,7 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 	fmt.Println("Write OK")
 }
 
-func (repl) readQC(args []string, cfg *pb.Configuration) {
+func (repl) readQC(args []string, cfg *pb.Configuration[uint32]) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
@@ -267,7 +267,7 @@ func (repl) readQC(args []string, cfg *pb.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeQC(args []string, cfg *pb.Configuration) {
+func (repl) writeQC(args []string, cfg *pb.Configuration[uint32]) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
@@ -286,7 +286,7 @@ func (repl) writeQC(args []string, cfg *pb.Configuration) {
 	fmt.Println("Write OK")
 }
 
-func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
+func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration[uint32]) {
 	// configuration using range syntax
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
@@ -318,7 +318,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 		for _, node := range r.mgr.Nodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
+		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList[uint32](nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -341,7 +341,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
+		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList[uint32](selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

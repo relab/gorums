@@ -104,8 +104,8 @@ func initServer() *gorums.Server {
 }
 
 func gorumsTestMgr() *dummy.Manager[uint32] {
-	mgr := dummy.NewManager(
-		gorums.WithGrpcDialOptions[uint32](
+	mgr := dummy.NewManager[uint32](
+		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

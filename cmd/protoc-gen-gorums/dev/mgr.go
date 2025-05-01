@@ -23,9 +23,9 @@ type Manager[idType cmp.Ordered] struct {
 // NewManager returns a new Manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
-func NewManager[idType cmp.Ordered](opts ...gorums.ManagerOption[idType]) *Manager[idType] {
+func NewManager[idType cmp.Ordered](opts ...gorums.ManagerOption) *Manager[idType] {
 	return &Manager[idType]{
-		RawManager: gorums.NewRawManager(opts...),
+		RawManager: gorums.NewRawManager[idType](opts...),
 	}
 }
 

@@ -14,7 +14,7 @@ import (
 
 func TestNewConfigurationEmptyNodeList(t *testing.T) {
 	wantErr := errors.New("config: missing required node addresses")
-	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	mgr := gorums.NewRawManager[uint32](gorums.WithNoConnect())
 	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32]([]string{}))
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, wantErr)
@@ -28,7 +28,7 @@ func TestNewConfigurationNodeList(t *testing.T) {
 
 	fmt.Println(nodes)
 
-	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	mgr := gorums.NewRawManager[uint32](gorums.WithNoConnect())
 	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
 
 	fmt.Print("3: ")
@@ -68,7 +68,7 @@ func TestNewConfigurationNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeMap(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	mgr := gorums.NewRawManager[uint32](gorums.WithNoConnect())
 	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ func TestNewConfigurationNodeMap(t *testing.T) {
 }
 
 func TestNewConfigurationNodeIDs(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	mgr := gorums.NewRawManager[uint32](gorums.WithNoConnect())
 	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
 	if err != nil {
 		t.Fatal(err)
@@ -128,7 +128,7 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 }
 
 func TestNewConfigurationAnd(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	mgr := gorums.NewRawManager[uint32](gorums.WithNoConnect())
 	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestNewConfigurationAnd(t *testing.T) {
 }
 
 func TestNewConfigurationExcept(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect[uint32]())
+	mgr := gorums.NewRawManager[uint32](gorums.WithNoConnect())
 	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList[uint32](nodes))
 	if err != nil {
 		t.Fatal(err)

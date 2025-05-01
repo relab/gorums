@@ -18,8 +18,8 @@ func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
 }
 
 func dummyMgr() *RawManager[uint32] {
-	return NewRawManager(
-		WithGrpcDialOptions[uint32](
+	return NewRawManager[uint32](
+		WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)

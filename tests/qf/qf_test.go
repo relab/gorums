@@ -194,8 +194,8 @@ func BenchmarkFullStackQF(b *testing.B) {
 			RegisterQuorumFunctionServer(srv, &testSrv{})
 			return srv
 		})
-		mgr := NewManager(
-			gorums.WithGrpcDialOptions[uint32](
+		mgr := NewManager[uint32](
+			gorums.WithGrpcDialOptions(
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 			),
 		)

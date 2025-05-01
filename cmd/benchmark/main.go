@@ -189,14 +189,14 @@ func main() {
 		options.QuorumSize = *qSize
 	}
 
-	mgrOpts := []gorums.ManagerOption[uint32]{
-		gorums.WithGrpcDialOptions[uint32](
+	mgrOpts := []gorums.ManagerOption{
+		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
-		gorums.WithSendBufferSize[uint32](*sendBuffer),
+		gorums.WithSendBufferSize(*sendBuffer),
 	}
 
-	mgr := benchmark.NewManager(mgrOpts...)
+	mgr := benchmark.NewManager[uint32](mgrOpts...)
 	defer mgr.Close()
 
 	qspec := &benchmark.QSpec{
