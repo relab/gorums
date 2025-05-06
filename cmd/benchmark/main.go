@@ -72,7 +72,7 @@ func runServer(server string, serverBuffer uint) {
 	lis, err := net.Listen("tcp", server)
 	checkf("Failed to listen on '%s': %v", server, err)
 
-	srv := gorums.NewServer(gorums.WithReceiveBufferSize(serverBuffer))
+	srv := benchmark.NewBenchServer(gorums.WithReceiveBufferSize(serverBuffer))
 	go func() { checkf("serve failed: %v", srv.Serve(lis)) }()
 
 	fmt.Printf("Running benchmark server on '%s'\n", server)
