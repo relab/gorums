@@ -65,28 +65,28 @@ func listBenchmarks() {
 	tw.Flush()
 }
 
-func runServer(server string, serverBuffer uint) {
+func runServer(options benchmark.Options) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 
-	lis, err := net.Listen("tcp", server)
-	checkf("Failed to listen on '%s': %v", server, err)
+	lis, err := net.Listen("tcp", options.Server)
+	checkf("Failed to listen on '%s': %v", options.Server, err)
 
-	srv := benchmark.NewBenchServer(gorums.WithReceiveBufferSize(serverBuffer))
+	srv := benchmark.NewBenchServer(gorums.WithReceiveBufferSize(options.ServerBuffer))
 	go func() { checkf("serve failed: %v", srv.Serve(lis)) }()
 
-	fmt.Printf("Running benchmark server on '%s'\n", server)
+	fmt.Printf("Running benchmark server on '%s'\n", options.Server)
 
 	<-signals
 	srv.Stop()
 }
 
-func printResults(results []*benchmark.Result, options benchmark.Options, serverStats bool) {
+func printResults(results []*benchmark.Result, options benchmark.Options) {
 	resultWriter := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
 	fmt.Fprint(resultWriter, "Benchmark\tThroughput\tLatency\tStd.dev\tClient")
-	if !serverStats || !options.Remote {
+	if !options.ServerStats || !options.Remote {
 		fmt.Fprint(resultWriter, "+Servers\t\t")
-	} else if serverStats {
+	} else if options.ServerStats {
 		fmt.Fprint(resultWriter, "\t\t")
 		for i := 1; i <= options.NumNodes; i++ {
 			fmt.Fprintf(resultWriter, "Server %d\t\t", i)
@@ -94,14 +94,14 @@ func printResults(results []*benchmark.Result, options benchmark.Options, server
 	}
 	fmt.Fprintln(resultWriter)
 	for _, r := range results {
-		if !serverStats && options.Remote {
+		if !options.ServerStats && options.Remote {
 			for _, s := range r.GetServerStats() {
 				r.SetMemPerOp(r.GetMemPerOp() + s.GetMemory()/r.GetTotalOps())
 				r.SetAllocsPerOp(r.GetAllocsPerOp() + s.GetAllocs()/r.GetTotalOps())
 			}
 		}
 		fmt.Fprint(resultWriter, r.Format())
-		if serverStats && options.Remote {
+		if options.ServerStats && options.Remote {
 			for _, s := range r.GetServerStats() {
 				fmt.Fprintf(resultWriter, "%d B/op\t%d allocs/op\t", s.GetMemory()/r.GetTotalOps(), s.GetAllocs()/r.GetTotalOps())
 			}
@@ -138,22 +138,6 @@ func main() {
 	benchReg := benchmarksFlag.Get()
 	remotes := remotesFlag.Get()
 
-	if *list {
-		listBenchmarks()
-		return
-	}
-
-	stopProfilers, err := StartProfilers(*cpuprofile, *memprofile, *traceFile)
-	checkf("Failed to start profiling: %v", err)
-	defer func() {
-		checkf("Failed to stop profiling: %v", stopProfilers())
-	}()
-
-	if *server != "" {
-		runServer(*server, *serverBuffer)
-		return
-	}
-
 	var options benchmark.Options
 	options.Concurrent = *concurrent
 	options.MaxAsync = *maxAsync
@@ -161,16 +145,18 @@ func main() {
 	options.Warmup = *warmupFlag
 	options.Duration = *benchTimeFlag
 	options.Remote = true
+	options.BenchRexExp = benchReg
+	options.SendBuffer = *sendBuffer
+	options.Remotes = remotes
+	options.Server = *server
+	options.ServerBuffer = *serverBuffer
+	options.CpuProfileFile = *cpuprofile
+	options.MemProfileFile = *memprofile
+	options.TraceFile = *traceFile
+	options.List = *list
+	options.ServerStats = *serverStats
 
-	// start local servers if needed
-	if len(remotes) < 1 {
-		options.Remote = false
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		remotes = benchmark.StartLocalServers(ctx, *cfgSize, gorums.WithReceiveBufferSize(*serverBuffer))
-	}
-
-	numNodes := len(remotes)
+	numNodes := len(options.Remotes)
 	if *cfgSize < 1 || *cfgSize > numNodes {
 		options.NumNodes = numNodes
 	} else {
@@ -189,11 +175,35 @@ func main() {
 		options.QuorumSize = *qSize
 	}
 
+	if options.List {
+		listBenchmarks()
+		return
+	}
+
+	stopProfilers, err := StartProfilers(options)
+	checkf("Failed to start profiling: %v", err)
+	defer func() {
+		checkf("Failed to stop profiling: %v", stopProfilers())
+	}()
+
+	if options.Server != "" {
+		runServer(options)
+		return
+	}
+
+	// start local servers if needed
+	if len(options.Remotes) < 1 {
+		options.Remote = false
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		options.Remotes = benchmark.StartLocalServers(ctx, options.NumNodes, gorums.WithReceiveBufferSize(options.ServerBuffer))
+	}
+
 	mgrOpts := []gorums.ManagerOption{
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
-		gorums.WithSendBufferSize(*sendBuffer),
+		gorums.WithSendBufferSize(options.SendBuffer),
 	}
 
 	mgr := benchmark.NewManager(mgrOpts...)
@@ -204,20 +214,20 @@ func main() {
 		CfgSize: options.NumNodes,
 	}
 
-	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(remotes[:options.NumNodes]))
+	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(options.Remotes[:options.NumNodes]))
 	checkf("Failed to create configuration: %v", err)
 
-	results, err := benchmark.RunBenchmarks(benchReg, options, cfg)
+	results, err := benchmark.RunBenchmarks(options, cfg)
 	checkf("Error running benchmarks: %v", err)
 
-	printResults(results, options, *serverStats)
+	printResults(results, options)
 }
 
 func checkf(format string, args ...any) {
 	for _, arg := range args {
 		if err, _ := arg.(error); err != nil {
 			fmt.Fprintf(os.Stderr, format, args...)
-			os.Exit(1) // skipcq: RVV-A0003
+			os.Exit(1)
 		}
 	}
 }

@@ -5,12 +5,14 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
+
+	"github.com/relab/gorums/benchmark"
 )
 
 // StartCPUProfile starts a CPU profile that will be written to the given path.
 // Returns a function to stop the profiler.
-func StartCPUProfile(cpuProfilePath string) (stop func() error, err error) {
-	cpuProfile, err := os.Create(cpuProfilePath)
+func StartCPUProfile(cpuProfileFile string) (stop func() error, err error) {
+	cpuProfile, err := os.Create(cpuProfileFile)
 	if err != nil {
 		return nil, err
 	}
@@ -28,8 +30,8 @@ func StartCPUProfile(cpuProfilePath string) (stop func() error, err error) {
 }
 
 // WriteMemProfile writes a memory profile to the given path.
-func WriteMemProfile(memProfilePath string) error {
-	f, err := os.Create(memProfilePath)
+func WriteMemProfile(memProfileFile string) error {
+	f, err := os.Create(memProfileFile)
 	if err != nil {
 		return err
 	}
@@ -43,17 +45,17 @@ func WriteMemProfile(memProfilePath string) error {
 
 // StartTrace starts a program trace using the "runtime/trace" package.
 // Returns a function to stop the trace.
-func StartTrace(tracePath string) (stop func() error, err error) {
-	traceFile, err := os.Create(tracePath)
+func StartTrace(traceFile string) (stop func() error, err error) {
+	f, err := os.Create(traceFile)
 	if err != nil {
 		return nil, err
 	}
-	if err := trace.Start(traceFile); err != nil {
+	if err := trace.Start(f); err != nil {
 		return nil, err
 	}
 	return func() error {
 		trace.Stop()
-		err = traceFile.Close()
+		err = f.Close()
 		if err != nil {
 			return err
 		}
@@ -62,7 +64,7 @@ func StartTrace(tracePath string) (stop func() error, err error) {
 }
 
 // StartProfilers starts various profilers and returns a function to stop them.
-func StartProfilers(cpuProfilePath, memProfilePath, tracePath string) (stopProfile func() error, err error) {
+func StartProfilers(options benchmark.Options) (stopProfile func() error, err error) {
 	nilFunc := func() error { return nil }
 
 	var (
@@ -70,15 +72,15 @@ func StartProfilers(cpuProfilePath, memProfilePath, tracePath string) (stopProfi
 		traceStop      = nilFunc
 	)
 
-	if cpuProfilePath != "" {
-		cpuProfileStop, err = StartCPUProfile(cpuProfilePath)
+	if options.CpuProfileFile != "" {
+		cpuProfileStop, err = StartCPUProfile(options.CpuProfileFile)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if tracePath != "" {
-		traceStop, err = StartTrace(tracePath)
+	if options.TraceFile != "" {
+		traceStop, err = StartTrace(options.TraceFile)
 		if err != nil {
 			return nil, err
 		}
@@ -93,8 +95,8 @@ func StartProfilers(cpuProfilePath, memProfilePath, tracePath string) (stopProfi
 		if err != nil {
 			return err
 		}
-		if memProfilePath != "" {
-			err = WriteMemProfile(memProfilePath)
+		if options.MemProfileFile != "" {
+			err = WriteMemProfile(options.MemProfileFile)
 		}
 		return err
 	}, nil

@@ -13,14 +13,33 @@ import (
 
 // Options controls different options for the benchmarks
 type Options struct {
-	Concurrent int           // Number of concurrent calls
-	Duration   time.Duration // Duration of benchmark
-	MaxAsync   int           // Max async calls at once
-	NumNodes   int           // Number of nodes to include in configuration
-	Payload    int           // Size of message payload
-	QuorumSize int           // Number of messages to wait for
-	Warmup     time.Duration // Warmup time
-	Remote     bool          // Whether the servers are remote (true) or local (false)
+	// benchmark options
+	Concurrent  int            // Number of concurrent calls
+	Duration    time.Duration  // Duration of benchmark
+	MaxAsync    int            // Max async calls at once
+	Payload     int            // Size of message payload
+	QuorumSize  int            // Number of messages to wait for
+	Warmup      time.Duration  // Warmup time
+	BenchRexExp *regexp.Regexp // Regular expression deciding which benchmarks to run, leave empty to run all benchmarks
+	Remote      bool           // Whether the servers are remote (true) or local (false)
+	ServerStats bool           // Show server statistics separately
+
+	// client options
+	SendBuffer uint     // The size of the out buffer channel to each node
+	NumNodes   int      // Number of nodes to include in configuration
+	Remotes    []string // list of servers to connect to
+
+	// server options
+	Server       string // The listener address
+	ServerBuffer uint   // The size of the out buffer channel
+
+	// profiling options
+	CpuProfileFile string // cpu profile file name
+	MemProfileFile string // memory profile file name
+	TraceFile      string // execution trace file name
+
+	// help options
+	List bool // list all different benchmarks
 }
 
 // Bench is a Benchmark with a name and description
@@ -270,11 +289,11 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 }
 
 // RunBenchmarks runs all the benchmarks that match the given regex with the given options
-func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg *Configuration) ([]*Result, error) {
+func RunBenchmarks(options Options, cfg *Configuration) ([]*Result, error) {
 	benchmarks := GetBenchmarks(cfg)
 	var results []*Result
 	for _, b := range benchmarks {
-		if benchRegex.MatchString(b.Name) {
+		if options.BenchRexExp.MatchString(b.Name) {
 			result, err := b.runBench(options)
 			if err != nil {
 				return nil, err
