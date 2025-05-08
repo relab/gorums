@@ -111,7 +111,7 @@ func printResults(results []*benchmark.Result, options benchmark.Options) {
 	resultWriter.Flush()
 }
 
-func main() {
+func parseOptions() benchmark.Options {
 	var (
 		benchmarksFlag = regexpFlag{val: regexp.MustCompile(".*")}
 		remotesFlag    = listFlag{}
@@ -174,6 +174,12 @@ func main() {
 	default:
 		options.QuorumSize = *qSize
 	}
+
+	return options
+}
+
+func main() {
+	options := parseOptions()
 
 	if options.List {
 		listBenchmarks()
