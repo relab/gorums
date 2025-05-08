@@ -188,12 +188,13 @@ func parseOptions() benchmark.Options {
 	options.TraceFile = *traceFile
 	options.List = *list
 	options.ServerStats = *serverStats
+	options.NumNodes = *cfgSize
+	options.QuorumSize = *qSize
 
 	numNodes := len(options.Remotes)
-	if *cfgSize < 1 || *cfgSize > numNodes {
+	if numNodes >= 1 {
+		// ignore config-size flag if remotes has been specified
 		options.NumNodes = numNodes
-	} else {
-		options.NumNodes = *cfgSize
 	}
 
 	// find a valid value for QuorumSize
@@ -204,8 +205,6 @@ func parseOptions() benchmark.Options {
 		options.QuorumSize = options.NumNodes / 2 // the default value
 	case *qSize > options.NumNodes:
 		options.QuorumSize = options.NumNodes
-	default:
-		options.QuorumSize = *qSize
 	}
 
 	return options
