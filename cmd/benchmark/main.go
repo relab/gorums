@@ -217,7 +217,7 @@ func checkf(format string, args ...any) {
 	for _, arg := range args {
 		if err, _ := arg.(error); err != nil {
 			fmt.Fprintf(os.Stderr, format, args...)
-			os.Exit(1)
+			os.Exit(1) // skipcq: RVV-A0003
 		}
 	}
 }
