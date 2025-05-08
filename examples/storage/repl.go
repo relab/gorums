@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/examples/storage/proto"
 	pb "github.com/relab/gorums/examples/storage/proto"
 	"golang.org/x/term"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -249,20 +248,6 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 	fmt.Println("Write OK")
 }
 
-func readQF(replies gorums.Iterator[*pb.ReadResponse], quorum int) (*pb.ReadResponse, error) {
-	var newest *pb.ReadResponse
-	replyCount := int(0)
-	for reply := range replies.IgnoreErrors() {
-		newest = newestValueOfTwo(newest, reply.Msg)
-		replyCount++
-		if replyCount <= quorum {
-			continue
-		}
-		return newest, nil
-	}
-	return nil, errors.New("storage.readqc: quorum not found")
-}
-
 func (repl) readQC(args []string, cfg *pb.Configuration) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
@@ -283,26 +268,6 @@ func (repl) readQC(args []string, cfg *pb.Configuration) {
 		return
 	}
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
-}
-
-func writeQF(replies gorums.Iterator[*pb.WriteResponse], cfgSize int) (*pb.WriteResponse, error) {
-	replyCount := int(0)
-	updated := int(0)
-	for response := range replies.IgnoreErrors() {
-		replyCount++
-		if isUpdated(response.Msg) {
-			updated++
-		}
-		if updated > cfgSize/2 {
-			return proto.WriteResponse_builder{New: true}.Build(), nil
-		}
-		// if all replicas have responded, there must have been another write before ours
-		// that had a newer timestamp
-		if replyCount == cfgSize {
-			return proto.WriteResponse_builder{New: false}.Build(), nil
-		}
-	}
-	return nil, errors.New("storage.writeqc: incomplete response")
 }
 
 func (repl) writeQC(args []string, cfg *pb.Configuration) {
