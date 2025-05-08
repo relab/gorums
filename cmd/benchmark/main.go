@@ -111,6 +111,39 @@ func printResults(results []*benchmark.Result, options benchmark.Options) {
 	resultWriter.Flush()
 }
 
+func runClient(options benchmark.Options) []*benchmark.Result {
+	// start local servers if needed
+	if len(options.Remotes) < 1 {
+		options.Remote = false
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		options.Remotes = benchmark.StartLocalServers(ctx, options.NumNodes, gorums.WithReceiveBufferSize(options.ServerBuffer))
+	}
+
+	mgrOpts := []gorums.ManagerOption{
+		gorums.WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+		gorums.WithSendBufferSize(options.SendBuffer),
+	}
+
+	mgr := benchmark.NewManager(mgrOpts...)
+	defer mgr.Close()
+
+	qspec := &benchmark.QSpec{
+		QSize:   options.QuorumSize,
+		CfgSize: options.NumNodes,
+	}
+
+	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(options.Remotes[:options.NumNodes]))
+	checkf("Failed to create configuration: %v", err)
+
+	results, err := benchmark.RunBenchmarks(options, cfg)
+	checkf("Error running benchmarks: %v", err)
+
+	return results
+}
+
 func parseOptions() benchmark.Options {
 	var (
 		benchmarksFlag = regexpFlag{val: regexp.MustCompile(".*")}
@@ -197,34 +230,7 @@ func main() {
 		return
 	}
 
-	// start local servers if needed
-	if len(options.Remotes) < 1 {
-		options.Remote = false
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		options.Remotes = benchmark.StartLocalServers(ctx, options.NumNodes, gorums.WithReceiveBufferSize(options.ServerBuffer))
-	}
-
-	mgrOpts := []gorums.ManagerOption{
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-		gorums.WithSendBufferSize(options.SendBuffer),
-	}
-
-	mgr := benchmark.NewManager(mgrOpts...)
-	defer mgr.Close()
-
-	qspec := &benchmark.QSpec{
-		QSize:   options.QuorumSize,
-		CfgSize: options.NumNodes,
-	}
-
-	cfg, err := mgr.NewConfiguration(qspec, gorums.WithNodeList(options.Remotes[:options.NumNodes]))
-	checkf("Failed to create configuration: %v", err)
-
-	results, err := benchmark.RunBenchmarks(options, cfg)
-	checkf("Error running benchmarks: %v", err)
+	results := runClient(options)
 
 	printResults(results, options)
 }
