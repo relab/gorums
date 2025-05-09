@@ -50,16 +50,15 @@ func QuorumCall[responseType proto.Message](
 		)
 	}
 
-	if d.ServerStream {
+	return func(yield func(Response[responseType]) bool) {
+		replies := int(0)
+		errors := int(0)
+
+		defer close(replyChan)
 		for _, n := range c {
 			defer n.channel.deleteRouter(md.GetMessageID())
 		}
-	}
 
-	replies := int(0)
-	errors := int(0)
-
-	return func(yield func(Response[responseType]) bool) {
 		for {
 			if d.ServerStream {
 				if errors >= nodes {
