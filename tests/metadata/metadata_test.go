@@ -27,7 +27,7 @@ func (srv testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeI
 	if len(v) < 1 {
 		return nil, status.Error(codes.NotFound, "missing metadata field: id")
 	}
-	id, err := strconv.Atoi(v[0])
+	id, err := strconv.ParseUint(v[0], 10, 32)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "value of id field: %q is not a number: %v", v[0], err)
 	}
