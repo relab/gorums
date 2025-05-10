@@ -32,11 +32,11 @@ func (r Response[messageType]) Unpack() (messageType, error, uint32) {
 	return r.Msg, r.Err, r.Nid
 }
 
-type Iterator[messageType proto.Message] iter.Seq[Response[messageType]]
+type Responses[messageType proto.Message] iter.Seq[Response[messageType]]
 
 // Filter uses a function to keep/remove messages from a quorum call
 // can be used to verify/filter responses from servers before computing quorum
-func (iterator Iterator[messageType]) Filter(keep func(Response[messageType]) bool) Iterator[messageType] {
+func (iterator Responses[messageType]) Filter(keep func(Response[messageType]) bool) Responses[messageType] {
 	return func(yield func(Response[messageType]) bool) {
 		for resp := range iterator {
 			if keep(resp) {
@@ -49,7 +49,7 @@ func (iterator Iterator[messageType]) Filter(keep func(Response[messageType]) bo
 }
 
 // IgnoreErrors removes the errors from the iterator
-func (iterator Iterator[messageType]) IgnoreErrors() Iterator[messageType] {
+func (iterator Responses[messageType]) IgnoreErrors() Responses[messageType] {
 	return func(yield func(Response[messageType]) bool) {
 		for resp := range iterator {
 			if resp.Err != nil {
@@ -64,7 +64,7 @@ func (iterator Iterator[messageType]) IgnoreErrors() Iterator[messageType] {
 
 // GetQuorum is an example function for an iterator method
 // it returns a message if it occurs more than a specified amount of times
-func (iterator Iterator[messageType]) GetQuorum(quorum int) (messageType, error) {
+func (iterator Responses[messageType]) GetQuorum(quorum int) (messageType, error) {
 	type replyFreq struct {
 		val  messageType
 		freq int

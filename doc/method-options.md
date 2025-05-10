@@ -70,7 +70,7 @@ service Storage {
 
 ## Correctable calls
 
-The iterators returned by quorum calls can be passed to the IterCorrectable function along with a callback function, in order to create a correctable object that can be used to get results at multiple levels.
+The Response iterator returned by quorum calls can be passed to the IterCorrectable function along with a quorum function, in order to create a correctable object that can be used to get results at multiple levels.
 
 ```go
 type CustomResult struct {
@@ -78,7 +78,7 @@ type CustomResult struct {
   msg *State
 }
 // example correctable quorum function that uses a custom result type
-func ReadCorrectableQF(responses gorums.Iterator[*State], levelSet func(CustomResult, int, error)) {
+func ReadCorrectableQF(responses gorums.Responses[*State], levelSet func(CustomResult, int, error)) {
 	level := 0
 	for response := range responses.IgnoreErrors() {
     level++

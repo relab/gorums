@@ -280,7 +280,7 @@ While Gorums allows us to call RPCs on individual nodes as we did above, Gorums 
 ## Quorum Calls
 
 Instead of invoking an RPC explicitly on all nodes in a configuration, Gorums allows users to invoke a *quorum call* via a method on the `Configuration` type.
-If an RPC is invoked as a quorum call, Gorums will invoke the RPCs on all nodes in parallel and return the replies in an iterator.
+If an RPC is invoked as a quorum call, Gorums will invoke the RPCs on all nodes in parallel and return the responses.
 
 For the Gorums plugin to generate quorum calls we need to specify the `quorumcall` option for our RPC methods in the proto file, as shown below:
 
@@ -300,17 +300,17 @@ service QCStorage {
 The generated methods have the following client-side interface:
 
 ```go
-func (c *Configuration) Read(ctx context.Context, in *ReadRequest) gorums.Iterator[*State]
-func (c *Configuration) Write(ctx context.Context, in *State) gorums.Iterator[*WriteResponse]
+func (c *Configuration) Read(ctx context.Context, in *ReadRequest) gorums.Responses[*State]
+func (c *Configuration) Write(ctx context.Context, in *State) gorums.Responses[*WriteResponse]
 ```
 
-## The quorum call iterators
+## The quorum call responses
 
-The quorum calls return an iterator which is used to process the responses from the quorum call.
-Behind the scenes, the RPCs invoked as part of a quorum call return multiple responses.
+The quorum calls return a gorums.Responses object which is an iterator used to process the responses from the quorum call.
+Getting the responses from the iterator can be done with a for loop just like with a slice.
 Each of these responses is a struct containing the node id of the server, and contains either a proto message and an error (or both).
-If you only care about the successfully received messages you can use the `IgnoreErrors` method on the iterator.
-We can create "quorum functions" which takes a quorum call iterator and returns a single result or an error.
+If you only care about the successfully received messages you can use the `IgnoreErrors` method.
+We can create "quorum functions" which takes the quorum call responses and returns a single result or an error.
 
 The example below shows an implementation of a "quorum function" for the `Read` and `Write` quorum calls.
 Here, `readQF` returns the `*State` with the highest timestamp for a majority of responses.
@@ -320,7 +320,7 @@ We decide to ignore all errors, meaning errors do not count towards the quorum.
 ```go
 package gorumsexample
 
-func readQF(responses gorums.Iterator[*State], quorum int) (*State, error) {
+func readQF(responses gorums.Responses[*State], quorum int) (*State, error) {
 	var newest *pb.ReadResponse
 	replyCount := int(0)
 	for response := range responses.IgnoreErrors() {
@@ -337,7 +337,7 @@ func readQF(responses gorums.Iterator[*State], quorum int) (*State, error) {
 	return nil, errors.New("QCStorage.readqf: quorum not found")
 }
 
-func writeQF(responses gorums.Iterator[*WriteResponse], quorum int) (*WriteResponse, error) {
+func writeQF(responses gorums.Responses[*WriteResponse], quorum int) (*WriteResponse, error) {
 	replyCount := int(0)
 	for response := range responses.IgnoreErrors() {
 		replyCount++

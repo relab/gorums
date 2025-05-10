@@ -59,7 +59,7 @@ type qspec struct {
 	doneLevel int
 }
 
-func (q qspec) corrQF(responses gorums.Iterator[*CorrectableResponse], levelSet func(int, int, error)) {
+func (q qspec) corrQF(responses gorums.Responses[*CorrectableResponse], levelSet func(int, int, error)) {
 	sum := 0
 	for response := range responses {
 		msg, err, _ := response.Unpack()

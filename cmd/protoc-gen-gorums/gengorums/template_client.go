@@ -24,7 +24,7 @@ var clientConfigurationInterface = `
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
 			{{- else}}
 				{{- $out := out $genFile .}}
-				{{- $iterator := use "gorums.Iterator" $genFile}}
+				{{- $iterator := use "gorums.Responses" $genFile}}
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) {{$iterator}}[*{{$out}}]
 			{{- end}}
 		{{- end}}

@@ -12,7 +12,7 @@ var commonVariables = `
 
 // Common variables used in several template functions.
 var quorumCallVariables = `
-{{$iterator := use "gorums.Iterator" .GenFile}}
+{{- $iterator := use "gorums.Responses" .GenFile}}
 `
 
 var quorumCallComment = `

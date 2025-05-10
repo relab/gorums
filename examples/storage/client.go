@@ -50,7 +50,7 @@ func isUpdated(r *proto.WriteResponse) bool {
 	return r.GetNew()
 }
 
-func writeQF(replies gorums.Iterator[*pb.WriteResponse], cfgSize int) (*pb.WriteResponse, error) {
+func writeQF(replies gorums.Responses[*pb.WriteResponse], cfgSize int) (*pb.WriteResponse, error) {
 	replyCount := int(0)
 	updated := int(0)
 	for response := range replies.IgnoreErrors() {
@@ -70,7 +70,7 @@ func writeQF(replies gorums.Iterator[*pb.WriteResponse], cfgSize int) (*pb.Write
 	return nil, errors.New("storage.writeqc: incomplete response")
 }
 
-func readQF(replies gorums.Iterator[*pb.ReadResponse], quorum int) (*pb.ReadResponse, error) {
+func readQF(replies gorums.Responses[*pb.ReadResponse], quorum int) (*pb.ReadResponse, error) {
 	var newest *pb.ReadResponse
 	replyCount := int(0)
 	for reply := range replies.IgnoreErrors() {

@@ -118,8 +118,8 @@ type Node struct {
 
 // StorageClient is the client interface for the Storage service.
 type StorageClient interface {
-	ReadQC(ctx context.Context, in *ReadRequest) gorums.Iterator[*ReadResponse]
-	WriteQC(ctx context.Context, in *WriteRequest) gorums.Iterator[*WriteResponse]
+	ReadQC(ctx context.Context, in *ReadRequest) gorums.Responses[*ReadResponse]
+	WriteQC(ctx context.Context, in *WriteRequest) gorums.Responses[*WriteResponse]
 	WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption)
 }
 
@@ -152,7 +152,7 @@ func (c *Configuration) WriteMulticast(ctx context.Context, in *WriteRequest, op
 
 // ReadQC executes the Read Quorum Call on a configuration
 // of Nodes and returns the most recent value.
-func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) gorums.Iterator[*ReadResponse] {
+func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) gorums.Responses[*ReadResponse] {
 	cd := gorums.QuorumCallData{
 		Message:      in,
 		Method:       "storage.Storage.ReadQC",
@@ -164,7 +164,7 @@ func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest) gorums.Iter
 
 // WriteQC executes the Write Quorum Call on a configuration
 // of Nodes and returns true if a majority of Nodes were updated.
-func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) gorums.Iterator[*WriteResponse] {
+func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest) gorums.Responses[*WriteResponse] {
 	cd := gorums.QuorumCallData{
 		Message:      in,
 		Method:       "storage.Storage.WriteQC",

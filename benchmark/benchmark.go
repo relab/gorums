@@ -33,7 +33,7 @@ type Bench struct {
 
 type (
 	benchFunc  func(Options) (*Result, error)
-	qcFunc     func(context.Context, *Echo) gorums.Iterator[*Echo]
+	qcFunc     func(context.Context, *Echo) gorums.Responses[*Echo]
 	serverFunc func(context.Context, *TimedMsg)
 )
 

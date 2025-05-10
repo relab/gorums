@@ -93,7 +93,7 @@ func (q testQSpec) WithoutReqQF(replies map[uint32]*Response) (*Response, bool) 
 	return reply, true
 }
 
-func IterUseReq(replies gorums.Iterator[*Response], quorum int, req *Request) (*Response, error) {
+func IterUseReq(replies gorums.Responses[*Response], quorum int, req *Request) (*Response, error) {
 	replyCount := 0
 	for reply := range replies.IgnoreErrors() {
 		msg := reply.Msg
@@ -107,7 +107,7 @@ func IterUseReq(replies gorums.Iterator[*Response], quorum int, req *Request) (*
 	return nil, errors.New("UseReq: quorum not found")
 }
 
-func IterIgnoreReq(replies gorums.Iterator[*Response], quorum int) (*Response, error) {
+func IterIgnoreReq(replies gorums.Responses[*Response], quorum int) (*Response, error) {
 	replyCount := 0
 	var firstMsg *Response
 	for reply := range replies.IgnoreErrors() {

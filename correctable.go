@@ -85,8 +85,8 @@ func (c *Correctable[resultType]) setDone() {
 }
 
 func IterCorrectable[responseType proto.Message, resultType any](
-	iter Iterator[responseType],
-	corrFunction func(Iterator[responseType], func(resultType, int, error)),
+	iter Responses[responseType],
+	corrFunction func(Responses[responseType], func(resultType, int, error)),
 ) *Correctable[resultType] {
 	corr := &Correctable[resultType]{donech: make(chan struct{}, 1)}
 	go func() {

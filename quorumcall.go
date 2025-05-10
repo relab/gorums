@@ -26,7 +26,7 @@ func QuorumCall[responseType proto.Message](
 	ctx context.Context,
 	c RawConfiguration,
 	d QuorumCallData,
-) Iterator[responseType] {
+) Responses[responseType] {
 	nodes := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 

@@ -31,8 +31,8 @@ func (f *Async[resultType]) Done() bool {
 
 // IterAsync lets you use a quorum call as an async call.
 func IterAsync[responseType proto.Message, resultType any](
-	iter Iterator[responseType],
-	asyncFunc func(Iterator[responseType]) resultType,
+	iter Responses[responseType],
+	asyncFunc func(Responses[responseType]) resultType,
 ) Async[resultType] {
 	async := Async[resultType]{
 		c: make(chan struct{}),

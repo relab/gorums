@@ -46,7 +46,7 @@ func (s *testSrv) UnaryRPC(_ gorums.ServerCtx, req *Request) (resp *Response, er
 	}.Build(), nil
 }
 
-func orderQF(ctx context.Context, responses gorums.Iterator[*Response], quorum int) (*Response, error) {
+func orderQF(ctx context.Context, responses gorums.Responses[*Response], quorum int) (*Response, error) {
 	replyCount := 0
 	var orderMsg *Response
 	var firstMsg *Response
@@ -161,7 +161,7 @@ func TestQCAsyncOrdering(t *testing.T) {
 		i++
 		responses := cfg.QCAsync(ctx, Request_builder{Num: uint64(i)}.Build())
 		wg.Add(1)
-		go func(responses gorums.Iterator[*Response]) {
+		go func(responses gorums.Responses[*Response]) {
 			defer wg.Done()
 			resp, err := orderQF(ctx, responses, 4)
 			if err != nil {

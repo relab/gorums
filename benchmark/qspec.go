@@ -9,7 +9,7 @@ import (
 
 // stopServerBenchmarkQF is the quorum function for the StopServerBenchmark quorumcall.
 // It requires a response from all nodes.
-func stopServerBenchmarkQF(replies gorums.Iterator[*Result], cfgSize int) (*Result, error) {
+func stopServerBenchmarkQF(replies gorums.Responses[*Result], cfgSize int) (*Result, error) {
 	// combine results, calculating averages and pooled variance
 	resp := &Result_builder{}
 	replyCount := 0
@@ -44,7 +44,7 @@ func stopServerBenchmarkQF(replies gorums.Iterator[*Result], cfgSize int) (*Resu
 
 // stopBenchmarkQF is the quorum function for the StopBenchmark quorumcall.
 // It requires a response from all nodes.
-func stopBenchmarkQF(replies gorums.Iterator[*MemoryStat], cfgSize int) ([]*MemoryStat, error) {
+func stopBenchmarkQF(replies gorums.Responses[*MemoryStat], cfgSize int) ([]*MemoryStat, error) {
 	replyList := make([]*MemoryStat, 0)
 	replyCount := 0
 	for reply := range replies.IgnoreErrors() {
@@ -60,7 +60,7 @@ func stopBenchmarkQF(replies gorums.Iterator[*MemoryStat], cfgSize int) ([]*Memo
 
 // qf is a generic quorum function which does not return anything.
 // It requires a response from a specified quorum amount of nodes.
-func qf[responseType proto.Message](replies gorums.Iterator[responseType], quorum int) error {
+func qf[responseType proto.Message](replies gorums.Responses[responseType], quorum int) error {
 	replyCount := 0
 	for range replies.IgnoreErrors() {
 		replyCount++
