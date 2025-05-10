@@ -75,7 +75,11 @@ func QuorumCall[responseType proto.Message](
 				if r.err != nil {
 					errors++
 				}
-				if !yield(NewResponse(r.msg.(responseType), r.err, r.nid)) {
+				var msg responseType
+				if r.msg != nil {
+					msg = r.msg.(responseType)
+				}
+				if !yield(NewResponse(msg, r.err, r.nid)) {
 					return
 				}
 			case <-ctx.Done():
