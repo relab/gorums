@@ -95,7 +95,6 @@ var funcMap = template.FuncMap{
 	"out":                    out,
 	"outType":                outType,
 	"internalOut":            internalOut,
-	"mapInternalOutType":     mapInternalOutType,
 	"unexport":               unexport,
 	"contains":               strings.Contains,
 	"field":                  field,
@@ -128,16 +127,6 @@ func outType(method *protogen.Method, out string) string {
 
 func internalOut(out string) string {
 	return fmt.Sprintf("internal%s", field(out))
-}
-
-func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasMethodOption(method, callTypesWithInternal...) {
-			out := out(g, method)
-			intOut := internalOut(out)
-			s[intOut] = out
-		}
-	})
 }
 
 // field derives an embedded field name from the given typeName.
