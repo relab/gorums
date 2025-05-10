@@ -84,6 +84,7 @@ func (c *Correctable[resultType]) setDone() {
 	}
 }
 
+// NewCorrectable lets you use a quorum call as a correctable call.
 func NewCorrectable[responseType proto.Message, resultType any](
 	iter Responses[responseType],
 	corrFunction func(Responses[responseType], func(resultType, int, error)),

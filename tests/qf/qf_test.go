@@ -207,6 +207,8 @@ func BenchmarkQF(b *testing.B) {
 			}
 		})
 
+		// Iterator versions
+
 		b.Run(fmt.Sprintf("IterUseReq_%d", n), func(b *testing.B) {
 			for b.Loop() {
 				iterator := func(yield func(gorums.Response[*Response]) bool) {
