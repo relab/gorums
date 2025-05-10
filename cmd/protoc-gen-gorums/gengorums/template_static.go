@@ -34,7 +34,7 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Configuration, error
 // order as they were provided in the creation of the Manager.
 //
 // NOTE: mutating the returned slice is not supported.
-func (c Configuration) Nodes() []*Node {
+func (c *Configuration) Nodes() []*Node {
 	nodes := make([]*Node, c.Size())
 	for i, n := range c.RawConfiguration {
 		nodes[i] = &Node{n}
@@ -43,13 +43,13 @@ func (c Configuration) Nodes() []*Node {
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+func (c *Configuration) And(d *Configuration) gorums.NodeListOption {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+func (c *Configuration) Except(rm *Configuration) gorums.NodeListOption {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
 
