@@ -5,18 +5,16 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"fmt": "Errorf", "github.com/relab/gorums": "ConfigOption", "google.golang.org/grpc/encoding": "GetCodec"}
+var pkgIdentMap = map[string]string{"github.com/relab/gorums": "ContentSubtype", "google.golang.org/grpc/encoding": "GetCodec"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Configuration", "Manager", "Node", "QuorumSpec"}
+var reservedIdents = []string{"Configuration", "Manager", "Node"}
 
 var staticCode = `// A Configuration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type Configuration struct {
 	gorums.RawConfiguration
-	qspec QuorumSpec
-	nodes []*Node
 }
 
 // ConfigurationFromRaw returns a new Configuration from the given raw configuration and QuorumSpec.
@@ -25,20 +23,9 @@ type Configuration struct {
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Configuration, error) {
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test any = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
-	}
+func ConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Configuration, error) {
 	newCfg := &Configuration{
 		RawConfiguration: rawCfg,
-		qspec:            qspec,
-	}
-	// initialize the nodes slice
-	newCfg.nodes = make([]*Node, newCfg.Size())
-	for i, n := range rawCfg {
-		newCfg.nodes[i] = &Node{n}
 	}
 	return newCfg, nil
 }
@@ -48,17 +35,21 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration, qspec QuorumSpec) (*Co
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *Configuration) Nodes() []*Node {
-	return c.nodes
+	nodes := make([]*Node, c.Size())
+	for i, n := range c.RawConfiguration {
+		nodes[i] = &Node{n}
+	}
+	return nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d *Configuration) gorums.NodeListOption {
+func (c *Configuration) And(d *Configuration) gorums.NodeListOption {
 	return c.RawConfiguration.And(d.RawConfiguration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm *Configuration) gorums.NodeListOption {
+func (c *Configuration) Except(rm *Configuration) gorums.NodeListOption {
 	return c.RawConfiguration.Except(rm.RawConfiguration)
 }
 
@@ -90,34 +81,11 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (m *Manager) NewConfiguration(opts ...gorums.ConfigOption) (c *Configuration, err error) {
-	if len(opts) < 1 || len(opts) > 2 {
-		return nil, fmt.Errorf("config: wrong number of options: %d", len(opts))
-	}
+func (m *Manager) NewConfiguration(nodeList gorums.NodeListOption) (c *Configuration, err error) {
 	c = &Configuration{}
-	for _, opt := range opts {
-		switch v := opt.(type) {
-		case gorums.NodeListOption:
-			c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, v)
-			if err != nil {
-				return nil, err
-			}
-		case QuorumSpec:
-			// Must be last since v may match QuorumSpec if it is interface{}
-			c.qspec = v
-		default:
-			return nil, fmt.Errorf("config: unknown option type: %v", v)
-		}
-	}
-	// return an error if the QuorumSpec interface is not empty and no implementation was provided.
-	var test any = struct{}{}
-	if _, empty := test.(QuorumSpec); !empty && c.qspec == nil {
-		return nil, fmt.Errorf("config: missing required QuorumSpec")
-	}
-	// initialize the nodes slice
-	c.nodes = make([]*Node, c.Size())
-	for i, n := range c.RawConfiguration {
-		c.nodes[i] = &Node{n}
+	c.RawConfiguration, err = gorums.NewRawConfiguration(m.RawManager, nodeList)
+	if err != nil {
+		return nil, err
 	}
 	return c, nil
 }

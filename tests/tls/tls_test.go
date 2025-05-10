@@ -17,9 +17,9 @@ type testSrv struct{}
 func (t testSrv) TestTLS(ctx gorums.ServerCtx, in *Request) (resp *Response, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok || peerInfo.AuthInfo.AuthType() != "tls" {
-		return &Response{OK: false}, nil
+		return Response_builder{OK: false}.Build(), nil
 	}
-	return &Response{OK: true}, nil
+	return Response_builder{OK: true}.Build(), nil
 }
 
 func TestTLS(t *testing.T) {

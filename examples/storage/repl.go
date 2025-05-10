@@ -254,7 +254,10 @@ func (repl) readQC(args []string, cfg *pb.Configuration) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.ReadQC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+
+	req := pb.ReadRequest_builder{Key: args[0]}.Build()
+	resp, err := readQF(cfg.ReadQC(ctx, req), cfg.Size()/2)
+
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -273,7 +276,8 @@ func (repl) writeQC(args []string, cfg *pb.Configuration) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.WriteQC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	req := pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()
+	resp, err := writeQF(cfg.WriteQC(ctx, req), cfg.Size())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -318,7 +322,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 		for _, node := range r.mgr.Nodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
+		cfg, err = r.mgr.NewConfiguration(gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -341,7 +345,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
+		cfg, err := r.mgr.NewConfiguration(gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

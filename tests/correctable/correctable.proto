@@ -10,10 +10,10 @@ import "gorums.proto";
 
 service CorrectableTest {
     rpc Correctable(CorrectableRequest) returns (CorrectableResponse) {
-        option (gorums.correctable) = true;
+        option (gorums.quorumcall) = true;
     }
     rpc CorrectableStream(CorrectableRequest) returns (stream CorrectableResponse) {
-        option (gorums.correctable) = true;
+        option (gorums.quorumcall) = true;
     }
 }
 
