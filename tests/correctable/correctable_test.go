@@ -80,7 +80,7 @@ func TestCorrectable(t *testing.T) {
 	run(t, 4, 1, func(ctx context.Context, c *Configuration, n, div int) *gorums.Correctable[int] {
 		corr := c.Correctable(ctx, &CorrectableRequest{})
 		qspec := qspec{div, n}
-		return gorums.IterCorrectable(corr, qspec.corrQF)
+		return gorums.NewCorrectable(corr, qspec.corrQF)
 	})
 }
 
@@ -88,7 +88,7 @@ func TestCorrectableStream(t *testing.T) {
 	run(t, 4, 4, func(ctx context.Context, c *Configuration, n, div int) *gorums.Correctable[int] {
 		corr := c.CorrectableStream(ctx, &CorrectableRequest{})
 		qspec := qspec{div, n}
-		return gorums.IterCorrectable(corr, qspec.corrQF)
+		return gorums.NewCorrectable(corr, qspec.corrQF)
 	})
 }
 

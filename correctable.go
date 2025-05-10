@@ -84,7 +84,7 @@ func (c *Correctable[resultType]) setDone() {
 	}
 }
 
-func IterCorrectable[responseType proto.Message, resultType any](
+func NewCorrectable[responseType proto.Message, resultType any](
 	iter Responses[responseType],
 	corrFunction func(Responses[responseType], func(resultType, int, error)),
 ) *Correctable[resultType] {
