@@ -77,14 +77,8 @@ var funcMap = template.FuncMap{
 	"isStream": func(method *protogen.Method) bool {
 		return method.Desc.IsStreamingServer()
 	},
-	"docName": func(method *protogen.Method) string {
-		return callType(method).docName
-	},
 	"fullName": func(method *protogen.Method) string {
 		return fmt.Sprintf("/%s/%s", method.Parent.Desc.FullName(), method.Desc.Name())
-	},
-	"serviceName": func(method *protogen.Method) string {
-		return string(method.Parent.Desc.Name())
 	},
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
@@ -93,36 +87,17 @@ var funcMap = template.FuncMap{
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
 	"out":                    out,
-	"outType":                outType,
 	"internalOut":            internalOut,
 	"unexport":               unexport,
 	"contains":               strings.Contains,
-	"field":                  field,
 	"configurationsServices": configurationsServices,
 	"configurationMethods":   configurationMethods,
 	"nodeServices":           nodeServices,
 	"nodeMethods":            nodeMethods,
 }
 
-type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
-
-// mapType returns a map of types as defined by the function mapFn.
-func mapType(g *protogen.GeneratedFile, services []*protogen.Service, mapFn mapFunc) (s map[string]string) {
-	s = make(map[string]string)
-	for _, service := range services {
-		for _, method := range service.Methods {
-			mapFn(g, method, s)
-		}
-	}
-	return s
-}
-
 func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 	return g.QualifiedGoIdent(method.Output.GoIdent)
-}
-
-func outType(method *protogen.Method, out string) string {
-	return fmt.Sprintf("%s%s", callType(method).outPrefix, field(out))
 }
 
 func internalOut(out string) string {
