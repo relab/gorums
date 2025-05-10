@@ -18,7 +18,7 @@ type onewaySrv struct {
 	received  chan *oneway.Request
 }
 
-func (s *onewaySrv) Unicast(ctx gorums.ServerCtx, r *oneway.Request) {
+func (s *onewaySrv) Unicast(_ gorums.ServerCtx, r *oneway.Request) {
 	if s.benchmark {
 		return
 	}
@@ -26,7 +26,7 @@ func (s *onewaySrv) Unicast(ctx gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func (s *onewaySrv) Multicast(ctx gorums.ServerCtx, r *oneway.Request) {
+func (s *onewaySrv) Multicast(_ gorums.ServerCtx, r *oneway.Request) {
 	if s.benchmark {
 		return
 	}
@@ -34,7 +34,7 @@ func (s *onewaySrv) Multicast(ctx gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func (s *onewaySrv) MulticastPerNode(ctx gorums.ServerCtx, r *oneway.Request) {
+func (s *onewaySrv) MulticastPerNode(_ gorums.ServerCtx, r *oneway.Request) {
 	if s.benchmark {
 		return
 	}
@@ -141,7 +141,7 @@ func TestMulticastPerNode(t *testing.T) {
 	f := func(msg *oneway.Request, id uint32) *oneway.Request {
 		return oneway.Request_builder{Num: add(msg.GetNum(), id)}.Build()
 	}
-	ignoreNodes := []int{}
+	var ignoreNodes []int
 	ignore := func(id uint32) bool {
 		for _, ignore := range ignoreNodes {
 			return id == uint32(ignore)

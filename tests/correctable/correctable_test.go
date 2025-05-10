@@ -106,6 +106,6 @@ func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, _ *CorrectableRequest, 
 	return nil
 }
 
-func (_ testSrv) Correctable(_ gorums.ServerCtx, _ *CorrectableRequest) (response *CorrectableResponse, err error) {
+func (testSrv) Correctable(_ gorums.ServerCtx, _ *CorrectableRequest) (response *CorrectableResponse, err error) {
 	return CorrectableResponse_builder{Level: 1}.Build(), nil
 }

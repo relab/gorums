@@ -14,7 +14,7 @@ type cfgSrv struct {
 	name string
 }
 
-func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (srv cfgSrv) Config(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		Name: srv.name,
 		Num:  req.GetNum(),

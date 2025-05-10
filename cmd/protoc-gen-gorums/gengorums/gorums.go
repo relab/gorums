@@ -147,34 +147,6 @@ func genGorumsMethods(gorumsType string, data servicesData, callTypeInfo *callTy
 	}
 }
 
-// callType returns call type information for the given method.
-// If the given method has specified a Gorums method option that
-// correspond to a call type, this call type is returned. Further,
-// if the call type has a sub call type, then this is returned instead.
-func callType(method *protogen.Method) *callTypeInfo {
-	for _, callTypeInfo := range callTypeOptions(method) {
-		callType := callTypeInfo.deriveCallType(method)
-		if callType.check(method) {
-			return callType
-		}
-	}
-	panic(fmt.Sprintf("unknown call type for method %s\n", method.GoName))
-}
-
-// callTypeOptions returns all Gorums call types for the given method.
-func callTypeOptions(method *protogen.Method) []*callTypeInfo {
-	methExt := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	var options []*callTypeInfo
-	for _, callType := range gorumsCallTypesInfo {
-		if callType.extInfo != nil {
-			if proto.HasExtension(methExt, callType.extInfo) {
-				options = append(options, callType)
-			}
-		}
-	}
-	return options
-}
-
 // hasGorumsMethods returns true if one of the methods in the set of services
 // has a Gorums call type.
 func hasGorumsMethods(services []*protogen.Service) bool {
@@ -199,7 +171,6 @@ type callTypeInfo struct {
 	extInfo        *protoimpl.ExtensionInfo
 	docName        string
 	template       string
-	outPrefix      string
 	chkFn          func(m *protogen.Method) bool
 	nestedCallType map[string]*callTypeInfo
 }
@@ -281,13 +252,6 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Quorumcall,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
-}
-
-// callTypesWithInternal should list all available call types that
-// has a quorum function and hence need an internal type that wraps
-// the return type with additional information.
-var callTypesWithInternal = []*protoimpl.ExtensionInfo{
-	gorums.E_Quorumcall,
 }
 
 // hasGorumsCallType returns true if the given method has specified
