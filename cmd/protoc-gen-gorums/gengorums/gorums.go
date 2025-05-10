@@ -311,17 +311,6 @@ func hasMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Extens
 	return false
 }
 
-// hasAllMethodOption returns true if the method has all of the given method options
-func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.ExtensionInfo) bool {
-	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	for _, callType := range methodOptions {
-		if !proto.HasExtension(ext, callType) {
-			return false
-		}
-	}
-	return true
-}
-
 // validateOptions returns an error if the extension options
 // for the provided method are incompatible.
 func validateOptions(method *protogen.Method) error {
