@@ -263,7 +263,7 @@ func (testSrv) IgnoreReq(_ gorums.ServerCtx, req *Request) (resp *Response, err 
 
 func BenchmarkFullStackQF(b *testing.B) {
 	for n := 3; n < 20; n += 2 {
-		_, stop := gorums.TestSetup(b, n, func(_ int) gorums.ServerIface {
+		addrs, stop := gorums.TestSetup(b, n, func(_ int) gorums.ServerIface {
 			srv := gorums.NewServer()
 			RegisterQuorumFunctionServer(srv, &testSrv{})
 			return srv
@@ -274,7 +274,7 @@ func BenchmarkFullStackQF(b *testing.B) {
 			),
 		)
 		c, err := mgr.NewConfiguration(
-			gorums.WithNodeList([]string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}), // dummy node list; won't actually be used in test
+			gorums.WithNodeList(addrs),
 		)
 		if err != nil {
 			b.Fatal(err)
