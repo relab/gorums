@@ -327,11 +327,11 @@ func (c *channel) reconnect(maxRetries float64) {
 			return
 		}
 		delay := float64(backoffCfg.BaseDelay)
-		max := float64(backoffCfg.MaxDelay)
-		for r := retries; delay < max && r > 0; r-- {
+		maxDelay := float64(backoffCfg.MaxDelay)
+		for r := retries; delay < maxDelay && r > 0; r-- {
 			delay *= backoffCfg.Multiplier
 		}
-		delay = math.Min(delay, max)
+		delay = math.Min(delay, maxDelay)
 		delay *= 1 + backoffCfg.Jitter*(rand.Float64()*2-1)
 		select {
 		case <-time.After(time.Duration(delay)):
