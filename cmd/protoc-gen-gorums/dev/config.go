@@ -27,7 +27,7 @@ func ConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Configuration, error
 // order as they were provided in the creation of the Manager.
 //
 // NOTE: mutating the returned slice is not supported.
-func (c *Configuration) Nodes() []*Node {
+func (c Configuration) Nodes() []*Node {
 	nodes := make([]*Node, c.Size())
 	for i, n := range c.RawConfiguration {
 		nodes[i] = &Node{n}

@@ -27,7 +27,7 @@ func NewResponse[messageType proto.Message](msg messageType, err error, nid uint
 	}
 }
 
-// The Unpack methods lets you destructure the response in a single line
+// Unpack destructures the response
 func (r Response[messageType]) Unpack() (messageType, error, uint32) {
 	return r.Msg, r.Err, r.Nid
 }

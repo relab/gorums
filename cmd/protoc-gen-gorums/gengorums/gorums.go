@@ -314,8 +314,7 @@ func hasMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Extens
 // validateOptions returns an error if the extension options
 // for the provided method are incompatible.
 func validateOptions(method *protogen.Method) error {
-	switch {
-	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
+	if !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient() {
 		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
 	}
 	return nil

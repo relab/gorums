@@ -14,8 +14,8 @@ import (
 // n is the number of replicas, and div is a divider.
 // the target level is n, and the level is calculated by the quorum function
 // by dividing the sum of levels from the servers with the divider.
-func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration, int, int) *gorums.Correctable[int]) {
-	addrs, teardown := gorums.TestSetup(t, n, func(i int) gorums.ServerIface {
+func run(t *testing.T, n, div int, corr func(context.Context, *Configuration, int, int) *gorums.Correctable[int]) {
+	addrs, teardown := gorums.TestSetup(t, n, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
@@ -77,7 +77,7 @@ func (q qspec) corrQF(responses gorums.Iterator[*CorrectableResponse], levelSet 
 }
 
 func TestCorrectable(t *testing.T) {
-	run(t, 4, 1, func(ctx context.Context, c *Configuration, n int, div int) *gorums.Correctable[int] {
+	run(t, 4, 1, func(ctx context.Context, c *Configuration, n, div int) *gorums.Correctable[int] {
 		corr := c.Correctable(ctx, &CorrectableRequest{})
 		qspec := qspec{div, n}
 		return gorums.IterCorrectable(corr, qspec.corrQF)
@@ -85,7 +85,7 @@ func TestCorrectable(t *testing.T) {
 }
 
 func TestCorrectableStream(t *testing.T) {
-	run(t, 4, 4, func(ctx context.Context, c *Configuration, n int, div int) *gorums.Correctable[int] {
+	run(t, 4, 4, func(ctx context.Context, c *Configuration, n, div int) *gorums.Correctable[int] {
 		corr := c.CorrectableStream(ctx, &CorrectableRequest{})
 		qspec := qspec{div, n}
 		return gorums.IterCorrectable(corr, qspec.corrQF)
@@ -96,7 +96,7 @@ type testSrv struct {
 	n int
 }
 
-func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error {
+func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, _ *CorrectableRequest, send func(response *CorrectableResponse) error) error {
 	for i := range srv.n {
 		err := send(CorrectableResponse_builder{Level: int32(i + 1)}.Build())
 		if err != nil {
@@ -106,6 +106,6 @@ func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableReq
 	return nil
 }
 
-func (srv testSrv) Correctable(_ gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error) {
+func (_ testSrv) Correctable(_ gorums.ServerCtx, _ *CorrectableRequest) (response *CorrectableResponse, err error) {
 	return CorrectableResponse_builder{Level: 1}.Build(), nil
 }

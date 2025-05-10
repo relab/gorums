@@ -251,11 +251,11 @@ func BenchmarkQF(b *testing.B) {
 
 type testSrv struct{}
 
-func (s testSrv) UseReq(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (_ testSrv) UseReq(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{Result: req.GetValue()}.Build(), nil
 }
 
-func (s testSrv) IgnoreReq(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (_ testSrv) IgnoreReq(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{Result: req.GetValue()}.Build(), nil
 }
 
