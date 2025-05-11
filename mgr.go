@@ -1,8 +1,10 @@
 package gorums
 
 import (
+	"cmp"
 	"fmt"
 	"log"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -129,6 +131,31 @@ func (m *RawManager) AddNode(node *RawNode) error {
 	m.lookup[node.id] = node
 	m.nodes = append(m.nodes, node)
 	return nil
+}
+
+// remove a node from a manager, the node is closed seperately
+func (m *RawManager) removeNode(node *RawNode) error {
+	if m.logger != nil {
+		m.logger.Printf("Removing node %s with id %d\n", node, node.id)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.lookup, node.id)
+
+	// assume nodes are sorted
+	i, found := slices.BinarySearchFunc(m.nodes, node, func(n1, n2 *RawNode) int {
+		return cmp.Compare(n1.id, n2.id)
+	})
+
+	if found {
+		// keep nodes sorted
+		m.nodes = append(m.nodes[:i], m.nodes[i+1:]...)
+		return nil
+	}
+
+	return fmt.Errorf("RemodeNode: Node %d (%s) not found", node.id, node)
 }
 
 // getMsgID returns a unique message ID.

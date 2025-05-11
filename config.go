@@ -17,28 +17,53 @@ type RawConfiguration struct {
 
 // NewRawConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList.
-func NewRawConfiguration(cfg NodeListOption, opts ...ManagerOption) (nodes RawConfiguration, err error) {
-	if cfg == nil {
+func NewRawConfiguration(nodes NodeListOption, opts ...ManagerOption) (cfg RawConfiguration, err error) {
+	if nodes == nil {
 		return RawConfiguration{}, fmt.Errorf("config: missing required node list")
 	}
 	mgr := NewRawManager(opts...)
-	return cfg.newConfig(mgr)
+
+	cfg, err = nodes.newConfig(mgr)
+	for _, n := range cfg.RawNodes {
+		n.obtain()
+	}
+
+	return cfg, err
 }
 
 // SubRawConfiguration returns a configuration from another configuration and a list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (c *RawConfiguration) SubRawConfiguration(cfg NodeListOption) (nodes RawConfiguration, err error) {
-	if cfg == nil {
+func (c *RawConfiguration) SubRawConfiguration(nodes NodeListOption) (cfg RawConfiguration, err error) {
+	if nodes == nil {
 		return RawConfiguration{}, fmt.Errorf("config: missing required node list")
 	}
-	return cfg.newConfig(c.RawManager)
+
+	cfg, err = nodes.newConfig(c.RawManager)
+	for _, n := range cfg.RawNodes {
+		n.obtain()
+	}
+
+	return cfg, err
 }
 
-// Close closes a raw configuration created from the NewRawConfiguration method
-func (c *RawConfiguration) Close() error {
+// CloseAll closes the configurations and all of its subconfigurations
+func (c *RawConfiguration) CloseAll() error {
 	c.RawManager.Close()
+	return nil
+}
+
+// Close closes the nodes which are not part of another subconfiguration
+// it is only meant to be used once
+func (c *RawConfiguration) Close() error {
+	for _, n := range c.RawNodes {
+		err := n.release()
+		if err != nil {
+			return err
+		}
+	}
+	*c = RawConfiguration{}
 	return nil
 }
 
