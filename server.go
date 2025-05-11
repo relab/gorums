@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 // requestHandler is used to fetch a response message based on the request.
@@ -47,7 +47,7 @@ func SendMessage(ctx context.Context, c chan<- *Message, msg *Message) error {
 // WrapMessage wraps the metadata, response and error status in a gorumsMessage
 //
 // This function should be used by generated code only.
-func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *Message {
+func WrapMessage(md *ordering.Metadata, resp proto.Message, err error) *Message {
 	errStatus, ok := status.FromError(err)
 	if !ok {
 		errStatus = status.New(codes.Unknown, err.Error())
@@ -95,7 +95,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(ServerCtx{Context: ctx, once: new(sync.Once), mut: &mut}, req, finished)
+			go handler(ServerCtx{Context: req.Metadata.AppendToIncomingContext(ctx), once: new(sync.Once), mut: &mut}, req, finished)
 			// Wait until the handler releases the mutex.
 			mut.Lock()
 		}
@@ -142,9 +142,7 @@ type Server struct {
 	grpcServer *grpc.Server
 }
 
-// NewServer returns a new instance of GorumsServer.
-// This function is intended for internal Gorums use.
-// You should call `NewServer` in the generated code instead.
+// NewServer returns a new instance of [gorums.Server].
 func NewServer(opts ...ServerOption) *Server {
 	var serverOpts serverOptions
 	for _, opt := range opts {

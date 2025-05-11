@@ -11,7 +11,7 @@ import "gorums.proto";
 import "internal/testprotos/msgs/msgs.proto";
 
 service QuorumCall {
-  rpc QuorumCall(msgs.Request) returns (msgs.Response) {
-    option (gorums.quorumcall) = true;
-  }
+    rpc QuorumCall(msgs.Request) returns (msgs.Response) {
+        option (gorums.quorumcall) = true;
+    }
 }

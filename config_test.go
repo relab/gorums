@@ -204,14 +204,14 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	})
 	defer teardown()
 
-	cfg, err := dummy.NewConfiguration(nil, gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
+	cfg, err := dummy.NewConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup
-	for j := 0; j < 2; j++ {
+	for range 2 {
 		wg.Add(1)
 		go func() {
 			node := cfg.Nodes()[0]

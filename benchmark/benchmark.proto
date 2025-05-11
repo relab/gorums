@@ -10,11 +10,13 @@ import "google/protobuf/empty.proto";
 
 import "gorums.proto";
 
-message Echo { bytes payload = 1; }
+message Echo {
+    bytes payload = 1;
+}
 
 message TimedMsg {
-  int64 SendTime = 1;
-  bytes payload = 2;
+    int64 SendTime = 1;
+    bytes payload  = 2;
 }
 
 message StartRequest {}
@@ -24,53 +26,53 @@ message StartResponse {}
 message StopRequest {}
 
 message Result {
-  string Name = 1;
-  uint64 TotalOps = 2;
-  int64 TotalTime = 3;
-  double Throughput = 4;
-  double LatencyAvg = 5;
-  double LatencyVar = 6;
-  uint64 AllocsPerOp = 7;
-  uint64 MemPerOp = 8;
-  repeated MemoryStat ServerStats = 9;
+    string Name                     = 1;
+    uint64 TotalOps                 = 2;
+    int64 TotalTime                 = 3;
+    double Throughput               = 4;
+    double LatencyAvg               = 5;
+    double LatencyVar               = 6;
+    uint64 AllocsPerOp              = 7;
+    uint64 MemPerOp                 = 8;
+    repeated MemoryStat ServerStats = 9;
 }
 
 message MemoryStat {
-  uint64 Allocs = 1;
-  uint64 Memory = 2;
+    uint64 Allocs = 1;
+    uint64 Memory = 2;
 }
 
-message MemoryStatList { repeated MemoryStat MemoryStats = 1; }
-
 service Benchmark {
-  rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
-    option (gorums.quorumcall) = true;
-  }
+    rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
+        option (gorums.quorumcall) = true;
+    }
 
-  rpc StopServerBenchmark(StopRequest) returns (Result) {
-    option (gorums.quorumcall) = true;
-  }
+    rpc StopServerBenchmark(StopRequest) returns (Result) {
+        option (gorums.quorumcall) = true;
+    }
 
-  rpc StartBenchmark(StartRequest) returns (StartResponse) {
-    option (gorums.quorumcall) = true;
-  }
+    rpc StartBenchmark(StartRequest) returns (StartResponse) {
+        option (gorums.quorumcall) = true;
+    }
 
-  rpc StopBenchmark(StopRequest) returns (MemoryStat) {
-    option (gorums.quorumcall) = true;
-    option (gorums.custom_return_type) = "MemoryStatList";
-  }
+    rpc StopBenchmark(StopRequest) returns (MemoryStat) {
+        option (gorums.quorumcall) = true;
+    }
 
-  // benchmarks
-  rpc QuorumCall(Echo) returns (Echo) { option (gorums.quorumcall) = true; }
+    // benchmarks
+    rpc QuorumCall(Echo) returns (Echo) {
+        option (gorums.quorumcall) = true;
+    }
 
-  rpc AsyncQuorumCall(Echo) returns (Echo) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-  }
+    rpc AsyncQuorumCall(Echo) returns (Echo) {
+        option (gorums.quorumcall) = true;
+    }
 
-  rpc SlowServer(Echo) returns (Echo) { option (gorums.quorumcall) = true; }
+    rpc SlowServer(Echo) returns (Echo) {
+        option (gorums.quorumcall) = true;
+    }
 
-  rpc Multicast(TimedMsg) returns (google.protobuf.Empty) {
-    option (gorums.multicast) = true;
-  }
+    rpc Multicast(TimedMsg) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+    }
 }

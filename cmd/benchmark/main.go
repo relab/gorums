@@ -58,7 +58,7 @@ func (f *listFlag) Get() []string {
 
 func listBenchmarks() {
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
-	benchmarks := benchmark.GetBenchmarks(nil)
+	benchmarks := benchmark.GetBenchmarks(nil, 0)
 	for _, b := range benchmarks {
 		fmt.Fprintf(tw, "%s:\t%s\n", b.Name, b.Description)
 	}
@@ -72,7 +72,7 @@ func runServer(server string, serverBuffer uint) {
 	lis, err := net.Listen("tcp", server)
 	checkf("Failed to listen on '%s': %v", server, err)
 
-	srv := gorums.NewServer(gorums.WithReceiveBufferSize(serverBuffer))
+	srv := benchmark.NewBenchServer(gorums.WithReceiveBufferSize(serverBuffer))
 	go func() { checkf("serve failed: %v", srv.Serve(lis)) }()
 
 	fmt.Printf("Running benchmark server on '%s'\n", server)
@@ -196,26 +196,21 @@ func main() {
 		gorums.WithSendBufferSize(*sendBuffer),
 	}
 
-	qspec := &benchmark.QSpec{
-		QSize:   options.QuorumSize,
-		CfgSize: options.NumNodes,
-	}
-
-	cfg, err := benchmark.NewConfiguration(qspec, gorums.WithNodeList(remotes[:options.NumNodes]), mgrOpts...)
+	cfg, err := benchmark.NewConfiguration(gorums.WithNodeList(remotes[:options.NumNodes]), mgrOpts...)
 	checkf("Failed to create configuration: %v", err)
 	defer cfg.Close()
 
-	results, err := benchmark.RunBenchmarks(benchReg, options, cfg)
+	results, err := benchmark.RunBenchmarks(benchReg, options, cfg, options.QuorumSize)
 	checkf("Error running benchmarks: %v", err)
 
 	printResults(results, options, *serverStats)
 }
 
-func checkf(format string, args ...interface{}) {
+func checkf(format string, args ...any) {
 	for _, arg := range args {
 		if err, _ := arg.(error); err != nil {
 			fmt.Fprintf(os.Stderr, format, args...)
-			os.Exit(1)
+			os.Exit(1) // skipcq: RVV-A0003
 		}
 	}
 }

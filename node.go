@@ -214,7 +214,7 @@ func (ms *MultiSorter) Less(i, j int) bool {
 	p, q := ms.nodes[i], ms.nodes[j]
 	// Try all but the last comparison.
 	var k int
-	for k = 0; k < len(ms.less)-1; k++ {
+	for k = range len(ms.less) - 1 {
 		less := ms.less[k]
 		switch {
 		case less(p, q):

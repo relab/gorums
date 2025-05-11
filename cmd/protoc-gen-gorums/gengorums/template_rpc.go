@@ -2,7 +2,7 @@ package gengorums
 
 var rpcSignature = `func (n *Node) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$customOut}}, err error) {
+	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$out}}, err error) {
 `
 
 var rpcVar = `
@@ -17,7 +17,7 @@ var rpcBody = `	cd := {{$callData}}{
 		Method: "{{$fullName}}",
 	}
 {{- if hasPerNodeArg .Method}}
-	{{$protoMessage := use "protoreflect.ProtoMessage" $genFile}}
+	{{$protoMessage := use "proto.Message" $genFile}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}
@@ -27,7 +27,7 @@ var rpcBody = `	cd := {{$callData}}{
 	if err != nil {
 		return nil, err
 	}
-	return res.(*{{$customOut}}), err
+	return res.(*{{$out}}), err
 }
 `
 

@@ -10,42 +10,21 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type (
-	cfgSrv struct {
-		name string
-	}
-	cfgQSpec struct {
-		quorum int
-	}
-)
+type cfgSrv struct {
+	name string
+}
 
-func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return &Response{
+func (srv cfgSrv) Config(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+	return Response_builder{
 		Name: srv.name,
 		Num:  req.GetNum(),
-	}, nil
-}
-
-func newQSpec(cfgSize int) *cfgQSpec {
-	return &cfgQSpec{quorum: cfgSize/2 + 1}
-}
-
-func (q cfgQSpec) ConfigQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	if len(replies) < q.quorum {
-		return nil, false
-	}
-	var reply *Response
-	for _, r := range replies {
-		reply = r
-		break
-	}
-	return reply, true
+	}.Build(), nil
 }
 
 // setup returns a new configuration of cfgSize and a corresponding teardown function.
 // Calling setup multiple times will return a different configuration with different
 // sets of nodes.
-func setup(t *testing.T, mainCfg *Configuration, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, cfgSize int, mainCfg *Configuration, opts ...gorums.ManagerOption) (cfg *Configuration, teardown func()) {
 	t.Helper()
 	srvs := make([]*cfgSrv, cfgSize)
 	for i := range srvs {
@@ -59,7 +38,14 @@ func setup(t *testing.T, mainCfg *Configuration, cfgSize int) (cfg *Configuratio
 	for i := range srvs {
 		srvs[i].name = addrs[i]
 	}
-	cfg, err := mainCfg.SubConfiguration(newQSpec(cfgSize), gorums.WithNodeList(addrs))
+
+	var err error
+	if mainCfg != nil {
+		cfg, err = mainCfg.SubConfiguration(gorums.WithNodeList(addrs))
+	} else {
+		cfg, err = NewConfiguration(gorums.WithNodeList(addrs), opts...)
+		mainCfg = cfg
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,45 +56,48 @@ func setup(t *testing.T, mainCfg *Configuration, cfgSize int) (cfg *Configuratio
 	return cfg, teardown
 }
 
+func configQF(cfg *Configuration, req *Request) (*Response, error) {
+	quorum := cfg.Size()/2 + 1
+	replyCount := int(0)
+	replies := cfg.Config(context.Background(), req)
+	for reply := range replies.IgnoreErrors() {
+		replyCount++
+		if replyCount < quorum {
+			continue
+		}
+		return reply.Msg, nil
+	}
+	return nil, fmt.Errorf("configQF: no quorum got: %d, want (at least): %d", replyCount, quorum)
+}
+
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
 	callRPC := func(cfg *Configuration) {
-		for i := 0; i < 5; i++ {
-			resp, err := cfg.Config(context.Background(), &Request{Num: uint64(i)})
+		for i := range 5 {
+			reply, err := configQF(cfg, Request_builder{Num: uint64(i)}.Build())
 			if err != nil {
 				t.Fatal(err)
 			}
-			if resp == nil {
+			if reply == nil {
 				t.Fatal("Got nil response")
 			}
 		}
 	}
-	cfg, err := NewConfiguration(
-		&cfgQSpec{},
-		gorums.RawConfiguration{}.And(gorums.RawConfiguration{}),
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	c1, teardown1 := setup(t, cfg, 4)
+
+	opts := gorums.WithGrpcDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials()))
+	c1, teardown1 := setup(t, 4, nil, opts)
 	defer teardown1()
 	fmt.Println("--- c1 ", c1.Nodes())
 	callRPC(c1)
 
-	c2, teardown2 := setup(t, cfg, 2)
+	c2, teardown2 := setup(t, 2, c1)
 	defer teardown2()
 	fmt.Println("--- c2 ", c2.Nodes())
 	callRPC(c2)
 
 	newNodeList := c1.And(c2)
-	c3, err := cfg.SubConfiguration(
-		newQSpec(c1.Size()+c2.Size()),
-		newNodeList,
-	)
+	c3, err := c1.SubConfiguration(newNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,10 +105,7 @@ func TestConfig(t *testing.T) {
 	callRPC(c3)
 
 	rmNodeList := c3.Except(c1)
-	c4, err := cfg.SubConfiguration(
-		newQSpec(c2.Size()),
-		rmNodeList,
-	)
+	c4, err := c1.SubConfiguration(rmNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 // QuorumCallData holds the message, destination nodes, method identifier,
@@ -13,54 +13,78 @@ import (
 //
 // This struct should be used by generated code only.
 type QuorumCallData struct {
-	Message        protoreflect.ProtoMessage
-	Method         string
-	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
-	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
+	Message      proto.Message
+	Method       string
+	PerNodeArgFn func(proto.Message, uint32) proto.Message
+	ServerStream bool
 }
 
 // QuorumCall performs a quorum call on the configuration.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
-	expectedReplies := c.Size()
-	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
+func QuorumCall[responseType proto.Message](
+	ctx context.Context,
+	c RawConfiguration,
+	d QuorumCallData,
+) Responses[responseType] {
+	nodes := len(c.RawNodes)
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
-	replyChan := make(chan response, expectedReplies)
-	for _, n := range c.Nodes() {
+	replyChan := make(chan response, nodes)
+
+	for _, n := range c.RawNodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)
 			if !msg.ProtoReflect().IsValid() {
-				expectedReplies--
+				nodes--
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan, false)
+		n.channel.enqueue(
+			request{
+				ctx: ctx,
+				msg: &Message{Metadata: md, Message: msg},
+			},
+			replyChan, d.ServerStream,
+		)
 	}
 
-	var (
-		errs    []nodeError
-		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
-	)
+	return func(yield func(Response[responseType]) bool) {
+		replies := int(0)
+		errors := int(0)
 
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
-				break
-			}
-			replies[r.nid] = r.msg
-			if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
+		defer close(replyChan)
+		for _, n := range c.RawNodes {
+			defer n.channel.deleteRouter(md.GetMessageID())
 		}
-		if len(errs)+len(replies) == expectedReplies {
-			return resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
+
+		for {
+			if d.ServerStream {
+				if errors >= nodes {
+					return
+				}
+			} else {
+				if replies >= nodes {
+					return
+				}
+			}
+			select {
+			case r := <-replyChan:
+				replies++
+				if r.err != nil {
+					errors++
+				}
+				var msg responseType
+				if r.msg != nil {
+					msg = r.msg.(responseType)
+				}
+				if !yield(NewResponse(msg, r.err, r.nid)) {
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
 }

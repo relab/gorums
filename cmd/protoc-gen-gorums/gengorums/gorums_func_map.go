@@ -8,31 +8,29 @@ import (
 
 	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
 // importMap holds the mapping between short-hand import name
 // and full import path for the default package.
 var importMap = map[string]protogen.GoImportPath{
-	"io":           protogen.GoImportPath("io"),
-	"time":         protogen.GoImportPath("time"),
-	"fmt":          protogen.GoImportPath("fmt"),
-	"log":          protogen.GoImportPath("log"),
-	"math":         protogen.GoImportPath("math"),
-	"rand":         protogen.GoImportPath("math/rand"),
-	"sync":         protogen.GoImportPath("sync"),
-	"atomic":       protogen.GoImportPath("sync/atomic"),
-	"context":      protogen.GoImportPath("context"),
-	"trace":        protogen.GoImportPath("golang.org/x/net/trace"),
-	"grpc":         protogen.GoImportPath("google.golang.org/grpc"),
-	"codes":        protogen.GoImportPath("google.golang.org/grpc/codes"),
-	"status":       protogen.GoImportPath("google.golang.org/grpc/status"),
-	"backoff":      protogen.GoImportPath("google.golang.org/grpc/backoff"),
-	"proto":        protogen.GoImportPath("google.golang.org/protobuf/proto"),
-	"gorums":       protogen.GoImportPath("github.com/relab/gorums"),
-	"ordering":     protogen.GoImportPath("github.com/relab/gorums/ordering"),
-	"protoreflect": protogen.GoImportPath("google.golang.org/protobuf/reflect/protoreflect"),
+	"io":       protogen.GoImportPath("io"),
+	"time":     protogen.GoImportPath("time"),
+	"fmt":      protogen.GoImportPath("fmt"),
+	"iter":     protogen.GoImportPath("iter"),
+	"log":      protogen.GoImportPath("log"),
+	"math":     protogen.GoImportPath("math"),
+	"rand":     protogen.GoImportPath("math/rand"),
+	"sync":     protogen.GoImportPath("sync"),
+	"atomic":   protogen.GoImportPath("sync/atomic"),
+	"context":  protogen.GoImportPath("context"),
+	"trace":    protogen.GoImportPath("golang.org/x/net/trace"),
+	"grpc":     protogen.GoImportPath("google.golang.org/grpc"),
+	"codes":    protogen.GoImportPath("google.golang.org/grpc/codes"),
+	"status":   protogen.GoImportPath("google.golang.org/grpc/status"),
+	"backoff":  protogen.GoImportPath("google.golang.org/grpc/backoff"),
+	"proto":    protogen.GoImportPath("google.golang.org/protobuf/proto"),
+	"gorums":   protogen.GoImportPath("github.com/relab/gorums"),
+	"ordering": protogen.GoImportPath("github.com/relab/gorums/ordering"),
 }
 
 func addImport(path, ident string, g *protogen.GeneratedFile) string {
@@ -76,32 +74,11 @@ var funcMap = template.FuncMap{
 		}
 		return ""
 	},
-	"correctableStream": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer()
-	},
-	"isCorrectable": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Correctable)
-	},
-	"withCorrectable": func(method *protogen.Method, arg string) string {
-		if hasMethodOption(method, gorums.E_Correctable) {
-			return arg
-		}
-		return ""
-	},
-	"withPromise": func(method *protogen.Method, arg string) string {
-		if hasMethodOption(method, callTypesWithPromiseObject...) {
-			return arg
-		}
-		return ""
-	},
-	"docName": func(method *protogen.Method) string {
-		return callType(method).docName
+	"isStream": func(method *protogen.Method) bool {
+		return method.Desc.IsStreamingServer()
 	},
 	"fullName": func(method *protogen.Method) string {
 		return fmt.Sprintf("/%s/%s", method.Parent.Desc.FullName(), method.Desc.Name())
-	},
-	"serviceName": func(method *protogen.Method) string {
-		return string(method.Parent.Desc.Name())
 	},
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)
@@ -109,94 +86,22 @@ var funcMap = template.FuncMap{
 	"isOneway": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
-	"isAsync": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Async)
-	},
 	"out":                    out,
-	"outType":                outType,
 	"internalOut":            internalOut,
-	"customOut":              customOut,
-	"mapInternalOutType":     mapInternalOutType,
-	"mapCorrectableOutType":  mapCorrectableOutType,
-	"mapAsyncOutType":        mapAsyncOutType,
-	"qspecMethods":           qspecMethods,
-	"qspecServices":          qspecServices,
 	"unexport":               unexport,
 	"contains":               strings.Contains,
-	"field":                  field,
 	"configurationsServices": configurationsServices,
 	"configurationMethods":   configurationMethods,
 	"nodeServices":           nodeServices,
 	"nodeMethods":            nodeMethods,
 }
 
-type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
-
-// mapType returns a map of types as defined by the function mapFn.
-func mapType(g *protogen.GeneratedFile, services []*protogen.Service, mapFn mapFunc) (s map[string]string) {
-	s = make(map[string]string)
-	for _, service := range services {
-		for _, method := range service.Methods {
-			mapFn(g, method, s)
-		}
-	}
-	return s
-}
-
 func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 	return g.QualifiedGoIdent(method.Output.GoIdent)
 }
 
-func outType(method *protogen.Method, out string) string {
-	return fmt.Sprintf("%s%s", callType(method).outPrefix, field(out))
-}
-
 func internalOut(out string) string {
 	return fmt.Sprintf("internal%s", field(out))
-}
-
-// customOut returns the output type to be used for the given method.
-// This may be the output type specified in the rpc line,
-// or if a custom_return_type option is provided for the method,
-// this provided custom type will be returned.
-func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	customOutType := fmt.Sprintf("%v", proto.GetExtension(ext, gorums.E_CustomReturnType))
-	outType := method.Output.GoIdent
-	if customOutType != "" {
-		outType.GoName = customOutType
-	}
-	return g.QualifiedGoIdent(outType)
-}
-
-func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasMethodOption(method, callTypesWithInternal...) {
-			out := out(g, method)
-			intOut := internalOut(out)
-			s[intOut] = out
-		}
-	})
-}
-
-func mapAsyncOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasAllMethodOption(method, gorums.E_Quorumcall, gorums.E_Async) {
-			out := customOut(g, method)
-			futOut := outType(method, out)
-			s[futOut] = out
-		}
-	})
-}
-
-func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasMethodOption(method, gorums.E_Correctable) {
-			out := customOut(g, method)
-			corrOut := outType(method, out)
-			s[corrOut] = out
-		}
-	})
 }
 
 // field derives an embedded field name from the given typeName.
@@ -211,7 +116,7 @@ func parseTemplate(name, tmpl string) *template.Template {
 	return template.Must(template.New(name).Funcs(funcMap).Parse(tmpl))
 }
 
-func mustExecute(t *template.Template, data interface{}) string {
+func mustExecute(t *template.Template, data any) string {
 	var b bytes.Buffer
 	if err := t.Execute(&b, data); err != nil {
 		panic(err)

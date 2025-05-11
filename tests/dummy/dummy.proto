@@ -6,7 +6,7 @@ option go_package = "github.com/relab/gorums/tests/dummy";
 option features.field_presence = IMPLICIT;
 
 service Dummy {
-  rpc Test(Empty) returns (Empty) {}
+    rpc Test(Empty) returns (Empty) {}
 }
 
 message Empty {}

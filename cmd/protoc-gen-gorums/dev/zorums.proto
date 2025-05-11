@@ -9,9 +9,15 @@ option features.field_presence = IMPLICIT;
 import "gorums.proto";
 import "google/protobuf/empty.proto";
 
-message Request { string Value = 1; }
-message Response { int64 Result = 1; }
-message MyResponse { string Value = 1; }
+message Request {
+    string Value = 1;
+}
+message Response {
+    int64 Result = 1;
+}
+message MyResponse {
+    string Value = 1;
+}
 
 // ZorumsService is not meant to be implemented.
 // The zorums generated code is placed alongside Gorums static code files
@@ -22,193 +28,92 @@ message MyResponse { string Value = 1; }
 // options and call types, including imported message types and
 // multiple RPCs reusing the same input and output types.
 service ZorumsService {
+    // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
+    // they are added to the _grpc.pb.go generated file.
+    rpc GRPCCall(Request) returns (Response) {}
 
-  // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
-  // they are added to the _grpc.pb.go generated file.
-  rpc GRPCCall(Request) returns (Response) {}
+    // ---------------------------------------------------------------
+    // QuorumCall variants
+    // ---------------------------------------------------------------
 
-  // ---------------------------------------------------------------
-  // QuorumCall variants
-  // ---------------------------------------------------------------
+    // QuorumCall plain.
+    rpc QuorumCall(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+    // QuorumCall with per_node_arg option.
+    rpc QuorumCallPerNodeArg(Request) returns (Response) {
+        option (gorums.quorumcall)   = true;
+        option (gorums.per_node_arg) = true;
+    }
+    // QuorumCallEmpty for testing imported message type.
+    rpc QuorumCallEmpty(google.protobuf.Empty) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
+    // QuorumCallEmpty2 for testing imported message type.
+    rpc QuorumCallEmpty2(Request) returns (google.protobuf.Empty) {
+        option (gorums.quorumcall) = true;
+    }
 
-  // QuorumCall plain.
-  rpc QuorumCall(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-  }
-  // QuorumCall with per_node_arg option.
-  rpc QuorumCallPerNodeArg(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.per_node_arg) = true;
-  }
-  // QuorumCall with custom_return_type option.
-  rpc QuorumCallCustomReturnType(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  // QuorumCallCombo with all supported options.
-  rpc QuorumCallCombo(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.per_node_arg) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  // QuorumCallEmpty for testing imported message type.
-  rpc QuorumCallEmpty(google.protobuf.Empty) returns (Response) {
-    option (gorums.quorumcall) = true;
-  }
-  // QuorumCallEmpty2 for testing imported message type.
-  rpc QuorumCallEmpty2(Request) returns (google.protobuf.Empty) {
-    option (gorums.quorumcall) = true;
-  }
+    // ---------------------------------------------------------------
+    // QuorumCall stream variants
+    // ---------------------------------------------------------------
 
-  // ------------------------------------------------------------------
-  // Multicast variants
-  // The multicast call type does not support the 'custom_return_type'
-  // option since multicast is one-way and so it doesn't make sense to
-  // operate on response types.
-  // ------------------------------------------------------------------
+    // QuorumCall plain.
+    rpc QuorumCallStream(Request) returns (stream Response) {
+        option (gorums.quorumcall) = true;
+    }
+    // QuorumCall with per_node_arg option.
+    rpc QuorumCallStreamPerNodeArg(Request) returns (stream Response) {
+        option (gorums.quorumcall)   = true;
+        option (gorums.per_node_arg) = true;
+    }
+    // QuorumCallEmpty for testing imported message type.
+    rpc QuorumCallStreamEmpty(google.protobuf.Empty) returns (stream Response) {
+        option (gorums.quorumcall) = true;
+    }
+    // QuorumCallEmpty2 for testing imported message type.
+    rpc QuorumCallStreamEmpty2(Request) returns (stream google.protobuf.Empty) {
+        option (gorums.quorumcall) = true;
+    }
 
-  // Multicast plain. Response type is not needed here.
-  rpc Multicast(Request) returns (Response) {
-    option (gorums.multicast) = true;
-  }
-  // MulticastPerNodeArg with per_node_arg option.
-  rpc MulticastPerNodeArg(Request) returns (Response) {
-    option (gorums.multicast) = true;
-    option (gorums.per_node_arg) = true;
-  }
-  // Multicast2 is testing whether multiple streams work.
-  rpc Multicast2(Request) returns (Response) {
-    option (gorums.multicast) = true;
-  }
-  // Multicast3 is testing imported message type.
-  rpc Multicast3(Request) returns (google.protobuf.Empty) {
-    option (gorums.multicast) = true;
-  }
-  // Multicast4 is testing imported message type.
-  rpc Multicast4(google.protobuf.Empty) returns (google.protobuf.Empty) {
-    option (gorums.multicast) = true;
-  }
+    // ------------------------------------------------------------------
+    // Multicast variants
+    // The multicast call type does not support the 'custom_return_type'
+    // option since multicast is one-way and so it doesn't make sense to
+    // operate on response types.
+    // ------------------------------------------------------------------
 
-  // ---------------------------------------------------------------
-  // Async variants
-  // ---------------------------------------------------------------
+    // Multicast plain. Response type is not needed here.
+    rpc Multicast(Request) returns (Response) {
+        option (gorums.multicast) = true;
+    }
+    // MulticastPerNodeArg with per_node_arg option.
+    rpc MulticastPerNodeArg(Request) returns (Response) {
+        option (gorums.multicast)    = true;
+        option (gorums.per_node_arg) = true;
+    }
+    // Multicast2 is testing whether multiple streams work.
+    rpc Multicast2(Request) returns (Response) {
+        option (gorums.multicast) = true;
+    }
+    // Multicast3 is testing imported message type.
+    rpc Multicast3(Request) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+    }
+    // Multicast4 is testing imported message type.
+    rpc Multicast4(google.protobuf.Empty) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+    }
 
-  // QuorumCallAsync plain.
-  rpc QuorumCallAsync(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-  }
-  // QuorumCallAsyncPerNodeArg with per_node_arg option.
-  rpc QuorumCallAsyncPerNodeArg(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-    option (gorums.per_node_arg) = true;
-  }
-  // QuorumCallAsyncCustomReturnType with custom_return_type option.
-  rpc QuorumCallAsyncCustomReturnType(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  // QuorumCallAsyncCombo with all supported options.
-  rpc QuorumCallAsyncCombo(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-    option (gorums.per_node_arg) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  // QuorumCallAsync2 plain; with same return type: Response.
-  rpc QuorumCallAsync2(Request) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-  }
-  // QuorumCallAsyncEmpty for testing imported message type.
-  rpc QuorumCallAsyncEmpty(Request) returns (google.protobuf.Empty) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-  }
-  // QuorumCallAsyncEmpty2 for testing imported message type; with same return
-  // type as QuorumCallAsync: Response.
-  rpc QuorumCallAsyncEmpty2(google.protobuf.Empty) returns (Response) {
-    option (gorums.quorumcall) = true;
-    option (gorums.async) = true;
-  }
+    // ---------------------------------------------------------------
+    // Unicast
+    // ---------------------------------------------------------------
 
-  // ---------------------------------------------------------------
-  // Correctable variants
-  // ---------------------------------------------------------------
+    rpc Unicast(Request) returns (Response) {
+        option (gorums.unicast) = true;
+    }
 
-  // Correctable plain.
-  rpc Correctable(Request) returns (Response) {
-    option (gorums.correctable) = true;
-  }
-  // CorrectablePerNodeArg with per_node_arg option.
-  rpc CorrectablePerNodeArg(Request) returns (Response) {
-    option (gorums.correctable) = true;
-    option (gorums.per_node_arg) = true;
-  }
-  // CorrectableCustomReturnType with custom_return_type option.
-  rpc CorrectableCustomReturnType(Request) returns (Response) {
-    option (gorums.correctable) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  // CorrectableCombo with all supported options.
-  rpc CorrectableCombo(Request) returns (Response) {
-    option (gorums.correctable) = true;
-    option (gorums.per_node_arg) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  // CorrectableEmpty for testing imported message type.
-  rpc CorrectableEmpty(Request) returns (google.protobuf.Empty) {
-    option (gorums.correctable) = true;
-  }
-  // CorrectableEmpty2 for testing imported message type; with same return
-  // type as Correctable: Response.
-  rpc CorrectableEmpty2(google.protobuf.Empty) returns (Response) {
-    option (gorums.correctable) = true;
-  }
-
-  // ---------------------------------------------------------------
-  // CorrectableStream variants
-  // ---------------------------------------------------------------
-
-  // CorrectableStream plain.
-  rpc CorrectableStream(Request) returns (stream Response) {
-    option (gorums.correctable) = true;
-  }
-  // CorrectablePerNodeArg with per_node_arg option.
-  rpc CorrectableStreamPerNodeArg(Request) returns (stream Response) {
-    option (gorums.correctable) = true;
-    option (gorums.per_node_arg) = true;
-  }
-  // CorrectableCustomReturnType with custom_return_type option.
-  rpc CorrectableStreamCustomReturnType(Request) returns (stream Response) {
-    option (gorums.correctable) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  // CorrectableCombo with all supported options.
-  rpc CorrectableStreamCombo(Request) returns (stream Response) {
-    option (gorums.correctable) = true;
-    option (gorums.per_node_arg) = true;
-    option (gorums.custom_return_type) = "MyResponse";
-  }
-  // CorrectableEmpty for testing imported message type.
-  rpc CorrectableStreamEmpty(Request) returns (stream google.protobuf.Empty) {
-    option (gorums.correctable) = true;
-  }
-  // CorrectableEmpty2 for testing imported message type; with same return
-  // type as Correctable: Response.
-  rpc CorrectableStreamEmpty2(google.protobuf.Empty) returns (stream Response) {
-    option (gorums.correctable) = true;
-  }
-
-  // ---------------------------------------------------------------
-  // Unicast
-  // ---------------------------------------------------------------
-
-  rpc Unicast(Request) returns (Response) { option (gorums.unicast) = true; }
-
-  rpc Unicast2(Request) returns (google.protobuf.Empty) {
-    option (gorums.unicast) = true;
-  }
+    rpc Unicast2(Request) returns (google.protobuf.Empty) {
+        option (gorums.unicast) = true;
+    }
 }

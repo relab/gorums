@@ -8,18 +8,17 @@ option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 
-service CorrectableTest{
-  rpc Correctable(CorrectableRequest) returns (CorrectableResponse) {
-    option (gorums.correctable) = true;
-  }
-  rpc CorrectableStream(CorrectableRequest) returns (stream CorrectableResponse) {
-    option (gorums.correctable) = true;
-  }
+service CorrectableTest {
+    rpc Correctable(CorrectableRequest) returns (CorrectableResponse) {
+        option (gorums.quorumcall) = true;
+    }
+    rpc CorrectableStream(CorrectableRequest) returns (stream CorrectableResponse) {
+        option (gorums.quorumcall) = true;
+    }
 }
 
 message CorrectableRequest {}
 
 message CorrectableResponse {
-  int32 Level = 1;
+    int32 Level = 1;
 }
-
