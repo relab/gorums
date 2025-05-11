@@ -83,6 +83,16 @@ func (c RawConfiguration) Nodes() []*RawNode {
 	return c.RawNodes
 }
 
+// AllNodes returns the nodes in this configuration and all subconfigurations.
+func (c RawConfiguration) AllNodeIDs() []uint32 {
+	return c.RawManager.NodeIDs()
+}
+
+// AllNodes returns the nodes in this configuration and all subconfigurations.
+func (c RawConfiguration) AllNodes() []*RawNode {
+	return c.RawManager.Nodes()
+}
+
 // Size returns the number of nodes in this configuration.
 func (c RawConfiguration) Size() int {
 	return len(c.RawNodes)

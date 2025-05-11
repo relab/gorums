@@ -3,6 +3,7 @@ package gorums_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -226,5 +227,50 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	close(errCh)
 	for err := range errCh {
 		t.Error(err)
+	}
+}
+
+func TestConfigRelease(t *testing.T) {
+	addrs, teardown := gorums.TestSetup(t, 10, func(_ int) gorums.ServerIface {
+		return initServer()
+	})
+	defer teardown()
+
+	c1, err := dummy.NewConfiguration(gorums.WithNodeList(addrs[:3]), gorumsTestMgrOpts()...)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c2, err := c1.SubConfiguration(gorums.WithNodeList(addrs[2:8]))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c3, err := c1.SubConfiguration(gorums.WithNodeList(addrs[5:]))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	allNodes := c2.AllNodeIDs()
+
+	c1c2, err := c2.SubConfiguration(c1.And(c2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetNodes := c1c2.NodeIDs()
+
+	c3.Close()
+
+	remainingNodes := c2.AllNodeIDs()
+
+	hasReleased := reflect.DeepEqual(remainingNodes, targetNodes)
+	hasAll := reflect.DeepEqual(remainingNodes, allNodes)
+
+	if hasAll {
+		t.Fatal("c3.Close() did not close any nodes")
+	}
+
+	if !hasReleased {
+		t.Fatal("There are not closed nodes which don't belong to any not closed configuration")
 	}
 }
