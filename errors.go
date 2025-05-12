@@ -3,7 +3,6 @@ package gorums
 import (
 	"errors"
 	"fmt"
-	"strings"
 )
 
 // Incomplete is the error returned by a quorum call when the call cannot completed
@@ -12,9 +11,7 @@ var Incomplete = errors.New("incomplete call")
 
 // QuorumCallError reports on a failed quorum call.
 type QuorumCallError struct {
-	cause   error
-	errors  []nodeError
-	replies int
+	cause error
 }
 
 // Is reports whether the target error is the same as the cause of the QuorumCallError.
@@ -26,19 +23,7 @@ func (e QuorumCallError) Is(target error) bool {
 }
 
 func (e QuorumCallError) Error() string {
-	s := fmt.Sprintf("quorum call error: %s (errors: %d, replies: %d)", e.cause, len(e.errors), e.replies)
-	var b strings.Builder
-	b.WriteString(s)
-	if len(e.errors) == 0 {
-		return b.String()
-	}
-	b.WriteString("\nnode errors:\n")
-	for _, err := range e.errors {
-		b.WriteByte('\t')
-		b.WriteString(err.Error())
-		b.WriteByte('\n')
-	}
-	return b.String()
+	return fmt.Sprintf("quorum call error: %s", e.cause)
 }
 
 // nodeError reports on a failed RPC call.

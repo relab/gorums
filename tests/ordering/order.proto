@@ -14,7 +14,6 @@ service GorumsTest {
 
     rpc QCAsync(Request) returns (Response) {
         option (gorums.quorumcall) = true;
-        option (gorums.async)      = true;
     }
 
     rpc UnaryRPC(Request) returns (Response) {}

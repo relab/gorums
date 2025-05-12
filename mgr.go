@@ -1,8 +1,10 @@
 package gorums
 
 import (
+	"cmp"
 	"fmt"
 	"log"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -10,12 +12,12 @@ import (
 	"google.golang.org/grpc/backoff"
 )
 
-// RawManager maintains a connection pool of nodes on
+// manager maintains a connection pool of nodes on
 // which quorum calls can be performed.
 //
 // This struct is intended to be used by generated code.
 // You should use the generated `Manager` struct instead.
-type RawManager struct {
+type manager struct {
 	mu        sync.Mutex
 	nodes     []*RawNode
 	lookup    map[uint32]*RawNode
@@ -25,12 +27,12 @@ type RawManager struct {
 	nextMsgID uint64
 }
 
-// NewRawManager returns a new RawManager for managing connection to nodes added
+// newManager returns a new manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager. This function is meant for internal use.
 // You should use the `NewManager` function in the generated code instead.
-func NewRawManager(opts ...ManagerOption) *RawManager {
-	m := &RawManager{
+func newManager(opts ...ManagerOption) *manager {
+	m := &manager{
 		lookup: make(map[uint32]*RawNode),
 		opts:   newManagerOptions(),
 	}
@@ -54,7 +56,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 	return m
 }
 
-func (m *RawManager) closeNodeConns() {
+func (m *manager) closeNodeConns() {
 	for _, node := range m.nodes {
 		err := node.close()
 		if err != nil && m.logger != nil {
@@ -64,7 +66,7 @@ func (m *RawManager) closeNodeConns() {
 }
 
 // Close closes all node connections and any client streams.
-func (m *RawManager) Close() {
+func (m *manager) close() {
 	m.closeOnce.Do(func() {
 		if m.logger != nil {
 			m.logger.Printf("closing")
@@ -75,7 +77,7 @@ func (m *RawManager) Close() {
 
 // NodeIDs returns the identifier of each available node. IDs are returned in
 // the same order as they were provided in the creation of the Manager.
-func (m *RawManager) NodeIDs() []uint32 {
+func (m *manager) nodeIDs() []uint32 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
@@ -86,7 +88,7 @@ func (m *RawManager) NodeIDs() []uint32 {
 }
 
 // Node returns the node with the given identifier if present.
-func (m *RawManager) Node(id uint32) (node *RawNode, found bool) {
+func (m *manager) node(id uint32) (node *RawNode, found bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	node, found = m.lookup[id]
@@ -95,14 +97,14 @@ func (m *RawManager) Node(id uint32) (node *RawNode, found bool) {
 
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
-func (m *RawManager) Nodes() []*RawNode {
+func (m *manager) getNodes() []*RawNode {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.nodes
 }
 
 // Size returns the number of nodes in the Manager.
-func (m *RawManager) Size() (nodes int) {
+func (m *manager) size() (nodes int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.nodes)
@@ -110,8 +112,9 @@ func (m *RawManager) Size() (nodes int) {
 
 // AddNode adds the node to the manager's node pool
 // and establishes a connection to the node.
-func (m *RawManager) AddNode(node *RawNode) error {
-	if _, found := m.Node(node.ID()); found {
+// should only be used by tests
+func (m *manager) addNode(node *RawNode) error {
+	if _, found := m.node(node.ID()); found {
 		// Node IDs must be unique
 		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
 	}
@@ -131,7 +134,32 @@ func (m *RawManager) AddNode(node *RawNode) error {
 	return nil
 }
 
+// remove a node from a manager, the node is closed seperately
+func (m *manager) removeNode(node *RawNode) error {
+	if m.logger != nil {
+		m.logger.Printf("Removing node %s with id %d\n", node, node.id)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.lookup, node.id)
+
+	// assume nodes are sorted
+	i, found := slices.BinarySearchFunc(m.nodes, node, func(n1, n2 *RawNode) int {
+		return cmp.Compare(n1.id, n2.id)
+	})
+
+	if found {
+		// keep nodes sorted
+		m.nodes = append(m.nodes[:i], m.nodes[i+1:]...)
+		return nil
+	}
+
+	return fmt.Errorf("RemodeNode: Node %d (%s) not found", node.id, node)
+}
+
 // getMsgID returns a unique message ID.
-func (m *RawManager) getMsgID() uint64 {
+func (m *manager) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)
 }

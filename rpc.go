@@ -4,21 +4,21 @@ import (
 	"context"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 // CallData contains data needed to make a remote procedure call.
 //
 // This struct should be used by generated code only.
 type CallData struct {
-	Message protoreflect.ProtoMessage
+	Message proto.Message
 	Method  string
 }
 
 // RPCCall executes a remote procedure call on the node.
 //
 // This method should be used by generated code only.
-func (n *RawNode) RPCCall(ctx context.Context, d CallData) (protoreflect.ProtoMessage, error) {
+func (n *RawNode) RPCCall(ctx context.Context, d CallData) (proto.Message, error) {
 	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
 	replyChan := make(chan response, 1)
 	n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}}, replyChan, false)
