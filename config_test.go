@@ -12,6 +12,11 @@ import (
 	"github.com/relab/gorums/tests/dummy"
 )
 
+var (
+	nodes   = []string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}
+	nodeMap = map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
+)
+
 func TestNewConfigurationEmptyNodeList(t *testing.T) {
 	wantErr := errors.New("config: missing required node addresses")
 	_, err := gorums.NewRawConfiguration(gorums.WithNodeList([]string{}))
@@ -25,7 +30,6 @@ func TestNewConfigurationEmptyNodeList(t *testing.T) {
 
 func TestNewConfigurationNodeList(t *testing.T) {
 	cfg, err := gorums.NewRawConfiguration(gorums.WithNodeList(nodes))
-	mgr := cfg.RawManager
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,10 +52,10 @@ func TestNewConfigurationNodeList(t *testing.T) {
 		}
 	}
 
-	if mgr.Size() != len(nodes) {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes))
+	if len(cfg.AllNodeIDs()) != len(nodes) {
+		t.Errorf("mgr.Size() = %d, expected %d", len(cfg.AllNodeIDs()), len(nodes))
 	}
-	mgrNodes := cfg.Nodes()
+	mgrNodes := cfg.AllNodes()
 	for _, n := range nodes {
 		if !contains(mgrNodes, n) {
 			t.Errorf("mgr.Nodes() = %v, expected %s", mgrNodes, n)
@@ -61,7 +65,6 @@ func TestNewConfigurationNodeList(t *testing.T) {
 
 func TestNewConfigurationNodeMap(t *testing.T) {
 	cfg, err := gorums.NewRawConfiguration(gorums.WithNodeMap(nodeMap))
-	mgr := cfg.RawManager
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,10 +76,10 @@ func TestNewConfigurationNodeMap(t *testing.T) {
 			t.Errorf("cfg.Nodes()[%s] = %d, expected %d", node.Address(), node.ID(), nodeMap[node.Address()])
 		}
 	}
-	if mgr.Size() != len(nodeMap) {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
+	if len(cfg.AllNodeIDs()) != len(nodeMap) {
+		t.Errorf("mgr.Size() = %d, expected %d", len(cfg.AllNodeIDs()), len(nodeMap))
 	}
-	for _, node := range mgr.Nodes() {
+	for _, node := range cfg.AllNodes() {
 		if nodeMap[node.Address()] != node.ID() {
 			t.Errorf("mgr.Nodes()[%s] = %d, expected %d", node.Address(), node.ID(), nodeMap[node.Address()])
 		}

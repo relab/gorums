@@ -27,7 +27,7 @@ type RawNode struct {
 	addr   string
 	conn   *grpc.ClientConn
 	cancel func()
-	mgr    *RawManager
+	mgr    *manager
 
 	// the default channel
 	channel *channel
@@ -92,7 +92,7 @@ func (n *RawNode) release() error {
 }
 
 // connect to this node and associate it with the manager.
-func (n *RawNode) connect(mgr *RawManager) error {
+func (n *RawNode) connect(mgr *manager) error {
 	n.mgr = mgr
 	if n.mgr.opts.noConnect {
 		return nil

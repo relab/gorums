@@ -129,7 +129,7 @@ func Repl(cfg *pb.Configuration) error {
 			r.multicast(args[1:])
 		case "nodes":
 			fmt.Println("Nodes: ")
-			for i, n := range cfg.RawManager.Nodes() {
+			for i, n := range cfg.AllNodes() {
 				fmt.Printf("%d: %s\n", i, n.Address())
 			}
 		default:
@@ -293,7 +293,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
 		var err error
-		numNodes := r.cfg.RawManager.Size()
+		numNodes := len(r.cfg.AllNodes())
 		if i == 0 {
 			start = 0
 		} else {
@@ -317,7 +317,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 			return nil
 		}
 		nodes := make([]string, 0)
-		for _, node := range r.cfg.RawManager.Nodes()[start:stop] {
+		for _, node := range r.cfg.AllNodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
 		cfg, err = r.cfg.SubConfiguration(gorums.WithNodeList(nodes))
@@ -330,7 +330,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 	// configuration using list of indices
 	if indices := strings.Split(cfgStr, ","); len(indices) > 0 {
 		selectedNodes := make([]string, 0, len(indices))
-		nodes := r.cfg.RawManager.Nodes()
+		nodes := r.cfg.AllNodes()
 		for _, index := range indices {
 			i, err := strconv.Atoi(index)
 			if err != nil {

@@ -12,7 +12,7 @@ import (
 // You should use the generated `Configuration` type instead.
 type RawConfiguration struct {
 	RawNodes []*RawNode
-	*RawManager
+	mgr      *manager
 }
 
 // NewRawConfiguration returns a configuration based on the provided list of nodes.
@@ -21,7 +21,7 @@ func NewRawConfiguration(nodes NodeListOption, opts ...ManagerOption) (cfg RawCo
 	if nodes == nil {
 		return RawConfiguration{}, fmt.Errorf("config: missing required node list")
 	}
-	mgr := NewRawManager(opts...)
+	mgr := newManager(opts...)
 
 	cfg, err = nodes.newConfig(mgr)
 	for _, n := range cfg.RawNodes {
@@ -40,7 +40,7 @@ func (c *RawConfiguration) SubRawConfiguration(nodes NodeListOption) (cfg RawCon
 		return RawConfiguration{}, fmt.Errorf("config: missing required node list")
 	}
 
-	cfg, err = nodes.newConfig(c.RawManager)
+	cfg, err = nodes.newConfig(c.mgr)
 	for _, n := range cfg.RawNodes {
 		n.obtain()
 	}
@@ -50,7 +50,7 @@ func (c *RawConfiguration) SubRawConfiguration(nodes NodeListOption) (cfg RawCon
 
 // CloseAll closes the configurations and all of its subconfigurations
 func (c *RawConfiguration) CloseAll() error {
-	c.RawManager.Close()
+	c.mgr.close()
 	return nil
 }
 
@@ -85,12 +85,12 @@ func (c RawConfiguration) Nodes() []*RawNode {
 
 // AllNodes returns the nodes in this configuration and all subconfigurations.
 func (c RawConfiguration) AllNodeIDs() []uint32 {
-	return c.RawManager.NodeIDs()
+	return c.mgr.nodeIDs()
 }
 
 // AllNodes returns the nodes in this configuration and all subconfigurations.
 func (c RawConfiguration) AllNodes() []*RawNode {
-	return c.RawManager.Nodes()
+	return c.mgr.getNodes()
 }
 
 // Size returns the number of nodes in this configuration.
