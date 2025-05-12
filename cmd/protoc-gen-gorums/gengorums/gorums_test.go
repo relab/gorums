@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-//TODO(meling) Test various generator functions that are non-trivial
+// TODO(meling) Test various generator functions that are non-trivial
 // methods to tests:
 // qspecMethods
 // qspecServices

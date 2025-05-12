@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 var streamDownErr = status.Error(codes.Unavailable, "stream is down")
@@ -32,7 +32,7 @@ func (req request) waitForSend() bool {
 
 type response struct {
 	nid uint32
-	msg protoreflect.ProtoMessage
+	msg proto.Message
 	err error
 }
 
@@ -50,7 +50,7 @@ type channel struct {
 	backoffCfg      backoff.Config
 	rand            *rand.Rand
 	gorumsClient    ordering.GorumsClient
-	gorumsStream    ordering.Gorums_NodeStreamClient
+	gorumsStream    grpc.BidiStreamingClient[ordering.Metadata, ordering.Metadata]
 	streamMut       sync.RWMutex
 	streamBroken    atomicFlag
 	connEstablished atomicFlag
@@ -328,11 +328,11 @@ func (c *channel) reconnect(maxRetries float64) {
 			return
 		}
 		delay := float64(backoffCfg.BaseDelay)
-		max := float64(backoffCfg.MaxDelay)
-		for r := retries; delay < max && r > 0; r-- {
+		maxDelay := float64(backoffCfg.MaxDelay)
+		for r := retries; delay < maxDelay && r > 0; r-- {
 			delay *= backoffCfg.Multiplier
 		}
-		delay = math.Min(delay, max)
+		delay = math.Min(delay, maxDelay)
 		delay *= 1 + backoffCfg.Jitter*(rand.Float64()*2-1)
 		select {
 		case <-time.After(time.Duration(delay)):

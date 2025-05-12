@@ -8,11 +8,11 @@ var _ {{$out}}
 `
 
 var mcVar = `
-{{$callData := use "gorums.QuorumCallData" .GenFile}}
-{{$genFile := .GenFile}}
-{{$unexportMethod := unexport .Method.GoName}}
-{{$context := use "context.Context" .GenFile}}
-{{$callOpt := use "gorums.CallOption" .GenFile}}
+	{{$callData := use "gorums.QuorumCallData" .GenFile}}
+	{{$genFile := .GenFile}}
+	{{$unexportMethod := unexport .Method.GoName}}
+	{{$context := use "context.Context" .GenFile}}
+	{{$callOpt := use "gorums.CallOption" .GenFile}}
 `
 
 var multicastSignature = `func (c *{{$configurationName}}) {{$method}}(` +
@@ -21,19 +21,20 @@ var multicastSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 	`opts ...{{$callOpt}}) {
 `
 
-var multicastBody = `	cd := {{$callData}}{
+var multicastBody = `
+	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
 	}
-{{- if hasPerNodeArg .Method}}
-{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
-		return f(req.(*{{$in}}), nid)
-	}
-{{- end}}
+	{{- if hasPerNodeArg .Method}}
+	{{$protoMessage := use "proto.Message" .GenFile}}
+		cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+			return f(req.(*{{$in}}), nid)
+		}
+	{{- end}}
 
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
-}
+		c.RawConfiguration.Multicast(ctx, cd, opts...)
+	}
 `
 
 var multicastCall = commonVariables +

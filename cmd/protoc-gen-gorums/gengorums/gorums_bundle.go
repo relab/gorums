@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -129,11 +130,8 @@ func findIdentifiers(pkgInfo *packages.Package) (map[string]string, []string) {
 }
 
 func addUniqueIdentifier(pkgIdents map[string][]string, path, name string) {
-	currentNames := pkgIdents[path]
-	for _, known := range currentNames {
-		if name == known {
-			return
-		}
+	if slices.Contains(pkgIdents[path], name) {
+		return
 	}
 	pkgIdents[path] = append(pkgIdents[path], name)
 }

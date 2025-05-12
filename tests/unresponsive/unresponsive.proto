@@ -6,7 +6,7 @@ option go_package = "github.com/relab/gorums/tests/unresponsive";
 option features.field_presence = IMPLICIT;
 
 service Unresponsive {
-  rpc TestUnresponsive(Empty) returns (Empty) {}
+    rpc TestUnresponsive(Empty) returns (Empty) {}
 }
 
 message Empty {}

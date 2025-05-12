@@ -12,54 +12,52 @@ var clientVariables = `
 `
 
 var clientServicesBegin = `
-{{- $genFile := .GenFile}}
-{{- range configurationsServices .Services}}
-	{{- $service := .GoName}}
+	{{- $genFile := .GenFile}}
+	{{- range configurationsServices .Services}}
+		{{- $service := .GoName}}
 `
 
 var clientServicesEnd = `
-{{- end}}
+	{{- end}}
 `
 
 var clientConfigurationInterface = `
-{{- $interfaceName := printf "%sClient" $service}}
-{{- $configurationName := printf "%sConfiguration" $service}}
-// {{$interfaceName}} is the client interface for the {{$service}} service.
-type {{$interfaceName}} interface {
-	{{- range configurationMethods .Methods}}
-		{{- $method := .GoName}}
-		{{- if isOneway .}}
-			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
-		{{- else if or (isCorrectable .) (isAsync .)}}
-			{{- $customOut := outType . (customOut $genFile .)}}
-			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) *{{$customOut}}
-		{{- else}}
-			{{- $customOut := customOut $genFile .}}
-			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
+	{{- $interfaceName := printf "%sClient" $service}}
+	{{- $configurationName := printf "%sConfiguration" $service}}
+	// {{$interfaceName}} is the client interface for the {{$service}} service.
+	type {{$interfaceName}} interface {
+		{{- range configurationMethods .Methods}}
+			{{- $method := .GoName}}
+			{{- if isOneway .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
+			{{- else}}
+				{{- $out := out $genFile .}}
+				{{- $iterator := use "gorums.Responses" $genFile}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) {{$iterator}}[*{{$out}}]
+			{{- end}}
 		{{- end}}
-	{{- end}}
-}
-// enforce interface compliance
-var _ {{$interfaceName}} = (*{{$configurationName}})(nil)
+	}
+	// enforce interface compliance
+	var _ {{$interfaceName}} = (*{{$configurationName}})(nil)
 `
 
 var clientNodeInterface = `
-{{- $interfaceName := printf "%sNodeClient" $service}}
-{{- $nodeName := printf "%sNode" $service}}
-// {{$interfaceName}} is the single node client interface for the {{$service}} service.
-type {{$interfaceName}} interface {
-	{{- range nodeMethods .Methods}}
-		{{- $method := .GoName}}
-		{{- if isOneway .}}
-			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
-		{{- else}}
-			{{- $customOut := customOut $genFile .}}
-			{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
+	{{- $interfaceName := printf "%sNodeClient" $service}}
+	{{- $nodeName := printf "%sNode" $service}}
+	// {{$interfaceName}} is the single node client interface for the {{$service}} service.
+	type {{$interfaceName}} interface {
+		{{- range nodeMethods .Methods}}
+			{{- $method := .GoName}}
+			{{- if isOneway .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
+			{{- else}}
+				{{- $out := out $genFile .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$out}}, err error)
+			{{- end}}
 		{{- end}}
-	{{- end}}
-}
-// enforce interface compliance
-var _ {{$interfaceName}} = (*{{$nodeName}})(nil)
+	}
+	// enforce interface compliance
+	var _ {{$interfaceName}} = (*{{$nodeName}})(nil)
 `
 
 var client = clientVariables +

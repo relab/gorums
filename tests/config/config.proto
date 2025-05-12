@@ -8,12 +8,16 @@ option features.field_presence = IMPLICIT;
 import "gorums.proto";
 
 service ConfigTest {
-    rpc Config(Request) returns (Response) { option (gorums.quorumcall) = true; }
+    rpc Config(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
+    }
 }
 
-message Request { uint64 Num = 1; }
+message Request {
+    uint64 Num = 1;
+}
 
 message Response {
     string Name = 1;
-    uint64 Num = 2;
+    uint64 Num  = 2;
 }

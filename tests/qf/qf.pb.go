@@ -13,7 +13,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -25,10 +24,10 @@ const (
 )
 
 type Request struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Value         int64                  `protobuf:"varint,1,opt,name=Value" json:"Value,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Value int64                  `protobuf:"varint,1,opt,name=Value"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Request) Reset() {
@@ -56,23 +55,36 @@ func (x *Request) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Request.ProtoReflect.Descriptor instead.
-func (*Request) Descriptor() ([]byte, []int) {
-	return file_qf_qf_proto_rawDescGZIP(), []int{0}
-}
-
 func (x *Request) GetValue() int64 {
 	if x != nil {
-		return x.Value
+		return x.xxx_hidden_Value
 	}
 	return 0
 }
 
+func (x *Request) SetValue(v int64) {
+	x.xxx_hidden_Value = v
+}
+
+type Request_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Value int64
+}
+
+func (b0 Request_builder) Build() *Request {
+	m0 := &Request{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Value = b.Value
+	return m0
+}
+
 type Response struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Result        int64                  `protobuf:"varint,1,opt,name=Result" json:"Result,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Result int64                  `protobuf:"varint,1,opt,name=Result"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Response) Reset() {
@@ -100,16 +112,29 @@ func (x *Response) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Response.ProtoReflect.Descriptor instead.
-func (*Response) Descriptor() ([]byte, []int) {
-	return file_qf_qf_proto_rawDescGZIP(), []int{1}
-}
-
 func (x *Response) GetResult() int64 {
 	if x != nil {
-		return x.Result
+		return x.xxx_hidden_Result
 	}
 	return 0
+}
+
+func (x *Response) SetResult(v int64) {
+	x.xxx_hidden_Result = v
+}
+
+type Response_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Result int64
+}
+
+func (b0 Response_builder) Build() *Response {
+	m0 := &Response{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Result = b.Result
+	return m0
 }
 
 var File_qf_qf_proto protoreflect.FileDescriptor
@@ -124,18 +149,6 @@ const file_qf_qf_proto_rawDesc = "" +
 	"\x0eQuorumFunction\x12)\n" +
 	"\x06UseReq\x12\v.qf.Request\x1a\f.qf.Response\"\x04\xa0\xb5\x18\x01\x12,\n" +
 	"\tIgnoreReq\x12\v.qf.Request\x1a\f.qf.Response\"\x04\xa0\xb5\x18\x01B'Z github.com/relab/gorums/tests/qf\x92\x03\x02\b\x02b\beditionsp\xe8\a"
-
-var (
-	file_qf_qf_proto_rawDescOnce sync.Once
-	file_qf_qf_proto_rawDescData []byte
-)
-
-func file_qf_qf_proto_rawDescGZIP() []byte {
-	file_qf_qf_proto_rawDescOnce.Do(func() {
-		file_qf_qf_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_qf_qf_proto_rawDesc), len(file_qf_qf_proto_rawDesc)))
-	})
-	return file_qf_qf_proto_rawDescData
-}
 
 var file_qf_qf_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_qf_qf_proto_goTypes = []any{

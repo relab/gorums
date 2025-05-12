@@ -17,8 +17,8 @@ func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
 	return nil, nil
 }
 
-func dummyMgr() *RawManager {
-	return NewRawManager(
+func dummyMgr() *manager {
+	return newManager(
 		WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
@@ -27,7 +27,7 @@ func dummyMgr() *RawManager {
 
 var handlerName = "mock.Server.Test"
 
-func dummySrv() *Server {
+func newDummySrv() *Server {
 	mockSrv := &mockSrv{}
 	srv := NewServer()
 	srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
@@ -44,7 +44,7 @@ func TestChannelCreation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//the node should be closed manually because it isn't added to the configuration
+	// the node should be closed manually because it isn't added to the configuration
 	defer node.close()
 	mgr := dummyMgr()
 	// a proper connection should NOT be established here
@@ -52,8 +52,9 @@ func TestChannelCreation(t *testing.T) {
 
 	replyChan := make(chan response, 1)
 	go func() {
-		md := ordering.Metadata_builder{MessageID: 1, Method: handlerName}.Build()
-		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
+		ctx := context.Background()
+		md := ordering.NewGorumsMetadata(ctx, 1, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan, false)
 	}()
 	select {
@@ -65,20 +66,20 @@ func TestChannelCreation(t *testing.T) {
 
 func TestChannelSuccessfulConnection(t *testing.T) {
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
-		return dummySrv()
+		return newDummySrv()
 	})
 	defer teardown()
 	mgr := dummyMgr()
-	defer mgr.Close()
+	defer mgr.close()
 	node, err := NewRawNode(addrs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = mgr.AddNode(node); err != nil {
+	if err = mgr.addNode(node); err != nil {
 		t.Fatal(err)
 	}
-	if len(mgr.Nodes()) < 1 {
+	if len(mgr.getNodes()) < 1 {
 		t.Fatal("the node was not added to the configuration")
 	}
 	if !node.channel.isConnected() {
@@ -91,7 +92,7 @@ func TestChannelSuccessfulConnection(t *testing.T) {
 
 func TestChannelUnsuccessfulConnection(t *testing.T) {
 	mgr := dummyMgr()
-	defer mgr.Close()
+	defer mgr.close()
 	// no servers are listening on the given address
 	node, err := NewRawNode("127.0.0.1:5000")
 	if err != nil {
@@ -99,10 +100,10 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 	}
 
 	// the node should still be added to the configuration
-	if err = mgr.AddNode(node); err != nil {
+	if err = mgr.addNode(node); err != nil {
 		t.Fatal(err)
 	}
-	if len(mgr.Nodes()) < 1 {
+	if len(mgr.getNodes()) < 1 {
 		t.Fatal("the node was not added to the configuration")
 	}
 	if node.conn == nil {
@@ -113,12 +114,12 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 func TestChannelReconnection(t *testing.T) {
 	srvAddr := "127.0.0.1:5000"
 	// wait to start the server
-	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
+	startServer, stopServer := testServerSetup(t, srvAddr, newDummySrv())
 	node, err := NewRawNode(srvAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	//the node should be closed manually because it isn't added to the configuration
+	// the node should be closed manually because it isn't added to the configuration
 	defer node.close()
 	mgr := dummyMgr()
 	// a proper connection should NOT be established here because server is not started
@@ -127,8 +128,9 @@ func TestChannelReconnection(t *testing.T) {
 	// send first message when server is down
 	replyChan1 := make(chan response, 1)
 	go func() {
-		md := ordering.Metadata_builder{MessageID: 1, Method: handlerName}.Build()
-		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
+		ctx := context.Background()
+		md := ordering.NewGorumsMetadata(ctx, 1, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan1, false)
 	}()
 
@@ -147,8 +149,9 @@ func TestChannelReconnection(t *testing.T) {
 	// send second message when server is up
 	replyChan2 := make(chan response, 1)
 	go func() {
-		md := ordering.Metadata_builder{MessageID: 2, Method: handlerName}.Build()
-		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
+		ctx := context.Background()
+		md := ordering.NewGorumsMetadata(ctx, 2, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
 		node.channel.enqueue(req, replyChan2, false)
 	}()
 
@@ -167,8 +170,9 @@ func TestChannelReconnection(t *testing.T) {
 	// send third message when server has been previously up but is now down
 	replyChan3 := make(chan response, 1)
 	go func() {
-		md := ordering.Metadata_builder{MessageID: 3, Method: handlerName}.Build()
-		req := request{ctx: context.Background(), msg: &Message{Metadata: md, Message: &mock.Request{}}}
+		ctx := context.Background()
+		md := ordering.NewGorumsMetadata(ctx, 3, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
 		node.channel.enqueue(req, replyChan3, false)
 	}()
 

@@ -52,14 +52,12 @@ The command performs the write quorum call on node 0 and 2
 `
 
 type repl struct {
-	mgr  *pb.StorageManager
 	cfg  *pb.StorageConfiguration
 	term *term.Terminal
 }
 
-func newRepl(mgr *pb.StorageManager, cfg *pb.StorageConfiguration) *repl {
+func newRepl(cfg *pb.StorageConfiguration) *repl {
 	return &repl{
-		mgr: mgr,
 		cfg: cfg,
 		term: term.NewTerminal(struct {
 			io.Reader
@@ -90,8 +88,8 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the manager and configuration.
-func Repl(mgr *pb.StorageManager, defaultCfg *pb.StorageConfiguration) error {
-	r := newRepl(mgr, defaultCfg)
+func Repl(cfg *pb.StorageConfiguration) error {
+	r := newRepl(cfg)
 
 	fmt.Println(help)
 	for {
@@ -131,7 +129,7 @@ func Repl(mgr *pb.StorageManager, defaultCfg *pb.StorageConfiguration) error {
 			r.multicast(args[1:])
 		case "nodes":
 			fmt.Println("Nodes: ")
-			for i, n := range mgr.Nodes() {
+			for i, n := range cfg.AllNodes() {
 				fmt.Printf("%d: %s\n", i, n.Address())
 			}
 		default:
@@ -254,7 +252,10 @@ func (repl) readQC(args []string, cfg *pb.StorageConfiguration) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.ReadQC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+
+	req := pb.ReadRequest_builder{Key: args[0]}.Build()
+	resp, err := readQF(cfg.ReadQC(ctx, req), cfg.Size()/2)
+
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -273,7 +274,8 @@ func (repl) writeQC(args []string, cfg *pb.StorageConfiguration) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.WriteQC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	req := pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()
+	resp, err := writeQF(cfg.WriteQC(ctx, req), cfg.Size())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -291,7 +293,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.StorageConfiguration) {
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
 		var err error
-		numNodes := r.mgr.Size()
+		numNodes := len(r.cfg.AllNodes())
 		if i == 0 {
 			start = 0
 		} else {
@@ -315,10 +317,10 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.StorageConfiguration) {
 			return nil
 		}
 		nodes := make([]string, 0)
-		for _, node := range r.mgr.Nodes()[start:stop] {
+		for _, node := range r.cfg.AllNodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = r.mgr.NewConfiguration(gorums.WithNodeList(nodes), &qspec{cfgSize: stop - start})
+		cfg, err = r.cfg.SubStorageConfiguration(gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -328,7 +330,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.StorageConfiguration) {
 	// configuration using list of indices
 	if indices := strings.Split(cfgStr, ","); len(indices) > 0 {
 		selectedNodes := make([]string, 0, len(indices))
-		nodes := r.mgr.Nodes()
+		nodes := r.cfg.AllNodes()
 		for _, index := range indices {
 			i, err := strconv.Atoi(index)
 			if err != nil {
@@ -341,7 +343,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.StorageConfiguration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.mgr.NewConfiguration(gorums.WithNodeList(selectedNodes), &qspec{cfgSize: len(selectedNodes)})
+		cfg, err := r.cfg.SubStorageConfiguration(gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

@@ -10,16 +10,18 @@ import (
 // By default this function returns once the message has been sent to all nodes.
 // Providing the call option WithNoSendWaiting, the function may return
 // before the message has been sent.
+//
+// This method should be used by generated code only.
 func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-	md := ordering.Metadata_builder{MessageID: c.getMsgID(), Method: d.Method}.Build()
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 	sentMsgs := 0
 
 	var replyChan chan response
 	if !o.noSendWaiting {
-		replyChan = make(chan response, len(c))
+		replyChan = make(chan response, c.Size())
 	}
-	for _, n := range c {
+	for _, n := range c.Nodes() {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)

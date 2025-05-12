@@ -17,9 +17,9 @@ type testSrv struct{}
 func (t testSrv) TestTLS(ctx gorums.ServerCtx, in *Request) (resp *Response, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok || peerInfo.AuthInfo.AuthType() != "tls" {
-		return &Response{OK: false}, nil
+		return Response_builder{OK: false}.Build(), nil
 	}
-	return &Response{OK: true}, nil
+	return Response_builder{OK: true}.Build(), nil
 }
 
 func TestTLS(t *testing.T) {
@@ -45,17 +45,17 @@ func TestTLS(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := NewTLSManager(
+	cfg, err := NewTLSConfiguration(
+		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
 		),
 	)
-	_, err = mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	node := mgr.Nodes()[0]
+	node := cfg.Nodes()[0]
 	resp, err := node.TestTLS(context.Background(), &Request{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)

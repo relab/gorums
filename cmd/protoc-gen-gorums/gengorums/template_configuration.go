@@ -12,7 +12,6 @@ var configurationServicesBegin = `
 	{{- $configurationName := printf "%sConfiguration" $service}}
 	{{- $qspecName := printf "%sQuorumSpec" $service}}
 	{{- $nodeName := printf "%sNode" $service}}
-	{{- $isQspec := ne (len (qspecMethods .Methods))	0}}
 `
 
 var configurationServicesEnd = `
@@ -24,37 +23,53 @@ var configurationStruct = `
 // procedure calls may be invoked.
 type {{$configurationName}} struct {
 	{{$rawConfiguration}}
-	{{- if $isQspec}}
-		qspec {{$qspecName}}
-	{{- end}}
-	nodes []*{{$nodeName}}
+}
+`
+
+var newConfiguration = `
+// New{{$configurationName}} returns a configuration based on the provided list of nodes (required)
+// and an optional quorum specification. The QuorumSpec is necessary for call types that
+// must process replies. For configurations only used for unicast or multicast call types,
+// a QuorumSpec is not needed.
+// Nodes can be supplied using WithNodeMap or WithNodeList.
+// Using any other type of NodeListOption will not work.
+// The ManagerOption list controls how the nodes in the configuration are created.
+func New{{$configurationName}}(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *{{$configurationName}}, err error) {
+	c = &{{$configurationName}}{}
+	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+`
+
+var subConfiguration = `
+// Sub{{$configurationName}} allows for making a new Configuration from the
+// ManagerOption list and node list of another set of configurations,
+// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
+// A new configuration can also be created from an existing configuration,
+// using the And, WithNewNodes, Except, and WithoutNodes methods.
+func (c *{{$configurationName}}) Sub{{$configurationName}}(cfg gorums.NodeListOption) (subCfg *{{$configurationName}}, err error) {
+	subCfg = &{{$configurationName}}{}
+	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return subCfg, nil
 }
 `
 
 var configurationFromRaw = `
-// {{$qspecName}}FromRaw returns a new {{$qspecName}} from the given raw configuration{{if $isQspec}} and QuorumSpec{{end}}.
+// {{$configurationName}}FromRaw returns a new {{$configurationName}} from the given raw configuration.
 //
 // This function may for example be used to "clone" a configuration but install a different QuorumSpec:
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func {{$configurationName}}FromRaw(rawCfg {{$rawConfiguration}}{{if $isQspec}}, qspec {{$qspecName}}{{end}}) (*{{$configurationName}}, error) {
-	{{- if $isQspec}}
-		// return an error if qspec is nil.
-		if qspec == nil {
-			return nil, {{use "fmt.Errorf" $genFile}}("config: missing required QuorumSpec")
-		}
-	{{- end}}
+func {{$configurationName}}FromRaw(rawCfg {{$rawConfiguration}}) (*{{$configurationName}}, error) {
 	newCfg := &{{$configurationName}}{
 		RawConfiguration: rawCfg,
-		{{- if $isQspec}}
-			qspec:            qspec,
-		{{- end}}
-	}
-	// initialize the nodes slice
-	newCfg.nodes = make([]*{{$nodeName}}, newCfg.Size())
-	for i, n := range rawCfg {
-		newCfg.nodes[i] = &{{$nodeName}}{n}
 	}
 	return newCfg, nil
 }
@@ -66,7 +81,24 @@ var configurationMethodsTemplate = `
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *{{$configurationName}}) Nodes() []*{{$nodeName}} {
-	return c.nodes
+	rawNodes := c.RawConfiguration.Nodes()
+	nodes := make([]*{{$nodeName}}, len(rawNodes))
+	for i, n := range rawNodes {
+		nodes[i] = &{{$nodeName}}{n}
+	}
+	return nodes
+}
+
+// AllNodes returns a slice of each available node of all subconfigurations. Sorted by node id.
+//
+// NOTE: mutating the returned slice is not supported.
+func (c *{{$configurationName}}) AllNodes() []*{{$nodeName}} {
+	rawNodes := c.RawConfiguration.AllNodes()
+	nodes := make([]*{{$nodeName}}, len(rawNodes))
+	for i, n := range rawNodes {
+		nodes[i] = &{{$nodeName}}{n}
+	}
+	return nodes
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
@@ -83,5 +115,5 @@ func (c {{$configurationName}}) Except(rm *{{$configurationName}}) {{$nodeListOp
 
 var configuration = configurationVars +
 	configurationServicesBegin +
-	configurationStruct + configurationFromRaw + configurationMethodsTemplate +
+	configurationStruct + newConfiguration + subConfiguration + configurationFromRaw + configurationMethodsTemplate +
 	configurationServicesEnd

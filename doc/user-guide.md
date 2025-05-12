@@ -117,7 +117,7 @@ func (n *Node) Write(ctx context.Context, in *State) (*WriteResponse, error)
 And this is our server interface:
 
 ```go
-type Storage interface {
+type StorageServer interface {
   Read(gorums.ServerCtx, *ReadRequest) (*State, error)
   Write(gorums.ServerCtx, *State) (*WriteResponse, error)
 }
@@ -280,7 +280,7 @@ While Gorums allows us to call RPCs on individual nodes as we did above, Gorums 
 ## Quorum Calls
 
 Instead of invoking an RPC explicitly on all nodes in a configuration, Gorums allows users to invoke a *quorum call* via a method on the `Configuration` type.
-If an RPC is invoked as a quorum call, Gorums will invoke the RPCs on all nodes in parallel and collect and process the replies.
+If an RPC is invoked as a quorum call, Gorums will invoke the RPCs on all nodes in parallel and return the responses.
 
 For the Gorums plugin to generate quorum calls we need to specify the `quorumcall` option for our RPC methods in the proto file, as shown below:
 
@@ -300,95 +300,67 @@ service QCStorage {
 The generated methods have the following client-side interface:
 
 ```go
-func (c *QCStorageConfiguration) Read(ctx context.Context, in *ReadRequest) (*State, error)
-func (c *QCStorageConfiguration) Write(ctx context.Context, in *State) (*WriteResponse, error)
+func (c *QCStorageConfiguration) Read(ctx context.Context, in *ReadRequest) gorums.Responses[*State]
+func (c *QCStorageConfiguration) Write(ctx context.Context, in *State) gorums.Responses[*WriteResponse]
 ```
 
-## The QuorumSpec Interface with Quorum Functions
+## The quorum call responses
 
-Gorums uses a *quorum function*, that takes as input a set of replies from individual servers, and computes the reply to be returned from the quorum call.
-Such a quorum function has two responsibilities:
+The quorum calls return a gorums.Responses object which is an iterator used to process the responses from the quorum call.
+Getting the responses from the iterator can be done with a for loop just like with a slice.
+Each of these responses is a struct containing the node id of the server, and contains either a proto message and an error (or both).
+If you only care about the successfully received messages you can use the `IgnoreErrors` method.
+We can create "quorum functions" which takes the quorum call responses and returns a single result or an error.
 
-1. Report when a set of replies form a quorum.
-2. Compute a single reply from a set of replies that form a quorum.
-
-Behind the scenes, the RPCs invoked as part of a quorum call return multiple replies.
-Typically, only one of these replies should be returned to the end-user.
-However, Gorums cannot provide a generic policy for selecting a single reply from many replies.
-Instead, Gorums makes this an application-specific choice.
-For example, it may be necessary to compare the content of several reply messages when deciding which reply to return to the client's quorum call, and sometimes several replies must be combined into a new one.
-Gorums, therefore, generates a `QuorumSpec` interface that contains a quorum function for every quorum call.
-The `QuorumSpec` generated for our example is as follows:
-
-```go
-type QuorumSpec interface {
-  // ReadQF is the quorum function for the Read
-  // quorum call method.
-  ReadQF(req *ReadRequest, replies map[uint32]*State) (*State, bool)
-
-  // WriteQF is the quorum function for the Write
-  // quorum call method.
-  WriteQF(req *WriteRequest, replies map[uint32]*WriteResponse) (*WriteResponse, bool)
-}
-```
-
-A `QuorumSpec` implementation must be provided when creating a new configuration.
-Each quorum function of the `QuorumSpec` must adhere to the following rules:
-
-* If too few replies have been received, a quorum function must return `false`, signaling to Gorums that the quorum call should wait for more replies.
-* Once sufficiently many replies have been received, the quorum function must return `true` along with an appropriate return value, signaling that the quorum call can return the value to the client.
-
-The example below shows an implementation of the `QuorumSpec` interface.
-Here, `ReadQF` returns the `*State` with the highest timestamp and `true`, signaling that the quorum call can return.
-The quorum call will return the `*State` chosen by the quorum function.
+The example below shows an implementation of a "quorum function" for the `Read` and `Write` quorum calls.
+Here, `readQF` returns the `*State` with the highest timestamp for a majority of responses.
+`writeQF` returns the `*WriteResponse` from one of the responses when it received a majority of responses.
+We decide to ignore all errors, meaning errors do not count towards the quorum.
 
 ```go
 package gorumsexample
 
-import "sort"
-
-type QSpec struct {
-  quorumSize int
-}
-
-// ReadQF is the quorum function for the Read RPC method.
-func (qs *QSpec) ReadQF(_ *ReadResponse, replies map[uint32]*State) (*State, bool) {
-  if len(replies) < qs.quorumSize {
-    return nil, false
-  }
-  return newestState(replies), true
-}
-
-// WriteQF is the quorum function for the Write RPC method.
-func (qs *QSpec) WriteQF(_ *WriteRequest, replies map[uint32]*WriteResponse) (*WriteResponse, bool) {
-  if len(replies) < qs.quorumSize {
-    return nil, false
-  }
-  // return the first response we find
-  var reply *WriteResponse
-  for _, r := range replies {
-    reply = r
-    break
-  }
-  return reply, true
-}
-
-func newestState(replies map[uint32]*State) *State {
-  var newest *State
-  for _, s := range replies {
-    if s.GetTimestamp() >= newest.GetTimestamp() {
-      newest = s
+func readQF(responses gorums.Responses[*State], quorum int) (*State, error) {
+	var newest *pb.ReadResponse
+	replyCount := int(0)
+	for response := range responses.IgnoreErrors() {
+    if newest != nil {
+		  newest = newestStateOfTwo(newest, response.Msg)
+    } else {
+      newest = response.Msg
     }
+		replyCount++
+		if replyCount >= quorum {
+			return newest, nil
+		}
+	}
+	return nil, errors.New("QCStorage.readqf: quorum not found")
+}
+
+func writeQF(responses gorums.Responses[*WriteResponse], quorum int) (*WriteResponse, error) {
+	replyCount := int(0)
+	for response := range responses.IgnoreErrors() {
+		replyCount++
+		if replyCount >= quorum {
+			return response.Msg
+		}
+	}
+	return nil, errors.New("QCStorage.writeqf: quorum not found")
+}
+
+func newestValueOfTwo(s1 *State, s2 *State) *State {
+  if s1.GetTimestamp() >= s2.GetTimestamp() {
+    return s1
   }
-  return newest
+  return s2
 }
 ```
 
 ## Invoking Quorum Calls on the Configuration in the StorageClient
 
-In the following code snippet, we create a configuration, including an instance of the `QSpec` defined above, and invoke a quorum call.
-The quorum call will return after receiving replies from two servers.
-Gorums ignores any outstanding replies.
+In the following code snippet, we create a configuration, and invoke a quorum call.
+We call a quorum function using the iterator from the quorum call.
+The quorum function will return after receiving replies from two servers.
 Note that Gorums does not cancel any outstanding RPCs, leaving it to the client to manage any cancellations through the `Context` argument to the quorum call.
 However, canceling RPCs to a replicated server may not be the desired behavior, since then one or more servers may not have seen previous messages.
 
@@ -400,15 +372,12 @@ func ExampleStorageClient() {
     "127.0.0.1:8082",
   }
 
-  mgr := NewQCStorageManager(
+  // Create a configuration including all nodes
+  allNodesConfig, err := examplepb.NewQCStorageConfiguration(
+    gorums.WithNodeList(addrs),
     gorums.WithGrpcDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
-  )
-  // Create a configuration including all nodes
-  allNodesConfig, err := mgr.NewConfiguration(
-    gorums.WithNodeList(addrs),
-    &QSpec{2},
   )
   if err != nil {
     log.Fatalln("error creating read config:", err)
@@ -416,8 +385,9 @@ func ExampleStorageClient() {
 
   // Invoke read quorum call:
   ctx, cancel := context.WithCancel(context.Background())
-  reply, err := allNodesConfig.Read(ctx, &ReadRequest{})
-  if err != nil {QCStorage
+  responses := allNodesConfig.Read(ctx, &ReadRequest{})
+  reply, err := readQF(responses, 2)
+  if err != nil {
     log.Fatalln("read rpc returned error:", err)
   }
   cancel()
@@ -430,9 +400,6 @@ Below is an example demonstrating how to work with configurations.
 These configurations are viewed from the client's perspective, and to actually make quorum calls on these configurations, there must be server endpoints to connect to.
 We ignore the construction of `mgr` and error handling.
 
-Depending on the application's requirements, the `QSpec` argument may depend on the resulting configuration's size.
-In the example below, we simply use fixed quorum sizes.
-
 ```go
 func ExampleConfigClient() {
   addrs := []string{
@@ -441,8 +408,7 @@ func ExampleConfigClient() {
     "127.0.0.1:8082",
   }
   // Make configuration c1 from addrs, giving |c1| = |addrs| = 3
-  c1, _ := mgr.NewConfiguration(
-    &QSpec{2},
+  c1, _ := examplepb.NewExampleConfiguration(
     gorums.WithNodeList(addrs),
   )
 
@@ -450,33 +416,28 @@ func ExampleConfigClient() {
     "127.0.0.1:9080",
     "127.0.0.1:9081",
   }
-  // Make configuration c2 from newAddrs, giving |c2| = |newAddrs| = 2
-  c2, _ := mgr.NewConfiguration(
-    &QSpec{1},
+  // Make subconfiguration c2 from newAddrs, giving |c2| = |newAddrs| = 2
+  c2, _ := c1.SubExampleConfiguration(
     gorums.WithNodeList(newAddrs),
   )
 
-  // Make new configuration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
-  c3, _ := mgr.NewConfiguration(
-    &QSpec{3},
+  // Make new subconfiguration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
+  c3, _ := c1.SubExampleConfiguration(
     c1.WithNewNodes(gorums.WithNodeList(newAddrs)),
   )
 
-  // Make new configuration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
-  c4, _ := mgr.NewConfiguration(
-    &QSpec{3},
+  // Make new subconfiguration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
+  c4, _ := c1.SubExampleConfiguration(
     c1.And(c2),
   )
 
-  // Make new configuration c5 from c1 except the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
-  c5, _ := mgr.NewConfiguration(
-    &QSpec{1},
+  // Make new subconfiguration c5 from c1 except the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
+  c5, _ := c1.SubExampleConfiguration(
     c1.WithoutNodes(c1.NodeIDs()[0]),
   )
 
-  // Make new configuration c6 from c3 except c1, giving |c6| = |c3| - |c1| = 5-3 = 2
-  c6, _ := mgr.NewConfiguration(
-    &QSpec{1},
+  // Make new subconfiguration c6 from c3 except c1, giving |c6| = |c3| - |c1| = 5-3 = 2
+  c6, _ := c1.SubExampleConfiguration(
     c3.Except(c1),
   )
 }

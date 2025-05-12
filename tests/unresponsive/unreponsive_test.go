@@ -28,19 +28,18 @@ func TestUnresponsive(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := NewUnresponsiveManager(
+	cfg, err := NewUnresponsiveConfiguration(
+		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	node := mgr.Nodes()[0]
-
-	for i := 0; i < 1000; i++ {
+	node := cfg.Nodes()[0]
+	for range 1000 {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		_, err = node.TestUnresponsive(ctx, &Empty{})
 		if err != nil && errors.Is(err, context.Canceled) {
