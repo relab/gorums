@@ -12,14 +12,27 @@ import "gorums.proto";
 
 service Reserved {
     rpc ConfTest(ReservedConfiguration) returns (ReservedNode) {}
-    rpc QuorumCall(ReservedConfiguration) returns (ReservedNode) {
+    rpc QuorumCall(ReservedServer) returns (ReservedClient) {
         option (gorums.quorumcall) = true;
     }
+}
+
+message ReservedNode {
+    string Node = 1;
+}
+
+message ReservedServer {
+    string Srv = 1;
 }
 
 message ReservedConfiguration {
     string Conf = 1;
 }
-message ReservedNode {
-    string Node = 1;
+
+message ReservedClient {
+    string Client = 1;
+}
+
+message ReservedNodeClient {
+    string NClient = 1;
 }

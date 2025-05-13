@@ -9,7 +9,7 @@ var serverVariables = `
 
 var serverServicesBegin = `
 {{- $genFile := .GenFile}}
-{{- range configurationsServices .Services}}
+{{- range .Services}}
 	{{- $service := .GoName}}
 	{{- $serverName := serviceTypeName $service "Server"}}
 `

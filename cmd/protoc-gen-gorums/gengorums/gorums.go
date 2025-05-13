@@ -89,6 +89,27 @@ func gorumsGuard(file *protogen.File) bool {
 	return true
 }
 
+var reservedNames map[string]struct{}
+
+func initReservedNames() {
+	reservedNames = make(map[string]struct{})
+}
+
+func checkNameCollision(file *protogen.File) {
+	for _, msg := range file.Messages {
+		msgName := fmt.Sprintf("%v", msg.Desc.Name())
+		for reserved := range reservedNames {
+			if msgName == reserved {
+				log.Fatalf("%v.proto: contains message %s, which is a reserved Gorums service type.\n", file.GeneratedFilenamePrefix, msgName)
+			}
+		}
+	}
+}
+
+func reserveName(name string) {
+	reservedNames[name] = struct{}{}
+}
+
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
 func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
 	// sort the gorums types so that output remains stable across rebuilds
@@ -97,9 +118,14 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 		sortedTypes = append(sortedTypes, gorumsType)
 	}
 	sort.Strings(sortedTypes)
+
+	initReservedNames()
+
 	for _, gorumsType := range sortedTypes {
 		genGorumsType(g, file.Services, gorumsType)
 	}
+
+	checkNameCollision(file)
 }
 
 // servicesData hold the services to generate and a reference to the file in which
