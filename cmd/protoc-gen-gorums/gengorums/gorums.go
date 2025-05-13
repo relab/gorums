@@ -98,15 +98,19 @@ func initReservedNames() {
 func checkNameCollision(file *protogen.File) {
 	for _, msg := range file.Messages {
 		msgName := fmt.Sprintf("%v", msg.Desc.Name())
-		for reserved := range reservedNames {
-			if msgName == reserved {
-				log.Fatalf("%v.proto: contains message %s, which is a reserved Gorums service type.\n", file.GeneratedFilenamePrefix, msgName)
-			}
+
+		_, ok := reservedNames[msgName]
+		if ok {
+			log.Fatalf("%v.proto: contains message %s, which is a reserved Gorums service type.\n", file.GeneratedFilenamePrefix, msgName)
 		}
 	}
 }
 
 func reserveName(name string) {
+	_, ok := reservedNames[name]
+	if ok {
+		log.Fatalf("reserveName: Redefinition of method %s.\n", name)
+	}
 	reservedNames[name] = struct{}{}
 }
 

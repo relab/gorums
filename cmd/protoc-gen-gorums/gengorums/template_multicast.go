@@ -15,6 +15,8 @@ var mcVar = `
 	{{- $callOpt := use "gorums.CallOption" .GenFile}}
 `
 
+var multicastReserve = `{{reserveMethod $configurationName $method}}`
+
 var multicastSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}},` +
@@ -41,5 +43,6 @@ var multicastCall = commonVariables +
 	mcVar +
 	multicastRefImports +
 	quorumCallComment +
+	multicastReserve +
 	multicastSignature +
 	multicastBody

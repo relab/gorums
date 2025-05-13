@@ -22,9 +22,10 @@ var clientServicesEnd = `
 `
 
 var clientConfigurationInterface = `
-	{{- $interfaceName := serviceTypeName $service "Client"}}
+	{{- $interfaceName := printf "%sClient" $service}}
 	{{- $configurationName := printf "%sConfiguration" $service}}
 	// {{$interfaceName}} is the client interface for the {{$service}} service.
+	{{- reserveName $interfaceName}}
 	type {{$interfaceName}} interface {
 		{{- range configurationMethods .Methods}}
 			{{- $method := .GoName}}
@@ -42,9 +43,10 @@ var clientConfigurationInterface = `
 `
 
 var clientNodeInterface = `
-	{{- $interfaceName := serviceTypeName $service "NodeClient"}}
-	{{- $nodeName := serviceTypeName $service "Node"}}
+	{{- $interfaceName := printf "%sNodeClient" $service}}
+	{{- $nodeName := printf "%sNode" $service}}
 	// {{$interfaceName}} is the single node client interface for the {{$service}} service.
+	{{- reserveName $interfaceName}}
 	type {{$interfaceName}} interface {
 		{{- range nodeMethods .Methods}}
 			{{- $method := .GoName}}

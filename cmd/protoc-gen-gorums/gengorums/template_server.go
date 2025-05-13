@@ -11,7 +11,7 @@ var serverServicesBegin = `
 {{- $genFile := .GenFile}}
 {{- range .Services}}
 	{{- $service := .GoName}}
-	{{- $serverName := serviceTypeName $service "Server"}}
+	{{- $serverName := printf "%sServer" $service}}
 `
 
 var serverServicesEnd = `
@@ -20,6 +20,7 @@ var serverServicesEnd = `
 
 var serverInterface = `
 // {{$serverName}} is the server-side API for the {{$service}} Service
+{{- reserveName $serverName}}
 type {{$serverName}} interface {
 	{{- range .Methods}}
 		{{- if isOneway .}}
@@ -34,7 +35,12 @@ type {{$serverName}} interface {
 `
 
 var registerInterface = `
-func Register{{$serverName}}(srv *{{use "gorums.Server" $genFile}}, impl {{$serverName}}) {
+{{- $funcName := printf "Register%s" $serverName}}
+// {{$funcName}} adds rpc handler functions to a server,
+// the handlers decide how the server responds when it receives
+// a request from a client
+{{- reserveName $funcName}}
+func {{$funcName}}(srv *{{use "gorums.Server" $genFile}}, impl {{$serverName}}) {
 	{{- range .Methods}}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})

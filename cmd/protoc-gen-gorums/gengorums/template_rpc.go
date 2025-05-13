@@ -7,6 +7,8 @@ var rpcVar = `
 	{{- $context := use "context.Context" .GenFile}}
 `
 
+var rpcReserve = `{{reserveMethod $nodeName $method}}`
+
 var rpcSignature = `func (n *{{$nodeName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$out}}, err error) {
@@ -34,5 +36,6 @@ var rpcBody = `	cd := {{$callData}}{
 var rpcCall = commonVariables +
 	rpcVar +
 	quorumCallComment +
+	rpcReserve +
 	rpcSignature +
 	rpcBody

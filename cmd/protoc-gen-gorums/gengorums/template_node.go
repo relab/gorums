@@ -10,8 +10,9 @@ var nodeStructs = `
 {{- $genFile := .GenFile}}
 {{- range .Services}}
 	{{- $service := .GoName}}
-	{{- $nodeName := serviceTypeName $service "Node"}}
+	{{- $nodeName := printf "%sNode" $service}}
 	// {{$nodeName}} holds the node specific methods for the {{$service}} service.
+	{{- reserveName $nodeName}}
 	type {{$nodeName}} struct {
 		*gorums.RawNode
 	}

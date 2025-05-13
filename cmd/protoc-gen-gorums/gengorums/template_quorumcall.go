@@ -8,9 +8,9 @@ var commonVariables = `
 {{- $out := out .GenFile .Method}}
 {{- $intOut := internalOut $out}}
 {{- $unexportOutput := unexport .Method.Output.GoIdent.GoName}}
-{{- $serviceName := .Method.Parent.GoName}}
-{{- $nodeName := serviceTypeName $serviceName "Node"}}
-{{- $configurationName := serviceTypeName $serviceName "Configuration"}}
+{{- $service := .Method.Parent.GoName}}
+{{- $nodeName := printf "%sNode" $service}}
+{{- $configurationName := printf "%sConfiguration" $service}}
 `
 
 // Common variables used in several template functions.
@@ -38,6 +38,8 @@ var quorumCallComment = `
 {{end -}}
 {{end -}}
 `
+
+var quorumCallReserve = `{{reserveMethod $configurationName $method}}`
 
 var quorumCallSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
@@ -72,5 +74,6 @@ var quorumCall = commonVariables +
 	quorumCallVariables +
 	qcVar +
 	quorumCallComment +
+	quorumCallReserve +
 	quorumCallSignature +
 	quorumCallBody
