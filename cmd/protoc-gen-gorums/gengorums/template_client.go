@@ -6,9 +6,9 @@ import (
 
 // gorums need to be imported in the zorums file
 var clientVariables = `
-{{$context := use "context.Context" .GenFile}}
-{{$_ := use "gorums.EnforceVersion" .GenFile}}
-{{$callOpt := use "gorums.CallOption" .GenFile}}
+{{- $context := use "context.Context" .GenFile}}
+{{- $_ := use "gorums.EnforceVersion" .GenFile}}
+{{- $callOpt := use "gorums.CallOption" .GenFile}}
 `
 
 var clientServicesBegin = `
@@ -22,7 +22,7 @@ var clientServicesEnd = `
 `
 
 var clientConfigurationInterface = `
-	{{- $interfaceName := printf "%sClient" $service}}
+	{{- $interfaceName := serviceTypeName $service "Client"}}
 	{{- $configurationName := printf "%sConfiguration" $service}}
 	// {{$interfaceName}} is the client interface for the {{$service}} service.
 	type {{$interfaceName}} interface {
@@ -42,8 +42,8 @@ var clientConfigurationInterface = `
 `
 
 var clientNodeInterface = `
-	{{- $interfaceName := printf "%sNodeClient" $service}}
-	{{- $nodeName := printf "%sNode" $service}}
+	{{- $interfaceName := serviceTypeName $service "NodeClient"}}
+	{{- $nodeName := serviceTypeName $service "Node"}}
 	// {{$interfaceName}} is the single node client interface for the {{$service}} service.
 	type {{$interfaceName}} interface {
 		{{- range nodeMethods .Methods}}

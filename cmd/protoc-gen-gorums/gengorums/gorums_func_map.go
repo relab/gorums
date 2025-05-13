@@ -58,6 +58,10 @@ var funcMap = template.FuncMap{
 		}
 		return g.QualifiedGoIdent(pkg.Ident(ident))
 	},
+	"serviceTypeName": func(serviceName, typeName string) string {
+		// TODO(Asbjørn): set the type name as reserved
+		return serviceName + typeName
+	},
 	"hasPerNodeArg": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_PerNodeArg)
 	},

@@ -24,27 +24,27 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Configuration struct {
+type ReservedConfiguration struct {
 	state           protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Conf string                 `protobuf:"bytes,1,opt,name=Conf"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
-func (x *Configuration) Reset() {
-	*x = Configuration{}
+func (x *ReservedConfiguration) Reset() {
+	*x = ReservedConfiguration{}
 	mi := &file_failing_reservednames_reserved_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Configuration) String() string {
+func (x *ReservedConfiguration) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Configuration) ProtoMessage() {}
+func (*ReservedConfiguration) ProtoMessage() {}
 
-func (x *Configuration) ProtoReflect() protoreflect.Message {
+func (x *ReservedConfiguration) ProtoReflect() protoreflect.Message {
 	mi := &file_failing_reservednames_reserved_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -56,52 +56,52 @@ func (x *Configuration) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *Configuration) GetConf() string {
+func (x *ReservedConfiguration) GetConf() string {
 	if x != nil {
 		return x.xxx_hidden_Conf
 	}
 	return ""
 }
 
-func (x *Configuration) SetConf(v string) {
+func (x *ReservedConfiguration) SetConf(v string) {
 	x.xxx_hidden_Conf = v
 }
 
-type Configuration_builder struct {
+type ReservedConfiguration_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	Conf string
 }
 
-func (b0 Configuration_builder) Build() *Configuration {
-	m0 := &Configuration{}
+func (b0 ReservedConfiguration_builder) Build() *ReservedConfiguration {
+	m0 := &ReservedConfiguration{}
 	b, x := &b0, m0
 	_, _ = b, x
 	x.xxx_hidden_Conf = b.Conf
 	return m0
 }
 
-type Manager struct {
-	state          protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Mgr string                 `protobuf:"bytes,1,opt,name=Mgr"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+type ReservedNode struct {
+	state           protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Node string                 `protobuf:"bytes,1,opt,name=Node"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
-func (x *Manager) Reset() {
-	*x = Manager{}
+func (x *ReservedNode) Reset() {
+	*x = ReservedNode{}
 	mi := &file_failing_reservednames_reserved_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Manager) String() string {
+func (x *ReservedNode) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Manager) ProtoMessage() {}
+func (*ReservedNode) ProtoMessage() {}
 
-func (x *Manager) ProtoReflect() protoreflect.Message {
+func (x *ReservedNode) ProtoReflect() protoreflect.Message {
 	mi := &file_failing_reservednames_reserved_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -113,28 +113,28 @@ func (x *Manager) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *Manager) GetMgr() string {
+func (x *ReservedNode) GetNode() string {
 	if x != nil {
-		return x.xxx_hidden_Mgr
+		return x.xxx_hidden_Node
 	}
 	return ""
 }
 
-func (x *Manager) SetMgr(v string) {
-	x.xxx_hidden_Mgr = v
+func (x *ReservedNode) SetNode(v string) {
+	x.xxx_hidden_Node = v
 }
 
-type Manager_builder struct {
+type ReservedNode_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	Mgr string
+	Node string
 }
 
-func (b0 Manager_builder) Build() *Manager {
-	m0 := &Manager{}
+func (b0 ReservedNode_builder) Build() *ReservedNode {
+	m0 := &ReservedNode{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.xxx_hidden_Mgr = b.Mgr
+	x.xxx_hidden_Node = b.Node
 	return m0
 }
 
@@ -142,26 +142,26 @@ var File_failing_reservednames_reserved_proto protoreflect.FileDescriptor
 
 const file_failing_reservednames_reserved_proto_rawDesc = "" +
 	"\n" +
-	"$failing/reservednames/reserved.proto\x12'gorums.testprotos.failing.reservednames\x1a\fgorums.proto\"#\n" +
-	"\rConfiguration\x12\x12\n" +
-	"\x04Conf\x18\x01 \x01(\tR\x04Conf\"\x1b\n" +
-	"\aManager\x12\x10\n" +
-	"\x03Mgr\x18\x01 \x01(\tR\x03Mgr2\x80\x02\n" +
-	"\bReserved\x12v\n" +
-	"\bConfTest\x126.gorums.testprotos.failing.reservednames.Configuration\x1a0.gorums.testprotos.failing.reservednames.Manager\"\x00\x12|\n" +
+	"$failing/reservednames/reserved.proto\x12'gorums.testprotos.failing.reservednames\x1a\fgorums.proto\"+\n" +
+	"\x15ReservedConfiguration\x12\x12\n" +
+	"\x04Conf\x18\x01 \x01(\tR\x04Conf\"\"\n" +
+	"\fReservedNode\x12\x12\n" +
+	"\x04Node\x18\x01 \x01(\tR\x04Node2\x9c\x02\n" +
+	"\bReserved\x12\x83\x01\n" +
+	"\bConfTest\x12>.gorums.testprotos.failing.reservednames.ReservedConfiguration\x1a5.gorums.testprotos.failing.reservednames.ReservedNode\"\x00\x12\x89\x01\n" +
 	"\n" +
-	"QuorumCall\x126.gorums.testprotos.failing.reservednames.Configuration\x1a0.gorums.testprotos.failing.reservednames.Manager\"\x04\xa0\xb5\x18\x01BHZAgithub.com/relab/gorums/internal/testprotos/failing/reservednames\x92\x03\x02\b\x02b\beditionsp\xe8\a"
+	"QuorumCall\x12>.gorums.testprotos.failing.reservednames.ReservedConfiguration\x1a5.gorums.testprotos.failing.reservednames.ReservedNode\"\x04\xa0\xb5\x18\x01BHZAgithub.com/relab/gorums/internal/testprotos/failing/reservednames\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
 var file_failing_reservednames_reserved_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_failing_reservednames_reserved_proto_goTypes = []any{
-	(*Configuration)(nil), // 0: gorums.testprotos.failing.reservednames.Configuration
-	(*Manager)(nil),       // 1: gorums.testprotos.failing.reservednames.Manager
+	(*ReservedConfiguration)(nil), // 0: gorums.testprotos.failing.reservednames.ReservedConfiguration
+	(*ReservedNode)(nil),          // 1: gorums.testprotos.failing.reservednames.ReservedNode
 }
 var file_failing_reservednames_reserved_proto_depIdxs = []int32{
-	0, // 0: gorums.testprotos.failing.reservednames.Reserved.ConfTest:input_type -> gorums.testprotos.failing.reservednames.Configuration
-	0, // 1: gorums.testprotos.failing.reservednames.Reserved.QuorumCall:input_type -> gorums.testprotos.failing.reservednames.Configuration
-	1, // 2: gorums.testprotos.failing.reservednames.Reserved.ConfTest:output_type -> gorums.testprotos.failing.reservednames.Manager
-	1, // 3: gorums.testprotos.failing.reservednames.Reserved.QuorumCall:output_type -> gorums.testprotos.failing.reservednames.Manager
+	0, // 0: gorums.testprotos.failing.reservednames.Reserved.ConfTest:input_type -> gorums.testprotos.failing.reservednames.ReservedConfiguration
+	0, // 1: gorums.testprotos.failing.reservednames.Reserved.QuorumCall:input_type -> gorums.testprotos.failing.reservednames.ReservedConfiguration
+	1, // 2: gorums.testprotos.failing.reservednames.Reserved.ConfTest:output_type -> gorums.testprotos.failing.reservednames.ReservedNode
+	1, // 3: gorums.testprotos.failing.reservednames.Reserved.QuorumCall:output_type -> gorums.testprotos.failing.reservednames.ReservedNode
 	2, // [2:4] is the sub-list for method output_type
 	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name

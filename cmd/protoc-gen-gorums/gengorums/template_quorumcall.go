@@ -2,15 +2,15 @@ package gengorums
 
 // Common variables used in several template functions.
 var commonVariables = `
-{{$fullName := .Method.Desc.FullName}}
-{{$method := .Method.GoName}}
-{{$in := in .GenFile .Method}}
-{{$out := out .GenFile .Method}}
-{{$intOut := internalOut $out}}
-{{$unexportOutput := unexport .Method.Output.GoIdent.GoName}}
-{{$serviceName := .Method.Parent.GoName}}
-{{$nodeName := printf "%sNode" $serviceName}}
-{{$configurationName := printf "%sConfiguration" $serviceName}}
+{{- $fullName := .Method.Desc.FullName}}
+{{- $method := .Method.GoName}}
+{{- $in := in .GenFile .Method}}
+{{- $out := out .GenFile .Method}}
+{{- $intOut := internalOut $out}}
+{{- $unexportOutput := unexport .Method.Output.GoIdent.GoName}}
+{{- $serviceName := .Method.Parent.GoName}}
+{{- $nodeName := serviceTypeName $serviceName "Node"}}
+{{- $configurationName := serviceTypeName $serviceName "Configuration"}}
 `
 
 // Common variables used in several template functions.
@@ -46,10 +46,10 @@ var quorumCallSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 `
 
 var qcVar = `
-{{$callData := use "gorums.QuorumCallData" .GenFile}}
-{{$genFile := .GenFile}}
-{{$unexportMethod := unexport .Method.GoName}}
-{{$context := use "context.Context" .GenFile}}
+{{- $callData := use "gorums.QuorumCallData" .GenFile}}
+{{- $genFile := .GenFile}}
+{{- $unexportMethod := unexport .Method.GoName}}
+{{- $context := use "context.Context" .GenFile}}
 `
 
 var quorumCallBody = `	cd := {{$callData}}{

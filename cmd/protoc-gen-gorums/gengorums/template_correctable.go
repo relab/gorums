@@ -25,12 +25,12 @@ var correctableCallComment = `
 `
 
 var correctableVar = `
-	{{$correctableOut := outType .Method $customOut}}
-	{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
-	{{$callData := use "gorums.CorrectableCallData" .GenFile}}
-	{{$genFile := .GenFile}}
-	{{$unexportMethod := unexport .Method.GoName}}
-	{{$context := use "context.Context" .GenFile}}
+	{{- $correctableOut := outType .Method $customOut}}
+	{{- $protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
+	{{- $callData := use "gorums.CorrectableCallData" .GenFile}}
+	{{- $genFile := .GenFile}}
+	{{- $unexportMethod := unexport .Method.GoName}}
+	{{- $context := use "context.Context" .GenFile}}
 `
 
 var correctableSignature = `func (c *{{$configurationName}}) {{$method}}(` +

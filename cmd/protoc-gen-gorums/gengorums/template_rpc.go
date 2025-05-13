@@ -1,10 +1,10 @@
 package gengorums
 
 var rpcVar = `
-	{{$callData := use "gorums.CallData" .GenFile}}
-	{{$genFile := .GenFile}}
-	{{$unexportMethod := unexport .Method.GoName}}
-	{{$context := use "context.Context" .GenFile}}
+	{{- $callData := use "gorums.CallData" .GenFile}}
+	{{- $genFile := .GenFile}}
+	{{- $unexportMethod := unexport .Method.GoName}}
+	{{- $context := use "context.Context" .GenFile}}
 `
 
 var rpcSignature = `func (n *{{$nodeName}}) {{$method}}(` +

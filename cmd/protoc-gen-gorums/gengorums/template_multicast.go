@@ -8,11 +8,11 @@ var _ {{$out}}
 `
 
 var mcVar = `
-	{{$callData := use "gorums.QuorumCallData" .GenFile}}
-	{{$genFile := .GenFile}}
-	{{$unexportMethod := unexport .Method.GoName}}
-	{{$context := use "context.Context" .GenFile}}
-	{{$callOpt := use "gorums.CallOption" .GenFile}}
+	{{- $callData := use "gorums.QuorumCallData" .GenFile}}
+	{{- $genFile := .GenFile}}
+	{{- $unexportMethod := unexport .Method.GoName}}
+	{{- $context := use "context.Context" .GenFile}}
+	{{- $callOpt := use "gorums.CallOption" .GenFile}}
 `
 
 var multicastSignature = `func (c *{{$configurationName}}) {{$method}}(` +

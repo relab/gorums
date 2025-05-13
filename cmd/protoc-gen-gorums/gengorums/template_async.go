@@ -27,7 +27,7 @@ var asyncSignature = `func (c *{{$configurationName}}) {{$method}}(` +
 	`*{{$asyncOut}} {`
 
 var asyncVar = qcVar + `
-{{$asyncOut := outType .Method $customOut}}
+{{- $asyncOut := outType .Method $customOut}}
 `
 
 var asyncBody = `	cd := {{$callData}}{
@@ -41,11 +41,11 @@ var asyncBody = `	cd := {{$callData}}{
 		}
 		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
 	}
-{{- if hasPerNodeArg .Method}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
-		return f(req.(*{{$in}}), nid)
-	}
-{{- end}}
+	{{- if hasPerNodeArg .Method}}
+		cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
+			return f(req.(*{{$in}}), nid)
+		}
+	{{- end}}
 
 	fut := c.RawConfiguration.AsyncCall(ctx, cd)
 	return &{{$asyncOut}}{fut}

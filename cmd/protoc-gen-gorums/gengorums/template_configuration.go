@@ -1,17 +1,16 @@
 package gengorums
 
 var configurationVars = `
-{{$rawConfiguration := use "gorums.RawConfiguration" .GenFile}}
-{{$nodeListOptions := use "gorums.NodeListOption" .GenFile}}
+{{- $rawConfiguration := use "gorums.RawConfiguration" .GenFile}}
+{{- $nodeListOptions := use "gorums.NodeListOption" .GenFile}}
 `
 
 var configurationServicesBegin = `
 {{- $genFile := .GenFile}}
 {{- range .Services}}
 	{{- $service := .GoName}}
-	{{- $configurationName := printf "%sConfiguration" $service}}
-	{{- $qspecName := printf "%sQuorumSpec" $service}}
-	{{- $nodeName := printf "%sNode" $service}}
+	{{- $configurationName := serviceTypeName $service "Configuration"}}
+	{{- $nodeName := serviceTypeName $service "Node"}}
 `
 
 var configurationServicesEnd = `
