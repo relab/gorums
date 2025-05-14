@@ -78,14 +78,14 @@ func orderQF(ctx context.Context, responses gorums.Responses[*Response], quorum 
 	return nil, errors.New("orderQF: quorum not found")
 }
 
-func setup(t *testing.T, cfgSize int) (cfg *GorumsTestConfiguration, teardown func()) {
+func setup(t *testing.T, cfgSize int) (cfg *gorums.Configuration, teardown func()) {
 	t.Helper()
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	cfg, err := NewGorumsTestConfiguration(
+	cfg, err := gorums.NewConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -105,7 +105,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	cfg, teardown := setup(t, 1)
 	defer teardown()
-	node := cfg.Nodes()[0]
+	node := GorumsTestNodeRpc(cfg.Nodes()[0])
 	// begin test
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
@@ -131,11 +131,12 @@ func TestQCOrdering(t *testing.T) {
 	// begin test
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
+	rpcCfg := GorumsTestConfigurationRpc(cfg)
 	for time.Now().Before(stopTime) {
 		i++
 		ctx := context.Background()
 		req := Request_builder{Num: uint64(i)}.Build()
-		resp, err := orderQF(ctx, cfg.QC(ctx, req), 4)
+		resp, err := orderQF(ctx, rpcCfg.QC(ctx, req), 4)
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
 		}
@@ -157,9 +158,10 @@ func TestQCAsyncOrdering(t *testing.T) {
 	var wg sync.WaitGroup
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
+	rpcCfg := GorumsTestConfigurationRpc(cfg)
 	for time.Now().Before(stopTime) {
 		i++
-		responses := cfg.QCAsync(ctx, Request_builder{Num: uint64(i)}.Build())
+		responses := rpcCfg.QCAsync(ctx, Request_builder{Num: uint64(i)}.Build())
 		wg.Add(1)
 		go func(responses gorums.Responses[*Response]) {
 			defer wg.Done()
@@ -190,10 +192,11 @@ func TestMixedOrdering(t *testing.T) {
 	// begin test
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
+	rpcCfg := GorumsTestConfigurationRpc(cfg)
 	for time.Now().Before(stopTime) {
 		req := Request_builder{Num: uint64(i)}.Build()
 		ctx := context.Background()
-		resp, err := orderQF(ctx, cfg.QC(ctx, req), 4)
+		resp, err := orderQF(ctx, rpcCfg.QC(ctx, req), 4)
 		i++
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
@@ -207,9 +210,10 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(len(nodes))
 		for _, node := range nodes {
-			go func(node *GorumsTestNode) {
+			go func(node *gorums.Node) {
 				defer wg.Done()
-				resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
+				nodeRpc := GorumsTestNodeRpc(node)
+				resp, err := nodeRpc.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return

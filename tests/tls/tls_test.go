@@ -45,7 +45,7 @@ func TestTLS(t *testing.T) {
 	})
 	defer teardown()
 
-	cfg, err := NewTLSConfiguration(
+	cfg, err := gorums.NewConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
@@ -55,7 +55,7 @@ func TestTLS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	node := cfg.Nodes()[0]
+	node := TLSNodeRpc(cfg.Nodes()[0])
 	resp, err := node.TestTLS(context.Background(), &Request{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)

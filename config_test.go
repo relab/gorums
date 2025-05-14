@@ -208,7 +208,7 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	})
 	defer teardown()
 
-	cfg, err := dummy.NewDummyConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
+	cfg, err := gorums.NewConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	for range 2 {
 		wg.Add(1)
 		go func() {
-			node := cfg.Nodes()[0]
+			node := dummy.DummyNodeRpc(cfg.Nodes()[0])
 			_, err := node.Test(context.Background(), &dummy.Empty{})
 			if err != nil {
 				errCh <- err
@@ -239,24 +239,24 @@ func TestConfigRelease(t *testing.T) {
 	})
 	defer teardown()
 
-	c1, err := dummy.NewDummyConfiguration(gorums.WithNodeList(addrs[:3]), gorumsTestMgrOpts()...)
+	c1, err := gorums.NewConfiguration(gorums.WithNodeList(addrs[:3]), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c2, err := c1.SubDummyConfiguration(gorums.WithNodeList(addrs[2:8]))
+	c2, err := c1.SubConfiguration(gorums.WithNodeList(addrs[2:8]))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	c3, err := c1.SubDummyConfiguration(gorums.WithNodeList(addrs[5:]))
+	c3, err := c1.SubConfiguration(gorums.WithNodeList(addrs[5:]))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	allNodes := c2.AllNodeIDs()
 
-	c1c2, err := c2.SubDummyConfiguration(c1.And(c2))
+	c1c2, err := c2.SubConfiguration(c1.And(c2))
 	if err != nil {
 		t.Fatal(err)
 	}

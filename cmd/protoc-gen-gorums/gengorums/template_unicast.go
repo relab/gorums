@@ -1,8 +1,10 @@
 package gengorums
 
 var unicastVar = rpcVar + `
-	{{$callOpt := use "gorums.CallOption" .GenFile}}
-	{{$nodeName := printf "%sNode" .Method.Parent.GoName}}
+{{- $callOpt := use "gorums.CallOption" .GenFile}}
+{{- $node := use "gorums.Node" .GenFile}}
+{{- $nodeName := printf "%sNode" .Method.Parent.GoName}}
+{{- $node := use "gorums.Node" .GenFile}}
 `
 
 var unicastCallComment = `
@@ -14,7 +16,7 @@ var unicastCallComment = `
 {{end -}}
 `
 
-var unicastSignature = `func (n *{{$nodeName}}) {{$method}}(` +
+var unicastSignature = `func (n {{$nodeName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}, opts ...{{$callOpt}}) {
 `
 
@@ -23,7 +25,7 @@ var unicastBody = `	cd := {{$callData}}{
 		Method: "{{$fullName}}",
 	}
 
-	n.Node.Unicast(ctx, cd, opts...)
+	n.node.Unicast(ctx, cd, opts...)
 }
 `
 

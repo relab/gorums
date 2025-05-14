@@ -10,16 +10,16 @@ type ConfigOption any
 // NodeListOption must be implemented by node providers.
 type NodeListOption interface {
 	ConfigOption
-	newConfig(*manager) (Configuration, error)
+	newConfig(*manager) (*Configuration, error)
 }
 
 type nodeIDMap struct {
 	idMap map[string]uint32
 }
 
-func (o nodeIDMap) newConfig(mgr *manager) (cfg Configuration, err error) {
+func (o nodeIDMap) newConfig(mgr *manager) (cfg *Configuration, err error) {
 	if len(o.idMap) == 0 {
-		return Configuration{}, fmt.Errorf("config: missing required node map")
+		return nil, fmt.Errorf("config: missing required node map")
 	}
 	nodes := make([]*Node, 0, len(o.idMap))
 	for naddr, id := range o.idMap {
@@ -27,10 +27,10 @@ func (o nodeIDMap) newConfig(mgr *manager) (cfg Configuration, err error) {
 		if !found {
 			node, err = NewNodeWithID(naddr, id)
 			if err != nil {
-				return Configuration{}, err
+				return nil, err
 			}
 			if err = mgr.addNode(node); err != nil {
-				return Configuration{}, err
+				return nil, err
 			}
 		}
 		nodes = append(nodes, node)
@@ -39,7 +39,7 @@ func (o nodeIDMap) newConfig(mgr *manager) (cfg Configuration, err error) {
 	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
 
-	cfg = Configuration{
+	cfg = &Configuration{
 		nodes: nodes,
 		mgr:   mgr,
 	}
@@ -57,19 +57,19 @@ type nodeList struct {
 	addrsList []string
 }
 
-func (o nodeList) newConfig(mgr *manager) (cfg Configuration, err error) {
+func (o nodeList) newConfig(mgr *manager) (cfg *Configuration, err error) {
 	if len(o.addrsList) == 0 {
-		return Configuration{}, fmt.Errorf("config: missing required node addresses")
+		return nil, fmt.Errorf("config: missing required node addresses")
 	}
 	nodes := make([]*Node, 0, len(o.addrsList))
 	for _, naddr := range o.addrsList {
 		node, err := NewNode(naddr)
 		if err != nil {
-			return Configuration{}, err
+			return nil, err
 		}
 		if n, found := mgr.node(node.ID()); !found {
 			if err = mgr.addNode(node); err != nil {
-				return Configuration{}, err
+				return nil, err
 			}
 		} else {
 			node = n
@@ -80,7 +80,7 @@ func (o nodeList) newConfig(mgr *manager) (cfg Configuration, err error) {
 	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
 
-	cfg = Configuration{
+	cfg = &Configuration{
 		nodes: nodes,
 		mgr:   mgr,
 	}
@@ -98,16 +98,16 @@ type nodeIDs struct {
 	nodeIDs []uint32
 }
 
-func (o nodeIDs) newConfig(mgr *manager) (cfg Configuration, err error) {
+func (o nodeIDs) newConfig(mgr *manager) (cfg *Configuration, err error) {
 	if len(o.nodeIDs) == 0 {
-		return Configuration{}, fmt.Errorf("config: missing required node IDs")
+		return nil, fmt.Errorf("config: missing required node IDs")
 	}
 	nodes := make([]*Node, 0, len(o.nodeIDs))
 	for _, id := range o.nodeIDs {
 		node, found := mgr.node(id)
 		if !found {
 			// Node IDs must have been registered previously
-			return Configuration{}, fmt.Errorf("config: node %d not found", id)
+			return nil, fmt.Errorf("config: node %d not found", id)
 		}
 		nodes = append(nodes, node)
 	}
@@ -115,7 +115,7 @@ func (o nodeIDs) newConfig(mgr *manager) (cfg Configuration, err error) {
 	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
 
-	cfg = Configuration{
+	cfg = &Configuration{
 		nodes: nodes,
 		mgr:   mgr,
 	}
@@ -130,14 +130,14 @@ func WithNodeIDs(ids []uint32) NodeListOption {
 }
 
 type addNodes struct {
-	old Configuration
+	old *Configuration
 	new NodeListOption
 }
 
-func (o addNodes) newConfig(mgr *manager) (nodes Configuration, err error) {
+func (o addNodes) newConfig(mgr *manager) (nodes *Configuration, err error) {
 	newNodes, err := o.new.newConfig(mgr)
 	if err != nil {
-		return Configuration{}, err
+		return nil, err
 	}
 	ac := &addConfig{old: o.old, add: newNodes}
 	return ac.newConfig(mgr)
@@ -145,16 +145,16 @@ func (o addNodes) newConfig(mgr *manager) (nodes Configuration, err error) {
 
 // WithNewNodes returns a NodeListOption that can be used to create a new configuration
 // combining c and the new nodes.
-func (c Configuration) WithNewNodes(new NodeListOption) NodeListOption {
+func (c *Configuration) WithNewNodes(new NodeListOption) NodeListOption {
 	return &addNodes{old: c, new: new}
 }
 
 type addConfig struct {
-	old Configuration
-	add Configuration
+	old *Configuration
+	add *Configuration
 }
 
-func (o addConfig) newConfig(mgr *manager) (cfg Configuration, err error) {
+func (o addConfig) newConfig(mgr *manager) (cfg *Configuration, err error) {
 	nodes := make([]*Node, 0, len(o.old.nodes)+len(o.add.nodes))
 	m := make(map[uint32]bool)
 	for _, n := range append(o.old.nodes, o.add.nodes...) {
@@ -167,7 +167,7 @@ func (o addConfig) newConfig(mgr *manager) (cfg Configuration, err error) {
 	OrderedBy(ID).Sort(mgr.nodes)
 	OrderedBy(ID).Sort(nodes)
 
-	cfg = Configuration{
+	cfg = &Configuration{
 		nodes: nodes,
 		mgr:   mgr,
 	}
@@ -176,13 +176,13 @@ func (o addConfig) newConfig(mgr *manager) (cfg Configuration, err error) {
 }
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
-func (c Configuration) And(d Configuration) NodeListOption {
+func (c *Configuration) And(d *Configuration) NodeListOption {
 	return &addConfig{old: c, add: d}
 }
 
 // WithoutNodes returns a NodeListOption that can be used to create a new configuration
 // from c without the given node IDs.
-func (c Configuration) WithoutNodes(ids ...uint32) NodeListOption {
+func (c *Configuration) WithoutNodes(ids ...uint32) NodeListOption {
 	rmIDs := make(map[uint32]bool)
 	for _, id := range ids {
 		rmIDs[id] = true
@@ -198,7 +198,7 @@ func (c Configuration) WithoutNodes(ids ...uint32) NodeListOption {
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
-func (c Configuration) Except(rm Configuration) NodeListOption {
+func (c *Configuration) Except(rm *Configuration) NodeListOption {
 	rmIDs := make(map[uint32]bool)
 	for _, rmNode := range rm.nodes {
 		rmIDs[rmNode.id] = true

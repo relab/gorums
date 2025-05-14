@@ -91,3 +91,15 @@ func (iterator Responses[messageType]) GetQuorum(quorum int) (messageType, error
 	var noReply messageType
 	return noReply, errors.New("quorum not found")
 }
+
+// IterTypeCast is used by generated code to
+func IterTypeCast[cast proto.Message](iterator Responses[proto.Message]) Responses[cast] {
+	return func(yield func(Response[cast]) bool) {
+		for r := range iterator {
+			castResp := NewResponse(r.Msg.(cast), r.Err, r.Nid)
+			if !yield(castResp) {
+				return
+			}
+		}
+	}
+}

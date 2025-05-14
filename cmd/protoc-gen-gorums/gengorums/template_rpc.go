@@ -5,11 +5,12 @@ var rpcVar = `
 	{{- $genFile := .GenFile}}
 	{{- $unexportMethod := unexport .Method.GoName}}
 	{{- $context := use "context.Context" .GenFile}}
+	{{- $node := use "gorums.Node" .GenFile}}
 `
 
 var rpcReserve = `{{reserveMethod $nodeName $method}}`
 
-var rpcSignature = `func (n *{{$nodeName}}) {{$method}}(` +
+var rpcSignature = `func (n {{$nodeName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$out}}, err error) {
 `
@@ -25,7 +26,7 @@ var rpcBody = `	cd := {{$callData}}{
 		}
 	{{- end}}
 
-	res, err := n.Node.RPCCall(ctx, cd)
+	res, err := n.node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

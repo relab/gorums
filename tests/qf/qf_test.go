@@ -268,7 +268,7 @@ func BenchmarkFullStackQF(b *testing.B) {
 			RegisterQuorumFunctionServer(srv, &testSrv{})
 			return srv
 		})
-		c, err := NewQuorumFunctionConfiguration(
+		c, err := gorums.NewConfiguration(
 			gorums.WithNodeList(addrs),
 			gorums.WithGrpcDialOptions(
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -283,10 +283,12 @@ func BenchmarkFullStackQF(b *testing.B) {
 
 		quorum := n / 2
 
+		crpc := QuorumFunctionConfigurationRpc(c)
+
 		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := Request_builder{Value: int64(requestValue)}.Build()
-				resp, err := IterUseReq(c.UseReq(context.Background(), req), quorum, req)
+				resp, err := IterUseReq(crpc.UseReq(context.Background(), req), quorum, req)
 				if err != nil {
 					b.Fatalf("UseReq error: %v", err)
 				}
@@ -296,7 +298,7 @@ func BenchmarkFullStackQF(b *testing.B) {
 		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
 			for b.Loop() {
 				req := Request_builder{Value: int64(requestValue)}.Build()
-				resp, err := IterIgnoreReq(c.IgnoreReq(context.Background(), req), quorum)
+				resp, err := IterIgnoreReq(crpc.IgnoreReq(context.Background(), req), quorum)
 				if err != nil {
 					b.Fatalf("IgnoreReq error: %v", err)
 				}

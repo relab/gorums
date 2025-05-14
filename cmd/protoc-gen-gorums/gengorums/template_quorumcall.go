@@ -10,6 +10,7 @@ var commonVariables = `
 {{- $unexportOutput := unexport .Method.Output.GoIdent.GoName}}
 {{- $service := .Method.Parent.GoName}}
 {{- $nodeName := printf "%sNode" $service}}
+{{- $configuration := use "gorums.Configuration" .GenFile}}
 {{- $configurationName := printf "%sConfiguration" $service}}
 `
 
@@ -41,7 +42,7 @@ var quorumCallComment = `
 
 var quorumCallReserve = `{{reserveMethod $configurationName $method}}`
 
-var quorumCallSignature = `func (c *{{$configurationName}}) {{$method}}(` +
+var quorumCallSignature = `func (c {{$configurationName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}})` +
 	`{{$iterator}}[*{{$out}}] {
@@ -66,7 +67,8 @@ var quorumCallBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	return gorums.QuorumCall[*{{$out}}](ctx, c.Configuration, cd)
+	responses := c.cfg.QuorumCall(ctx, cd)
+	return gorums.IterTypeCast[*{{$out}}](responses)
 }
 `
 

@@ -17,13 +17,16 @@ type Configuration struct {
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList.
-func NewConfiguration(nodes NodeListOption, opts ...ManagerOption) (cfg Configuration, err error) {
+func NewConfiguration(nodes NodeListOption, opts ...ManagerOption) (cfg *Configuration, err error) {
 	if nodes == nil {
-		return Configuration{}, fmt.Errorf("config: missing required node list")
+		return nil, fmt.Errorf("config: missing required node list")
 	}
 	mgr := newManager(opts...)
 
 	cfg, err = nodes.newConfig(mgr)
+	if err != nil {
+		return nil, err
+	}
 	for _, n := range cfg.nodes {
 		n.obtain()
 	}
@@ -35,12 +38,15 @@ func NewConfiguration(nodes NodeListOption, opts ...ManagerOption) (cfg Configur
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func (c *Configuration) SubConfiguration(nodes NodeListOption) (cfg Configuration, err error) {
+func (c *Configuration) SubConfiguration(nodes NodeListOption) (cfg *Configuration, err error) {
 	if nodes == nil {
-		return Configuration{}, fmt.Errorf("config: missing required node list")
+		return nil, fmt.Errorf("config: missing required node list")
 	}
 
 	cfg, err = nodes.newConfig(c.mgr)
+	if err != nil {
+		return nil, err
+	}
 	for _, n := range cfg.nodes {
 		n.obtain()
 	}
