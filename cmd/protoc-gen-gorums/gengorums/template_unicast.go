@@ -23,7 +23,7 @@ var unicastBody = `	cd := {{$callData}}{
 		Method: "{{$fullName}}",
 	}
 
-	n.RawNode.Unicast(ctx, cd, opts...)
+	n.Node.Unicast(ctx, cd, opts...)
 }
 `
 

@@ -12,7 +12,7 @@ import (
 // before the message has been sent.
 //
 // This method should be used by generated code only.
-func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
+func (n *Node) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
 	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)

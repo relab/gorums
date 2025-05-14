@@ -46,7 +46,7 @@ var _ CorrectableTestNodeClient = (*CorrectableTestNode)(nil)
 // A CorrectableTestConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type CorrectableTestConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewCorrectableTestConfiguration returns a configuration based on the provided list of nodes (required)
@@ -58,7 +58,7 @@ type CorrectableTestConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewCorrectableTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *CorrectableTestConfiguration, err error) {
 	c = &CorrectableTestConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func NewCorrectableTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.M
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *CorrectableTestConfiguration) SubCorrectableTestConfiguration(cfg gorums.NodeListOption) (subCfg *CorrectableTestConfiguration, err error) {
 	subCfg = &CorrectableTestConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -85,9 +85,9 @@ func (c *CorrectableTestConfiguration) SubCorrectableTestConfiguration(cfg gorum
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func CorrectableTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*CorrectableTestConfiguration, error) {
+func CorrectableTestConfigurationFromRaw(rawCfg gorums.Configuration) (*CorrectableTestConfiguration, error) {
 	newCfg := &CorrectableTestConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -97,7 +97,7 @@ func CorrectableTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Corre
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *CorrectableTestConfiguration) Nodes() []*CorrectableTestNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*CorrectableTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &CorrectableTestNode{n}
@@ -109,7 +109,7 @@ func (c *CorrectableTestConfiguration) Nodes() []*CorrectableTestNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *CorrectableTestConfiguration) AllNodes() []*CorrectableTestNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*CorrectableTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &CorrectableTestNode{n}
@@ -119,18 +119,18 @@ func (c *CorrectableTestConfiguration) AllNodes() []*CorrectableTestNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c CorrectableTestConfiguration) And(d *CorrectableTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c CorrectableTestConfiguration) Except(rm *CorrectableTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // CorrectableTestNode holds the node specific methods for the CorrectableTest service.
 type CorrectableTestNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // Correctable is a quorum call invoked on each node in configuration c,
@@ -143,7 +143,7 @@ func (c *CorrectableTestConfiguration) Correctable(ctx context.Context, in *Corr
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*CorrectableResponse](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*CorrectableResponse](ctx, c.Configuration, cd)
 }
 
 // CorrectableStream is a quorum call invoked on each node in configuration c,
@@ -158,7 +158,7 @@ func (c *CorrectableTestConfiguration) CorrectableStream(ctx context.Context, in
 		ServerStream: true,
 	}
 
-	return gorums.QuorumCall[*CorrectableResponse](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*CorrectableResponse](ctx, c.Configuration, cd)
 }
 
 // CorrectableTestServer is the server-side API for the CorrectableTest Service

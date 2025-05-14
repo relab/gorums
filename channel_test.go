@@ -40,7 +40,7 @@ func newDummySrv() *Server {
 }
 
 func TestChannelCreation(t *testing.T) {
-	node, err := NewRawNode("127.0.0.1:5000")
+	node, err := NewNode("127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestChannelSuccessfulConnection(t *testing.T) {
 	defer teardown()
 	mgr := dummyMgr()
 	defer mgr.close()
-	node, err := NewRawNode(addrs[0])
+	node, err := NewNode(addrs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 	mgr := dummyMgr()
 	defer mgr.close()
 	// no servers are listening on the given address
-	node, err := NewRawNode("127.0.0.1:5000")
+	node, err := NewNode("127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestChannelReconnection(t *testing.T) {
 	srvAddr := "127.0.0.1:5000"
 	// wait to start the server
 	startServer, stopServer := testServerSetup(t, srvAddr, newDummySrv())
-	node, err := NewRawNode(srvAddr)
+	node, err := NewNode(srvAddr)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,15 +24,15 @@ type QuorumCallData struct {
 // This method should be used by generated code only.
 func QuorumCall[responseType proto.Message](
 	ctx context.Context,
-	c RawConfiguration,
+	c Configuration,
 	d QuorumCallData,
 ) Responses[responseType] {
-	nodes := len(c.RawNodes)
+	nodes := len(c.nodes)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
 	replyChan := make(chan response, nodes)
 
-	for _, n := range c.RawNodes {
+	for _, n := range c.nodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)
@@ -55,7 +55,7 @@ func QuorumCall[responseType proto.Message](
 		errors := int(0)
 
 		defer close(replyChan)
-		for _, n := range c.RawNodes {
+		for _, n := range c.nodes {
 			defer n.channel.deleteRouter(md.GetMessageID())
 		}
 

@@ -51,7 +51,7 @@ var _ BenchmarkNodeClient = (*BenchmarkNode)(nil)
 // A BenchmarkConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type BenchmarkConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewBenchmarkConfiguration returns a configuration based on the provided list of nodes (required)
@@ -63,7 +63,7 @@ type BenchmarkConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewBenchmarkConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *BenchmarkConfiguration, err error) {
 	c = &BenchmarkConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func NewBenchmarkConfiguration(cfg gorums.NodeListOption, opts ...gorums.Manager
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *BenchmarkConfiguration) SubBenchmarkConfiguration(cfg gorums.NodeListOption) (subCfg *BenchmarkConfiguration, err error) {
 	subCfg = &BenchmarkConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -90,9 +90,9 @@ func (c *BenchmarkConfiguration) SubBenchmarkConfiguration(cfg gorums.NodeListOp
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func BenchmarkConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*BenchmarkConfiguration, error) {
+func BenchmarkConfigurationFromRaw(rawCfg gorums.Configuration) (*BenchmarkConfiguration, error) {
 	newCfg := &BenchmarkConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -102,7 +102,7 @@ func BenchmarkConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*BenchmarkCo
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *BenchmarkConfiguration) Nodes() []*BenchmarkNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*BenchmarkNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &BenchmarkNode{n}
@@ -114,7 +114,7 @@ func (c *BenchmarkConfiguration) Nodes() []*BenchmarkNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *BenchmarkConfiguration) AllNodes() []*BenchmarkNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*BenchmarkNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &BenchmarkNode{n}
@@ -124,13 +124,13 @@ func (c *BenchmarkConfiguration) AllNodes() []*BenchmarkNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c BenchmarkConfiguration) And(d *BenchmarkConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c BenchmarkConfiguration) Except(rm *BenchmarkConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -146,12 +146,12 @@ func (c *BenchmarkConfiguration) Multicast(ctx context.Context, in *TimedMsg, op
 		Method:  "benchmark.Benchmark.Multicast",
 	}
 
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+	c.Configuration.Multicast(ctx, cd, opts...)
 }
 
 // BenchmarkNode holds the node specific methods for the Benchmark service.
 type BenchmarkNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // StartServerBenchmark is a quorum call invoked on each node in configuration c,
@@ -164,7 +164,7 @@ func (c *BenchmarkConfiguration) StartServerBenchmark(ctx context.Context, in *S
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*StartResponse](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*StartResponse](ctx, c.Configuration, cd)
 }
 
 // StopServerBenchmark is a quorum call invoked on each node in configuration c,
@@ -177,7 +177,7 @@ func (c *BenchmarkConfiguration) StopServerBenchmark(ctx context.Context, in *St
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Result](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Result](ctx, c.Configuration, cd)
 }
 
 // StartBenchmark is a quorum call invoked on each node in configuration c,
@@ -190,7 +190,7 @@ func (c *BenchmarkConfiguration) StartBenchmark(ctx context.Context, in *StartRe
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*StartResponse](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*StartResponse](ctx, c.Configuration, cd)
 }
 
 // StopBenchmark is a quorum call invoked on each node in configuration c,
@@ -203,7 +203,7 @@ func (c *BenchmarkConfiguration) StopBenchmark(ctx context.Context, in *StopRequ
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*MemoryStat](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*MemoryStat](ctx, c.Configuration, cd)
 }
 
 // benchmarks
@@ -214,7 +214,7 @@ func (c *BenchmarkConfiguration) QuorumCall(ctx context.Context, in *Echo) gorum
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Echo](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Echo](ctx, c.Configuration, cd)
 }
 
 // AsyncQuorumCall is a quorum call invoked on each node in configuration c,
@@ -227,7 +227,7 @@ func (c *BenchmarkConfiguration) AsyncQuorumCall(ctx context.Context, in *Echo) 
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Echo](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Echo](ctx, c.Configuration, cd)
 }
 
 // SlowServer is a quorum call invoked on each node in configuration c,
@@ -240,7 +240,7 @@ func (c *BenchmarkConfiguration) SlowServer(ctx context.Context, in *Echo) gorum
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Echo](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Echo](ctx, c.Configuration, cd)
 }
 
 // BenchmarkServer is the server-side API for the Benchmark Service

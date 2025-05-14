@@ -45,7 +45,7 @@ var _ GorumsTestNodeClient = (*GorumsTestNode)(nil)
 // A GorumsTestConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type GorumsTestConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewGorumsTestConfiguration returns a configuration based on the provided list of nodes (required)
@@ -57,7 +57,7 @@ type GorumsTestConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewGorumsTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *GorumsTestConfiguration, err error) {
 	c = &GorumsTestConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func NewGorumsTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.Manage
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *GorumsTestConfiguration) SubGorumsTestConfiguration(cfg gorums.NodeListOption) (subCfg *GorumsTestConfiguration, err error) {
 	subCfg = &GorumsTestConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +84,9 @@ func (c *GorumsTestConfiguration) SubGorumsTestConfiguration(cfg gorums.NodeList
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func GorumsTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*GorumsTestConfiguration, error) {
+func GorumsTestConfigurationFromRaw(rawCfg gorums.Configuration) (*GorumsTestConfiguration, error) {
 	newCfg := &GorumsTestConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -96,7 +96,7 @@ func GorumsTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*GorumsTest
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *GorumsTestConfiguration) Nodes() []*GorumsTestNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*GorumsTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &GorumsTestNode{n}
@@ -108,7 +108,7 @@ func (c *GorumsTestConfiguration) Nodes() []*GorumsTestNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *GorumsTestConfiguration) AllNodes() []*GorumsTestNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*GorumsTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &GorumsTestNode{n}
@@ -118,18 +118,18 @@ func (c *GorumsTestConfiguration) AllNodes() []*GorumsTestNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c GorumsTestConfiguration) And(d *GorumsTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c GorumsTestConfiguration) Except(rm *GorumsTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // GorumsTestNode holds the node specific methods for the GorumsTest service.
 type GorumsTestNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // QC is a quorum call invoked on each node in configuration c,
@@ -142,7 +142,7 @@ func (c *GorumsTestConfiguration) QC(ctx context.Context, in *Request) gorums.Re
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Response](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Response](ctx, c.Configuration, cd)
 }
 
 // QCAsync is a quorum call invoked on each node in configuration c,
@@ -155,7 +155,7 @@ func (c *GorumsTestConfiguration) QCAsync(ctx context.Context, in *Request) goru
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Response](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Response](ctx, c.Configuration, cd)
 }
 
 // UnaryRPC is a quorum call invoked on each node in configuration c,
@@ -167,7 +167,7 @@ func (n *GorumsTestNode) UnaryRPC(ctx context.Context, in *Request) (resp *Respo
 		Method:  "ordering.GorumsTest.UnaryRPC",
 	}
 
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

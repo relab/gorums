@@ -48,7 +48,7 @@ var _ StorageNodeClient = (*StorageNode)(nil)
 // A StorageConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type StorageConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewStorageConfiguration returns a configuration based on the provided list of nodes (required)
@@ -60,7 +60,7 @@ type StorageConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewStorageConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *StorageConfiguration, err error) {
 	c = &StorageConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func NewStorageConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOp
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *StorageConfiguration) SubStorageConfiguration(cfg gorums.NodeListOption) (subCfg *StorageConfiguration, err error) {
 	subCfg = &StorageConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +87,9 @@ func (c *StorageConfiguration) SubStorageConfiguration(cfg gorums.NodeListOption
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func StorageConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*StorageConfiguration, error) {
+func StorageConfigurationFromRaw(rawCfg gorums.Configuration) (*StorageConfiguration, error) {
 	newCfg := &StorageConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -99,7 +99,7 @@ func StorageConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*StorageConfig
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *StorageConfiguration) Nodes() []*StorageNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*StorageNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &StorageNode{n}
@@ -111,7 +111,7 @@ func (c *StorageConfiguration) Nodes() []*StorageNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *StorageConfiguration) AllNodes() []*StorageNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*StorageNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &StorageNode{n}
@@ -121,13 +121,13 @@ func (c *StorageConfiguration) AllNodes() []*StorageNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c StorageConfiguration) And(d *StorageConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c StorageConfiguration) Except(rm *StorageConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -143,12 +143,12 @@ func (c *StorageConfiguration) WriteMulticast(ctx context.Context, in *WriteRequ
 		Method:  "storage.Storage.WriteMulticast",
 	}
 
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+	c.Configuration.Multicast(ctx, cd, opts...)
 }
 
 // StorageNode holds the node specific methods for the Storage service.
 type StorageNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // ReadQC executes the Read Quorum Call on a configuration
@@ -160,7 +160,7 @@ func (c *StorageConfiguration) ReadQC(ctx context.Context, in *ReadRequest) goru
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*ReadResponse](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*ReadResponse](ctx, c.Configuration, cd)
 }
 
 // WriteQC executes the Write Quorum Call on a configuration
@@ -172,7 +172,7 @@ func (c *StorageConfiguration) WriteQC(ctx context.Context, in *WriteRequest) go
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*WriteResponse](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*WriteResponse](ctx, c.Configuration, cd)
 }
 
 // ReadRPC executes the Read RPC on a single Node
@@ -182,7 +182,7 @@ func (n *StorageNode) ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadR
 		Method:  "storage.Storage.ReadRPC",
 	}
 
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func (n *StorageNode) WriteRPC(ctx context.Context, in *WriteRequest) (resp *Wri
 		Method:  "storage.Storage.WriteRPC",
 	}
 
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

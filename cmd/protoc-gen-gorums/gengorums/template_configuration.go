@@ -1,7 +1,7 @@
 package gengorums
 
 var configurationVars = `
-{{- $rawConfiguration := use "gorums.RawConfiguration" .GenFile}}
+{{- $configuration := use "gorums.Configuration" .GenFile}}
 {{- $nodeListOptions := use "gorums.NodeListOption" .GenFile}}
 `
 
@@ -22,7 +22,7 @@ var configurationStruct = `
 // procedure calls may be invoked.
 {{- reserveName $configurationName}}
 type {{$configurationName}} struct {
-	{{$rawConfiguration}}
+	{{$configuration}}
 }
 `
 
@@ -38,7 +38,7 @@ var newConfiguration = `
 {{- reserveName $funcName}}
 func {{$funcName}}(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *{{$configurationName}}, err error) {
 	c = &{{$configurationName}}{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ var subConfiguration = `
 {{- reserveMethod $configurationName $methodName}}
 func (c *{{$configurationName}}) {{$methodName}}(cfg gorums.NodeListOption) (subCfg *{{$configurationName}}, err error) {
 	subCfg = &{{$configurationName}}{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -73,9 +73,9 @@ var configurationFromRaw = `
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
 {{- reserveName $funcName}}
-func {{$funcName}}(rawCfg {{$rawConfiguration}}) (*{{$configurationName}}, error) {
+func {{$funcName}}(rawCfg {{$configuration}}) (*{{$configurationName}}, error) {
 	newCfg := &{{$configurationName}}{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -88,7 +88,7 @@ var configurationMethodsTemplate = `
 // NOTE: mutating the returned slice is not supported.
 {{- reserveMethod $configurationName "Nodes"}}
 func (c *{{$configurationName}}) Nodes() []*{{$nodeName}} {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*{{$nodeName}}, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &{{$nodeName}}{n}
@@ -101,7 +101,7 @@ func (c *{{$configurationName}}) Nodes() []*{{$nodeName}} {
 // NOTE: mutating the returned slice is not supported.
 {{- reserveMethod $configurationName "AllNodes"}}
 func (c *{{$configurationName}}) AllNodes() []*{{$nodeName}} {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*{{$nodeName}}, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &{{$nodeName}}{n}
@@ -112,14 +112,14 @@ func (c *{{$configurationName}}) AllNodes() []*{{$nodeName}} {
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 {{- reserveMethod $configurationName "And"}}
 func (c {{$configurationName}}) And(d *{{$configurationName}}) {{$nodeListOptions}} {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 {{- reserveMethod $configurationName "Except"}}
 func (c {{$configurationName}}) Except(rm *{{$configurationName}}) {{$nodeListOptions}} {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 `
 

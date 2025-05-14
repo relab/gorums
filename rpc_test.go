@@ -26,7 +26,7 @@ func TestRPCCallSuccess(t *testing.T) {
 	node := cfg.Nodes()[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	response, err := node.RawNode.RPCCall(ctx, gorums.CallData{
+	response, err := node.Node.RPCCall(ctx, gorums.CallData{
 		Message: &dummy.Empty{},
 		Method:  "dummy.Dummy.Test",
 	})
@@ -53,7 +53,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 	node := cfg.Nodes()[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	response, err := node.RawNode.RPCCall(ctx, gorums.CallData{
+	response, err := node.Node.RPCCall(ctx, gorums.CallData{
 		Message: &dummy.Empty{},
 		Method:  "dummy.Dummy.Test",
 	})
@@ -80,7 +80,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 0*time.Second)
 	time.Sleep(50 * time.Millisecond)
 	defer cancel()
-	response, err := node.RawNode.RPCCall(ctx, gorums.CallData{
+	response, err := node.Node.RPCCall(ctx, gorums.CallData{
 		Message: &dummy.Empty{},
 		Method:  "dummy.Dummy.Test",
 	})

@@ -29,7 +29,7 @@ func init() {
 // A MetadataTestConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type MetadataTestConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewMetadataTestConfiguration returns a configuration based on the provided list of nodes (required)
@@ -41,7 +41,7 @@ type MetadataTestConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewMetadataTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *MetadataTestConfiguration, err error) {
 	c = &MetadataTestConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func NewMetadataTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.Mana
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *MetadataTestConfiguration) SubMetadataTestConfiguration(cfg gorums.NodeListOption) (subCfg *MetadataTestConfiguration, err error) {
 	subCfg = &MetadataTestConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -68,9 +68,9 @@ func (c *MetadataTestConfiguration) SubMetadataTestConfiguration(cfg gorums.Node
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func MetadataTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*MetadataTestConfiguration, error) {
+func MetadataTestConfigurationFromRaw(rawCfg gorums.Configuration) (*MetadataTestConfiguration, error) {
 	newCfg := &MetadataTestConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -80,7 +80,7 @@ func MetadataTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Metadata
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *MetadataTestConfiguration) Nodes() []*MetadataTestNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*MetadataTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &MetadataTestNode{n}
@@ -92,7 +92,7 @@ func (c *MetadataTestConfiguration) Nodes() []*MetadataTestNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *MetadataTestConfiguration) AllNodes() []*MetadataTestNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*MetadataTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &MetadataTestNode{n}
@@ -102,18 +102,18 @@ func (c *MetadataTestConfiguration) AllNodes() []*MetadataTestNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c MetadataTestConfiguration) And(d *MetadataTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c MetadataTestConfiguration) Except(rm *MetadataTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // MetadataTestNode holds the node specific methods for the MetadataTest service.
 type MetadataTestNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // IDFromMD returns the 'id' field from the metadata.
@@ -123,7 +123,7 @@ func (n *MetadataTestNode) IDFromMD(ctx context.Context, in *emptypb.Empty) (res
 		Method:  "metadata.MetadataTest.IDFromMD",
 	}
 
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +137,7 @@ func (n *MetadataTestNode) WhatIP(ctx context.Context, in *emptypb.Empty) (resp 
 		Method:  "metadata.MetadataTest.WhatIP",
 	}
 
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

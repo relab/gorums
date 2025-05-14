@@ -25,7 +25,7 @@ func TestManagerLogging(t *testing.T) {
 }
 
 func TestManagerAddNode(t *testing.T) {
-	cfg, err := NewRawConfiguration(WithNodeMap(mgrTestNodeMap), WithNoConnect())
+	cfg, err := NewConfiguration(WithNodeMap(mgrTestNodeMap), WithNoConnect())
 	mgr := cfg.mgr
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +41,7 @@ func TestManagerAddNode(t *testing.T) {
 		{"127.0.1.1:1234", 2, "config: node 2 (127.0.1.1:1234) already exists"},
 	}
 	for _, test := range tests {
-		node, err := NewRawNodeWithID(test.addr, test.id)
+		node, err := NewNodeWithID(test.addr, test.id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -59,7 +59,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	})
 	defer teardown()
 
-	cfg, err := NewRawConfiguration(WithNodeList(addrs[:2]),
+	cfg, err := NewConfiguration(WithNodeList(addrs[:2]),
 		WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
@@ -75,7 +75,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.size(), len(addrs)-1)
 	}
 
-	node, err := NewRawNode(addrs[2])
+	node, err := NewNode(addrs[2])
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,7 @@ func init() {
 // A DummyConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type DummyConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewDummyConfiguration returns a configuration based on the provided list of nodes (required)
@@ -40,7 +40,7 @@ type DummyConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewDummyConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *DummyConfiguration, err error) {
 	c = &DummyConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func NewDummyConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOpti
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *DummyConfiguration) SubDummyConfiguration(cfg gorums.NodeListOption) (subCfg *DummyConfiguration, err error) {
 	subCfg = &DummyConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +67,9 @@ func (c *DummyConfiguration) SubDummyConfiguration(cfg gorums.NodeListOption) (s
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func DummyConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*DummyConfiguration, error) {
+func DummyConfigurationFromRaw(rawCfg gorums.Configuration) (*DummyConfiguration, error) {
 	newCfg := &DummyConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -79,7 +79,7 @@ func DummyConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*DummyConfigurat
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *DummyConfiguration) Nodes() []*DummyNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*DummyNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &DummyNode{n}
@@ -91,7 +91,7 @@ func (c *DummyConfiguration) Nodes() []*DummyNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *DummyConfiguration) AllNodes() []*DummyNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*DummyNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &DummyNode{n}
@@ -101,18 +101,18 @@ func (c *DummyConfiguration) AllNodes() []*DummyNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c DummyConfiguration) And(d *DummyConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c DummyConfiguration) Except(rm *DummyConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // DummyNode holds the node specific methods for the Dummy service.
 type DummyNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // Test is a quorum call invoked on each node in configuration c,
@@ -124,7 +124,7 @@ func (n *DummyNode) Test(ctx context.Context, in *Empty) (resp *Empty, err error
 		Method:  "dummy.Dummy.Test",
 	}
 
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

@@ -43,7 +43,7 @@ var _ ConfigTestNodeClient = (*ConfigTestNode)(nil)
 // A ConfigTestConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type ConfigTestConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewConfigTestConfiguration returns a configuration based on the provided list of nodes (required)
@@ -55,7 +55,7 @@ type ConfigTestConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewConfigTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *ConfigTestConfiguration, err error) {
 	c = &ConfigTestConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func NewConfigTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.Manage
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *ConfigTestConfiguration) SubConfigTestConfiguration(cfg gorums.NodeListOption) (subCfg *ConfigTestConfiguration, err error) {
 	subCfg = &ConfigTestConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -82,9 +82,9 @@ func (c *ConfigTestConfiguration) SubConfigTestConfiguration(cfg gorums.NodeList
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func ConfigTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*ConfigTestConfiguration, error) {
+func ConfigTestConfigurationFromRaw(rawCfg gorums.Configuration) (*ConfigTestConfiguration, error) {
 	newCfg := &ConfigTestConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -94,7 +94,7 @@ func ConfigTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*ConfigTest
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *ConfigTestConfiguration) Nodes() []*ConfigTestNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*ConfigTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &ConfigTestNode{n}
@@ -106,7 +106,7 @@ func (c *ConfigTestConfiguration) Nodes() []*ConfigTestNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *ConfigTestConfiguration) AllNodes() []*ConfigTestNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*ConfigTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &ConfigTestNode{n}
@@ -116,18 +116,18 @@ func (c *ConfigTestConfiguration) AllNodes() []*ConfigTestNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c ConfigTestConfiguration) And(d *ConfigTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c ConfigTestConfiguration) Except(rm *ConfigTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // ConfigTestNode holds the node specific methods for the ConfigTest service.
 type ConfigTestNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // Config is a quorum call invoked on each node in configuration c,
@@ -140,7 +140,7 @@ func (c *ConfigTestConfiguration) Config(ctx context.Context, in *Request) gorum
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Response](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Response](ctx, c.Configuration, cd)
 }
 
 // ConfigTestServer is the server-side API for the ConfigTest Service

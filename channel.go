@@ -43,7 +43,7 @@ type responseRouter struct {
 
 type channel struct {
 	sendQ           chan request
-	node            *RawNode
+	node            *Node
 	mu              sync.Mutex
 	lastError       error
 	latency         time.Duration
@@ -67,7 +67,7 @@ type channel struct {
 // connection has not yet been established. This is to prevent
 // deadlock when invoking a call type, as the goroutine will
 // block on the sendQ until a connection has been established.
-func newChannel(n *RawNode) *channel {
+func newChannel(n *Node) *channel {
 	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		backoffCfg:      n.mgr.opts.backoff,

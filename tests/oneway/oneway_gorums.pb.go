@@ -46,7 +46,7 @@ var _ OnewayTestNodeClient = (*OnewayTestNode)(nil)
 // A OnewayTestConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type OnewayTestConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewOnewayTestConfiguration returns a configuration based on the provided list of nodes (required)
@@ -58,7 +58,7 @@ type OnewayTestConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewOnewayTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *OnewayTestConfiguration, err error) {
 	c = &OnewayTestConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func NewOnewayTestConfiguration(cfg gorums.NodeListOption, opts ...gorums.Manage
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *OnewayTestConfiguration) SubOnewayTestConfiguration(cfg gorums.NodeListOption) (subCfg *OnewayTestConfiguration, err error) {
 	subCfg = &OnewayTestConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -85,9 +85,9 @@ func (c *OnewayTestConfiguration) SubOnewayTestConfiguration(cfg gorums.NodeList
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func OnewayTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*OnewayTestConfiguration, error) {
+func OnewayTestConfigurationFromRaw(rawCfg gorums.Configuration) (*OnewayTestConfiguration, error) {
 	newCfg := &OnewayTestConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -97,7 +97,7 @@ func OnewayTestConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*OnewayTest
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *OnewayTestConfiguration) Nodes() []*OnewayTestNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*OnewayTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &OnewayTestNode{n}
@@ -109,7 +109,7 @@ func (c *OnewayTestConfiguration) Nodes() []*OnewayTestNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *OnewayTestConfiguration) AllNodes() []*OnewayTestNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*OnewayTestNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &OnewayTestNode{n}
@@ -119,13 +119,13 @@ func (c *OnewayTestConfiguration) AllNodes() []*OnewayTestNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c OnewayTestConfiguration) And(d *OnewayTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c OnewayTestConfiguration) Except(rm *OnewayTestConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // Multicast is a quorum call invoked on each node in configuration c,
@@ -138,7 +138,7 @@ func (c *OnewayTestConfiguration) Multicast(ctx context.Context, in *Request, op
 		Method:  "oneway.OnewayTest.Multicast",
 	}
 
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+	c.Configuration.Multicast(ctx, cd, opts...)
 }
 
 // MulticastPerNode is a quorum call invoked on each node in configuration c,
@@ -159,12 +159,12 @@ func (c *OnewayTestConfiguration) MulticastPerNode(ctx context.Context, in *Requ
 		return f(req.(*Request), nid)
 	}
 
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+	c.Configuration.Multicast(ctx, cd, opts...)
 }
 
 // OnewayTestNode holds the node specific methods for the OnewayTest service.
 type OnewayTestNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // OnewayTestServer is the server-side API for the OnewayTest Service
@@ -202,5 +202,5 @@ func (n *OnewayTestNode) Unicast(ctx context.Context, in *Request, opts ...gorum
 		Method:  "oneway.OnewayTest.Unicast",
 	}
 
-	n.RawNode.Unicast(ctx, cd, opts...)
+	n.Node.Unicast(ctx, cd, opts...)
 }

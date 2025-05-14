@@ -4,6 +4,7 @@ package gengorums
 var nodeVariables = `
 {{- $_ := use "gorums.EnforceVersion" .GenFile}}
 {{- $callOpt := use "gorums.CallOption" .GenFile}}
+{{- $node := use "gorums.Node" .GenFile}}
 `
 
 var nodeStructs = `
@@ -14,7 +15,7 @@ var nodeStructs = `
 	// {{$nodeName}} holds the node specific methods for the {{$service}} service.
 	{{- reserveName $nodeName}}
 	type {{$nodeName}} struct {
-		*gorums.RawNode
+		*{{$node}}
 	}
 {{- end}}
 `

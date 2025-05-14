@@ -42,7 +42,7 @@ func TestServerCallback(t *testing.T) {
 	)
 	defer mgr.close()
 
-	node, err := NewRawNode(lis.Addr().String())
+	node, err := NewNode(lis.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}

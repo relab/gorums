@@ -44,7 +44,7 @@ var _ QuorumFunctionNodeClient = (*QuorumFunctionNode)(nil)
 // A QuorumFunctionConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type QuorumFunctionConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewQuorumFunctionConfiguration returns a configuration based on the provided list of nodes (required)
@@ -56,7 +56,7 @@ type QuorumFunctionConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewQuorumFunctionConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *QuorumFunctionConfiguration, err error) {
 	c = &QuorumFunctionConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func NewQuorumFunctionConfiguration(cfg gorums.NodeListOption, opts ...gorums.Ma
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *QuorumFunctionConfiguration) SubQuorumFunctionConfiguration(cfg gorums.NodeListOption) (subCfg *QuorumFunctionConfiguration, err error) {
 	subCfg = &QuorumFunctionConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -83,9 +83,9 @@ func (c *QuorumFunctionConfiguration) SubQuorumFunctionConfiguration(cfg gorums.
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func QuorumFunctionConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*QuorumFunctionConfiguration, error) {
+func QuorumFunctionConfigurationFromRaw(rawCfg gorums.Configuration) (*QuorumFunctionConfiguration, error) {
 	newCfg := &QuorumFunctionConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -95,7 +95,7 @@ func QuorumFunctionConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Quorum
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *QuorumFunctionConfiguration) Nodes() []*QuorumFunctionNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*QuorumFunctionNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &QuorumFunctionNode{n}
@@ -107,7 +107,7 @@ func (c *QuorumFunctionConfiguration) Nodes() []*QuorumFunctionNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *QuorumFunctionConfiguration) AllNodes() []*QuorumFunctionNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*QuorumFunctionNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &QuorumFunctionNode{n}
@@ -117,18 +117,18 @@ func (c *QuorumFunctionConfiguration) AllNodes() []*QuorumFunctionNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c QuorumFunctionConfiguration) And(d *QuorumFunctionConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c QuorumFunctionConfiguration) Except(rm *QuorumFunctionConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // QuorumFunctionNode holds the node specific methods for the QuorumFunction service.
 type QuorumFunctionNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // UseReq is a quorum call invoked on each node in configuration c,
@@ -141,7 +141,7 @@ func (c *QuorumFunctionConfiguration) UseReq(ctx context.Context, in *Request) g
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Response](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Response](ctx, c.Configuration, cd)
 }
 
 // IgnoreReq is a quorum call invoked on each node in configuration c,
@@ -154,7 +154,7 @@ func (c *QuorumFunctionConfiguration) IgnoreReq(ctx context.Context, in *Request
 		ServerStream: false,
 	}
 
-	return gorums.QuorumCall[*Response](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*Response](ctx, c.Configuration, cd)
 }
 
 // QuorumFunctionServer is the server-side API for the QuorumFunction Service

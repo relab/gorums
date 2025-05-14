@@ -28,7 +28,7 @@ func init() {
 // A TLSConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type TLSConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewTLSConfiguration returns a configuration based on the provided list of nodes (required)
@@ -40,7 +40,7 @@ type TLSConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewTLSConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *TLSConfiguration, err error) {
 	c = &TLSConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func NewTLSConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *TLSConfiguration) SubTLSConfiguration(cfg gorums.NodeListOption) (subCfg *TLSConfiguration, err error) {
 	subCfg = &TLSConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +67,9 @@ func (c *TLSConfiguration) SubTLSConfiguration(cfg gorums.NodeListOption) (subCf
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func TLSConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*TLSConfiguration, error) {
+func TLSConfigurationFromRaw(rawCfg gorums.Configuration) (*TLSConfiguration, error) {
 	newCfg := &TLSConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -79,7 +79,7 @@ func TLSConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*TLSConfiguration,
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *TLSConfiguration) Nodes() []*TLSNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*TLSNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &TLSNode{n}
@@ -91,7 +91,7 @@ func (c *TLSConfiguration) Nodes() []*TLSNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *TLSConfiguration) AllNodes() []*TLSNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*TLSNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &TLSNode{n}
@@ -101,18 +101,18 @@ func (c *TLSConfiguration) AllNodes() []*TLSNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c TLSConfiguration) And(d *TLSConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c TLSConfiguration) Except(rm *TLSConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // TLSNode holds the node specific methods for the TLS service.
 type TLSNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // TestTLS is a quorum call invoked on each node in configuration c,
@@ -124,7 +124,7 @@ func (n *TLSNode) TestTLS(ctx context.Context, in *Request) (resp *Response, err
 		Method:  "tls.TLS.TestTLS",
 	}
 
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

@@ -35,7 +35,7 @@ var multicastBody = `
 		}
 	{{- end}}
 
-		c.RawConfiguration.Multicast(ctx, cd, opts...)
+		c.Configuration.Multicast(ctx, cd, opts...)
 	}
 `
 

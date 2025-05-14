@@ -28,7 +28,7 @@ func init() {
 // A UnresponsiveConfiguration represents a static set of nodes on which quorum remote
 // procedure calls may be invoked.
 type UnresponsiveConfiguration struct {
-	gorums.RawConfiguration
+	gorums.Configuration
 }
 
 // NewUnresponsiveConfiguration returns a configuration based on the provided list of nodes (required)
@@ -40,7 +40,7 @@ type UnresponsiveConfiguration struct {
 // The ManagerOption list controls how the nodes in the configuration are created.
 func NewUnresponsiveConfiguration(cfg gorums.NodeListOption, opts ...gorums.ManagerOption) (c *UnresponsiveConfiguration, err error) {
 	c = &UnresponsiveConfiguration{}
-	c.RawConfiguration, err = gorums.NewRawConfiguration(cfg, opts...)
+	c.Configuration, err = gorums.NewConfiguration(cfg, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func NewUnresponsiveConfiguration(cfg gorums.NodeListOption, opts ...gorums.Mana
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
 func (c *UnresponsiveConfiguration) SubUnresponsiveConfiguration(cfg gorums.NodeListOption) (subCfg *UnresponsiveConfiguration, err error) {
 	subCfg = &UnresponsiveConfiguration{}
-	subCfg.RawConfiguration, err = c.SubRawConfiguration(cfg)
+	subCfg.Configuration, err = c.SubConfiguration(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +67,9 @@ func (c *UnresponsiveConfiguration) SubUnresponsiveConfiguration(cfg gorums.Node
 //
 //	cfg1, err := mgr.NewConfiguration(qspec1, opts...)
 //	cfg2 := ConfigurationFromRaw(cfg1.RawConfig, qspec2)
-func UnresponsiveConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*UnresponsiveConfiguration, error) {
+func UnresponsiveConfigurationFromRaw(rawCfg gorums.Configuration) (*UnresponsiveConfiguration, error) {
 	newCfg := &UnresponsiveConfiguration{
-		RawConfiguration: rawCfg,
+		Configuration: rawCfg,
 	}
 	return newCfg, nil
 }
@@ -79,7 +79,7 @@ func UnresponsiveConfigurationFromRaw(rawCfg gorums.RawConfiguration) (*Unrespon
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *UnresponsiveConfiguration) Nodes() []*UnresponsiveNode {
-	rawNodes := c.RawConfiguration.Nodes()
+	rawNodes := c.Configuration.Nodes()
 	nodes := make([]*UnresponsiveNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &UnresponsiveNode{n}
@@ -91,7 +91,7 @@ func (c *UnresponsiveConfiguration) Nodes() []*UnresponsiveNode {
 //
 // NOTE: mutating the returned slice is not supported.
 func (c *UnresponsiveConfiguration) AllNodes() []*UnresponsiveNode {
-	rawNodes := c.RawConfiguration.AllNodes()
+	rawNodes := c.Configuration.AllNodes()
 	nodes := make([]*UnresponsiveNode, len(rawNodes))
 	for i, n := range rawNodes {
 		nodes[i] = &UnresponsiveNode{n}
@@ -101,18 +101,18 @@ func (c *UnresponsiveConfiguration) AllNodes() []*UnresponsiveNode {
 
 // And returns a NodeListOption that can be used to create a new configuration combining c and d.
 func (c UnresponsiveConfiguration) And(d *UnresponsiveConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.And(d.RawConfiguration)
+	return c.Configuration.And(d.Configuration)
 }
 
 // Except returns a NodeListOption that can be used to create a new configuration
 // from c without the nodes in rm.
 func (c UnresponsiveConfiguration) Except(rm *UnresponsiveConfiguration) gorums.NodeListOption {
-	return c.RawConfiguration.Except(rm.RawConfiguration)
+	return c.Configuration.Except(rm.Configuration)
 }
 
 // UnresponsiveNode holds the node specific methods for the Unresponsive service.
 type UnresponsiveNode struct {
-	*gorums.RawNode
+	*gorums.Node
 }
 
 // TestUnresponsive is a quorum call invoked on each node in configuration c,
@@ -124,7 +124,7 @@ func (n *UnresponsiveNode) TestUnresponsive(ctx context.Context, in *Empty) (res
 		Method:  "unresponsive.Unresponsive.TestUnresponsive",
 	}
 
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.Node.RPCCall(ctx, cd)
 	if err != nil {
 		return nil, err
 	}

@@ -66,7 +66,7 @@ var quorumCallBody = `	cd := {{$callData}}{
 	}
 {{- end}}
 
-	return gorums.QuorumCall[*{{$out}}](ctx, c.RawConfiguration, cd)
+	return gorums.QuorumCall[*{{$out}}](ctx, c.Configuration, cd)
 }
 `
 

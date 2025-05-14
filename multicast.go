@@ -12,7 +12,7 @@ import (
 // before the message has been sent.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
+func (c Configuration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 	sentMsgs := 0
