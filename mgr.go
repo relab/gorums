@@ -43,9 +43,7 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 	}
 	snowflake := broadcast.NewSnowflake(m.opts.machineID)
 	if m.opts.logger != nil {
-		// a random machineID will be generated if m.opts.machineID is invalid
-		mID := snowflake.MachineID
-		m.logger = m.opts.logger.With(slog.Uint64("MachineID", mID))
+		m.logger = m.opts.logger.With(logging.MachineID(snowflake.MachineID))
 	}
 	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
 		grpc.CallContentSubtype(ContentSubtype),
