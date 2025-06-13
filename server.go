@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 
@@ -12,21 +13,51 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// requestHandler is used to fetch a response message based on the request.
-// A requestHandler should receive a message from the server, unmarshal it into
+// RequestHandler is used to fetch a response message based on the request.
+// A RequestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type requestHandler func(ServerCtx, *Message, chan<- *Message)
+type RequestHandler func(ServerCtx, *Message, chan<- *Message)
 
-type orderingServer struct {
-	handlers map[string]requestHandler
-	opts     *serverOptions
-	ordering.UnimplementedGorumsServer
+type Interceptor func(ServerCtx, *Message, chan<- *Message, RequestHandler)
+
+type ResponseHandler func(ServerCtx, *Message) (*Message, error)
+
+type ResponseInterceptor func(ServerCtx, *Message, ResponseHandler) (*Message, error)
+
+type (
+	orderingServer struct {
+		handlers map[string]RequestHandler
+		opts     *serverOptions
+		ordering.UnimplementedGorumsServer
+	}
+)
+
+func InterceptorWithResponse(intercept ResponseInterceptor) Interceptor {
+	return func(ctx ServerCtx, msg *Message, out chan<- *Message, next RequestHandler) {
+		nextWithResp := func(ctx ServerCtx, msg *Message) (*Message, error) {
+			respChan := make(chan *Message, 1)
+			next(ctx, msg, respChan)
+			resp, ok := <-respChan
+			if !ok {
+				return nil, fmt.Errorf("handler closed channel without response")
+			}
+			return resp, nil
+		}
+		resp, err := intercept(ctx, msg, nextWithResp)
+		if err != nil {
+			// TODO(jostein): Wrap the error instead of the message
+			out <- WrapMessage(msg.Metadata, nil, err)
+			ctx.Release() // release handler lock to allow other requests to proceed
+			return
+		}
+		out <- resp
+	}
 }
 
 func newOrderingServer(opts *serverOptions) *orderingServer {
 	s := &orderingServer{
-		handlers: make(map[string]requestHandler),
+		handlers: make(map[string]RequestHandler),
 		opts:     opts,
 	}
 	return s
@@ -106,6 +137,7 @@ type serverOptions struct {
 	buffer          uint
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
+	interceptors    []Interceptor
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -136,10 +168,46 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
+func WithInterceptors(i ...Interceptor) ServerOption {
+	return func(opts *serverOptions) {
+		opts.interceptors = append(opts.interceptors, i...)
+	}
+}
+
+func chainInterceptors(final RequestHandler, interceptors ...Interceptor) RequestHandler {
+	if len(interceptors) == 0 {
+		return final
+	}
+	handler := final
+	for i := len(interceptors) - 1; i >= 0; i-- {
+		curr := interceptors[i]
+		next := handler
+		handler = func(ctx ServerCtx, msg *Message, out chan<- *Message) {
+			curr(ctx, msg, out, next)
+		}
+	}
+	return handler
+}
+
+// final = someHandler
+// interceptors = [interceptor1, interceptor2, ...]
+// The chain will be built as follows:
+// we then compose the chain like this:
+// i := len(interceptors) - 1 -> i = 1 (interceptor2)
+// h = final -> h = someHandler
+
+// h is then set to a new function that calls the current interceptor with the final handler as the next handler.
+// h is then further modified with interceptor1 calling interceptor2 as the next handler, which also calls the final handler.
+// the final call chain will look like this:
+// interceptor2 -> interceptor1 -> someHandler
+// This allows each interceptor to modify the request and response, or perform additional actions before or after calling the next handler in the chain.
+// on the way out, interceptor1 will run and then interceptor2, before finally passing the messsage to be sent to the client.
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	srv        *orderingServer
-	grpcServer *grpc.Server
+	srv          *orderingServer
+	grpcServer   *grpc.Server
+	interceptors []Interceptor
 }
 
 // NewServer returns a new instance of [gorums.Server].
@@ -149,8 +217,9 @@ func NewServer(opts ...ServerOption) *Server {
 		opt(&serverOpts)
 	}
 	s := &Server{
-		srv:        newOrderingServer(&serverOpts),
-		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
+		srv:          newOrderingServer(&serverOpts),
+		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
+		interceptors: serverOpts.interceptors,
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
@@ -159,8 +228,8 @@ func NewServer(opts ...ServerOption) *Server {
 // RegisterHandler registers a request handler for the specified method name.
 //
 // This function should only be used by generated code.
-func (s *Server) RegisterHandler(method string, handler requestHandler) {
-	s.srv.handlers[method] = handler
+func (s *Server) RegisterHandler(method string, handler RequestHandler) {
+	s.srv.handlers[method] = chainInterceptors(handler, s.interceptors...)
 }
 
 // Serve starts serving on the listener.
