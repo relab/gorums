@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
+	"github.com/relab/gorums/examples/interceptors"
 	pb "github.com/relab/gorums/examples/storage/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -21,13 +22,13 @@ func startServer(address string) (*gorums.Server, string) {
 	if err != nil {
 		log.Fatalf("Failed to listen on '%s': %v\n", address, err)
 	}
-
 	// init server implementation
 	storage := newStorageServer()
 	storage.logger = log.New(os.Stderr, fmt.Sprintf("%s: ", lis.Addr()), log.Ltime|log.Lmicroseconds|log.Lmsgprefix)
 
 	// create Gorums server
-	srv := gorums.NewServer()
+	// TODO(jostein): Remove interceptors from this example and provide a separate example for interceptors?
+	srv := gorums.NewServer(gorums.WithInterceptors(interceptors.MetadataInterceptor, interceptors.NoFooAllowedInterceptor[*pb.WriteRequest], gorums.InterceptorWithResponse(interceptors.LoggingSimpleInterceptor)))
 	// register server implementation with Gorums server
 	pb.RegisterStorageServer(srv, storage)
 	// handle requests on listener
