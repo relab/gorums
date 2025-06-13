@@ -84,3 +84,8 @@ func DecodeBroadcastID(broadcastID uint64) (timestamp uint32, shardID uint16, ma
 	n := (broadcastID & bitMaskSequenceNum)
 	return uint32(t), uint16(shard), uint16(m), uint32(n)
 }
+
+// ExtractShardID extracts the shard ID from the broadcast ID.
+func ExtractShardID(broadcastID uint64) uint16 {
+	return uint16((broadcastID & bitMaskShardID) >> timestampBits)
+}
