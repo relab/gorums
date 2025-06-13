@@ -16,14 +16,22 @@ type Snowflake struct {
 }
 
 const (
-	MaxMachineID       = uint16(1 << 12)
-	maxShard           = uint8(1 << 4)
-	maxSequenceNum     = uint32(1 << 18)
-	bitMaskTimestamp   = uint64((1<<30)-1) << 34
-	bitMaskShardID     = uint64((1<<4)-1) << 30
-	bitMaskMachineID   = uint64((1<<12)-1) << 18
-	bitMaskSequenceNum = uint64((1 << 18) - 1)
-	epoch              = "2024-01-01T00:00:00"
+	timestampBits      = 30                 // seconds since 01.01.2025
+	shardIDBits        = 4                  // 16 different shards
+	machineIDBits      = 12                 // 4096 clients
+	sequenceNumBits    = 18                 // 262 144 messages
+	timestampBitsShift = 64 - timestampBits // 34
+
+	maxShard       = uint8(1 << shardIDBits)
+	maxMachineID   = uint16(1 << machineIDBits)
+	maxSequenceNum = uint32(1 << sequenceNumBits)
+
+	bitMaskTimestamp   = uint64((1<<timestampBits)-1) << timestampBitsShift
+	bitMaskShardID     = uint64((1<<shardIDBits)-1) << timestampBits
+	bitMaskMachineID   = uint64((1<<machineIDBits)-1) << sequenceNumBits
+	bitMaskSequenceNum = uint64((1 << sequenceNumBits) - 1)
+
+	epoch = "2025-01-01T00:00:00"
 )
 
 func Epoch() time.Time {
@@ -32,8 +40,8 @@ func Epoch() time.Time {
 }
 
 func NewSnowflake(id uint64) *Snowflake {
-	if id >= uint64(MaxMachineID) {
-		id = uint64(rand.Int31n(int32(MaxMachineID)))
+	if id >= uint64(maxMachineID) {
+		id = uint64(rand.Int31n(int32(maxMachineID)))
 	}
 	return &Snowflake{
 		MachineID:   id,
@@ -43,10 +51,6 @@ func NewSnowflake(id uint64) *Snowflake {
 }
 
 func (s *Snowflake) NewBroadcastID() uint64 {
-	// timestamp: 30 bit -> seconds since 01.01.2024
-	// shardID: 4 bit -> 16 different shards
-	// machineID: 12 bit -> 4096 clients
-	// sequenceNum: 18 bit -> 262 144 messages
 start:
 	s.mut.Lock()
 	timestamp := uint64(time.Since(s.epoch).Seconds())
@@ -63,17 +67,26 @@ start:
 	s.SequenceNum = l
 	s.mut.Unlock()
 
-	t := (timestamp << 34) & bitMaskTimestamp
-	shard := (uint64(rand.Int31n(int32(maxShard))) << 30) & bitMaskShardID
-	m := uint64(s.MachineID<<18) & bitMaskMachineID
+	t := (timestamp << timestampBitsShift) & bitMaskTimestamp
+	shard := (uint64(rand.Int31n(int32(maxShard))) << timestampBits) & bitMaskShardID
+	m := uint64(s.MachineID<<sequenceNumBits) & bitMaskMachineID
 	n := l & bitMaskSequenceNum
 	return t | shard | m | n
 }
 
 func DecodeBroadcastID(broadcastID uint64) (timestamp uint32, shardID uint16, machineID uint16, sequenceNo uint32) {
-	t := (broadcastID & bitMaskTimestamp) >> 34
-	shard := (broadcastID & bitMaskShardID) >> 30
-	m := (broadcastID & bitMaskMachineID) >> 18
+	t := (broadcastID & bitMaskTimestamp) >> timestampBitsShift
+	shard := (broadcastID & bitMaskShardID) >> timestampBits
+	m := (broadcastID & bitMaskMachineID) >> sequenceNumBits
 	n := (broadcastID & bitMaskSequenceNum)
 	return uint32(t), uint16(shard), uint16(m), uint32(n)
+}
+
+// InvalidMachineID returns an invalid machine ID.
+// This can be used to initialize a Snowflake instance to avoid unintentional
+// collisions with valid machine IDs. This is necessary because 0 is a valid
+// machine ID and should not be used as the default.
+// TODO(meling): make the zero value be the invalid machine ID instead.
+func InvalidMachineID() uint64 {
+	return uint64(maxMachineID) + 1
 }

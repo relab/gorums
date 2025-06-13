@@ -26,11 +26,9 @@ type managerOptions struct {
 
 func newManagerOptions() managerOptions {
 	return managerOptions{
-		backoff:    backoff.DefaultConfig,
-		sendBuffer: 100,
-		// Provide an illegal machineID to avoid unintentional collisions.
-		// 0 is a valid MachineID and should not be used as default.
-		machineID:      uint64(broadcast.MaxMachineID) + 1,
+		backoff:        backoff.DefaultConfig,
+		sendBuffer:     100,
+		machineID:      broadcast.InvalidMachineID(),
 		maxSendRetries: 0,
 		maxConnRetries: -1, // no limit
 	}

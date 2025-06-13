@@ -343,9 +343,7 @@ func NewServer(opts ...ServerOption) *Server {
 		shardBuffer:       200,
 		sendBuffer:        30,
 		reqTTL:            5 * time.Minute,
-		// Provide an illegal machineID to avoid unintentional collisions.
-		// 0 is a valid MachineID and should not be used as default.
-		machineID: uint64(broadcast.MaxMachineID) + 1,
+		machineID:         broadcast.InvalidMachineID(),
 	}
 	for _, opt := range opts {
 		opt(&serverOpts)

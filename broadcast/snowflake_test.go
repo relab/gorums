@@ -5,8 +5,8 @@ import (
 )
 
 func TestBroadcastID(t *testing.T) {
-	if MaxMachineID != 4096 {
-		t.Errorf("maxMachineID is hardcoded in test. want: %v, got: %v", 4096, MaxMachineID)
+	if maxMachineID != 4096 {
+		t.Errorf("maxMachineID is hardcoded in test. want: %v, got: %v", 4096, maxMachineID)
 	}
 	if maxSequenceNum != 262144 {
 		t.Errorf("maxSequenceNum is hardcoded in test. want: %v, got: %v", 262144, maxSequenceNum)
