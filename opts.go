@@ -4,7 +4,6 @@ import (
 	"log/slog"
 
 	"github.com/relab/gorums/authentication"
-	"github.com/relab/gorums/broadcast"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/metadata"
@@ -28,7 +27,7 @@ func newManagerOptions() managerOptions {
 	return managerOptions{
 		backoff:        backoff.DefaultConfig,
 		sendBuffer:     100,
-		machineID:      broadcast.InvalidMachineID(),
+		machineID:      0,
 		maxSendRetries: 0,
 		maxConnRetries: -1, // no limit
 	}
@@ -102,10 +101,11 @@ func WithAuthentication(auth *authentication.EllipticCurve) ManagerOption {
 	}
 }
 
-// WithMachineID returns a ManagerOption that allows you to set a unique ID for the client.
-// This ID will be embedded in broadcast request sent from the client, making the requests
-// trackable by the whole cluster. A random ID will be generated if not set. This can cause
-// collisions if there are many clients. MinID = 0 and MaxID = 4095.
+// WithMachineID returns a ManagerOption that sets a unique ID for the client.
+// The valid range for this ID is 1 to 4095, and it should be unique for each client.
+// This ID will be embedded in broadcast requests sent from the client, making client
+// requests trackable across the server replicas. A random ID will be generated if not set.
+// This can cause collisions if there are many clients.
 func WithMachineID(id uint64) ManagerOption {
 	return func(o *managerOptions) {
 		o.machineID = id

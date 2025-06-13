@@ -29,7 +29,7 @@ const (
 	bitMaskTimestamp   = uint64((1<<timestampBits)-1) << timestampBitsShift
 	bitMaskShardID     = uint64((1<<shardIDBits)-1) << timestampBits
 	bitMaskMachineID   = uint64((1<<machineIDBits)-1) << sequenceNumBits
-	bitMaskSequenceNum = uint64((1 << sequenceNumBits) - 1)
+	bitMaskSequenceNum = uint64((1<<sequenceNumBits)-1) << 0
 
 	epoch = "2025-01-01T00:00:00"
 )
@@ -39,9 +39,12 @@ func Epoch() time.Time {
 	return timestamp
 }
 
+// NewSnowflake creates a new Snowflake instance with the given machine ID.
+// If the machine ID is 0 or greater than 4096, a random machine ID will be
+// generated within the range [1, 4096].
 func NewSnowflake(id uint64) *Snowflake {
-	if id >= uint64(maxMachineID) {
-		id = uint64(rand.Int31n(int32(maxMachineID)))
+	if id == 0 || id > uint64(maxMachineID) {
+		id = uint64(rand.Int31n(int32(maxMachineID))) + 1 // avoid 0 as the machine ID
 	}
 	return &Snowflake{
 		MachineID:   id,
@@ -80,13 +83,4 @@ func DecodeBroadcastID(broadcastID uint64) (timestamp uint32, shardID uint16, ma
 	m := (broadcastID & bitMaskMachineID) >> sequenceNumBits
 	n := (broadcastID & bitMaskSequenceNum)
 	return uint32(t), uint16(shard), uint16(m), uint32(n)
-}
-
-// InvalidMachineID returns an invalid machine ID.
-// This can be used to initialize a Snowflake instance to avoid unintentional
-// collisions with valid machine IDs. This is necessary because 0 is a valid
-// machine ID and should not be used as the default.
-// TODO(meling): make the zero value be the invalid machine ID instead.
-func InvalidMachineID() uint64 {
-	return uint64(maxMachineID) + 1
 }

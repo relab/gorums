@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums/authentication"
-	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -273,9 +272,12 @@ func WithSLogger(logger *slog.Logger) ServerOption {
 	}
 }
 
-// WithSrvID sets the MachineID of the broadcast server. This ID is used to
-// generate BroadcastIDs. This method should be used if a replica needs to
-// initiate a broadcast request.
+// WithSrvID returns a ServerOption that sets the MachineID of the broadcast server.
+// This method should be used if a replica needs to initiate a broadcast request.
+// The valid range for this ID is 1 to 4095, and it should be unique for each replica.
+// This ID will be embedded in broadcast requests sent from the replica, making requests
+// trackable across the replicas. A random ID will be generated if not set.
+// This can cause collisions if there are many replicas.
 //
 // An example use case is in Paxos:
 // The designated leader sends a prepare and receives some promises it has
@@ -343,7 +345,7 @@ func NewServer(opts ...ServerOption) *Server {
 		shardBuffer:       200,
 		sendBuffer:        30,
 		reqTTL:            5 * time.Minute,
-		machineID:         broadcast.InvalidMachineID(),
+		machineID:         0,
 	}
 	for _, opt := range opts {
 		opt(&serverOpts)
