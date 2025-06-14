@@ -8,51 +8,43 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net"
 )
 
-// Elliptic Curve Cryptography (ECC) is a key-based technique for encrypting data.
-// ECC focuses on pairs of public and private keys for decryption and encryption of web traffic.
-// ECC is frequently discussed in the context of the Rivest–Shamir–Adleman (RSA) cryptographic algorithm.
-//
-// https://pkg.go.dev/github.com/katzenpost/core/crypto/eddsa
+// EllipticCurve represents an elliptic curve instance used for message authentication.
 type EllipticCurve struct {
-	addr        net.Addr       // used to identify self
-	pubKeyCurve elliptic.Curve // http://golang.org/pkg/crypto/elliptic/#P256
-	privateKey  *ecdsa.PrivateKey
-	publicKey   *ecdsa.PublicKey
+	addr       net.Addr // used to identify self
+	curve      elliptic.Curve
+	privateKey *ecdsa.PrivateKey
+	publicKey  *ecdsa.PublicKey
 }
 
 // New EllipticCurve instance
 func New(curve elliptic.Curve) *EllipticCurve {
 	return &EllipticCurve{
-		pubKeyCurve: curve,
-		privateKey:  new(ecdsa.PrivateKey),
+		curve:      curve,
+		privateKey: new(ecdsa.PrivateKey),
 	}
 }
 
-// GenerateKeys EllipticCurve public and private keys
-func (ec *EllipticCurve) GenerateKeys() error {
-	privKey, err := ecdsa.GenerateKey(ec.pubKeyCurve, rand.Reader)
+// NewWithAddr returns a new EllipticCurve instance with the given address.
+// It generates a new public-private key pair for the specified elliptic curve.
+func NewWithAddr(curve elliptic.Curve, addr net.Addr) (*EllipticCurve, error) {
+	if addr == nil {
+		return nil, errors.New("address cannot be nil")
+	}
+	priv, err := ecdsa.GenerateKey(curve, rand.Reader)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	ec.privateKey = privKey
-	ec.publicKey = &privKey.PublicKey
-	return nil
-}
-
-// RegisterKeys EllipticCurve public and private keys
-func (ec *EllipticCurve) RegisterKeys(addr net.Addr, privKey *ecdsa.PrivateKey, pubKey *ecdsa.PublicKey) {
-	ec.addr = addr
-	ec.privateKey = privKey
-	ec.publicKey = pubKey
-}
-
-// Returns the EllipticCurve public and private keys
-func (ec *EllipticCurve) Keys() (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
-	return ec.privateKey, ec.publicKey
+	return &EllipticCurve{
+		addr:       addr,
+		curve:      curve,
+		privateKey: priv,
+		publicKey:  &priv.PublicKey,
+	}, nil
 }
 
 // Returns the address
@@ -93,7 +85,7 @@ func (ec *EllipticCurve) DecodePrivate(pemEncodedPriv string) (*ecdsa.PrivateKey
 func (ec *EllipticCurve) DecodePublic(pemEncodedPub string) (*ecdsa.PublicKey, error) {
 	blockPub, _ := pem.Decode([]byte(pemEncodedPub))
 	if blockPub == nil {
-		return nil, fmt.Errorf("invalid publicKey")
+		return nil, errors.New("invalid public key")
 	}
 	x509EncodedPub := blockPub.Bytes
 	genericPublicKey, err := x509.ParsePKIXPublicKey(x509EncodedPub)
@@ -102,76 +94,40 @@ func (ec *EllipticCurve) DecodePublic(pemEncodedPub string) (*ecdsa.PublicKey, e
 }
 
 func (ec *EllipticCurve) Sign(msg []byte) ([]byte, error) {
-	h := sha256.Sum256(msg)
-	hash := h[:]
-	signature, err := ecdsa.SignASN1(rand.Reader, ec.privateKey, hash)
-	if err != nil {
-		return nil, err
-	}
-	return signature, nil
+	return ecdsa.SignASN1(rand.Reader, ec.privateKey, Hash(msg))
 }
 
-func (ec *EllipticCurve) Hash(msg []byte) []byte {
-	h := sha256.Sum256(msg)
-	hash := h[:]
-	return hash
+func Hash(msg []byte) []byte {
+	hash := sha256.Sum256(msg)
+	return hash[:]
 }
 
-// VerifySignature sign ecdsa style and verify signature
-func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []byte) (bool, error) {
-	h := sha256.Sum256(msg)
-	hash := h[:]
+var InvalidSignatureErr = errors.New("invalid signature")
+
+// VerifySignature verifies the signature of the message's hash using the given PEM encoded
+// public key. It returns an error if the signature is invalid or if there is an error
+// decoding the public key.
+func (ec *EllipticCurve) VerifySignature(pemEncodedPub string, msg, signature []byte) error {
 	pubKey, err := ec.DecodePublic(pemEncodedPub)
 	if err != nil {
-		return false, err
+		return err
 	}
-	ok := ecdsa.VerifyASN1(pubKey, hash, signature)
-	return ok, nil
+	if valid := ecdsa.VerifyASN1(pubKey, Hash(msg), signature); !valid {
+		return InvalidSignatureErr
+	}
+	return nil
 }
 
-// VerifySignature sign ecdsa style and verify signature
-func (ec *EllipticCurve) SignAndVerify(privKey *ecdsa.PrivateKey, pubKey *ecdsa.PublicKey) ([]byte, bool, error) {
-	h := sha256.Sum256([]byte("test"))
-	hash := h[:]
-	signature, err := ecdsa.SignASN1(rand.Reader, privKey, hash)
-	if err != nil {
-		return nil, false, err
-	}
-	ok := ecdsa.VerifyASN1(pubKey, hash, signature)
-	return signature, ok, nil
+func EncodeMsg(msg any) []byte {
+	return fmt.Appendf(nil, "%v", msg)
 }
 
-func (ec *EllipticCurve) EncodeMsg(msg any) ([]byte, error) {
-	return []byte(fmt.Sprintf("%v", msg)), nil
-	/*var encodedMsg bytes.Buffer
-	gob.Register(msg)
-	enc := gob.NewEncoder(&encodedMsg)
-	err := enc.Encode(msg)
-	if err != nil {
-		return nil, err
-	}
-	return encodedMsg.Bytes(), nil*/
-}
-
-func encodeMsg(msg any) ([]byte, error) {
-	return []byte(fmt.Sprintf("%v", msg)), nil
-}
-
-func Verify(pemEncodedPub string, signature, digest []byte, msg any) (bool, error) {
-	encodedMsg, err := encodeMsg(msg)
-	if err != nil {
-		return false, err
-	}
+func Verify(pemEncodedPub string, signature, digest []byte, msg any) error {
+	encodedMsg := EncodeMsg(msg)
 	ec := New(elliptic.P256())
-	h := sha256.Sum256(encodedMsg)
-	hash := h[:]
+	hash := Hash(encodedMsg)
 	if !bytes.Equal(hash, digest) {
-		return false, fmt.Errorf("wrong digest")
+		return errors.New("invalid digest for message")
 	}
-	pubKey, err := ec.DecodePublic(pemEncodedPub)
-	if err != nil {
-		return false, err
-	}
-	ok := ecdsa.VerifyASN1(pubKey, hash, signature)
-	return ok, nil
+	return ec.VerifySignature(pemEncodedPub, encodedMsg, signature)
 }

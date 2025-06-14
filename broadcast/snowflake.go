@@ -16,14 +16,22 @@ type Snowflake struct {
 }
 
 const (
-	MaxMachineID       = uint16(1 << 12)
-	maxShard           = uint8(1 << 4)
-	maxSequenceNum     = uint32(1 << 18)
-	bitMaskTimestamp   = uint64((1<<30)-1) << 34
-	bitMaskShardID     = uint64((1<<4)-1) << 30
-	bitMaskMachineID   = uint64((1<<12)-1) << 18
-	bitMaskSequenceNum = uint64((1 << 18) - 1)
-	epoch              = "2024-01-01T00:00:00"
+	timestampBits      = 30                 // seconds since 01.01.2025
+	shardIDBits        = 4                  // 16 different shards
+	machineIDBits      = 12                 // 4096 clients
+	sequenceNumBits    = 18                 // 262 144 messages
+	timestampBitsShift = 64 - timestampBits // 34
+
+	maxShard       = uint8(1 << shardIDBits)
+	maxMachineID   = uint16(1 << machineIDBits)
+	maxSequenceNum = uint32(1 << sequenceNumBits)
+
+	bitMaskTimestamp   = uint64((1<<timestampBits)-1) << timestampBitsShift
+	bitMaskShardID     = uint64((1<<shardIDBits)-1) << timestampBits
+	bitMaskMachineID   = uint64((1<<machineIDBits)-1) << sequenceNumBits
+	bitMaskSequenceNum = uint64((1<<sequenceNumBits)-1) << 0
+
+	epoch = "2025-01-01T00:00:00"
 )
 
 func Epoch() time.Time {
@@ -31,9 +39,12 @@ func Epoch() time.Time {
 	return timestamp
 }
 
+// NewSnowflake creates a new Snowflake instance with the given machine ID.
+// If the machine ID is 0 or greater than 4096, a random machine ID will be
+// generated within the range [1, 4096].
 func NewSnowflake(id uint64) *Snowflake {
-	if id >= uint64(MaxMachineID) {
-		id = uint64(rand.Int31n(int32(MaxMachineID)))
+	if id == 0 || id > uint64(maxMachineID) {
+		id = uint64(rand.Int31n(int32(maxMachineID))) + 1 // avoid 0 as the machine ID
 	}
 	return &Snowflake{
 		MachineID:   id,
@@ -43,10 +54,6 @@ func NewSnowflake(id uint64) *Snowflake {
 }
 
 func (s *Snowflake) NewBroadcastID() uint64 {
-	// timestamp: 30 bit -> seconds since 01.01.2024
-	// shardID: 4 bit -> 16 different shards
-	// machineID: 12 bit -> 4096 clients
-	// sequenceNum: 18 bit -> 262 144 messages
 start:
 	s.mut.Lock()
 	timestamp := uint64(time.Since(s.epoch).Seconds())
@@ -63,17 +70,22 @@ start:
 	s.SequenceNum = l
 	s.mut.Unlock()
 
-	t := (timestamp << 34) & bitMaskTimestamp
-	shard := (uint64(rand.Int31n(int32(maxShard))) << 30) & bitMaskShardID
-	m := uint64(s.MachineID<<18) & bitMaskMachineID
+	t := (timestamp << timestampBitsShift) & bitMaskTimestamp
+	shard := (uint64(rand.Int31n(int32(maxShard))) << timestampBits) & bitMaskShardID
+	m := uint64(s.MachineID<<sequenceNumBits) & bitMaskMachineID
 	n := l & bitMaskSequenceNum
 	return t | shard | m | n
 }
 
 func DecodeBroadcastID(broadcastID uint64) (timestamp uint32, shardID uint16, machineID uint16, sequenceNo uint32) {
-	t := (broadcastID & bitMaskTimestamp) >> 34
-	shard := (broadcastID & bitMaskShardID) >> 30
-	m := (broadcastID & bitMaskMachineID) >> 18
+	t := (broadcastID & bitMaskTimestamp) >> timestampBitsShift
+	shard := (broadcastID & bitMaskShardID) >> timestampBits
+	m := (broadcastID & bitMaskMachineID) >> sequenceNumBits
 	n := (broadcastID & bitMaskSequenceNum)
 	return uint32(t), uint16(shard), uint16(m), uint32(n)
+}
+
+// ExtractShardID extracts the shard ID from the broadcast ID.
+func ExtractShardID(broadcastID uint64) uint16 {
+	return uint16((broadcastID & bitMaskShardID) >> timestampBits)
 }

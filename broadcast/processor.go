@@ -3,6 +3,7 @@ package broadcast
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/relab/gorums/logging"
@@ -116,7 +117,7 @@ func (p *BroadcastProcessor) handleCancellation(bMsg *Msg, metadata *metadata) b
 
 func (p *BroadcastProcessor) handleBroadcast(bMsg *Msg, methods []string, metadata *metadata) bool {
 	// check if msg has already been broadcasted for this method
-	//if alreadyBroadcasted(p.metadata.Methods, bMsg.Method) {
+	// if alreadyBroadcasted(p.metadata.Methods, bMsg.Method) {
 	if !bMsg.Msg.options.AllowDuplication && alreadyBroadcasted(methods, bMsg.Method) {
 		return false
 	}
@@ -135,7 +136,7 @@ func (p *BroadcastProcessor) handleReply(bMsg *Msg, metadata *metadata) bool {
 			err := p.router.Send(broadcastID, originAddr, originMethod, metadata.OriginDigest, metadata.OriginSignature, metadata.OriginPubKey, replyMsg)
 			p.log("broadcast: sent reply to client", err, logging.Method(originMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 		}(p.broadcastID, metadata.OriginAddr, metadata.OriginMethod, bMsg.Reply)
-		// the request is done becuase we have sent a reply to the client
+		// the request is done because we have sent a reply to the client
 		p.log("broadcast: sending reply to client", nil, logging.Method(metadata.OriginMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 		return true
 	}
@@ -161,7 +162,7 @@ func (p *BroadcastProcessor) handleReply(bMsg *Msg, metadata *metadata) bool {
 		// is done.
 		return metadata.hasReceivedClientRequest()
 	}
-	// the request is done becuase we have sent a reply to the client
+	// the request is done because we have sent a reply to the client
 	p.log("broadcast: sending reply to client", err, logging.Method(metadata.OriginMethod), logging.MsgType(bMsg.MsgType.String()), logging.Stopping(true), logging.IsBroadcastCall(metadata.isBroadcastCall()))
 	return true
 }
@@ -432,12 +433,7 @@ func (r *BroadcastProcessor) dispatchOutOfOrderMsgs() {
 }
 
 func alreadyBroadcasted(methods []string, method string) bool {
-	for _, m := range methods {
-		if m == method {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(methods, method)
 }
 
 func (p *BroadcastProcessor) initialize(msg *Content, metadata *metadata) {

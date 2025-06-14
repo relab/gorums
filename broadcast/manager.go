@@ -40,9 +40,8 @@ func NewBroadcastManager(logger *slog.Logger, createClient func(addr string, dia
 }
 
 func (mgr *manager) Process(msg *Content) (context.Context, func(*Msg) error, error) {
-	_, shardID, _, _ := DecodeBroadcastID(msg.BroadcastID)
-	shardID = shardID % NumShards
-	shard := mgr.state.shards[shardID]
+	shardID := ExtractShardID(msg.BroadcastID)
+	shard := mgr.state.getShard(shardID)
 
 	// we only need a single response
 	receiveChan := make(chan shardResponse, 1)
@@ -67,8 +66,7 @@ func (mgr *manager) Broadcast(broadcastID uint64, req protoreflect.ProtoMessage,
 		return enqueueBroadcast(msg)
 	}
 	// slow path: communicate with the shard first
-	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
-	shardID = shardID % NumShards
+	shardID := ExtractShardID(msg.BroadcastID)
 	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
 	return nil
@@ -88,8 +86,7 @@ func (mgr *manager) SendToClient(broadcastID uint64, resp protoreflect.ProtoMess
 		return enqueueBroadcast(msg)
 	}
 	// slow path: communicate with the shard first
-	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
-	shardID = shardID % NumShards
+	shardID := ExtractShardID(msg.BroadcastID)
 	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
 	return nil
@@ -107,8 +104,7 @@ func (mgr *manager) Cancel(broadcastID uint64, srvAddrs []string, enqueueBroadca
 	if enqueueBroadcast != nil {
 		return enqueueBroadcast(msg)
 	}
-	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
-	shardID = shardID % NumShards
+	shardID := ExtractShardID(msg.BroadcastID)
 	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
 	return nil
@@ -128,8 +124,7 @@ func (mgr *manager) Done(broadcastID uint64, enqueueBroadcast func(*Msg) error) 
 		_ = enqueueBroadcast(msg)
 		return
 	}
-	_, shardID, _, _ := DecodeBroadcastID(broadcastID)
-	shardID = shardID % NumShards
+	shardID := ExtractShardID(msg.BroadcastID)
 	shard := mgr.state.getShard(shardID)
 	shard.handleBMsg(msg)
 }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums/authentication"
-	"github.com/relab/gorums/broadcast"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -38,58 +37,18 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
-func (s *orderingServer) encodeMsg(req *Message) ([]byte, error) {
-	// we must not consider the signature field when validating.
-	// also the msgType must be set to requestType.
-	signature := make([]byte, len(req.Metadata.GetAuthMsg().GetSignature()))
-	copy(signature, req.Metadata.GetAuthMsg().GetSignature())
-	reqType := req.msgType
-	req.Metadata.GetAuthMsg().SetSignature(nil)
-	req.msgType = 0
-	encodedMsg, err := s.opts.auth.EncodeMsg(*req)
-	req.Metadata.GetAuthMsg().SetSignature(make([]byte, len(signature)))
-	// TODO(meling): I think this is incorrect and should be done differently.
-	copy(req.Metadata.GetAuthMsg().GetSignature(), signature)
-	req.msgType = reqType
-	return encodedMsg, err
-}
-
 func (s *orderingServer) verify(req *Message) error {
 	if s.opts.auth == nil {
 		return nil
 	}
-	if req.Metadata.GetAuthMsg() == nil {
-		return fmt.Errorf("missing authMsg")
-	}
-	if req.Metadata.GetAuthMsg().GetSignature() == nil {
-		return fmt.Errorf("missing signature")
-	}
-	if req.Metadata.GetAuthMsg().GetPublicKey() == "" {
-		return fmt.Errorf("missing publicKey")
-	}
-	auth := s.opts.auth
-	authMsg := req.Metadata.GetAuthMsg()
-	if s.opts.allowList != nil {
-		pemEncodedPub, ok := s.opts.allowList[authMsg.GetSender()]
-		if !ok {
-			return fmt.Errorf("not allowed")
-		}
-		if pemEncodedPub != authMsg.GetPublicKey() {
-			return fmt.Errorf("publicKey did not match")
-		}
-	}
-	encodedMsg, err := s.encodeMsg(req)
+	authMsg, err := req.Metadata.GetValidAuthMsg()
 	if err != nil {
 		return err
 	}
-	valid, err := auth.VerifySignature(authMsg.GetPublicKey(), encodedMsg, authMsg.GetSignature())
-	if err != nil {
+	if err := s.opts.allowList.Check(authMsg.GetSender(), authMsg.GetPublicKey()); err != nil {
 		return err
 	}
-	if !valid {
-		return fmt.Errorf("invalid signature")
-	}
-	return nil
+	return s.opts.auth.VerifySignature(authMsg.GetPublicKey(), req.Encode(), authMsg.GetSignature())
 }
 
 // SendMessage attempts to send a message on a channel.
@@ -182,9 +141,30 @@ type serverOptions struct {
 	// address and use forwarding from the host. If not this option is not given,
 	// the listen address used on the gRPC listener will be used instead.
 	listenAddr   string
-	allowList    map[string]string
+	allowList    allowList
 	auth         *authentication.EllipticCurve
 	grpcDialOpts []grpc.DialOption
+}
+
+// allowList is a map of (address, public key) pairs.
+type allowList map[string]string
+
+// Check checks if the address and public key are in the allow list.
+// If the address is not in the allow list or the public key does not match,
+// an error is returned. If the allow list is nil, no check is performed.
+func (al allowList) Check(addr string, publicKey string) error {
+	if al == nil {
+		// bypass if no allow list specified
+		return nil
+	}
+	pemEncodedPub, ok := al[addr]
+	if !ok {
+		return fmt.Errorf("not allowed: %s", addr)
+	}
+	if pemEncodedPub != publicKey {
+		return fmt.Errorf("public key mismatch")
+	}
+	return nil
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -292,9 +272,12 @@ func WithSLogger(logger *slog.Logger) ServerOption {
 	}
 }
 
-// WithSrvID sets the MachineID of the broadcast server. This ID is used to
-// generate BroadcastIDs. This method should be used if a replica needs to
-// initiate a broadcast request.
+// WithSrvID returns a ServerOption that sets the MachineID of the broadcast server.
+// This method should be used if a replica needs to initiate a broadcast request.
+// The valid range for this ID is 1 to 4095, and it should be unique for each replica.
+// This ID will be embedded in broadcast requests sent from the replica, making requests
+// trackable across the replicas. A random ID will be generated if not set.
+// This can cause collisions if there are many replicas.
 //
 // An example use case is in Paxos:
 // The designated leader sends a prepare and receives some promises it has
@@ -307,14 +290,18 @@ func WithSrvID(machineID uint64) ServerOption {
 	}
 }
 
-// WithAllowList accepts (address, publicKey) pairs which is used to validate
+// WithAllowList accepts (address, public-key) pairs which is used to authenticate
 // messages. Only nodes added to the allow list are allowed to send msgs to
 // the server.
 func WithAllowList(curve elliptic.Curve, allowed ...string) ServerOption {
 	return func(o *serverOptions) {
-		o.allowList = make(map[string]string)
+		if len(allowed) == 0 {
+			o.auth = authentication.New(curve)
+			return
+		}
+		o.allowList = make(allowList)
 		if len(allowed)%2 != 0 {
-			panic("must provide (address, publicKey) pairs to WithAllowList()")
+			panic("must provide (address, public-key) pairs to WithAllowList()")
 		}
 		for i := range allowed {
 			if i%2 != 0 {
@@ -358,9 +345,7 @@ func NewServer(opts ...ServerOption) *Server {
 		shardBuffer:       200,
 		sendBuffer:        30,
 		reqTTL:            5 * time.Minute,
-		// Provide an illegal machineID to avoid unintentional collisions.
-		// 0 is a valid MachineID and should not be used as default.
-		machineID: uint64(broadcast.MaxMachineID) + 1,
+		machineID:         0,
 	}
 	for _, opt := range opts {
 		opt(&serverOpts)

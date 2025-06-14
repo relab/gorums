@@ -3,10 +3,11 @@ package broadcast
 import (
 	"crypto/elliptic"
 	"log/slog"
-	net "net"
+	"net"
 
-	gorums "github.com/relab/gorums"
-	grpc "google.golang.org/grpc"
+	"github.com/relab/gorums"
+	"github.com/relab/gorums/authentication"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -127,7 +128,7 @@ func (qs *testQSpec) OrderQF(in *Request, replies []*Response) (*Response, bool)
 	return nil, false
 }
 
-func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configuration, func(), error) {
+func newClient(srvAddrs []string, qsize ...int) (*Configuration, func(), error) {
 	quorumSize := len(srvAddrs)
 	if len(qsize) > 0 {
 		quorumSize = qsize[0]
@@ -137,15 +138,13 @@ func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configurati
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	if listenAddr != "" {
-		lis, err := net.Listen("tcp", "127.0.0.1:")
-		if err != nil {
-			return nil, nil, err
-		}
-		err = mgr.AddClientServer(lis, lis.Addr())
-		if err != nil {
-			return nil, nil, err
-		}
+	lis, err := net.Listen("tcp", "127.0.0.1:")
+	if err != nil {
+		return nil, nil, err
+	}
+	err = mgr.AddClientServer(lis, lis.Addr())
+	if err != nil {
+		return nil, nil, err
 	}
 	config, err := mgr.NewConfiguration(
 		gorums.WithNodeList(srvAddrs),
@@ -154,12 +153,10 @@ func newClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configurati
 	if err != nil {
 		return nil, nil, err
 	}
-	return config, func() {
-		mgr.Close()
-	}, nil
+	return config, mgr.Close, nil
 }
 
-func newAuthClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configuration, func(), error) {
+func newAuthClient(srvAddrs []string, qsize ...int) (*Configuration, func(), error) {
 	quorumSize := len(srvAddrs)
 	if len(qsize) > 0 {
 		quorumSize = qsize[0]
@@ -168,27 +165,23 @@ func newAuthClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configu
 		lis net.Listener
 		err error
 	)
-	if listenAddr != "" {
-		lis, err = net.Listen("tcp", "127.0.0.1:")
-		if err != nil {
-			return nil, nil, err
-		}
+	lis, err = net.Listen("tcp", "127.0.0.1:")
+	if err != nil {
+		return nil, nil, err
 	}
-	auth := gorums.NewAuth(elliptic.P256())
-	_ = auth.GenerateKeys()
-	privKey, pubKey := auth.Keys()
-	auth.RegisterKeys(lis.Addr(), privKey, pubKey)
+	auth, err := authentication.NewWithAddr(elliptic.P256(), lis.Addr())
+	if err != nil {
+		return nil, nil, err
+	}
 	mgr := NewManager(
 		gorums.WithAuthentication(auth),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	if listenAddr != "" {
-		err = mgr.AddClientServer(lis, lis.Addr())
-		if err != nil {
-			return nil, nil, err
-		}
+	err = mgr.AddClientServer(lis, lis.Addr())
+	if err != nil {
+		return nil, nil, err
 	}
 	config, err := mgr.NewConfiguration(
 		gorums.WithNodeList(srvAddrs),
@@ -197,7 +190,5 @@ func newAuthClient(srvAddrs []string, listenAddr string, qsize ...int) (*Configu
 	if err != nil {
 		return nil, nil, err
 	}
-	return config, func() {
-		mgr.Close()
-	}, nil
+	return config, mgr.Close, nil
 }

@@ -61,7 +61,7 @@ func (r *BroadcastRouter) registerState(state *BroadcastState) {
 	r.state = state
 }
 
-type msg interface{}
+type msg any
 
 func (r *BroadcastRouter) Send(broadcastID uint64, addr, method string, originDigest, originSignature []byte, originPubKey string, req msg) error {
 	if r.addr == "" {

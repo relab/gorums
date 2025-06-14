@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"crypto/elliptic"
 	"hash/fnv"
 	"log/slog"
 	"strings"
@@ -18,11 +17,6 @@ import (
 
 // exposing the log entry struct used for structured logging to the user
 type LogEntry logging.LogEntry
-
-// exposing the ellipticCurve struct for the user
-func NewAuth(curve elliptic.Curve) *authentication.EllipticCurve {
-	return authentication.New(curve)
-}
 
 type broadcastServer struct {
 	viewMutex         sync.RWMutex
@@ -75,10 +69,9 @@ type (
 
 type (
 	defaultImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage] func(ServerCtx, T) (V, error)
+	implementationFunc[T protoreflect.ProtoMessage, V Broadcaster]                      func(ServerCtx, T, V)
 	clientImplementationFunc[T protoreflect.ProtoMessage, V protoreflect.ProtoMessage]  func(context.Context, T, uint64) (V, error)
 )
-
-type implementationFunc[T protoreflect.ProtoMessage, V Broadcaster] func(ServerCtx, T, V)
 
 func CancelFunc(ServerCtx, protoreflect.ProtoMessage, Broadcaster) {}
 
@@ -163,7 +156,7 @@ func NewBroadcastOptions() broadcast.BroadcastOptions {
 	}
 }
 
-type Broadcaster interface{}
+type Broadcaster any
 
 type BroadcastMetadata struct {
 	BroadcastID       uint64
@@ -208,6 +201,7 @@ func newBroadcastMetadata(md *ordering.Metadata) BroadcastMetadata {
 	}
 }
 
-func (md BroadcastMetadata) Verify(msg protoreflect.ProtoMessage) (bool, error) {
+// TODO(meling): this method is never called
+func (md BroadcastMetadata) Verify(msg protoreflect.ProtoMessage) error {
 	return authentication.Verify(md.OriginPubKey, md.OriginSignature, md.OriginDigest, msg)
 }
