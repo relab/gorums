@@ -36,7 +36,7 @@ type testServer struct {
 	order          []string
 }
 
-func newtestServer(addr string, srvAddresses []string, _ int, withOrder ...bool) *testServer {
+func newTestServer(addr string, srvAddresses []string, _ int, withOrder ...bool) *testServer {
 	address, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		panic(err)

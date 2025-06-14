@@ -64,9 +64,9 @@ func createSrvs(numSrvs int, down ...int) ([]*testServer, []string, func(), erro
 		}
 		var srv *testServer
 		if ordering {
-			srv = newtestServer(addr, srvAddrs, i, true)
+			srv = newTestServer(addr, srvAddrs, i, true)
 		} else {
-			srv = newtestServer(addr, srvAddrs, i)
+			srv = newTestServer(addr, srvAddrs, i)
 		}
 		lis, err := net.Listen("tcp4", srv.addr)
 		if err != nil {
@@ -93,7 +93,7 @@ func TestSimpleBroadcastCall(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -123,7 +123,7 @@ func TestSimpleBroadcastTo(t *testing.T) {
 	defer srvCleanup()
 
 	// only want a response from the leader, hence qsize = 1
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080", 1)
+	config, clientCleanup, err := newClient(srvAddrs, 1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -152,7 +152,7 @@ func TestSimpleBroadcastCancel(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -181,7 +181,7 @@ func TestBroadcastCancel(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -192,7 +192,7 @@ func TestBroadcastCancel(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		_, _ = config.LongRunningTask(ctx, &Request{Value: val}, true)
 		cancel()
-		// wait until cancel has reaced the servers before asking for the result
+		// wait until cancel has reached the servers before asking for the result
 		time.Sleep(1 * time.Second)
 		ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		resp, err := config.GetVal(ctx, &Request{Value: val})
@@ -218,7 +218,7 @@ func TestBroadcastCancelOneSrvDown(t *testing.T) {
 	defer srvCleanup()
 
 	// only want response from the online servers
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080", numSrvs-1)
+	config, clientCleanup, err := newClient(srvAddrs, numSrvs-1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -250,7 +250,7 @@ func TestBroadcastCancelOneSrvFails(t *testing.T) {
 	defer srvCleanup()
 
 	// only want response from the online servers
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080", numSrvs-1)
+	config, clientCleanup, err := newClient(srvAddrs, numSrvs-1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -284,7 +284,7 @@ func TestBroadcastCancelOneClientFails(t *testing.T) {
 	defer srvCleanup()
 
 	// only want response from the online servers
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -299,7 +299,7 @@ func TestBroadcastCancelOneClientFails(t *testing.T) {
 	clientCleanup()
 
 	// only want response from the online servers
-	config2, clientCleanup2, err2 := newClient(srvAddrs, "127.0.0.1:8081")
+	config2, clientCleanup2, err2 := newClient(srvAddrs)
 	defer clientCleanup2()
 	if err2 != nil {
 		t.Error(err2)
@@ -326,7 +326,7 @@ func TestBroadcastCallOrderingSendToOneSrv(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs[1:2], "127.0.0.1:8080", len(srvAddrs))
+	config, clientCleanup, err := newClient(srvAddrs[1:2], len(srvAddrs))
 	if err != nil {
 		t.Error(err)
 	}
@@ -356,7 +356,7 @@ func TestBroadcastCallOrderingSendToAllSrvs(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -386,7 +386,7 @@ func TestBroadcastCallOrderingDoesNotInterfereWithMethodsNotSpecifiedInOrder(t *
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -414,7 +414,7 @@ func TestBroadcastCallRace(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -446,7 +446,7 @@ func TestBroadcastCallClientKnowsOnlyOneServer(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs[0:1], "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs[0:1])
 	if err != nil {
 		t.Error(err)
 	}
@@ -482,7 +482,7 @@ func TestBroadcastCallOneServerIsDown(t *testing.T) {
 
 	start := max(skip, 0)
 	end := min(numSrvs-1, len(srvAddrs))
-	config, clientCleanup, err := newClient(srvAddrs[start:end], "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs[start:end])
 	if err != nil {
 		t.Error(err)
 	}
@@ -514,7 +514,7 @@ func TestBroadcastCallForward(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs[1:2], "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs[1:2])
 	if err != nil {
 		t.Error(err)
 	}
@@ -540,7 +540,7 @@ func TestBroadcastCallForwardMultiple(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs[1:], "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs[1:])
 	if err != nil {
 		t.Error(err)
 	}
@@ -564,13 +564,13 @@ func TestBroadcastCallRaceTwoClients(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	client1, clientCleanup1, err := newClient(srvAddrs, "127.0.0.1:8080")
+	client1, clientCleanup1, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
 	defer clientCleanup1()
 
-	client2, clientCleanup2, err := newClient(srvAddrs, "127.0.0.1:8081")
+	client2, clientCleanup2, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -634,7 +634,7 @@ func TestBroadcastCallAsyncReqs(t *testing.T) {
 	numClients := 10
 	clients := make([]*Configuration, numClients)
 	for c := range numClients {
-		config, clientCleanup, err := newClient(srvAddrs, fmt.Sprintf("127.0.0.1:808%v", c), 3)
+		config, clientCleanup, err := newClient(srvAddrs, 3)
 		if err != nil {
 			t.Error(err)
 		}
@@ -683,7 +683,7 @@ func TestQCBroadcastOptionRace(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -717,7 +717,7 @@ func TestQCMulticastRace(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
@@ -751,7 +751,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		b.Error(err)
 	}
@@ -792,7 +792,7 @@ func BenchmarkQCMulticast(b *testing.B) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		b.Error(err)
 	}
@@ -835,7 +835,7 @@ func BenchmarkQCBroadcastOption(b *testing.B) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		b.Error(err)
 	}
@@ -881,7 +881,7 @@ func BenchmarkQCBroadcastOptionManyClients(b *testing.B) {
 	numClients := 10
 	clients := make([]*Configuration, numClients)
 	for c := range numClients {
-		config, clientCleanup, err := newClient(srvAddrs, fmt.Sprintf("127.0.0.1:808%v", c), 3)
+		config, clientCleanup, err := newClient(srvAddrs, 3)
 		if err != nil {
 			b.Error(err)
 		}
@@ -934,7 +934,7 @@ func BenchmarkBroadcastCallAllServers(b *testing.B) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newClient(srvAddrs)
 	if err != nil {
 		b.Error(err)
 	}
@@ -975,7 +975,7 @@ func BenchmarkBroadcastCallToOneServer(b *testing.B) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs[0:1], "127.0.0.1:8080", 3)
+	config, clientCleanup, err := newClient(srvAddrs[0:1], 3)
 	if err != nil {
 		b.Error(err)
 	}
@@ -1016,7 +1016,7 @@ func BenchmarkBroadcastCallOneFailedServer(b *testing.B) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs, "127.0.0.1:8080", 2)
+	config, clientCleanup, err := newClient(srvAddrs, 2)
 	if err != nil {
 		b.Error(err)
 	}
@@ -1057,7 +1057,7 @@ func BenchmarkBroadcastCallOneDownSrvToOneSrv(b *testing.B) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newClient(srvAddrs[1:2], "127.0.0.1:8080", 2)
+	config, clientCleanup, err := newClient(srvAddrs[1:2], 2)
 	if err != nil {
 		b.Error(err)
 	}
@@ -1101,7 +1101,7 @@ func BenchmarkBroadcastCallManyClients(b *testing.B) {
 	numClients := 10
 	clients := make([]*Configuration, numClients)
 	for c := range numClients {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+		config, clientCleanup, err := newClient(srvAddrs[0:1], 3)
 		if err != nil {
 			b.Error(err)
 		}
@@ -1209,7 +1209,7 @@ func BenchmarkBroadcastCallTenClientsCPU(b *testing.B) {
 	numClients := 10
 	clients := make([]*Configuration, numClients)
 	for c := range numClients {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), 3)
+		config, clientCleanup, err := newClient(srvAddrs[0:1], 3)
 		if err != nil {
 			b.Error(err)
 		}
@@ -1270,7 +1270,7 @@ func BenchmarkBroadcastCallTenClientsMEM(b *testing.B) {
 	numClients := 1
 	clients := make([]*Configuration, numClients)
 	for c := range numClients {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
+		config, clientCleanup, err := newClient(srvAddrs[0:1], numSrvs)
 		if err != nil {
 			b.Error(err)
 		}
@@ -1324,7 +1324,7 @@ func BenchmarkBroadcastCallTenClientsTRACE(b *testing.B) {
 	numClients := 1
 	clients := make([]*Configuration, numClients)
 	for c := range numClients {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
+		config, clientCleanup, err := newClient(srvAddrs[0:1], numSrvs)
 		if err != nil {
 			b.Error(err)
 		}
@@ -1381,7 +1381,7 @@ func TestBroadcastCallManyRequestsAsync(t *testing.T) {
 
 	clients := make([]*Configuration, numClients)
 	for c := range numClients {
-		config, clientCleanup, err := newClient(srvAddrs[0:1], fmt.Sprintf("127.0.0.1:%v", 8080+c), numSrvs)
+		config, clientCleanup, err := newClient(srvAddrs[0:1], numSrvs)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1440,7 +1440,7 @@ func TestAuthenticationBroadcastCall(t *testing.T) {
 	}
 	defer srvCleanup()
 
-	config, clientCleanup, err := newAuthClient(srvAddrs, "127.0.0.1:8080")
+	config, clientCleanup, err := newAuthClient(srvAddrs)
 	if err != nil {
 		t.Error(err)
 	}
