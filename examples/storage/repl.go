@@ -52,11 +52,11 @@ The command performs the write quorum call on node 0 and 2
 `
 
 type repl struct {
-	cfg  *pb.StorageConfiguration
+	cfg  *gorums.Configuration
 	term *term.Terminal
 }
 
-func newRepl(cfg *pb.StorageConfiguration) *repl {
+func newRepl(cfg *gorums.Configuration) *repl {
 	return &repl{
 		cfg: cfg,
 		term: term.NewTerminal(struct {
@@ -88,7 +88,7 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the manager and configuration.
-func Repl(cfg *pb.StorageConfiguration) error {
+func Repl(cfg *gorums.Configuration) error {
 	r := newRepl(cfg)
 
 	fmt.Println(help)
@@ -171,8 +171,10 @@ func (r repl) multicast(args []string) {
 		return
 	}
 
+	cfgRpc := pb.StorageConfigurationRpc(r.cfg)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	r.cfg.WriteMulticast(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
+	cfgRpc.WriteMulticast(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
 	cancel()
 	fmt.Println("Multicast OK: (server output not synchronized)")
 }
@@ -208,13 +210,14 @@ func (r repl) qcCfg(args []string) {
 	}
 }
 
-func (repl) readRPC(args []string, node *pb.StorageNode) {
+func (repl) readRPC(args []string, node *gorums.Node) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
 	}
+	nodeRpc := pb.StorageNodeRpc(node)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := node.ReadRPC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+	resp, err := nodeRpc.ReadRPC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -227,13 +230,16 @@ func (repl) readRPC(args []string, node *pb.StorageNode) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeRPC(args []string, node *pb.StorageNode) {
+func (repl) writeRPC(args []string, node *gorums.Node) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
 	}
+
+	nodeRpc := pb.StorageNodeRpc(node)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := node.WriteRPC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	resp, err := nodeRpc.WriteRPC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -246,15 +252,17 @@ func (repl) writeRPC(args []string, node *pb.StorageNode) {
 	fmt.Println("Write OK")
 }
 
-func (repl) readQC(args []string, cfg *pb.StorageConfiguration) {
+func (repl) readQC(args []string, cfg *gorums.Configuration) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 
+	cfgRpc := pb.StorageConfigurationRpc(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	req := pb.ReadRequest_builder{Key: args[0]}.Build()
-	resp, err := readQF(cfg.ReadQC(ctx, req), cfg.Size()/2)
+	resp, err := readQF(cfgRpc.ReadQC(ctx, req), cfg.Size()/2)
 
 	cancel()
 	if err != nil {
@@ -268,14 +276,17 @@ func (repl) readQC(args []string, cfg *pb.StorageConfiguration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeQC(args []string, cfg *pb.StorageConfiguration) {
+func (repl) writeQC(args []string, cfg *gorums.Configuration) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
 	}
+
+	cfgRpc := pb.StorageConfigurationRpc(cfg)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	req := pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()
-	resp, err := writeQF(cfg.WriteQC(ctx, req), cfg.Size())
+	resp, err := writeQF(cfgRpc.WriteQC(ctx, req), cfg.Size())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -288,7 +299,7 @@ func (repl) writeQC(args []string, cfg *pb.StorageConfiguration) {
 	fmt.Println("Write OK")
 }
 
-func (r repl) parseConfiguration(cfgStr string) (cfg *pb.StorageConfiguration) {
+func (r repl) parseConfiguration(cfgStr string) (cfg *gorums.Configuration) {
 	// configuration using range syntax
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
@@ -320,7 +331,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.StorageConfiguration) {
 		for _, node := range r.cfg.AllNodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = r.cfg.SubStorageConfiguration(gorums.WithNodeList(nodes))
+		cfg, err = r.cfg.SubConfiguration(gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -343,7 +354,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.StorageConfiguration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.cfg.SubStorageConfiguration(gorums.WithNodeList(selectedNodes))
+		cfg, err := r.cfg.SubConfiguration(gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

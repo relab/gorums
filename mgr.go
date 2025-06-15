@@ -19,8 +19,8 @@ import (
 // You should use the generated `Manager` struct instead.
 type manager struct {
 	mu        sync.Mutex
-	nodes     []*RawNode
-	lookup    map[uint32]*RawNode
+	nodes     []*Node
+	lookup    map[uint32]*Node
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      managerOptions
@@ -33,7 +33,7 @@ type manager struct {
 // You should use the `NewManager` function in the generated code instead.
 func newManager(opts ...ManagerOption) *manager {
 	m := &manager{
-		lookup: make(map[uint32]*RawNode),
+		lookup: make(map[uint32]*Node),
 		opts:   newManagerOptions(),
 	}
 	for _, opt := range opts {
@@ -88,7 +88,7 @@ func (m *manager) nodeIDs() []uint32 {
 }
 
 // Node returns the node with the given identifier if present.
-func (m *manager) node(id uint32) (node *RawNode, found bool) {
+func (m *manager) node(id uint32) (node *Node, found bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	node, found = m.lookup[id]
@@ -97,7 +97,7 @@ func (m *manager) node(id uint32) (node *RawNode, found bool) {
 
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
-func (m *manager) getNodes() []*RawNode {
+func (m *manager) getNodes() []*Node {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.nodes
@@ -113,7 +113,7 @@ func (m *manager) size() (nodes int) {
 // AddNode adds the node to the manager's node pool
 // and establishes a connection to the node.
 // should only be used by tests
-func (m *manager) addNode(node *RawNode) error {
+func (m *manager) addNode(node *Node) error {
 	if _, found := m.node(node.ID()); found {
 		// Node IDs must be unique
 		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
@@ -135,7 +135,7 @@ func (m *manager) addNode(node *RawNode) error {
 }
 
 // remove a node from a manager, the node is closed seperately
-func (m *manager) removeNode(node *RawNode) error {
+func (m *manager) removeNode(node *Node) error {
 	if m.logger != nil {
 		m.logger.Printf("Removing node %s with id %d\n", node, node.id)
 	}
@@ -146,7 +146,7 @@ func (m *manager) removeNode(node *RawNode) error {
 	delete(m.lookup, node.id)
 
 	// assume nodes are sorted
-	i, found := slices.BinarySearchFunc(m.nodes, node, func(n1, n2 *RawNode) int {
+	i, found := slices.BinarySearchFunc(m.nodes, node, func(n1, n2 *Node) int {
 		return cmp.Compare(n1.id, n2.id)
 	})
 

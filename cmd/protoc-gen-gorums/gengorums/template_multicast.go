@@ -17,7 +17,7 @@ var mcVar = `
 
 var multicastReserve = `{{reserveMethod $configurationName $method}}`
 
-var multicastSignature = `func (c *{{$configurationName}}) {{$method}}(` +
+var multicastSignature = `func (c {{$configurationName}}) {{$method}}(` +
 	`ctx {{$context}}, in *{{$in}}` +
 	`{{perNodeFnType .GenFile .Method ", f"}},` +
 	`opts ...{{$callOpt}}) {
@@ -35,7 +35,7 @@ var multicastBody = `
 		}
 	{{- end}}
 
-		c.RawConfiguration.Multicast(ctx, cd, opts...)
+		c.cfg.Multicast(ctx, cd, opts...)
 	}
 `
 

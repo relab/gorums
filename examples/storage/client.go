@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/examples/storage/proto"
 	pb "github.com/relab/gorums/examples/storage/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -17,7 +16,7 @@ func runClient(addresses []string) error {
 	}
 
 	// create configuration containing all nodes
-	cfg, err := proto.NewStorageConfiguration(
+	cfg, err := gorums.NewConfiguration(
 		gorums.WithNodeList(addresses),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
@@ -31,7 +30,7 @@ func runClient(addresses []string) error {
 }
 
 // newestValue returns the reply that had the most recent timestamp
-func newestValueOfTwo(v1, v2 *proto.ReadResponse) *proto.ReadResponse {
+func newestValueOfTwo(v1, v2 *pb.ReadResponse) *pb.ReadResponse {
 	if v1 == nil {
 		return v2
 	} else if v2 == nil {
@@ -45,7 +44,7 @@ func newestValueOfTwo(v1, v2 *proto.ReadResponse) *proto.ReadResponse {
 }
 
 // numUpdated returns the number of replicas that updated their value
-func isUpdated(r *proto.WriteResponse) bool {
+func isUpdated(r *pb.WriteResponse) bool {
 	return r.GetNew()
 }
 
@@ -58,12 +57,12 @@ func writeQF(replies gorums.Responses[*pb.WriteResponse], cfgSize int) (*pb.Writ
 			updated++
 		}
 		if updated > cfgSize/2 {
-			return proto.WriteResponse_builder{New: true}.Build(), nil
+			return pb.WriteResponse_builder{New: true}.Build(), nil
 		}
 		// if all replicas have responded, there must have been another write before ours
 		// that had a newer timestamp
 		if replyCount == cfgSize {
-			return proto.WriteResponse_builder{New: false}.Build(), nil
+			return pb.WriteResponse_builder{New: false}.Build(), nil
 		}
 	}
 	return nil, errors.New("storage.writeqc: incomplete response")
