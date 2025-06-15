@@ -24,7 +24,7 @@ func (srv cfgSrv) Config(_ gorums.ServerCtx, req *Request) (resp *Response, err 
 // setup returns a new configuration of cfgSize and a corresponding teardown function.
 // Calling setup multiple times will return a different configuration with different
 // sets of nodes.
-func setup(t *testing.T, cfgSize int, mainCfg *Configuration, opts ...gorums.ManagerOption) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, cfgSize int, mainCfg *ConfigTestConfiguration, opts ...gorums.ManagerOption) (cfg *ConfigTestConfiguration, teardown func()) {
 	t.Helper()
 	srvs := make([]*cfgSrv, cfgSize)
 	for i := range srvs {
@@ -41,9 +41,9 @@ func setup(t *testing.T, cfgSize int, mainCfg *Configuration, opts ...gorums.Man
 
 	var err error
 	if mainCfg != nil {
-		cfg, err = mainCfg.SubConfiguration(gorums.WithNodeList(addrs))
+		cfg, err = mainCfg.SubConfigTestConfiguration(gorums.WithNodeList(addrs))
 	} else {
-		cfg, err = NewConfiguration(gorums.WithNodeList(addrs), opts...)
+		cfg, err = NewConfigTestConfiguration(gorums.WithNodeList(addrs), opts...)
 		mainCfg = cfg
 	}
 	if err != nil {
@@ -56,7 +56,7 @@ func setup(t *testing.T, cfgSize int, mainCfg *Configuration, opts ...gorums.Man
 	return cfg, teardown
 }
 
-func configQF(cfg *Configuration, req *Request) (*Response, error) {
+func configQF(cfg *ConfigTestConfiguration, req *Request) (*Response, error) {
 	quorum := cfg.Size()/2 + 1
 	replyCount := int(0)
 	replies := cfg.Config(context.Background(), req)
@@ -73,7 +73,7 @@ func configQF(cfg *Configuration, req *Request) (*Response, error) {
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	callRPC := func(cfg *Configuration) {
+	callRPC := func(cfg *ConfigTestConfiguration) {
 		for i := range 5 {
 			reply, err := configQF(cfg, Request_builder{Num: uint64(i)}.Build())
 			if err != nil {
@@ -97,7 +97,7 @@ func TestConfig(t *testing.T) {
 	callRPC(c2)
 
 	newNodeList := c1.And(c2)
-	c3, err := c1.SubConfiguration(newNodeList)
+	c3, err := c1.SubConfigTestConfiguration(newNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestConfig(t *testing.T) {
 	callRPC(c3)
 
 	rmNodeList := c3.Except(c1)
-	c4, err := c1.SubConfiguration(rmNodeList)
+	c4, err := c1.SubConfigTestConfiguration(rmNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}

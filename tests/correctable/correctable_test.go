@@ -14,7 +14,7 @@ import (
 // n is the number of replicas, and div is a divider.
 // the target level is n, and the level is calculated by the quorum function
 // by dividing the sum of levels from the servers with the divider.
-func run(t *testing.T, n, div int, corr func(context.Context, *Configuration, int, int) *gorums.Correctable[int]) {
+func run(t *testing.T, n, div int, corr func(context.Context, *CorrectableTestConfiguration, int, int) *gorums.Correctable[int]) {
 	addrs, teardown := gorums.TestSetup(t, n, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
@@ -22,7 +22,7 @@ func run(t *testing.T, n, div int, corr func(context.Context, *Configuration, in
 	})
 	defer teardown()
 
-	cfg, err := NewConfiguration(
+	cfg, err := NewCorrectableTestConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -76,7 +76,7 @@ func (q qspec) corrQF(responses gorums.Responses[*CorrectableResponse], levelSet
 }
 
 func TestCorrectable(t *testing.T) {
-	run(t, 4, 1, func(ctx context.Context, c *Configuration, n, div int) *gorums.Correctable[int] {
+	run(t, 4, 1, func(ctx context.Context, c *CorrectableTestConfiguration, n, div int) *gorums.Correctable[int] {
 		corr := c.Correctable(ctx, &CorrectableRequest{})
 		qspec := qspec{div, n}
 		return gorums.NewCorrectable(corr, qspec.corrQF)
@@ -84,7 +84,7 @@ func TestCorrectable(t *testing.T) {
 }
 
 func TestCorrectableStream(t *testing.T) {
-	run(t, 4, 4, func(ctx context.Context, c *Configuration, n, div int) *gorums.Correctable[int] {
+	run(t, 4, 4, func(ctx context.Context, c *CorrectableTestConfiguration, n, div int) *gorums.Correctable[int] {
 		corr := c.CorrectableStream(ctx, &CorrectableRequest{})
 		qspec := qspec{div, n}
 		return gorums.NewCorrectable(corr, qspec.corrQF)

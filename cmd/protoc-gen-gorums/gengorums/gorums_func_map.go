@@ -58,6 +58,14 @@ var funcMap = template.FuncMap{
 		}
 		return g.QualifiedGoIdent(pkg.Ident(ident))
 	},
+	"reserveName": func(name string) string {
+		reserveName(name)
+		return ""
+	},
+	"reserveMethod": func(structName, methodName string) string {
+		reserveName(structName + "." + methodName)
+		return ""
+	},
 	"hasPerNodeArg": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_PerNodeArg)
 	},

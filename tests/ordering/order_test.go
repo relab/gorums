@@ -78,14 +78,14 @@ func orderQF(ctx context.Context, responses gorums.Responses[*Response], quorum 
 	return nil, errors.New("orderQF: quorum not found")
 }
 
-func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, cfgSize int) (cfg *GorumsTestConfiguration, teardown func()) {
 	t.Helper()
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	cfg, err := NewConfiguration(
+	cfg, err := NewGorumsTestConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -207,7 +207,7 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		wg.Add(len(nodes))
 		for _, node := range nodes {
-			go func(node *Node) {
+			go func(node *GorumsTestNode) {
 				defer wg.Done()
 				resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
 				if err != nil {

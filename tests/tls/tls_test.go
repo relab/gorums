@@ -45,7 +45,7 @@ func TestTLS(t *testing.T) {
 	})
 	defer teardown()
 
-	cfg, err := NewConfiguration(
+	cfg, err := NewTLSConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),

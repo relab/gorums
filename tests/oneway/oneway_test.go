@@ -42,7 +42,7 @@ func (s *onewaySrv) MulticastPerNode(_ gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*onewaySrv, teardown func()) {
+func setup(t testing.TB, cfgSize int) (cfg *oneway.OnewayTestConfiguration, srvs []*onewaySrv, teardown func()) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := range cfgSize {
@@ -59,7 +59,7 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 		nodeMap[addr] = uint32(i)
 	}
 
-	cfg, err := oneway.NewConfiguration(
+	cfg, err := oneway.NewOnewayTestConfiguration(
 		gorums.WithNodeMap(nodeMap),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -94,7 +94,7 @@ func TestOnewayCalls(t *testing.T) {
 		{name: "MulticastNoSendWaiting", calls: numCalls, servers: 9, sendWait: false},
 	}
 
-	f := func(c *oneway.Configuration) func(context.Context, *oneway.Request, ...gorums.CallOption) {
+	f := func(c *oneway.OnewayTestConfiguration) func(context.Context, *oneway.Request, ...gorums.CallOption) {
 		if c.Size() == 1 {
 			return c.Nodes()[0].Unicast
 		}

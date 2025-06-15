@@ -17,7 +17,7 @@ func runClient(addresses []string) error {
 	}
 
 	// create configuration containing all nodes
-	cfg, err := proto.NewConfiguration(
+	cfg, err := proto.NewStorageConfiguration(
 		gorums.WithNodeList(addresses),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS

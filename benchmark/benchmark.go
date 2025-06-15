@@ -37,7 +37,7 @@ type (
 	serverFunc func(context.Context, *TimedMsg)
 )
 
-func runQCBenchmark(opts Options, cfg *Configuration, quorum int, f qcFunc) (*Result, error) {
+func runQCBenchmark(opts Options, cfg *BenchmarkConfiguration, quorum int, f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -103,7 +103,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, quorum int, f qcFunc) (*Re
 	return result, nil
 }
 
-func runAsyncQCBenchmark(opts Options, cfg *Configuration, quorum int) (*Result, error) {
+func runAsyncQCBenchmark(opts Options, cfg *BenchmarkConfiguration, quorum int) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
@@ -187,7 +187,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, quorum int) (*Result,
 	return result, nil
 }
 
-func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result, error) {
+func runServerBenchmark(opts Options, cfg *BenchmarkConfiguration, f serverFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	payload := make([]byte, opts.Payload)
@@ -241,7 +241,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 }
 
 // GetBenchmarks returns a list of Benchmarks that can be performed on the configuration
-func GetBenchmarks(cfg *Configuration, quorum int) []Bench {
+func GetBenchmarks(cfg *BenchmarkConfiguration, quorum int) []Bench {
 	m := []Bench{
 		{
 			Name:        "QuorumCall",
@@ -270,7 +270,7 @@ func GetBenchmarks(cfg *Configuration, quorum int) []Bench {
 }
 
 // RunBenchmarks runs all the benchmarks that match the given regex with the given options
-func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg *Configuration, quorum int) ([]*Result, error) {
+func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg *BenchmarkConfiguration, quorum int) ([]*Result, error) {
 	benchmarks := GetBenchmarks(cfg, quorum)
 	var results []*Result
 	for _, b := range benchmarks {

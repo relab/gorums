@@ -99,6 +99,7 @@ func (c *channel) newNodeStream(conn *grpc.ClientConn) error {
 	c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
 	c.streamMut.Unlock()
 	if err != nil {
+		fmt.Println("oops " + err.Error())
 		return err
 	}
 	c.streamBroken.clear()

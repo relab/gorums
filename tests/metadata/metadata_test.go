@@ -58,7 +58,7 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	cfg, err := NewConfiguration(
+	cfg, err := NewMetadataTestConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithMetadata(md),
 		gorums.WithGrpcDialOptions(
@@ -86,7 +86,7 @@ func TestPerMessageMetadata(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
-	cfg, err := NewConfiguration(gorums.WithNodeList(addrs),
+	cfg, err := NewMetadataTestConfiguration(gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
@@ -121,7 +121,7 @@ func TestPerNodeMetadata(t *testing.T) {
 		})
 	}
 
-	cfg, err := NewConfiguration(
+	cfg, err := NewMetadataTestConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithPerNodeMetadata(perNodeMD),
 		gorums.WithGrpcDialOptions(
@@ -148,7 +148,7 @@ func TestCanGetPeerInfo(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
-	cfg, err := NewConfiguration(
+	cfg, err := NewMetadataTestConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),

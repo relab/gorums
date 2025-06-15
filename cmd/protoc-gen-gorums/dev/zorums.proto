@@ -117,3 +117,50 @@ service ZorumsService {
         option (gorums.unicast) = true;
     }
 }
+
+service ZorumsNoQCService {
+    // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
+    // they are added to the _grpc.pb.go generated file.
+    rpc GRPCCall(Request) returns (Response) {}
+
+    // ------------------------------------------------------------------
+    // Multicast variants
+    // The multicast call type does not support the 'custom_return_type'
+    // option since multicast is one-way and so it doesn't make sense to
+    // operate on response types.
+    // ------------------------------------------------------------------
+
+    // Multicast plain. Response type is not needed here.
+    rpc Multicast(Request) returns (Response) {
+        option (gorums.multicast) = true;
+    }
+    // MulticastPerNodeArg with per_node_arg option.
+    rpc MulticastPerNodeArg(Request) returns (Response) {
+        option (gorums.multicast)    = true;
+        option (gorums.per_node_arg) = true;
+    }
+    // Multicast2 is testing whether multiple streams work.
+    rpc Multicast2(Request) returns (Response) {
+        option (gorums.multicast) = true;
+    }
+    // Multicast3 is testing imported message type.
+    rpc Multicast3(Request) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+    }
+    // Multicast4 is testing imported message type.
+    rpc Multicast4(google.protobuf.Empty) returns (google.protobuf.Empty) {
+        option (gorums.multicast) = true;
+    }
+
+    // ---------------------------------------------------------------
+    // Unicast
+    // ---------------------------------------------------------------
+
+    rpc Unicast(Request) returns (Response) {
+        option (gorums.unicast) = true;
+    }
+
+    rpc Unicast2(Request) returns (google.protobuf.Empty) {
+        option (gorums.unicast) = true;
+    }
+}

@@ -77,12 +77,6 @@ func gorumsGuard(file *protogen.File) bool {
 		// there is nothing for this plugin to do
 		return false
 	}
-	if len(file.Services) > 1 {
-		// To build multiple services, make separate proto files and
-		// run the plugin separately for each proto file.
-		// These cannot share the same Go package.
-		log.Fatalln("Gorums does not support multiple services in the same proto file.")
-	}
 	// fail generator if a Gorums reserved identifier is used as a message name.
 	for _, msg := range file.Messages {
 		msgName := fmt.Sprintf("%v", msg.Desc.Name())
@@ -95,6 +89,31 @@ func gorumsGuard(file *protogen.File) bool {
 	return true
 }
 
+var reservedNames map[string]struct{}
+
+func initReservedNames() {
+	reservedNames = make(map[string]struct{})
+}
+
+func checkNameCollision(file *protogen.File) {
+	for _, msg := range file.Messages {
+		msgName := fmt.Sprintf("%v", msg.Desc.Name())
+
+		_, ok := reservedNames[msgName]
+		if ok {
+			log.Fatalf("%v.proto: contains message %s, which is a reserved Gorums service type.\n", file.GeneratedFilenamePrefix, msgName)
+		}
+	}
+}
+
+func reserveName(name string) {
+	_, ok := reservedNames[name]
+	if ok {
+		log.Fatalf("reserveName: Redefinition of method %s.\n", name)
+	}
+	reservedNames[name] = struct{}{}
+}
+
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
 func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
 	// sort the gorums types so that output remains stable across rebuilds
@@ -103,9 +122,14 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 		sortedTypes = append(sortedTypes, gorumsType)
 	}
 	sort.Strings(sortedTypes)
+
+	initReservedNames()
+
 	for _, gorumsType := range sortedTypes {
 		genGorumsType(g, file.Services, gorumsType)
 	}
+
+	checkNameCollision(file)
 }
 
 // servicesData hold the services to generate and a reference to the file in which
@@ -209,8 +233,10 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 // The entries in this map is used to generate dev/zorums_{type}.pb.go
 // files for the different keys.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
-	"server": {template: server},
-	"client": {template: client},
+	"node":          {template: node},
+	"configuration": {template: configuration},
+	"server":        {template: server},
+	"client":        {template: client},
 
 	callTypeName(gorums.E_Rpc): {
 		extInfo:  gorums.E_Rpc,

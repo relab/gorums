@@ -268,8 +268,8 @@ func BenchmarkFullStackQF(b *testing.B) {
 			RegisterQuorumFunctionServer(srv, &testSrv{})
 			return srv
 		})
-		c, err := NewConfiguration(
-			gorums.WithNodeList(addrs), // dummy node list; won't actually be used in test
+		c, err := NewQuorumFunctionConfiguration(
+			gorums.WithNodeList(addrs),
 			gorums.WithGrpcDialOptions(
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 			),

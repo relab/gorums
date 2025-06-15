@@ -10,9 +10,14 @@ func GenerateDevFiles(gen *protogen.Plugin, file *protogen.File) {
 	if !gorumsGuard(file) {
 		return
 	}
+
+	initReservedNames()
+
 	for gorumsType := range gorumsCallTypesInfo {
 		generateDevFile(gen, file, gorumsType)
 	}
+
+	checkNameCollision(file)
 }
 
 func generateDevFile(gen *protogen.Plugin, file *protogen.File, gorumsType string) {

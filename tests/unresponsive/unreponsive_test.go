@@ -28,7 +28,7 @@ func TestUnresponsive(t *testing.T) {
 	})
 	defer teardown()
 
-	cfg, err := NewConfiguration(
+	cfg, err := NewUnresponsiveConfiguration(
 		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),

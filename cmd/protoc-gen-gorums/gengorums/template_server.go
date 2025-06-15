@@ -1,15 +1,27 @@
 package gengorums
 
 var serverVariables = `
-{{$context := use "gorums.ServerCtx" .GenFile}}
+{{- $context := use "gorums.ServerCtx" .GenFile}}
+{{- $gorumsMessage := use "gorums.Message" .GenFile}}
+{{- $wrapMessage := use "gorums.WrapMessage" .GenFile}}
+{{- $sendMessage := use "gorums.SendMessage" .GenFile}}
+`
+
+var serverServicesBegin = `
+{{- $genFile := .GenFile}}
+{{- range .Services}}
+	{{- $service := .GoName}}
+	{{- $serverName := printf "%sServer" $service}}
+`
+
+var serverServicesEnd = `
+{{- end}}
 `
 
 var serverInterface = `
-{{$genFile := .GenFile}}
-{{range .Services -}}
-{{$service := .GoName}}
-// {{$service}} is the server-side API for the {{$service}} Service
-type {{$service}}Server interface {
+// {{$serverName}} is the server-side API for the {{$service}} Service
+{{- reserveName $serverName}}
+type {{$serverName}} interface {
 	{{- range .Methods}}
 		{{- if isOneway .}}
 			{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
@@ -20,17 +32,15 @@ type {{$service}}Server interface {
 		{{- end}}
 	{{- end}}
 }
-{{- end}}
 `
 
 var registerInterface = `
-{{$genFile := .GenFile}}
-{{$gorumsMessage := use "gorums.Message" .GenFile}}
-{{$wrapMessage := use "gorums.WrapMessage" $genFile}}
-{{$sendMessage := use "gorums.SendMessage" $genFile}}
-{{range .Services -}}
-{{$service := .GoName}}
-func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}Server) {
+{{- $funcName := printf "Register%s" $serverName}}
+// {{$funcName}} adds rpc handler functions to a server,
+// the handlers decide how the server responds when it receives
+// a request from a client
+{{- reserveName $funcName}}
+func {{$funcName}}(srv *{{use "gorums.Server" $genFile}}, impl {{$serverName}}) {
 	{{- range .Methods}}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}, {{if isOneway .}} _ {{- else}} finished {{- end}} chan<- *{{$gorumsMessage}}) {
 		req := in.Message.(*{{in $genFile .}})
@@ -53,7 +63,9 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 	})
 	{{- end}}
 }
-{{- end}}
 `
 
-var server = serverVariables + serverInterface + registerInterface
+var server = serverVariables +
+	serverServicesBegin +
+	serverInterface + registerInterface +
+	serverServicesEnd

@@ -6,17 +6,26 @@ import (
 
 // gorums need to be imported in the zorums file
 var clientVariables = `
-{{$context := use "context.Context" .GenFile}}
-{{$_ := use "gorums.EnforceVersion" .GenFile}}
-{{$callOpt := use "gorums.CallOption" .GenFile}}
+{{- $context := use "context.Context" .GenFile}}
+{{- $_ := use "gorums.EnforceVersion" .GenFile}}
+{{- $callOpt := use "gorums.CallOption" .GenFile}}
+`
+
+var clientServicesBegin = `
+	{{- $genFile := .GenFile}}
+	{{- range configurationsServices .Services}}
+		{{- $service := .GoName}}
+`
+
+var clientServicesEnd = `
+	{{- end}}
 `
 
 var clientConfigurationInterface = `
-{{- $genFile := .GenFile}}
-{{- range configurationsServices .Services}}
-	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sClient" $service}}
+	{{- $configurationName := printf "%sConfiguration" $service}}
 	// {{$interfaceName}} is the client interface for the {{$service}} service.
+	{{- reserveName $interfaceName}}
 	type {{$interfaceName}} interface {
 		{{- range configurationMethods .Methods}}
 			{{- $method := .GoName}}
@@ -30,16 +39,14 @@ var clientConfigurationInterface = `
 		{{- end}}
 	}
 	// enforce interface compliance
-	var _ {{$interfaceName}} = (*Configuration)(nil)
-{{- end}}
+	var _ {{$interfaceName}} = (*{{$configurationName}})(nil)
 `
 
 var clientNodeInterface = `
-{{- $genFile := .GenFile}}
-{{- range nodeServices .Services}}
-	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sNodeClient" $service}}
+	{{- $nodeName := printf "%sNode" $service}}
 	// {{$interfaceName}} is the single node client interface for the {{$service}} service.
+	{{- reserveName $interfaceName}}
 	type {{$interfaceName}} interface {
 		{{- range nodeMethods .Methods}}
 			{{- $method := .GoName}}
@@ -52,11 +59,13 @@ var clientNodeInterface = `
 		{{- end}}
 	}
 	// enforce interface compliance
-	var _ {{$interfaceName}} = (*Node)(nil)
-{{- end}}
+	var _ {{$interfaceName}} = (*{{$nodeName}})(nil)
 `
 
-var client = clientVariables + clientConfigurationInterface + clientNodeInterface
+var client = clientVariables +
+	clientServicesBegin +
+	clientConfigurationInterface + clientNodeInterface +
+	clientServicesEnd
 
 // configurationsServices returns all services containing at least one multi node method.
 func configurationsServices(services []*protogen.Service) (s []*protogen.Service) {

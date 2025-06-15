@@ -300,8 +300,8 @@ service QCStorage {
 The generated methods have the following client-side interface:
 
 ```go
-func (c *Configuration) Read(ctx context.Context, in *ReadRequest) gorums.Responses[*State]
-func (c *Configuration) Write(ctx context.Context, in *State) gorums.Responses[*WriteResponse]
+func (c *QCStorageConfiguration) Read(ctx context.Context, in *ReadRequest) gorums.Responses[*State]
+func (c *QCStorageConfiguration) Write(ctx context.Context, in *State) gorums.Responses[*WriteResponse]
 ```
 
 ## The quorum call responses
@@ -372,15 +372,12 @@ func ExampleStorageClient() {
     "127.0.0.1:8082",
   }
 
-  mgr := NewManager(
+  // Create a configuration including all nodes
+  allNodesConfig, err := examplepb.NewQCStorageConfiguration(
+    gorums.WithNodeList(addrs),
     gorums.WithGrpcDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
-  )
-  // Create a configuration including all nodes
-  allNodesConfig, err := mgr.NewConfiguration(
-    &QSpec{2},
-    gorums.WithNodeList(addrs),
   )
   if err != nil {
     log.Fatalln("error creating read config:", err)
@@ -411,7 +408,7 @@ func ExampleConfigClient() {
     "127.0.0.1:8082",
   }
   // Make configuration c1 from addrs, giving |c1| = |addrs| = 3
-  c1, _ := mgr.NewConfiguration(
+  c1, _ := examplepb.NewExampleConfiguration(
     gorums.WithNodeList(addrs),
   )
 
@@ -419,28 +416,28 @@ func ExampleConfigClient() {
     "127.0.0.1:9080",
     "127.0.0.1:9081",
   }
-  // Make configuration c2 from newAddrs, giving |c2| = |newAddrs| = 2
-  c2, _ := mgr.NewConfiguration(
+  // Make subconfiguration c2 from newAddrs, giving |c2| = |newAddrs| = 2
+  c2, _ := c1.SubExampleConfiguration(
     gorums.WithNodeList(newAddrs),
   )
 
-  // Make new configuration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
-  c3, _ := mgr.NewConfiguration(
+  // Make new subconfiguration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
+  c3, _ := c1.SubExampleConfiguration(
     c1.WithNewNodes(gorums.WithNodeList(newAddrs)),
   )
 
-  // Make new configuration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
-  c4, _ := mgr.NewConfiguration(
+  // Make new subconfiguration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
+  c4, _ := c1.SubExampleConfiguration(
     c1.And(c2),
   )
 
-  // Make new configuration c5 from c1 except the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
-  c5, _ := mgr.NewConfiguration(
+  // Make new subconfiguration c5 from c1 except the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
+  c5, _ := c1.SubExampleConfiguration(
     c1.WithoutNodes(c1.NodeIDs()[0]),
   )
 
-  // Make new configuration c6 from c3 except c1, giving |c6| = |c3| - |c1| = 5-3 = 2
-  c6, _ := mgr.NewConfiguration(
+  // Make new subconfiguration c6 from c3 except c1, giving |c6| = |c3| - |c1| = 5-3 = 2
+  c6, _ := c1.SubExampleConfiguration(
     c3.Except(c1),
   )
 }

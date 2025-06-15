@@ -18,7 +18,7 @@ func TestRPCCallSuccess(t *testing.T) {
 	})
 	defer teardown()
 
-	cfg, err := dummy.NewConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
+	cfg, err := dummy.NewDummyConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 		return initServer()
 	})
 
-	cfg, err := dummy.NewConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
+	cfg, err := dummy.NewDummyConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 	})
 	defer teardown()
 
-	cfg, err := dummy.NewConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
+	cfg, err := dummy.NewDummyConfiguration(gorums.WithNodeList(addrs), gorumsTestMgrOpts()...)
 	if err != nil {
 		t.Fatal(err)
 	}
