@@ -17,8 +17,8 @@ func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
 	return nil, nil
 }
 
-func dummyMgr() *RawManager {
-	return NewRawManager(
+func dummyMgr() *manager {
+	return newManager(
 		WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
@@ -27,7 +27,7 @@ func dummyMgr() *RawManager {
 
 var handlerName = "mock.Server.Test"
 
-func dummySrv() *Server {
+func newDummySrv() *Server {
 	mockSrv := &mockSrv{}
 	srv := NewServer()
 	srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
@@ -66,20 +66,20 @@ func TestChannelCreation(t *testing.T) {
 
 func TestChannelSuccessfulConnection(t *testing.T) {
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
-		return dummySrv()
+		return newDummySrv()
 	})
 	defer teardown()
 	mgr := dummyMgr()
-	defer mgr.Close()
+	defer mgr.close()
 	node, err := NewRawNode(addrs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = mgr.AddNode(node); err != nil {
+	if err = mgr.addNode(node); err != nil {
 		t.Fatal(err)
 	}
-	if len(mgr.Nodes()) < 1 {
+	if len(mgr.getNodes()) < 1 {
 		t.Fatal("the node was not added to the configuration")
 	}
 	if !node.channel.isConnected() {
@@ -92,7 +92,7 @@ func TestChannelSuccessfulConnection(t *testing.T) {
 
 func TestChannelUnsuccessfulConnection(t *testing.T) {
 	mgr := dummyMgr()
-	defer mgr.Close()
+	defer mgr.close()
 	// no servers are listening on the given address
 	node, err := NewRawNode("127.0.0.1:5000")
 	if err != nil {
@@ -100,10 +100,10 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 	}
 
 	// the node should still be added to the configuration
-	if err = mgr.AddNode(node); err != nil {
+	if err = mgr.addNode(node); err != nil {
 		t.Fatal(err)
 	}
-	if len(mgr.Nodes()) < 1 {
+	if len(mgr.getNodes()) < 1 {
 		t.Fatal("the node was not added to the configuration")
 	}
 	if node.conn == nil {
@@ -114,7 +114,7 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 func TestChannelReconnection(t *testing.T) {
 	srvAddr := "127.0.0.1:5000"
 	// wait to start the server
-	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
+	startServer, stopServer := testServerSetup(t, srvAddr, newDummySrv())
 	node, err := NewRawNode(srvAddr)
 	if err != nil {
 		t.Fatal(err)

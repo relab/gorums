@@ -16,19 +16,18 @@ func runClient(addresses []string) error {
 		log.Fatalln("No addresses provided!")
 	}
 
-	// init gorums manager
-	mgr := proto.NewManager(
+	// create configuration containing all nodes
+	cfg, err := proto.NewConfiguration(
+		gorums.WithNodeList(addresses),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)
-	// create configuration containing all nodes
-	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addresses))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return Repl(mgr, cfg)
+	return Repl(cfg)
 }
 
 // newestValue returns the reply that had the most recent timestamp

@@ -59,17 +59,17 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 		nodeMap[addr] = uint32(i)
 	}
 
-	mgr := oneway.NewManager(
+	cfg, err := oneway.NewConfiguration(
+		gorums.WithNodeMap(nodeMap),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := mgr.NewConfiguration(gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}
 	teardown = func() {
-		mgr.Close()
+		cfg.Close()
 		closeServers()
 	}
 	return cfg, srvs, teardown

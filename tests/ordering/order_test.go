@@ -85,17 +85,17 @@ func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	mgr := NewManager(
+	cfg, err := NewConfiguration(
+		gorums.WithNodeList(addrs),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 	teardown = func() {
-		mgr.Close()
+		cfg.Close()
 		closeServers()
 	}
 	return cfg, teardown

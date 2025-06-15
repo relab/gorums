@@ -1,4 +1,4 @@
-package gorums_test
+package gorums
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/relab/gorums"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -16,7 +15,7 @@ func TestServerCallback(t *testing.T) {
 	var message string
 	signal := make(chan struct{})
 
-	srv := gorums.NewServer(gorums.WithConnectCallback(func(ctx context.Context) {
+	srv := NewServer(WithConnectCallback(func(ctx context.Context) {
 		m, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			return
@@ -35,20 +34,20 @@ func TestServerCallback(t *testing.T) {
 
 	md := metadata.New(map[string]string{"message": "hello"})
 
-	mgr := gorums.NewRawManager(
-		gorums.WithMetadata(md),
-		gorums.WithGrpcDialOptions(
+	mgr := newManager(
+		WithMetadata(md),
+		WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	defer mgr.Close()
+	defer mgr.close()
 
-	node, err := gorums.NewRawNode(lis.Addr().String())
+	node, err := NewRawNode(lis.Addr().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err = mgr.AddNode(node); err != nil {
+	if err = mgr.addNode(node); err != nil {
 		t.Fatal(err)
 	}
 

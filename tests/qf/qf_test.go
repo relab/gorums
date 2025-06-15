@@ -268,13 +268,11 @@ func BenchmarkFullStackQF(b *testing.B) {
 			RegisterQuorumFunctionServer(srv, &testSrv{})
 			return srv
 		})
-		mgr := NewManager(
+		c, err := NewConfiguration(
+			gorums.WithNodeList(addrs), // dummy node list; won't actually be used in test
 			gorums.WithGrpcDialOptions(
 				grpc.WithTransportCredentials(insecure.NewCredentials()),
 			),
-		)
-		c, err := mgr.NewConfiguration(
-			gorums.WithNodeList(addrs),
 		)
 		if err != nil {
 			b.Fatal(err)
@@ -305,9 +303,9 @@ func BenchmarkFullStackQF(b *testing.B) {
 				_ = resp.GetResult()
 			}
 		})
-		// close manager and stop gRPC servers;
+		// close configuration and stop gRPC servers;
 		// must be done for each iteration
-		mgr.Close()
+		c.Close()
 		stop()
 	}
 }

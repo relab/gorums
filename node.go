@@ -7,6 +7,7 @@ import (
 	"net"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -26,10 +27,14 @@ type RawNode struct {
 	addr   string
 	conn   *grpc.ClientConn
 	cancel func()
-	mgr    *RawManager
+	mgr    *manager
 
 	// the default channel
 	channel *channel
+
+	// reference conting, use a mutex just in case
+	mu             sync.Mutex
+	referenceCount uint
 }
 
 // NewRawNode returns a new node for the provided address.
@@ -58,8 +63,36 @@ func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 	}, nil
 }
 
+// called when the node is added to a configuration
+func (n *RawNode) obtain() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.referenceCount++
+}
+
+// called when the node is removed from a configuration
+// if the reference count reaches zero close the node
+func (n *RawNode) release() error {
+	n.mu.Lock()
+	n.referenceCount--
+	shouldClose := n.referenceCount == 0
+	n.mu.Unlock()
+
+	if shouldClose {
+		err := n.mgr.removeNode(n)
+		if err != nil {
+			return err
+		}
+		err = n.close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // connect to this node and associate it with the manager.
-func (n *RawNode) connect(mgr *RawManager) error {
+func (n *RawNode) connect(mgr *manager) error {
 	n.mgr = mgr
 	if n.mgr.opts.noConnect {
 		return nil

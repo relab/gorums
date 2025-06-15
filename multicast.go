@@ -19,9 +19,9 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 
 	var replyChan chan response
 	if !o.noSendWaiting {
-		replyChan = make(chan response, len(c))
+		replyChan = make(chan response, c.Size())
 	}
-	for _, n := range c {
+	for _, n := range c.Nodes() {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)

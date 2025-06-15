@@ -27,12 +27,12 @@ func QuorumCall[responseType proto.Message](
 	c RawConfiguration,
 	d QuorumCallData,
 ) Responses[responseType] {
-	nodes := len(c)
+	nodes := len(c.RawNodes)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
 	replyChan := make(chan response, nodes)
 
-	for _, n := range c {
+	for _, n := range c.RawNodes {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
 			msg = d.PerNodeArgFn(d.Message, n.id)
@@ -55,7 +55,7 @@ func QuorumCall[responseType proto.Message](
 		errors := int(0)
 
 		defer close(replyChan)
-		for _, n := range c {
+		for _, n := range c.RawNodes {
 			defer n.channel.deleteRouter(md.GetMessageID())
 		}
 
