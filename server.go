@@ -63,18 +63,6 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 	return s
 }
 
-// SendMessage attempts to send a message on a channel.
-//
-// This function should be used by generated code only.
-func SendMessage(ctx context.Context, c chan<- *Message, msg *Message) error {
-	select {
-	case c <- msg:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	return nil
-}
-
 // WrapMessage wraps the metadata, response and error status in a gorumsMessage
 //
 // This function should be used by generated code only.
@@ -126,7 +114,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(ServerCtx{Context: req.Metadata.AppendToIncomingContext(ctx), once: new(sync.Once), mut: &mut}, req, finished)
+			go handler(ServerCtx{Context: req.Metadata.AppendToIncomingContext(ctx), once: new(sync.Once), mut: &mut, c: finished}, req)
 			// Wait until the handler releases the mutex.
 			mut.Lock()
 		}
@@ -254,9 +242,20 @@ type ServerCtx struct {
 	context.Context
 	once *sync.Once // must be a pointer to avoid passing ctx by value
 	mut  *sync.Mutex
+	c    chan<- *Message
 }
 
 // Release releases this handler's lock on the server, which allows the next request to be processed.
 func (ctx *ServerCtx) Release() {
 	ctx.once.Do(ctx.mut.Unlock)
+}
+
+// SendMessage attempts to send a message on a channel.
+func (ctx *ServerCtx) SendMessage(msg *Message) error {
+	select {
+	case ctx.c <- msg:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
