@@ -9,6 +9,7 @@ package metadata
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -196,16 +197,14 @@ type MetadataTestServer interface {
 }
 
 func RegisterMetadataTestServer(srv *gorums.Server, impl MetadataTestServer) {
-	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("metadata.MetadataTest.IDFromMD", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*emptypb.Empty)
-		defer ctx.Release()
 		resp, err := impl.IDFromMD(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("metadata.MetadataTest.WhatIP", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*emptypb.Empty)
-		defer ctx.Release()
 		resp, err := impl.WhatIP(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
 }

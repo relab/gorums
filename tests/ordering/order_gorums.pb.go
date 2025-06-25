@@ -9,6 +9,7 @@ package ordering
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -250,23 +251,20 @@ type GorumsTestServer interface {
 }
 
 func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTestServer) {
-	srv.RegisterHandler("ordering.GorumsTest.QC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("ordering.GorumsTest.QC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QC(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("ordering.GorumsTest.QCAsync", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("ordering.GorumsTest.QCAsync", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QCAsync(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("ordering.GorumsTest.UnaryRPC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("ordering.GorumsTest.UnaryRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.UnaryRPC(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
 }
 

@@ -9,6 +9,7 @@ package proto
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -284,34 +285,30 @@ type StorageServer interface {
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
-	srv.RegisterHandler("storage.Storage.ReadRPC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.ReadRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*ReadRequest)
-		defer ctx.Release()
 		resp, err := impl.ReadRPC(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("storage.Storage.WriteRPC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.WriteRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*WriteRequest)
-		defer ctx.Release()
 		resp, err := impl.WriteRPC(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("storage.Storage.ReadQC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.ReadQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*ReadRequest)
-		defer ctx.Release()
 		resp, err := impl.ReadQC(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("storage.Storage.WriteQC", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.WriteQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*WriteRequest)
-		defer ctx.Release()
 		resp, err := impl.WriteQC(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("storage.Storage.WriteMulticast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("storage.Storage.WriteMulticast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*WriteRequest)
-		defer ctx.Release()
 		impl.WriteMulticast(ctx, req)
+		return nil, nil // no response for oneway calls
 	})
 }
 

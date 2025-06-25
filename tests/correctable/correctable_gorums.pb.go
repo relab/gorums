@@ -9,6 +9,7 @@ package correctable
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	ordering "github.com/relab/gorums/ordering"
 	encoding "google.golang.org/grpc/encoding"
@@ -229,23 +230,19 @@ type CorrectableTestServer interface {
 }
 
 func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServer) {
-	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*CorrectableRequest)
-		defer ctx.Release()
 		resp, err := impl.Correctable(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*CorrectableRequest)
-		defer ctx.Release()
 		err := impl.CorrectableStream(ctx, req, func(resp *CorrectableResponse) error {
 			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
 			md := proto.Clone(in.Metadata)
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
+			return ctx.SendMessage(gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
-		if err != nil {
-			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
-		}
+		return nil, err
 	})
 }
 

@@ -9,6 +9,7 @@ package qf
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -228,17 +229,15 @@ type QuorumFunctionServer interface {
 }
 
 func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunctionServer) {
-	srv.RegisterHandler("qf.QuorumFunction.UseReq", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("qf.QuorumFunction.UseReq", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.UseReq(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("qf.QuorumFunction.IgnoreReq", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("qf.QuorumFunction.IgnoreReq", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.IgnoreReq(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
 }
 

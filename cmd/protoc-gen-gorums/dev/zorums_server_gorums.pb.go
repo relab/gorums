@@ -58,231 +58,213 @@ type ZorumsServiceServer interface {
 }
 
 func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
-	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.GRPCCall", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.GRPCCall(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCall(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallPerNodeArg(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallCustomReturnType(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallCombo", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallCombo(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*emptypb.Empty)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallEmpty(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallEmpty2(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.Multicast(ctx, req)
+		return nil, nil // Multicast does not return a response, so we return nil.
 	})
-	srv.RegisterHandler("dev.ZorumsService.MulticastPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.MulticastPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.MulticastPerNodeArg(ctx, req)
+		return nil, nil // MulticastPerNodeArg does not return a response, so we return nil.
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multicast2", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.Multicast2(ctx, req)
+		return nil, nil // Multicast2 does not return a response, so we return nil.
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multicast3", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast3", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.Multicast3(ctx, req)
+		return nil, nil // Multicast3 does not return a response, so we return nil.
 	})
-	srv.RegisterHandler("dev.ZorumsService.Multicast4", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Multicast4", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*emptypb.Empty)
-		defer ctx.Release()
 		impl.Multicast4(ctx, req)
+		return nil, nil // Multicast4 does not return a response, so we return nil.
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallAsync(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallAsyncPerNodeArg(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallAsyncCustomReturnType(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncCombo", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallAsyncCombo(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallAsync2(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallAsyncEmpty(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*emptypb.Empty)
-		defer ctx.Release()
 		resp, err := impl.QuorumCallAsyncEmpty2(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.Correctable(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectablePerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectablePerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.CorrectablePerNodeArg(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.CorrectableCustomReturnType(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableCombo", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.CorrectableCombo(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.CorrectableEmpty(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*emptypb.Empty)
-		defer ctx.Release()
 		resp, err := impl.CorrectableEmpty2(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		err := impl.CorrectableStream(ctx, req, func(resp *Response) error {
 			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
 			md := proto.Clone(in.Metadata)
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
+			return ctx.SendMessage(gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
-			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
+			ctx.SendMessage(gorums.WrapMessage(in.Metadata, nil, err))
 		}
+		return nil, err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamPerNodeArg", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		err := impl.CorrectableStreamPerNodeArg(ctx, req, func(resp *Response) error {
 			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
 			md := proto.Clone(in.Metadata)
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
+			return ctx.SendMessage(gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
-			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
+			ctx.SendMessage(gorums.WrapMessage(in.Metadata, nil, err))
 		}
+		return nil, err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCustomReturnType", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		err := impl.CorrectableStreamCustomReturnType(ctx, req, func(resp *Response) error {
 			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
 			md := proto.Clone(in.Metadata)
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
+			return ctx.SendMessage(gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
-			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
+			ctx.SendMessage(gorums.WrapMessage(in.Metadata, nil, err))
 		}
+		return nil, err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCombo", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamCombo", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
 		defer ctx.Release()
 		err := impl.CorrectableStreamCombo(ctx, req, func(resp *Response) error {
 			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
 			md := proto.Clone(in.Metadata)
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
+			return ctx.SendMessage(gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
-			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
+			ctx.SendMessage(gorums.WrapMessage(in.Metadata, nil, err))
 		}
+		return nil, err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		err := impl.CorrectableStreamEmpty(ctx, req, func(resp *emptypb.Empty) error {
 			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
 			md := proto.Clone(in.Metadata)
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
+			return ctx.SendMessage(gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
-			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
+			ctx.SendMessage(gorums.WrapMessage(in.Metadata, nil, err))
 		}
+		return nil, err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*emptypb.Empty)
-		defer ctx.Release()
 		err := impl.CorrectableStreamEmpty2(ctx, req, func(resp *Response) error {
 			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
 			md := proto.Clone(in.Metadata)
-			return gorums.SendMessage(ctx, finished, gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
+			return ctx.SendMessage(gorums.WrapMessage(md.(*ordering.Metadata), resp, nil))
 		})
 		if err != nil {
-			gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, nil, err))
+			ctx.SendMessage(gorums.WrapMessage(in.Metadata, nil, err))
 		}
+		return nil, err
 	})
-	srv.RegisterHandler("dev.ZorumsService.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.Unicast(ctx, req)
+		return nil, nil // Unicast does not return a response, so we return nil.
 	})
-	srv.RegisterHandler("dev.ZorumsService.Unicast2", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("dev.ZorumsService.Unicast2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.Unicast2(ctx, req)
+		return nil, nil // Unicast2 does not return a response, so we return nil.
 	})
 }

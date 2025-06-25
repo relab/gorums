@@ -9,6 +9,7 @@ package dummy
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 )
@@ -180,10 +181,9 @@ type DummyServer interface {
 }
 
 func RegisterDummyServer(srv *gorums.Server, impl DummyServer) {
-	srv.RegisterHandler("dummy.Dummy.Test", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("dummy.Dummy.Test", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Empty)
-		defer ctx.Release()
 		resp, err := impl.Test(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
 }

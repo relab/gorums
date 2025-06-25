@@ -9,6 +9,7 @@ package oneway
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -206,20 +207,20 @@ type OnewayTestServer interface {
 }
 
 func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTestServer) {
-	srv.RegisterHandler("oneway.OnewayTest.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("oneway.OnewayTest.Unicast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.Unicast(ctx, req)
+		return nil, nil // no response for oneway calls
 	})
-	srv.RegisterHandler("oneway.OnewayTest.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("oneway.OnewayTest.Multicast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.Multicast(ctx, req)
+		return nil, nil // no response for oneway calls
 	})
-	srv.RegisterHandler("oneway.OnewayTest.MulticastPerNode", func(ctx gorums.ServerCtx, in *gorums.Message, _ chan<- *gorums.Message) {
+	srv.RegisterHandler("oneway.OnewayTest.MulticastPerNode", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		impl.MulticastPerNode(ctx, req)
+		return nil, nil // no response for oneway calls
 	})
 }
 

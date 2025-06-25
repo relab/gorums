@@ -9,6 +9,7 @@ package config
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -197,11 +198,10 @@ type ConfigTestServer interface {
 }
 
 func RegisterConfigTestServer(srv *gorums.Server, impl ConfigTestServer) {
-	srv.RegisterHandler("config.ConfigTest.Config", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("config.ConfigTest.Config", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Request)
-		defer ctx.Release()
 		resp, err := impl.Config(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
 }
 

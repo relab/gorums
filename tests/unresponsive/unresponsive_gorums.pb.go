@@ -9,6 +9,7 @@ package unresponsive
 import (
 	context "context"
 	fmt "fmt"
+
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
 )
@@ -180,10 +181,9 @@ type UnresponsiveServer interface {
 }
 
 func RegisterUnresponsiveServer(srv *gorums.Server, impl UnresponsiveServer) {
-	srv.RegisterHandler("unresponsive.Unresponsive.TestUnresponsive", func(ctx gorums.ServerCtx, in *gorums.Message, finished chan<- *gorums.Message) {
+	srv.RegisterHandler("unresponsive.Unresponsive.TestUnresponsive", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := in.Message.(*Empty)
-		defer ctx.Release()
 		resp, err := impl.TestUnresponsive(ctx, req)
-		gorums.SendMessage(ctx, finished, gorums.WrapMessage(in.Metadata, resp, err))
+		return gorums.WrapMessage(in.Metadata, resp, err), err
 	})
 }
