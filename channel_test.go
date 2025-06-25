@@ -30,11 +30,10 @@ var handlerName = "mock.Server.Test"
 func dummySrv() *Server {
 	mockSrv := &mockSrv{}
 	srv := NewServer()
-	srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+	srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message) (*Message, error) {
 		req := in.Message.(*mock.Request)
-		defer ctx.Release()
 		resp, err := mockSrv.Test(ctx, req)
-		SendMessage(ctx, finished, WrapMessage(in.Metadata, resp, err))
+		return WrapMessage(in.Metadata, resp, err), err
 	})
 	return srv
 }
