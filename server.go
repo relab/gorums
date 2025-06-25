@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"sync"
 
@@ -17,47 +16,35 @@ import (
 // A RequestHandler should receive a message from the server, unmarshal it into
 // the proper type for that Method's request type, call a user provided Handler,
 // and return a marshaled result to the server.
-type RequestHandler func(ServerCtx, *Message, chan<- *Message)
-
-type Interceptor func(ServerCtx, *Message, chan<- *Message, RequestHandler)
-
-type ResponseHandler func(ServerCtx, *Message) (*Message, error)
-
-type ResponseInterceptor func(ServerCtx, *Message, ResponseHandler) (*Message, error)
+type (
+	Interceptor func(ServerCtx, *Message, Handler) (*Message, error)
+	Handler     func(ServerCtx, *Message) (*Message, error)
+)
 
 type (
 	orderingServer struct {
-		handlers map[string]RequestHandler
+		handlers map[string]Handler
 		opts     *serverOptions
 		ordering.UnimplementedGorumsServer
 	}
 )
 
-func InterceptorWithResponse(intercept ResponseInterceptor) Interceptor {
-	return func(ctx ServerCtx, msg *Message, out chan<- *Message, next RequestHandler) {
-		nextWithResp := func(ctx ServerCtx, msg *Message) (*Message, error) {
-			respChan := make(chan *Message, 1)
-			next(ctx, msg, respChan)
-			resp, ok := <-respChan
-			if !ok {
-				return nil, fmt.Errorf("handler closed channel without response")
-			}
-			return resp, nil
-		}
-		resp, err := intercept(ctx, msg, nextWithResp)
-		if err != nil {
-			// TODO(jostein): Wrap the error instead of the message
-			out <- WrapMessage(msg.Metadata, nil, err)
-			ctx.Release() // release handler lock to allow other requests to proceed
-			return
-		}
-		out <- resp
+func defaultInterceptor(ctx ServerCtx, msg *Message, next Handler) (*Message, error) {
+	// the default interceptor must be the outermost interceptor in the chain
+	// it releases the handler lock after the next handler returns
+	// allowing the next request to be processed
+	defer ctx.Release()
+	message, err := next(ctx, msg)
+	if message == nil && err == nil {
+		return nil, nil
 	}
+	ctx.SendMessage(message)
+	return message, err
 }
 
 func newOrderingServer(opts *serverOptions) *orderingServer {
 	s := &orderingServer{
-		handlers: make(map[string]RequestHandler),
+		handlers: make(map[string]Handler),
 		opts:     opts,
 	}
 	return s
@@ -162,7 +149,7 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 	}
 }
 
-func chainInterceptors(final RequestHandler, interceptors ...Interceptor) RequestHandler {
+func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
 	if len(interceptors) == 0 {
 		return final
 	}
@@ -170,8 +157,8 @@ func chainInterceptors(final RequestHandler, interceptors ...Interceptor) Reques
 	for i := len(interceptors) - 1; i >= 0; i-- {
 		curr := interceptors[i]
 		next := handler
-		handler = func(ctx ServerCtx, msg *Message, out chan<- *Message) {
-			curr(ctx, msg, out, next)
+		handler = func(ctx ServerCtx, msg *Message) (*Message, error) {
+			return curr(ctx, msg, next)
 		}
 	}
 	return handler
@@ -207,7 +194,7 @@ func NewServer(opts ...ServerOption) *Server {
 	s := &Server{
 		srv:          newOrderingServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
-		interceptors: serverOpts.interceptors,
+		interceptors: append([]Interceptor{defaultInterceptor}, serverOpts.interceptors...),
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
@@ -216,7 +203,7 @@ func NewServer(opts ...ServerOption) *Server {
 // RegisterHandler registers a request handler for the specified method name.
 //
 // This function should only be used by generated code.
-func (s *Server) RegisterHandler(method string, handler RequestHandler) {
+func (s *Server) RegisterHandler(method string, handler Handler) {
 	s.srv.handlers[method] = chainInterceptors(handler, s.interceptors...)
 }
 
