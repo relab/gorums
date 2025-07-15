@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package all2all;
+
+option go_package = "github.com/relab/gorums/tests/all2all";
+
+import "gorums.proto";
+
+service Sample {
+    rpc WriteQC(WriteRequest) returns (WriteResponse) {
+        option (gorums.quorumcall) = true;
+    }
+}
+
+message WriteResponse {
+    bool New = 1;
+}
+message WriteRequest {
+    string Key   = 1;
+    string Value = 2;
+}
