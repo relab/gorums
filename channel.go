@@ -159,6 +159,15 @@ func (c *channel) deleteRouter(msgID uint64) {
 	delete(c.responseRouters, msgID)
 }
 
+// clearStream cancels the current stream context and clears the stream reference.
+// This triggers reconnection on the next send attempt.
+func (c *channel) clearStream() {
+	c.cancelStream()
+	c.streamMut.Lock()
+	c.gorumsStream = nil
+	c.streamMut.Unlock()
+}
+
 func (c *channel) sendMsg(req request) (err error) {
 	defer func() {
 		// While the default is to block the caller until the message has been sent, we
@@ -204,11 +213,7 @@ func (c *channel) sendMsg(req request) (err error) {
 				// false alarm
 			default:
 				// trigger reconnect
-				c.cancelStream()
-				// Clear broken stream
-				c.streamMut.Lock()
-				c.gorumsStream = nil
-				c.streamMut.Unlock()
+				c.clearStream()
 			}
 		}
 	}()
@@ -216,10 +221,7 @@ func (c *channel) sendMsg(req request) (err error) {
 	err = stream.SendMsg(req.msg)
 	if err != nil {
 		c.setLastErr(err)
-		// Clear broken stream
-		c.streamMut.Lock()
-		c.gorumsStream = nil
-		c.streamMut.Unlock()
+		c.clearStream()
 	}
 
 	close(done)
