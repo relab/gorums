@@ -324,9 +324,9 @@ func (c *channel) ensureStream() error {
 
 // isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
 func (c *channel) isConnected() bool {
-	c.streamMut.Lock()
+	c.streamMut.RLock()
 	hasStream := c.gorumsStream != nil
-	c.streamMut.Unlock()
+	c.streamMut.RUnlock()
 
 	return c.node.conn.GetState() == connectivity.Ready && hasStream
 }
