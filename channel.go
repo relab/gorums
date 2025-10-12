@@ -85,12 +85,9 @@ func newChannel(n *RawNode) *channel {
 // newNodeStream creates a new stream for this channel.
 // The receiver goroutine will detect the new stream and start using it.
 func (c *channel) newNodeStream() (err error) {
-	// gorumsClient creates streams over the node's ClientConn
-	gorumsClient := ordering.NewGorumsClient(c.node.conn)
-
 	c.streamMut.Lock()
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
-	c.gorumsStream, err = gorumsClient.NodeStream(c.streamCtx)
+	c.gorumsStream, err = ordering.NewGorumsClient(c.node.conn).NodeStream(c.streamCtx)
 	c.streamMut.Unlock()
 
 	return err
@@ -280,7 +277,7 @@ func (c *channel) channelLatency() time.Duration {
 	return c.latency
 }
 
-// ensureStream ensures there's an active NodeStream and starts the receiver goroutine if needed.
+// ensureStream ensures there's an active NodeStream for the sender and receiver goroutines.
 // gRPC automatically handles TCP connection state when creating the stream.
 func (c *channel) ensureStream() error {
 	if c.isConnected() {
