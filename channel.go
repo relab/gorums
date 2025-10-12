@@ -236,13 +236,7 @@ func (c *channel) sender() {
 		case req = <-c.sendQ:
 		}
 
-		// Ensure TCP connection is ready
-		if err := c.ensureConnected(); err != nil {
-			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: err})
-			continue
-		}
-
-		// Ensure we have an active stream
+		// Ensure we have an active stream (gRPC handles TCP connection automatically)
 		if err := c.ensureStream(); err != nil {
 			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: err})
 			continue
@@ -258,33 +252,27 @@ func (c *channel) sender() {
 
 func (c *channel) receiver() {
 	for {
-		resp := newMessage(responseType)
-
-		// Get stream reference without holding lock during blocking RecvMsg
 		c.streamMut.RLock()
 		stream := c.gorumsStream
 		c.streamMut.RUnlock()
 
 		if stream == nil {
-			// No stream available, wait a bit and try again
+			// No stream available, wait and retry
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 
+		resp := newMessage(responseType)
 		err := stream.RecvMsg(resp)
 		if err != nil {
 			c.setLastErr(err)
-			// Stream failed - cancel stream and notify pending messages
 			c.cancelStream()
 			c.cancelPendingMsgs()
 
-			// Clear the broken stream so ensureStream will create a new one
+			// Clear broken stream - sender will recreate when needed
 			c.streamMut.Lock()
 			c.gorumsStream = nil
 			c.streamMut.Unlock()
-
-			// Attempt to reconnect indefinitely until the node is closed.
-			c.reconnect(-1)
 		} else {
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
 			c.routeResponse(resp.Metadata.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
@@ -299,64 +287,13 @@ func (c *channel) receiver() {
 }
 
 func (c *channel) connect() error {
-	// Ensure we have a ClientConn by dialing if needed
 	if c.node.conn == nil {
 		if err := c.node.dial(); err != nil {
 			return err
 		}
 	}
-
-	// Ensure TCP connection is ready
-	if err := c.ensureConnected(); err != nil {
-		return err
-	}
-
-	// Ensure stream is created
+	// Create stream (gRPC handles TCP connection automatically)
 	return c.ensureStream()
-}
-
-// reconnect tries to reconnect the stream to the node.
-// maxRetries = -1 represents infinite retries.
-func (c *channel) reconnect(maxRetries int) {
-	var retries int
-	for {
-		// Check if we should stop
-		select {
-		case <-c.parentCtx.Done():
-			return
-		default:
-		}
-
-		// Check if we've exceeded retry limit
-		if maxRetries > 0 && retries >= maxRetries {
-			return
-		}
-
-		// Try to reconnect: first ensure TCP connection, then create stream
-		err := c.ensureConnected()
-		if err != nil {
-			c.setLastErr(err)
-			retries++
-			time.Sleep(100 * time.Millisecond) // Brief delay before retry
-			continue
-		}
-
-		err = c.ensureStream()
-		if err == nil {
-			// Success!
-			return
-		}
-
-		c.setLastErr(err)
-		retries++
-
-		// Wait before next retry (gRPC handles backoff, but add small delay)
-		select {
-		case <-time.After(100 * time.Millisecond):
-		case <-c.parentCtx.Done():
-			return
-		}
-	}
 }
 
 func (c *channel) setLastErr(err error) {
@@ -379,32 +316,8 @@ func (c *channel) channelLatency() time.Duration {
 	return c.latency
 }
 
-// ensureConnected checks the underlying gRPC connection state and triggers
-// connection if idle. Unlike the old approach, we don't block waiting for Ready
-// state - we let gRPC handle connection establishment lazily when stream is created.
-func (c *channel) ensureConnected() error {
-	if c.node.conn == nil {
-		return status.Error(codes.Unavailable, "connection not initialized")
-	}
-
-	state := c.node.conn.GetState()
-	switch state {
-	case connectivity.Shutdown:
-		return status.Error(codes.Unavailable, "connection shutdown")
-	case connectivity.Idle:
-		// Trigger connection attempt (non-blocking)
-		c.node.conn.Connect()
-	case connectivity.TransientFailure:
-		// Force retry on transient failure
-		c.node.conn.ResetConnectBackoff()
-	}
-
-	// Don't block - let stream creation handle actual connection
-	return nil
-}
-
 // ensureStream ensures there's an active NodeStream and starts the receiver goroutine if needed.
-// It checks if gorumsStream exists and creates a new one if needed.
+// gRPC automatically handles TCP connection state when creating the stream.
 func (c *channel) ensureStream() error {
 	c.streamMut.Lock()
 	hasStream := c.gorumsStream != nil
