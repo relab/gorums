@@ -2,7 +2,6 @@ package gorums
 
 import (
 	"testing"
-	"time"
 )
 
 // TestEnsureStreamCreatesStream verifies that ensureStream creates a stream when none exists.
@@ -87,28 +86,13 @@ func TestIsConnectedRequiresBothReadyAndStream(t *testing.T) {
 	defer teardown()
 
 	node := newNode(t, addrs[0])
-
-	// After AddNode with server running, connection should be established
-	// Wait a bit for connection to complete
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if node.channel.isConnected() {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-
 	if !node.channel.isConnected() {
-		t.Error("isConnected should return true when connection is Ready and stream exists")
+		t.Fatal("node should be connected")
 	}
 
-	// Clear the stream
-	node.channel.streamMut.Lock()
-	node.channel.gorumsStream = nil
-	node.channel.streamMut.Unlock()
+	node.channel.clearStream()
 
-	// Now isConnected should return false (no stream)
 	if node.channel.isConnected() {
-		t.Error("isConnected should return false when stream is nil, even if connection is Ready")
+		t.Error("isConnected should return false after clearing the stream")
 	}
 }

@@ -19,14 +19,8 @@ func TestWaitForSendDefaultBehavior(t *testing.T) {
 	defer teardown()
 
 	node := newNode(t, addrs[0])
-
-	// Wait for connection to be established
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if node.channel.isConnected() {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	if !node.channel.isConnected() {
+		t.Fatal("node should be connected")
 	}
 
 	// Create call options with waitForSend=true (default behavior)
@@ -173,14 +167,8 @@ func TestSendMsgContextCancelDuringSend(t *testing.T) {
 	defer teardown()
 
 	node := newNode(t, addrs[0])
-
-	// Wait for connection
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if node.channel.isConnected() {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	if !node.channel.isConnected() {
+		t.Fatal("node should be connected")
 	}
 
 	// Create context with short timeout and manually enqueue
