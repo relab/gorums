@@ -66,78 +66,84 @@ func expectResponse(t *testing.T, replyChan <-chan response, check func(t *testi
 }
 
 func TestChannelCreation(t *testing.T) {
+	mgr := dummyMgr()
+	t.Cleanup(func() { mgr.Close() })
+
 	node, err := NewRawNode("127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer node.close()
-	mgr := dummyMgr()
-	node.connect(mgr)
+	if err = mgr.AddNode(node); err != nil {
+		t.Error(err)
+	}
 
 	replyChan := sendTestMessage(t, node, 1, callOptions{})
-	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
+	expectResponse(t, replyChan, func(_ *testing.T, _ response) bool {
 		// Any response (including error) is acceptable for this test
 		return true
 	})
 }
 
 func TestChannelSuccessfulConnection(t *testing.T) {
+	mgr := dummyMgr()
+	t.Cleanup(func() { mgr.Close() })
+
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
 		return dummySrv()
 	})
-	defer teardown()
-	mgr := dummyMgr()
-	defer mgr.Close()
+	t.Cleanup(func() { teardown() })
+
 	node, err := NewRawNode(addrs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
-	if len(mgr.Nodes()) < 1 {
-		t.Fatal("the node was not added to the configuration")
+
+	if len(mgr.Nodes()) != 1 {
+		t.Error("node not added to the manager")
 	}
 	if !node.channel.isConnected() {
-		t.Fatal("a connection could not be made to a live node")
-	}
-	if node.conn == nil {
-		t.Fatal("connection should not be nil")
+		t.Error("node should be connected")
 	}
 }
 
 func TestChannelUnsuccessfulConnection(t *testing.T) {
 	mgr := dummyMgr()
-	defer mgr.Close()
+	t.Cleanup(func() { mgr.Close() })
+
 	// no servers are listening on the given address
 	node, err := NewRawNode("127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	// the node should still be added to the configuration
+	// the node should still be added to the manager
 	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
-	if len(mgr.Nodes()) < 1 {
-		t.Fatal("the node was not added to the configuration")
+
+	if len(mgr.Nodes()) != 1 {
+		t.Error("node not added to the manager")
 	}
-	if node.conn == nil {
-		t.Fatal("connection should not be nil")
+	if node.channel.isConnected() {
+		t.Error("node should not be connected")
 	}
 }
 
 func TestChannelReconnection(t *testing.T) {
+	mgr := dummyMgr()
+	t.Cleanup(func() { mgr.Close() })
+
 	srvAddr := "127.0.0.1:5000"
 	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
 	node, err := NewRawNode(srvAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer node.close()
-	mgr := dummyMgr()
-	node.connect(mgr)
+	if err = mgr.AddNode(node); err != nil {
+		t.Error(err)
+	}
 
 	// send message when server is down
 	replyChan := sendTestMessage(t, node, 1, callOptions{})
