@@ -48,9 +48,7 @@ type channel struct {
 	latency   time.Duration
 
 	// Stream management for FIFO ordering
-	// gorumsClient creates streams over the node's ClientConn
-	gorumsClient ordering.GorumsClient
-	// gorumsStream is the active bidirectional stream for FIFO message delivery
+	// gorumsStream is a bidirectional stream for FIFO message delivery
 	gorumsStream ordering.Gorums_NodeStreamClient
 	streamMut    sync.RWMutex
 	streamCtx    context.Context
@@ -90,16 +88,18 @@ func newChannel(n *RawNode) *channel {
 // Note that the stream could fail even though conn != nil due
 // to the non-blocking dial. Hence, we need to try to connect
 // to the node before starting the receiving goroutine.
-func (c *channel) newNodeStream(conn *grpc.ClientConn) error {
+func (c *channel) newNodeStream(conn *grpc.ClientConn) (err error) {
 	if conn == nil {
 		// no need to proceed if dial failed
 		return fmt.Errorf("connection is nil")
 	}
+
+	// gorumsClient creates streams over the node's ClientConn
+	gorumsClient := ordering.NewGorumsClient(conn)
+
 	c.streamMut.Lock()
-	var err error
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
-	c.gorumsClient = ordering.NewGorumsClient(conn)
-	c.gorumsStream, err = c.gorumsClient.NodeStream(c.streamCtx)
+	c.gorumsStream, err = gorumsClient.NodeStream(c.streamCtx)
 	c.streamMut.Unlock()
 	if err != nil {
 		return err
