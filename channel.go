@@ -88,11 +88,6 @@ func newChannel(n *RawNode) *channel {
 // to the non-blocking dial. Hence, we need to try to connect
 // to the node before starting the receiving goroutine.
 func (c *channel) newNodeStream() (err error) {
-	if c.node.conn == nil {
-		// no need to proceed if dial failed
-		return fmt.Errorf("connection is nil")
-	}
-
 	// gorumsClient creates streams over the node's ClientConn
 	gorumsClient := ordering.NewGorumsClient(c.node.conn)
 
