@@ -39,7 +39,6 @@ func dummySrv() *Server {
 }
 
 // sendTestMessage sends a test message via the node's channel and returns a response channel.
-// Uses t.Context() for proper test timeout handling.
 func sendTestMessage(t *testing.T, node *RawNode, msgID uint64, opts callOptions) <-chan response {
 	t.Helper()
 	replyChan := make(chan response, 1)
@@ -52,6 +51,20 @@ func sendTestMessage(t *testing.T, node *RawNode, msgID uint64, opts callOptions
 	return replyChan
 }
 
+// expectResponse waits for a response from replyChan and validates it using the provided check function.
+// The check function returns true if the response is acceptable, false otherwise.
+// Returns the check result (can be ignored when not needed for retry logic).
+func expectResponse(t *testing.T, replyChan <-chan response, check func(t *testing.T, resp response) bool) bool {
+	t.Helper()
+	select {
+	case resp := <-replyChan:
+		return check(t, resp)
+	case <-time.After(3 * time.Second):
+		t.Fatal("deadlock: unable to dequeue messages from the node")
+	}
+	return false // unreachable, but keeps compiler happy
+}
+
 func TestChannelCreation(t *testing.T) {
 	node, err := NewRawNode("127.0.0.1:5000")
 	if err != nil {
@@ -62,12 +75,10 @@ func TestChannelCreation(t *testing.T) {
 	node.connect(mgr)
 
 	replyChan := sendTestMessage(t, node, 1, callOptions{})
-
-	select {
-	case <-replyChan:
-	case <-time.After(3 * time.Second):
-		t.Fatal("deadlock: impossible to enqueue messages to the node")
-	}
+	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
+		// Any response (including error) is acceptable for this test
+		return true
+	})
 }
 
 func TestChannelSuccessfulConnection(t *testing.T) {
@@ -128,40 +139,28 @@ func TestChannelReconnection(t *testing.T) {
 	mgr := dummyMgr()
 	node.connect(mgr)
 
-	// send first message when server is down
-	replyChan1 := sendTestMessage(t, node, 1, callOptions{})
-
-	// check response: should be error because server is down
-	select {
-	case resp := <-replyChan1:
+	// send message when server is down
+	replyChan := sendTestMessage(t, node, 1, callOptions{})
+	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
 		if resp.err == nil {
 			t.Error("response err: got <nil>, want error")
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("deadlock: impossible to enqueue messages to the node")
-	}
+		return true
+	})
 
 	startServer()
 
-	// send second message when server is up
-	// Retry to accommodate gRPC's exponential backoff after first failure
+	// send message when server is up but not yet connected,
+	// with retries to accommodate gRPC connection establishment
 	var successfulSend bool
-	for attempt := 0; attempt < 5; attempt++ {
-		replyChan2 := sendTestMessage(t, node, 2, getCallOptions(E_Multicast, nil))
-
-		select {
-		case resp := <-replyChan2:
-			if resp.err == nil {
-				successfulSend = true
-				break
-			}
-			// Server is up but gRPC still in backoff, retry after delay
-			if attempt < 4 {
-				time.Sleep(500 * time.Millisecond)
-			}
-		case <-time.After(1 * time.Second):
-			t.Fatal("deadlock: impossible to enqueue messages to the node")
+	for range 10 {
+		replyChan = sendTestMessage(t, node, 2, getCallOptions(E_Multicast, nil))
+		if expectResponse(t, replyChan, func(t *testing.T, resp response) bool { return resp.err == nil }) {
+			successfulSend = true
+			break
 		}
+		// server is up but gRPC connection not yet established, retry after delay
+		time.Sleep(500 * time.Millisecond)
 	}
 	if !successfulSend {
 		t.Error("failed to send message after server came back up")
@@ -169,16 +168,12 @@ func TestChannelReconnection(t *testing.T) {
 
 	stopServer()
 
-	// send third message when server has been previously up but is now down
-	replyChan3 := sendTestMessage(t, node, 3, callOptions{})
-
-	// check response: should be error because server is down
-	select {
-	case resp3 := <-replyChan3:
-		if resp3.err == nil {
+	// send third message when server has previously been up, but is now down
+	replyChan = sendTestMessage(t, node, 3, callOptions{})
+	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
+		if resp.err == nil {
 			t.Error("response err: got <nil>, want error")
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("deadlock: impossible to enqueue messages to the node")
-	}
+		return true
+	})
 }
