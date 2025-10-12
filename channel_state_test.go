@@ -3,9 +3,6 @@ package gorums
 import (
 	"testing"
 	"time"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // TestEnsureStreamCreatesStream verifies that ensureStream creates a stream when none exists.
@@ -15,23 +12,9 @@ func TestEnsureStreamCreatesStream(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := NewRawManager(
-		WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	defer mgr.Close()
+	node := newNode(t, addrs[0])
 
-	node, err := NewRawNode(addrs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	node.mgr = mgr
-	if err := node.dial(); err != nil {
-		t.Fatal(err)
-	}
-
+	// Replace channel with fresh one that has no stream
 	node.channel = newChannel(node)
 
 	// Initially no stream
@@ -66,23 +49,9 @@ func TestEnsureStreamIdempotent(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := NewRawManager(
-		WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	defer mgr.Close()
+	node := newNode(t, addrs[0])
 
-	node, err := NewRawNode(addrs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	node.mgr = mgr
-	if err := node.dial(); err != nil {
-		t.Fatal(err)
-	}
-
+	// Replace channel with fresh one that has no stream
 	node.channel = newChannel(node)
 
 	// Create first stream
@@ -117,21 +86,7 @@ func TestIsConnectedRequiresBothReadyAndStream(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := NewRawManager(
-		WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	defer mgr.Close()
-
-	node, err := NewRawNode(addrs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	node := newNode(t, addrs[0])
 
 	// After AddNode with server running, connection should be established
 	// Wait a bit for connection to complete

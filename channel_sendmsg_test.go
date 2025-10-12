@@ -18,16 +18,7 @@ func TestWaitForSendDefaultBehavior(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := dummyMgr()
-	defer mgr.Close()
-
-	node, err := NewRawNode(addrs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	node := newNode(t, addrs[0])
 
 	// Wait for connection to be established
 	deadline := time.Now().Add(2 * time.Second)
@@ -106,16 +97,7 @@ func TestSendMsgContextAlreadyCancelled(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := dummyMgr()
-	defer mgr.Close()
-
-	node, err := NewRawNode(addrs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	node := newNode(t, addrs[0])
 
 	// Create already-cancelled context and manually enqueue
 	ctx, cancel := context.WithCancel(context.Background())
@@ -155,17 +137,8 @@ func TestSendMsgContextAlreadyCancelled(t *testing.T) {
 // TestSendMsgStreamNil tests that sendMsg returns unavailable error
 // when stream is nil (not yet established).
 func TestSendMsgStreamNil(t *testing.T) {
-	mgr := dummyMgr()
-	defer mgr.Close()
-
 	// Create node pointing to non-existent server
-	node, err := NewRawNode("127.0.0.1:9999")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	node := newNode(t, "127.0.0.1:9999")
 
 	msgID := uint64(4)
 	opts := callOptions{
@@ -199,16 +172,7 @@ func TestSendMsgContextCancelDuringSend(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := dummyMgr()
-	defer mgr.Close()
-
-	node, err := NewRawNode(addrs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	node := newNode(t, addrs[0])
 
 	// Wait for connection
 	deadline := time.Now().Add(2 * time.Second)
