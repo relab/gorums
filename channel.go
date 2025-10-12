@@ -321,15 +321,9 @@ func (c *channel) channelLatency() time.Duration {
 // ensureStream ensures there's an active NodeStream and starts the receiver goroutine if needed.
 // gRPC automatically handles TCP connection state when creating the stream.
 func (c *channel) ensureStream() error {
-	c.streamMut.Lock()
-	hasStream := c.gorumsStream != nil
-	c.streamMut.Unlock()
-
-	if hasStream {
+	if c.isConnected() {
 		return nil
 	}
-
-	// Create new stream - newNodeStream handles locking and receiver startup
 	return c.newNodeStream(c.node.conn)
 }
 
