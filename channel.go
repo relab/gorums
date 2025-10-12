@@ -52,8 +52,6 @@ type channel struct {
 	streamMut    sync.RWMutex
 	streamCtx    context.Context
 	cancelStream context.CancelFunc
-	// receiverStarted ensures we only start one receiver goroutine
-	receiverStarted bool
 
 	// Response routing
 	responseRouters map[uint64]responseRouter
@@ -63,12 +61,13 @@ type channel struct {
 	parentCtx context.Context
 }
 
-// newChannel creates a new channel for the given node and starts the sending goroutine.
+// newChannel creates a new channel for the given node and
+// starts the sender and receiver goroutines.
 //
-// Note that we start the sending goroutine even though the
-// connection has not yet been established. This is to prevent
-// deadlock when invoking a call type, as the goroutine will
-// block on the sendQ until a connection has been established.
+// Note that we start both goroutines even though the connection and stream
+// have not yet been established. This is to prevent deadlock when invoking
+// a call type. The sender blocks on the sendQ and the receiver waits for
+// the stream to become available.
 func newChannel(n *RawNode) *channel {
 	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
@@ -79,14 +78,12 @@ func newChannel(n *RawNode) *channel {
 	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = n.newContext()
 	go c.sender()
+	go c.receiver()
 	return c
 }
 
-// newNodeStream creates a stream and starts the receiving goroutine.
-//
-// Note that the stream could fail even though conn != nil due
-// to the non-blocking dial. Hence, we need to try to connect
-// to the node before starting the receiving goroutine.
+// newNodeStream creates a new stream for this channel.
+// The receiver goroutine will detect the new stream and start using it.
 func (c *channel) newNodeStream() (err error) {
 	// gorumsClient creates streams over the node's ClientConn
 	gorumsClient := ordering.NewGorumsClient(c.node.conn)
@@ -95,16 +92,8 @@ func (c *channel) newNodeStream() (err error) {
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 	c.gorumsStream, err = gorumsClient.NodeStream(c.streamCtx)
 	c.streamMut.Unlock()
-	if err != nil {
-		return err
-	}
 
-	// Start receiver goroutine once (guard against multiple receivers)
-	if !c.receiverStarted {
-		c.receiverStarted = true
-		go c.receiver()
-	}
-	return nil
+	return err
 }
 
 func (c *channel) cancelPendingMsgs() {
@@ -162,6 +151,13 @@ func (c *channel) clearStream() {
 	c.streamMut.Unlock()
 }
 
+// getStream returns the current stream, or nil if no stream is available.
+func (c *channel) getStream() ordering.Gorums_NodeStreamClient {
+	c.streamMut.RLock()
+	defer c.streamMut.RUnlock()
+	return c.gorumsStream
+}
+
 func (c *channel) sendMsg(req request) (err error) {
 	defer func() {
 		// While the default is to block the caller until the message has been sent, we
@@ -181,12 +177,9 @@ func (c *channel) sendMsg(req request) (err error) {
 		return req.ctx.Err()
 	}
 
-	c.streamMut.RLock()
-	stream := c.gorumsStream
-	c.streamMut.RUnlock()
-
+	stream := c.getStream()
 	if stream == nil {
-		return status.Error(codes.Unavailable, "stream not available")
+		return streamDownErr
 	}
 
 	done := make(chan struct{})
@@ -212,8 +205,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		}
 	}()
 
-	err = stream.SendMsg(req.msg)
-	if err != nil {
+	if err = stream.SendMsg(req.msg); err != nil {
 		c.setLastErr(err)
 		c.clearStream()
 	}
@@ -231,16 +223,11 @@ func (c *channel) sender() {
 			return
 		case req = <-c.sendQ:
 		}
-
-		// Ensure we have an active stream (gRPC handles TCP connection automatically)
 		if err := c.ensureStream(); err != nil {
 			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: err})
 			continue
 		}
-
-		// Try to send message
-		err := c.sendMsg(req)
-		if err != nil {
+		if err := c.sendMsg(req); err != nil {
 			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: err})
 		}
 	}
@@ -248,10 +235,7 @@ func (c *channel) sender() {
 
 func (c *channel) receiver() {
 	for {
-		c.streamMut.RLock()
-		stream := c.gorumsStream
-		c.streamMut.RUnlock()
-
+		stream := c.getStream()
 		if stream == nil {
 			// No stream available, wait and retry
 			time.Sleep(10 * time.Millisecond)
@@ -259,8 +243,7 @@ func (c *channel) receiver() {
 		}
 
 		resp := newMessage(responseType)
-		err := stream.RecvMsg(resp)
-		if err != nil {
+		if err := stream.RecvMsg(resp); err != nil {
 			c.setLastErr(err)
 			c.cancelPendingMsgs()
 			c.clearStream()
@@ -308,9 +291,5 @@ func (c *channel) ensureStream() error {
 
 // isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
 func (c *channel) isConnected() bool {
-	c.streamMut.RLock()
-	hasStream := c.gorumsStream != nil
-	c.streamMut.RUnlock()
-
-	return c.node.conn.GetState() == connectivity.Ready && hasStream
+	return c.node.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
