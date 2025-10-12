@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/status"
@@ -88,14 +87,14 @@ func newChannel(n *RawNode) *channel {
 // Note that the stream could fail even though conn != nil due
 // to the non-blocking dial. Hence, we need to try to connect
 // to the node before starting the receiving goroutine.
-func (c *channel) newNodeStream(conn *grpc.ClientConn) (err error) {
-	if conn == nil {
+func (c *channel) newNodeStream() (err error) {
+	if c.node.conn == nil {
 		// no need to proceed if dial failed
 		return fmt.Errorf("connection is nil")
 	}
 
 	// gorumsClient creates streams over the node's ClientConn
-	gorumsClient := ordering.NewGorumsClient(conn)
+	gorumsClient := ordering.NewGorumsClient(c.node.conn)
 
 	c.streamMut.Lock()
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
@@ -319,7 +318,7 @@ func (c *channel) ensureStream() error {
 	if c.isConnected() {
 		return nil
 	}
-	return c.newNodeStream(c.node.conn)
+	return c.newNodeStream()
 }
 
 // isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
