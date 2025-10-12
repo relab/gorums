@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -39,24 +38,31 @@ func dummySrv() *Server {
 	return srv
 }
 
+// sendTestMessage sends a test message via the node's channel and returns a response channel.
+// Uses t.Context() for proper test timeout handling.
+func sendTestMessage(t *testing.T, node *RawNode, msgID uint64, opts callOptions) <-chan response {
+	t.Helper()
+	replyChan := make(chan response, 1)
+	go func() {
+		ctx := t.Context()
+		md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
+		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: opts}
+		node.channel.enqueue(req, replyChan, false)
+	}()
+	return replyChan
+}
+
 func TestChannelCreation(t *testing.T) {
 	node, err := NewRawNode("127.0.0.1:5000")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the node should be closed manually because it isn't added to the configuration
 	defer node.close()
 	mgr := dummyMgr()
-	// a proper connection should NOT be established here
 	node.connect(mgr)
 
-	replyChan := make(chan response, 1)
-	go func() {
-		ctx := context.Background()
-		md := ordering.NewGorumsMetadata(ctx, 1, handlerName)
-		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
-		node.channel.enqueue(req, replyChan, false)
-	}()
+	replyChan := sendTestMessage(t, node, 1, callOptions{})
+
 	select {
 	case <-replyChan:
 	case <-time.After(3 * time.Second):
@@ -113,26 +119,17 @@ func TestChannelUnsuccessfulConnection(t *testing.T) {
 
 func TestChannelReconnection(t *testing.T) {
 	srvAddr := "127.0.0.1:5000"
-	// wait to start the server
 	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
 	node, err := NewRawNode(srvAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the node should be closed manually because it isn't added to the configuration
 	defer node.close()
 	mgr := dummyMgr()
-	// a proper connection should NOT be established here because server is not started
 	node.connect(mgr)
 
 	// send first message when server is down
-	replyChan1 := make(chan response, 1)
-	go func() {
-		ctx := context.Background()
-		md := ordering.NewGorumsMetadata(ctx, 1, handlerName)
-		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
-		node.channel.enqueue(req, replyChan1, false)
-	}()
+	replyChan1 := sendTestMessage(t, node, 1, callOptions{})
 
 	// check response: should be error because server is down
 	select {
@@ -150,13 +147,7 @@ func TestChannelReconnection(t *testing.T) {
 	// Retry to accommodate gRPC's exponential backoff after first failure
 	var successfulSend bool
 	for attempt := 0; attempt < 5; attempt++ {
-		replyChan2 := make(chan response, 1)
-		go func() {
-			ctx := context.Background()
-			md := ordering.NewGorumsMetadata(ctx, 2, handlerName)
-			req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
-			node.channel.enqueue(req, replyChan2, false)
-		}()
+		replyChan2 := sendTestMessage(t, node, 2, getCallOptions(E_Multicast, nil))
 
 		select {
 		case resp := <-replyChan2:
@@ -179,13 +170,7 @@ func TestChannelReconnection(t *testing.T) {
 	stopServer()
 
 	// send third message when server has been previously up but is now down
-	replyChan3 := make(chan response, 1)
-	go func() {
-		ctx := context.Background()
-		md := ordering.NewGorumsMetadata(ctx, 3, handlerName)
-		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}}
-		node.channel.enqueue(req, replyChan3, false)
-	}()
+	replyChan3 := sendTestMessage(t, node, 3, callOptions{})
 
 	// check response: should be error because server is down
 	select {
