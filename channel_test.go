@@ -160,3 +160,27 @@ func TestChannelReconnection(t *testing.T) {
 		return true
 	})
 }
+
+func TestEnqueueToClosedChannel(t *testing.T) {
+	node := newNode(t, "127.0.0.1:5000")
+
+	// Close the manager (which closes the channel)
+	node.mgr.Close()
+
+	// Allow some time for the context to be cancelled
+	time.Sleep(50 * time.Millisecond)
+
+	// Try to send a message after the channel is closed
+	replyChan := sendTestMessage(t, node, 1, callOptions{})
+
+	// Should receive an error response
+	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
+		if resp.err == nil {
+			t.Error("expected error when enqueueing to closed channel, got nil")
+		}
+		if resp.err.Error() != "channel closed" {
+			t.Errorf("expected 'channel closed' error, got: %v", resp.err)
+		}
+		return true
+	})
+}
