@@ -268,13 +268,8 @@ func (c *channel) receiver() {
 		err := stream.RecvMsg(resp)
 		if err != nil {
 			c.setLastErr(err)
-			c.cancelStream()
 			c.cancelPendingMsgs()
-
-			// Clear broken stream - sender will recreate when needed
-			c.streamMut.Lock()
-			c.gorumsStream = nil
-			c.streamMut.Unlock()
+			c.clearStream()
 		} else {
 			err := status.FromProto(resp.Metadata.GetStatus()).Err()
 			c.routeResponse(resp.Metadata.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
