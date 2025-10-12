@@ -282,16 +282,6 @@ func (c *channel) receiver() {
 	}
 }
 
-func (c *channel) connect() error {
-	if c.node.conn == nil {
-		if err := c.node.dial(); err != nil {
-			return err
-		}
-	}
-	// Create stream (gRPC handles TCP connection automatically)
-	return c.ensureStream()
-}
-
 func (c *channel) setLastErr(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
