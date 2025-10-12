@@ -147,22 +147,33 @@ func TestChannelReconnection(t *testing.T) {
 	startServer()
 
 	// send second message when server is up
-	replyChan2 := make(chan response, 1)
-	go func() {
-		ctx := context.Background()
-		md := ordering.NewGorumsMetadata(ctx, 2, handlerName)
-		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
-		node.channel.enqueue(req, replyChan2, false)
-	}()
+	// Retry to accommodate gRPC's exponential backoff after first failure
+	var successfulSend bool
+	for attempt := 0; attempt < 5; attempt++ {
+		replyChan2 := make(chan response, 1)
+		go func() {
+			ctx := context.Background()
+			md := ordering.NewGorumsMetadata(ctx, 2, handlerName)
+			req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: getCallOptions(E_Multicast, nil)}
+			node.channel.enqueue(req, replyChan2, false)
+		}()
 
-	// check response: error should be nil because server is up
-	select {
-	case resp := <-replyChan2:
-		if resp.err != nil {
-			t.Errorf("response err: got %v, want <nil>", resp.err)
+		select {
+		case resp := <-replyChan2:
+			if resp.err == nil {
+				successfulSend = true
+				break
+			}
+			// Server is up but gRPC still in backoff, retry after delay
+			if attempt < 4 {
+				time.Sleep(500 * time.Millisecond)
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatal("deadlock: impossible to enqueue messages to the node")
 		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("deadlock: impossible to enqueue messages to the node")
+	}
+	if !successfulSend {
+		t.Error("failed to send message after server came back up")
 	}
 
 	stopServer()
