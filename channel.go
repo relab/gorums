@@ -197,12 +197,14 @@ func (c *channel) sendMsg(req request) (err error) {
 				// false alarm
 			default:
 				// trigger reconnect
+				c.logf("request context cancelled: %v", req.ctx.Err())
 				c.clearStream()
 			}
 		}
 	}()
 
 	if err = stream.SendMsg(req.msg); err != nil {
+		c.logf("SendMsg error: %v", err)
 		c.setLastErr(err)
 		c.clearStream()
 	}
@@ -241,6 +243,7 @@ func (c *channel) receiver() {
 
 		resp := newMessage(responseType)
 		if err := stream.RecvMsg(resp); err != nil {
+			c.logf("RecvMsg error: %v", err)
 			c.setLastErr(err)
 			c.cancelPendingMsgs()
 			c.clearStream()
@@ -255,6 +258,13 @@ func (c *channel) receiver() {
 		default:
 		}
 	}
+}
+
+func (c *channel) logf(format string, args ...any) {
+	if c.node.mgr.logger == nil {
+		return
+	}
+	c.node.mgr.logger.Printf("Node %d: %s", c.node.ID(), fmt.Sprintf(format, args...))
 }
 
 func (c *channel) setLastErr(err error) {
