@@ -10,9 +10,9 @@ import (
 	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
-// TestWaitForSendDefaultBehavior tests that by default (waitForSend=true),
+// TestMustWaitSendDoneDefaultBehavior tests that by default (mustWaitSendDone=true),
 // the caller blocks until the message is sent and the responseRouter is cleaned up.
-func TestWaitForSendDefaultBehavior(t *testing.T) {
+func TestMustWaitSendDoneDefaultBehavior(t *testing.T) {
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
 		return dummySrv()
 	})
@@ -23,17 +23,17 @@ func TestWaitForSendDefaultBehavior(t *testing.T) {
 		t.Fatal("node should be connected")
 	}
 
-	// Create call options with waitForSend=true (default behavior)
+	// Create call options with mustWaitSendDone=true (default behavior)
 	msgID := uint64(1)
 	opts := callOptions{
-		callType:      &protoimpl.ExtensionInfo{}, // non-nil makes waitForSend true
-		noSendWaiting: false,                      // default: wait for send
+		callType:     &protoimpl.ExtensionInfo{}, // non-nil makes mustWaitSendDone check callType
+		waitSendDone: true,                       // default: wait for send completion
 	}
 
-	// Verify waitForSend returns true
+	// Verify mustWaitSendDone returns true
 	testReq := request{opts: opts}
-	if !testReq.waitForSend() {
-		t.Fatal("waitForSend should return true with callType set and noSendWaiting=false")
+	if !testReq.mustWaitSendDone() {
+		t.Fatal("mustWaitSendDone should return true with callType set and waitSendDone=true")
 	}
 
 	replyChan := sendTestMessage(t, node, msgID, opts)
@@ -60,16 +60,16 @@ func TestWaitForSendDefaultBehavior(t *testing.T) {
 }
 
 // TestNoSendWaitingBehavior tests that with WithNoSendWaiting option,
-// waitForSend returns false, which means sendMsg's defer doesn't send
+// mustWaitSendDone returns false, which means sendMsg's defer doesn't send
 // an empty confirmation response.
 func TestNoSendWaitingBehavior(t *testing.T) {
-	// Create request with noSendWaiting=true
+	// Create request with waitSendDone=false
 	ctx := context.Background()
 	msgID := uint64(2)
 	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
 	opts := callOptions{
-		callType:      &protoimpl.ExtensionInfo{}, // non-nil
-		noSendWaiting: true,                       // don't wait for send
+		callType:     &protoimpl.ExtensionInfo{}, // non-nil
+		waitSendDone: false,                      // don't wait for send completion
 	}
 	req := request{
 		ctx:  ctx,
@@ -77,9 +77,9 @@ func TestNoSendWaitingBehavior(t *testing.T) {
 		opts: opts,
 	}
 
-	// Verify waitForSend returns false
-	if req.waitForSend() {
-		t.Fatal("waitForSend should return false with noSendWaiting=true")
+	// Verify mustWaitSendDone returns false
+	if req.mustWaitSendDone() {
+		t.Fatal("mustWaitSendDone should return false with waitSendDone=false")
 	}
 }
 
@@ -111,18 +111,13 @@ func TestSendMsgContextAlreadyCancelled(t *testing.T) {
 	replyChan := make(chan response, 1)
 	node.channel.enqueue(req, replyChan, false)
 
-	// Should receive response - when context is cancelled before send,
-	// sendMsg returns early with context error. The defer runs and sends
-	// empty response (because waitForSend=true), which deletes the router.
-	// Then sender tries to send error response but router is already deleted.
-	// So we only get the empty response from defer.
+	// Should receive error response - when context is cancelled before send,
+	// sendMsg returns early with context error. With the bug fix, the defer only sends
+	// empty response if err == nil. Since err != nil, the sender() goroutine sends the
+	// error response to the caller.
 	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
-		// Response is empty (send confirmation from defer)
-		if resp.err != nil {
-			t.Errorf("expected nil error from defer, got: %v", resp.err)
-		}
-		if resp.msg != nil {
-			t.Error("expected nil message from defer")
+		if resp.err == nil {
+			t.Error("expected context.Canceled error, got nil")
 		}
 		return true
 	})
@@ -200,16 +195,16 @@ func TestSendMsgContextCancelDuringSend(t *testing.T) {
 	})
 }
 
-// TestWaitForSendWithNilCallType tests that waitForSend returns false
-// when callType is nil (edge case).
-func TestWaitForSendWithNilCallType(t *testing.T) {
+// TestMustWaitSendDoneWithNilCallType tests that mustWaitSendDone returns false
+// when callType is nil (edge case for non-oneway calls).
+func TestMustWaitSendDoneWithNilCallType(t *testing.T) {
 	req := request{
 		ctx:  context.Background(),
 		msg:  &Message{},
-		opts: callOptions{callType: nil, noSendWaiting: false},
+		opts: callOptions{callType: nil, waitSendDone: true},
 	}
 
-	if req.waitForSend() {
-		t.Error("waitForSend should return false when callType is nil")
+	if req.mustWaitSendDone() {
+		t.Error("mustWaitSendDone should return false when callType is nil")
 	}
 }

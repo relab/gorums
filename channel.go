@@ -21,9 +21,11 @@ type request struct {
 	opts callOptions
 }
 
-// waitForSend returns true if the WithNoSendWaiting call option is not set.
-func (req request) waitForSend() bool {
-	return req.opts.callType != nil && !req.opts.noSendWaiting
+// mustWaitSendDone returns true if the caller must wait for send completion.
+// This is the default behavior unless the WithNoSendWaiting call option is set.
+// Only returns true for one-way call types (Unicast/Multicast) where callType is set.
+func (req request) mustWaitSendDone() bool {
+	return req.opts.callType != nil && req.opts.waitSendDone
 }
 
 type response struct {
@@ -157,22 +159,22 @@ func (c *channel) getStream() ordering.Gorums_NodeStreamClient {
 
 func (c *channel) sendMsg(req request) (err error) {
 	defer func() {
-		// While the default is to block the caller until the message has been sent, we
-		// can provide the WithNoSendWaiting call option to more quickly unblock the caller.
-		// Hence, after sending, we unblock the waiting caller if the call option is not set;
-		// that is, waitForSend is true. Conversely, if the call option is set, the call type
-		// will not block on the response channel, and the "receiver" goroutine below will
-		// eventually clean up the responseRouter map by calling routeResponse.
+		// For one-way call types (Unicast/Multicast), the caller can choose between two behaviors:
 		//
-		// It is important to note that waitForSend() should NOT return true if a response
-		// is expected from the node at the other end, e.g. when using RPCCall or QuorumCall.
-		// CallOptions are not provided with the requests from these types and thus waitForSend()
-		// returns false. This design should maybe be revised?
+		// 1. Default (mustWaitSendDone=true): Block until send completes
+		//    - If send succeeds (err == nil): Send empty response to unblock caller immediately
+		//    - If send fails (err != nil): sender() goroutine will deliver the error
+		//    - Provides synchronous error handling with immediate feedback
 		//
-		// Only send the empty response if the send succeeded (err == nil).
-		// If there was an error, the sender() goroutine will send the error response.
-		if req.waitForSend() && err == nil {
-			// unblock the caller and clean up the responseRouter map
+		// 2. WithNoSendWaiting option (mustWaitSendDone=false): Return immediately after enqueuing
+		//    - Caller returns as soon as message is queued to sendQ
+		//    - Any errors are delivered asynchronously by sender() goroutine
+		//    - Provides fire-and-forget semantics
+		//
+		// Note: Two-way call types (RPCCall, QuorumCall) do not use this mechanism, they always
+		// wait for actual server responses, so mustWaitSendDone() returns false for them.
+		if req.mustWaitSendDone() && err == nil {
+			// Send succeeded: unblock the caller and clean up the responseRouter
 			c.routeResponse(req.msg.Metadata.GetMessageID(), response{})
 		}
 	}()

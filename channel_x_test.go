@@ -92,11 +92,10 @@ func TestChannelConcurrentSends(t *testing.T) {
 		t.Fatal("node should be connected")
 	}
 
-	// Important: When using getCallOptions(E_Multicast, nil), the waitForSend() method returns true.
-	// This means the sendMsg defer will send a "send confirmation" response and DELETE the router.
-	// The actual RPC response will then be discarded because the router no longer exists.
-	// This is the intended behavior for fire-and-forget multicast operations where you only
-	// need confirmation that the message was sent, not the actual response.
+	// Important: When using getCallOptions(E_Multicast, nil), the mustWaitSendDone() method returns true.
+	// This means the sendMsg defer will send a "send completion" notification and DELETE the router.
+	// For one-way calls (Unicast/Multicast), the server never sends responses, so this is the only
+	// response the caller receives - confirming that the message was successfully sent.
 	//
 	// For this concurrent send test, we use getCallOptions(E_Multicast, nil) to test
 	// the send confirmation path, which is the most common use case for multicast.
@@ -210,7 +209,7 @@ func TestChannelContextCancellation(t *testing.T) {
 
 		opts := getCallOptions(E_Multicast, []CallOption{})
 		resp := sendRequestWithContext(t, node, ctx, 100, opts, 5*time.Second)
-		
+
 		// With the bug fix, we should now get the context.Canceled error
 		if resp.err == nil {
 			t.Error("expected context.Canceled error, got nil")
@@ -226,7 +225,7 @@ func TestChannelContextCancellation(t *testing.T) {
 
 		opts := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
 		resp := sendRequestWithContext(t, node, ctx, 100, opts, 5*time.Second)
-		
+
 		// Should also get the context.Canceled error
 		if resp.err == nil {
 			t.Error("expected context.Canceled error, got nil")
@@ -351,22 +350,22 @@ func TestChannelShutdown(t *testing.T) {
 	}
 }
 
-// Test 6: WithNoSendWaiting Option
-func TestChannelNoSendWaitingOption(t *testing.T) {
+// Test 6: Send Completion Waiting Behavior
+func TestChannelSendCompletionWaiting(t *testing.T) {
 	node, _, cleanup := setupConnectedNode(t)
 	defer cleanup()
 
 	tests := []struct {
-		name          string
-		noSendWaiting bool
+		name         string
+		waitSendDone bool
 	}{
 		{
-			name:          "with send waiting",
-			noSendWaiting: false,
+			name:         "wait for send completion",
+			waitSendDone: true,
 		},
 		{
-			name:          "without send waiting",
-			noSendWaiting: true,
+			name:         "no wait for send completion",
+			waitSendDone: false,
 		},
 	}
 
@@ -378,7 +377,7 @@ func TestChannelNoSendWaitingOption(t *testing.T) {
 			md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
 
 			opts := getCallOptions(E_Multicast, nil)
-			opts.noSendWaiting = tt.noSendWaiting
+			opts.waitSendDone = tt.waitSendDone
 
 			req := request{
 				ctx:  ctx,
@@ -394,7 +393,7 @@ func TestChannelNoSendWaitingOption(t *testing.T) {
 			case resp := <-replyChan:
 				elapsed := time.Since(start)
 				// Just verify we got a response (error or not)
-				t.Logf("response received in %v (noSendWaiting=%v, err=%v)", elapsed, tt.noSendWaiting, resp.err)
+				t.Logf("response received in %v (waitSendDone=%v, err=%v)", elapsed, tt.waitSendDone, resp.err)
 			case <-time.After(3 * time.Second):
 				t.Fatal("timeout waiting for response")
 			}
