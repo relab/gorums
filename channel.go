@@ -163,7 +163,15 @@ func (c *channel) sendMsg(req request) (err error) {
 		// that is, waitForSend is true. Conversely, if the call option is set, the call type
 		// will not block on the response channel, and the "receiver" goroutine below will
 		// eventually clean up the responseRouter map by calling routeResponse.
-		if req.waitForSend() {
+		//
+		// It is important to note that waitForSend() should NOT return true if a response
+		// is expected from the node at the other end, e.g. when using RPCCall or QuorumCall.
+		// CallOptions are not provided with the requests from these types and thus waitForSend()
+		// returns false. This design should maybe be revised?
+		//
+		// Only send the empty response if the send succeeded (err == nil).
+		// If there was an error, the sender() goroutine will send the error response.
+		if req.waitForSend() && err == nil {
 			// unblock the caller and clean up the responseRouter map
 			c.routeResponse(req.msg.Metadata.GetMessageID(), response{})
 		}
