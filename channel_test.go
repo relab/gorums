@@ -25,7 +25,7 @@ func dummyMgr() *RawManager {
 
 func newNode(t *testing.T, srvAddr string) *RawNode {
 	mgr := dummyMgr()
-	t.Cleanup(func() { mgr.Close() })
+	t.Cleanup(mgr.Close)
 	node, err := NewRawNode(srvAddr)
 	if err != nil {
 		t.Fatal(err)
