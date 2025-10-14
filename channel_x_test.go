@@ -83,6 +83,41 @@ func setupConnectedNode(t *testing.T) (*RawNode, *RawManager, func()) {
 	return node, mgr, cleanup
 }
 
+// setupConnectedNodeWithSlowServer creates a node connected to a server with a slow handler (3s delay)
+func setupConnectedNodeWithSlowServer(t *testing.T) (*RawNode, *RawManager, func()) {
+	t.Helper()
+	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
+		srv := NewServer()
+		srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+			defer ctx.Release()
+			// Simulate slow processing - 3 second delay
+			time.Sleep(3 * time.Second)
+			SendMessage(ctx, finished, WrapMessage(in.Metadata, &mock.Response{}, nil))
+		})
+		return srv
+	})
+
+	mgr := dummyMgr()
+	node, err := NewRawNode(addrs[0])
+	if err != nil {
+		teardown()
+		t.Fatal(err)
+	}
+
+	if err = mgr.AddNode(node); err != nil {
+		teardown()
+		mgr.Close()
+		t.Fatal(err)
+	}
+
+	cleanup := func() {
+		mgr.Close()
+		teardown()
+	}
+
+	return node, mgr, cleanup
+}
+
 // Test 1: Concurrent Message Sending
 func TestChannelConcurrentSends(t *testing.T) {
 	node, mgr, cleanup := setupConnectedNode(t)
@@ -197,58 +232,79 @@ func TestChannelStreamingResponses(t *testing.T) {
 	}
 }
 
-// Test 3: Context Cancellation During Send
-func TestChannelContextCancellation(t *testing.T) {
-	node, _, cleanup := setupConnectedNode(t)
-	t.Cleanup(cleanup)
+func TestChannelContext(t *testing.T) {
+	waitSendDone := getCallOptions(E_Multicast, nil)
+	noSendWaiting := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
 
-	t.Run("CancelBeforeSend/WaitSending", func(t *testing.T) {
-		// Create an already-cancelled context
-		ctx, cancel := context.WithCancel(t.Context())
+	// Helper context setup functions
+	cancelledContext := func(ctx context.Context) (context.Context, context.CancelFunc) {
+		ctx, cancel := context.WithCancel(ctx)
 		cancel() // Cancel immediately
+		return ctx, cancel
+	}
+	expireBeforeSend := func(ctx context.Context) (context.Context, context.CancelFunc) {
+		// Very short timeout to cancel during SendMsg operation
+		// Note: SendMsg itself is fast, but we're testing the cancellation path
+		ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+		// Let context expire before we send
+		time.Sleep(5 * time.Millisecond)
+		return ctx, cancel
+	}
 
-		opts := getCallOptions(E_Multicast, []CallOption{})
-		resp := sendRequestWithContext(t, node, ctx, 100, opts, 5*time.Second)
+	tests := []struct {
+		name         string
+		setupNode    func(t *testing.T) (*RawNode, *RawManager, func())
+		contextSetup func(context.Context) (context.Context, context.CancelFunc)
+		callOpts     callOptions
+		wantErr      error
+	}{
+		{
+			name:         "CancelBeforeSend/WaitSending",
+			setupNode:    setupConnectedNode,
+			contextSetup: cancelledContext,
+			callOpts:     waitSendDone,
+			wantErr:      context.Canceled,
+		},
+		{
+			name:         "CancelBeforeSend/NoSendWaiting",
+			setupNode:    setupConnectedNode,
+			contextSetup: cancelledContext,
+			callOpts:     noSendWaiting,
+			wantErr:      context.Canceled,
+		},
+		{
+			name:         "CancelDuringSend/WaitSending",
+			setupNode:    setupConnectedNodeWithSlowServer,
+			contextSetup: expireBeforeSend,
+			callOpts:     waitSendDone,
+			wantErr:      context.DeadlineExceeded,
+		},
+		{
+			name:         "CancelDuringSend/NoSendWaiting",
+			setupNode:    setupConnectedNodeWithSlowServer,
+			contextSetup: expireBeforeSend,
+			callOpts:     noSendWaiting,
+			wantErr:      context.DeadlineExceeded,
+		},
+	}
 
-		// With the bug fix, we should now get the context.Canceled error
-		if resp.err == nil {
-			t.Error("expected context.Canceled error, got nil")
-		} else if !errors.Is(resp.err, context.Canceled) {
-			t.Errorf("expected context.Canceled error, got: %v", resp.err)
-		}
-	})
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node, _, cleanup := tt.setupNode(t)
+			t.Cleanup(cleanup)
 
-	t.Run("CancelBeforeSend/NoSendWaiting", func(t *testing.T) {
-		// Create an already-cancelled context
-		ctx, cancel := context.WithCancel(t.Context())
-		cancel() // Cancel immediately
+			ctx, cancel := tt.contextSetup(t.Context())
+			t.Cleanup(cancel)
 
-		opts := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
-		resp := sendRequestWithContext(t, node, ctx, 100, opts, 5*time.Second)
+			// Send request
+			msgID := uint64(100 + i)
+			resp := sendRequestWithContext(t, node, ctx, msgID, tt.callOpts, 5*time.Second)
 
-		// Should also get the context.Canceled error
-		if resp.err == nil {
-			t.Error("expected context.Canceled error, got nil")
-		} else if !errors.Is(resp.err, context.Canceled) {
-			t.Errorf("expected context.Canceled error, got: %v", resp.err)
-		}
-	})
-
-	t.Run("CancelDuringSend", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		// Cancel after a short delay
-		go func() {
-			time.Sleep(10 * time.Millisecond)
-			cancel()
-		}()
-
-		opts := getCallOptions(E_Multicast, nil)
-		resp := sendRequestWithContext(t, node, ctx, 101, opts, 2*time.Second)
-
-		// This may or may not error depending on timing
-		// The important thing is it doesn't hang
-		t.Logf("cancel during operation result: err=%v", resp.err)
-	})
+			if !errors.Is(resp.err, tt.wantErr) {
+				t.Errorf("expected %v, got: %v", tt.wantErr, resp.err)
+			}
+		})
+	}
 }
 
 // Test 4: Stream Failure During Active Communication

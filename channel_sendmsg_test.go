@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/relab/gorums/ordering"
 	"github.com/relab/gorums/tests/mock"
@@ -83,46 +82,6 @@ func TestNoSendWaitingBehavior(t *testing.T) {
 	}
 }
 
-// TestSendMsgContextAlreadyCancelled tests that sendMsg immediately returns
-// context error if the context is already cancelled before sending.
-func TestSendMsgContextAlreadyCancelled(t *testing.T) {
-	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
-		return dummySrv()
-	})
-	defer teardown()
-
-	node := newNode(t, addrs[0])
-
-	// Create already-cancelled context and manually enqueue
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
-
-	msgID := uint64(3)
-	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	opts := callOptions{
-		callType: &protoimpl.ExtensionInfo{},
-	}
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: opts,
-	}
-
-	replyChan := make(chan response, 1)
-	node.channel.enqueue(req, replyChan, false)
-
-	// Should receive error response - when context is cancelled before send,
-	// sendMsg returns early with context error. With the bug fix, the defer only sends
-	// empty response if err == nil. Since err != nil, the sender() goroutine sends the
-	// error response to the caller.
-	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
-		if resp.err == nil {
-			t.Error("expected context.Canceled error, got nil")
-		}
-		return true
-	})
-}
-
 // TestSendMsgStreamNil tests that sendMsg returns unavailable error
 // when stream is nil (not yet established).
 func TestSendMsgStreamNil(t *testing.T) {
@@ -141,56 +100,6 @@ func TestSendMsgStreamNil(t *testing.T) {
 		if resp.err == nil {
 			t.Error("expected unavailable error when stream is nil")
 		}
-		return true
-	})
-}
-
-// TestSendMsgContextCancelDuringSend tests the scenario where context
-// is cancelled while SendMsg is in progress.
-func TestSendMsgContextCancelDuringSend(t *testing.T) {
-	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
-		srv := NewServer()
-		// Register handler that delays response to simulate slow send
-		srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
-			defer ctx.Release()
-			// Simulate slow processing
-			time.Sleep(100 * time.Millisecond)
-			SendMessage(ctx, finished, WrapMessage(in.Metadata, &mock.Response{}, nil))
-		})
-		return srv
-	})
-	defer teardown()
-
-	node := newNode(t, addrs[0])
-	if !node.channel.isConnected() {
-		t.Fatal("node should be connected")
-	}
-
-	// Create context with short timeout and manually enqueue
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
-
-	msgID := uint64(5)
-	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	opts := callOptions{
-		callType: &protoimpl.ExtensionInfo{},
-	}
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: opts,
-	}
-
-	replyChan := make(chan response, 1)
-	node.channel.enqueue(req, replyChan, false)
-
-	// Should receive either timeout error or send confirmation
-	// (the race condition is acceptable in this test)
-	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
-		// Either context timeout or successful send is acceptable
-		// The important thing is that the goroutine in sendMsg
-		// properly handles the cancellation without deadlock
-		_ = resp
 		return true
 	})
 }
