@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums/ordering"
-	"github.com/relab/gorums/tests/mock"
 )
 
 const defaultTestTimeout = 3 * time.Second
@@ -19,11 +18,7 @@ func sendRequest(t *testing.T, node *RawNode, ctx context.Context, msgID uint64,
 	t.Helper()
 	replyChan := make(chan response, 1)
 	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: opts,
-	}
+	req := request{ctx: ctx, msg: &Message{Metadata: md}, opts: opts}
 	node.channel.enqueue(req, replyChan, false)
 
 	select {
@@ -43,11 +38,7 @@ func sendStreamingRequest(t *testing.T, node *RawNode, msgID uint64, opts callOp
 	replyChan := make(chan response, 10)
 	ctx := t.Context()
 	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: opts,
-	}
+	req := request{ctx: ctx, msg: &Message{Metadata: md}, opts: opts}
 	node.channel.enqueue(req, replyChan, true)
 
 	select {
