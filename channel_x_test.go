@@ -300,17 +300,7 @@ func TestChannelStreamFailureDuringCommunication(t *testing.T) {
 	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
 	startServer()
 
-	mgr := dummyMgr()
-	defer mgr.Close()
-
-	node, err := NewRawNode(srvAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	node := newNode(t, srvAddr)
 
 	// Verify connection is established
 	if !node.channel.isConnected() {
