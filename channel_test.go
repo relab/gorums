@@ -411,9 +411,9 @@ func TestChannelConcurrentSends(t *testing.T) {
 	results := make(chan result, numMessages)
 
 	// Send messages concurrently from multiple goroutines
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(goroutineID int) {
-			for j := 0; j < messagesPerGoroutine; j++ {
+			for j := range messagesPerGoroutine {
 				msgID := uint64(goroutineID*1000 + j + 1)
 				// Use standard multicast options which provide send confirmation
 				opts := getCallOptions(E_Multicast, nil)
@@ -425,7 +425,7 @@ func TestChannelConcurrentSends(t *testing.T) {
 
 	// Collect results
 	var errors []error
-	for i := 0; i < numMessages; i++ {
+	for range numMessages {
 		res := <-results
 		if res.err != nil {
 			errors = append(errors, res.err)
@@ -599,7 +599,7 @@ func TestChannelShutdown(t *testing.T) {
 
 	// Enqueue several messages in goroutines (don't wait for responses)
 	const numMessages = 10
-	for i := 0; i < numMessages; i++ {
+	for i := range numMessages {
 		go func(msgID uint64) {
 			sendRequest(t, node, t.Context(), msgID, getCallOptions(E_Multicast, nil))
 		}(uint64(i))
@@ -705,7 +705,7 @@ func TestChannelResponseRouting(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 
 	// Send all messages
-	for i := 0; i < numMessages; i++ {
+	for i := range numMessages {
 		msgID := uint64(i + 1000)
 		go func(id uint64) {
 			opts := getCallOptions(E_Multicast, nil)
@@ -716,7 +716,7 @@ func TestChannelResponseRouting(t *testing.T) {
 
 	// Collect and verify results
 	received := make(map[uint64]bool)
-	for i := 0; i < numMessages; i++ {
+	for range numMessages {
 		result := <-results
 		if result.resp.err != nil {
 			t.Errorf("message %d got error: %v", result.msgID, result.resp.err)
