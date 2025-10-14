@@ -6,7 +6,7 @@ import (
 
 // TestEnsureStreamCreatesStream verifies that ensureStream creates a stream when none exists.
 func TestEnsureStreamCreatesStream(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 
 	// Replace channel with fresh one that has no stream
 	node.channel = newChannel(node)
@@ -38,7 +38,7 @@ func TestEnsureStreamCreatesStream(t *testing.T) {
 // TestEnsureStreamIdempotent verifies that calling ensureStream multiple
 // times doesn't create multiple streams.
 func TestEnsureStreamIdempotent(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 
 	// Replace channel with fresh one that has no stream
 	node.channel = newChannel(node)
@@ -70,7 +70,7 @@ func TestEnsureStreamIdempotent(t *testing.T) {
 // TestIsConnectedRequiresBothReadyAndStream verifies that isConnected()
 // returns true only when both connection is Ready AND stream exists.
 func TestIsConnectedRequiresBothReadyAndStream(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 	if !node.channel.isConnected() {
 		t.Fatal("node should be connected")
 	}

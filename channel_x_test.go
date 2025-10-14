@@ -57,29 +57,9 @@ func sendStreamingRequest(t *testing.T, node *RawNode, msgID uint64, opts callOp
 	}
 }
 
-// TODO(meling): rename to newConnectedNode and move to channel_test.go
-// setupConnectedNode creates a node connected to a live server that will delay
-// responding by the given duration. If delay is 0, the server responds immediately.
-func setupConnectedNode(t *testing.T, delay time.Duration) *RawNode {
-	t.Helper()
-	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
-		srv := NewServer()
-		srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
-			defer ctx.Release()
-			// Simulate slow processing
-			time.Sleep(delay)
-			SendMessage(ctx, finished, WrapMessage(in.Metadata, &mock.Response{}, nil))
-		})
-		return srv
-	})
-	t.Cleanup(teardown)
-
-	return newNode(t, addrs[0])
-}
-
 // Test 1: Concurrent Message Sending
 func TestChannelConcurrentSends(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 
 	if !node.channel.isConnected() {
 		t.Fatal("node should be connected")
@@ -143,7 +123,7 @@ func TestChannelConcurrentSends(t *testing.T) {
 
 // Test 2: Streaming Response Handling
 func TestChannelStreamingResponses(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 
 	// Test that streaming flag keeps router alive
 	msgID := uint64(1)
@@ -232,7 +212,7 @@ func TestChannelContext(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			node := setupConnectedNode(t, tt.serverDelay)
+			node := newNodeWithServer(t, tt.serverDelay)
 
 			ctx, cancel := tt.contextSetup(t.Context())
 			t.Cleanup(cancel)
@@ -285,7 +265,7 @@ func TestChannelStreamFailureDuringCommunication(t *testing.T) {
 
 // Test 5: Channel Shutdown and Cleanup
 func TestChannelShutdown(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 
 	if !node.channel.isConnected() {
 		t.Fatal("node should be connected")
@@ -314,7 +294,7 @@ func TestChannelShutdown(t *testing.T) {
 
 // Test 6: Send Completion Waiting Behavior
 func TestChannelSendCompletionWaiting(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 
 	tests := []struct {
 		name         string
@@ -371,7 +351,7 @@ func TestChannelConnectionState(t *testing.T) {
 		node          *RawNode
 		wantConnected bool
 	}{
-		{name: "WithLiveServer", node: setupConnectedNode(t, 0), wantConnected: true},
+		{name: "WithLiveServer", node: newNodeWithServer(t, 0), wantConnected: true},
 		{name: "WithoutServer_", node: newNode(t, "127.0.0.1:5003"), wantConnected: false},
 	}
 
@@ -387,7 +367,7 @@ func TestChannelConnectionState(t *testing.T) {
 
 // Test 9: Response Routing
 func TestChannelResponseRouting(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 
 	// Send multiple messages and verify each gets routed correctly
 	const numMessages = 20
@@ -429,7 +409,7 @@ func TestChannelResponseRouting(t *testing.T) {
 
 // Test 10: Router Cleanup for Non-Streaming
 func TestChannelRouterCleanup(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 
 	// Send a non-streaming message
 	msgID := uint64(5000)

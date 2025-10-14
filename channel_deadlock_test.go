@@ -22,7 +22,7 @@ import (
 // 3. Sending multiple messages concurrently to trigger the deadlock condition
 // 4. Verifying all goroutines can successfully enqueue without hanging
 func TestChannelDeadlock(t *testing.T) {
-	node := setupConnectedNode(t, 0)
+	node := newNodeWithServer(t, 0)
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}

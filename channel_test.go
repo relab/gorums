@@ -15,6 +15,7 @@ func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
 	return nil, nil
 }
 
+// newNode creates a node for the given server address and adds it to a new manager.
 func newNode(t *testing.T, srvAddr string) *RawNode {
 	mgr := NewRawManager(
 		WithGrpcDialOptions(
@@ -30,6 +31,25 @@ func newNode(t *testing.T, srvAddr string) *RawNode {
 		t.Error(err)
 	}
 	return node
+}
+
+// newNodeWithServer creates a node connected to a live server that will delay
+// responding by the given duration. If delay is 0, the server responds immediately.
+func newNodeWithServer(t *testing.T, delay time.Duration) *RawNode {
+	t.Helper()
+	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
+		srv := NewServer()
+		srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
+			defer ctx.Release()
+			// Simulate slow processing
+			time.Sleep(delay)
+			SendMessage(ctx, finished, WrapMessage(in.Metadata, &mock.Response{}, nil))
+		})
+		return srv
+	})
+	t.Cleanup(teardown)
+
+	return newNode(t, addrs[0])
 }
 
 var handlerName = "mock.Server.Test"
