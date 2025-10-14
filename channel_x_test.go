@@ -57,7 +57,9 @@ func sendStreamingRequest(t *testing.T, node *RawNode, msgID uint64, opts callOp
 	}
 }
 
-// setupConnectedNode creates a node connected to a live server
+// TODO(meling): rename to newConnectedNode and move to channel_test.go
+// setupConnectedNode creates a node connected to a live server that will delay
+// responding by the given duration. If delay is 0, the server responds immediately.
 func setupConnectedNode(t *testing.T, delay time.Duration) *RawNode {
 	t.Helper()
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
@@ -72,8 +74,7 @@ func setupConnectedNode(t *testing.T, delay time.Duration) *RawNode {
 	})
 	t.Cleanup(teardown)
 
-	node := newNode(t, addrs[0])
-	return node
+	return newNode(t, addrs[0])
 }
 
 // Test 1: Concurrent Message Sending

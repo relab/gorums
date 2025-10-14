@@ -22,19 +22,16 @@ import (
 // 3. Sending multiple messages concurrently to trigger the deadlock condition
 // 4. Verifying all goroutines can successfully enqueue without hanging
 func TestChannelDeadlock(t *testing.T) {
-	srvAddr := "127.0.0.1:5011"
-	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
-	startServer()
-
-	node := newNode(t, srvAddr)
+	node := setupConnectedNode(t, 0)
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
+
 	// Send a message to activate the stream
 	sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil), 2*time.Second)
 
-	// Break the stream by stopping server
-	stopServer()
+	// Break the stream, forcing a reconnection on next send
+	node.channel.clearStream()
 	time.Sleep(20 * time.Millisecond)
 
 	// Send multiple messages concurrently when stream is broken with the

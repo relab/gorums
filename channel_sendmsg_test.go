@@ -10,12 +10,8 @@ import (
 // TestMustWaitSendDoneDefaultBehavior tests that by default (mustWaitSendDone=true),
 // the caller blocks until the message is sent and the responseRouter is cleaned up.
 func TestMustWaitSendDoneDefaultBehavior(t *testing.T) {
-	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
-		return dummySrv()
-	})
-	defer teardown()
+	node := setupConnectedNode(t, 0)
 
-	node := newNode(t, addrs[0])
 	if !node.channel.isConnected() {
 		t.Fatal("node should be connected")
 	}

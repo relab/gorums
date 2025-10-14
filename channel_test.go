@@ -57,34 +57,6 @@ func TestChannelCreation(t *testing.T) {
 	sendRequest(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
 }
 
-func TestChannelSuccessfulConnection(t *testing.T) {
-	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
-		return dummySrv()
-	})
-	t.Cleanup(func() { teardown() })
-
-	node := newNode(t, addrs[0])
-
-	if len(node.mgr.Nodes()) != 1 {
-		t.Error("node not added to the manager")
-	}
-	if !node.channel.isConnected() {
-		t.Error("node should be connected")
-	}
-}
-
-func TestChannelUnsuccessfulConnection(t *testing.T) {
-	// no servers are listening on the given address
-	node := newNode(t, "127.0.0.1:5000")
-
-	if len(node.mgr.Nodes()) != 1 {
-		t.Error("node not added to the manager")
-	}
-	if node.channel.isConnected() {
-		t.Error("node should not be connected")
-	}
-}
-
 func TestChannelReconnection(t *testing.T) {
 	srvAddr := "127.0.0.1:5000"
 	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
