@@ -15,16 +15,12 @@ func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
 	return nil, nil
 }
 
-func dummyMgr() *RawManager {
-	return NewRawManager(
+func newNode(t *testing.T, srvAddr string) *RawNode {
+	mgr := NewRawManager(
 		WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-}
-
-func newNode(t *testing.T, srvAddr string) *RawNode {
-	mgr := dummyMgr()
 	t.Cleanup(mgr.Close)
 	node, err := NewRawNode(srvAddr)
 	if err != nil {

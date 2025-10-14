@@ -349,14 +349,7 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 // Test 7: Error Tracking
 func TestChannelErrorTracking(t *testing.T) {
 	// Test with a node that can't connect
-	node, err := NewRawNode("127.0.0.1:5002")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer node.close()
-
-	mgr := dummyMgr()
-	node.connect(mgr)
+	node := newNode(t, "127.0.0.1:5002")
 
 	// Try to send a message (should fail)
 	resp := sendRequest(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
