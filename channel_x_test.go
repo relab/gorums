@@ -58,7 +58,7 @@ func sendStreamingRequest(t *testing.T, node *RawNode, msgID uint64, opts callOp
 }
 
 // setupConnectedNode creates a node connected to a live server
-func setupConnectedNode(t *testing.T, delay time.Duration) (*RawNode, *RawManager) {
+func setupConnectedNode(t *testing.T, delay time.Duration) *RawNode {
 	t.Helper()
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
 		srv := NewServer()
@@ -73,12 +73,12 @@ func setupConnectedNode(t *testing.T, delay time.Duration) (*RawNode, *RawManage
 	t.Cleanup(teardown)
 
 	node := newNode(t, addrs[0])
-	return node, node.mgr
+	return node
 }
 
 // Test 1: Concurrent Message Sending
 func TestChannelConcurrentSends(t *testing.T) {
-	node, mgr := setupConnectedNode(t, 0)
+	node := setupConnectedNode(t, 0)
 
 	if !node.channel.isConnected() {
 		t.Fatal("node should be connected")
@@ -135,14 +135,14 @@ func TestChannelConcurrentSends(t *testing.T) {
 	}
 
 	// Check for goroutine leaks by verifying channel state
-	if mgr == nil {
+	if node.mgr == nil {
 		t.Error("manager should not be nil")
 	}
 }
 
 // Test 2: Streaming Response Handling
 func TestChannelStreamingResponses(t *testing.T) {
-	node, _ := setupConnectedNode(t, 0)
+	node := setupConnectedNode(t, 0)
 
 	// Test that streaming flag keeps router alive
 	msgID := uint64(1)
@@ -231,7 +231,7 @@ func TestChannelContext(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			node, _ := setupConnectedNode(t, tt.serverDelay)
+			node := setupConnectedNode(t, tt.serverDelay)
 
 			ctx, cancel := tt.contextSetup(t.Context())
 			t.Cleanup(cancel)
@@ -284,7 +284,7 @@ func TestChannelStreamFailureDuringCommunication(t *testing.T) {
 
 // Test 5: Channel Shutdown and Cleanup
 func TestChannelShutdown(t *testing.T) {
-	node, mgr := setupConnectedNode(t, 0)
+	node := setupConnectedNode(t, 0)
 
 	if !node.channel.isConnected() {
 		t.Fatal("node should be connected")
@@ -302,7 +302,7 @@ func TestChannelShutdown(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Close the manager (which should close the node)
-	mgr.Close()
+	node.mgr.Close()
 
 	// Try to send a message after closure
 	resp := sendRequest(t, node, t.Context(), 999, getCallOptions(E_Multicast, nil), 1*time.Second)
@@ -313,7 +313,7 @@ func TestChannelShutdown(t *testing.T) {
 
 // Test 6: Send Completion Waiting Behavior
 func TestChannelSendCompletionWaiting(t *testing.T) {
-	node, _ := setupConnectedNode(t, 0)
+	node := setupConnectedNode(t, 0)
 
 	tests := []struct {
 		name         string
@@ -373,42 +373,19 @@ func TestChannelErrorTracking(t *testing.T) {
 // Test 8: Connection State Tracking
 func TestChannelConnectionState(t *testing.T) {
 	tests := []struct {
-		name              string
-		setupServer       bool
-		expectedConnected bool
+		name          string
+		node          *RawNode
+		wantConnected bool
 	}{
-		{
-			name:              "with live server",
-			setupServer:       true,
-			expectedConnected: true,
-		},
-		{
-			name:              "without server",
-			setupServer:       false,
-			expectedConnected: false,
-		},
+		{name: "WithLiveServer", node: setupConnectedNode(t, 0), wantConnected: true},
+		{name: "WithoutServer_", node: newNode(t, "127.0.0.1:5003"), wantConnected: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var node *RawNode
-
-			if tt.setupServer {
-				node, _ = setupConnectedNode(t, 0)
-			} else {
-				mgr := dummyMgr()
-				var err error
-				node, err = NewRawNode("127.0.0.1:5003")
-				if err != nil {
-					t.Fatal(err)
-				}
-				defer node.close()
-				node.connect(mgr)
-			}
-
-			connected := node.channel.isConnected()
-			if connected != tt.expectedConnected {
-				t.Errorf("isConnected() = %v, want %v", connected, tt.expectedConnected)
+			connected := tt.node.channel.isConnected()
+			if connected != tt.wantConnected {
+				t.Errorf("isConnected() = %v, want %v", connected, tt.wantConnected)
 			}
 		})
 	}
@@ -416,7 +393,7 @@ func TestChannelConnectionState(t *testing.T) {
 
 // Test 9: Response Routing
 func TestChannelResponseRouting(t *testing.T) {
-	node, _ := setupConnectedNode(t, 0)
+	node := setupConnectedNode(t, 0)
 
 	// Send multiple messages and verify each gets routed correctly
 	const numMessages = 20
@@ -458,7 +435,7 @@ func TestChannelResponseRouting(t *testing.T) {
 
 // Test 10: Router Cleanup for Non-Streaming
 func TestChannelRouterCleanup(t *testing.T) {
-	node, _ := setupConnectedNode(t, 0)
+	node := setupConnectedNode(t, 0)
 
 	// Send a non-streaming message
 	msgID := uint64(5000)
