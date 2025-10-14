@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums/ordering"
-	"github.com/relab/gorums/tests/mock"
 )
 
 // DEADLOCK BUG REPRODUCTION TEST
@@ -65,10 +64,9 @@ func TestChannelDeadlock(t *testing.T) {
 	startServer()
 
 	node := newNode(t, srvAddr)
-
-	// Ensure connection is up
-	time.Sleep(50 * time.Millisecond)
-
+	if !node.channel.isConnected() {
+		t.Error("node should be connected")
+	}
 	// Send a message to activate the stream
 	sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil), 2*time.Second)
 
@@ -76,30 +74,24 @@ func TestChannelDeadlock(t *testing.T) {
 	stopServer()
 	time.Sleep(20 * time.Millisecond)
 
-	// Send multiple messages concurrently when stream is broken
-	// This triggers the deadlock between sender and receiver goroutines
+	// Send multiple messages concurrently when stream is broken with the
+	// goal to trigger a deadlock between sender and receiver goroutines.
 	doneChan := make(chan bool, 10)
-
 	for id := range 10 {
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 
-			msgID := uint64(100 + id)
-			md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-			req := request{
-				ctx:  ctx,
-				msg:  &Message{Metadata: md, Message: &mock.Request{}},
-				opts: callOptions{},
-			}
+			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), handlerName)
+			req := request{ctx: ctx, msg: &Message{Metadata: md}}
 
-			// Try to enqueue with timeout
+			// try to enqueue
 			select {
 			case node.channel.sendQ <- req:
-				// Successfully enqueued
+				// successfully enqueued
 				doneChan <- true
 			case <-ctx.Done():
-				// Timed out trying to enqueue (deadlock!)
+				// timed out trying to enqueue (deadlock!)
 				doneChan <- false
 			}
 		}()
@@ -107,27 +99,21 @@ func TestChannelDeadlock(t *testing.T) {
 
 	// Wait for all goroutines to complete
 	timeout := time.After(5 * time.Second)
-	completed := 0
 	successful := 0
-
-	for completed < 10 {
+	for completed := range 10 {
 		select {
 		case success := <-doneChan:
-			completed++
 			if success {
 				successful++
 			}
 		case <-timeout:
-			t.Fatalf("DEADLOCK: Only %d/10 goroutines completed (%d successful). "+
-				"Remaining goroutines are stuck trying to enqueue.",
-				completed, successful)
+			// remaining goroutines are stuck trying to enqueue.
+			t.Fatalf("DEADLOCK: Only %d/10 goroutines completed (%d successful).", completed, successful)
 		}
 	}
 
-	// If we reach here, all goroutines completed
-	if successful == 10 {
-		t.Log("SUCCESS: All 10 goroutines successfully enqueued - deadlock bug is fixed!")
-	} else {
-		t.Fatalf("PARTIAL DEADLOCK: %d/10 goroutines timed out trying to enqueue", 10-successful)
+	// If we reach here, all 10 goroutines completed (but some may have failed to enqueue)
+	if successful < 10 {
+		t.Fatalf("DEADLOCK: %d/10 goroutines timed out trying to enqueue (sendQ blocked)", 10-successful)
 	}
 }

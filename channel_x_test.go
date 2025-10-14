@@ -301,10 +301,8 @@ func TestChannelStreamFailureDuringCommunication(t *testing.T) {
 	startServer()
 
 	node := newNode(t, srvAddr)
-
-	// Verify connection is established
 	if !node.channel.isConnected() {
-		t.Fatal("node should be connected")
+		t.Error("node should be connected")
 	}
 
 	// Send first message successfully
