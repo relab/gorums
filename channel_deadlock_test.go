@@ -28,7 +28,7 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 
 	// Send a message to activate the stream
-	sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil), 2*time.Second)
+	sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
 
 	// Break the stream, forcing a reconnection on next send
 	node.channel.clearStream()
