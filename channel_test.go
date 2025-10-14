@@ -54,7 +54,7 @@ func TestChannelCreation(t *testing.T) {
 	node := newNode(t, "127.0.0.1:5000")
 
 	// Send a single message through the channel
-	sendRequestWithContext(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
+	sendRequest(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
 }
 
 func TestChannelSuccessfulConnection(t *testing.T) {
@@ -92,7 +92,7 @@ func TestChannelReconnection(t *testing.T) {
 	node := newNode(t, srvAddr)
 
 	// send message when server is down
-	resp := sendRequestWithContext(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
+	resp := sendRequest(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -103,7 +103,7 @@ func TestChannelReconnection(t *testing.T) {
 	// with retries to accommodate gRPC connection establishment
 	var successfulSend bool
 	for range 10 {
-		resp = sendRequestWithContext(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil), 3*time.Second)
+		resp = sendRequest(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil), 3*time.Second)
 		if resp.err == nil {
 			successfulSend = true
 			break
@@ -118,7 +118,7 @@ func TestChannelReconnection(t *testing.T) {
 	stopServer()
 
 	// send third message when server has previously been up, but is now down
-	resp = sendRequestWithContext(t, node, t.Context(), 3, callOptions{}, 3*time.Second)
+	resp = sendRequest(t, node, t.Context(), 3, callOptions{}, 3*time.Second)
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -135,7 +135,7 @@ func TestEnqueueToClosedChannel(t *testing.T) {
 
 	// Try to send a message after the channel is closed
 	// Should receive an error response
-	resp := sendRequestWithContext(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
+	resp := sendRequest(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
 	if resp.err == nil {
 		t.Error("expected error when enqueueing to closed channel, got nil")
 	}

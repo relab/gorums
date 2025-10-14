@@ -12,8 +12,8 @@ import (
 
 // Test helpers
 
-// sendRequestWithContext is a helper that sends a request with a specific context.
-func sendRequestWithContext(t *testing.T, node *RawNode, ctx context.Context, msgID uint64, opts callOptions, timeout time.Duration) response {
+// sendRequest is a helper that sends a request with a specific context.
+func sendRequest(t *testing.T, node *RawNode, ctx context.Context, msgID uint64, opts callOptions, timeout time.Duration) response {
 	t.Helper()
 	replyChan := make(chan response, 1)
 	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
@@ -28,6 +28,30 @@ func sendRequestWithContext(t *testing.T, node *RawNode, ctx context.Context, ms
 	case resp := <-replyChan:
 		return resp
 	case <-time.After(timeout):
+		t.Fatalf("timeout waiting for response to message %d", msgID)
+		return response{}
+	}
+}
+
+// sendStreamingRequest is a helper for testing streaming behavior.
+// Unlike sendRequestWithContext, this sets streaming=true which keeps the router alive
+// after the first response, allowing the caller to test router lifecycle behavior.
+func sendStreamingRequest(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
+	t.Helper()
+	replyChan := make(chan response, 10)
+	ctx := t.Context()
+	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
+	req := request{
+		ctx:  ctx,
+		msg:  &Message{Metadata: md, Message: &mock.Request{}},
+		opts: opts,
+	}
+	node.channel.enqueue(req, replyChan, true)
+
+	select {
+	case resp := <-replyChan:
+		return resp
+	case <-time.After(3 * time.Second):
 		t.Fatalf("timeout waiting for response to message %d", msgID)
 		return response{}
 	}
@@ -131,7 +155,7 @@ func TestChannelConcurrentSends(t *testing.T) {
 				msgID := uint64(goroutineID*1000 + j + 1)
 				// Use standard multicast options which provide send confirmation
 				opts := getCallOptions(E_Multicast, nil)
-				resp := sendRequestWithContext(t, node, t.Context(), msgID, opts, 5*time.Second)
+				resp := sendRequest(t, node, t.Context(), msgID, opts, 5*time.Second)
 				results <- result{msgID: msgID, err: resp.err}
 			}
 		}(i)
@@ -167,28 +191,13 @@ func TestChannelStreamingResponses(t *testing.T) {
 	defer cleanup()
 
 	// Test that streaming flag keeps router alive
-	replyChan := make(chan response, 10)
-	ctx := context.Background()
 	msgID := uint64(1)
-	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: getCallOptions(E_Multicast, nil),
+	resp := sendStreamingRequest(t, node, msgID, getCallOptions(E_Multicast, nil))
+	if resp.err != nil {
+		t.Errorf("unexpected error: %v", resp.err)
 	}
 
-	// Enqueue with streaming=true
-	node.channel.enqueue(req, replyChan, true)
-
-	// Wait for response
-	select {
-	case <-replyChan:
-		// Response received
-	case <-time.After(3 * time.Second):
-		t.Fatal("timeout waiting for response")
-	}
-
-	// Verify router still exists for streaming
+	// Verify router still exists for streaming (unlike non-streaming where it's deleted)
 	node.channel.responseMut.Lock()
 	_, exists := node.channel.responseRouters[msgID]
 	node.channel.responseMut.Unlock()
@@ -276,7 +285,7 @@ func TestChannelContext(t *testing.T) {
 
 			// Send request
 			msgID := uint64(100 + i)
-			resp := sendRequestWithContext(t, node, ctx, msgID, tt.callOpts, 5*time.Second)
+			resp := sendRequest(t, node, ctx, msgID, tt.callOpts, 5*time.Second)
 
 			if !errors.Is(resp.err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.err)
@@ -309,7 +318,7 @@ func TestChannelStreamFailureDuringCommunication(t *testing.T) {
 	}
 
 	// Send first message successfully
-	resp1 := sendRequestWithContext(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil), 3*time.Second)
+	resp1 := sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil), 3*time.Second)
 	if resp1.err != nil {
 		t.Errorf("first message should succeed, got error: %v", resp1.err)
 	}
@@ -321,7 +330,7 @@ func TestChannelStreamFailureDuringCommunication(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Try to send another message - should fail
-	resp2 := sendRequestWithContext(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil), 3*time.Second)
+	resp2 := sendRequest(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil), 3*time.Second)
 	if resp2.err == nil {
 		t.Error("expected error when stream is broken")
 	}
@@ -341,46 +350,25 @@ func TestChannelShutdown(t *testing.T) {
 		t.Fatal("node should be connected")
 	}
 
-	// Enqueue several messages
+	// Enqueue several messages in goroutines (don't wait for responses)
 	const numMessages = 10
-	replyChans := make([]chan response, numMessages)
-
 	for i := 0; i < numMessages; i++ {
-		replyChan := make(chan response, 1)
-		replyChans[i] = replyChan
-		ctx := context.Background()
-		md := ordering.NewGorumsMetadata(ctx, uint64(i), handlerName)
-		req := request{
-			ctx:  ctx,
-			msg:  &Message{Metadata: md, Message: &mock.Request{}},
-			opts: getCallOptions(E_Multicast, nil),
-		}
-		node.channel.enqueue(req, replyChan, false)
+		go func(msgID uint64) {
+			sendRequest(t, node, t.Context(), msgID, getCallOptions(E_Multicast, nil), 3*time.Second)
+		}(uint64(i))
 	}
+
+	// Give messages time to enqueue
+	time.Sleep(50 * time.Millisecond)
 
 	// Close the manager (which should close the node)
 	mgr.Close()
 	cleanup()
 
 	// Try to send a message after closure
-	replyChan := make(chan response, 1)
-	ctx := context.Background()
-	md := ordering.NewGorumsMetadata(ctx, 999, handlerName)
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: getCallOptions(E_Multicast, nil),
-	}
-	node.channel.enqueue(req, replyChan, false)
-
-	// Should receive an error quickly
-	select {
-	case resp := <-replyChan:
-		if resp.err == nil {
-			t.Error("expected error when sending to closed channel")
-		}
-	case <-time.After(1 * time.Second):
-		t.Error("should receive error response quickly after channel closure")
+	resp := sendRequest(t, node, t.Context(), 999, getCallOptions(E_Multicast, nil), 1*time.Second)
+	if resp.err == nil {
+		t.Error("expected error when sending to closed channel")
 	}
 }
 
@@ -405,32 +393,16 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			replyChan := make(chan response, 1)
-			ctx := context.Background()
 			msgID := uint64(200 + i)
-			md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-
 			opts := getCallOptions(E_Multicast, nil)
 			opts.waitSendDone = tt.waitSendDone
 
-			req := request{
-				ctx:  ctx,
-				msg:  &Message{Metadata: md, Message: &mock.Request{}},
-				opts: opts,
-			}
-
 			start := time.Now()
-			node.channel.enqueue(req, replyChan, false)
+			resp := sendRequest(t, node, t.Context(), msgID, opts, 3*time.Second)
+			elapsed := time.Since(start)
 
-			// Wait for response
-			select {
-			case resp := <-replyChan:
-				elapsed := time.Since(start)
-				// Just verify we got a response (error or not)
-				t.Logf("response received in %v (waitSendDone=%v, err=%v)", elapsed, tt.waitSendDone, resp.err)
-			case <-time.After(3 * time.Second):
-				t.Fatal("timeout waiting for response")
-			}
+			// Just verify we got a response (error or not)
+			t.Logf("response received in %v (waitSendDone=%v, err=%v)", elapsed, tt.waitSendDone, resp.err)
 		})
 	}
 }
@@ -448,7 +420,7 @@ func TestChannelErrorTracking(t *testing.T) {
 	node.connect(mgr)
 
 	// Try to send a message (should fail)
-	resp := sendRequestWithContext(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
+	resp := sendRequest(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
 	if resp.err == nil {
 		t.Error("expected error when connecting to non-existent server")
 	}
@@ -525,7 +497,7 @@ func TestChannelResponseRouting(t *testing.T) {
 		msgID := uint64(i + 1000)
 		go func(id uint64) {
 			opts := getCallOptions(E_Multicast, nil)
-			resp := sendRequestWithContext(t, node, t.Context(), id, opts, 5*time.Second)
+			resp := sendRequest(t, node, t.Context(), id, opts, 5*time.Second)
 			results <- msgResponse{msgID: id, resp: resp}
 		}(msgID)
 	}
@@ -555,27 +527,10 @@ func TestChannelRouterCleanup(t *testing.T) {
 	defer cleanup()
 
 	// Send a non-streaming message
-	replyChan := make(chan response, 1)
-	ctx := context.Background()
 	msgID := uint64(5000)
-	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: getCallOptions(E_Multicast, nil),
-	}
-
-	// Enqueue with streaming=false
-	node.channel.enqueue(req, replyChan, false)
-
-	// Wait for response
-	select {
-	case resp := <-replyChan:
-		if resp.err != nil {
-			t.Errorf("unexpected error: %v", resp.err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timeout waiting for response")
+	resp := sendRequest(t, node, t.Context(), msgID, getCallOptions(E_Multicast, nil), 3*time.Second)
+	if resp.err != nil {
+		t.Errorf("unexpected error: %v", resp.err)
 	}
 
 	// Give some time for cleanup

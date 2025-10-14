@@ -33,7 +33,7 @@ func TestMustWaitSendDoneDefaultBehavior(t *testing.T) {
 	}
 
 	// Should receive empty response (from defer in sendMsg) indicating send completed
-	resp := sendRequestWithContext(t, node, t.Context(), msgID, opts, 3*time.Second)
+	resp := sendRequest(t, node, t.Context(), msgID, opts, 3*time.Second)
 	if resp.err != nil {
 		t.Errorf("expected no error from send confirmation, got: %v", resp.err)
 	}
@@ -63,7 +63,7 @@ func TestSendMsgStreamNil(t *testing.T) {
 	}
 
 	// Should receive unavailable error
-	resp := sendRequestWithContext(t, node, t.Context(), msgID, opts, 3*time.Second)
+	resp := sendRequest(t, node, t.Context(), msgID, opts, 3*time.Second)
 	if resp.err == nil {
 		t.Error("expected unavailable error when stream is nil")
 	}
