@@ -80,7 +80,7 @@ func TestChannelDeadlock(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Send a message to activate the stream
-	sendRequest(t, node, 1, getCallOptions(E_Multicast, nil), 2*time.Second)
+	sendRequestWithContext(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil), 2*time.Second)
 
 	// Break the stream by stopping server
 	stopServer()

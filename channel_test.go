@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/relab/gorums/ordering"
 	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -51,41 +50,11 @@ func dummySrv() *Server {
 	return srv
 }
 
-// sendTestMessage sends a test message via the node's channel and returns a response channel.
-func sendTestMessage(t *testing.T, node *RawNode, msgID uint64, opts callOptions) <-chan response {
-	t.Helper()
-	replyChan := make(chan response, 1)
-	go func() {
-		ctx := t.Context()
-		md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-		req := request{ctx: ctx, msg: &Message{Metadata: md, Message: &mock.Request{}}, opts: opts}
-		node.channel.enqueue(req, replyChan, false)
-	}()
-	return replyChan
-}
-
-// expectResponse waits for a response from replyChan and validates it using the provided check function.
-// The check function returns true if the response is acceptable, false otherwise.
-// Returns the check result (can be ignored when not needed for retry logic).
-func expectResponse(t *testing.T, replyChan <-chan response, check func(t *testing.T, resp response) bool) bool {
-	t.Helper()
-	select {
-	case resp := <-replyChan:
-		return check(t, resp)
-	case <-time.After(3 * time.Second):
-		t.Fatal("deadlock: unable to dequeue messages from the node")
-	}
-	return false // unreachable, but keeps compiler happy
-}
-
 func TestChannelCreation(t *testing.T) {
 	node := newNode(t, "127.0.0.1:5000")
 
-	replyChan := sendTestMessage(t, node, 1, callOptions{})
-	expectResponse(t, replyChan, func(_ *testing.T, _ response) bool {
-		// Any response (including error) is acceptable for this test
-		return true
-	})
+	// Send a single message through the channel
+	sendRequestWithContext(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
 }
 
 func TestChannelSuccessfulConnection(t *testing.T) {
@@ -123,13 +92,10 @@ func TestChannelReconnection(t *testing.T) {
 	node := newNode(t, srvAddr)
 
 	// send message when server is down
-	replyChan := sendTestMessage(t, node, 1, callOptions{})
-	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
-		if resp.err == nil {
-			t.Error("response err: got <nil>, want error")
-		}
-		return true
-	})
+	resp := sendRequestWithContext(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
+	if resp.err == nil {
+		t.Error("response err: got <nil>, want error")
+	}
 
 	startServer()
 
@@ -137,8 +103,8 @@ func TestChannelReconnection(t *testing.T) {
 	// with retries to accommodate gRPC connection establishment
 	var successfulSend bool
 	for range 10 {
-		replyChan = sendTestMessage(t, node, 2, getCallOptions(E_Multicast, nil))
-		if expectResponse(t, replyChan, func(t *testing.T, resp response) bool { return resp.err == nil }) {
+		resp = sendRequestWithContext(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil), 3*time.Second)
+		if resp.err == nil {
 			successfulSend = true
 			break
 		}
@@ -152,13 +118,10 @@ func TestChannelReconnection(t *testing.T) {
 	stopServer()
 
 	// send third message when server has previously been up, but is now down
-	replyChan = sendTestMessage(t, node, 3, callOptions{})
-	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
-		if resp.err == nil {
-			t.Error("response err: got <nil>, want error")
-		}
-		return true
-	})
+	resp = sendRequestWithContext(t, node, t.Context(), 3, callOptions{}, 3*time.Second)
+	if resp.err == nil {
+		t.Error("response err: got <nil>, want error")
+	}
 }
 
 func TestEnqueueToClosedChannel(t *testing.T) {
@@ -171,16 +134,12 @@ func TestEnqueueToClosedChannel(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Try to send a message after the channel is closed
-	replyChan := sendTestMessage(t, node, 1, callOptions{})
-
 	// Should receive an error response
-	expectResponse(t, replyChan, func(t *testing.T, resp response) bool {
-		if resp.err == nil {
-			t.Error("expected error when enqueueing to closed channel, got nil")
-		}
-		if resp.err.Error() != "channel closed" {
-			t.Errorf("expected 'channel closed' error, got: %v", resp.err)
-		}
-		return true
-	})
+	resp := sendRequestWithContext(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
+	if resp.err == nil {
+		t.Error("expected error when enqueueing to closed channel, got nil")
+	}
+	if resp.err.Error() != "channel closed" {
+		t.Errorf("expected 'channel closed' error, got: %v", resp.err)
+	}
 }

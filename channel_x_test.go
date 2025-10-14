@@ -12,29 +12,7 @@ import (
 
 // Test helpers
 
-// sendRequest is a helper that sends a request and waits for a response
-func sendRequest(t *testing.T, node *RawNode, msgID uint64, opts callOptions, timeout time.Duration) response {
-	t.Helper()
-	replyChan := make(chan response, 1)
-	ctx := context.Background()
-	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: opts,
-	}
-	node.channel.enqueue(req, replyChan, false)
-
-	select {
-	case resp := <-replyChan:
-		return resp
-	case <-time.After(timeout):
-		t.Fatalf("timeout waiting for response to message %d", msgID)
-		return response{}
-	}
-}
-
-// sendRequestWithContext is a helper that sends a request with a custom context
+// sendRequestWithContext is a helper that sends a request with a specific context.
 func sendRequestWithContext(t *testing.T, node *RawNode, ctx context.Context, msgID uint64, opts callOptions, timeout time.Duration) response {
 	t.Helper()
 	replyChan := make(chan response, 1)
@@ -153,7 +131,7 @@ func TestChannelConcurrentSends(t *testing.T) {
 				msgID := uint64(goroutineID*1000 + j + 1)
 				// Use standard multicast options which provide send confirmation
 				opts := getCallOptions(E_Multicast, nil)
-				resp := sendRequest(t, node, msgID, opts, 5*time.Second)
+				resp := sendRequestWithContext(t, node, t.Context(), msgID, opts, 5*time.Second)
 				results <- result{msgID: msgID, err: resp.err}
 			}
 		}(i)
@@ -331,7 +309,7 @@ func TestChannelStreamFailureDuringCommunication(t *testing.T) {
 	}
 
 	// Send first message successfully
-	resp1 := sendRequest(t, node, 1, getCallOptions(E_Multicast, nil), 3*time.Second)
+	resp1 := sendRequestWithContext(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil), 3*time.Second)
 	if resp1.err != nil {
 		t.Errorf("first message should succeed, got error: %v", resp1.err)
 	}
@@ -343,7 +321,7 @@ func TestChannelStreamFailureDuringCommunication(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Try to send another message - should fail
-	resp2 := sendRequest(t, node, 2, getCallOptions(E_Multicast, nil), 3*time.Second)
+	resp2 := sendRequestWithContext(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil), 3*time.Second)
 	if resp2.err == nil {
 		t.Error("expected error when stream is broken")
 	}
@@ -470,7 +448,7 @@ func TestChannelErrorTracking(t *testing.T) {
 	node.connect(mgr)
 
 	// Try to send a message (should fail)
-	resp := sendRequest(t, node, 1, callOptions{}, 3*time.Second)
+	resp := sendRequestWithContext(t, node, t.Context(), 1, callOptions{}, 3*time.Second)
 	if resp.err == nil {
 		t.Error("expected error when connecting to non-existent server")
 	}
@@ -547,7 +525,7 @@ func TestChannelResponseRouting(t *testing.T) {
 		msgID := uint64(i + 1000)
 		go func(id uint64) {
 			opts := getCallOptions(E_Multicast, nil)
-			resp := sendRequest(t, node, id, opts, 5*time.Second)
+			resp := sendRequestWithContext(t, node, t.Context(), id, opts, 5*time.Second)
 			results <- msgResponse{msgID: id, resp: resp}
 		}(msgID)
 	}
