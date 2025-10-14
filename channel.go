@@ -21,13 +21,6 @@ type request struct {
 	opts callOptions
 }
 
-// mustWaitSendDone returns true if the caller must wait for send completion.
-// This is the default behavior unless the WithNoSendWaiting call option is set.
-// Only returns true for one-way call types (Unicast/Multicast) where callType is set.
-func (req request) mustWaitSendDone() bool {
-	return req.opts.callType != nil && req.opts.waitSendDone
-}
-
 type response struct {
 	nid uint32
 	msg protoreflect.ProtoMessage
@@ -173,7 +166,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		//
 		// Note: Two-way call types (RPCCall, QuorumCall) do not use this mechanism, they always
 		// wait for actual server responses, so mustWaitSendDone() returns false for them.
-		if req.mustWaitSendDone() && err == nil {
+		if req.opts.mustWaitSendDone() && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
 			c.routeResponse(req.msg.Metadata.GetMessageID(), response{})
 		}

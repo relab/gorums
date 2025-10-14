@@ -1,11 +1,8 @@
 package gorums
 
 import (
-	"context"
 	"testing"
 
-	"github.com/relab/gorums/ordering"
-	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
@@ -30,8 +27,7 @@ func TestMustWaitSendDoneDefaultBehavior(t *testing.T) {
 	}
 
 	// Verify mustWaitSendDone returns true
-	testReq := request{opts: opts}
-	if !testReq.mustWaitSendDone() {
+	if !opts.mustWaitSendDone() {
 		t.Fatal("mustWaitSendDone should return true with callType set and waitSendDone=true")
 	}
 
@@ -62,22 +58,13 @@ func TestMustWaitSendDoneDefaultBehavior(t *testing.T) {
 // mustWaitSendDone returns false, which means sendMsg's defer doesn't send
 // an empty confirmation response.
 func TestNoSendWaitingBehavior(t *testing.T) {
-	// Create request with waitSendDone=false
-	ctx := context.Background()
-	msgID := uint64(2)
-	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
+	// Create call options with waitSendDone=false
 	opts := callOptions{
 		callType:     &protoimpl.ExtensionInfo{}, // non-nil
 		waitSendDone: false,                      // don't wait for send completion
 	}
-	req := request{
-		ctx:  ctx,
-		msg:  &Message{Metadata: md, Message: &mock.Request{}},
-		opts: opts,
-	}
-
 	// Verify mustWaitSendDone returns false
-	if req.mustWaitSendDone() {
+	if opts.mustWaitSendDone() {
 		t.Fatal("mustWaitSendDone should return false with waitSendDone=false")
 	}
 }
@@ -107,13 +94,9 @@ func TestSendMsgStreamNil(t *testing.T) {
 // TestMustWaitSendDoneWithNilCallType tests that mustWaitSendDone returns false
 // when callType is nil (edge case for non-oneway calls).
 func TestMustWaitSendDoneWithNilCallType(t *testing.T) {
-	req := request{
-		ctx:  context.Background(),
-		msg:  &Message{},
-		opts: callOptions{callType: nil, waitSendDone: true},
-	}
+	opts := callOptions{callType: nil, waitSendDone: true}
 
-	if req.mustWaitSendDone() {
+	if opts.mustWaitSendDone() {
 		t.Error("mustWaitSendDone should return false when callType is nil")
 	}
 }
