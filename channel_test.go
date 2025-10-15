@@ -58,32 +58,15 @@ func newNodeWithServer(t *testing.T, delay time.Duration) *RawNode {
 
 const defaultTestTimeout = 3 * time.Second
 
-// sendRequest is a helper that sends a request with a specific context.
-func sendRequest(t *testing.T, node *RawNode, ctx context.Context, msgID uint64, opts callOptions) response {
+func sendRequest(t *testing.T, node *RawNode, req request, msgID uint64) response {
 	t.Helper()
-	replyChan := make(chan response, 1)
-	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	req := request{ctx: ctx, msg: &Message{Metadata: md}, opts: opts}
-	node.channel.enqueue(req, replyChan)
-
-	select {
-	case resp := <-replyChan:
-		return resp
-	case <-time.After(defaultTestTimeout):
-		t.Fatalf("timeout waiting for response to message %d", msgID)
-		return response{}
+	if req.ctx == nil {
+		req.ctx = t.Context()
 	}
-}
-
-// sendStreamingRequest is a helper for testing streaming behavior.
-// Unlike sendRequestWithContext, this sets streaming=true which keeps the router alive
-// after the first response, allowing the caller to test router lifecycle behavior.
-func sendStreamingRequest(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
-	t.Helper()
-	replyChan := make(chan response, 10)
-	ctx := t.Context()
-	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	req := request{ctx: ctx, msg: &Message{Metadata: md}, opts: opts, streaming: true}
+	req.msg = &Message{}
+	replyChan := make(chan response, 1)
+	md := ordering.NewGorumsMetadata(req.ctx, msgID, handlerName)
+	req.msg.Metadata = md
 	node.channel.enqueue(req, replyChan)
 
 	select {
@@ -128,7 +111,7 @@ func TestChannelCreation(t *testing.T) {
 	node := newNode(t, "127.0.0.1:5000")
 
 	// Send a single message through the channel
-	sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
+	sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 1)
 }
 
 func TestChannelReconnection(t *testing.T) {
@@ -138,7 +121,7 @@ func TestChannelReconnection(t *testing.T) {
 	node := newNode(t, srvAddr)
 
 	// send message when server is down
-	resp := sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
+	resp := sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 1)
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -149,7 +132,7 @@ func TestChannelReconnection(t *testing.T) {
 	// with retries to accommodate gRPC connection establishment
 	var successfulSend bool
 	for range 10 {
-		resp = sendRequest(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil))
+		resp = sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 2)
 		if resp.err == nil {
 			successfulSend = true
 			break
@@ -165,7 +148,7 @@ func TestChannelReconnection(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// send third message when server has previously been up, but is now down
-	resp = sendRequest(t, node, t.Context(), 3, getCallOptions(E_Multicast, nil))
+	resp = sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 3)
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -208,7 +191,7 @@ func TestChannelErrorHandling(t *testing.T) {
 				}
 
 				// Send first message successfully
-				resp1 := sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
+				resp1 := sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 1)
 				if resp1.err != nil {
 					t.Errorf("first message should succeed, got error: %v", resp1.err)
 				}
@@ -227,7 +210,7 @@ func TestChannelErrorHandling(t *testing.T) {
 			node := tt.setup(t)
 
 			// Send message and verify error
-			resp := sendRequest(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil))
+			resp := sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 2)
 
 			if resp.err == nil {
 				t.Error("expected error but got nil")
@@ -332,7 +315,7 @@ func TestChannelConnectionState(t *testing.T) {
 			wantConnected: false,
 			sendMsg: func(t *testing.T, node *RawNode) {
 				opts := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
-				resp := sendRequest(t, node, t.Context(), 4, opts)
+				resp := sendRequest(t, node, request{opts: opts}, 4)
 				if resp.err == nil {
 					t.Error("expected error when sending with nil stream")
 				}
@@ -378,7 +361,7 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 
 	// Send a message to activate the stream
-	sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
+	sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 1)
 
 	// Break the stream, forcing a reconnection on next send
 	node.channel.clearStream()
@@ -456,7 +439,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 				if !opts.mustWaitSendDone() {
 					t.Fatal("mustWaitSendDone should return true")
 				}
-				return sendRequest(t, node, t.Context(), msgID, opts)
+				return sendRequest(t, node, request{opts: opts}, msgID)
 			},
 			verifyResponse: func(t *testing.T, resp response) {
 				if resp.msg != nil {
@@ -469,7 +452,9 @@ func TestChannelRouterLifecycle(t *testing.T) {
 			name:  "StreamingKeepsRouterAlive",
 			msgID: 2,
 			opts:  getCallOptions(E_Multicast, nil),
-			send:  sendStreamingRequest,
+			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
+				return sendRequest(t, node, request{opts: opts, streaming: true}, msgID)
+			},
 			afterSend: func(t *testing.T, node *RawNode, msgID uint64) {
 				if !routerExists(node, msgID) {
 					t.Error("router should still exist for streaming message before manual delete")
@@ -483,7 +468,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 			msgID: 5000,
 			opts:  getCallOptions(E_Multicast, nil),
 			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
-				return sendRequest(t, node, t.Context(), msgID, opts)
+				return sendRequest(t, node, request{opts: opts}, msgID)
 			},
 			afterSend: func(t *testing.T, node *RawNode, msgID uint64) {
 				time.Sleep(100 * time.Millisecond)
@@ -548,7 +533,7 @@ func TestChannelConcurrentSends(t *testing.T) {
 				msgID := uint64(goroutineID*1000 + j + 1)
 				// Use standard multicast options which provide send confirmation
 				opts := getCallOptions(E_Multicast, nil)
-				resp := sendRequest(t, node, t.Context(), msgID, opts)
+				resp := sendRequest(t, node, request{opts: opts}, msgID)
 				results <- result{msgID: msgID, err: resp.err}
 			}
 		}(i)
@@ -643,7 +628,7 @@ func TestChannelContext(t *testing.T) {
 
 			// Send request
 			msgID := uint64(100 + i)
-			resp := sendRequest(t, node, ctx, msgID, tt.callOpts)
+			resp := sendRequest(t, node, request{ctx: ctx, opts: tt.callOpts}, msgID)
 
 			if !errors.Is(resp.err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.err)
@@ -664,7 +649,7 @@ func TestChannelShutdown(t *testing.T) {
 	const numMessages = 10
 	for i := range numMessages {
 		go func(msgID uint64) {
-			sendRequest(t, node, t.Context(), msgID, getCallOptions(E_Multicast, nil))
+			sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, msgID)
 		}(uint64(i))
 	}
 
@@ -675,7 +660,7 @@ func TestChannelShutdown(t *testing.T) {
 	node.mgr.Close()
 
 	// Try to send a message after closure
-	resp := sendRequest(t, node, t.Context(), 999, getCallOptions(E_Multicast, nil))
+	resp := sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 999)
 	if resp.err == nil {
 		t.Error("expected error when sending to closed channel")
 	}
@@ -706,7 +691,7 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 			opts.waitSendDone = tt.waitSendDone
 
 			start := time.Now()
-			resp := sendRequest(t, node, t.Context(), msgID, opts)
+			resp := sendRequest(t, node, request{opts: opts}, msgID)
 			elapsed := time.Since(start)
 
 			// Just verify we got a response (error or not)
@@ -733,7 +718,7 @@ func TestChannelResponseRouting(t *testing.T) {
 		msgID := uint64(i + 1000)
 		go func(id uint64) {
 			opts := getCallOptions(E_Multicast, nil)
-			resp := sendRequest(t, node, t.Context(), id, opts)
+			resp := sendRequest(t, node, request{opts: opts}, id)
 			results <- msgResponse{msgID: id, resp: resp}
 		}(msgID)
 	}
