@@ -166,7 +166,7 @@ func TestChannelErrorHandling(t *testing.T) {
 				time.Sleep(50 * time.Millisecond)
 				return node
 			},
-			wantSpecificError: "channel closed",
+			wantSpecificError: "node closed",
 		},
 		{
 			name: "ErrorTracking",
