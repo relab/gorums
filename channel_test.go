@@ -58,8 +58,6 @@ func newNodeWithServer(t *testing.T, delay time.Duration) *RawNode {
 
 const defaultTestTimeout = 3 * time.Second
 
-// Test helpers
-
 // sendRequest is a helper that sends a request with a specific context.
 func sendRequest(t *testing.T, node *RawNode, ctx context.Context, msgID uint64, opts callOptions) response {
 	t.Helper()
@@ -111,11 +109,26 @@ func dummySrv() *Server {
 	return srv
 }
 
+// Helper functions for accessing channel internals
+
+func routerExists(node *RawNode, msgID uint64) bool {
+	node.channel.responseMut.Lock()
+	defer node.channel.responseMut.Unlock()
+	_, exists := node.channel.responseRouters[msgID]
+	return exists
+}
+
+func getStream(node *RawNode) grpc.ClientStream {
+	node.channel.streamMut.Lock()
+	defer node.channel.streamMut.Unlock()
+	return node.channel.gorumsStream
+}
+
 func TestChannelCreation(t *testing.T) {
 	node := newNode(t, "127.0.0.1:5000")
 
 	// Send a single message through the channel
-	sendRequest(t, node, t.Context(), 1, callOptions{})
+	sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
 }
 
 func TestChannelReconnection(t *testing.T) {
@@ -125,7 +138,7 @@ func TestChannelReconnection(t *testing.T) {
 	node := newNode(t, srvAddr)
 
 	// send message when server is down
-	resp := sendRequest(t, node, t.Context(), 1, callOptions{})
+	resp := sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -149,109 +162,199 @@ func TestChannelReconnection(t *testing.T) {
 	}
 
 	stopServer()
+	time.Sleep(100 * time.Millisecond)
 
 	// send third message when server has previously been up, but is now down
-	resp = sendRequest(t, node, t.Context(), 3, callOptions{})
+	resp = sendRequest(t, node, t.Context(), 3, getCallOptions(E_Multicast, nil))
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
 }
 
-func TestEnqueueToClosedChannel(t *testing.T) {
-	node := newNode(t, "127.0.0.1:5000")
+// TestChannelErrorHandling verifies error detection and handling in various scenarios.
+func TestChannelErrorHandling(t *testing.T) {
+	tests := []struct {
+		name              string
+		setup             func(t *testing.T) *RawNode
+		wantSpecificError string
+		checkLastErr      bool
+	}{
+		{
+			name: "EnqueueToClosedChannel",
+			setup: func(t *testing.T) *RawNode {
+				node := newNode(t, "127.0.0.1:5000")
+				node.mgr.Close()
+				time.Sleep(50 * time.Millisecond)
+				return node
+			},
+			wantSpecificError: "channel closed",
+		},
+		{
+			name: "ErrorTracking",
+			setup: func(t *testing.T) *RawNode {
+				return newNode(t, "127.0.0.1:5002")
+			},
+		},
+		{
+			name: "StreamFailureDuringCommunication",
+			setup: func(t *testing.T) *RawNode {
+				srvAddr := "127.0.0.1:5001"
+				startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
+				startServer()
+				node := newNode(t, srvAddr)
 
-	// Close the manager (which closes the channel)
-	node.mgr.Close()
+				if !node.channel.isConnected() {
+					t.Error("node should be connected")
+				}
 
-	// Allow some time for the context to be cancelled
-	time.Sleep(50 * time.Millisecond)
+				// Send first message successfully
+				resp1 := sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
+				if resp1.err != nil {
+					t.Errorf("first message should succeed, got error: %v", resp1.err)
+				}
 
-	// Try to send a message after the channel is closed
-	// Should receive an error response
-	resp := sendRequest(t, node, t.Context(), 1, callOptions{})
-	if resp.err == nil {
-		t.Error("expected error when enqueueing to closed channel, got nil")
-	}
-	if resp.err.Error() != "channel closed" {
-		t.Errorf("expected 'channel closed' error, got: %v", resp.err)
-	}
-}
-
-// TestEnsureStreamCreatesStream verifies that ensureStream creates a stream when none exists.
-func TestEnsureStreamCreatesStream(t *testing.T) {
-	node := newNodeWithServer(t, 0)
-
-	// Replace channel with fresh one that has no stream
-	node.channel = newChannel(node)
-
-	// Initially no stream
-	node.channel.streamMut.Lock()
-	initialStream := node.channel.gorumsStream
-	node.channel.streamMut.Unlock()
-
-	if initialStream != nil {
-		t.Fatal("Stream should be nil initially")
-	}
-
-	// ensureStream should create stream
-	if err := node.channel.ensureStream(); err != nil {
-		t.Fatalf("ensureStream failed: %v", err)
-	}
-
-	// Verify stream was created
-	node.channel.streamMut.Lock()
-	finalStream := node.channel.gorumsStream
-	node.channel.streamMut.Unlock()
-
-	if finalStream == nil {
-		t.Error("Stream was not created by ensureStream")
-	}
-}
-
-// TestEnsureStreamIdempotent verifies that calling ensureStream multiple
-// times doesn't create multiple streams.
-func TestEnsureStreamIdempotent(t *testing.T) {
-	node := newNodeWithServer(t, 0)
-
-	// Replace channel with fresh one that has no stream
-	node.channel = newChannel(node)
-
-	// Create first stream
-	if err := node.channel.ensureStream(); err != nil {
-		t.Fatalf("First ensureStream failed: %v", err)
+				// Stop server to break the stream
+				stopServer()
+				time.Sleep(100 * time.Millisecond)
+				return node
+			},
+			checkLastErr: true,
+		},
 	}
 
-	node.channel.streamMut.Lock()
-	firstStream := node.channel.gorumsStream
-	node.channel.streamMut.Unlock()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node := tt.setup(t)
 
-	// Call ensureStream again
-	if err := node.channel.ensureStream(); err != nil {
-		t.Fatalf("Second ensureStream failed: %v", err)
-	}
+			// Send message and verify error
+			resp := sendRequest(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil))
 
-	node.channel.streamMut.Lock()
-	secondStream := node.channel.gorumsStream
-	node.channel.streamMut.Unlock()
+			if resp.err == nil {
+				t.Error("expected error but got nil")
+			} else {
+				t.Logf("error received: %v", resp.err)
+				if tt.wantSpecificError != "" && resp.err.Error() != tt.wantSpecificError {
+					t.Errorf("expected '%s' error, got: %v", tt.wantSpecificError, resp.err)
+				}
+			}
 
-	// Should be the same stream
-	if firstStream != secondStream {
-		t.Error("ensureStream created a new stream instead of reusing existing one")
+			if tt.checkLastErr && node.channel.lastErr() == nil {
+				t.Error("lastErr should be set after stream failure")
+			}
+		})
 	}
 }
 
-// TestIsConnectedRequiresBothReadyAndStream verifies that isConnected()
-// returns true only when both connection is Ready AND stream exists.
-func TestIsConnectedRequiresBothReadyAndStream(t *testing.T) {
+// TestChannelEnsureStream verifies that ensureStream correctly manages stream lifecycle.
+func TestChannelEnsureStream(t *testing.T) {
 	node := newNodeWithServer(t, 0)
-	if !node.channel.isConnected() {
-		t.Fatal("node should be connected")
+
+	tests := []struct {
+		name            string
+		ensureTwice     bool
+		wantSameStreams bool
+	}{
+		{
+			name:        "CreatesStream",
+			ensureTwice: false,
+		},
+		{
+			name:            "Idempotent",
+			ensureTwice:     true,
+			wantSameStreams: true,
+		},
 	}
 
-	node.channel.clearStream()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			node.channel = newChannel(node)
 
-	if node.channel.isConnected() {
-		t.Error("isConnected should return false after clearing the stream")
+			if initialStream := getStream(node); initialStream != nil {
+				t.Fatal("Stream should be nil initially")
+			}
+
+			if err := node.channel.ensureStream(); err != nil {
+				t.Fatalf("First ensureStream failed: %v", err)
+			}
+
+			firstStream := getStream(node)
+			if firstStream == nil {
+				t.Error("Stream was not created by ensureStream")
+			}
+
+			if tt.ensureTwice {
+				if err := node.channel.ensureStream(); err != nil {
+					t.Fatalf("Second ensureStream failed: %v", err)
+				}
+
+				secondStream := getStream(node)
+				if tt.wantSameStreams && firstStream != secondStream {
+					t.Error("ensureStream created a new stream instead of reusing existing one")
+				}
+			}
+		})
+	}
+}
+
+// TestChannelConnectionState verifies connection state detection and behavior.
+func TestChannelConnectionState(t *testing.T) {
+	tests := []struct {
+		name          string
+		node          *RawNode
+		setup         func(node *RawNode)
+		wantConnected bool
+		sendMsg       func(t *testing.T, node *RawNode)
+	}{
+		{
+			name: "RequiresBothReadyAndStream",
+			node: newNodeWithServer(t, 0),
+			setup: func(node *RawNode) {
+				if !node.channel.isConnected() {
+					t.Fatal("node should be connected before clearing stream")
+				}
+				node.channel.clearStream()
+			},
+			wantConnected: false,
+		},
+		{
+			name:          "WithLiveServer",
+			node:          newNodeWithServer(t, 0),
+			wantConnected: true,
+		},
+		{
+			name:          "WithoutServer",
+			node:          newNode(t, "127.0.0.1:5003"),
+			wantConnected: false,
+		},
+		{
+			name:          "SendWithNilStream",
+			node:          newNode(t, "127.0.0.1:9999"),
+			wantConnected: false,
+			sendMsg: func(t *testing.T, node *RawNode) {
+				opts := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
+				resp := sendRequest(t, node, t.Context(), 4, opts)
+				if resp.err == nil {
+					t.Error("expected error when sending with nil stream")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.setup != nil {
+				tt.setup(tt.node)
+			}
+
+			connected := tt.node.channel.isConnected()
+			if connected != tt.wantConnected {
+				t.Errorf("isConnected() = %v, want %v", connected, tt.wantConnected)
+			}
+
+			if tt.sendMsg != nil {
+				tt.sendMsg(t, tt.node)
+			}
+		})
 	}
 }
 
@@ -325,61 +428,89 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 }
 
-// TestMustWaitSendDoneDefaultBehavior tests that by default (mustWaitSendDone=true),
-// the caller blocks until the message is sent and the responseRouter is cleaned up.
-func TestMustWaitSendDoneDefaultBehavior(t *testing.T) {
+// TestChannelRouterLifecycle tests router creation, persistence, and cleanup behavior.
+func TestChannelRouterLifecycle(t *testing.T) {
 	node := newNodeWithServer(t, 0)
-
 	if !node.channel.isConnected() {
 		t.Fatal("node should be connected")
 	}
 
-	// Create call options with mustWaitSendDone=true (default behavior)
-	msgID := uint64(1)
-	opts := callOptions{
-		callType:     &protoimpl.ExtensionInfo{}, // non-nil makes mustWaitSendDone check callType
-		waitSendDone: true,                       // default: wait for send completion
+	waitSendDoneOpts := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
+	waitSendDoneOpts.waitSendDone = true
+	waitSendDoneOpts.callType = &protoimpl.ExtensionInfo{}
+
+	tests := []struct {
+		name             string
+		msgID            uint64
+		opts             callOptions
+		send             func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response
+		verifyResponse   func(t *testing.T, resp response)
+		afterSend        func(t *testing.T, node *RawNode, msgID uint64)
+		wantRouterExists bool
+	}{
+		{
+			name:  "WaitSendDone",
+			msgID: 1,
+			opts:  waitSendDoneOpts,
+			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
+				if !opts.mustWaitSendDone() {
+					t.Fatal("mustWaitSendDone should return true")
+				}
+				return sendRequest(t, node, t.Context(), msgID, opts)
+			},
+			verifyResponse: func(t *testing.T, resp response) {
+				if resp.msg != nil {
+					t.Error("expected empty response from send confirmation")
+				}
+			},
+			wantRouterExists: false,
+		},
+		{
+			name:  "StreamingKeepsRouterAlive",
+			msgID: 2,
+			opts:  getCallOptions(E_Multicast, nil),
+			send:  sendStreamingRequest,
+			afterSend: func(t *testing.T, node *RawNode, msgID uint64) {
+				if !routerExists(node, msgID) {
+					t.Error("router should still exist for streaming message before manual delete")
+				}
+				node.channel.deleteRouter(msgID)
+			},
+			wantRouterExists: false,
+		},
+		{
+			name:  "NonStreamingAutoCleanup",
+			msgID: 5000,
+			opts:  getCallOptions(E_Multicast, nil),
+			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
+				return sendRequest(t, node, t.Context(), msgID, opts)
+			},
+			afterSend: func(t *testing.T, node *RawNode, msgID uint64) {
+				time.Sleep(100 * time.Millisecond)
+			},
+			wantRouterExists: false,
+		},
 	}
 
-	// Verify mustWaitSendDone returns true
-	if !opts.mustWaitSendDone() {
-		t.Fatal("mustWaitSendDone should return true with callType set and waitSendDone=true")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := tt.send(t, node, tt.msgID, tt.opts)
+			if resp.err != nil {
+				t.Errorf("unexpected error: %v", resp.err)
+			}
 
-	// Should receive empty response (from defer in sendMsg) indicating send completed
-	resp := sendRequest(t, node, t.Context(), msgID, opts)
-	if resp.err != nil {
-		t.Errorf("expected no error from send confirmation, got: %v", resp.err)
-	}
-	if resp.msg != nil {
-		t.Error("expected empty response from send confirmation")
-	}
+			if tt.verifyResponse != nil {
+				tt.verifyResponse(t, resp)
+			}
 
-	// Verify responseRouter was cleaned up
-	node.channel.responseMut.Lock()
-	_, exists := node.channel.responseRouters[msgID]
-	node.channel.responseMut.Unlock()
+			if tt.afterSend != nil {
+				tt.afterSend(t, node, tt.msgID)
+			}
 
-	if exists {
-		t.Error("responseRouter should have been cleaned up after send")
-	}
-}
-
-// TestSendMsgStreamNil tests that sendMsg returns unavailable error
-// when stream is nil (not yet established).
-func TestSendMsgStreamNil(t *testing.T) {
-	// Create node pointing to non-existent server
-	node := newNode(t, "127.0.0.1:9999")
-
-	msgID := uint64(4)
-	opts := callOptions{
-		callType: &protoimpl.ExtensionInfo{},
-	}
-
-	// Should receive unavailable error
-	resp := sendRequest(t, node, t.Context(), msgID, opts)
-	if resp.err == nil {
-		t.Error("expected unavailable error when stream is nil")
+			if exists := routerExists(node, tt.msgID); exists != tt.wantRouterExists {
+				t.Errorf("router exists = %v, want %v", exists, tt.wantRouterExists)
+			}
+		})
 	}
 }
 
@@ -444,39 +575,6 @@ func TestChannelConcurrentSends(t *testing.T) {
 	// Check for goroutine leaks by verifying channel state
 	if node.mgr == nil {
 		t.Error("manager should not be nil")
-	}
-}
-
-// Test 2: Streaming Response Handling
-func TestChannelStreamingResponses(t *testing.T) {
-	node := newNodeWithServer(t, 0)
-
-	// Test that streaming flag keeps router alive
-	msgID := uint64(1)
-	resp := sendStreamingRequest(t, node, msgID, getCallOptions(E_Multicast, nil))
-	if resp.err != nil {
-		t.Errorf("unexpected error: %v", resp.err)
-	}
-
-	// Verify router still exists for streaming (unlike non-streaming where it's deleted)
-	node.channel.responseMut.Lock()
-	_, exists := node.channel.responseRouters[msgID]
-	node.channel.responseMut.Unlock()
-
-	if !exists {
-		t.Error("router should still exist for streaming message")
-	}
-
-	// Manually delete the router
-	node.channel.deleteRouter(msgID)
-
-	// Verify router is deleted
-	node.channel.responseMut.Lock()
-	_, exists = node.channel.responseRouters[msgID]
-	node.channel.responseMut.Unlock()
-
-	if exists {
-		t.Error("router should be deleted after calling deleteRouter")
 	}
 }
 
@@ -554,42 +652,7 @@ func TestChannelContext(t *testing.T) {
 	}
 }
 
-// Test 4: Stream Failure During Active Communication
-func TestChannelStreamFailureDuringCommunication(t *testing.T) {
-	srvAddr := "127.0.0.1:5001"
-	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
-	startServer()
-
-	node := newNode(t, srvAddr)
-	if !node.channel.isConnected() {
-		t.Error("node should be connected")
-	}
-
-	// Send first message successfully
-	resp1 := sendRequest(t, node, t.Context(), 1, getCallOptions(E_Multicast, nil))
-	if resp1.err != nil {
-		t.Errorf("first message should succeed, got error: %v", resp1.err)
-	}
-
-	// Stop server to break the stream
-	stopServer()
-
-	// Give some time for the stream to break
-	time.Sleep(100 * time.Millisecond)
-
-	// Try to send another message - should fail
-	resp2 := sendRequest(t, node, t.Context(), 2, getCallOptions(E_Multicast, nil))
-	if resp2.err == nil {
-		t.Error("expected error when stream is broken")
-	}
-
-	// Verify lastErr is set
-	if node.channel.lastErr() == nil {
-		t.Error("lastErr should be set after stream failure")
-	}
-}
-
-// Test 5: Channel Shutdown and Cleanup
+// TestChannelShutdown verifies proper cleanup when channel is closed.
 func TestChannelShutdown(t *testing.T) {
 	node := newNodeWithServer(t, 0)
 
@@ -652,46 +715,7 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 	}
 }
 
-// Test 7: Error Tracking
-func TestChannelErrorTracking(t *testing.T) {
-	// Test with a node that can't connect
-	node := newNode(t, "127.0.0.1:5002")
-
-	// Try to send a message (should fail)
-	resp := sendRequest(t, node, t.Context(), 1, callOptions{})
-	if resp.err == nil {
-		t.Error("expected error when connecting to non-existent server")
-	}
-
-	// Note: lastErr might not be set immediately since the connection
-	// attempt happens asynchronously. The error we get is streamDownErr
-	// which is returned before lastErr is set.
-	// Let's just verify we got an error response, which is the important part.
-	t.Logf("error received: %v", resp.err)
-}
-
-// Test 8: Connection State Tracking
-func TestChannelConnectionState(t *testing.T) {
-	tests := []struct {
-		name          string
-		node          *RawNode
-		wantConnected bool
-	}{
-		{name: "WithLiveServer", node: newNodeWithServer(t, 0), wantConnected: true},
-		{name: "WithoutServer_", node: newNode(t, "127.0.0.1:5003"), wantConnected: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			connected := tt.node.channel.isConnected()
-			if connected != tt.wantConnected {
-				t.Errorf("isConnected() = %v, want %v", connected, tt.wantConnected)
-			}
-		})
-	}
-}
-
-// Test 9: Response Routing
+// TestChannelResponseRouting verifies that responses are correctly routed to their callers.
 func TestChannelResponseRouting(t *testing.T) {
 	node := newNodeWithServer(t, 0)
 
@@ -730,29 +754,5 @@ func TestChannelResponseRouting(t *testing.T) {
 	// Verify all messages were received
 	if len(received) != numMessages {
 		t.Errorf("got %d unique responses, want %d", len(received), numMessages)
-	}
-}
-
-// Test 10: Router Cleanup for Non-Streaming
-func TestChannelRouterCleanup(t *testing.T) {
-	node := newNodeWithServer(t, 0)
-
-	// Send a non-streaming message
-	msgID := uint64(5000)
-	resp := sendRequest(t, node, t.Context(), msgID, getCallOptions(E_Multicast, nil))
-	if resp.err != nil {
-		t.Errorf("unexpected error: %v", resp.err)
-	}
-
-	// Give some time for cleanup
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify router is cleaned up for non-streaming
-	node.channel.responseMut.Lock()
-	_, exists := node.channel.responseRouters[msgID]
-	node.channel.responseMut.Unlock()
-
-	if exists {
-		t.Error("router should be automatically deleted for non-streaming message")
 	}
 }
