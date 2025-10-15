@@ -64,7 +64,7 @@ func sendRequest(t *testing.T, node *RawNode, ctx context.Context, msgID uint64,
 	replyChan := make(chan response, 1)
 	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
 	req := request{ctx: ctx, msg: &Message{Metadata: md}, opts: opts}
-	node.channel.enqueue(req, replyChan, false)
+	node.channel.enqueue(req, replyChan)
 
 	select {
 	case resp := <-replyChan:
@@ -83,8 +83,8 @@ func sendStreamingRequest(t *testing.T, node *RawNode, msgID uint64, opts callOp
 	replyChan := make(chan response, 10)
 	ctx := t.Context()
 	md := ordering.NewGorumsMetadata(ctx, msgID, handlerName)
-	req := request{ctx: ctx, msg: &Message{Metadata: md}, opts: opts}
-	node.channel.enqueue(req, replyChan, true)
+	req := request{ctx: ctx, msg: &Message{Metadata: md}, opts: opts, streaming: true}
+	node.channel.enqueue(req, replyChan)
 
 	select {
 	case resp := <-replyChan:

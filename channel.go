@@ -16,9 +16,10 @@ import (
 var streamDownErr = status.Error(codes.Unavailable, "stream is down")
 
 type request struct {
-	ctx  context.Context
-	msg  *Message
-	opts callOptions
+	ctx       context.Context
+	msg       *Message
+	opts      callOptions
+	streaming bool
 }
 
 type response struct {
@@ -112,17 +113,20 @@ func (c *channel) routeResponse(msgID uint64, resp response) {
 	}
 }
 
-func (c *channel) enqueue(req request, responseChan chan<- response, streaming bool) {
+func (c *channel) enqueue(req request, responseChan chan<- response) {
+	msgID := req.msg.Metadata.GetMessageID()
 	if responseChan != nil {
+		// allocate before critical section
+		router := responseRouter{responseChan, req.streaming}
 		c.responseMut.Lock()
-		c.responseRouters[req.msg.Metadata.GetMessageID()] = responseRouter{responseChan, streaming}
+		c.responseRouters[msgID] = router
 		c.responseMut.Unlock()
 	}
 	// either enqueue the request on the sendQ or respond
 	// with error if the node is closed
 	select {
 	case <-c.parentCtx.Done():
-		c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
+		c.routeResponse(msgID, response{nid: c.node.ID(), err: fmt.Errorf("channel closed")})
 		return
 	case c.sendQ <- req:
 	}

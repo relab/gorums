@@ -23,12 +23,12 @@ func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	req := request{ctx: ctx, msg: &Message{Metadata: md, Message: d.Message}, opts: o}
 
 	if !o.waitSendDone {
-		n.channel.enqueue(req, nil, false)
+		n.channel.enqueue(req, nil)
 		return // fire-and-forget: don't wait for send completion
 	}
 
 	// Default: block until send completes
 	replyChan := make(chan response, 1)
-	n.channel.enqueue(req, replyChan, false)
+	n.channel.enqueue(req, replyChan)
 	<-replyChan
 }
