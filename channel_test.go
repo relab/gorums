@@ -102,9 +102,7 @@ func routerExists(node *RawNode, msgID uint64) bool {
 }
 
 func getStream(node *RawNode) grpc.ClientStream {
-	node.channel.streamMut.Lock()
-	defer node.channel.streamMut.Unlock()
-	return node.channel.gorumsStream
+	return node.channel.getStream()
 }
 
 func TestChannelCreation(t *testing.T) {

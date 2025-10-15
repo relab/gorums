@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/status"
@@ -44,7 +45,7 @@ type channel struct {
 
 	// Stream management for FIFO ordering
 	// gorumsStream is a bidirectional stream for FIFO message delivery
-	gorumsStream ordering.Gorums_NodeStreamClient
+	gorumsStream grpc.ClientStream
 	streamMut    sync.RWMutex
 	streamCtx    context.Context
 	cancelStream context.CancelFunc
@@ -148,7 +149,7 @@ func (c *channel) clearStream() {
 }
 
 // getStream returns the current stream, or nil if no stream is available.
-func (c *channel) getStream() ordering.Gorums_NodeStreamClient {
+func (c *channel) getStream() grpc.ClientStream {
 	c.streamMut.RLock()
 	defer c.streamMut.RUnlock()
 	return c.gorumsStream
