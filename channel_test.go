@@ -63,10 +63,8 @@ func sendRequest(t *testing.T, node *RawNode, req request, msgID uint64) respons
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
-	req.msg = &Message{}
+	req.msg = &Message{Metadata: ordering.NewGorumsMetadata(req.ctx, msgID, handlerName)}
 	replyChan := make(chan response, 1)
-	md := ordering.NewGorumsMetadata(req.ctx, msgID, handlerName)
-	req.msg.Metadata = md
 	node.channel.enqueue(req, replyChan)
 
 	select {
