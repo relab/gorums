@@ -122,6 +122,8 @@ func TestChannelCreation(t *testing.T) {
 func TestChannelReconnection(t *testing.T) {
 	node, stopServer := newNodeWithStoppableServer(t, 0)
 
+	// TODO(meling): This isn't really testing reconnection, since once the node is closed/server stopped, it won't reconnect.
+
 	// send message when server is up but not yet connected,
 	// with retries to accommodate gRPC connection establishment
 	var successfulSend bool
@@ -222,51 +224,100 @@ func TestChannelErrorHandling(t *testing.T) {
 
 // TestChannelEnsureStream verifies that ensureStream correctly manages stream lifecycle.
 func TestChannelEnsureStream(t *testing.T) {
-	node := newNodeWithServer(t, 0)
+	// Helper to prepare a fresh node with no stream
+	newNodeWithoutStream := func(t *testing.T) *RawNode {
+		node := newNodeWithServer(t, 0)
+		node.cancel() // ensure sender and receiver goroutines are stopped
+		node.channel = newChannel(node)
+		return node
+	}
+
+	// Helper to verify stream expectations
+	assertStreams := func(t *testing.T, first, second grpc.ClientStream, wantSame bool) {
+		t.Helper()
+		// If second is nil, skip equality check (covered by UnconnectedNodeHasNoStream action)
+		if second == nil {
+			return
+		}
+		// Both streams provided - check equality
+		if wantSame && first != second {
+			t.Error("expected same stream, but got different stream")
+		}
+		if !wantSame && first == second {
+			t.Error("expected different stream, but got same stream")
+		}
+	}
 
 	tests := []struct {
-		name            string
-		ensureTwice     bool
-		wantSameStreams bool
+		name     string
+		setup    func(t *testing.T) *RawNode
+		action   func(node *RawNode) (first, second grpc.ClientStream)
+		wantSame bool
 	}{
 		{
-			name:        "CreatesStream",
-			ensureTwice: false,
+			name:  "UnconnectedNodeHasNoStream",
+			setup: func(t *testing.T) *RawNode { return newNode(t, "") },
+			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
+				if err := node.channel.ensureStream(); err == nil {
+					t.Error("ensureStream succeeded unexpectedly")
+				}
+				if getStream(node) != nil {
+					t.Error("stream should be nil")
+				}
+				return nil, nil
+			},
 		},
 		{
-			name:            "Idempotent",
-			ensureTwice:     true,
-			wantSameStreams: true,
+			name:  "CreatesStreamWhenConnected",
+			setup: newNodeWithoutStream,
+			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
+				if err := node.channel.ensureStream(); err != nil {
+					t.Errorf("ensureStream failed: %v", err)
+				}
+				return getStream(node), nil
+			},
+		},
+		{
+			name:  "RepeatedCallsReturnSameStream",
+			setup: newNodeWithoutStream,
+			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
+				if err := node.channel.ensureStream(); err != nil {
+					t.Errorf("first ensureStream failed: %v", err)
+				}
+				first := getStream(node)
+				if err := node.channel.ensureStream(); err != nil {
+					t.Errorf("second ensureStream failed: %v", err)
+				}
+				return first, getStream(node)
+			},
+			wantSame: true,
+		},
+		{
+			name:  "StreamDisconnectionCreatesNewStream",
+			setup: newNodeWithoutStream,
+			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
+				if err := node.channel.ensureStream(); err != nil {
+					t.Errorf("initial ensureStream failed: %v", err)
+				}
+				first := getStream(node)
+				node.channel.clearStream()
+				if err := node.channel.ensureStream(); err != nil {
+					t.Errorf("ensureStream after disconnect failed: %v", err)
+				}
+				return first, getStream(node)
+			},
+			wantSame: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			node.channel = newChannel(node)
-
-			if initialStream := getStream(node); initialStream != nil {
-				t.Fatal("Stream should be nil initially")
+			node := tt.setup(t)
+			if stream := getStream(node); stream != nil {
+				t.Fatal("stream should be nil initially")
 			}
-
-			if err := node.channel.ensureStream(); err != nil {
-				t.Fatalf("First ensureStream failed: %v", err)
-			}
-
-			firstStream := getStream(node)
-			if firstStream == nil {
-				t.Error("Stream was not created by ensureStream")
-			}
-
-			if tt.ensureTwice {
-				if err := node.channel.ensureStream(); err != nil {
-					t.Fatalf("Second ensureStream failed: %v", err)
-				}
-
-				secondStream := getStream(node)
-				if tt.wantSameStreams && firstStream != secondStream {
-					t.Error("ensureStream created a new stream instead of reusing existing one")
-				}
-			}
+			first, second := tt.action(node)
+			assertStreams(t, first, second, tt.wantSame)
 		})
 	}
 }
