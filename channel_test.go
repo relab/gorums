@@ -120,6 +120,68 @@ func TestChannelCreation(t *testing.T) {
 	}
 }
 
+// TestChannelShutdown verifies proper cleanup when channel is closed.
+func TestChannelShutdown(t *testing.T) {
+	node := newNodeWithServer(t, 0)
+	if !node.channel.isConnected() {
+		t.Error("node should be connected")
+	}
+
+	// enqueue several messages to confirm normal operation
+	const numMessages = 10
+	var wg sync.WaitGroup
+	for i := range numMessages {
+		wg.Go(func() {
+			resp := sendRequest(t, node, request{}, uint64(i))
+			if resp.err != nil {
+				t.Errorf("unexpected error for message %d, got error: %v", i, resp.err)
+			}
+		})
+	}
+	wg.Wait()
+
+	// shut down the node's channel
+	if err := node.close(); err != nil {
+		t.Errorf("error closing node: %v", err)
+	}
+
+	// try to send a message after node closure
+	resp := sendRequest(t, node, request{}, 999)
+	if resp.err == nil {
+		t.Error("expected error when sending to closed channel")
+	} else if resp.err.Error() != "node closed" {
+		t.Errorf("expected 'node closed' error, got: %v", resp.err)
+	}
+
+	if node.channel.isConnected() {
+		t.Error("channel should not be connected after close")
+	}
+}
+
+// TestChannelSendCompletionWaiting verifies the behavior of send completion waiting.
+func TestChannelSendCompletionWaiting(t *testing.T) {
+	node := newNodeWithServer(t, 0)
+
+	tests := []struct {
+		name string
+		opts callOptions
+	}{
+		{name: "WaitForSend", opts: waitSendDone},
+		{name: "NoSendWaiting", opts: noSendWaiting},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start := time.Now()
+			resp := sendRequest(t, node, request{opts: tt.opts}, uint64(i))
+			elapsed := time.Since(start)
+			if resp.err != nil {
+				t.Errorf("unexpected error: %v", resp.err)
+			}
+			t.Logf("response received in %v", elapsed)
+		})
+	}
+}
+
 // TestChannelErrors verifies error detection and handling in various scenarios.
 func TestChannelErrors(t *testing.T) {
 	tests := []struct {
@@ -166,7 +228,6 @@ func TestChannelErrors(t *testing.T) {
 			wantErr: "connect: connection refused",
 		},
 	}
-
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node := tt.setup(t)
@@ -328,6 +389,108 @@ func TestChannelConnectionState(t *testing.T) {
 	}
 }
 
+// TestChannelConcurrentSends tests sending multiple messages concurrently from multiple goroutines.
+func TestChannelConcurrentSends(t *testing.T) {
+	node := newNodeWithServer(t, 0)
+
+	const numMessages = 1000
+	const numGoroutines = 10
+	msgsPerGoroutine := numMessages / (2 * numGoroutines)
+
+	results := make(chan msgResponse, numMessages)
+	for goID := range numGoroutines {
+		go func() {
+			send(t, results, node, goID, msgsPerGoroutine, request{opts: waitSendDone})
+			send(t, results, node, goID, msgsPerGoroutine, request{opts: noSendWaiting})
+		}()
+	}
+
+	var errs []error
+	for range numMessages {
+		res := <-results
+		if res.resp.err != nil {
+			errs = append(errs, res.resp.err)
+		}
+	}
+
+	if len(errs) > 0 {
+		t.Errorf("got %d errors during concurrent sends (first few): %v", len(errs), errs[:min(3, len(errs))])
+	}
+	if !node.channel.isConnected() {
+		t.Error("node should still be connected after concurrent sends")
+	}
+	if node.mgr == nil {
+		t.Error("manager should not be nil")
+	}
+}
+
+func TestChannelContext(t *testing.T) {
+	// Helper context setup functions
+	cancelledContext := func(ctx context.Context) (context.Context, context.CancelFunc) {
+		ctx, cancel := context.WithCancel(ctx)
+		cancel() // Cancel immediately
+		return ctx, cancel
+	}
+	expireBeforeSend := func(ctx context.Context) (context.Context, context.CancelFunc) {
+		// Very short timeout to cancel during SendMsg operation
+		// Note: SendMsg itself is fast, but we're testing the cancellation path
+		ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+		// Let context expire before we send
+		time.Sleep(5 * time.Millisecond)
+		return ctx, cancel
+	}
+
+	tests := []struct {
+		name         string
+		serverDelay  time.Duration
+		contextSetup func(context.Context) (context.Context, context.CancelFunc)
+		callOpts     callOptions
+		wantErr      error
+	}{
+		{
+			name:         "CancelBeforeSend/WaitSending",
+			serverDelay:  0,
+			contextSetup: cancelledContext,
+			callOpts:     waitSendDone,
+			wantErr:      context.Canceled,
+		},
+		{
+			name:         "CancelBeforeSend/NoSendWaiting",
+			serverDelay:  0,
+			contextSetup: cancelledContext,
+			callOpts:     noSendWaiting,
+			wantErr:      context.Canceled,
+		},
+		{
+			name:         "CancelDuringSend/WaitSending",
+			serverDelay:  3 * time.Second,
+			contextSetup: expireBeforeSend,
+			callOpts:     waitSendDone,
+			wantErr:      context.DeadlineExceeded,
+		},
+		{
+			name:         "CancelDuringSend/NoSendWaiting",
+			serverDelay:  3 * time.Second,
+			contextSetup: expireBeforeSend,
+			callOpts:     noSendWaiting,
+			wantErr:      context.DeadlineExceeded,
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := tt.contextSetup(t.Context())
+			t.Cleanup(cancel)
+
+			node := newNodeWithServer(t, tt.serverDelay)
+			resp := sendRequest(t, node, request{ctx: ctx, opts: tt.callOpts}, uint64(i))
+			if !errors.Is(resp.err, tt.wantErr) {
+				t.Errorf("expected %v, got: %v", tt.wantErr, resp.err)
+			}
+		})
+	}
+}
+
 // TestChannelDeadlock reproduces a deadlock bug (issue #235) that occurred
 // in channel.go when the stream broke during active communication.
 //
@@ -478,195 +641,6 @@ func TestChannelRouterLifecycle(t *testing.T) {
 			if exists := routerExists(node, tt.msgID); exists != tt.wantRouterExists {
 				t.Errorf("router exists = %v, want %v", exists, tt.wantRouterExists)
 			}
-		})
-	}
-}
-
-func TestChannelConcurrentSends(t *testing.T) {
-	node := newNodeWithServer(t, 0)
-
-	if !node.channel.isConnected() {
-		t.Fatal("node should be connected")
-	}
-
-	// Important: When using waitSendDone, the mustWaitSendDone() method returns true.
-	// This means the sendMsg defer will send a "send completion" notification and DELETE the router.
-	// For one-way calls (Unicast/Multicast), the server never sends responses, so this is the only
-	// response the caller receives - confirming that the message was successfully sent.
-	//
-	// For this concurrent send test, we use waitSendDone to test
-	// the send confirmation path, which is the most common use case for multicast.
-
-	const numMessages = 1000
-	const numGoroutines = 10
-	msgsPerGoroutine := numMessages / numGoroutines
-
-	results := make(chan msgResponse, numMessages)
-
-	// Send messages concurrently from multiple goroutines
-	for goID := range numGoroutines {
-		go func() {
-			send(t, results, node, goID, msgsPerGoroutine, request{opts: waitSendDone})
-			// send(t, results, node, goID, msgsPerGoroutine, request{opts: noSendWaiting})
-		}()
-	}
-
-	var errs []error
-	for range numMessages {
-		res := <-results
-		if res.resp.err != nil {
-			errs = append(errs, res.resp.err)
-		}
-	}
-
-	if len(errs) > 0 {
-		t.Errorf("got %d errors during concurrent sends (first few): %v", len(errs), errs[:min(3, len(errs))])
-	}
-	if !node.channel.isConnected() {
-		t.Error("node should still be connected after concurrent sends")
-	}
-	if node.mgr == nil {
-		t.Error("manager should not be nil")
-	}
-}
-
-func TestChannelContext(t *testing.T) {
-	// Helper context setup functions
-	cancelledContext := func(ctx context.Context) (context.Context, context.CancelFunc) {
-		ctx, cancel := context.WithCancel(ctx)
-		cancel() // Cancel immediately
-		return ctx, cancel
-	}
-	expireBeforeSend := func(ctx context.Context) (context.Context, context.CancelFunc) {
-		// Very short timeout to cancel during SendMsg operation
-		// Note: SendMsg itself is fast, but we're testing the cancellation path
-		ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
-		// Let context expire before we send
-		time.Sleep(5 * time.Millisecond)
-		return ctx, cancel
-	}
-
-	tests := []struct {
-		name         string
-		serverDelay  time.Duration
-		contextSetup func(context.Context) (context.Context, context.CancelFunc)
-		callOpts     callOptions
-		wantErr      error
-	}{
-		{
-			name:         "CancelBeforeSend/WaitSending",
-			serverDelay:  0,
-			contextSetup: cancelledContext,
-			callOpts:     waitSendDone,
-			wantErr:      context.Canceled,
-		},
-		{
-			name:         "CancelBeforeSend/NoSendWaiting",
-			serverDelay:  0,
-			contextSetup: cancelledContext,
-			callOpts:     noSendWaiting,
-			wantErr:      context.Canceled,
-		},
-		{
-			name:         "CancelDuringSend/WaitSending",
-			serverDelay:  3 * time.Second,
-			contextSetup: expireBeforeSend,
-			callOpts:     waitSendDone,
-			wantErr:      context.DeadlineExceeded,
-		},
-		{
-			name:         "CancelDuringSend/NoSendWaiting",
-			serverDelay:  3 * time.Second,
-			contextSetup: expireBeforeSend,
-			callOpts:     noSendWaiting,
-			wantErr:      context.DeadlineExceeded,
-		},
-	}
-
-	for i, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := tt.contextSetup(t.Context())
-			t.Cleanup(cancel)
-
-			node := newNodeWithServer(t, tt.serverDelay)
-			resp := sendRequest(t, node, request{ctx: ctx, opts: tt.callOpts}, uint64(i))
-			if !errors.Is(resp.err, tt.wantErr) {
-				t.Errorf("expected %v, got: %v", tt.wantErr, resp.err)
-			}
-		})
-	}
-}
-
-// TestChannelShutdown verifies proper cleanup when channel is closed.
-func TestChannelShutdown(t *testing.T) {
-	node := newNodeWithServer(t, 0)
-
-	if !node.channel.isConnected() {
-		t.Fatal("node should be connected")
-	}
-
-	// enqueue several messages to confirm normal operation
-	const numMessages = 10
-	var wg sync.WaitGroup
-	for i := range numMessages {
-		wg.Go(func() {
-			resp := sendRequest(t, node, request{}, uint64(i))
-			// TODO(meling): We should not use t.Errorf in a goroutine. Use a channel to report errors instead. (Could move loop thing to a helper function.)
-			if resp.err != nil {
-				t.Errorf("unexpected error for message %d, got error: %v", i, resp.err)
-			}
-		})
-	}
-	wg.Wait()
-
-	// shut down the node's channel
-	if err := node.close(); err != nil {
-		t.Errorf("error closing node: %v", err)
-	}
-
-	// try to send a message after node closure
-	resp := sendRequest(t, node, request{}, 999)
-	if resp.err == nil {
-		t.Error("expected error when sending to closed channel")
-	} else if resp.err.Error() != "node closed" {
-		t.Errorf("expected 'node closed' error, got: %v", resp.err)
-	}
-
-	if node.channel.isConnected() {
-		t.Error("channel should not be connected after close")
-	}
-}
-
-// Test 6: Send Completion Waiting Behavior
-func TestChannelSendCompletionWaiting(t *testing.T) { // TODO(meling): This is not really a test; mainly measures time taken with and without waiting.
-	node := newNodeWithServer(t, 0)
-
-	tests := []struct {
-		name         string
-		waitSendDone bool
-	}{
-		{
-			name:         "wait for send completion",
-			waitSendDone: true,
-		},
-		{
-			name:         "no wait for send completion",
-			waitSendDone: false,
-		},
-	}
-
-	for i, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			msgID := uint64(i)
-			opts := waitSendDone
-			opts.waitSendDone = tt.waitSendDone
-
-			start := time.Now()
-			resp := sendRequest(t, node, request{opts: opts}, msgID)
-			elapsed := time.Since(start)
-
-			// Just verify we got a response (error or not)
-			t.Logf("response received in %v (waitSendDone=%v, err=%v)", elapsed, tt.waitSendDone, resp.err)
 		})
 	}
 }
