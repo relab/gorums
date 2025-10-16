@@ -42,6 +42,15 @@ func newNode(t *testing.T, srvAddr string) *RawNode {
 // responding by the given duration. If delay is 0, the server responds immediately.
 func newNodeWithServer(t *testing.T, delay time.Duration) *RawNode {
 	t.Helper()
+	node, teardown := newNodeWithStoppableServer(t, delay)
+	t.Cleanup(teardown)
+	return node
+}
+
+const handlerName = "mock.Server.Test"
+
+func newNodeWithStoppableServer(t *testing.T, delay time.Duration) (*RawNode, func()) {
+	t.Helper()
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
 		srv := NewServer()
 		srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
@@ -52,9 +61,8 @@ func newNodeWithServer(t *testing.T, delay time.Duration) *RawNode {
 		})
 		return srv
 	})
-	t.Cleanup(teardown)
 
-	return newNode(t, addrs[0])
+	return newNode(t, addrs[0]), teardown
 }
 
 func sendRequest(t *testing.T, node *RawNode, req request, msgID uint64) response {
@@ -88,27 +96,6 @@ func send(t *testing.T, results chan<- msgResponse, node *RawNode, goroutineID, 
 	}
 }
 
-// TODO(meling): replace the tests/mock package with dummy implementations here; no need for two proto files and generated code for the same thing.
-type mockSrv struct{}
-
-func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
-	return nil, nil
-}
-
-var handlerName = "mock.Server.Test"
-
-func dummySrv() *Server {
-	mockSrv := &mockSrv{}
-	srv := NewServer()
-	srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message, finished chan<- *Message) {
-		req := in.Message.(*mock.Request)
-		defer ctx.Release()
-		resp, err := mockSrv.Test(ctx, req)
-		SendMessage(ctx, finished, WrapMessage(in.Metadata, resp, err))
-	})
-	return srv
-}
-
 // Helper functions for accessing channel internals
 
 func routerExists(node *RawNode, msgID uint64) bool {
@@ -125,29 +112,21 @@ func getStream(node *RawNode) grpc.ClientStream {
 func TestChannelCreation(t *testing.T) {
 	node := newNode(t, "127.0.0.1:5000")
 
-	// Send a single message through the channel
-	sendRequest(t, node, request{opts: waitSendDone}, 1)
-}
-
-func TestChannelReconnection(t *testing.T) {
-	srvAddr := "127.0.0.1:5000"
-	startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
-
-	node := newNode(t, srvAddr)
-
 	// send message when server is down
 	resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
+}
 
-	startServer()
+func TestChannelReconnection(t *testing.T) {
+	node, stopServer := newNodeWithStoppableServer(t, 0)
 
 	// send message when server is up but not yet connected,
 	// with retries to accommodate gRPC connection establishment
 	var successfulSend bool
 	for range 10 {
-		resp = sendRequest(t, node, request{opts: waitSendDone}, 2)
+		resp := sendRequest(t, node, request{opts: waitSendDone}, 2)
 		if resp.err == nil {
 			successfulSend = true
 			break
@@ -160,10 +139,11 @@ func TestChannelReconnection(t *testing.T) {
 	}
 
 	stopServer()
+	// give server some time to shut down: potentially flaky
 	time.Sleep(100 * time.Millisecond)
 
 	// send third message when server has previously been up, but is now down
-	resp = sendRequest(t, node, request{opts: waitSendDone}, 3)
+	resp := sendRequest(t, node, request{opts: waitSendDone}, 3)
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -196,19 +176,16 @@ func TestChannelErrorHandling(t *testing.T) {
 		{
 			name: "StreamFailureDuringCommunication",
 			setup: func(t *testing.T) *RawNode {
-				srvAddr := "127.0.0.1:5001"
-				startServer, stopServer := testServerSetup(t, srvAddr, dummySrv())
-				startServer()
-				node := newNode(t, srvAddr)
+				node, stopServer := newNodeWithStoppableServer(t, 0)
 
 				if !node.channel.isConnected() {
 					t.Error("node should be connected")
 				}
 
 				// Send first message successfully
-				resp1 := sendRequest(t, node, request{opts: waitSendDone}, 1)
-				if resp1.err != nil {
-					t.Errorf("first message should succeed, got error: %v", resp1.err)
+				resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
+				if resp.err != nil {
+					t.Errorf("first message should succeed, got error: %v", resp.err)
 				}
 
 				// Stop server to break the stream

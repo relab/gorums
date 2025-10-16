@@ -2,8 +2,8 @@ package gorums
 
 import (
 	"net"
+	"sync"
 	"testing"
-	"time"
 )
 
 // ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
@@ -14,12 +14,15 @@ type ServerIface interface {
 
 // TestSetup starts numServers gRPC servers using the given registration
 // function, and returns the server addresses along with a stop function
-// that should be called to shut down the test.
+// that should be called to shut down the test. The stop function will block
+// until all servers have stopped.
 // This function can be used by other packages for testing purposes.
 func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
 	t.Helper()
 	servers := make([]ServerIface, numServers)
+	listeners := make([]net.Listener, numServers)
 	addrs := make([]string, numServers)
+	srvStopped := make(chan struct{}, numServers)
 	for i := range numServers {
 		srv := srvFn(i)
 		// listen on any available port
@@ -27,34 +30,23 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 		if err != nil {
 			t.Fatalf("Failed to listen on port: %v", err)
 		}
+		listeners[i] = lis
 		addrs[i] = lis.Addr().String()
 		servers[i] = srv
-		go func() { _ = srv.Serve(lis) }()
+		go func() {
+			_ = srv.Serve(lis) // blocks until the server is stopped
+			srvStopped <- struct{}{}
+		}()
 	}
-	stopFn := func() {
-		for _, srv := range servers {
-			srv.Stop()
+	stopFn := sync.OnceFunc(func() {
+		for i := range numServers {
+			listeners[i].Close()
+			servers[i].Stop()
 		}
-	}
+		// wait for all servers to stop
+		for range numServers {
+			<-srvStopped
+		}
+	})
 	return addrs, stopFn
-}
-
-func testServerSetup(t testing.TB, addr string, srv ServerIface) (func(), func()) {
-	t.Helper()
-	var lis net.Listener
-	var err error
-	startFn := func() {
-		lis, err = net.Listen("tcp", addr)
-		if err != nil {
-			t.Fatalf("Failed to listen on port: %v", err)
-		}
-		go func() { _ = srv.Serve(lis) }()
-		// to ensure that the server has started
-		time.Sleep(100 * time.Millisecond)
-	}
-	stopFn := func() {
-		lis.Close()
-		srv.Stop()
-	}
-	return startFn, stopFn
 }
