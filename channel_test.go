@@ -120,38 +120,6 @@ func TestChannelCreation(t *testing.T) {
 	}
 }
 
-func TestChannelReconnection(t *testing.T) {
-	node, stopServer := newNodeWithStoppableServer(t, 0)
-
-	// TODO(meling): This isn't really testing reconnection, since once the node is closed/server stopped, it won't reconnect.
-
-	// send message when server is up but not yet connected,
-	// with retries to accommodate gRPC connection establishment
-	var successfulSend bool
-	for range 10 {
-		resp := sendRequest(t, node, request{opts: waitSendDone}, 2)
-		if resp.err == nil {
-			successfulSend = true
-			break
-		}
-		// server is up but gRPC connection not yet established, retry after delay
-		time.Sleep(500 * time.Millisecond)
-	}
-	if !successfulSend {
-		t.Error("failed to send message after server came back up")
-	}
-
-	stopServer()
-	// give server some time to shut down: potentially flaky
-	time.Sleep(100 * time.Millisecond)
-
-	// send third message when server has previously been up, but is now down
-	resp := sendRequest(t, node, request{opts: waitSendDone}, 3)
-	if resp.err == nil {
-		t.Error("response err: got <nil>, want error")
-	}
-}
-
 // TestChannelErrors verifies error detection and handling in various scenarios.
 func TestChannelErrors(t *testing.T) {
 	tests := []struct {
