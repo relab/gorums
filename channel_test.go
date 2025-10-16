@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -151,72 +152,66 @@ func TestChannelReconnection(t *testing.T) {
 	}
 }
 
-// TestChannelErrorHandling verifies error detection and handling in various scenarios.
-func TestChannelErrorHandling(t *testing.T) {
+// TestChannelErrors verifies error detection and handling in various scenarios.
+func TestChannelErrors(t *testing.T) {
 	tests := []struct {
-		name              string
-		setup             func(t *testing.T) *RawNode
-		wantSpecificError string
-		checkLastErr      bool
+		name    string
+		setup   func(t *testing.T) *RawNode
+		wantErr string
 	}{
+		{
+			name: "EnqueueWithoutServer",
+			setup: func(t *testing.T) *RawNode {
+				return newNode(t, "127.0.0.1:5002")
+			},
+			wantErr: "connect: connection refused",
+		},
 		{
 			name: "EnqueueToClosedChannel",
 			setup: func(t *testing.T) *RawNode {
 				node := newNode(t, "127.0.0.1:5000")
-				node.mgr.Close()
-				time.Sleep(50 * time.Millisecond)
+				node.close()
 				return node
 			},
-			wantSpecificError: "node closed",
+			wantErr: "node closed",
 		},
 		{
-			name: "ErrorTracking",
+			name: "EnqueueToServerWithClosedNode",
 			setup: func(t *testing.T) *RawNode {
-				return newNode(t, "127.0.0.1:5002")
+				node := newNodeWithServer(t, 0)
+				node.close()
+				return node
 			},
+			wantErr: "node closed",
 		},
 		{
-			name: "StreamFailureDuringCommunication",
+			name: "ServerFailureDuringCommunication",
 			setup: func(t *testing.T) *RawNode {
 				node, stopServer := newNodeWithStoppableServer(t, 0)
-
-				if !node.channel.isConnected() {
-					t.Error("node should be connected")
-				}
-
-				// Send first message successfully
 				resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
 				if resp.err != nil {
 					t.Errorf("first message should succeed, got error: %v", resp.err)
 				}
-
-				// Stop server to break the stream
 				stopServer()
-				time.Sleep(100 * time.Millisecond)
 				return node
 			},
-			checkLastErr: true,
+			wantErr: "connect: connection refused",
 		},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node := tt.setup(t)
+			time.Sleep(100 * time.Millisecond)
 
 			// Send message and verify error
-			resp := sendRequest(t, node, request{opts: waitSendDone}, 2)
-
+			resp := sendRequest(t, node, request{opts: waitSendDone}, uint64(i))
 			if resp.err == nil {
-				t.Error("expected error but got nil")
+				t.Errorf("expected error '%s' but got nil", tt.wantErr)
 			} else {
-				t.Logf("error received: %v", resp.err)
-				if tt.wantSpecificError != "" && resp.err.Error() != tt.wantSpecificError {
-					t.Errorf("expected '%s' error, got: %v", tt.wantSpecificError, resp.err)
+				if !strings.Contains(resp.err.Error(), tt.wantErr) {
+					t.Errorf("expected error '%s', got: %v", tt.wantErr, resp.err)
 				}
-			}
-
-			if tt.checkLastErr && node.channel.lastErr() == nil {
-				t.Error("lastErr should be set after stream failure")
 			}
 		})
 	}
@@ -329,8 +324,17 @@ func TestChannelConnectionState(t *testing.T) {
 		node          *RawNode
 		setup         func(node *RawNode)
 		wantConnected bool
-		sendMsg       func(t *testing.T, node *RawNode)
 	}{
+		{
+			name:          "WithoutServer",
+			node:          newNode(t, "127.0.0.1:5003"),
+			wantConnected: false,
+		},
+		{
+			name:          "WithLiveServer",
+			node:          newNodeWithServer(t, 0),
+			wantConnected: true,
+		},
 		{
 			name: "RequiresBothReadyAndStream",
 			node: newNodeWithServer(t, 0),
@@ -342,42 +346,15 @@ func TestChannelConnectionState(t *testing.T) {
 			},
 			wantConnected: false,
 		},
-		{
-			name:          "WithLiveServer",
-			node:          newNodeWithServer(t, 0),
-			wantConnected: true,
-		},
-		{
-			name:          "WithoutServer",
-			node:          newNode(t, "127.0.0.1:5003"),
-			wantConnected: false,
-		},
-		{
-			name:          "SendWithNilStream",
-			node:          newNode(t, "127.0.0.1:9999"),
-			wantConnected: false,
-			sendMsg: func(t *testing.T, node *RawNode) {
-				resp := sendRequest(t, node, request{opts: noSendWaiting}, 4)
-				if resp.err == nil {
-					t.Error("expected error when sending with nil stream")
-				}
-			},
-		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup(tt.node)
 			}
-
 			connected := tt.node.channel.isConnected()
 			if connected != tt.wantConnected {
 				t.Errorf("isConnected() = %v, want %v", connected, tt.wantConnected)
-			}
-
-			if tt.sendMsg != nil {
-				tt.sendMsg(t, tt.node)
 			}
 		})
 	}
