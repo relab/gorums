@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,14 +11,14 @@ import (
 	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
-type mockSrv struct{}
+const defaultTestTimeout = 3 * time.Second
 
-func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
-	return nil, nil
-}
+var (
+	waitSendDone  = getCallOptions(E_Multicast, nil)
+	noSendWaiting = getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
+)
 
 // newNode creates a node for the given server address and adds it to a new manager.
 func newNode(t *testing.T, srvAddr string) *RawNode {
@@ -56,8 +57,6 @@ func newNodeWithServer(t *testing.T, delay time.Duration) *RawNode {
 	return newNode(t, addrs[0])
 }
 
-const defaultTestTimeout = 3 * time.Second
-
 func sendRequest(t *testing.T, node *RawNode, req request, msgID uint64) response {
 	t.Helper()
 	if req.ctx == nil {
@@ -74,6 +73,26 @@ func sendRequest(t *testing.T, node *RawNode, req request, msgID uint64) respons
 		t.Fatalf("timeout waiting for response to message %d", msgID)
 		return response{}
 	}
+}
+
+type msgResponse struct {
+	msgID uint64
+	resp  response
+}
+
+func send(t *testing.T, results chan<- msgResponse, node *RawNode, goroutineID, msgsToSend int, req request) {
+	for j := range msgsToSend {
+		msgID := uint64(goroutineID*1000 + j)
+		resp := sendRequest(t, node, req, msgID)
+		results <- msgResponse{msgID: msgID, resp: resp}
+	}
+}
+
+// TODO(meling): replace the tests/mock package with dummy implementations here; no need for two proto files and generated code for the same thing.
+type mockSrv struct{}
+
+func (mockSrv) Test(_ ServerCtx, _ *mock.Request) (*mock.Response, error) {
+	return nil, nil
 }
 
 var handlerName = "mock.Server.Test"
@@ -107,7 +126,7 @@ func TestChannelCreation(t *testing.T) {
 	node := newNode(t, "127.0.0.1:5000")
 
 	// Send a single message through the channel
-	sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 1)
+	sendRequest(t, node, request{opts: waitSendDone}, 1)
 }
 
 func TestChannelReconnection(t *testing.T) {
@@ -117,7 +136,7 @@ func TestChannelReconnection(t *testing.T) {
 	node := newNode(t, srvAddr)
 
 	// send message when server is down
-	resp := sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 1)
+	resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -128,7 +147,7 @@ func TestChannelReconnection(t *testing.T) {
 	// with retries to accommodate gRPC connection establishment
 	var successfulSend bool
 	for range 10 {
-		resp = sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 2)
+		resp = sendRequest(t, node, request{opts: waitSendDone}, 2)
 		if resp.err == nil {
 			successfulSend = true
 			break
@@ -144,7 +163,7 @@ func TestChannelReconnection(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// send third message when server has previously been up, but is now down
-	resp = sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 3)
+	resp = sendRequest(t, node, request{opts: waitSendDone}, 3)
 	if resp.err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -187,7 +206,7 @@ func TestChannelErrorHandling(t *testing.T) {
 				}
 
 				// Send first message successfully
-				resp1 := sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 1)
+				resp1 := sendRequest(t, node, request{opts: waitSendDone}, 1)
 				if resp1.err != nil {
 					t.Errorf("first message should succeed, got error: %v", resp1.err)
 				}
@@ -206,7 +225,7 @@ func TestChannelErrorHandling(t *testing.T) {
 			node := tt.setup(t)
 
 			// Send message and verify error
-			resp := sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 2)
+			resp := sendRequest(t, node, request{opts: waitSendDone}, 2)
 
 			if resp.err == nil {
 				t.Error("expected error but got nil")
@@ -310,8 +329,7 @@ func TestChannelConnectionState(t *testing.T) {
 			node:          newNode(t, "127.0.0.1:9999"),
 			wantConnected: false,
 			sendMsg: func(t *testing.T, node *RawNode) {
-				opts := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
-				resp := sendRequest(t, node, request{opts: opts}, 4)
+				resp := sendRequest(t, node, request{opts: noSendWaiting}, 4)
 				if resp.err == nil {
 					t.Error("expected error when sending with nil stream")
 				}
@@ -357,7 +375,7 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 
 	// Send a message to activate the stream
-	sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 1)
+	sendRequest(t, node, request{opts: waitSendDone}, 1)
 
 	// Break the stream, forcing a reconnection on next send
 	node.channel.clearStream()
@@ -414,10 +432,6 @@ func TestChannelRouterLifecycle(t *testing.T) {
 		t.Fatal("node should be connected")
 	}
 
-	waitSendDoneOpts := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
-	waitSendDoneOpts.waitSendDone = true
-	waitSendDoneOpts.callType = &protoimpl.ExtensionInfo{}
-
 	tests := []struct {
 		name             string
 		msgID            uint64
@@ -430,7 +444,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 		{
 			name:  "WaitSendDone",
 			msgID: 1,
-			opts:  waitSendDoneOpts,
+			opts:  waitSendDone,
 			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
 				if !opts.mustWaitSendDone() {
 					t.Fatal("mustWaitSendDone should return true")
@@ -447,7 +461,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 		{
 			name:  "StreamingKeepsRouterAlive",
 			msgID: 2,
-			opts:  getCallOptions(E_Multicast, nil),
+			opts:  waitSendDone,
 			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
 				return sendRequest(t, node, request{opts: opts, streaming: true}, msgID)
 			},
@@ -462,7 +476,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 		{
 			name:  "NonStreamingAutoCleanup",
 			msgID: 5000,
-			opts:  getCallOptions(E_Multicast, nil),
+			opts:  waitSendDone,
 			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
 				return sendRequest(t, node, request{opts: opts}, msgID)
 			},
@@ -495,7 +509,6 @@ func TestChannelRouterLifecycle(t *testing.T) {
 	}
 }
 
-// Test 1: Concurrent Message Sending
 func TestChannelConcurrentSends(t *testing.T) {
 	node := newNodeWithServer(t, 0)
 
@@ -503,66 +516,48 @@ func TestChannelConcurrentSends(t *testing.T) {
 		t.Fatal("node should be connected")
 	}
 
-	// Important: When using getCallOptions(E_Multicast, nil), the mustWaitSendDone() method returns true.
+	// Important: When using waitSendDone, the mustWaitSendDone() method returns true.
 	// This means the sendMsg defer will send a "send completion" notification and DELETE the router.
 	// For one-way calls (Unicast/Multicast), the server never sends responses, so this is the only
 	// response the caller receives - confirming that the message was successfully sent.
 	//
-	// For this concurrent send test, we use getCallOptions(E_Multicast, nil) to test
+	// For this concurrent send test, we use waitSendDone to test
 	// the send confirmation path, which is the most common use case for multicast.
 
-	const numMessages = 50 // Reduced to avoid potential issues
-	const numGoroutines = 5
-	messagesPerGoroutine := numMessages / numGoroutines
+	const numMessages = 1000
+	const numGoroutines = 10
+	msgsPerGoroutine := numMessages / numGoroutines
 
-	type result struct {
-		msgID uint64
-		err   error
-	}
-
-	results := make(chan result, numMessages)
+	results := make(chan msgResponse, numMessages)
 
 	// Send messages concurrently from multiple goroutines
-	for i := range numGoroutines {
-		go func(goroutineID int) {
-			for j := range messagesPerGoroutine {
-				msgID := uint64(goroutineID*1000 + j + 1)
-				// Use standard multicast options which provide send confirmation
-				opts := getCallOptions(E_Multicast, nil)
-				resp := sendRequest(t, node, request{opts: opts}, msgID)
-				results <- result{msgID: msgID, err: resp.err}
-			}
-		}(i)
+	for goID := range numGoroutines {
+		go func() {
+			send(t, results, node, goID, msgsPerGoroutine, request{opts: waitSendDone})
+			// send(t, results, node, goID, msgsPerGoroutine, request{opts: noSendWaiting})
+		}()
 	}
 
-	// Collect results
-	var errors []error
+	var errs []error
 	for range numMessages {
 		res := <-results
-		if res.err != nil {
-			errors = append(errors, res.err)
+		if res.resp.err != nil {
+			errs = append(errs, res.resp.err)
 		}
 	}
 
-	if len(errors) > 0 {
-		t.Errorf("got %d errors during concurrent sends (first few): %v", len(errors), errors[:min(5, len(errors))])
+	if len(errs) > 0 {
+		t.Errorf("got %d errors during concurrent sends (first few): %v", len(errs), errs[:min(3, len(errs))])
 	}
-
-	// Verify node is still connected
 	if !node.channel.isConnected() {
 		t.Error("node should still be connected after concurrent sends")
 	}
-
-	// Check for goroutine leaks by verifying channel state
 	if node.mgr == nil {
 		t.Error("manager should not be nil")
 	}
 }
 
 func TestChannelContext(t *testing.T) {
-	waitSendDone := getCallOptions(E_Multicast, nil)
-	noSendWaiting := getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
-
 	// Helper context setup functions
 	cancelledContext := func(ctx context.Context) (context.Context, context.CancelFunc) {
 		ctx, cancel := context.WithCancel(ctx)
@@ -617,15 +612,11 @@ func TestChannelContext(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			node := newNodeWithServer(t, tt.serverDelay)
-
 			ctx, cancel := tt.contextSetup(t.Context())
 			t.Cleanup(cancel)
 
-			// Send request
-			msgID := uint64(100 + i)
-			resp := sendRequest(t, node, request{ctx: ctx, opts: tt.callOpts}, msgID)
-
+			node := newNodeWithServer(t, tt.serverDelay)
+			resp := sendRequest(t, node, request{ctx: ctx, opts: tt.callOpts}, uint64(i))
 			if !errors.Is(resp.err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.err)
 			}
@@ -641,29 +632,40 @@ func TestChannelShutdown(t *testing.T) {
 		t.Fatal("node should be connected")
 	}
 
-	// Enqueue several messages in goroutines (don't wait for responses)
+	// enqueue several messages to confirm normal operation
 	const numMessages = 10
+	var wg sync.WaitGroup
 	for i := range numMessages {
-		go func(msgID uint64) {
-			sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, msgID)
-		}(uint64(i))
+		wg.Go(func() {
+			resp := sendRequest(t, node, request{}, uint64(i))
+			// TODO(meling): We should not use t.Errorf in a goroutine. Use a channel to report errors instead. (Could move loop thing to a helper function.)
+			if resp.err != nil {
+				t.Errorf("unexpected error for message %d, got error: %v", i, resp.err)
+			}
+		})
+	}
+	wg.Wait()
+
+	// shut down the node's channel
+	if err := node.close(); err != nil {
+		t.Errorf("error closing node: %v", err)
 	}
 
-	// Give messages time to enqueue
-	time.Sleep(50 * time.Millisecond)
-
-	// Close the manager (which should close the node)
-	node.mgr.Close()
-
-	// Try to send a message after closure
-	resp := sendRequest(t, node, request{opts: getCallOptions(E_Multicast, nil)}, 999)
+	// try to send a message after node closure
+	resp := sendRequest(t, node, request{}, 999)
 	if resp.err == nil {
 		t.Error("expected error when sending to closed channel")
+	} else if resp.err.Error() != "node closed" {
+		t.Errorf("expected 'node closed' error, got: %v", resp.err)
+	}
+
+	if node.channel.isConnected() {
+		t.Error("channel should not be connected after close")
 	}
 }
 
 // Test 6: Send Completion Waiting Behavior
-func TestChannelSendCompletionWaiting(t *testing.T) {
+func TestChannelSendCompletionWaiting(t *testing.T) { // TODO(meling): This is not really a test; mainly measures time taken with and without waiting.
 	node := newNodeWithServer(t, 0)
 
 	tests := []struct {
@@ -682,8 +684,8 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msgID := uint64(200 + i)
-			opts := getCallOptions(E_Multicast, nil)
+			msgID := uint64(i)
+			opts := waitSendDone
 			opts.waitSendDone = tt.waitSendDone
 
 			start := time.Now()
@@ -696,27 +698,18 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 	}
 }
 
-// TestChannelResponseRouting verifies that responses are correctly routed to their callers.
+// TestChannelResponseRouting sends multiple messages and verifies that
+// responses are correctly routed to their callers.
 func TestChannelResponseRouting(t *testing.T) {
 	node := newNodeWithServer(t, 0)
 
-	// Send multiple messages and verify each gets routed correctly
 	const numMessages = 20
-	type msgResponse struct {
-		msgID uint64
-		resp  response
-	}
-
 	results := make(chan msgResponse, numMessages)
 
-	// Send all messages
 	for i := range numMessages {
-		msgID := uint64(i + 1000)
-		go func(id uint64) {
-			opts := getCallOptions(E_Multicast, nil)
-			resp := sendRequest(t, node, request{opts: opts}, id)
-			results <- msgResponse{msgID: id, resp: resp}
-		}(msgID)
+		go func() {
+			send(t, results, node, i, 1, request{})
+		}()
 	}
 
 	// Collect and verify results
