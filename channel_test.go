@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -257,7 +258,7 @@ func TestChannelEnsureStream(t *testing.T) {
 	}
 
 	// Helper to verify stream expectations
-	assertStreams := func(t *testing.T, first, second grpc.ClientStream, wantSame bool) {
+	cmpStream := func(t *testing.T, first, second grpc.ClientStream, wantSame bool) {
 		t.Helper()
 		// If second is nil, skip equality check (covered by UnconnectedNodeHasNoStream action)
 		if second == nil {
@@ -341,7 +342,7 @@ func TestChannelEnsureStream(t *testing.T) {
 				t.Fatal("stream should be nil initially")
 			}
 			first, second := tt.action(node)
-			assertStreams(t, first, second, tt.wantSame)
+			cmpStream(t, first, second, tt.wantSame)
 		})
 	}
 }
@@ -565,82 +566,33 @@ func TestChannelDeadlock(t *testing.T) {
 func TestChannelRouterLifecycle(t *testing.T) {
 	node := newNodeWithServer(t, 0)
 	if !node.channel.isConnected() {
-		t.Fatal("node should be connected")
+		t.Error("node should be connected")
 	}
 
 	tests := []struct {
-		name             string
-		msgID            uint64
-		opts             callOptions
-		send             func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response
-		verifyResponse   func(t *testing.T, resp response)
-		afterSend        func(t *testing.T, node *RawNode, msgID uint64)
-		wantRouterExists bool
+		name       string
+		opts       callOptions
+		streaming  bool
+		afterSend  func(t *testing.T, node *RawNode, msgID uint64)
+		wantRouter bool
 	}{
-		{
-			name:  "WaitSendDone",
-			msgID: 1,
-			opts:  waitSendDone,
-			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
-				if !opts.mustWaitSendDone() {
-					t.Fatal("mustWaitSendDone should return true")
-				}
-				return sendRequest(t, node, request{opts: opts}, msgID)
-			},
-			verifyResponse: func(t *testing.T, resp response) {
-				if resp.msg != nil {
-					t.Error("expected empty response from send confirmation")
-				}
-			},
-			wantRouterExists: false,
-		},
-		{
-			name:  "StreamingKeepsRouterAlive",
-			msgID: 2,
-			opts:  waitSendDone,
-			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
-				return sendRequest(t, node, request{opts: opts, streaming: true}, msgID)
-			},
-			afterSend: func(t *testing.T, node *RawNode, msgID uint64) {
-				if !routerExists(node, msgID) {
-					t.Error("router should still exist for streaming message before manual delete")
-				}
-				node.channel.deleteRouter(msgID)
-			},
-			wantRouterExists: false,
-		},
-		{
-			name:  "NonStreamingAutoCleanup",
-			msgID: 5000,
-			opts:  waitSendDone,
-			send: func(t *testing.T, node *RawNode, msgID uint64, opts callOptions) response {
-				return sendRequest(t, node, request{opts: opts}, msgID)
-			},
-			afterSend: func(t *testing.T, node *RawNode, msgID uint64) {
-				time.Sleep(100 * time.Millisecond)
-			},
-			wantRouterExists: false,
-		},
+		{name: "WaitSendDone/NonStreamingAutoCleanup", opts: waitSendDone, streaming: false, wantRouter: false},
+		{name: "WaitSendDone/StreamingKeepsRouterAlive", opts: waitSendDone, streaming: true, wantRouter: true},
+		{name: "NoSendWaiting/NonStreamingAutoCleanup", opts: noSendWaiting, streaming: false, wantRouter: false},
+		{name: "NoSendWaiting/StreamingKeepsRouterAlive", opts: noSendWaiting, streaming: true, wantRouter: true},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resp := tt.send(t, node, tt.msgID, tt.opts)
+	for i, tt := range tests {
+		name := fmt.Sprintf("msgID=%d/%s/streaming=%t", i, tt.name, tt.streaming)
+		t.Run(name, func(t *testing.T) {
+			msgID := uint64(i)
+			resp := sendRequest(t, node, request{opts: tt.opts, streaming: tt.streaming}, msgID)
 			if resp.err != nil {
 				t.Errorf("unexpected error: %v", resp.err)
 			}
-
-			if tt.verifyResponse != nil {
-				tt.verifyResponse(t, resp)
+			if exists := routerExists(node, msgID); exists != tt.wantRouter {
+				t.Errorf("router exists = %v, want %v", exists, tt.wantRouter)
 			}
-
-			if tt.afterSend != nil {
-				tt.afterSend(t, node, tt.msgID)
-			}
-
-			if exists := routerExists(node, tt.msgID); exists != tt.wantRouterExists {
-				t.Errorf("router exists = %v, want %v", exists, tt.wantRouterExists)
-			}
+			node.channel.deleteRouter(msgID) // just for kicks
 		})
 	}
 }
@@ -654,9 +606,7 @@ func TestChannelResponseRouting(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 
 	for i := range numMessages {
-		go func() {
-			send(t, results, node, i, 1, request{})
-		}()
+		go send(t, results, node, i, 1, request{})
 	}
 
 	// Collect and verify results
