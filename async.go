@@ -58,7 +58,7 @@ func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Asyn
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan, false)
+		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan)
 	}
 
 	fut := &Async{c: make(chan struct{}, 1)}

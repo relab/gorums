@@ -29,8 +29,6 @@ func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 
 	// Default: block until send completes
 	replyChan := make(chan response, 1)
-	n.channel.enqueue(req, replyChan, false)
-	// channel sends an empty reply on replyChan when the message has been sent
-	// wait until the message has been sent
+	n.channel.enqueue(req, replyChan)
 	<-replyChan
 }
