@@ -13,29 +13,14 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - name: Cache Go Modules
-        uses: actions/cache@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
-          path: |
-            ~/.cache/go-build          # ubuntu-latest
-            ~/Library/Caches/go-build  # macos-latest
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+          go-version-file: "go.mod"
+          cache: true
+      - uses: arduino/setup-protoc@v3.0.0
         with:
-          go-version: "1.24.1"
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3.0.0
-        with:
-          version: "29.3"
+          version: "32.1"
           include-pre-releases: true
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -43,11 +28,8 @@ jobs:
         run: make
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
-          skip-pkg-cache: true
-          skip-build-cache: true
-          args: --timeout 5m --disable errcheck
-          # Optional: show only new issues if it's a pull request. The default value is `false`.
+          args: --timeout=5m --disable=errcheck
           only-new-issues: true
