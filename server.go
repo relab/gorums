@@ -21,13 +21,11 @@ type (
 	Handler     func(ServerCtx, *Message) (*Message, error)
 )
 
-type (
-	orderingServer struct {
-		handlers map[string]Handler
-		opts     *serverOptions
-		ordering.UnimplementedGorumsServer
-	}
-)
+type orderingServer struct {
+	handlers map[string]Handler
+	opts     *serverOptions
+	ordering.UnimplementedGorumsServer
+}
 
 func defaultInterceptor(ctx ServerCtx, msg *Message, next Handler) (*Message, error) {
 	// the default interceptor must be the outermost interceptor in the chain
