@@ -28,10 +28,10 @@ type orderingServer struct {
 	ordering.UnimplementedGorumsServer
 }
 
+// defaultInterceptor must be the outermost interceptor in the chain since it is responsible
+// for releasing the server method's handler lock after the final interceptor (the next handler)
+// has completed, allowing the next request to be processed.
 func defaultInterceptor(ctx ServerCtx, msg *Message, next Handler) (*Message, error) {
-	// the default interceptor must be the outermost interceptor in the chain
-	// it releases the handler lock after the next handler returns
-	// allowing the next request to be processed
 	defer ctx.Release()
 	message, err := next(ctx, msg)
 	if message == nil && err == nil {
@@ -42,11 +42,10 @@ func defaultInterceptor(ctx ServerCtx, msg *Message, next Handler) (*Message, er
 }
 
 func newOrderingServer(opts *serverOptions) *orderingServer {
-	s := &orderingServer{
+	return &orderingServer{
 		handlers: make(map[string]Handler),
 		opts:     opts,
 	}
-	return s
 }
 
 // WrapMessage wraps the metadata, response and error status in a gorumsMessage
