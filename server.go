@@ -99,7 +99,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(ServerCtx{Context: req.Metadata.AppendToIncomingContext(ctx), once: new(sync.Once), mut: &mut, c: finished}, req)
+			go handler(newServerCtx(req.Metadata.AppendToIncomingContext(ctx), &mut, finished), req)
 			// Wait until the handler releases the mutex.
 			mut.Lock()
 		}
@@ -224,6 +224,15 @@ type ServerCtx struct {
 	once *sync.Once // must be a pointer to avoid passing ctx by value
 	mut  *sync.Mutex
 	c    chan<- *Message
+}
+
+func newServerCtx(ctx context.Context, mut *sync.Mutex, c chan<- *Message) ServerCtx {
+	return ServerCtx{
+		Context: ctx,
+		once:    new(sync.Once),
+		mut:     mut,
+		c:       c,
+	}
 }
 
 // Release releases this handler's lock on the server, which allows the next request
