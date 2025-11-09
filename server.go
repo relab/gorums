@@ -172,20 +172,6 @@ func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
 	return handler
 }
 
-// final = someHandler
-// interceptors = [interceptor1, interceptor2, ...]
-// The chain will be built as follows:
-// we then compose the chain like this:
-// i := len(interceptors) - 1 -> i = 1 (interceptor2)
-// h = final -> h = someHandler
-
-// h is then set to a new function that calls the current interceptor with the final handler as the next handler.
-// h is then further modified with interceptor1 calling interceptor2 as the next handler, which also calls the final handler.
-// the final call chain will look like this:
-// interceptor2 -> interceptor1 -> someHandler
-// This allows each interceptor to modify the request and response, or perform additional actions before or after calling the next handler in the chain.
-// on the way out, interceptor1 will run and then interceptor2, before finally passing the messsage to be sent to the client.
-
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
 	srv          *orderingServer
