@@ -153,6 +153,10 @@ func WithInterceptors(i ...Interceptor) ServerOption {
 	}
 }
 
+// chainInterceptors composes the provided interceptors around the final Handler and
+// returns a Handler that executes the chain. The execution order is the same as the
+// order of the interceptors in the slice: the first element is executed first, and
+// the last element calls the final handler (the server method).
 func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
 	if len(interceptors) == 0 {
 		return final
