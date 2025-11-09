@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-func LoggingInterceptor(addr string) func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+func LoggingInterceptor(addr string) gorums.Interceptor {
 	return func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 		log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, msg.Metadata.GetMethod(), msg.Message)
 		start := time.Now()
