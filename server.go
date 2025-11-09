@@ -240,7 +240,9 @@ type ServerCtx struct {
 	c    chan<- *Message
 }
 
-// Release releases this handler's lock on the server, which allows the next request to be processed.
+// Release releases this handler's lock on the server, which allows the next request
+// to be processed concurrently. Use Release only when the handler no longer needs
+// exclusive access to the server's state. It is safe to call Release multiple times.
 func (ctx *ServerCtx) Release() {
 	ctx.once.Do(ctx.mut.Unlock)
 }
