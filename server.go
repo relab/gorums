@@ -141,6 +141,12 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
+// WithInterceptors registers server-side interceptors to run for every incoming request.
+// Interceptors are executed for each registered handler. Interceptors may modify both
+// the request and/or response messages, or perform additional actions before or after
+// calling the next handler in the chain. Interceptors are executed in the order they are
+// provided: the first element is executed first, and the last element calls the actual
+// server method handler.
 func WithInterceptors(i ...Interceptor) ServerOption {
 	return func(opts *serverOptions) {
 		opts.interceptors = append(opts.interceptors, i...)
