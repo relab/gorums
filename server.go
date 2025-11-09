@@ -242,7 +242,10 @@ func (ctx *ServerCtx) Release() {
 	ctx.once.Do(ctx.mut.Unlock)
 }
 
-// SendMessage attempts to send a message on a channel.
+// SendMessage attempts to send the given message to the client.
+// This may fail if the stream was closed or the stream context got canceled.
+//
+// This function should be used by generated code only.
 func (ctx *ServerCtx) SendMessage(msg *Message) error {
 	select {
 	case ctx.c <- msg:
