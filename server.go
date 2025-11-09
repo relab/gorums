@@ -12,13 +12,14 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// RequestHandler is used to fetch a response message based on the request.
-// A RequestHandler should receive a message from the server, unmarshal it into
-// the proper type for that Method's request type, call a user provided Handler,
-// and return a marshaled result to the server.
 type (
+	// Interceptor is a function that can intercept and modify incoming requests
+	// and outgoing responses. It receives a ServerCtx, the incoming Message, and
+	// a Handler representing the next element in the chain (either another
+	// Interceptor or the actual server method). It returns a Message and an error.
 	Interceptor func(ServerCtx, *Message, Handler) (*Message, error)
-	Handler     func(ServerCtx, *Message) (*Message, error)
+	// Handler is a function that processes a request message and returns a response message.
+	Handler func(ServerCtx, *Message) (*Message, error)
 )
 
 type orderingServer struct {
