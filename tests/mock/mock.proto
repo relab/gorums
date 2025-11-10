@@ -6,7 +6,7 @@ option go_package = "github.com/relab/gorums/tests/mock";
 option features.field_presence = IMPLICIT;
 
 service Server {
-    rpc Test(Request) returns (Response) {}
+    rpc Test(Request) returns (Response);
 }
 
 message Request {
