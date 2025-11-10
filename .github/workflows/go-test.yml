@@ -1,9 +1,8 @@
-name: Test
+name: Go Test
 on:
   push:
     branches: [master]
   pull_request:
-    branches: [master]
 
 jobs:
   test:
