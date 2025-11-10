@@ -28,19 +28,6 @@ type orderingServer struct {
 	ordering.UnimplementedGorumsServer
 }
 
-// defaultInterceptor must be the outermost interceptor in the chain since it is responsible
-// for releasing the server method's handler lock after the final interceptor (the next handler)
-// has completed, allowing the next request to be processed.
-func defaultInterceptor(ctx ServerCtx, msg *Message, next Handler) (*Message, error) {
-	defer ctx.Release()
-	message, err := next(ctx, msg)
-	if message == nil && err == nil {
-		return nil, nil
-	}
-	ctx.SendMessage(message)
-	return message, err
-}
-
 func newOrderingServer(opts *serverOptions) *orderingServer {
 	return &orderingServer{
 		handlers: make(map[string]Handler),
@@ -99,7 +86,30 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(newServerCtx(req.Metadata.AppendToIncomingContext(ctx), &mut, finished), req)
+			//
+			// This func() is the default interceptor; it is the first and last handler in the chain.
+			// It is responsible for releasing the mutex when the handler chain is done.
+			go func() {
+				srvCtx := newServerCtx(req.Metadata.AppendToIncomingContext(ctx), &mut, finished)
+				defer srvCtx.Release()
+
+				message, err := handler(srvCtx, req)
+				// If there is no message and no error, we do not send anything back to the client.
+				// This corresponds to a unidirectional message from client to server, where clients
+				// are not expected to receive a response.
+				if message == nil && err == nil {
+					return
+				}
+				// If there was an error in the interceptor chain or the method handler, they may return a nil message.
+				// Thus, we need to create a response message to send the error back to the client.
+				if message == nil {
+					message = NewResponseMessage(req.Metadata, nil)
+				}
+				message.setError(err)
+				_ = srvCtx.SendMessage(message) // to the client
+				// We ignore the error from SendMessage here; it means that the stream is closed.
+				// The for-loop above will exit on the next RecvMsg call.
+			}()
 			// Wait until the handler releases the mutex.
 			mut.Lock()
 		}
@@ -188,7 +198,7 @@ func NewServer(opts ...ServerOption) *Server {
 	s := &Server{
 		srv:          newOrderingServer(&serverOpts),
 		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
-		interceptors: append([]Interceptor{defaultInterceptor}, serverOpts.interceptors...),
+		interceptors: serverOpts.interceptors,
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
@@ -226,6 +236,7 @@ type ServerCtx struct {
 	c    chan<- *Message
 }
 
+// newServerCtx creates a new ServerCtx with the given context, mutex and message channel.
 func newServerCtx(ctx context.Context, mut *sync.Mutex, c chan<- *Message) ServerCtx {
 	return ServerCtx{
 		Context: ctx,
