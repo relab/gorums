@@ -12,20 +12,20 @@ import (
 
 func LoggingInterceptor(addr string) gorums.Interceptor {
 	return func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-		log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, msg.Metadata.GetMethod(), msg.Message)
+		log.Printf("[%s]: LoggingInterceptor(incoming): Method=%s, Message=%s", addr, msg.GetMethod(), msg.GetProtoMessage())
 		start := time.Now()
 		resp, err := next(ctx, msg)
 
 		duration := time.Since(start)
-		log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, ResponseErr=%v, Message=%v, Type=%T", addr, msg.Metadata.GetMethod(), duration, resp.Metadata, resp.Message, resp.Message)
+		log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, ResponseErr=%v, Message=%v, Type=%T", addr, msg.GetMethod(), duration, resp.GetMetadata(), resp.GetProtoMessage(), resp.GetProtoMessage())
 		return resp, err
 	}
 }
 
 func LoggingSimpleInterceptor(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-	log.Printf("LoggingSimpleInterceptor(incoming): Method=%s, Message=%v)", msg.Metadata.GetMethod(), msg.Message)
+	log.Printf("LoggingSimpleInterceptor(incoming): Method=%s, Message=%v)", msg.GetMethod(), msg.GetProtoMessage())
 	resp, err := next(ctx, msg)
-	log.Printf("LoggingSimpleInterceptor(outgoing): Method=%s, ResponseErr=%v, Message=%v", msg.Metadata.GetMethod(), err, resp.Message)
+	log.Printf("LoggingSimpleInterceptor(outgoing): Method=%s, ResponseErr=%v, Message=%v", msg.GetMethod(), err, resp.GetProtoMessage())
 	return resp, err
 }
 
@@ -52,7 +52,7 @@ func DelayedInterceptor(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.H
 
 /** NoFooAllowedInterceptor rejects requests for messages with key "foo". */
 func NoFooAllowedInterceptor[T interface{ GetKey() string }](ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-	if req, ok := msg.Message.(T); ok {
+	if req, ok := msg.GetProtoMessage().(T); ok {
 		log.Printf("NoFooAllowedInterceptor: Received request for key '%s'", req.GetKey())
 		if req.GetKey() == "foo" {
 			log.Printf("NoFooAllowedInterceptor: Rejecting request for key 'foo'")
@@ -69,7 +69,7 @@ func MetadataInterceptor(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.
 		Key:   "customKey",
 		Value: "customValue",
 	}.Build()
-	msg.Metadata.SetEntry([]*ordering.MetadataEntry{
+	msg.GetMetadata().SetEntry([]*ordering.MetadataEntry{
 		entry,
 	})
 	// Call the next handler in the chain
