@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -33,6 +35,25 @@ type Message struct {
 // msgType specifies the message type to be unmarshaled.
 func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
+}
+
+// NewResponseMessage creates a new Gorums Message for the given metadata and response message.
+//
+// This function should be used by generated code only.
+func NewResponseMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage) *Message {
+	return &Message{Metadata: md, Message: resp, msgType: responseType}
+}
+
+// setError sets the error status in the message metadata in preparation for sending
+// the response to the client. The provided error may include several wrapped errors.
+// If err is nil, the status is set to OK.
+// This method should be called just prior to sending the response to the client.
+func (m *Message) setError(err error) {
+	errStatus, ok := status.FromError(err)
+	if !ok {
+		errStatus = status.New(codes.Unknown, err.Error())
+	}
+	m.Metadata.SetStatus(errStatus.Proto())
 }
 
 // Codec is the gRPC codec used by gorums.
