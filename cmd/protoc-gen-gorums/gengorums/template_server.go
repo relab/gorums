@@ -26,7 +26,7 @@ type {{$service}}Server interface {
 var registerInterface = `
 {{$genFile := .GenFile}}
 {{$gorumsMessage := use "gorums.Message" .GenFile}}
-{{$wrapMessage := use "gorums.WrapMessage" $genFile}}
+{{$newMessage := use "gorums.NewResponseMessage" $genFile}}
 {{range .Services -}}
 {{$service := .GoName}}
 func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}Server) {
@@ -38,14 +38,14 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 		return nil, nil
 		{{- else if correctableStream .}}
 		err := impl.{{.GoName}}(ctx, req, func(resp *{{out $genFile .}}) error {
-			// create a copy of the metadata, to avoid a data race between WrapMessage and SendMsg
+			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
 			md := {{use "proto.CloneOf" $genFile}}(in.Metadata)
-			return ctx.SendMessage({{$wrapMessage}}(md, resp, nil))
+			return ctx.SendMessage({{$newMessage}}(md, resp))
 		})
 		return nil, err
 		{{- else }}
 		resp, err := impl.{{.GoName}}(ctx, req)
-		return {{$wrapMessage}}(in.Metadata, resp, err), err
+		return {{$newMessage}}(in.Metadata, resp), err
 		{{- end}}
 	})
 	{{- end}}
