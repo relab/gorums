@@ -7,53 +7,29 @@ import (
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// requestHandler is used to fetch a response message based on the request.
-// A requestHandler should receive a message from the server, unmarshal it into
-// the proper type for that Method's request type, call a user provided Handler,
-// and return a marshaled result to the server.
-type requestHandler func(ServerCtx, *Message, chan<- *Message)
+type (
+	// Interceptor is a function that can intercept and modify incoming requests
+	// and outgoing responses. It receives a ServerCtx, the incoming Message, and
+	// a Handler representing the next element in the chain (either another
+	// Interceptor or the actual server method). It returns a Message and an error.
+	Interceptor func(ServerCtx, *Message, Handler) (*Message, error)
+	// Handler is a function that processes a request message and returns a response message.
+	Handler func(ServerCtx, *Message) (*Message, error)
+)
 
 type orderingServer struct {
-	handlers map[string]requestHandler
+	handlers map[string]Handler
 	opts     *serverOptions
 	ordering.UnimplementedGorumsServer
 }
 
 func newOrderingServer(opts *serverOptions) *orderingServer {
-	s := &orderingServer{
-		handlers: make(map[string]requestHandler),
+	return &orderingServer{
+		handlers: make(map[string]Handler),
 		opts:     opts,
 	}
-	return s
-}
-
-// SendMessage attempts to send a message on a channel.
-//
-// This function should be used by generated code only.
-func SendMessage(ctx context.Context, c chan<- *Message, msg *Message) error {
-	select {
-	case c <- msg:
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-	return nil
-}
-
-// WrapMessage wraps the metadata, response and error status in a gorumsMessage
-//
-// This function should be used by generated code only.
-func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *Message {
-	errStatus, ok := status.FromError(err)
-	if !ok {
-		errStatus = status.New(codes.Unknown, err.Error())
-	}
-	md.SetStatus(errStatus.Proto())
-	return &Message{Metadata: md, Message: resp}
 }
 
 // NodeStream handles a connection to a single client. The stream is aborted if there
@@ -95,7 +71,30 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
-			go handler(ServerCtx{Context: req.Metadata.AppendToIncomingContext(ctx), once: new(sync.Once), mut: &mut}, req, finished)
+			//
+			// This func() is the default interceptor; it is the first and last handler in the chain.
+			// It is responsible for releasing the mutex when the handler chain is done.
+			go func() {
+				srvCtx := newServerCtx(req.Metadata.AppendToIncomingContext(ctx), &mut, finished)
+				defer srvCtx.Release()
+
+				message, err := handler(srvCtx, req)
+				// If there is no message and no error, we do not send anything back to the client.
+				// This corresponds to a unidirectional message from client to server, where clients
+				// are not expected to receive a response.
+				if message == nil && err == nil {
+					return
+				}
+				// If there was an error in the interceptor chain or the method handler, they may return a nil message.
+				// Thus, we need to create a response message to send the error back to the client.
+				if message == nil {
+					message = NewResponseMessage(req.Metadata, nil)
+				}
+				message.setError(err)
+				_ = srvCtx.SendMessage(message) // to the client
+				// We ignore the error from SendMessage here; it means that the stream is closed.
+				// The for-loop above will exit on the next RecvMsg call.
+			}()
 			// Wait until the handler releases the mutex.
 			mut.Lock()
 		}
@@ -106,6 +105,7 @@ type serverOptions struct {
 	buffer          uint
 	grpcOpts        []grpc.ServerOption
 	connectCallback func(context.Context)
+	interceptors    []Interceptor
 }
 
 // ServerOption is used to change settings for the GorumsServer
@@ -136,10 +136,42 @@ func WithConnectCallback(callback func(context.Context)) ServerOption {
 	}
 }
 
+// WithInterceptors registers server-side interceptors to run for every incoming request.
+// Interceptors are executed for each registered handler. Interceptors may modify both
+// the request and/or response messages, or perform additional actions before or after
+// calling the next handler in the chain. Interceptors are executed in the order they are
+// provided: the first element is executed first, and the last element calls the actual
+// server method handler.
+func WithInterceptors(i ...Interceptor) ServerOption {
+	return func(opts *serverOptions) {
+		opts.interceptors = append(opts.interceptors, i...)
+	}
+}
+
+// chainInterceptors composes the provided interceptors around the final Handler and
+// returns a Handler that executes the chain. The execution order is the same as the
+// order of the interceptors in the slice: the first element is executed first, and
+// the last element calls the final handler (the server method).
+func chainInterceptors(final Handler, interceptors ...Interceptor) Handler {
+	if len(interceptors) == 0 {
+		return final
+	}
+	handler := final
+	for i := len(interceptors) - 1; i >= 0; i-- {
+		curr := interceptors[i]
+		next := handler
+		handler = func(ctx ServerCtx, msg *Message) (*Message, error) {
+			return curr(ctx, msg, next)
+		}
+	}
+	return handler
+}
+
 // Server serves all ordering based RPCs using registered handlers.
 type Server struct {
-	srv        *orderingServer
-	grpcServer *grpc.Server
+	srv          *orderingServer
+	grpcServer   *grpc.Server
+	interceptors []Interceptor
 }
 
 // NewServer returns a new instance of [gorums.Server].
@@ -149,8 +181,9 @@ func NewServer(opts ...ServerOption) *Server {
 		opt(&serverOpts)
 	}
 	s := &Server{
-		srv:        newOrderingServer(&serverOpts),
-		grpcServer: grpc.NewServer(serverOpts.grpcOpts...),
+		srv:          newOrderingServer(&serverOpts),
+		grpcServer:   grpc.NewServer(serverOpts.grpcOpts...),
+		interceptors: serverOpts.interceptors,
 	}
 	ordering.RegisterGorumsServer(s.grpcServer, s.srv)
 	return s
@@ -159,8 +192,8 @@ func NewServer(opts ...ServerOption) *Server {
 // RegisterHandler registers a request handler for the specified method name.
 //
 // This function should only be used by generated code.
-func (s *Server) RegisterHandler(method string, handler requestHandler) {
-	s.srv.handlers[method] = handler
+func (s *Server) RegisterHandler(method string, handler Handler) {
+	s.srv.handlers[method] = chainInterceptors(handler, s.interceptors...)
 }
 
 // Serve starts serving on the listener.
@@ -185,9 +218,35 @@ type ServerCtx struct {
 	context.Context
 	once *sync.Once // must be a pointer to avoid passing ctx by value
 	mut  *sync.Mutex
+	c    chan<- *Message
 }
 
-// Release releases this handler's lock on the server, which allows the next request to be processed.
+// newServerCtx creates a new ServerCtx with the given context, mutex and message channel.
+func newServerCtx(ctx context.Context, mut *sync.Mutex, c chan<- *Message) ServerCtx {
+	return ServerCtx{
+		Context: ctx,
+		once:    new(sync.Once),
+		mut:     mut,
+		c:       c,
+	}
+}
+
+// Release releases this handler's lock on the server, which allows the next request
+// to be processed concurrently. Use Release only when the handler no longer needs
+// exclusive access to the server's state. It is safe to call Release multiple times.
 func (ctx *ServerCtx) Release() {
 	ctx.once.Do(ctx.mut.Unlock)
+}
+
+// SendMessage attempts to send the given message to the client.
+// This may fail if the stream was closed or the stream context got canceled.
+//
+// This function should be used by generated code only.
+func (ctx *ServerCtx) SendMessage(msg *Message) error {
+	select {
+	case ctx.c <- msg:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
