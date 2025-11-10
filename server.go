@@ -7,9 +7,6 @@ import (
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 type (
@@ -33,18 +30,6 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 		handlers: make(map[string]Handler),
 		opts:     opts,
 	}
-}
-
-// WrapMessage wraps the metadata, response and error status in a gorumsMessage
-//
-// This function should be used by generated code only.
-func WrapMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage, err error) *Message {
-	errStatus, ok := status.FromError(err)
-	if !ok {
-		errStatus = status.New(codes.Unknown, err.Error())
-	}
-	md.SetStatus(errStatus.Proto())
-	return &Message{Metadata: md, Message: resp}
 }
 
 // NodeStream handles a connection to a single client. The stream is aborted if there

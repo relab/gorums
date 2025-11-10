@@ -33,7 +33,7 @@ func dummySrv() *Server {
 	srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message) (*Message, error) {
 		req := in.Message.(*mock.Request)
 		resp, err := mockSrv.Test(ctx, req)
-		return WrapMessage(in.Metadata, resp, err), err
+		return NewResponseMessage(in.Metadata, resp), err
 	})
 	return srv
 }
