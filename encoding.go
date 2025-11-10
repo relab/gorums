@@ -44,6 +44,30 @@ func NewResponseMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage) *
 	return &Message{Metadata: md, Message: resp, msgType: responseType}
 }
 
+// GetProtoMessage returns the protobuf message contained in the Message.
+func (m *Message) GetProtoMessage() protoreflect.ProtoMessage {
+	if m == nil {
+		return nil
+	}
+	return m.Message
+}
+
+// GetMetadata returns the metadata of the message.
+func (m *Message) GetMetadata() *ordering.Metadata {
+	if m == nil {
+		return nil
+	}
+	return m.Metadata
+}
+
+// GetMethod returns the method name from the message metadata.
+func (m *Message) GetMethod() string {
+	if m == nil || m.Metadata == nil {
+		return "nil"
+	}
+	return m.Metadata.GetMethod()
+}
+
 // setError sets the error status in the message metadata in preparation for sending
 // the response to the client. The provided error may include several wrapped errors.
 // If err is nil, the status is set to OK.
