@@ -75,7 +75,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// This func() is the default interceptor; it is the first and last handler in the chain.
 			// It is responsible for releasing the mutex when the handler chain is done.
 			go func() {
-				srvCtx := newServerCtx(req.Metadata.AppendToIncomingContext(ctx), &mut, finished)
+				metadata := req.GetMetadata()
+				srvCtx := newServerCtx(metadata.AppendToIncomingContext(ctx), &mut, finished)
 				defer srvCtx.Release()
 
 				message, err := handler(srvCtx, req)
@@ -88,7 +89,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 				// If there was an error in the interceptor chain or the method handler, they may return a nil message.
 				// Thus, we need to create a response message to send the error back to the client.
 				if message == nil {
-					message = NewResponseMessage(req.Metadata, nil)
+					message = NewResponseMessage(metadata, nil)
 				}
 				message.setError(err)
 				_ = srvCtx.SendMessage(message) // to the client

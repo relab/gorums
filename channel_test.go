@@ -67,7 +67,7 @@ func newNodeWithStoppableServer(t *testing.T, delay time.Duration) (*RawNode, fu
 			time.Sleep(delay)
 			req := in.Message.(*mock.Request)
 			resp, err := mockSrv.Test(ctx, req)
-			return NewResponseMessage(in.Metadata, resp), err
+			return NewResponseMessage(in.GetMetadata(), resp), err
 		})
 		return srv
 	})

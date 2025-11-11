@@ -96,7 +96,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 		s.RegisterHandler("mock.Server.Test", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 			req := in.Message.(*mock.Request)
 			resp, err := interceptorSrv.Test(ctx, req)
-			return gorums.NewResponseMessage(in.Metadata, resp), err
+			return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 		})
 		return s
 	})
