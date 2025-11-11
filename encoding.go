@@ -26,7 +26,7 @@ const (
 //
 // This struct should be used by generated code only.
 type Message struct {
-	Metadata *ordering.Metadata
+	metadata *ordering.Metadata
 	Message  protoreflect.ProtoMessage
 	msgType  gorumsMsgType
 }
@@ -34,19 +34,19 @@ type Message struct {
 // newMessage creates a new Message struct for unmarshaling.
 // msgType specifies the message type to be unmarshaled.
 func newMessage(msgType gorumsMsgType) *Message {
-	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
+	return &Message{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
 // newRequestMessage creates a new Gorums Message for the given metadata and request message.
 func newRequestMessage(md *ordering.Metadata, req protoreflect.ProtoMessage) *Message {
-	return &Message{Metadata: md, Message: req, msgType: requestType}
+	return &Message{metadata: md, Message: req, msgType: requestType}
 }
 
 // NewResponseMessage creates a new Gorums Message for the given metadata and response message.
 //
 // This function should be used by generated code only.
 func NewResponseMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage) *Message {
-	return &Message{Metadata: md, Message: resp, msgType: responseType}
+	return &Message{metadata: md, Message: resp, msgType: responseType}
 }
 
 // GetProtoMessage returns the protobuf message contained in the Message.
@@ -62,7 +62,7 @@ func (m *Message) GetMetadata() *ordering.Metadata {
 	if m == nil {
 		return nil
 	}
-	return m.Metadata
+	return m.metadata
 }
 
 // GetMethod returns the method name from the message metadata.
@@ -70,7 +70,7 @@ func (m *Message) GetMethod() string {
 	if m == nil {
 		return "nil"
 	}
-	return m.Metadata.GetMethod()
+	return m.metadata.GetMethod()
 }
 
 // GetMessageID returns the message ID from the message metadata.
@@ -78,14 +78,14 @@ func (m *Message) GetMessageID() uint64 {
 	if m == nil {
 		return 0
 	}
-	return m.Metadata.GetMessageID()
+	return m.metadata.GetMessageID()
 }
 
 func (m *Message) GetStatus() *status.Status {
 	if m == nil {
 		return status.New(codes.Unknown, "nil message")
 	}
-	return status.FromProto(m.Metadata.GetStatus())
+	return status.FromProto(m.metadata.GetStatus())
 }
 
 // setError sets the error status in the message metadata in preparation for sending
@@ -97,7 +97,7 @@ func (m *Message) setError(err error) {
 	if !ok {
 		errStatus = status.New(codes.Unknown, err.Error())
 	}
-	m.Metadata.SetStatus(errStatus.Proto())
+	m.metadata.SetStatus(errStatus.Proto())
 }
 
 // Codec is the gRPC codec used by gorums.
@@ -137,9 +137,9 @@ func (c Codec) Marshal(m any) (b []byte, err error) {
 
 // gorumsMarshal marshals a metadata and a data message into a single byte slice.
 func (c Codec) gorumsMarshal(msg *Message) (b []byte, err error) {
-	mdSize := c.marshaler.Size(msg.Metadata)
+	mdSize := c.marshaler.Size(msg.metadata)
 	b = protowire.AppendVarint(b, uint64(mdSize))
-	b, err = c.marshaler.MarshalAppend(b, msg.Metadata)
+	b, err = c.marshaler.MarshalAppend(b, msg.metadata)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (c Codec) Unmarshal(b []byte, m any) (err error) {
 func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	// unmarshal metadata
 	mdBuf, mdLen := protowire.ConsumeBytes(b)
-	err = c.unmarshaler.Unmarshal(mdBuf, msg.Metadata)
+	err = c.unmarshaler.Unmarshal(mdBuf, msg.metadata)
 	if err != nil {
 		return fmt.Errorf("gorums: could not unmarshal metadata: %w", err)
 	}
