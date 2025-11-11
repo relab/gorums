@@ -36,7 +36,7 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan)
+		n.channel.enqueue(request{ctx: ctx, msg: newRequestMessage(md, msg)}, replyChan)
 	}
 
 	var (

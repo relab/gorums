@@ -37,6 +37,11 @@ func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{Metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
+// newRequestMessage creates a new Gorums Message for the given metadata and request message.
+func newRequestMessage(md *ordering.Metadata, req protoreflect.ProtoMessage) *Message {
+	return &Message{Metadata: md, Message: req, msgType: requestType}
+}
+
 // NewResponseMessage creates a new Gorums Message for the given metadata and response message.
 //
 // This function should be used by generated code only.

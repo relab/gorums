@@ -114,7 +114,7 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, streaming: d.ServerStream}, replyChan)
+		n.channel.enqueue(request{ctx: ctx, msg: newRequestMessage(md, msg), streaming: d.ServerStream}, replyChan)
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}

@@ -80,7 +80,7 @@ func sendRequest(t *testing.T, node *RawNode, req request, msgID uint64) respons
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
-	req.msg = &Message{Metadata: ordering.NewGorumsMetadata(req.ctx, msgID, handlerName)}
+	req.msg = newRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, handlerName), nil)
 	replyChan := make(chan response, 1)
 	node.channel.enqueue(req, replyChan)
 
@@ -541,7 +541,7 @@ func TestChannelDeadlock(t *testing.T) {
 			defer cancel()
 
 			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), handlerName)
-			req := request{ctx: ctx, msg: &Message{Metadata: md}}
+			req := request{ctx: ctx, msg: newRequestMessage(md, nil)}
 
 			// try to enqueue
 			select {
