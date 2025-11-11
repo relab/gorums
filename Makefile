@@ -11,7 +11,7 @@ plugin_deps				:= gorums.pb.go internal/correctable/opts.pb.go $(static_file)
 runtime_deps			:= ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests
+.PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests genproto
 
 all: dev benchmark compiletests
 
@@ -74,3 +74,12 @@ stressgen: tools
 	cd ./internal/testprotos; go test -c
 	cd ./internal/testprotos; stress -timeout=10s -p=1 ./testprotos.test
 	rm ./internal/testprotos/testprotos.test
+
+# Regenerate all Gorums and protobuf generated files across the repo (dev, benchmark, tests, examples).
+# This will force regeneration even though the proto files have not changed.
+genproto:
+	@echo "Regenerating all proto files (dev, benchmark, tests, examples)"
+	@$(MAKE) -B -s dev
+	@$(MAKE) -B -s benchmark
+	@$(MAKE) -B -s --no-print-directory -C ./tests all
+	@$(MAKE) -B -s --no-print-directory -C ./examples all
