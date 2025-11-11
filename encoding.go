@@ -27,7 +27,7 @@ const (
 // This struct should be used by generated code only.
 type Message struct {
 	metadata *ordering.Metadata
-	Message  protoreflect.ProtoMessage
+	message  protoreflect.ProtoMessage
 	msgType  gorumsMsgType
 }
 
@@ -39,24 +39,24 @@ func newMessage(msgType gorumsMsgType) *Message {
 
 // newRequestMessage creates a new Gorums Message for the given metadata and request message.
 func newRequestMessage(md *ordering.Metadata, req protoreflect.ProtoMessage) *Message {
-	return &Message{metadata: md, Message: req, msgType: requestType}
+	return &Message{metadata: md, message: req, msgType: requestType}
 }
 
 // NewResponseMessage creates a new Gorums Message for the given metadata and response message.
 //
 // This function should be used by generated code only.
 func NewResponseMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage) *Message {
-	return &Message{metadata: md, Message: resp, msgType: responseType}
+	return &Message{metadata: md, message: resp, msgType: responseType}
 }
 
 // AsProto returns msg's underlying protobuf message of the specified type T.
 // If msg is nil or the contained message is not of type T, the zero value of T is returned.
 func AsProto[T protoreflect.ProtoMessage](msg *Message) T {
 	var zero T
-	if msg == nil || msg.Message == nil {
+	if msg == nil || msg.message == nil {
 		return zero
 	}
-	if req, ok := msg.Message.(T); ok {
+	if req, ok := msg.message.(T); ok {
 		return req
 	}
 	return zero
@@ -67,7 +67,7 @@ func (m *Message) GetProtoMessage() protoreflect.ProtoMessage {
 	if m == nil {
 		return nil
 	}
-	return m.Message
+	return m.message
 }
 
 // GetMetadata returns the metadata of the message.
@@ -157,9 +157,9 @@ func (c Codec) gorumsMarshal(msg *Message) (b []byte, err error) {
 		return nil, err
 	}
 
-	msgSize := c.marshaler.Size(msg.Message)
+	msgSize := c.marshaler.Size(msg.message)
 	b = protowire.AppendVarint(b, uint64(msgSize))
-	b, err = c.marshaler.MarshalAppend(b, msg.Message)
+	b, err = c.marshaler.MarshalAppend(b, msg.message)
 	if err != nil {
 		return nil, err
 	}
@@ -212,9 +212,9 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 		// err is a NotFound error with no message name information; return a more informative error
 		return fmt.Errorf("gorums: could not find message type %s", messageName)
 	}
-	msg.Message = msgType.New().Interface()
+	msg.message = msgType.New().Interface()
 
 	// unmarshal message
 	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
-	return c.unmarshaler.Unmarshal(msgBuf, msg.Message)
+	return c.unmarshaler.Unmarshal(msgBuf, msg.message)
 }
