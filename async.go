@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 // Async encapsulates the state of an asynchronous quorum call,
@@ -12,14 +12,14 @@ import (
 //
 // This struct should only be used by generated code.
 type Async struct {
-	reply protoreflect.ProtoMessage
+	reply proto.Message
 	err   error
 	c     chan struct{}
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *Async) Get() (protoreflect.ProtoMessage, error) {
+func (f *Async) Get() (proto.Message, error) {
 	<-f.c
 	return f.reply, f.err
 }
@@ -77,10 +77,10 @@ func (c RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state
 	defer close(fut.c)
 
 	var (
-		resp    protoreflect.ProtoMessage
+		resp    proto.Message
 		errs    []nodeError
 		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
+		replies = make(map[uint32]proto.Message)
 	)
 
 	for {

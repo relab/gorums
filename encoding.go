@@ -27,7 +27,7 @@ const (
 // This struct should be used by generated code only.
 type Message struct {
 	metadata *ordering.Metadata
-	message  protoreflect.ProtoMessage
+	message  proto.Message
 	msgType  gorumsMsgType
 }
 
@@ -38,20 +38,20 @@ func newMessage(msgType gorumsMsgType) *Message {
 }
 
 // newRequestMessage creates a new Gorums Message for the given metadata and request message.
-func newRequestMessage(md *ordering.Metadata, req protoreflect.ProtoMessage) *Message {
+func newRequestMessage(md *ordering.Metadata, req proto.Message) *Message {
 	return &Message{metadata: md, message: req, msgType: requestType}
 }
 
 // NewResponseMessage creates a new Gorums Message for the given metadata and response message.
 //
 // This function should be used by generated code only.
-func NewResponseMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage) *Message {
+func NewResponseMessage(md *ordering.Metadata, resp proto.Message) *Message {
 	return &Message{metadata: md, message: resp, msgType: responseType}
 }
 
 // AsProto returns msg's underlying protobuf message of the specified type T.
 // If msg is nil or the contained message is not of type T, the zero value of T is returned.
-func AsProto[T protoreflect.ProtoMessage](msg *Message) T {
+func AsProto[T proto.Message](msg *Message) T {
 	var zero T
 	if msg == nil || msg.message == nil {
 		return zero
@@ -63,7 +63,7 @@ func AsProto[T protoreflect.ProtoMessage](msg *Message) T {
 }
 
 // GetProtoMessage returns the protobuf message contained in the Message.
-func (m *Message) GetProtoMessage() protoreflect.ProtoMessage {
+func (m *Message) GetProtoMessage() proto.Message {
 	if m == nil {
 		return nil
 	}
@@ -141,7 +141,7 @@ func (c Codec) Marshal(m any) (b []byte, err error) {
 	switch msg := m.(type) {
 	case *Message:
 		return c.gorumsMarshal(msg)
-	case protoreflect.ProtoMessage:
+	case proto.Message:
 		return c.marshaler.Marshal(msg)
 	default:
 		return nil, fmt.Errorf("gorums: cannot marshal message of type '%T'", m)
@@ -171,7 +171,7 @@ func (c Codec) Unmarshal(b []byte, m any) (err error) {
 	switch msg := m.(type) {
 	case *Message:
 		return c.gorumsUnmarshal(b, msg)
-	case protoreflect.ProtoMessage:
+	case proto.Message:
 		return c.unmarshaler.Unmarshal(b, msg)
 	default:
 		return fmt.Errorf("gorums: cannot unmarshal message of type '%T'", m)

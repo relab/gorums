@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 var streamDownErr = status.Error(codes.Unavailable, "stream is down")
@@ -25,7 +25,7 @@ type request struct {
 
 type response struct {
 	nid uint32
-	msg protoreflect.ProtoMessage
+	msg proto.Message
 	err error
 }
 

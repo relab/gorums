@@ -37,7 +37,7 @@ var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
 `
 
 var qcVar = `
-{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
+{{$protoMessage := use "proto.Message" .GenFile}}
 {{$callData := use "gorums.QuorumCallData" .GenFile}}
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}

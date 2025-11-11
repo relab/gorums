@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 // LevelNotSet is the zero value level used to indicate that no level (and
@@ -22,7 +22,7 @@ type watcher struct {
 // This struct should be used by generated code only.
 type Correctable struct {
 	mu       sync.Mutex
-	reply    protoreflect.ProtoMessage
+	reply    proto.Message
 	level    int
 	err      error
 	done     bool
@@ -31,7 +31,7 @@ type Correctable struct {
 }
 
 // Get returns the latest response, the current level, and the last error.
-func (c *Correctable) Get() (protoreflect.ProtoMessage, int, error) {
+func (c *Correctable) Get() (proto.Message, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
@@ -55,7 +55,7 @@ func (c *Correctable) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error, done bool) {
+func (c *Correctable) set(reply proto.Message, level int, err error, done bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
@@ -83,10 +83,10 @@ func (c *Correctable) set(reply protoreflect.ProtoMessage, level int, err error,
 //
 // This struct should only be used by generated code.
 type CorrectableCallData struct {
-	Message        protoreflect.ProtoMessage
+	Message        proto.Message
 	Method         string
-	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
-	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, int, bool)
+	PerNodeArgFn   func(proto.Message, uint32) proto.Message
+	QuorumFunction func(proto.Message, map[uint32]proto.Message) (proto.Message, int, bool)
 	ServerStream   bool
 }
 
@@ -131,12 +131,12 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 
 func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
 	var (
-		resp    protoreflect.ProtoMessage
+		resp    proto.Message
 		errs    []nodeError
 		rlevel  int
 		clevel  = LevelNotSet
 		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
+		replies = make(map[uint32]proto.Message)
 	)
 
 	if state.data.ServerStream {

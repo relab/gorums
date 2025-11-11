@@ -26,7 +26,7 @@ var correctableCallComment = `
 
 var correctableVar = `
 {{$correctableOut := outType .Method $customOut}}
-{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
+{{$protoMessage := use "proto.Message" .GenFile}}
 {{$callData := use "gorums.CorrectableCallData" .GenFile}}
 {{$genFile := .GenFile}}
 {{$unexportMethod := unexport .Method.GoName}}
