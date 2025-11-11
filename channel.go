@@ -220,7 +220,7 @@ func (c *channel) receiver() {
 			c.clearStream()
 		} else {
 			err := resp.GetStatus().Err()
-			c.routeResponse(resp.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
+			c.routeResponse(resp.GetMessageID(), response{nid: c.node.ID(), msg: resp.GetProtoMessage(), err: err})
 		}
 
 		select {

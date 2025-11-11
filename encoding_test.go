@@ -15,7 +15,7 @@ func TestAsProto(t *testing.T) {
 	}{
 		{
 			name:    "Success",
-			msg:     &Message{Message: mock.Request_builder{Val: "hello"}.Build()},
+			msg:     newRequestMessage(nil, mock.Request_builder{Val: "hello"}.Build()),
 			wantNil: false,
 			wantVal: "hello",
 		},
@@ -26,7 +26,7 @@ func TestAsProto(t *testing.T) {
 		},
 		{
 			name:    "WrongType",
-			msg:     &Message{Message: mock.Response_builder{Val: "r"}.Build()},
+			msg:     NewResponseMessage(nil, mock.Response_builder{Val: "r"}.Build()),
 			wantNil: true,
 		},
 	}

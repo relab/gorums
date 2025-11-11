@@ -71,12 +71,12 @@ func (interceptorSrv) Test(_ gorums.ServerCtx, req *mock.Request) (*mock.Respons
 
 func appendStringInterceptor(in, out string) gorums.Interceptor {
 	return func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-		if req, ok := msg.Message.(*mock.Request); ok {
+		if req := gorums.AsProto[*mock.Request](msg); req != nil {
 			req.SetVal(req.GetVal() + in)
 		}
 		resp, err := next(ctx, msg)
 		if resp != nil {
-			if r, ok := resp.Message.(*mock.Response); ok {
+			if r := gorums.AsProto[*mock.Response](resp); r != nil {
 				r.SetVal(r.GetVal() + out)
 			}
 		}
@@ -94,7 +94,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 		))
 		// register final handler which appends "final-" to the request value
 		s.RegisterHandler("mock.Server.Test", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			req := in.Message.(*mock.Request)
+			req := gorums.AsProto[*mock.Request](in)
 			resp, err := interceptorSrv.Test(ctx, req)
 			return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 		})
