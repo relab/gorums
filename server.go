@@ -67,7 +67,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
-		if handler, ok := s.handlers[req.Metadata.GetMethod()]; ok {
+		if handler, ok := s.handlers[req.GetMethod()]; ok {
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.

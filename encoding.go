@@ -62,10 +62,25 @@ func (m *Message) GetMetadata() *ordering.Metadata {
 
 // GetMethod returns the method name from the message metadata.
 func (m *Message) GetMethod() string {
-	if m == nil || m.Metadata == nil {
+	if m == nil {
 		return "nil"
 	}
 	return m.Metadata.GetMethod()
+}
+
+// GetMessageID returns the message ID from the message metadata.
+func (m *Message) GetMessageID() uint64 {
+	if m == nil {
+		return 0
+	}
+	return m.Metadata.GetMessageID()
+}
+
+func (m *Message) GetStatus() *status.Status {
+	if m == nil {
+		return status.New(codes.Unknown, "nil message")
+	}
+	return status.FromProto(m.Metadata.GetStatus())
 }
 
 // setError sets the error status in the message metadata in preparation for sending
@@ -155,10 +170,10 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	}
 
 	// get method descriptor from registry
-	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(msg.Metadata.GetMethod()))
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(msg.GetMethod()))
 	if err != nil {
 		// err is a NotFound error with no method name information; return a more informative error
-		return fmt.Errorf("gorums: could not find method descriptor for %s", msg.Metadata.GetMethod())
+		return fmt.Errorf("gorums: could not find method descriptor for %s", msg.GetMethod())
 	}
 	methodDesc := desc.(protoreflect.MethodDescriptor)
 

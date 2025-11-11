@@ -122,7 +122,7 @@ func (c *channel) isConnected() bool {
 // enqueue adds the request to the send queue and sets up a response router if needed.
 // If the node is closed, it responds with an error instead.
 func (c *channel) enqueue(req request, responseChan chan<- response) {
-	msgID := req.msg.Metadata.GetMessageID()
+	msgID := req.msg.GetMessageID()
 	if responseChan != nil {
 		// allocate before critical section
 		router := responseRouter{responseChan, req.streaming}
@@ -191,11 +191,11 @@ func (c *channel) sender() {
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: err})
+			c.routeResponse(req.msg.GetMessageID(), response{nid: c.node.ID(), err: err})
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
-			c.routeResponse(req.msg.Metadata.GetMessageID(), response{nid: c.node.ID(), err: err})
+			c.routeResponse(req.msg.GetMessageID(), response{nid: c.node.ID(), err: err})
 		}
 	}
 }
@@ -219,8 +219,8 @@ func (c *channel) receiver() {
 			c.cancelPendingMsgs()
 			c.clearStream()
 		} else {
-			err := status.FromProto(resp.Metadata.GetStatus()).Err()
-			c.routeResponse(resp.Metadata.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
+			err := resp.GetStatus().Err()
+			c.routeResponse(resp.GetMessageID(), response{nid: c.node.ID(), msg: resp.Message, err: err})
 		}
 
 		select {
@@ -250,7 +250,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// wait for actual server responses, so mustWaitSendDone() returns false for them.
 		if req.opts.mustWaitSendDone() && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
-			c.routeResponse(req.msg.Metadata.GetMessageID(), response{})
+			c.routeResponse(req.msg.GetMessageID(), response{})
 		}
 	}()
 
