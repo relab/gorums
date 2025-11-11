@@ -26,13 +26,14 @@ type {{$service}}Server interface {
 var registerInterface = `
 {{$genFile := .GenFile}}
 {{$gorumsMessage := use "gorums.Message" .GenFile}}
+{{$asProto := use "gorums.AsProto" .GenFile}}
 {{$newMessage := use "gorums.NewResponseMessage" $genFile}}
 {{range .Services -}}
 {{$service := .GoName}}
 func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$service}}Server) {
 	{{- range .Methods}}
 	srv.RegisterHandler("{{.Desc.FullName}}", func(ctx {{$context}}, in *{{$gorumsMessage}}) (*{{$gorumsMessage}}, error) {
-		req := in.Message.(*{{in $genFile .}})
+		req := {{$asProto}}[*{{in $genFile .}}](in)
 		{{- if isOneway .}}
 		impl.{{.GoName}}(ctx, req)
 		return nil, nil
