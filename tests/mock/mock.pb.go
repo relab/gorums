@@ -10,7 +10,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -22,10 +21,10 @@ const (
 )
 
 type Request struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Val           string                 `protobuf:"bytes,1,opt,name=val" json:"val,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Val string                 `protobuf:"bytes,1,opt,name=val"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Request) Reset() {
@@ -53,23 +52,36 @@ func (x *Request) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Request.ProtoReflect.Descriptor instead.
-func (*Request) Descriptor() ([]byte, []int) {
-	return file_mock_mock_proto_rawDescGZIP(), []int{0}
-}
-
 func (x *Request) GetVal() string {
 	if x != nil {
-		return x.Val
+		return x.xxx_hidden_Val
 	}
 	return ""
 }
 
+func (x *Request) SetVal(v string) {
+	x.xxx_hidden_Val = v
+}
+
+type Request_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Val string
+}
+
+func (b0 Request_builder) Build() *Request {
+	m0 := &Request{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Val = b.Val
+	return m0
+}
+
 type Response struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Val           string                 `protobuf:"bytes,1,opt,name=val" json:"val,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Val string                 `protobuf:"bytes,1,opt,name=val"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Response) Reset() {
@@ -97,16 +109,29 @@ func (x *Response) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Response.ProtoReflect.Descriptor instead.
-func (*Response) Descriptor() ([]byte, []int) {
-	return file_mock_mock_proto_rawDescGZIP(), []int{1}
-}
-
 func (x *Response) GetVal() string {
 	if x != nil {
-		return x.Val
+		return x.xxx_hidden_Val
 	}
 	return ""
+}
+
+func (x *Response) SetVal(v string) {
+	x.xxx_hidden_Val = v
+}
+
+type Response_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Val string
+}
+
+func (b0 Response_builder) Build() *Response {
+	m0 := &Response{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Val = b.Val
+	return m0
 }
 
 var File_mock_mock_proto protoreflect.FileDescriptor
@@ -120,18 +145,6 @@ const file_mock_mock_proto_rawDesc = "" +
 	"\x03val\x18\x01 \x01(\tR\x03val2/\n" +
 	"\x06Server\x12%\n" +
 	"\x04Test\x12\r.mock.Request\x1a\x0e.mock.ResponseB)Z\"github.com/relab/gorums/tests/mock\x92\x03\x02\b\x02b\beditionsp\xe8\a"
-
-var (
-	file_mock_mock_proto_rawDescOnce sync.Once
-	file_mock_mock_proto_rawDescData []byte
-)
-
-func file_mock_mock_proto_rawDescGZIP() []byte {
-	file_mock_mock_proto_rawDescOnce.Do(func() {
-		file_mock_mock_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_mock_mock_proto_rawDesc), len(file_mock_mock_proto_rawDesc)))
-	})
-	return file_mock_mock_proto_rawDescData
-}
 
 var file_mock_mock_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_mock_mock_proto_goTypes = []any{

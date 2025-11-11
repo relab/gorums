@@ -54,7 +54,7 @@ const handlerName = "mock.Server.Test"
 type mockSrv struct{}
 
 func (mockSrv) Test(_ ServerCtx, req *mock.Request) (*mock.Response, error) {
-	return &mock.Response{Val: req.GetVal() + "server-"}, nil
+	return mock.Response_builder{Val: req.GetVal() + "-mocked-"}.Build(), nil
 }
 
 func newNodeWithStoppableServer(t *testing.T, delay time.Duration) (*RawNode, func()) {
@@ -65,7 +65,7 @@ func newNodeWithStoppableServer(t *testing.T, delay time.Duration) (*RawNode, fu
 		srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message) (*Message, error) {
 			// Simulate slow processing
 			time.Sleep(delay)
-			req := in.Message.(*mock.Request)
+			req := AsProto[*mock.Request](in)
 			resp, err := mockSrv.Test(ctx, req)
 			return NewResponseMessage(in.GetMetadata(), resp), err
 		})

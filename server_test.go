@@ -66,18 +66,18 @@ func TestServerCallback(t *testing.T) {
 type interceptorSrv struct{}
 
 func (interceptorSrv) Test(_ gorums.ServerCtx, req *mock.Request) (*mock.Response, error) {
-	return &mock.Response{Val: req.GetVal() + "server-"}, nil
+	return mock.Response_builder{Val: req.GetVal() + "server-"}.Build(), nil
 }
 
 func appendStringInterceptor(in, out string) gorums.Interceptor {
 	return func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 		if req, ok := msg.Message.(*mock.Request); ok {
-			req.Val = req.GetVal() + in
+			req.SetVal(req.GetVal() + in)
 		}
 		resp, err := next(ctx, msg)
 		if resp != nil {
 			if r, ok := resp.Message.(*mock.Response); ok {
-				r.Val = r.GetVal() + out
+				r.SetVal(r.GetVal() + out)
 			}
 		}
 		return resp, err
@@ -120,7 +120,10 @@ func TestServerInterceptorsChain(t *testing.T) {
 	// call the RPC
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	res, err := mgr.Nodes()[0].RPCCall(ctx, gorums.CallData{Message: &mock.Request{Val: "client-"}, Method: "mock.Server.Test"})
+	res, err := mgr.Nodes()[0].RPCCall(ctx, gorums.CallData{
+		Message: mock.Request_builder{Val: "client-"}.Build(),
+		Method:  "mock.Server.Test",
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
