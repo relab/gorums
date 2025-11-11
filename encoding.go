@@ -49,6 +49,19 @@ func NewResponseMessage(md *ordering.Metadata, resp protoreflect.ProtoMessage) *
 	return &Message{metadata: md, Message: resp, msgType: responseType}
 }
 
+// AsProto returns msg's underlying protobuf message of the specified type T.
+// If msg is nil or the contained message is not of type T, the zero value of T is returned.
+func AsProto[T protoreflect.ProtoMessage](msg *Message) T {
+	var zero T
+	if msg == nil || msg.Message == nil {
+		return zero
+	}
+	if req, ok := msg.Message.(T); ok {
+		return req
+	}
+	return zero
+}
+
 // GetProtoMessage returns the protobuf message contained in the Message.
 func (m *Message) GetProtoMessage() protoreflect.ProtoMessage {
 	if m == nil {
