@@ -3,8 +3,6 @@ package version
 
 import (
 	"fmt"
-	"runtime/debug"
-	"strings"
 )
 
 // These constants determine the current version of this module.
@@ -23,25 +21,10 @@ const (
 //
 //	v1.20.1
 //	v1.21.0-rc.1
-//	v1.21.0-devel+<commit-hash>
 func String() string {
 	v := fmt.Sprintf("v%d.%d.%d", Major, Minor, Patch)
 	if PreRelease != "" {
 		v += "-" + PreRelease
-
-		bi, ok := debug.ReadBuildInfo()
-		var metadata string
-		if ok {
-			for _, setting := range bi.Settings {
-				if setting.Key == "vcs.revision" {
-					metadata = setting.Value[0:8]
-					break
-				}
-			}
-		}
-		if strings.Contains(PreRelease, "devel") && metadata != "" {
-			v += "+" + metadata
-		}
 	}
 	return v
 }
