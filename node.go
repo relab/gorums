@@ -59,27 +59,24 @@ func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
 }
 
 // connect to this node and associate it with the manager.
-func (n *RawNode) connect(mgr *RawManager) error {
+func (n *RawNode) connect(mgr *RawManager) (err error) {
 	n.mgr = mgr
 	if n.mgr.opts.noConnect {
 		return nil
 	}
+
+	// Create gRPC connection
+	n.conn, err = grpc.NewClient(n.addr, n.mgr.opts.grpcDialOpts...)
+	if err != nil {
+		return nodeError{nodeID: n.id, cause: err}
+	}
+
+	// Create channel and establish gRPC node stream
 	n.channel = newChannel(n)
-	if err := n.channel.connect(); err != nil {
+	if err := n.channel.ensureStream(); err != nil {
 		return nodeError{nodeID: n.id, cause: err}
 	}
 	return nil
-}
-
-// dial the node and close the current connection.
-func (n *RawNode) dial() error {
-	if n.conn != nil {
-		// close the current connection before dialing again.
-		n.conn.Close()
-	}
-	var err error
-	n.conn, err = grpc.NewClient(n.addr, n.mgr.opts.grpcDialOpts...)
-	return err
 }
 
 // newContext returns a new context for this node's channel.

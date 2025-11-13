@@ -26,7 +26,7 @@ var multicastBody = `	cd := {{$callData}}{
 		Method:  "{{$fullName}}",
 	}
 {{- if hasPerNodeArg .Method}}
-{{$protoMessage := use "protoreflect.ProtoMessage" .GenFile}}
+{{$protoMessage := use "proto.Message" .GenFile}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}

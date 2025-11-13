@@ -1,6 +1,6 @@
 # User Guide
 
-You may wish to read the gRPC "Getting Started" documentation found [here](http://www.grpc.io/docs/) before continuing.
+You may wish to read the gRPC [Getting Started documentation](http://www.grpc.io/docs/) before continuing.
 Gorums uses gRPC under the hood, and exposes some of its configuration.
 Gorums also uses [Protocol Buffers](https://developers.google.com/protocol-buffers) to specify messages and RPC methods.
 
@@ -97,7 +97,7 @@ Next, we compile our service definition into Go code which includes:
 We simply invoke `protoc` to compile our Protobuf definition:
 
 ```shell
-protoc -I=$(go list -m -f {{.Dir}} github.com/relab/gorums):. \
+protoc -I="$(go list -m -f {{.Dir}} github.com/relab/gorums):." \
   --go_out=paths=source_relative:. \
   --gorums_out=paths=source_relative:. \
   storage.proto

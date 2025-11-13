@@ -17,7 +17,7 @@ var rpcBody = `	cd := {{$callData}}{
 		Method: "{{$fullName}}",
 	}
 {{- if hasPerNodeArg .Method}}
-	{{$protoMessage := use "protoreflect.ProtoMessage" $genFile}}
+	{{$protoMessage := use "proto.Message" $genFile}}
 	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
 		return f(req.(*{{$in}}), nid)
 	}

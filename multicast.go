@@ -6,10 +6,14 @@ import (
 	"github.com/relab/gorums/ordering"
 )
 
-// Multicast is a one-way call; no replies are processed.
-// By default this function returns once the message has been sent to all nodes.
-// Providing the call option WithNoSendWaiting, the function may return
-// before the message has been sent.
+// Multicast is a one-way call; no replies are returned to the client.
+//
+// By default, this method blocks until messages have been sent to all nodes.
+// This ensures that send operations complete before the caller proceeds, which can
+// be useful for observing context cancellation or for pacing message sends.
+//
+// With the WithNoSendWaiting call option, the method returns immediately after
+// enqueueing messages to all nodes (fire-and-forget semantics).
 //
 // This method should be used by generated code only.
 func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
@@ -18,7 +22,7 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 	sentMsgs := 0
 
 	var replyChan chan response
-	if !o.noSendWaiting {
+	if o.waitSendDone {
 		replyChan = make(chan response, len(c))
 	}
 	for _, n := range c {
@@ -29,17 +33,16 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}, opts: o}, replyChan, false)
+		n.channel.enqueue(request{ctx: ctx, msg: newRequestMessage(md, msg), opts: o}, replyChan)
 		sentMsgs++
 	}
 
-	// if noSendWaiting is set, we will not wait for confirmation from the channel before returning.
-	if o.noSendWaiting {
+	// Fire-and-forget: return immediately without waiting for send completion
+	if !o.waitSendDone {
 		return
 	}
 
-	// nodeStream sends an empty reply on replyChan when the message has been sent
-	// wait until the message has been sent
+	// Default: block until all sends complete
 	for ; sentMsgs > 0; sentMsgs-- {
 		<-replyChan
 	}

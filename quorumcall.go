@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 )
 
 // QuorumCallData holds the message, destination nodes, method identifier,
@@ -13,16 +13,16 @@ import (
 //
 // This struct should be used by generated code only.
 type QuorumCallData struct {
-	Message        protoreflect.ProtoMessage
+	Message        proto.Message
 	Method         string
-	PerNodeArgFn   func(protoreflect.ProtoMessage, uint32) protoreflect.ProtoMessage
-	QuorumFunction func(protoreflect.ProtoMessage, map[uint32]protoreflect.ProtoMessage) (protoreflect.ProtoMessage, bool)
+	PerNodeArgFn   func(proto.Message, uint32) proto.Message
+	QuorumFunction func(proto.Message, map[uint32]proto.Message) (proto.Message, bool)
 }
 
 // QuorumCall performs a quorum call on the configuration.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp protoreflect.ProtoMessage, err error) {
+func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp proto.Message, err error) {
 	expectedReplies := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
@@ -36,13 +36,13 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: &Message{Metadata: md, Message: msg}}, replyChan, false)
+		n.channel.enqueue(request{ctx: ctx, msg: newRequestMessage(md, msg)}, replyChan)
 	}
 
 	var (
 		errs    []nodeError
 		quorum  bool
-		replies = make(map[uint32]protoreflect.ProtoMessage)
+		replies = make(map[uint32]proto.Message)
 	)
 
 	for {

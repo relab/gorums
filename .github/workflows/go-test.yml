@@ -1,49 +1,32 @@
-name: Test
+name: Go Test
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
 
 jobs:
   test:
     strategy:
       matrix:
-        go-version: ["1.24.1"]
         platform: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
 
     steps:
-    - name: Cache Go Modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build          # ubuntu-latest
-          ~/Library/Caches/go-build  # macos-latest
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
+      - uses: arduino/setup-protoc@v3.0.0
+        with:
+          version: "32.1"
+          include-pre-releases: true
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          make tools
+          make installgorums
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: ${{ matrix.go-version }}
-
-    - name: Install Protoc
-      uses: arduino/setup-protoc@v3.0.0
-      with:
-        version: "29.3"
-        include-pre-releases: true
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Install tools
-      run: |
-        make tools
-        make installgorums
-
-    - name: Run Tests
-      run: make test
+      - name: Run Tests
+        run: make test
