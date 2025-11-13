@@ -22,13 +22,11 @@ Session.vim
 
 *.xo
 .vscode/*.log
+.idea/
+z-scratch/
 
 # binary files
 cmd/benchmark/benchmark
 cmd/protoc-gen-gorums/gengorums/template_static.go.bak
-ideas.txt
-all-to-all.md
 
-# jetbrains IDE files
-.idea/
 go.work.sum

@@ -83,3 +83,60 @@ genproto:
 	@$(MAKE) -B -s benchmark
 	@$(MAKE) -B -s --no-print-directory -C ./tests all
 	@$(MAKE) -B -s --no-print-directory -C ./examples all
+
+# Release helper targets to automate common release preparation steps.
+# See doc/release-guide.md for details.
+.PHONY: release-tools prepare-release release-pr release-publish
+
+release-tools:
+	@echo "+ Checking for required release tools (gorelease, gh)..."
+	@command -v gorelease >/dev/null 2>&1 || go install golang.org/x/exp/cmd/gorelease@latest
+	@command -v gh >/dev/null || (echo "Please install 'gh' (GitHub CLI): brew install gh" && exit 1)
+	@echo "+ Checking installed tool versions"
+	@protoc --version || echo "protoc not found or not on PATH"
+	@protoc-gen-go --version || echo "protoc-gen-go not found or not on PATH"
+	@protoc-gen-go-grpc --version || echo "protoc-gen-go-grpc not found or not on PATH"
+	@protoc-gen-gorums --version || echo "protoc-gen-gorums not found or not on PATH"
+	@echo "+ OK"
+
+prepare-release: release-tools
+	@echo "+ Upgrade module dependencies"
+	@go get -u ./... && go mod tidy
+	@cd examples && go get -u ./... && go mod tidy
+	@$(MAKE) genproto
+	@echo "+ Running gorelease to suggest the next version"
+	@tmp=$$(mktemp); \
+	gorelease | tee $$tmp; \
+	suggested=$$(awk -F': ' '/^Suggested version:/ {print $$2; exit}' $$tmp); \
+	echo "--------------------------------------------------------------------------"; \
+	echo ""; \
+	echo "gorelease suggests: $$suggested"; \
+	echo ""; \
+	echo "If the suggested version looks good, please edit the version constants in:"; \
+	echo "  - internal/version/version.go"; \
+	echo "  - version.go"; \
+	echo ""; \
+	echo "After editing those files, re-run to update generated files before creating the PR:"; \
+	echo "  make genproto"; \
+	echo "  go get -C examples github.com/relab/gorums@$${suggested:-vX.Y.Z}"; \
+	echo "  go mod tidy && (cd examples && go mod tidy)"; \
+	echo ""; \
+	echo "Then create the release PR:"; \
+	echo "  make release-pr VERSION=$${suggested:-vX.Y.Z}"
+
+release-pr:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make release-pr VERSION=v0.9.0"; exit 1; fi
+	@if [ -n "$$(git status --porcelain)" ]; then echo "Uncommitted changes present; commit or stash first; aborting."; exit 1; fi
+	@BRANCH="release/$(VERSION)-devel"; \
+	git switch -c $$BRANCH; \
+	git add -A; \
+	git commit -m "Gorums release $(VERSION)"; \
+	git push -u origin HEAD; \
+	gh pr create --title "Gorums release $(VERSION)" --body "Release $(VERSION)"
+
+release-publish:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make release-publish VERSION=v0.9.0"; exit 1; fi
+	@echo "+ Tagging and pushing tag: $(VERSION)"
+	@git tag -a $(VERSION) -m "Gorums $(VERSION)"
+	@git push origin $(VERSION)
+	@echo "+ Tag pushed. Use 'gh release create $(VERSION) --title \"Gorums $(VERSION)\"' to publish with release notes."

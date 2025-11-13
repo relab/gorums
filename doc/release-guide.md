@@ -1,102 +1,50 @@
 # Preparing a new Release of Gorums
 
-Below are the steps to prepare a new release of Gorums.
+This repository includes a `Makefile` with helpers that automate the repetitive parts of preparing a release.
+The recommended flow below uses those targets.
 
-To cut a release you will need additional tools:
+## Makefile helper targets
+
+Useful `make` targets provided in the repository:
+
+- `make release-tools` — install/check `gorelease` and `gh`.
+- `make prepare-release` — regenerates protos (via `genproto`), tidies modules, checks important tool versions and runs `gorelease` to suggest a version. After a suggested version is shown it prints instructions for editing version constants and re-running `make genproto` to update generated files.
+- `make genproto` — regenerate all proto-generated files (dev, benchmark, tests, examples).
+- `make release-pr VERSION=vX.Y.Z` — create a release branch, commit changes and open a PR (requires a clean working tree).
+- `make release-publish VERSION=vX.Y.Z` — create and push an annotated tag; then use `gh release create` to publish the release notes.
+
+## Quick flow
 
 ```shell
-% go install golang.org/x/exp/cmd/gorelease@latest
-% brew install gh
+# Prepare everything and get a suggested version from gorelease
+make prepare-release
+
+# If the suggested version looks good, edit version constants as instructed
+# then update generated files and tidy modules:
+make genproto
+go mod tidy
+(cd examples && go mod tidy)
+
+# (Optional) Run tests
+make test
+make testrace
+
+# Create the release PR (when ready)
+make release-pr VERSION=v0.9.0
+
+# After merge, tag & push and publish the release notes with gh
+make release-publish VERSION=v0.9.0
+gh release create v0.9.0 --prerelease --title "Gorums v0.9.0" --notes-file release-notes.md
+
+# To check that the new version is available (after a bit of time):
+go list -m github.com/relab/gorums@v0.9.0
 ```
 
-1. Check and upgrade dependencies:
+## Version file edits
 
-   ```shell
-   % git switch -c meling/release/v0.9.0-devel
-   % make tools
-   % protoc --version
-   libprotoc 3.15.6
-   # v3.15.6 is current; but if new version available run:
-   % brew upgrade protobuf
-   % protoc-gen-go-grpc --version
-   protoc-gen-go-grpc 1.1.0
-   % protoc-gen-go --version
-   protoc-gen-go v1.26.0
-   # Upgrade module dependencies
-   % go get -u ./...
-   % cd examples
-   % go get -u ./...
-   % cd ..
-   ```
+After `make prepare-release` prints the suggested version, update the version constants in the following files before creating the PR:
 
-2. Run `gorelease` to suggested new version number, e.g.:
+- `internal/version/version.go`
+- `version.go` (keep `MinVersion` unchanged unless you intentionally want to relax the minimum)
 
-   ```text
-   ... (list of compatability changes) ...
-   Inferred base version: v0.8.1
-   Suggested version: v0.9.0
-   ```
-
-3. Edit `internal/version/version.go`
-
-4. Edit `version.go` (`MinVersion` should be kept as is, since otherwise `make dev` below will fail)
-
-5. Install new version of `protoc-gen-gorums`:
-
-   ```shell
-   % make dev
-   % protoc-gen-gorums --version
-   protoc-gen-gorums v0.9.0-devel
-   ```
-
-6. Now `version.go` can be updated to reflect the new version number, if necessary.
-
-7. Recompile `_gorums.pb.go` files:
-
-   ```shell
-   % make -B
-   % go mod tidy
-   % cd examples
-   % make -B
-   % go mod tidy
-   % cd ..
-   ```
-
-8. Run tests:
-
-   ```shell
-   % make test
-   % make testrace
-   ```
-
-9. Edit gorums dependency to be v0.9.0 in example/go.mod:
-
-   ```shell
-   % vim examples/go.mod
-   ```
-
-10. Add and commit changes due to upgrades and recompilation:
-
-    ```shell
-    % git add
-    % git commit -m "Gorums release v0.9.0"
-    % gh pr create --title "Gorums release v0.9.0"
-    ```
-
-11. Merge the PR and publish the release with release notes:
-
-    ```shell
-    % git switch main
-    % git pull
-    # Prepare release notes in release-notes.md
-    % gh release create v0.9.0 --prerelease --title "Main changes in release"
-    # Select generated release notes from template
-    ```
-
-    Now other projects can depend on `v0.9.0` of `github.com/relab/gorums`.
-
-12. To check that the new version is available (after a bit of time):
-
-    ```shell
-    % go list -m github.com/relab/gorums@v0.9.0
-    ```
+After editing those files, regenerate generated files and tidy modules as shown above, then create the PR with `make release-pr`.
