@@ -76,10 +76,10 @@ type qspec struct {
 func (q qspec) q(replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool) {
 	sum := 0
 	for _, reply := range replies {
-		sum += int(reply.Level)
+		sum += int(reply.GetLevel())
 	}
 	level := sum / q.div
-	return &CorrectableResponse{Level: int32(level)}, level, level >= q.doneLevel
+	return CorrectableResponse_builder{Level: int32(level)}.Build(), level, level >= q.doneLevel
 }
 
 // CorrectableStreamQF is the quorum function for the CorrectableStream
@@ -106,7 +106,7 @@ type testSrv struct {
 
 func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error {
 	for i := range srv.n {
-		err := send(&CorrectableResponse{Level: int32(i + 1)})
+		err := send(CorrectableResponse_builder{Level: int32(i + 1)}.Build())
 		if err != nil {
 			return err
 		}
@@ -115,5 +115,5 @@ func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableReq
 }
 
 func (srv testSrv) Correctable(_ gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error) {
-	return &CorrectableResponse{Level: 1}, nil
+	return CorrectableResponse_builder{Level: 1}.Build(), nil
 }

@@ -20,10 +20,10 @@ type (
 )
 
 func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return &Response{
+	return Response_builder{
 		Name: srv.name,
 		Num:  req.GetNum(),
-	}, nil
+	}.Build(), nil
 }
 
 func newQSpec(cfgSize int) *cfgQSpec {
@@ -75,7 +75,7 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 func TestConfig(t *testing.T) {
 	callRPC := func(cfg *Configuration) {
 		for i := range 5 {
-			resp, err := cfg.Config(context.Background(), &Request{Num: uint64(i)})
+			resp, err := cfg.Config(context.Background(), Request_builder{Num: uint64(i)}.Build())
 			if err != nil {
 				t.Fatal(err)
 			}

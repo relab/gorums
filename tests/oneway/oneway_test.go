@@ -111,7 +111,7 @@ func TestOnewayCalls(t *testing.T) {
 			}
 
 			for c := 1; c <= test.calls; c++ {
-				in := &oneway.Request{Num: uint64(c)}
+				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				if test.sendWait {
 					f(cfg)(context.Background(), in)
 				} else {
@@ -125,8 +125,8 @@ func TestOnewayCalls(t *testing.T) {
 				close(srvs[i].received)
 				expected := uint64(1)
 				for r := range srvs[i].received {
-					if expected != r.Num {
-						t.Errorf("%s(%d) = %d, expected %d", test.name, expected, r.Num, expected)
+					if expected != r.GetNum() {
+						t.Errorf("%s(%d) = %d, expected %d", test.name, expected, r.GetNum(), expected)
 					}
 					expected++
 				}
@@ -141,7 +141,7 @@ func TestMulticastPerNode(t *testing.T) {
 
 	// simple transformation function
 	f := func(msg *oneway.Request, id uint32) *oneway.Request {
-		return &oneway.Request{Num: add(msg.Num, id)}
+		return oneway.Request_builder{Num: add(msg.GetNum(), id)}.Build()
 	}
 	ignoreNodes := []int{}
 	ignore := func(id uint32) bool {
@@ -155,7 +155,7 @@ func TestMulticastPerNode(t *testing.T) {
 		if ignore(id) {
 			return nil
 		}
-		return &oneway.Request{Num: add(msg.Num, id)}
+		return oneway.Request_builder{Num: add(msg.GetNum(), id)}.Build()
 	}
 	tests := []struct {
 		name        string
@@ -196,7 +196,7 @@ func TestMulticastPerNode(t *testing.T) {
 			}
 
 			for c := 1; c <= test.calls; c++ {
-				in := &oneway.Request{Num: uint64(c)}
+				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				if test.sendWait {
 					cfg.MulticastPerNode(context.Background(), in, test.f)
 				} else {
@@ -213,8 +213,8 @@ func TestMulticastPerNode(t *testing.T) {
 				srvs[i].wg.Wait()
 				close(srvs[i].received)
 				for r := range srvs[i].received {
-					if expected != r.Num {
-						t.Errorf("%s -> %d, expected %d, nodeID=%d, ignore=%t", test.name, r.Num, expected, nodeIDs[i], ignore(nodeIDs[i]))
+					if expected != r.GetNum() {
+						t.Errorf("%s -> %d, expected %d, nodeID=%d, ignore=%t", test.name, r.GetNum(), expected, nodeIDs[i], ignore(nodeIDs[i]))
 					}
 					expected++
 				}
@@ -230,16 +230,16 @@ func BenchmarkUnicast(b *testing.B) {
 		srv.benchmark = true
 	}
 	node := cfg.Nodes()[0]
-	in := &oneway.Request{Num: 0}
+	in := oneway.Request_builder{Num: 0}.Build()
 	b.Run("UnicastSendWaiting__", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
-			in.Num = uint64(c)
+			in.SetNum(uint64(c))
 			node.Unicast(context.Background(), in)
 		}
 	})
 	b.Run("UnicastNoSendWaiting", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
-			in.Num = uint64(c)
+			in.SetNum(uint64(c))
 			node.Unicast(context.Background(), in, gorums.WithNoSendWaiting())
 		}
 	})
@@ -251,16 +251,16 @@ func BenchmarkMulticast(b *testing.B) {
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
-	in := &oneway.Request{Num: 0}
+	in := oneway.Request_builder{Num: 0}.Build()
 	b.Run("MulticastSendWaiting__", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
-			in.Num = uint64(c)
+			in.SetNum(uint64(c))
 			cfg.Multicast(context.Background(), in)
 		}
 	})
 	b.Run("MulticastNoSendWaiting", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
-			in.Num = uint64(c)
+			in.SetNum(uint64(c))
 			cfg.Multicast(context.Background(), in, gorums.WithNoSendWaiting())
 		}
 	})
