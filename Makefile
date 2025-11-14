@@ -106,7 +106,8 @@ prepare-release: release-tools
 	@$(MAKE) genproto
 	@echo "+ Running gorelease to suggest the next version"
 	@tmp=$$(mktemp); \
-	gorelease | tee $$tmp; \
+	gorelease > $$tmp; \
+	cat $$tmp | tee release-notes.txt; \
 	suggested=$$(awk -F': ' '/^Suggested version:/ {print $$2; exit}' $$tmp); \
 	echo "--------------------------------------------------------------------------"; \
 	echo ""; \
