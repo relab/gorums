@@ -77,7 +77,7 @@ stressgen: tools
 
 # Regenerate all Gorums and protobuf generated files across the repo (dev, benchmark, tests, examples).
 # This will force regeneration even though the proto files have not changed.
-genproto:
+genproto: installgorums dev
 	@echo "Regenerating all proto files (dev, benchmark, tests, examples)"
 	@$(MAKE) -B -s dev
 	@$(MAKE) -B -s benchmark
