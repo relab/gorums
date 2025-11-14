@@ -54,7 +54,7 @@ bootstrapgorums: tools
 endif
 
 compiletests: installgorums
-	@$(MAKE) --no-print-directory -C ./tests all
+	@$(MAKE) --no-print-directory -C ./internal/tests all
 
 test: compiletests
 	@go test ./...
@@ -75,13 +75,13 @@ stressgen: tools
 	cd ./internal/testprotos; stress -timeout=10s -p=1 ./testprotos.test
 	rm ./internal/testprotos/testprotos.test
 
-# Regenerate all Gorums and protobuf generated files across the repo (dev, benchmark, tests, examples).
+# Regenerate all Gorums and protobuf generated files across the repo (dev, benchmark, internal/tests, examples).
 # This will force regeneration even though the proto files have not changed.
 genproto: installgorums dev
-	@echo "Regenerating all proto files (dev, benchmark, tests, examples)"
+	@echo "Regenerating all proto files (dev, benchmark, internal/tests, examples)"
 	@$(MAKE) -B -s dev
 	@$(MAKE) -B -s benchmark
-	@$(MAKE) -B -s --no-print-directory -C ./tests all
+	@$(MAKE) -B -s --no-print-directory -C ./internal/tests all
 	@$(MAKE) -B -s --no-print-directory -C ./examples all
 
 # Release helper targets to automate common release preparation steps.

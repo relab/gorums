@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/tests/dummy"
+	"github.com/relab/gorums/internal/tests/dummy"
 )
 
 func TestNewConfigurationEmptyNodeList(t *testing.T) {
