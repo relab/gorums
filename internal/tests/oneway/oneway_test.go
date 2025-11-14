@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/tests/oneway"
+	"github.com/relab/gorums/internal/tests/oneway"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

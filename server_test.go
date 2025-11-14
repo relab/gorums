@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/tests/mock"
+	"github.com/relab/gorums/internal/tests/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"

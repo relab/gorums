@@ -3,7 +3,7 @@ package gorums
 import (
 	"testing"
 
-	"github.com/relab/gorums/tests/mock"
+	"github.com/relab/gorums/internal/tests/mock"
 )
 
 func TestAsProto(t *testing.T) {

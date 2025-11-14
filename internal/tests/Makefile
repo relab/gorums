@@ -26,13 +26,13 @@ config: config/config.pb.go config/config_gorums.pb.go
 correctable: correctable/correctable.pb.go correctable/correctable_gorums.pb.go
 
 %.pb.go : %.proto
-	@protoc -I=..:. --go_out=paths=source_relative:. --go_opt=default_api_level=API_OPAQUE $<
+	@protoc -I=../..:. --go_out=paths=source_relative:. --go_opt=default_api_level=API_OPAQUE $<
 
 %_grpc.pb.go : %.proto
-	@protoc -I=..:. --go-grpc_out=paths=source_relative:. $<
+	@protoc -I=../..:. --go-grpc_out=paths=source_relative:. $<
 
 %_gorums.pb.go : %.proto
-	@protoc -I=..:. --gorums_out=paths=source_relative:. $<
+	@protoc -I=../..:. --gorums_out=paths=source_relative:. $<
 
 clean:
 	find . -name '*.pb.go' -exec rm {} \;

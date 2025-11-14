@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/relab/gorums/internal/tests/mock"
 	"github.com/relab/gorums/ordering"
-	"github.com/relab/gorums/tests/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )

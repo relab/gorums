@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/tests/dummy"
+	"github.com/relab/gorums/internal/tests/dummy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
