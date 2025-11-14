@@ -136,7 +136,11 @@ release-pr:
 	git add -A; \
 	git commit -m "Gorums release $(VERSION)"; \
 	git push -u origin HEAD; \
-	gh pr create --title "Gorums release $(VERSION)" --body "Release $(VERSION)"
+	gh pr create --title "Gorums release $(VERSION)" --body "Release $(VERSION)"; \
+	echo "+ Release PR created. Opening in browser. Perform Squash and merge."; \
+	echo "+ After it is merged, run 'make release-publish VERSION=$(VERSION)' to publish the release."; \
+	sleep 2; \
+	gh pr view --web; \
 
 release-publish:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release-publish VERSION=v0.9.0"; exit 1; fi
