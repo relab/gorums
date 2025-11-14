@@ -29,21 +29,21 @@ func (s *testSrv) isInOrder(num uint64) bool {
 }
 
 func (s *testSrv) QC(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return &Response{
+	return Response_builder{
 		InOrder: s.isInOrder(req.GetNum()),
-	}, nil
+	}.Build(), nil
 }
 
 func (s *testSrv) QCAsync(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return &Response{
+	return Response_builder{
 		InOrder: s.isInOrder(req.GetNum()),
-	}, nil
+	}.Build(), nil
 }
 
 func (s *testSrv) UnaryRPC(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return &Response{
+	return Response_builder{
 		InOrder: s.isInOrder(req.GetNum()),
-	}, nil
+	}.Build(), nil
 }
 
 type testQSpec struct {
@@ -55,7 +55,7 @@ func (q testQSpec) qf(replies map[uint32]*Response) (*Response, bool) {
 		return nil, false
 	}
 	for _, reply := range replies {
-		if !reply.InOrder {
+		if !reply.GetInOrder() {
 			return reply, true
 		}
 	}
@@ -112,7 +112,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		resp, err := node.UnaryRPC(context.Background(), &Request{Num: uint64(i)})
+		resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
@@ -134,7 +134,7 @@ func TestQCOrdering(t *testing.T) {
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		resp, err := cfg.QC(context.Background(), &Request{Num: uint64(i)})
+		resp, err := cfg.QC(context.Background(), Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
 		}
@@ -158,7 +158,7 @@ func TestQCAsyncOrdering(t *testing.T) {
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		promise := cfg.QCAsync(ctx, &Request{Num: uint64(i)})
+		promise := cfg.QCAsync(ctx, Request_builder{Num: uint64(i)}.Build())
 		wg.Add(1)
 		go func(promise *AsyncResponse) {
 			defer wg.Done()
@@ -190,7 +190,7 @@ func TestMixedOrdering(t *testing.T) {
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
-		resp, err := cfg.QC(context.Background(), &Request{Num: uint64(i)})
+		resp, err := cfg.QC(context.Background(), Request_builder{Num: uint64(i)}.Build())
 		i++
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
@@ -206,7 +206,7 @@ func TestMixedOrdering(t *testing.T) {
 		for _, node := range nodes {
 			go func(node *Node) {
 				defer wg.Done()
-				resp, err := node.UnaryRPC(context.Background(), &Request{Num: uint64(i)})
+				resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return

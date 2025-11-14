@@ -11,7 +11,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -23,7 +22,7 @@ const (
 )
 
 type CorrectableRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -53,16 +52,23 @@ func (x *CorrectableRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CorrectableRequest.ProtoReflect.Descriptor instead.
-func (*CorrectableRequest) Descriptor() ([]byte, []int) {
-	return file_correctable_correctable_proto_rawDescGZIP(), []int{0}
+type CorrectableRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+}
+
+func (b0 CorrectableRequest_builder) Build() *CorrectableRequest {
+	m0 := &CorrectableRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	return m0
 }
 
 type CorrectableResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Level         int32                  `protobuf:"varint,1,opt,name=Level" json:"Level,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Level int32                  `protobuf:"varint,1,opt,name=Level"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CorrectableResponse) Reset() {
@@ -90,16 +96,29 @@ func (x *CorrectableResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CorrectableResponse.ProtoReflect.Descriptor instead.
-func (*CorrectableResponse) Descriptor() ([]byte, []int) {
-	return file_correctable_correctable_proto_rawDescGZIP(), []int{1}
-}
-
 func (x *CorrectableResponse) GetLevel() int32 {
 	if x != nil {
-		return x.Level
+		return x.xxx_hidden_Level
 	}
 	return 0
+}
+
+func (x *CorrectableResponse) SetLevel(v int32) {
+	x.xxx_hidden_Level = v
+}
+
+type CorrectableResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Level int32
+}
+
+func (b0 CorrectableResponse_builder) Build() *CorrectableResponse {
+	m0 := &CorrectableResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Level = b.Level
+	return m0
 }
 
 var File_correctable_correctable_proto protoreflect.FileDescriptor
@@ -113,18 +132,6 @@ const file_correctable_correctable_proto_rawDesc = "" +
 	"\x0fCorrectableTest\x12V\n" +
 	"\vCorrectable\x12\x1f.correctable.CorrectableRequest\x1a .correctable.CorrectableResponse\"\x04\xa8\xb5\x18\x01\x12^\n" +
 	"\x11CorrectableStream\x12\x1f.correctable.CorrectableRequest\x1a .correctable.CorrectableResponse\"\x04\xa8\xb5\x18\x010\x01B0Z)github.com/relab/gorums/tests/correctable\x92\x03\x02\b\x02b\beditionsp\xe8\a"
-
-var (
-	file_correctable_correctable_proto_rawDescOnce sync.Once
-	file_correctable_correctable_proto_rawDescData []byte
-)
-
-func file_correctable_correctable_proto_rawDescGZIP() []byte {
-	file_correctable_correctable_proto_rawDescOnce.Do(func() {
-		file_correctable_correctable_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_correctable_correctable_proto_rawDesc), len(file_correctable_correctable_proto_rawDesc)))
-	})
-	return file_correctable_correctable_proto_rawDescData
-}
 
 var file_correctable_correctable_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_correctable_correctable_proto_goTypes = []any{

@@ -11,7 +11,6 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
-	sync "sync"
 	unsafe "unsafe"
 )
 
@@ -23,10 +22,10 @@ const (
 )
 
 type Request struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Num           uint64                 `protobuf:"varint,1,opt,name=Num" json:"Num,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Num uint64                 `protobuf:"varint,1,opt,name=Num"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Request) Reset() {
@@ -54,23 +53,36 @@ func (x *Request) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Request.ProtoReflect.Descriptor instead.
-func (*Request) Descriptor() ([]byte, []int) {
-	return file_ordering_order_proto_rawDescGZIP(), []int{0}
-}
-
 func (x *Request) GetNum() uint64 {
 	if x != nil {
-		return x.Num
+		return x.xxx_hidden_Num
 	}
 	return 0
 }
 
+func (x *Request) SetNum(v uint64) {
+	x.xxx_hidden_Num = v
+}
+
+type Request_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Num uint64
+}
+
+func (b0 Request_builder) Build() *Request {
+	m0 := &Request{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Num = b.Num
+	return m0
+}
+
 type Response struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	InOrder       bool                   `protobuf:"varint,1,opt,name=InOrder" json:"InOrder,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_InOrder bool                   `protobuf:"varint,1,opt,name=InOrder"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Response) Reset() {
@@ -98,16 +110,29 @@ func (x *Response) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Response.ProtoReflect.Descriptor instead.
-func (*Response) Descriptor() ([]byte, []int) {
-	return file_ordering_order_proto_rawDescGZIP(), []int{1}
-}
-
 func (x *Response) GetInOrder() bool {
 	if x != nil {
-		return x.InOrder
+		return x.xxx_hidden_InOrder
 	}
 	return false
+}
+
+func (x *Response) SetInOrder(v bool) {
+	x.xxx_hidden_InOrder = v
+}
+
+type Response_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	InOrder bool
+}
+
+func (b0 Response_builder) Build() *Response {
+	m0 := &Response{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_InOrder = b.InOrder
+	return m0
 }
 
 var File_ordering_order_proto protoreflect.FileDescriptor
@@ -124,18 +149,6 @@ const file_ordering_order_proto_rawDesc = "" +
 	"\x02QC\x12\x11.ordering.Request\x1a\x12.ordering.Response\"\x04\xa0\xb5\x18\x01\x12:\n" +
 	"\aQCAsync\x12\x11.ordering.Request\x1a\x12.ordering.Response\"\b\xa0\xb5\x18\x01е\x18\x01\x123\n" +
 	"\bUnaryRPC\x12\x11.ordering.Request\x1a\x12.ordering.Response\"\x00B-Z&github.com/relab/gorums/tests/ordering\x92\x03\x02\b\x02b\beditionsp\xe8\a"
-
-var (
-	file_ordering_order_proto_rawDescOnce sync.Once
-	file_ordering_order_proto_rawDescData []byte
-)
-
-func file_ordering_order_proto_rawDescGZIP() []byte {
-	file_ordering_order_proto_rawDescOnce.Do(func() {
-		file_ordering_order_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_ordering_order_proto_rawDesc), len(file_ordering_order_proto_rawDesc)))
-	})
-	return file_ordering_order_proto_rawDescData
-}
 
 var file_ordering_order_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_ordering_order_proto_goTypes = []any{
