@@ -77,7 +77,7 @@ stressgen: tools
 
 # Regenerate all Gorums and protobuf generated files across the repo (dev, benchmark, tests, examples).
 # This will force regeneration even though the proto files have not changed.
-genproto:
+genproto: installgorums dev
 	@echo "Regenerating all proto files (dev, benchmark, tests, examples)"
 	@$(MAKE) -B -s dev
 	@$(MAKE) -B -s benchmark
@@ -106,7 +106,8 @@ prepare-release: release-tools
 	@$(MAKE) genproto
 	@echo "+ Running gorelease to suggest the next version"
 	@tmp=$$(mktemp); \
-	gorelease | tee $$tmp; \
+	gorelease > $$tmp; \
+	cat $$tmp | tee release-notes.txt; \
 	suggested=$$(awk -F': ' '/^Suggested version:/ {print $$2; exit}' $$tmp); \
 	echo "--------------------------------------------------------------------------"; \
 	echo ""; \
@@ -121,12 +122,15 @@ prepare-release: release-tools
 	echo "  go get -C examples github.com/relab/gorums@$${suggested:-vX.Y.Z}"; \
 	echo "  go mod tidy && (cd examples && go mod tidy)"; \
 	echo ""; \
+	echo "Commit all changes and create an empty commit with the release notes:"; \
+	echo "  git commit --allow-empty -F release-notes.txt"; \
+	echo ""; \
 	echo "Then create the release PR:"; \
 	echo "  make release-pr VERSION=$${suggested:-vX.Y.Z}"
 
 release-pr:
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make release-pr VERSION=v0.9.0"; exit 1; fi
-	@if [ -n "$$(git status --porcelain)" ]; then echo "Uncommitted changes present; commit or stash first; aborting."; exit 1; fi
+	@if [ -n "$$(git status --porcelain --untracked-files=no)" ]; then echo "Uncommitted changes present; commit or stash first; aborting."; exit 1; fi
 	@BRANCH="release/$(VERSION)-devel"; \
 	git switch -c $$BRANCH; \
 	git add -A; \

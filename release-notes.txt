@@ -1,0 +1,134 @@
+# github.com/relab/gorums
+## incompatible changes
+Message.Message: removed
+Message.Metadata: removed
+SendMessage: removed
+Server: old is comparable, new is not
+WrapMessage: removed
+requestHandler: changed from func(ServerCtx, *Message, chan<- *Message) to func(ServerCtx, *Message) (*Message, error)
+## compatible changes
+(*Message).GetMessageID: added
+(*Message).GetMetadata: added
+(*Message).GetMethod: added
+(*Message).GetProtoMessage: added
+(*Message).GetStatus: added
+(*ServerCtx).SendMessage: added
+AsProto: added
+Handler: added
+Interceptor: added
+NewResponseMessage: added
+WithInterceptors: added
+
+# github.com/relab/gorums/benchmark
+## incompatible changes
+github.com/relab/gorums.(*Server).RegisterHandler: changed from func(string, github.com/relab/gorums.requestHandler) to func(string, github.com/relab/gorums.Handler)
+
+# github.com/relab/gorums/tests/config
+## incompatible changes
+(*Request).Descriptor: removed
+(*Response).Descriptor: removed
+Request.Num: removed
+Response.Name: removed
+Response.Num: removed
+## compatible changes
+(*Request).SetNum: added
+(*Response).SetName: added
+(*Response).SetNum: added
+Request_builder: added
+Response_builder: added
+
+# github.com/relab/gorums/tests/correctable
+## incompatible changes
+(*CorrectableRequest).Descriptor: removed
+(*CorrectableResponse).Descriptor: removed
+CorrectableResponse.Level: removed
+## compatible changes
+(*CorrectableResponse).SetLevel: added
+CorrectableRequest_builder: added
+CorrectableResponse_builder: added
+
+# github.com/relab/gorums/tests/dummy
+## incompatible changes
+(*Empty).Descriptor: removed
+## compatible changes
+Empty_builder: added
+
+# github.com/relab/gorums/tests/metadata
+## incompatible changes
+(*IPAddr).Descriptor: removed
+(*NodeID).Descriptor: removed
+IPAddr.Addr: removed
+NodeID.ID: removed
+## compatible changes
+(*IPAddr).SetAddr: added
+(*NodeID).SetID: added
+IPAddr_builder: added
+NodeID_builder: added
+
+# github.com/relab/gorums/tests/mock
+## incompatible changes
+(*Request).Descriptor: removed
+(*Response).Descriptor: removed
+File_mock_proto: removed
+Request.Val: removed
+Response.Val: removed
+## compatible changes
+(*Request).SetVal: added
+(*Response).SetVal: added
+File_mock_mock_proto: added
+Request_builder: added
+Response_builder: added
+
+# github.com/relab/gorums/tests/oneway
+## incompatible changes
+(*Empty).Descriptor: removed
+(*Request).Descriptor: removed
+Request.Num: removed
+## compatible changes
+(*Request).SetNum: added
+Empty_builder: added
+Request_builder: added
+
+# github.com/relab/gorums/tests/ordering
+## incompatible changes
+(*Request).Descriptor: removed
+(*Response).Descriptor: removed
+Request.Num: removed
+Response.InOrder: removed
+## compatible changes
+(*Request).SetNum: added
+(*Response).SetInOrder: added
+Request_builder: added
+Response_builder: added
+
+# github.com/relab/gorums/tests/qf
+## incompatible changes
+(*Request).Descriptor: removed
+(*Response).Descriptor: removed
+Request.Value: removed
+Response.Result: removed
+## compatible changes
+(*Request).SetValue: added
+(*Response).SetResult: added
+Request_builder: added
+Response_builder: added
+
+# github.com/relab/gorums/tests/tls
+## incompatible changes
+(*Request).Descriptor: removed
+(*Response).Descriptor: removed
+Response.OK: removed
+## compatible changes
+(*Response).SetOK: added
+Request_builder: added
+Response_builder: added
+
+# github.com/relab/gorums/tests/unresponsive
+## incompatible changes
+(*Empty).Descriptor: removed
+## compatible changes
+Empty_builder: added
+
+# summary
+Inferred base version: v0.9.0
+Suggested version: v0.10.0
