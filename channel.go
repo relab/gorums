@@ -99,8 +99,8 @@ func (c *channel) getStream() grpc.ClientStream {
 // clearStream cancels the current stream context and clears the stream reference.
 // This triggers reconnection on the next send attempt.
 func (c *channel) clearStream() {
-	c.cancelStream()
 	c.streamMut.Lock()
+	c.cancelStream()
 	c.gorumsStream = nil
 	c.streamMut.Unlock()
 }
