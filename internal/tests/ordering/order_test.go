@@ -159,9 +159,7 @@ func TestQCAsyncOrdering(t *testing.T) {
 	for time.Now().Before(stopTime) {
 		i++
 		promise := cfg.QCAsync(ctx, Request_builder{Num: uint64(i)}.Build())
-		wg.Add(1)
-		go func(promise *AsyncResponse) {
-			defer wg.Done()
+		wg.Go(func() {
 			resp, err := promise.Get()
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -175,7 +173,7 @@ func TestQCAsyncOrdering(t *testing.T) {
 			if !resp.GetInOrder() && !t.Failed() {
 				t.Errorf("Message received out of order.")
 			}
-		}(promise)
+		})
 	}
 	wg.Wait()
 	cancel()
@@ -202,10 +200,8 @@ func TestMixedOrdering(t *testing.T) {
 			t.Fatalf("Message received out of order.")
 		}
 		var wg sync.WaitGroup
-		wg.Add(len(nodes))
 		for _, node := range nodes {
-			go func(node *Node) {
-				defer wg.Done()
+			wg.Go(func() {
 				resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
@@ -218,7 +214,7 @@ func TestMixedOrdering(t *testing.T) {
 					t.Errorf("Message received out of order.")
 					return
 				}
-			}(node)
+			})
 		}
 		wg.Wait()
 		i++

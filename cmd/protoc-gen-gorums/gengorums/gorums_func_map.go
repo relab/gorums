@@ -52,8 +52,7 @@ var funcMap = template.FuncMap{
 		if strings.Count(pkgIdent, ".") != 1 {
 			return "EXPECTED PACKAGE NAME AND IDENTIFIER, but got: " + pkgIdent
 		}
-		i := strings.Index(pkgIdent, ".")
-		path, ident := pkgIdent[0:i], pkgIdent[i+1:]
+		path, ident, _ := strings.Cut(pkgIdent, ".")
 		pkg, ok := importMap[path]
 		if !ok {
 			return "IMPORT NOT FOUND: " + path

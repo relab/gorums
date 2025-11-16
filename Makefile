@@ -75,6 +75,9 @@ stressgen: tools
 	cd ./internal/testprotos; stress -timeout=10s -p=1 ./testprotos.test
 	rm ./internal/testprotos/testprotos.test
 
+modernize:
+	@go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./...
+
 # Regenerate all Gorums and protobuf generated files across the repo (dev, benchmark, internal/tests, examples).
 # This will force regeneration even though the proto files have not changed.
 genproto: installgorums dev

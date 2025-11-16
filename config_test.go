@@ -223,15 +223,13 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup
 	for range 2 {
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			node := cfg.Nodes()[0]
 			_, err := node.Test(context.Background(), &dummy.Empty{})
 			if err != nil {
 				errCh <- err
 			}
-			wg.Done()
-		}()
+		})
 	}
 	wg.Wait()
 	close(errCh)
