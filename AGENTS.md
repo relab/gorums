@@ -94,6 +94,8 @@ These files are generated from templates. Instead:
 - Main branch: `master`
 - Work on feature branches
 - Create new branches for significant changes, unless already working on a feature branch
+- Feature branches should be named: `feature/short-description` or `fix/short-description`
+- If there is an associated GitHub issue, include its ID in the branch name: `feature/123/short-description`
 - Commit individual units of work with clear, descriptive messages
 - Never use `git add -A` without first checking `git status`
 - Run tests before committing
