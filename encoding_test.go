@@ -8,6 +8,8 @@ import (
 )
 
 func TestAsProto(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		msg     *gorums.Message

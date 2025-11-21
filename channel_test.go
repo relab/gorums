@@ -231,10 +231,8 @@ func TestChannelErrors(t *testing.T) {
 			resp := sendRequest(t, node, request{opts: waitSendDone}, uint64(i))
 			if resp.err == nil {
 				t.Errorf("expected error '%s' but got nil", tt.wantErr)
-			} else {
-				if !strings.Contains(resp.err.Error(), tt.wantErr) {
-					t.Errorf("expected error '%s', got: %v", tt.wantErr, resp.err)
-				}
+			} else if !strings.Contains(resp.err.Error(), tt.wantErr) {
+				t.Errorf("expected error '%s', got: %v", tt.wantErr, resp.err)
 			}
 		})
 	}
