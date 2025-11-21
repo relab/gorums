@@ -61,9 +61,11 @@ func appendStringInterceptor(in, out string) gorums.Interceptor {
 
 		// call the next handler
 		resp, err := next(ctx, msg)
-		r := resp.GetProtoMessage()
-		// update the underlying response gorums.Message's proto.Message
-		mock.SetVal(r, mock.GetVal(r)+out)
+		if resp != nil {
+			r := resp.GetProtoMessage()
+			// update the underlying response gorums.Message's proto.Message
+			mock.SetVal(r, mock.GetVal(r)+out)
+		}
 		return resp, err
 	}
 }
