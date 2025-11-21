@@ -5,8 +5,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/relab/gorums/internal/testutils/dynamic"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 // ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
@@ -48,8 +50,14 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 	listeners := make([]net.Listener, numServers)
 	addrs := make([]string, numServers)
 	srvStopped := make(chan struct{}, numServers)
+	dynamic.Register(t)
 	for i := range numServers {
-		srv := srvFn(i)
+		var srv ServerIface
+		if srvFn != nil {
+			srv = srvFn(i)
+		} else {
+			srv = initServer()
+		}
 		// listen on any available port
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
@@ -77,4 +85,20 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 		}
 	})
 	return addrs, stopFn
+}
+
+func initServer() *Server {
+	srv := NewServer()
+	srv.RegisterHandler(dynamic.MockServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
+		req := AsProto[proto.Message](in)
+		resp, err := (&testSrv{}).Test(ctx, req)
+		return NewResponseMessage(in.GetMetadata(), resp), err
+	})
+	return srv
+}
+
+type testSrv struct{}
+
+func (t testSrv) Test(ctx ServerCtx, request proto.Message) (response proto.Message, err error) {
+	return dynamic.NewResponse(""), nil
 }

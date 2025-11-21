@@ -216,10 +216,7 @@ func TestNewConfigurationExcept(t *testing.T) {
 }
 
 func TestConfigConcurrentAccess(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
-		dynamic.Register(t)
-		return initServer()
-	})
+	addrs, teardown := gorums.TestSetup(t, 1, nil)
 	defer teardown()
 
 	node := gorums.NewNode(t, addrs[0])

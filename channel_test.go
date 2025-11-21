@@ -40,7 +40,6 @@ func (mockSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
 func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, func()) {
 	t.Helper()
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
-		dynamic.Register(t)
 		mockSrv := &mockSrv{}
 		srv := NewServer()
 		srv.RegisterHandler(dynamic.MockServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
