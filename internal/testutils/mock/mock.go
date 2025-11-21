@@ -77,18 +77,18 @@ func Register(t testing.TB) {
 
 	fd, err := protodesc.NewFile(mockFile, nil)
 	if err != nil {
-		t.Errorf("failed to create mock file descriptor: %v", err)
+		t.Fatalf("failed to create mock file descriptor: %v", err)
 	}
 	if err := protoregistry.GlobalFiles.RegisterFile(fd); err != nil {
-		t.Errorf("failed to register mock file: %v", err)
+		t.Fatalf("failed to register mock file: %v", err)
 	}
 	initDescriptors(t, fd)
 
 	if err := protoregistry.GlobalTypes.RegisterMessage(requestType); err != nil {
-		t.Errorf("failed to register Request type: %v", err)
+		t.Fatalf("failed to register Request type: %v", err)
 	}
 	if err := protoregistry.GlobalTypes.RegisterMessage(responseType); err != nil {
-		t.Errorf("failed to register Response type: %v", err)
+		t.Fatalf("failed to register Response type: %v", err)
 	}
 }
 
@@ -96,19 +96,19 @@ func initDescriptors(t testing.TB, fd protoreflect.FileDescriptor) {
 	t.Helper()
 	mockServiceDesc := fd.Services().ByName("Server")
 	if mockServiceDesc == nil {
-		t.Error("Server service not found")
+		t.Fatal("Server service not found")
 	}
 	mockMethodDesc := mockServiceDesc.Methods().ByName("Test")
 	if mockMethodDesc == nil {
-		t.Error("Test method not found")
+		t.Fatal("Test method not found")
 	}
 	requestMsgDesc := fd.Messages().ByName("Request")
 	if requestMsgDesc == nil {
-		t.Error("Request message not found")
+		t.Fatal("Request message not found")
 	}
 	responseMsgDesc := fd.Messages().ByName("Response")
 	if responseMsgDesc == nil {
-		t.Error("Response message not found")
+		t.Fatal("Response message not found")
 	}
 	requestType = dynamicpb.NewMessageType(requestMsgDesc)
 	responseType = dynamicpb.NewMessageType(responseMsgDesc)
@@ -116,7 +116,12 @@ func initDescriptors(t testing.TB, fd protoreflect.FileDescriptor) {
 
 // Helpers for Mock messages
 
+const panicMsg = "mock.Register() must be called before using NewRequest/NewResponse"
+
 func NewRequest(val string) proto.Message {
+	if requestType == nil {
+		panic(panicMsg)
+	}
 	msg := requestType.New()
 	if val != "" {
 		fd := msg.Descriptor().Fields().ByName("val")
@@ -128,6 +133,9 @@ func NewRequest(val string) proto.Message {
 }
 
 func NewResponse(val string) proto.Message {
+	if responseType == nil {
+		panic(panicMsg)
+	}
 	msg := responseType.New()
 	if val != "" {
 		fd := msg.Descriptor().Fields().ByName("val")
