@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -65,22 +64,10 @@ func TestManagerAddNode(t *testing.T) {
 	}
 }
 
-type dummySrv struct{}
-
-func (dummySrv) Test(ctx gorums.ServerCtx, _ proto.Message) (resp proto.Message, err error) {
-	return dynamic.NewResponse(""), nil
-}
-
 func TestManagerAddNodeWithConn(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
 		dynamic.Register(t)
-		srv := gorums.NewServer()
-		srv.RegisterHandler("mock.Server.Test", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			req := gorums.AsProto[proto.Message](in)
-			resp, err := (&dummySrv{}).Test(ctx, req)
-			return gorums.NewResponseMessage(in.GetMetadata(), resp), err
-		})
-		return srv
+		return initServer()
 	})
 	defer teardown()
 	mgr := gorums.NewRawManager(

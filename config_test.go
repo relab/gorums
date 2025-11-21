@@ -222,24 +222,15 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := gorumsTestMgr()
-	defer mgr.Close()
-
-	node, err := gorums.NewRawNode(addrs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	node := gorums.NewNode(t, addrs[0])
 
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup
 	for range 2 {
 		wg.Go(func() {
-			_, err := mgr.Nodes()[0].RPCCall(context.Background(), gorums.CallData{
+			_, err := node.RPCCall(context.Background(), gorums.CallData{
 				Message: dynamic.NewRequest(""),
-				Method:  "mock.Server.Test",
+				Method:  dynamic.MockServerMethodName,
 			})
 			if err != nil {
 				errCh <- err
