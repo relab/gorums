@@ -9,7 +9,6 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/dynamic"
 	"google.golang.org/grpc/encoding"
-	"google.golang.org/protobuf/proto"
 )
 
 func init() {
@@ -19,10 +18,7 @@ func init() {
 }
 
 func TestRPCCallSuccess(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
-		dynamic.Register(t)
-		return initServer()
-	})
+	addrs, teardown := gorums.TestSetup(t, 1, nil)
 	defer teardown()
 
 	node := gorums.NewNode(t, addrs[0])
@@ -42,10 +38,7 @@ func TestRPCCallSuccess(t *testing.T) {
 }
 
 func TestRPCCallDownedNode(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
-		dynamic.Register(t)
-		return initServer()
-	})
+	addrs, teardown := gorums.TestSetup(t, 1, nil)
 	node := gorums.NewNode(t, addrs[0])
 
 	teardown()                         // stop all servers on purpose
@@ -65,10 +58,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 }
 
 func TestRPCCallTimedOut(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
-		dynamic.Register(t)
-		return initServer()
-	})
+	addrs, teardown := gorums.TestSetup(t, 1, nil)
 	defer teardown()
 
 	node := gorums.NewNode(t, addrs[0])
@@ -86,20 +76,4 @@ func TestRPCCallTimedOut(t *testing.T) {
 	if response != nil {
 		t.Fatalf("Unexpected response, got: %v, want: %v", response, nil)
 	}
-}
-
-func initServer() *gorums.Server {
-	srv := gorums.NewServer()
-	srv.RegisterHandler(dynamic.MockServerMethodName, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[proto.Message](in)
-		resp, err := (&testSrv{}).Test(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
-	})
-	return srv
-}
-
-type testSrv struct{}
-
-func (t testSrv) Test(ctx gorums.ServerCtx, request proto.Message) (response proto.Message, err error) {
-	return dynamic.NewResponse(""), nil
 }

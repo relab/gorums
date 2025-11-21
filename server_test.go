@@ -80,7 +80,6 @@ func (interceptorSrv) Test(_ gorums.ServerCtx, req proto.Message) (proto.Message
 func TestServerInterceptorsChain(t *testing.T) {
 	// set up a server with two interceptors: i1, i2
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
-		dynamic.Register(t)
 		interceptorSrv := &interceptorSrv{}
 		s := gorums.NewServer(gorums.WithInterceptors(
 			appendStringInterceptor("i1in-", "i1out"),

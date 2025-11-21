@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/testutils/dynamic"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
@@ -65,10 +64,7 @@ func TestManagerAddNode(t *testing.T) {
 }
 
 func TestManagerAddNodeWithConn(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
-		dynamic.Register(t)
-		return initServer()
-	})
+	addrs, teardown := gorums.TestSetup(t, 3, nil)
 	defer teardown()
 	mgr := gorums.NewRawManager(
 		gorums.WithGrpcDialOptions(
