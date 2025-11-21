@@ -90,8 +90,7 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 func initServer() *Server {
 	srv := NewServer()
 	srv.RegisterHandler(mock.ServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
-		req := AsProto[proto.Message](in)
-		resp, err := (&testSrv{}).Test(ctx, req)
+		resp, err := (&testSrv{}).Test(ctx, in.GetProtoMessage())
 		return NewResponseMessage(in.GetMetadata(), resp), err
 	})
 	return srv
