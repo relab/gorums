@@ -110,12 +110,8 @@ func TestServerInterceptorsChain(t *testing.T) {
 	if res == nil {
 		t.Fatalf("unexpected nil response")
 	}
-	r, ok := res.(proto.Message)
-	if !ok {
-		t.Fatalf("unexpected response type: %T", res)
-	}
 	want := "client-i1in-i2in-server-i2out-i1out"
-	if mock.GetVal(r) != want {
-		t.Fatalf("unexpected response value: got %q, want %q", mock.GetVal(r), want)
+	if mock.GetVal(res) != want {
+		t.Fatalf("unexpected response value: got %q, want %q", mock.GetVal(res), want)
 	}
 }
