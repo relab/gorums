@@ -130,11 +130,11 @@ func NewCodec() *Codec {
 }
 
 // Name returns the name of the Codec.
-func (c Codec) Name() string {
+func (Codec) Name() string {
 	return ContentSubtype
 }
 
-func (c Codec) String() string {
+func (Codec) String() string {
 	return ContentSubtype
 }
 

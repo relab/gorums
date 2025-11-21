@@ -98,6 +98,6 @@ func initServer() *Server {
 
 type testSrv struct{}
 
-func (t testSrv) Test(ctx ServerCtx, request proto.Message) (response proto.Message, err error) {
+func (testSrv) Test(_ ServerCtx, _ proto.Message) (proto.Message, error) {
 	return mock.NewResponse(""), nil
 }
