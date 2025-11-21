@@ -77,5 +77,6 @@
     "[yaml]": {
         "editor.tabSize": 4,
         "editor.formatOnSave": true,
-    }
+    },
+    "makefile.configureOnOpen": false
 }

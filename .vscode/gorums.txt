@@ -11,6 +11,7 @@ descriptorpb
 devel
 devguide
 donech
+dynamicpb
 emptypb
 Erevik
 errcheck
@@ -58,6 +59,7 @@ pkgs
 proto
 protobuf
 protoc
+protodesc
 protogen
 protoimpl
 protoreflect
@@ -83,6 +85,7 @@ struct
 syncrq
 testprotos
 testrace
+testutils
 timestamppb
 tmpl
 Tormod

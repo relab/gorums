@@ -20,7 +20,7 @@ func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
 	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
-	req := request{ctx: ctx, msg: newRequestMessage(md, d.Message), opts: o}
+	req := request{ctx: ctx, msg: NewRequestMessage(md, d.Message), opts: o}
 
 	if !o.waitSendDone {
 		n.channel.enqueue(req, nil)

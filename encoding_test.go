@@ -1,23 +1,24 @@
-package gorums
+package gorums_test
 
 import (
 	"testing"
 
-	"github.com/relab/gorums/internal/tests/mock"
+	"github.com/relab/gorums"
+	"github.com/relab/gorums/internal/tests/config"
 )
 
 func TestAsProto(t *testing.T) {
 	tests := []struct {
 		name    string
-		msg     *Message
+		msg     *gorums.Message
 		wantNil bool
-		wantVal string
+		wantNum uint64
 	}{
 		{
 			name:    "Success",
-			msg:     newRequestMessage(nil, mock.Request_builder{Val: "hello"}.Build()),
+			msg:     gorums.NewRequestMessage(nil, config.Request_builder{Num: 42}.Build()),
 			wantNil: false,
-			wantVal: "hello",
+			wantNum: 42,
 		},
 		{
 			name:    "NilMessage",
@@ -26,7 +27,7 @@ func TestAsProto(t *testing.T) {
 		},
 		{
 			name:    "WrongType",
-			msg:     NewResponseMessage(nil, mock.Response_builder{Val: "r"}.Build()),
+			msg:     gorums.NewResponseMessage(nil, config.Response_builder{Name: "test", Num: 99}.Build()),
 			wantNil: true,
 		},
 	}
@@ -34,7 +35,7 @@ func TestAsProto(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			req := AsProto[*mock.Request](tc.msg)
+			req := gorums.AsProto[*config.Request](tc.msg)
 			if tc.wantNil {
 				if req != nil {
 					t.Errorf("AsProto returned %v, want nil", req)
@@ -42,10 +43,10 @@ func TestAsProto(t *testing.T) {
 				return
 			}
 			if req == nil {
-				t.Errorf("AsProto returned nil, want *mock.Request")
+				t.Errorf("AsProto returned nil, want *config.Request")
 			}
-			if got := req.GetVal(); got != tc.wantVal {
-				t.Errorf("Val = %q, want %q", got, tc.wantVal)
+			if got := req.GetNum(); got != tc.wantNum {
+				t.Errorf("Num = %d, want %d", got, tc.wantNum)
 			}
 		})
 	}

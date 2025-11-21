@@ -1,7 +1,7 @@
 # Tests that should be run each time
-TESTS := qf ordering metadata tls unresponsive dummy mock oneway config correctable
+TESTS := qf ordering metadata tls unresponsive oneway config correctable
 
-.PHONY: all clean qf ordering metadata tls unresponsive dummy mock oneway config correctable
+.PHONY: all clean qf ordering metadata tls unresponsive oneway config correctable
 
 all: $(TESTS)
 
@@ -14,10 +14,6 @@ metadata: metadata/metadata.pb.go metadata/metadata_gorums.pb.go
 tls: tls/tls.pb.go tls/tls_gorums.pb.go
 
 unresponsive: unresponsive/unresponsive.pb.go unresponsive/unresponsive_gorums.pb.go
-
-dummy: dummy/dummy.pb.go dummy/dummy_gorums.pb.go
-
-mock: mock/mock.pb.go
 
 oneway: oneway/oneway.pb.go oneway/oneway_gorums.pb.go
 

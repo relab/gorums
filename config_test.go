@@ -8,8 +8,15 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/tests/dummy"
+	"github.com/relab/gorums/internal/testutils/dynamic"
+	"google.golang.org/grpc/encoding"
 )
+
+func init() {
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
+}
 
 func TestNewConfigurationEmptyNodeList(t *testing.T) {
 	wantErr := errors.New("config: missing required node addresses")
@@ -210,13 +217,19 @@ func TestNewConfigurationExcept(t *testing.T) {
 
 func TestConfigConcurrentAccess(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
+		dynamic.Register(t)
 		return initServer()
 	})
 	defer teardown()
 
 	mgr := gorumsTestMgr()
-	cfg, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	defer mgr.Close()
+
+	node, err := gorums.NewRawNode(addrs[0])
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err = mgr.AddNode(node); err != nil {
 		t.Fatal(err)
 	}
 
@@ -224,8 +237,10 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 2 {
 		wg.Go(func() {
-			node := cfg.Nodes()[0]
-			_, err := node.Test(context.Background(), &dummy.Empty{})
+			_, err := mgr.Nodes()[0].RPCCall(context.Background(), gorums.CallData{
+				Message: dynamic.NewRequest(""),
+				Method:  "mock.Server.Test",
+			})
 			if err != nil {
 				errCh <- err
 			}
