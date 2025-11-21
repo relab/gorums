@@ -16,13 +16,9 @@ const ServerMethodName = "mock.Server.Test"
 
 var (
 	// Mock Service Descriptors
-	mockFile        *descriptorpb.FileDescriptorProto
-	mockServiceDesc protoreflect.ServiceDescriptor
-	mockMethodDesc  protoreflect.MethodDescriptor
-	requestMsgDesc  protoreflect.MessageDescriptor
-	responseMsgDesc protoreflect.MessageDescriptor
-	requestType     protoreflect.MessageType
-	responseType    protoreflect.MessageType
+	mockFile     *descriptorpb.FileDescriptorProto
+	requestType  protoreflect.MessageType
+	responseType protoreflect.MessageType
 )
 
 func init() {
@@ -69,56 +65,53 @@ func init() {
 	}
 }
 
-// Register registers the dynamic types in the global registry.
+// Register registers the mock types in the global registry.
 // It is safe to call multiple times.
 func Register(t testing.TB) {
 	t.Helper()
-	if _, err := protoregistry.GlobalFiles.FindFileByPath(mockFile.GetName()); err == nil {
+	if fd, err := protoregistry.GlobalFiles.FindFileByPath(mockFile.GetName()); err == nil {
 		// Already registered
-		desc, _ := protoregistry.GlobalFiles.FindFileByPath(mockFile.GetName())
-		mockServiceDesc = desc.Services().ByName("Server")
-		mockMethodDesc = mockServiceDesc.Methods().ByName("Test")
-		requestMsgDesc = desc.Messages().ByName("Request")
-		responseMsgDesc = desc.Messages().ByName("Response")
-		if requestMsgDesc == nil {
-			t.Fatal("Request message not found in existing file")
-		}
-		if responseMsgDesc == nil {
-			t.Fatal("Response message not found in existing file")
-		}
-		requestType = dynamicpb.NewMessageType(requestMsgDesc)
-		responseType = dynamicpb.NewMessageType(responseMsgDesc)
+		initDescriptors(t, fd)
 		return
 	}
 
 	fd, err := protodesc.NewFile(mockFile, nil)
 	if err != nil {
-		t.Fatalf("failed to create mock file descriptor: %v", err)
+		t.Errorf("failed to create mock file descriptor: %v", err)
 	}
-
 	if err := protoregistry.GlobalFiles.RegisterFile(fd); err != nil {
-		t.Fatalf("failed to register mock file: %v", err)
+		t.Errorf("failed to register mock file: %v", err)
 	}
+	initDescriptors(t, fd)
 
-	mockServiceDesc = fd.Services().ByName("Server")
-	mockMethodDesc = mockServiceDesc.Methods().ByName("Test")
-	requestMsgDesc = fd.Messages().ByName("Request")
-	responseMsgDesc = fd.Messages().ByName("Response")
-	if requestMsgDesc == nil {
-		t.Fatal("Request message not found in new file")
+	if err := protoregistry.GlobalTypes.RegisterMessage(requestType); err != nil {
+		t.Errorf("failed to register Request type: %v", err)
 	}
+	if err := protoregistry.GlobalTypes.RegisterMessage(responseType); err != nil {
+		t.Errorf("failed to register Response type: %v", err)
+	}
+}
+
+func initDescriptors(t testing.TB, fd protoreflect.FileDescriptor) {
+	t.Helper()
+	mockServiceDesc := fd.Services().ByName("Server")
+	if mockServiceDesc == nil {
+		t.Error("Server service not found")
+	}
+	mockMethodDesc := mockServiceDesc.Methods().ByName("Test")
+	if mockMethodDesc == nil {
+		t.Error("Test method not found")
+	}
+	requestMsgDesc := fd.Messages().ByName("Request")
+	if requestMsgDesc == nil {
+		t.Error("Request message not found")
+	}
+	responseMsgDesc := fd.Messages().ByName("Response")
 	if responseMsgDesc == nil {
-		t.Fatal("Response message not found in new file")
+		t.Error("Response message not found")
 	}
 	requestType = dynamicpb.NewMessageType(requestMsgDesc)
 	responseType = dynamicpb.NewMessageType(responseMsgDesc)
-
-	if err := protoregistry.GlobalTypes.RegisterMessage(requestType); err != nil {
-		t.Fatalf("failed to register Request type: %v", err)
-	}
-	if err := protoregistry.GlobalTypes.RegisterMessage(responseType); err != nil {
-		t.Fatalf("failed to register Response type: %v", err)
-	}
 }
 
 // Helpers for Mock messages
