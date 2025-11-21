@@ -73,7 +73,7 @@ func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Asyn
 	return fut
 }
 
-func (c RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
+func (RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
 	defer close(fut.c)
 
 	var (
