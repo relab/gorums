@@ -45,8 +45,7 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, fu
 		srv.RegisterHandler(mock.ServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
 			// Simulate slow processing
 			time.Sleep(delay)
-			req := AsProto[proto.Message](in)
-			resp, err := mockSrv.Test(ctx, req)
+			resp, err := mockSrv.Test(ctx, in.GetProtoMessage())
 			return NewResponseMessage(in.GetMetadata(), resp), err
 		})
 		return srv

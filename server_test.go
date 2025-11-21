@@ -55,18 +55,15 @@ func TestServerCallback(t *testing.T) {
 
 func appendStringInterceptor(in, out string) gorums.Interceptor {
 	return func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-		// Check if msg and msg.message are not nil before using AsProto
-		if msg != nil && msg.GetProtoMessage() != nil {
-			if req := gorums.AsProto[proto.Message](msg); req != nil {
-				mock.SetVal(req, mock.GetVal(req)+in)
-			}
-		}
+		req := msg.GetProtoMessage()
+		// update the underlying request gorums.Message's proto.Message
+		mock.SetVal(req, mock.GetVal(req)+in)
+
+		// call the next handler
 		resp, err := next(ctx, msg)
-		if resp != nil && resp.GetProtoMessage() != nil {
-			if r := gorums.AsProto[proto.Message](resp); r != nil {
-				mock.SetVal(r, mock.GetVal(r)+out)
-			}
-		}
+		r := resp.GetProtoMessage()
+		// update the underlying response gorums.Message's proto.Message
+		mock.SetVal(r, mock.GetVal(r)+out)
 		return resp, err
 	}
 }
@@ -87,8 +84,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 		))
 		// register final handler which appends "final-" to the request value
 		s.RegisterHandler(mock.ServerMethodName, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			req := gorums.AsProto[proto.Message](in)
-			resp, err := interceptorSrv.Test(ctx, req)
+			resp, err := interceptorSrv.Test(ctx, in.GetProtoMessage())
 			return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 		})
 		return s
