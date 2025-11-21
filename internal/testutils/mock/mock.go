@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"sync"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -69,27 +70,30 @@ func init() {
 // It is safe to call multiple times.
 func Register(t testing.TB) {
 	t.Helper()
-	if fd, err := protoregistry.GlobalFiles.FindFileByPath(mockFile.GetName()); err == nil {
-		// Already registered
+	onceFn := sync.OnceFunc(func() {
+		if fd, err := protoregistry.GlobalFiles.FindFileByPath(mockFile.GetName()); err == nil {
+			// Already registered
+			initDescriptors(t, fd)
+			return
+		}
+
+		fd, err := protodesc.NewFile(mockFile, nil)
+		if err != nil {
+			t.Fatalf("failed to create mock file descriptor: %v", err)
+		}
+		if err := protoregistry.GlobalFiles.RegisterFile(fd); err != nil {
+			t.Fatalf("failed to register mock file: %v", err)
+		}
 		initDescriptors(t, fd)
-		return
-	}
 
-	fd, err := protodesc.NewFile(mockFile, nil)
-	if err != nil {
-		t.Fatalf("failed to create mock file descriptor: %v", err)
-	}
-	if err := protoregistry.GlobalFiles.RegisterFile(fd); err != nil {
-		t.Fatalf("failed to register mock file: %v", err)
-	}
-	initDescriptors(t, fd)
-
-	if err := protoregistry.GlobalTypes.RegisterMessage(requestType); err != nil {
-		t.Fatalf("failed to register Request type: %v", err)
-	}
-	if err := protoregistry.GlobalTypes.RegisterMessage(responseType); err != nil {
-		t.Fatalf("failed to register Response type: %v", err)
-	}
+		if err := protoregistry.GlobalTypes.RegisterMessage(requestType); err != nil {
+			t.Fatalf("failed to register Request type: %v", err)
+		}
+		if err := protoregistry.GlobalTypes.RegisterMessage(responseType); err != nil {
+			t.Fatalf("failed to register Response type: %v", err)
+		}
+	})
+	onceFn()
 }
 
 func initDescriptors(t testing.TB, fd protoreflect.FileDescriptor) {
