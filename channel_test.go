@@ -24,7 +24,7 @@ var (
 )
 
 // newNode creates a node for the given server address and adds it to a new manager.
-func newNode(t *testing.T, srvAddr string) *RawNode {
+func newNode(t testing.TB, srvAddr string) *RawNode {
 	mgr := NewRawManager(
 		WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -43,7 +43,7 @@ func newNode(t *testing.T, srvAddr string) *RawNode {
 
 // newNodeWithServer creates a node connected to a live server that will delay
 // responding by the given duration. If delay is 0, the server responds immediately.
-func newNodeWithServer(t *testing.T, delay time.Duration) *RawNode {
+func newNodeWithServer(t testing.TB, delay time.Duration) *RawNode {
 	t.Helper()
 	node, teardown := newNodeWithStoppableServer(t, delay)
 	t.Cleanup(teardown)
@@ -58,7 +58,7 @@ func (mockSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
 	return dynamic.NewResponse(dynamic.GetVal(req) + "-mocked-"), nil
 }
 
-func newNodeWithStoppableServer(t *testing.T, delay time.Duration) (*RawNode, func()) {
+func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, func()) {
 	t.Helper()
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
 		dynamic.Register(t)
@@ -77,7 +77,7 @@ func newNodeWithStoppableServer(t *testing.T, delay time.Duration) (*RawNode, fu
 	return newNode(t, addrs[0]), teardown
 }
 
-func sendRequest(t *testing.T, node *RawNode, req request, msgID uint64) response {
+func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) response {
 	t.Helper()
 	if req.ctx == nil {
 		req.ctx = t.Context()
@@ -100,7 +100,7 @@ type msgResponse struct {
 	resp  response
 }
 
-func send(t *testing.T, results chan<- msgResponse, node *RawNode, goroutineID, msgsToSend int, req request) {
+func send(t testing.TB, results chan<- msgResponse, node *RawNode, goroutineID, msgsToSend int, req request) {
 	for j := range msgsToSend {
 		msgID := uint64(goroutineID*1000 + j)
 		resp := sendRequest(t, node, req, msgID)
