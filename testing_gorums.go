@@ -34,7 +34,7 @@ func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *RawNode {
 		t.Fatal(err)
 	}
 	if err = mgr.AddNode(node); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	return node
 }
@@ -50,6 +50,7 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 	listeners := make([]net.Listener, numServers)
 	addrs := make([]string, numServers)
 	srvStopped := make(chan struct{}, numServers)
+	// always register the mock types and Test method; this should be fine for testing
 	mock.Register(t)
 	for i := range numServers {
 		var srv ServerIface
