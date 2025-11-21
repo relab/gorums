@@ -21,7 +21,7 @@ type CallData struct {
 func (n *RawNode) RPCCall(ctx context.Context, d CallData) (proto.Message, error) {
 	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
 	replyChan := make(chan response, 1)
-	n.channel.enqueue(request{ctx: ctx, msg: newRequestMessage(md, d.Message)}, replyChan)
+	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message)}, replyChan)
 
 	select {
 	case r := <-replyChan:

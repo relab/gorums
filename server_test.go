@@ -7,11 +7,19 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/tests/mock"
+	"github.com/relab/gorums/internal/testutils/dynamic"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
+
+func init() {
+	if encoding.GetCodec(gorums.ContentSubtype) == nil {
+		encoding.RegisterCodec(gorums.NewCodec())
+	}
+}
 
 func TestServerCallback(t *testing.T) {
 	var message string
@@ -65,19 +73,22 @@ func TestServerCallback(t *testing.T) {
 
 type interceptorSrv struct{}
 
-func (interceptorSrv) Test(_ gorums.ServerCtx, req *mock.Request) (*mock.Response, error) {
-	return mock.Response_builder{Val: req.GetVal() + "server-"}.Build(), nil
+func (interceptorSrv) Test(_ gorums.ServerCtx, req proto.Message) (proto.Message, error) {
+	return dynamic.NewResponse(dynamic.GetVal(req) + "server-"), nil
 }
 
 func appendStringInterceptor(in, out string) gorums.Interceptor {
 	return func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-		if req := gorums.AsProto[*mock.Request](msg); req != nil {
-			req.SetVal(req.GetVal() + in)
+		// Check if msg and msg.message are not nil before using AsProto
+		if msg != nil && msg.GetProtoMessage() != nil {
+			if req := gorums.AsProto[proto.Message](msg); req != nil {
+				dynamic.SetVal(req, dynamic.GetVal(req)+in)
+			}
 		}
 		resp, err := next(ctx, msg)
-		if resp != nil {
-			if r := gorums.AsProto[*mock.Response](resp); r != nil {
-				r.SetVal(r.GetVal() + out)
+		if resp != nil && resp.GetProtoMessage() != nil {
+			if r := gorums.AsProto[proto.Message](resp); r != nil {
+				dynamic.SetVal(r, dynamic.GetVal(r)+out)
 			}
 		}
 		return resp, err
@@ -87,6 +98,7 @@ func appendStringInterceptor(in, out string) gorums.Interceptor {
 func TestServerInterceptorsChain(t *testing.T) {
 	// set up a server with two interceptors: i1, i2
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
+		dynamic.Register(t)
 		interceptorSrv := &interceptorSrv{}
 		s := gorums.NewServer(gorums.WithInterceptors(
 			appendStringInterceptor("i1in-", "i1out"),
@@ -94,7 +106,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 		))
 		// register final handler which appends "final-" to the request value
 		s.RegisterHandler("mock.Server.Test", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			req := gorums.AsProto[*mock.Request](in)
+			req := gorums.AsProto[proto.Message](in)
 			resp, err := interceptorSrv.Test(ctx, req)
 			return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 		})
@@ -121,7 +133,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	res, err := mgr.Nodes()[0].RPCCall(ctx, gorums.CallData{
-		Message: mock.Request_builder{Val: "client-"}.Build(),
+		Message: dynamic.NewRequest("client-"),
 		Method:  "mock.Server.Test",
 	})
 	if err != nil {
@@ -130,12 +142,12 @@ func TestServerInterceptorsChain(t *testing.T) {
 	if res == nil {
 		t.Fatalf("unexpected nil response")
 	}
-	r, ok := res.(*mock.Response)
+	r, ok := res.(proto.Message)
 	if !ok {
 		t.Fatalf("unexpected response type: %T", res)
 	}
 	want := "client-i1in-i2in-server-i2out-i1out"
-	if r.GetVal() != want {
-		t.Fatalf("unexpected response value: got %q, want %q", r.GetVal(), want)
+	if dynamic.GetVal(r) != want {
+		t.Fatalf("unexpected response value: got %q, want %q", dynamic.GetVal(r), want)
 	}
 }

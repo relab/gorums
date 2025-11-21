@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/relab/gorums/internal/tests/mock"
+	"github.com/relab/gorums/internal/testutils/dynamic"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/proto"
 )
 
 const defaultTestTimeout = 3 * time.Second
@@ -53,19 +54,20 @@ const handlerName = "mock.Server.Test"
 
 type mockSrv struct{}
 
-func (mockSrv) Test(_ ServerCtx, req *mock.Request) (*mock.Response, error) {
-	return mock.Response_builder{Val: req.GetVal() + "-mocked-"}.Build(), nil
+func (mockSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
+	return dynamic.NewResponse(dynamic.GetVal(req) + "-mocked-"), nil
 }
 
 func newNodeWithStoppableServer(t *testing.T, delay time.Duration) (*RawNode, func()) {
 	t.Helper()
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
+		dynamic.Register(t)
 		mockSrv := &mockSrv{}
 		srv := NewServer()
 		srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message) (*Message, error) {
 			// Simulate slow processing
 			time.Sleep(delay)
-			req := AsProto[*mock.Request](in)
+			req := AsProto[proto.Message](in)
 			resp, err := mockSrv.Test(ctx, req)
 			return NewResponseMessage(in.GetMetadata(), resp), err
 		})
@@ -80,7 +82,7 @@ func sendRequest(t *testing.T, node *RawNode, req request, msgID uint64) respons
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
-	req.msg = newRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, handlerName), nil)
+	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, handlerName), nil)
 	replyChan := make(chan response, 1)
 	node.channel.enqueue(req, replyChan)
 
@@ -541,7 +543,7 @@ func TestChannelDeadlock(t *testing.T) {
 			defer cancel()
 
 			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), handlerName)
-			req := request{ctx: ctx, msg: newRequestMessage(md, nil)}
+			req := request{ctx: ctx, msg: NewRequestMessage(md, nil)}
 
 			// try to enqueue
 			select {
