@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/relab/gorums/internal/testutils/dynamic"
+	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -50,7 +50,7 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 	listeners := make([]net.Listener, numServers)
 	addrs := make([]string, numServers)
 	srvStopped := make(chan struct{}, numServers)
-	dynamic.Register(t)
+	mock.Register(t)
 	for i := range numServers {
 		var srv ServerIface
 		if srvFn != nil {
@@ -89,7 +89,7 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 
 func initServer() *Server {
 	srv := NewServer()
-	srv.RegisterHandler(dynamic.MockServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
+	srv.RegisterHandler(mock.ServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
 		req := AsProto[proto.Message](in)
 		resp, err := (&testSrv{}).Test(ctx, req)
 		return NewResponseMessage(in.GetMetadata(), resp), err
@@ -100,5 +100,5 @@ func initServer() *Server {
 type testSrv struct{}
 
 func (t testSrv) Test(ctx ServerCtx, request proto.Message) (response proto.Message, err error) {
-	return dynamic.NewResponse(""), nil
+	return mock.NewResponse(""), nil
 }

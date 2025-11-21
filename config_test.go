@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/testutils/dynamic"
+	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/encoding"
 )
 
@@ -226,8 +226,8 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	for range 2 {
 		wg.Go(func() {
 			_, err := node.RPCCall(context.Background(), gorums.CallData{
-				Message: dynamic.NewRequest(""),
-				Method:  dynamic.MockServerMethodName,
+				Message: mock.NewRequest(""),
+				Method:  mock.ServerMethodName,
 			})
 			if err != nil {
 				errCh <- err

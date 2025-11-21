@@ -1,4 +1,4 @@
-package dynamic
+package mock
 
 import (
 	"testing"
@@ -11,8 +11,8 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
-// MockServerMethodName is the method supported by the dynamic package.
-const MockServerMethodName = "mock.Server.Test"
+// ServerMethodName is the method supported by the mock package.
+const ServerMethodName = "mock.Server.Test"
 
 var (
 	// Mock Service Descriptors
