@@ -8,8 +8,6 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/dynamic"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
@@ -43,23 +41,7 @@ func TestServerCallback(t *testing.T) {
 	defer srv.Stop()
 
 	md := metadata.New(map[string]string{"message": "hello"})
-
-	mgr := gorums.NewRawManager(
-		gorums.WithMetadata(md),
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	defer mgr.Close()
-
-	node, err := gorums.NewRawNode(lis.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	gorums.NewNode(t, lis.Addr().String(), gorums.WithMetadata(md))
 
 	select {
 	case <-time.After(100 * time.Millisecond):
@@ -69,12 +51,6 @@ func TestServerCallback(t *testing.T) {
 	if message != "hello" {
 		t.Errorf("incorrect message: got '%s', want 'hello'", message)
 	}
-}
-
-type interceptorSrv struct{}
-
-func (interceptorSrv) Test(_ gorums.ServerCtx, req proto.Message) (proto.Message, error) {
-	return dynamic.NewResponse(dynamic.GetVal(req) + "server-"), nil
 }
 
 func appendStringInterceptor(in, out string) gorums.Interceptor {
@@ -95,6 +71,12 @@ func appendStringInterceptor(in, out string) gorums.Interceptor {
 	}
 }
 
+type interceptorSrv struct{}
+
+func (interceptorSrv) Test(_ gorums.ServerCtx, req proto.Message) (proto.Message, error) {
+	return dynamic.NewResponse(dynamic.GetVal(req) + "server-"), nil
+}
+
 func TestServerInterceptorsChain(t *testing.T) {
 	// set up a server with two interceptors: i1, i2
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
@@ -105,7 +87,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 			appendStringInterceptor("i2in-", "i2out-"),
 		))
 		// register final handler which appends "final-" to the request value
-		s.RegisterHandler("mock.Server.Test", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		s.RegisterHandler(dynamic.MockServerMethodName, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 			req := gorums.AsProto[proto.Message](in)
 			resp, err := interceptorSrv.Test(ctx, req)
 			return gorums.NewResponseMessage(in.GetMetadata(), resp), err
@@ -114,27 +96,14 @@ func TestServerInterceptorsChain(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := gorums.NewRawManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	defer mgr.Close()
-
-	node, err := gorums.NewRawNode(addrs[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
+	node := gorums.NewNode(t, addrs[0])
 
 	// call the RPC
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	res, err := mgr.Nodes()[0].RPCCall(ctx, gorums.CallData{
+	res, err := node.RPCCall(ctx, gorums.CallData{
 		Message: dynamic.NewRequest("client-"),
-		Method:  "mock.Server.Test",
+		Method:  dynamic.MockServerMethodName,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

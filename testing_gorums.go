@@ -4,12 +4,37 @@ import (
 	"net"
 	"sync"
 	"testing"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
 type ServerIface interface {
 	Serve(net.Listener) error
 	Stop()
+}
+
+// NewNode creates a node for the given server address and adds it to a new manager.
+// The manager is automatically closed when the test finishes.
+func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *RawNode {
+	t.Helper()
+	mgrOpts := []ManagerOption{
+		WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	}
+	mgrOpts = append(mgrOpts, opts...)
+	mgr := NewRawManager(mgrOpts...)
+	t.Cleanup(mgr.Close)
+	node, err := NewRawNode(srvAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = mgr.AddNode(node); err != nil {
+		t.Error(err)
+	}
+	return node
 }
 
 // TestSetup starts numServers gRPC servers using the given registration

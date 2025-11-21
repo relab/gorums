@@ -12,7 +12,6 @@ import (
 	"github.com/relab/gorums/internal/testutils/dynamic"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -23,24 +22,6 @@ var (
 	noSendWaiting = getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
 )
 
-// newNode creates a node for the given server address and adds it to a new manager.
-func newNode(t testing.TB, srvAddr string) *RawNode {
-	mgr := NewRawManager(
-		WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	t.Cleanup(mgr.Close)
-	node, err := NewRawNode(srvAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Error(err)
-	}
-	return node
-}
-
 // newNodeWithServer creates a node connected to a live server that will delay
 // responding by the given duration. If delay is 0, the server responds immediately.
 func newNodeWithServer(t testing.TB, delay time.Duration) *RawNode {
@@ -49,8 +30,6 @@ func newNodeWithServer(t testing.TB, delay time.Duration) *RawNode {
 	t.Cleanup(teardown)
 	return node
 }
-
-const handlerName = "mock.Server.Test"
 
 type mockSrv struct{}
 
@@ -64,7 +43,7 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, fu
 		dynamic.Register(t)
 		mockSrv := &mockSrv{}
 		srv := NewServer()
-		srv.RegisterHandler(handlerName, func(ctx ServerCtx, in *Message) (*Message, error) {
+		srv.RegisterHandler(dynamic.MockServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
 			// Simulate slow processing
 			time.Sleep(delay)
 			req := AsProto[proto.Message](in)
@@ -74,7 +53,7 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, fu
 		return srv
 	})
 
-	return newNode(t, addrs[0]), teardown
+	return NewNode(t, addrs[0]), teardown
 }
 
 func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) response {
@@ -82,7 +61,7 @@ func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) respons
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
-	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, handlerName), nil)
+	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, dynamic.MockServerMethodName), nil)
 	replyChan := make(chan response, 1)
 	node.channel.enqueue(req, replyChan)
 
@@ -122,7 +101,7 @@ func getStream(node *RawNode) grpc.ClientStream {
 }
 
 func TestChannelCreation(t *testing.T) {
-	node := newNode(t, "127.0.0.1:5000")
+	node := NewNode(t, "127.0.0.1:5000")
 
 	// send message when server is down
 	resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
@@ -203,14 +182,14 @@ func TestChannelErrors(t *testing.T) {
 		{
 			name: "EnqueueWithoutServer",
 			setup: func(t *testing.T) *RawNode {
-				return newNode(t, "127.0.0.1:5002")
+				return NewNode(t, "127.0.0.1:5002")
 			},
 			wantErr: "connect: connection refused",
 		},
 		{
 			name: "EnqueueToClosedChannel",
 			setup: func(t *testing.T) *RawNode {
-				node := newNode(t, "127.0.0.1:5000")
+				node := NewNode(t, "127.0.0.1:5000")
 				err := node.close()
 				if err != nil {
 					t.Errorf("failed to close node: %v", err)
@@ -297,7 +276,7 @@ func TestChannelEnsureStream(t *testing.T) {
 	}{
 		{
 			name:  "UnconnectedNodeHasNoStream",
-			setup: func(t *testing.T) *RawNode { return newNode(t, "") },
+			setup: func(t *testing.T) *RawNode { return NewNode(t, "") },
 			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
 				if err := node.channel.ensureStream(); err == nil {
 					t.Error("ensureStream succeeded unexpectedly")
@@ -373,7 +352,7 @@ func TestChannelConnectionState(t *testing.T) {
 	}{
 		{
 			name:          "WithoutServer",
-			node:          newNode(t, "127.0.0.1:5003"),
+			node:          NewNode(t, "127.0.0.1:5003"),
 			wantConnected: false,
 		},
 		{
@@ -542,7 +521,7 @@ func TestChannelDeadlock(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 
-			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), handlerName)
+			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), dynamic.MockServerMethodName)
 			req := request{ctx: ctx, msg: NewRequestMessage(md, nil)}
 
 			// try to enqueue

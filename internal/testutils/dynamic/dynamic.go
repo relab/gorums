@@ -11,6 +11,9 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
+// MockServerMethodName is the method supported by the dynamic package.
+const MockServerMethodName = "mock.Server.Test"
+
 var (
 	// Mock Service Descriptors
 	mockFile        *descriptorpb.FileDescriptorProto
