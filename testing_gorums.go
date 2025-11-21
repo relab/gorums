@@ -50,7 +50,9 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 	listeners := make([]net.Listener, numServers)
 	addrs := make([]string, numServers)
 	srvStopped := make(chan struct{}, numServers)
-	// always register the mock types and Test method; this should be fine for testing
+	// Register mock types in the global protobuf registry for default server implementation.
+	// This is called even when a custom srvFn is provided to ensure mock types are available for tests.
+	// Note: this uses global state and may have implications for concurrent test execution.
 	mock.Register(t)
 	for i := range numServers {
 		var srv ServerIface
