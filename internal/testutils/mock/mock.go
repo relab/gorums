@@ -105,19 +105,19 @@ var registerOnce = sync.OnceValue(func() error {
 func initDescriptors(fd protoreflect.FileDescriptor) error {
 	mockServiceDesc := fd.Services().ByName("Server")
 	if mockServiceDesc == nil {
-		return errors.New("Server service not found")
+		return errors.New("service Server not found")
 	}
 	mockMethodDesc := mockServiceDesc.Methods().ByName("Test")
 	if mockMethodDesc == nil {
-		return errors.New("Test method not found")
+		return errors.New("method Test not found")
 	}
 	requestMsgDesc := fd.Messages().ByName("Request")
 	if requestMsgDesc == nil {
-		return errors.New("Request message not found")
+		return errors.New("message Request not found")
 	}
 	responseMsgDesc := fd.Messages().ByName("Response")
 	if responseMsgDesc == nil {
-		return errors.New("Response message not found")
+		return errors.New("message Response not found")
 	}
 	requestType = dynamicpb.NewMessageType(requestMsgDesc)
 	responseType = dynamicpb.NewMessageType(responseMsgDesc)
