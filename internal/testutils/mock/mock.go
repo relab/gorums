@@ -151,6 +151,9 @@ func NewResponse(val string) proto.Message {
 }
 
 func GetVal(msg proto.Message) string {
+	if msg == nil {
+		return ""
+	}
 	m := msg.ProtoReflect()
 	if !m.IsValid() {
 		return ""
@@ -163,6 +166,9 @@ func GetVal(msg proto.Message) string {
 }
 
 func SetVal(msg proto.Message, val string) {
+	if msg == nil {
+		return
+	}
 	m := msg.ProtoReflect()
 	if !m.IsValid() {
 		return
