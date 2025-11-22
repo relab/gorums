@@ -43,6 +43,7 @@ func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *RawNode {
 // function, and returns the server addresses along with a stop function
 // that should be called to shut down the test. The stop function will block
 // until all servers have stopped.
+// If srvFn is nil, a default mock server implementation is used.
 // This function can be used by other packages for testing purposes.
 func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
 	t.Helper()
