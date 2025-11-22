@@ -1,6 +1,8 @@
 package mock
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -70,52 +72,56 @@ func init() {
 // It is safe to call multiple times.
 func Register(t testing.TB) {
 	t.Helper()
-	onceFn := sync.OnceFunc(func() {
-		if fd, err := protoregistry.GlobalFiles.FindFileByPath(mockFile.GetName()); err == nil {
-			// Already registered
-			initDescriptors(t, fd)
-			return
-		}
-
-		fd, err := protodesc.NewFile(mockFile, nil)
-		if err != nil {
-			t.Fatalf("failed to create mock file descriptor: %v", err)
-		}
-		if err := protoregistry.GlobalFiles.RegisterFile(fd); err != nil {
-			t.Fatalf("failed to register mock file: %v", err)
-		}
-		initDescriptors(t, fd)
-
-		if err := protoregistry.GlobalTypes.RegisterMessage(requestType); err != nil {
-			t.Fatalf("failed to register Request type: %v", err)
-		}
-		if err := protoregistry.GlobalTypes.RegisterMessage(responseType); err != nil {
-			t.Fatalf("failed to register Response type: %v", err)
-		}
-	})
-	onceFn()
+	if err := registerOnce(); err != nil {
+		t.Fatal(err)
+	}
 }
 
-func initDescriptors(t testing.TB, fd protoreflect.FileDescriptor) {
-	t.Helper()
+var registerOnce = sync.OnceValue(func() error {
+	if fd, err := protoregistry.GlobalFiles.FindFileByPath(mockFile.GetName()); err == nil {
+		// Already registered
+		return initDescriptors(fd)
+	}
+
+	fd, err := protodesc.NewFile(mockFile, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create mock file descriptor: %v", err)
+	}
+	if err := protoregistry.GlobalFiles.RegisterFile(fd); err != nil {
+		return fmt.Errorf("failed to register mock file: %v", err)
+	}
+	if err := initDescriptors(fd); err != nil {
+		return fmt.Errorf("failed to initialize mock descriptors: %v", err)
+	}
+	if err := protoregistry.GlobalTypes.RegisterMessage(requestType); err != nil {
+		return fmt.Errorf("failed to register Request type: %v", err)
+	}
+	if err := protoregistry.GlobalTypes.RegisterMessage(responseType); err != nil {
+		return fmt.Errorf("failed to register Response type: %v", err)
+	}
+	return nil
+})
+
+func initDescriptors(fd protoreflect.FileDescriptor) error {
 	mockServiceDesc := fd.Services().ByName("Server")
 	if mockServiceDesc == nil {
-		t.Fatal("Server service not found")
+		return errors.New("Server service not found")
 	}
 	mockMethodDesc := mockServiceDesc.Methods().ByName("Test")
 	if mockMethodDesc == nil {
-		t.Fatal("Test method not found")
+		return errors.New("Test method not found")
 	}
 	requestMsgDesc := fd.Messages().ByName("Request")
 	if requestMsgDesc == nil {
-		t.Fatal("Request message not found")
+		return errors.New("Request message not found")
 	}
 	responseMsgDesc := fd.Messages().ByName("Response")
 	if responseMsgDesc == nil {
-		t.Fatal("Response message not found")
+		return errors.New("Response message not found")
 	}
 	requestType = dynamicpb.NewMessageType(requestMsgDesc)
 	responseType = dynamicpb.NewMessageType(responseMsgDesc)
+	return nil
 }
 
 // Helpers for Mock messages
