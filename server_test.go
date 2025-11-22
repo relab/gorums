@@ -54,19 +54,20 @@ func TestServerCallback(t *testing.T) {
 }
 
 func appendStringInterceptor(in, out string) gorums.Interceptor {
-	return func(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
-		req := msg.GetProtoMessage()
-		// update the underlying request gorums.Message's proto.Message
-		mock.SetVal(req, mock.GetVal(req)+in)
-
-		// call the next handler
-		resp, err := next(ctx, msg)
-		if resp != nil {
-			r := resp.GetProtoMessage()
-			// update the underlying response gorums.Message's proto.Message
-			mock.SetVal(r, mock.GetVal(r)+out)
+	return func(ctx gorums.ServerCtx, inMsg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
+		if req := inMsg.GetProtoMessage(); req != nil {
+			// update the underlying request gorums.Message's proto.Message
+			mock.SetVal(req, mock.GetVal(req)+in)
 		}
-		return resp, err
+		// call the next handler
+		outMsg, err := next(ctx, inMsg)
+		if outMsg != nil {
+			if resp := outMsg.GetProtoMessage(); resp != nil {
+				// update the underlying response gorums.Message's proto.Message
+				mock.SetVal(resp, mock.GetVal(resp)+out)
+			}
+		}
+		return outMsg, err
 	}
 }
 
