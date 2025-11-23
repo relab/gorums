@@ -39,6 +39,35 @@ func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *RawNode {
 	return node
 }
 
+// NewConfig creates a configuration for the given node addresses and adds it to a new manager.
+// The manager is automatically closed when the test finishes.
+func NewConfig(t testing.TB, addrs []string, opts ...ManagerOption) RawConfiguration {
+	t.Helper()
+	mgrOpts := []ManagerOption{
+		WithGrpcDialOptions(
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		),
+	}
+	mgrOpts = append(mgrOpts, opts...)
+	mgr := NewRawManager(mgrOpts...)
+	t.Cleanup(mgr.Close)
+
+	for _, addr := range addrs {
+		node, err := NewRawNode(addr)
+		if err != nil {
+			t.Fatalf("Failed to create node: %v", err)
+		}
+		if err = mgr.AddNode(node); err != nil {
+			t.Fatalf("Failed to add node: %v", err)
+		}
+	}
+	cfg, err := NewRawConfiguration(mgr, WithNodeList(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
 // TestSetup starts numServers gRPC servers using the given registration
 // function, and returns the server addresses along with a stop function
 // that should be called to shut down the test. The stop function will block
