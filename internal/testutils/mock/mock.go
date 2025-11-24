@@ -1,187 +1,133 @@
 package mock
 
 import (
-	"errors"
 	"fmt"
-	"sync"
-	"testing"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
-	"google.golang.org/protobuf/types/dynamicpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// ServerMethodName is the method supported by the mock package.
-const ServerMethodName = "mock.Server.Test"
-
-var (
-	// Mock Service Descriptors
-	mockFile     *descriptorpb.FileDescriptorProto
-	requestType  protoreflect.MessageType
-	responseType protoreflect.MessageType
+// TestMethod and GetValueMethod are the methods supported by the mock package.
+const (
+	TestMethod     = "mock.MockService.Test"
+	GetValueMethod = "mock.MockService.GetValue"
 )
 
-func init() {
-	// Initialize Mock Definitions
-	mockFile = &descriptorpb.FileDescriptorProto{
-		Name:    proto.String("mock/mock.proto"),
-		Package: proto.String("mock"),
-		MessageType: []*descriptorpb.DescriptorProto{
-			{
-				Name: proto.String("Request"),
-				Field: []*descriptorpb.FieldDescriptorProto{
-					{
-						Name:   proto.String("val"),
-						Number: proto.Int32(1),
-						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-						Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
-					},
-				},
-			},
-			{
-				Name: proto.String("Response"),
-				Field: []*descriptorpb.FieldDescriptorProto{
-					{
-						Name:   proto.String("val"),
-						Number: proto.Int32(1),
-						Label:  descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-						Type:   descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
-					},
-				},
-			},
-		},
-		Service: []*descriptorpb.ServiceDescriptorProto{
-			{
-				Name: proto.String("Server"),
-				Method: []*descriptorpb.MethodDescriptorProto{
-					{
-						Name:       proto.String("Test"),
-						InputType:  proto.String(".mock.Request"),
-						OutputType: proto.String(".mock.Response"),
-					},
-				},
-			},
-		},
-	}
+// Service represents a service to be registered.
+type Service struct {
+	Name    string // Full package and service name, e.g., "mock.MockService"
+	Methods []Method
 }
 
-// Register registers the mock types in the global registry.
-// It is safe to call multiple times.
-func Register(t testing.TB) {
-	t.Helper()
-	if err := registerOnce(); err != nil {
-		t.Fatal(err)
-	}
+// Method represents a method in a service.
+type Method struct {
+	Name   string
+	Input  proto.Message
+	Output proto.Message
 }
 
-var registerOnce = sync.OnceValue(func() error {
-	if fd, err := protoregistry.GlobalFiles.FindFileByPath(mockFile.GetName()); err == nil {
-		// Already registered
-		return initDescriptors(fd)
+// RegisterServices registers the given services in the global registry.
+// It is safe to call multiple times, but services with the same package name
+// must be registered in the same call or be identical to previous registrations.
+// Returns an error if registration fails.
+func RegisterServices(services []Service) error {
+	// Group by package
+	packages := make(map[string][]*descriptorpb.ServiceDescriptorProto)
+
+	for _, s := range services {
+		pkgName, svcName, found := strings.Cut(s.Name, ".")
+		if !found {
+			return fmt.Errorf("service name %q must contain a package", s.Name)
+		}
+
+		svcDesc := &descriptorpb.ServiceDescriptorProto{
+			Name: proto.String(svcName),
+		}
+
+		for _, m := range s.Methods {
+			inDesc := m.Input.ProtoReflect().Descriptor()
+			outDesc := m.Output.ProtoReflect().Descriptor()
+			inName := string(inDesc.FullName())
+			outName := string(outDesc.FullName())
+
+			svcDesc.Method = append(svcDesc.Method, &descriptorpb.MethodDescriptorProto{
+				Name:       proto.String(m.Name),
+				InputType:  proto.String("." + inName),
+				OutputType: proto.String("." + outName),
+			})
+		}
+		packages[pkgName] = append(packages[pkgName], svcDesc)
 	}
 
-	fd, err := protodesc.NewFile(mockFile, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create mock file descriptor: %v", err)
-	}
-	if err := protoregistry.GlobalFiles.RegisterFile(fd); err != nil {
-		return fmt.Errorf("failed to register mock file: %v", err)
-	}
-	if err := initDescriptors(fd); err != nil {
-		return fmt.Errorf("failed to initialize mock descriptors: %v", err)
-	}
-	if err := protoregistry.GlobalTypes.RegisterMessage(requestType); err != nil {
-		return fmt.Errorf("failed to register Request type: %v", err)
-	}
-	if err := protoregistry.GlobalTypes.RegisterMessage(responseType); err != nil {
-		return fmt.Errorf("failed to register Response type: %v", err)
-	}
-	return nil
-})
+	for pkg, svcDescriptors := range packages {
+		// Collect dependencies
+		deps := make(map[string]struct{})
 
-func initDescriptors(fd protoreflect.FileDescriptor) error {
-	mockServiceDesc := fd.Services().ByName("Server")
-	if mockServiceDesc == nil {
-		return errors.New("service Server not found")
+		// Iterate over the original services to find dependencies for this package.
+		for _, s := range services {
+			pName, _, found := strings.Cut(s.Name, ".")
+			if !found || pName != pkg {
+				continue
+			}
+
+			for _, m := range s.Methods {
+				if d := m.Input.ProtoReflect().Descriptor().ParentFile(); d != nil {
+					deps[d.Path()] = struct{}{}
+				}
+				if d := m.Output.ProtoReflect().Descriptor().ParentFile(); d != nil {
+					deps[d.Path()] = struct{}{}
+				}
+			}
+		}
+
+		fd := &descriptorpb.FileDescriptorProto{
+			Name:    proto.String(fmt.Sprintf("mock/%s.proto", pkg)),
+			Package: proto.String(pkg),
+			Service: svcDescriptors,
+		}
+
+		for dep := range deps {
+			fd.Dependency = append(fd.Dependency, dep)
+		}
+
+		// Check if already registered
+		if _, err := protoregistry.GlobalFiles.FindFileByPath(fd.GetName()); err == nil {
+			continue // Already registered
+		}
+
+		fileDesc, err := protodesc.NewFile(fd, protoregistry.GlobalFiles)
+		if err != nil {
+			return fmt.Errorf("failed to create file descriptor for %s: %v", pkg, err)
+		}
+
+		if err := protoregistry.GlobalFiles.RegisterFile(fileDesc); err != nil {
+			return fmt.Errorf("failed to register file %s: %v", pkg, err)
+		}
 	}
-	mockMethodDesc := mockServiceDesc.Methods().ByName("Test")
-	if mockMethodDesc == nil {
-		return errors.New("method Test not found")
-	}
-	requestMsgDesc := fd.Messages().ByName("Request")
-	if requestMsgDesc == nil {
-		return errors.New("message Request not found")
-	}
-	responseMsgDesc := fd.Messages().ByName("Response")
-	if responseMsgDesc == nil {
-		return errors.New("message Response not found")
-	}
-	requestType = dynamicpb.NewMessageType(requestMsgDesc)
-	responseType = dynamicpb.NewMessageType(responseMsgDesc)
 	return nil
 }
 
 // Helpers for Mock messages
 
-const panicMsg = "mock.Register() must be called before using NewRequest/NewResponse"
-
-func NewRequest(val string) proto.Message {
-	if requestType == nil {
-		panic(panicMsg)
-	}
-	msg := requestType.New()
-	if val != "" {
-		fd := msg.Descriptor().Fields().ByName("val")
-		if fd != nil {
-			msg.Set(fd, protoreflect.ValueOfString(val))
-		}
-	}
-	return msg.Interface()
-}
-
-func NewResponse(val string) proto.Message {
-	if responseType == nil {
-		panic(panicMsg)
-	}
-	msg := responseType.New()
-	if val != "" {
-		fd := msg.Descriptor().Fields().ByName("val")
-		if fd != nil {
-			msg.Set(fd, protoreflect.ValueOfString(val))
-		}
-	}
-	return msg.Interface()
-}
-
 func GetVal(msg proto.Message) string {
 	if msg == nil {
 		return ""
 	}
-	m := msg.ProtoReflect()
-	if !m.IsValid() {
-		return ""
+	if m, ok := msg.(*wrapperspb.StringValue); ok {
+		return m.Value
 	}
-	fd := m.Descriptor().Fields().ByName("val")
-	if fd == nil {
-		return ""
-	}
-	return m.Get(fd).String()
+	return ""
 }
 
 func SetVal(msg proto.Message, val string) {
 	if msg == nil {
 		return
 	}
-	m := msg.ProtoReflect()
-	if !m.IsValid() {
-		return
+	if m, ok := msg.(*wrapperspb.StringValue); ok {
+		m.Value = val
 	}
-	fd := m.Descriptor().Fields().ByName("val")
-	if fd == nil {
-		return
-	}
-	m.Set(fd, protoreflect.ValueOfString(val))
 }

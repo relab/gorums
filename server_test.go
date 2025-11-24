@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func init() {
@@ -74,7 +75,7 @@ func appendStringInterceptor(in, out string) gorums.Interceptor {
 type interceptorSrv struct{}
 
 func (interceptorSrv) Test(_ gorums.ServerCtx, req proto.Message) (proto.Message, error) {
-	return mock.NewResponse(mock.GetVal(req) + "server-"), nil
+	return pb.String(mock.GetVal(req) + "server-"), nil
 }
 
 func TestServerInterceptorsChain(t *testing.T) {
@@ -86,7 +87,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 			appendStringInterceptor("i2in-", "i2out-"),
 		))
 		// register final handler which appends "final-" to the request value
-		s.RegisterHandler(mock.ServerMethodName, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		s.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 			resp, err := interceptorSrv.Test(ctx, in.GetProtoMessage())
 			return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 		})
@@ -100,8 +101,8 @@ func TestServerInterceptorsChain(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	res, err := node.RPCCall(ctx, gorums.CallData{
-		Message: mock.NewRequest("client-"),
-		Method:  mock.ServerMethodName,
+		Message: pb.String("client-"),
+		Method:  mock.TestMethod,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

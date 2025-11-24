@@ -10,6 +10,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/encoding"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func init() {
@@ -226,8 +227,8 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	for range 2 {
 		wg.Go(func() {
 			_, err := node.RPCCall(context.Background(), gorums.CallData{
-				Message: mock.NewRequest(""),
-				Method:  mock.ServerMethodName,
+				Message: pb.String(""),
+				Method:  mock.TestMethod,
 			})
 			if err != nil {
 				errCh <- err

@@ -9,6 +9,7 @@ import (
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/encoding"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func init() {
@@ -26,8 +27,8 @@ func TestRPCCallSuccess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	response, err := node.RPCCall(ctx, gorums.CallData{
-		Message: mock.NewRequest(""),
-		Method:  mock.ServerMethodName,
+		Message: pb.String(""),
+		Method:  mock.TestMethod,
 	})
 	if err != nil {
 		t.Fatalf("Unexpected error, got: %v, want: %v", err, nil)
@@ -46,8 +47,8 @@ func TestRPCCallDownedNode(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	response, err := node.RPCCall(ctx, gorums.CallData{
-		Message: mock.NewRequest(""),
-		Method:  mock.ServerMethodName,
+		Message: pb.String(""),
+		Method:  mock.TestMethod,
 	})
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("rpc error: code = Unavailable desc = stream is down"))
@@ -67,8 +68,8 @@ func TestRPCCallTimedOut(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	defer cancel()
 	response, err := node.RPCCall(ctx, gorums.CallData{
-		Message: mock.NewRequest(""),
-		Method:  mock.ServerMethodName,
+		Message: pb.String(""),
+		Method:  mock.TestMethod,
 	})
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("context deadline exceeded"))

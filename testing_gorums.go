@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
@@ -71,19 +72,20 @@ func NewConfig(t testing.TB, addrs []string, opts ...ManagerOption) RawConfigura
 // TestSetup starts numServers gRPC servers using the given registration
 // function, and returns the server addresses along with a stop function
 // that should be called to shut down the test. The stop function will block
-// until all servers have stopped.
-// If srvFn is nil, a default mock server implementation is used.
-// This function can be used by other packages for testing purposes.
+// until all servers have stopped. The provided srvFn is used to register
+// the server handlers. The service, method, and message types must be registered
+// in the global protobuf registry before calling this function. See TestMain
+// for an example of how to register the required information. If srvFn is nil,
+// a default mock server implementation is used.
+//
+// This function can be used by other packages for testing purposes, as long as
+// the required types are registered in the global protobuf registry.
 func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
 	t.Helper()
 	servers := make([]ServerIface, numServers)
 	listeners := make([]net.Listener, numServers)
 	addrs := make([]string, numServers)
 	srvStopped := make(chan struct{}, numServers)
-	// Register mock types in the global protobuf registry for default server implementation.
-	// This is called even when a custom srvFn is provided to ensure mock types are available for tests.
-	// Note: this uses global state and may have implications for concurrent test execution.
-	mock.Register(t)
 	for i := range numServers {
 		var srv ServerIface
 		if srvFn != nil {
@@ -122,7 +124,7 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 
 func initServer() *Server {
 	srv := NewServer()
-	srv.RegisterHandler(mock.ServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
 		resp, err := (&testSrv{}).Test(ctx, in.GetProtoMessage())
 		return NewResponseMessage(in.GetMetadata(), resp), err
 	})
@@ -132,5 +134,5 @@ func initServer() *Server {
 type testSrv struct{}
 
 func (testSrv) Test(_ ServerCtx, _ proto.Message) (proto.Message, error) {
-	return mock.NewResponse(""), nil
+	return pb.String(""), nil
 }
