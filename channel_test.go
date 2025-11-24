@@ -13,6 +13,7 @@ import (
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const defaultTestTimeout = 3 * time.Second
@@ -34,7 +35,7 @@ func newNodeWithServer(t testing.TB, delay time.Duration) *RawNode {
 type mockSrv struct{}
 
 func (mockSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
-	return mock.NewResponse(mock.GetVal(req) + "-mocked-"), nil
+	return pb.String(mock.GetVal(req) + "-mocked-"), nil
 }
 
 func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, func()) {
@@ -42,7 +43,7 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, fu
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
 		mockSrv := &mockSrv{}
 		srv := NewServer()
-		srv.RegisterHandler(mock.ServerMethodName, func(ctx ServerCtx, in *Message) (*Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
 			// Simulate slow processing
 			time.Sleep(delay)
 			resp, err := mockSrv.Test(ctx, in.GetProtoMessage())
@@ -59,7 +60,7 @@ func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) respons
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
-	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, mock.ServerMethodName), nil)
+	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, mock.TestMethod), nil)
 	replyChan := make(chan response, 1)
 	node.channel.enqueue(req, replyChan)
 
@@ -517,7 +518,7 @@ func TestChannelDeadlock(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 			defer cancel()
 
-			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), mock.ServerMethodName)
+			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), mock.TestMethod)
 			req := request{ctx: ctx, msg: NewRequestMessage(md, nil)}
 
 			// try to enqueue
