@@ -19,7 +19,7 @@ func TestQuorumCallSuccess(t *testing.T) {
 	cd := gorums.QuorumCallData{
 		Message: mock.NewRequest(""),
 		Method:  mock.ServerMethodName,
-		QuorumFunction: func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
+		QuorumFunction: func(_ proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
 			t.Logf("Received %d replies: %v", len(replies), replies)
 			if len(replies) > 2 {
 				for _, reply := range replies {
