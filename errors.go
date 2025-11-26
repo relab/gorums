@@ -6,9 +6,12 @@ import (
 	"strings"
 )
 
-// Incomplete is the error returned by a quorum call when the call cannot completed
+// ErrIncomplete is the error returned by a quorum call when the call cannot completed
 // due insufficient non-error replies to form a quorum according to the quorum function.
-var Incomplete = errors.New("incomplete call")
+var ErrIncomplete = errors.New("incomplete call")
+
+// ErrTypeMismatch is returned when a response cannot be cast to the expected type.
+var ErrTypeMismatch = errors.New("response type mismatch")
 
 // QuorumCallError reports on a failed quorum call.
 type QuorumCallError struct {

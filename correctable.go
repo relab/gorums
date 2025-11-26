@@ -169,7 +169,7 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 		}
 		if (state.data.ServerStream && len(errs) == state.expectedReplies) ||
 			(!state.data.ServerStream && len(errs)+len(replies) == state.expectedReplies) {
-			corr.set(resp, clevel, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}, true)
+			corr.set(resp, clevel, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: len(replies)}, true)
 			return
 		}
 	}

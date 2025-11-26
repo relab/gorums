@@ -60,7 +60,7 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 			return resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
 		}
 		if len(errs)+len(replies) == expectedReplies {
-			return resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
+			return resp, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: len(replies)}
 		}
 	}
 }

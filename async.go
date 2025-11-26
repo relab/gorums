@@ -100,7 +100,7 @@ func (RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state a
 			return
 		}
 		if len(errs)+len(replies) == state.expectedReplies {
-			fut.reply, fut.err = resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
+			fut.reply, fut.err = resp, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: len(replies)}
 			return
 		}
 	}
