@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// ErrIncomplete is the error returned by a quorum call when the call cannot completed
-// due insufficient non-error replies to form a quorum according to the quorum function.
+// ErrIncomplete is the error returned by a quorum call when the call cannot be completed
+// due to insufficient non-error replies to form a quorum according to the quorum function.
 var ErrIncomplete = errors.New("incomplete call")
 
 // ErrTypeMismatch is returned when a response cannot be cast to the expected type.
