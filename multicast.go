@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/protobuf/proto"
 )
 
 // Multicast is a one-way call; no replies are returned to the client.
@@ -21,9 +22,9 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 	sentMsgs := 0
 
-	var replyChan chan response
+	var replyChan chan Result[proto.Message]
 	if o.waitSendDone {
-		replyChan = make(chan response, len(c))
+		replyChan = make(chan Result[proto.Message], len(c))
 	}
 	for _, n := range c {
 		msg := d.Message
@@ -33,7 +34,7 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), opts: o}, replyChan)
+		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), opts: o, responseChan: replyChan})
 		sentMsgs++
 	}
 

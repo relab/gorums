@@ -55,27 +55,28 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, fu
 	return NewNode(t, addrs[0]), teardown
 }
 
-func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) response {
+func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) Result[proto.Message] {
 	t.Helper()
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
 	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, mock.TestMethod), nil)
-	replyChan := make(chan response, 1)
-	node.channel.enqueue(req, replyChan)
+	replyChan := make(chan Result[proto.Message], 1)
+	req.responseChan = replyChan
+	node.channel.enqueue(req)
 
 	select {
 	case resp := <-replyChan:
 		return resp
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("timeout waiting for response to message %d", msgID)
-		return response{}
+		return Result[proto.Message]{}
 	}
 }
 
 type msgResponse struct {
 	msgID uint64
-	resp  response
+	resp  Result[proto.Message]
 }
 
 func send(t testing.TB, results chan<- msgResponse, node *RawNode, goroutineID, msgsToSend int, req request) {
@@ -104,7 +105,7 @@ func TestChannelCreation(t *testing.T) {
 
 	// send message when server is down
 	resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
-	if resp.err == nil {
+	if resp.Err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
 }
@@ -122,8 +123,8 @@ func TestChannelShutdown(t *testing.T) {
 	for i := range numMessages {
 		wg.Go(func() {
 			resp := sendRequest(t, node, request{}, uint64(i))
-			if resp.err != nil {
-				t.Errorf("unexpected error for message %d, got error: %v", i, resp.err)
+			if resp.Err != nil {
+				t.Errorf("unexpected error for message %d, got error: %v", i, resp.Err)
 			}
 		})
 	}
@@ -136,10 +137,10 @@ func TestChannelShutdown(t *testing.T) {
 
 	// try to send a message after node closure
 	resp := sendRequest(t, node, request{}, 999)
-	if resp.err == nil {
+	if resp.Err == nil {
 		t.Error("expected error when sending to closed channel")
-	} else if resp.err.Error() != "node closed" {
-		t.Errorf("expected 'node closed' error, got: %v", resp.err)
+	} else if resp.Err.Error() != "node closed" {
+		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
 	}
 
 	if node.channel.isConnected() {
@@ -163,8 +164,8 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 			start := time.Now()
 			resp := sendRequest(t, node, request{opts: tt.opts}, uint64(i))
 			elapsed := time.Since(start)
-			if resp.err != nil {
-				t.Errorf("unexpected error: %v", resp.err)
+			if resp.Err != nil {
+				t.Errorf("unexpected error: %v", resp.Err)
 			}
 			t.Logf("response received in %v", elapsed)
 		})
@@ -214,8 +215,8 @@ func TestChannelErrors(t *testing.T) {
 			setup: func(t *testing.T) *RawNode {
 				node, stopServer := newNodeWithStoppableServer(t, 0)
 				resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
-				if resp.err != nil {
-					t.Errorf("first message should succeed, got error: %v", resp.err)
+				if resp.Err != nil {
+					t.Errorf("first message should succeed, got error: %v", resp.Err)
 				}
 				stopServer()
 				return node
@@ -230,10 +231,10 @@ func TestChannelErrors(t *testing.T) {
 
 			// Send message and verify error
 			resp := sendRequest(t, node, request{opts: waitSendDone}, uint64(i))
-			if resp.err == nil {
+			if resp.Err == nil {
 				t.Errorf("expected error '%s' but got nil", tt.wantErr)
-			} else if !strings.Contains(resp.err.Error(), tt.wantErr) {
-				t.Errorf("expected error '%s', got: %v", tt.wantErr, resp.err)
+			} else if !strings.Contains(resp.Err.Error(), tt.wantErr) {
+				t.Errorf("expected error '%s', got: %v", tt.wantErr, resp.Err)
 			}
 		})
 	}
@@ -401,8 +402,8 @@ func TestChannelConcurrentSends(t *testing.T) {
 	var errs []error
 	for range numMessages {
 		res := <-results
-		if res.resp.err != nil {
-			errs = append(errs, res.resp.err)
+		if res.resp.Err != nil {
+			errs = append(errs, res.resp.Err)
 		}
 	}
 
@@ -477,8 +478,8 @@ func TestChannelContext(t *testing.T) {
 
 			node := newNodeWithServer(t, tt.serverDelay)
 			resp := sendRequest(t, node, request{ctx: ctx, opts: tt.callOpts}, uint64(i))
-			if !errors.Is(resp.err, tt.wantErr) {
-				t.Errorf("expected %v, got: %v", tt.wantErr, resp.err)
+			if !errors.Is(resp.Err, tt.wantErr) {
+				t.Errorf("expected %v, got: %v", tt.wantErr, resp.Err)
 			}
 		})
 	}
@@ -578,8 +579,8 @@ func TestChannelRouterLifecycle(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			msgID := uint64(i)
 			resp := sendRequest(t, node, request{opts: tt.opts, streaming: tt.streaming}, msgID)
-			if resp.err != nil {
-				t.Errorf("unexpected error: %v", resp.err)
+			if resp.Err != nil {
+				t.Errorf("unexpected error: %v", resp.Err)
 			}
 			if exists := routerExists(node, msgID); exists != tt.wantRouter {
 				t.Errorf("router exists = %v, want %v", exists, tt.wantRouter)
@@ -605,8 +606,8 @@ func TestChannelResponseRouting(t *testing.T) {
 	received := make(map[uint64]bool)
 	for range numMessages {
 		result := <-results
-		if result.resp.err != nil {
-			t.Errorf("message %d got error: %v", result.msgID, result.resp.err)
+		if result.resp.Err != nil {
+			t.Errorf("message %d got error: %v", result.msgID, result.resp.Err)
 		}
 		if received[result.msgID] {
 			t.Errorf("message %d received twice", result.msgID)

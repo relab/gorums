@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/relab/gorums/ordering"
+	"google.golang.org/protobuf/proto"
 )
 
 // Unicast is a one-way call; no replies are returned to the client.
@@ -20,15 +21,14 @@ func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
 	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
-	req := request{ctx: ctx, msg: NewRequestMessage(md, d.Message), opts: o}
 
 	if !o.waitSendDone {
-		n.channel.enqueue(req, nil)
+		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message), opts: o})
 		return // fire-and-forget: don't wait for send completion
 	}
 
 	// Default: block until send completes
-	replyChan := make(chan response, 1)
-	n.channel.enqueue(req, replyChan)
+	replyChan := make(chan Result[proto.Message], 1)
+	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message), opts: o, responseChan: replyChan})
 	<-replyChan
 }

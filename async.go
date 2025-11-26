@@ -37,7 +37,7 @@ func (f *Async) Done() bool {
 type asyncCallState struct {
 	md              *ordering.Metadata
 	data            QuorumCallData
-	replyChan       <-chan response
+	replyChan       <-chan Result[proto.Message]
 	expectedReplies int
 }
 
@@ -47,7 +47,7 @@ type asyncCallState struct {
 func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 	expectedReplies := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
-	replyChan := make(chan response, expectedReplies)
+	replyChan := make(chan Result[proto.Message], expectedReplies)
 
 	for _, n := range c {
 		msg := d.Message
@@ -58,7 +58,7 @@ func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Asyn
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg)}, replyChan)
+		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 	}
 
 	fut := &Async{c: make(chan struct{}, 1)}
@@ -86,11 +86,11 @@ func (RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state a
 	for {
 		select {
 		case r := <-state.replyChan:
-			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
+			if r.Err != nil {
+				errs = append(errs, nodeError{nodeID: r.NodeID, cause: r.Err})
 				break
 			}
-			replies[r.nid] = r.msg
+			replies[r.NodeID] = r.Value
 			if resp, quorum = state.data.QuorumFunction(state.data.Message, replies); quorum {
 				fut.reply, fut.err = resp, nil
 				return

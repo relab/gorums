@@ -17,21 +17,18 @@ import (
 var streamDownErr = status.Error(codes.Unavailable, "stream is down")
 
 type request struct {
-	ctx       context.Context
-	msg       *Message
-	opts      callOptions
-	streaming bool
+	ctx          context.Context
+	msg          *Message
+	opts         callOptions
+	streaming    bool
+	responseChan chan<- Result[proto.Message]
 }
 
-type response struct {
-	nid uint32
-	msg proto.Message
-	err error
-}
-
-type responseRouter struct {
-	c         chan<- response
-	streaming bool
+// Result wraps a response value with its associated error and node ID.
+type Result[T any] struct {
+	NodeID uint32
+	Value  T
+	Err    error
 }
 
 type channel struct {
@@ -50,8 +47,10 @@ type channel struct {
 	streamCtx    context.Context
 	cancelStream context.CancelFunc
 
-	// Response routing
-	responseRouters map[uint64]responseRouter
+	// Response routing; the map holds pending requests waiting for responses.
+	// The request contains the responseChan on which to send the response
+	// to the caller.
+	responseRouters map[uint64]request
 	responseMut     sync.Mutex
 
 	// Lifecycle management: node close() cancels this context
@@ -70,7 +69,7 @@ func newChannel(n *RawNode) *channel {
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		node:            n,
 		latency:         -1 * time.Second,
-		responseRouters: make(map[uint64]responseRouter),
+		responseRouters: make(map[uint64]request),
 	}
 	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = n.newContext()
@@ -119,15 +118,13 @@ func (c *channel) isConnected() bool {
 	return c.node.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
 
-// enqueue adds the request to the send queue and sets up a response router if needed.
+// enqueue adds the request to the send queue and sets up response routing if needed.
 // If the node is closed, it responds with an error instead.
-func (c *channel) enqueue(req request, responseChan chan<- response) {
+func (c *channel) enqueue(req request) {
 	msgID := req.msg.GetMessageID()
-	if responseChan != nil {
-		// allocate before critical section
-		router := responseRouter{responseChan, req.streaming}
+	if req.responseChan != nil {
 		c.responseMut.Lock()
-		c.responseRouters[msgID] = router
+		c.responseRouters[msgID] = req
 		c.responseMut.Unlock()
 	}
 	// either enqueue the request on the sendQ or respond
@@ -135,36 +132,36 @@ func (c *channel) enqueue(req request, responseChan chan<- response) {
 	select {
 	case <-c.parentCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(msgID, response{nid: c.node.ID(), err: fmt.Errorf("node closed")})
+		c.routeResponse(msgID, Result[proto.Message]{NodeID: c.node.ID(), Err: fmt.Errorf("node closed")})
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
 	}
 }
 
-// routeResponse routes the response to the appropriate response router based on msgID.
-// If no router is found, the response is discarded.
-func (c *channel) routeResponse(msgID uint64, resp response) {
+// routeResponse routes the response to the appropriate response channel based on msgID.
+// If no matching request is found, the response is discarded.
+func (c *channel) routeResponse(msgID uint64, resp Result[proto.Message]) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
-	if router, ok := c.responseRouters[msgID]; ok {
-		router.c <- resp
+	if req, ok := c.responseRouters[msgID]; ok {
+		req.responseChan <- resp
 		// delete the router if we are only expecting a single reply message
-		if !router.streaming {
+		if !req.streaming {
 			delete(c.responseRouters, msgID)
 		}
 	}
 }
 
-// cancelPendingMsgs cancels all pending messages by sending an error response to each router.
-// This is typically called when the stream goes down to notify all waiting calls.
+// cancelPendingMsgs cancels all pending messages by sending an error response to each
+// associated request. This is called when the stream goes down to notify all waiting calls.
 func (c *channel) cancelPendingMsgs() {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
-	for msgID, router := range c.responseRouters {
-		router.c <- response{nid: c.node.ID(), err: streamDownErr}
+	for msgID, req := range c.responseRouters {
+		req.responseChan <- Result[proto.Message]{NodeID: c.node.ID(), Err: streamDownErr}
 		// delete the router if we are only expecting a single reply message
-		if !router.streaming {
+		if !req.streaming {
 			delete(c.responseRouters, msgID)
 		}
 	}
@@ -191,11 +188,11 @@ func (c *channel) sender() {
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), response{nid: c.node.ID(), err: err})
+			c.routeResponse(req.msg.GetMessageID(), Result[proto.Message]{NodeID: c.node.ID(), Err: err})
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), response{nid: c.node.ID(), err: err})
+			c.routeResponse(req.msg.GetMessageID(), Result[proto.Message]{NodeID: c.node.ID(), Err: err})
 		}
 	}
 }
@@ -220,7 +217,7 @@ func (c *channel) receiver() {
 			c.clearStream()
 		} else {
 			err := resp.GetStatus().Err()
-			c.routeResponse(resp.GetMessageID(), response{nid: c.node.ID(), msg: resp.GetProtoMessage(), err: err})
+			c.routeResponse(resp.GetMessageID(), Result[proto.Message]{NodeID: c.node.ID(), Value: resp.GetProtoMessage(), Err: err})
 		}
 
 		select {
@@ -250,7 +247,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// wait for actual server responses, so mustWaitSendDone() returns false for them.
 		if req.opts.mustWaitSendDone() && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
-			c.routeResponse(req.msg.GetMessageID(), response{})
+			c.routeResponse(req.msg.GetMessageID(), Result[proto.Message]{})
 		}
 	}()
 

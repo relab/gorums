@@ -93,7 +93,7 @@ type CorrectableCallData struct {
 type correctableCallState struct {
 	md              *ordering.Metadata
 	data            CorrectableCallData
-	replyChan       <-chan response
+	replyChan       <-chan Result[proto.Message]
 	expectedReplies int
 }
 
@@ -104,7 +104,7 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 	expectedReplies := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
-	replyChan := make(chan response, expectedReplies)
+	replyChan := make(chan Result[proto.Message], expectedReplies)
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
@@ -114,7 +114,7 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: d.ServerStream}, replyChan)
+		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: d.ServerStream, responseChan: replyChan})
 	}
 
 	corr := &Correctable{donech: make(chan struct{}, 1)}
@@ -148,19 +148,19 @@ func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Corre
 	for {
 		select {
 		case r := <-state.replyChan:
-			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
+			if r.Err != nil {
+				errs = append(errs, nodeError{nodeID: r.NodeID, cause: r.Err})
 				break
 			}
-			replies[r.nid] = r.msg
+			replies[r.NodeID] = r.Value
 			if resp, rlevel, quorum = state.data.QuorumFunction(state.data.Message, replies); quorum {
 				if quorum {
-					corr.set(r.msg, rlevel, nil, true)
+					corr.set(r.Value, rlevel, nil, true)
 					return
 				}
 				if rlevel > clevel {
 					clevel = rlevel
-					corr.set(r.msg, rlevel, nil, false)
+					corr.set(r.Value, rlevel, nil, false)
 				}
 			}
 		case <-ctx.Done():

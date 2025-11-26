@@ -26,7 +26,7 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 	expectedReplies := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
-	replyChan := make(chan response, expectedReplies)
+	replyChan := make(chan Result[proto.Message], expectedReplies)
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {
@@ -36,7 +36,7 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg)}, replyChan)
+		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 	}
 
 	var (
@@ -48,11 +48,11 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 	for {
 		select {
 		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
+			if r.Err != nil {
+				errs = append(errs, nodeError{nodeID: r.NodeID, cause: r.Err})
 				break
 			}
-			replies[r.nid] = r.msg
+			replies[r.NodeID] = r.Value
 			if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
 				return resp, nil
 			}
