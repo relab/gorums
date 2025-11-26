@@ -333,7 +333,7 @@ func ThresholdQuorum[Req, Resp msg](threshold int) QuorumFunc[Req, Resp, Resp] {
 //
 // This is a base quorum function that terminates the interceptor chain.
 func MajorityQuorum[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (Resp, error) {
-	quorumSize := (ctx.Size() + 1) / 2
+	quorumSize := ctx.Size()/2 + 1
 	return ThresholdQuorum[Req, Resp](quorumSize)(ctx)
 }
 

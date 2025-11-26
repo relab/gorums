@@ -651,6 +651,32 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			wantErr:   false,
 			wantValue: "first",
 		},
+		{
+			name:       "MajorityQuorum_Even_Success",
+			quorumFunc: MajorityQuorum[*pb.StringValue, *pb.StringValue],
+			numNodes:   4,
+			responses: []Result[proto.Message]{
+				{NodeID: 1, Value: pb.String("first"), Err: nil},
+				{NodeID: 2, Value: pb.String("second"), Err: nil},
+				{NodeID: 3, Value: pb.String("third"), Err: nil},
+				{NodeID: 4, Value: nil, Err: errors.New("error4")},
+			},
+			wantErr:   false,
+			wantValue: "first",
+		},
+		{
+			name:       "MajorityQuorum_Even_Insufficient",
+			quorumFunc: MajorityQuorum[*pb.StringValue, *pb.StringValue],
+			numNodes:   4,
+			responses: []Result[proto.Message]{
+				{NodeID: 1, Value: pb.String("first"), Err: nil},
+				{NodeID: 2, Value: pb.String("second"), Err: nil},
+				{NodeID: 3, Value: nil, Err: errors.New("error3")},
+				{NodeID: 4, Value: nil, Err: errors.New("error4")},
+			},
+			wantErr:     true,
+			wantErrType: ErrIncomplete,
+		},
 
 		// ThresholdQuorum tests
 		{
