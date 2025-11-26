@@ -256,7 +256,7 @@ func PerNodeTransform[Req, Resp msg, Out any](transform func(Req, *RawNode) Req)
 // the aggregated result and a boolean indicating whether quorum was reached.
 //
 // Note: This is a terminal handler that collects all responses itself. Any base quorum function
-// passed when using this interceptor will be ignored."
+// passed when using this interceptor will be ignored.
 //
 // Example:
 //
