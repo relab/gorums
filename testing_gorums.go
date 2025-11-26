@@ -140,7 +140,7 @@ type testSrv struct {
 	val int32
 }
 
-func (_ testSrv) Test(_ ServerCtx, _ proto.Message) (proto.Message, error) {
+func (testSrv) Test(_ ServerCtx, _ proto.Message) (proto.Message, error) {
 	return pb.String(""), nil
 }
 

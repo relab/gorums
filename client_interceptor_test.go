@@ -411,7 +411,7 @@ func TestInterceptorCollectAllResponses(t *testing.T) {
 func TestInterceptorIntegration_CollectAll(t *testing.T) {
 	addrs, closeServers := TestSetup(t, 3, func(i int) ServerIface {
 		srv := NewServer()
-		srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
+		srv.RegisterHandler(mock.TestMethod, func(_ ServerCtx, in *Message) (*Message, error) {
 			req := AsProto[*pb.StringValue](in)
 			resp := pb.String(req.GetValue() + "-node-" + strconv.Itoa(i))
 			return NewResponseMessage(in.GetMetadata(), resp), nil
@@ -704,7 +704,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 func TestInterceptorQuorumSpecAdapter(t *testing.T) {
 	t.Run("AdapterWithMajorityQuorum", func(t *testing.T) {
 		// Define a legacy-style quorum function
-		qf := func(req *pb.StringValue, replies map[uint32]*pb.StringValue) (*pb.StringValue, bool) {
+		qf := func(_ *pb.StringValue, replies map[uint32]*pb.StringValue) (*pb.StringValue, bool) {
 			quorumSize := 2 // Majority of 3
 			if len(replies) >= quorumSize {
 				// Return first reply
@@ -737,7 +737,7 @@ func TestInterceptorQuorumSpecAdapter(t *testing.T) {
 
 	t.Run("AdapterQuorumNotReached", func(t *testing.T) {
 		// Define a quorum function that needs all 3 responses
-		qf := func(req *pb.StringValue, replies map[uint32]*pb.StringValue) (*pb.StringValue, bool) {
+		qf := func(_ *pb.StringValue, replies map[uint32]*pb.StringValue) (*pb.StringValue, bool) {
 			if len(replies) == 3 {
 				return pb.String("success"), true
 			}
@@ -766,7 +766,7 @@ func TestInterceptorQuorumSpecAdapter(t *testing.T) {
 func TestInterceptorUsage(t *testing.T) {
 	t.Run("CorrectUsage", func(t *testing.T) {
 		// Demonstrate correct usage: transform followed by aggregator
-		transform := func(req *pb.StringValue, node *RawNode) *pb.StringValue {
+		transform := func(req *pb.StringValue, _ *RawNode) *pb.StringValue {
 			return pb.String(req.GetValue() + "-transformed")
 		}
 

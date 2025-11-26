@@ -270,7 +270,7 @@ func PerNodeTransform[Req, Resp msg, Out any](transform func(Req, *RawNode) Req)
 func QuorumSpecInterceptor[Req, Resp msg, Out any](
 	qf func(Req, map[uint32]Resp) (Out, bool),
 ) QuorumInterceptor[Req, Resp, Out] {
-	return func(next QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
+	return func(_ QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
 		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
 			replies := CollectAll(IgnoreErrors(ctx.Responses()))
 			resp, ok := qf(ctx.Request(), replies)
