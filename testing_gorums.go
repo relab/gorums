@@ -91,7 +91,7 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 		if srvFn != nil {
 			srv = srvFn(i)
 		} else {
-			srv = initServer()
+			srv = initServer(i)
 		}
 		// listen on any available port
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -122,17 +122,45 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 	return addrs, stopFn
 }
 
-func initServer() *Server {
+func initServer(i int) *Server {
 	srv := NewServer()
+	ts := testSrv{val: int32((i + 1) * 10)}
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
-		resp, err := (&testSrv{}).Test(ctx, in.GetProtoMessage())
+		resp, err := ts.Test(ctx, in.GetProtoMessage())
+		return NewResponseMessage(in.GetMetadata(), resp), err
+	})
+	srv.RegisterHandler(mock.GetValueMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
+		resp, err := ts.GetValue(ctx, in.GetProtoMessage())
 		return NewResponseMessage(in.GetMetadata(), resp), err
 	})
 	return srv
 }
 
-type testSrv struct{}
+type testSrv struct {
+	val int32
+}
 
-func (testSrv) Test(_ ServerCtx, _ proto.Message) (proto.Message, error) {
+func (_ testSrv) Test(_ ServerCtx, _ proto.Message) (proto.Message, error) {
 	return pb.String(""), nil
+}
+
+func (ts testSrv) GetValue(_ ServerCtx, _ proto.Message) (proto.Message, error) {
+	return pb.Int32(ts.val), nil
+}
+
+func echoServerFn(_ int) ServerIface {
+	srv := NewServer()
+	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
+		resp, err := echoSrv{}.Test(ctx, in.GetProtoMessage())
+		return NewResponseMessage(in.GetMetadata(), resp), err
+	})
+
+	return srv
+}
+
+// echoSrv implements a simple echo server handler for testing
+type echoSrv struct{}
+
+func (echoSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
+	return pb.String("echo: " + mock.GetVal(req)), nil
 }
