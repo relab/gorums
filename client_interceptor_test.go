@@ -828,9 +828,7 @@ func TestInterceptorQuorumSpecAdapter(t *testing.T) {
 	})
 }
 
-// TestInterceptorTerminalHandlerError tests that ErrNoTerminalHandler
-// is returned when no interceptor in the chain completes the call.
-// TestInterceptorUsage demonstrates correct usage of interceptors
+// TestInterceptorUsage demonstrates correct usage of interceptor chaining.
 func TestInterceptorUsage(t *testing.T) {
 	t.Run("CorrectUsage", func(t *testing.T) {
 		// Demonstrate correct usage: transform followed by aggregator
