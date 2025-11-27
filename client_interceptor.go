@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"iter"
-	"maps"
 	"sync"
 
 	"github.com/relab/gorums/ordering"
@@ -33,9 +32,12 @@ type QuorumInterceptor[Req, Resp msg, Out any] func(QuorumFunc[Req, Resp, Out]) 
 // (e.g. MajorityQuorum) that actually collects and aggregates responses.
 type QuorumFunc[Req, Resp msg, Out any] func(*ClientCtx[Req, Resp]) (Out, error)
 
+// Results is an iterator that yields Result[T] values from a quorum call.
+type Results[T msg] iter.Seq[Result[T]]
+
 // ClientCtx provides context and access to the quorum call state for interceptors.
 // It exposes the request, configuration, and an iterator over node responses.
-type ClientCtx[Req, Resp any] struct {
+type ClientCtx[Req, Resp msg] struct {
 	context.Context
 	config        RawConfiguration
 	request       Req
@@ -48,7 +50,7 @@ type ClientCtx[Req, Resp any] struct {
 }
 
 // newClientCtx creates a new ClientCtx for a quorum call.
-func newClientCtx[Req, Resp any](
+func newClientCtx[Req, Resp msg](
 	ctx context.Context,
 	config RawConfiguration,
 	req Req,
@@ -134,22 +136,19 @@ func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Mes
 //
 // Example usage:
 //
-//	for nodeID, result := range ctx.Responses() {
+//	for result := range ctx.Responses() {
 //	    if result.Err != nil {
 //	        // Handle node error
 //	        continue
 //	    }
 //	    // Process result.Value
-//	    if haveQuorum {
-//	        break // Early termination
-//	    }
 //	}
-func (c *ClientCtx[Req, Resp]) Responses() iter.Seq2[uint32, Result[Resp]] {
+func (c *ClientCtx[Req, Resp]) Responses() Results[Resp] {
 	// Trigger lazy sending
 	if c.sendOnce != nil {
 		c.sendOnce()
 	}
-	return func(yield func(uint32, Result[Resp]) bool) {
+	return func(yield func(Result[Resp]) bool) {
 		// Wait for at most c.Size() responses
 		for range c.Size() {
 			select {
@@ -168,7 +167,7 @@ func (c *ClientCtx[Req, Resp]) Responses() iter.Seq2[uint32, Result[Resp]] {
 						res.Err = ErrTypeMismatch
 					}
 				}
-				if !yield(res.NodeID, res) {
+				if !yield(res) {
 					return // Consumer stopped iteration
 				}
 			case <-c.Done():
@@ -182,20 +181,21 @@ func (c *ClientCtx[Req, Resp]) Responses() iter.Seq2[uint32, Result[Resp]] {
 // Iterator Helpers
 // -------------------------------------------------------------------------
 
-// IgnoreErrors filters an iterator to only yield successful responses, discarding errors.
-// This is useful when you want to process only valid responses from nodes.
+// IgnoreErrors returns an iterator that yields only successful responses,
+// discarding any responses with errors. This is useful when you want to process
+// only valid responses from nodes.
 //
 // Example:
 //
-//	for nodeID, resp := range IgnoreErrors(ctx.Responses()) {
+//	for resp := range ctx.Responses().IgnoreErrors() {
 //	    // resp is guaranteed to be a successful response
 //	    process(resp)
 //	}
-func IgnoreErrors[Resp any](seq iter.Seq2[uint32, Result[Resp]]) iter.Seq2[uint32, Resp] {
-	return func(yield func(uint32, Resp) bool) {
-		for nodeID, result := range seq {
+func (seq Results[Resp]) IgnoreErrors() Results[Resp] {
+	return func(yield func(Result[Resp]) bool) {
+		for result := range seq {
 			if result.Err == nil {
-				if !yield(nodeID, result.Value) {
+				if !yield(result) {
 					return
 				}
 			}
@@ -203,12 +203,28 @@ func IgnoreErrors[Resp any](seq iter.Seq2[uint32, Result[Resp]]) iter.Seq2[uint3
 	}
 }
 
-// CollectN collects up to n successful responses from the iterator into a map.
+// Filter returns an iterator that yields only the responses for which the
+// provided keep function returns true. This is useful for verifying or filtering
+// responses from servers before further processing.
+func (seq Results[Resp]) Filter(keep func(Result[Resp]) bool) Results[Resp] {
+	return func(yield func(Result[Resp]) bool) {
+		for result := range seq {
+			if keep(result) {
+				if !yield(result) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// CollectN collects up to n responses from the iterator into a map by node ID.
+// It includes both successful and error responses.
 // It returns early if n responses are collected or the iterator is exhausted.
-func CollectN[Resp any](seq iter.Seq2[uint32, Resp], n int) map[uint32]Resp {
+func (seq Results[Resp]) CollectN(n int) map[uint32]Resp {
 	replies := make(map[uint32]Resp, n)
-	for nodeID, resp := range seq {
-		replies[nodeID] = resp
+	for result := range seq {
+		replies[result.NodeID] = result.Value
 		if len(replies) >= n {
 			break
 		}
@@ -216,10 +232,14 @@ func CollectN[Resp any](seq iter.Seq2[uint32, Resp], n int) map[uint32]Resp {
 	return replies
 }
 
-// CollectAll collects all responses from the iterator into a map.
-// This is a convenience wrapper around maps.Collect.
-func CollectAll[Resp any](seq iter.Seq2[uint32, Resp]) map[uint32]Resp {
-	return maps.Collect(seq)
+// CollectAll collects all responses from the iterator into a map by node ID.
+// It includes both successful and error responses.
+func (seq Results[Resp]) CollectAll() map[uint32]Resp {
+	replies := make(map[uint32]Resp)
+	for result := range seq {
+		replies[result.NodeID] = result.Value
+	}
+	return replies
 }
 
 // -------------------------------------------------------------------------
@@ -275,7 +295,7 @@ func QuorumSpecInterceptor[Req, Resp msg, Out any](
 ) QuorumInterceptor[Req, Resp, Out] {
 	return func(_ QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
 		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
-			replies := CollectAll(IgnoreErrors(ctx.Responses()))
+			replies := ctx.Responses().IgnoreErrors().CollectAll()
 			resp, ok := qf(ctx.Request(), replies)
 			if !ok {
 				var zero Out
@@ -308,9 +328,9 @@ func ThresholdQuorum[Req, Resp msg](threshold int) QuorumFunc[Req, Resp, Resp] {
 			errs      []nodeError
 		)
 
-		for nodeID, result := range ctx.Responses() {
+		for result := range ctx.Responses() {
 			if result.Err != nil {
-				errs = append(errs, nodeError{nodeID: nodeID, cause: result.Err})
+				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 				continue
 			}
 
@@ -360,7 +380,7 @@ func AllResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (Resp, error) {
 //
 // This is a base quorum function that terminates the interceptor chain.
 func CollectAllResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (map[uint32]Resp, error) {
-	return maps.Collect(IgnoreErrors(ctx.Responses())), nil
+	return ctx.Responses().CollectAll(), nil
 }
 
 // -------------------------------------------------------------------------

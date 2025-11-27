@@ -121,7 +121,7 @@ func TestIteratorUtilities(t *testing.T) {
 	tests := []struct {
 		name            string
 		responses       []Result[proto.Message]
-		operation       string // "ignoreErrors", "collectN", "collectAll"
+		operation       string // "ignoreErrors", "collectN", "collectAll", "filter"
 		collectN        int
 		wantCount       int
 		wantFilteredIDs []uint32
@@ -143,7 +143,7 @@ func TestIteratorUtilities(t *testing.T) {
 			name: "CollectN",
 			responses: []Result[proto.Message]{
 				{NodeID: 1, Value: pb.String("response"), Err: nil},
-				{NodeID: 2, Value: pb.String("response"), Err: nil},
+				{NodeID: 2, Value: nil, Err: errors.New("error")},
 				{NodeID: 3, Value: pb.String("response"), Err: nil},
 				{NodeID: 4, Value: pb.String("response"), Err: nil},
 				{NodeID: 5, Value: pb.String("response"), Err: nil},
@@ -156,13 +156,22 @@ func TestIteratorUtilities(t *testing.T) {
 			name: "CollectAll",
 			responses: []Result[proto.Message]{
 				{NodeID: 1, Value: pb.String("response"), Err: nil},
-				{NodeID: 2, Value: pb.String("response"), Err: nil},
+				{NodeID: 2, Value: nil, Err: errors.New("error")},
 				{NodeID: 3, Value: pb.String("response"), Err: nil},
-				{NodeID: 4, Value: pb.String("response"), Err: nil},
-				{NodeID: 5, Value: pb.String("response"), Err: nil},
 			},
 			operation: "collectAll",
-			wantCount: 5,
+			wantCount: 3,
+		},
+		{
+			name: "Filter",
+			responses: []Result[proto.Message]{
+				{NodeID: 1, Value: pb.String("keep"), Err: nil},
+				{NodeID: 2, Value: pb.String("drop"), Err: nil},
+				{NodeID: 3, Value: pb.String("keep"), Err: nil},
+			},
+			operation:       "filter",
+			wantCount:       2,
+			wantFilteredIDs: []uint32{1, 3},
 		},
 	}
 
@@ -173,11 +182,11 @@ func TestIteratorUtilities(t *testing.T) {
 			switch tt.operation {
 			case "ignoreErrors":
 				count := 0
-				for nodeID, resp := range IgnoreErrors(clientCtx.Responses()) {
-					t.Logf("Node %d: %v", nodeID, resp.GetValue())
+				for resp := range clientCtx.Responses().IgnoreErrors() {
+					t.Logf("Node %d: %v", resp.NodeID, resp.Value.GetValue())
 					count++
-					if !slices.Contains(tt.wantFilteredIDs, nodeID) {
-						t.Errorf("Node %d should have been filtered out", nodeID)
+					if !slices.Contains(tt.wantFilteredIDs, resp.NodeID) {
+						t.Errorf("Node %d should have been filtered out", resp.NodeID)
 					}
 				}
 				if count != tt.wantCount {
@@ -185,15 +194,29 @@ func TestIteratorUtilities(t *testing.T) {
 				}
 
 			case "collectN":
-				replies := CollectN(IgnoreErrors(clientCtx.Responses()), tt.collectN)
+				replies := clientCtx.Responses().CollectN(tt.collectN)
 				if len(replies) != tt.wantCount {
 					t.Errorf("Expected %d responses, got %d", tt.wantCount, len(replies))
 				}
 
 			case "collectAll":
-				replies := CollectAll(IgnoreErrors(clientCtx.Responses()))
+				replies := clientCtx.Responses().CollectAll()
 				if len(replies) != tt.wantCount {
 					t.Errorf("Expected %d responses, got %d", tt.wantCount, len(replies))
+				}
+
+			case "filter":
+				count := 0
+				for resp := range clientCtx.Responses().Filter(func(r Result[*pb.StringValue]) bool {
+					return r.Value.GetValue() == "keep"
+				}) {
+					count++
+					if !slices.Contains(tt.wantFilteredIDs, resp.NodeID) {
+						t.Errorf("Node %d should have been filtered out", resp.NodeID)
+					}
+				}
+				if count != tt.wantCount {
+					t.Errorf("Expected %d responses, got %d", tt.wantCount, count)
 				}
 			}
 		})
@@ -237,8 +260,8 @@ func TestInterceptorChaining(t *testing.T) {
 // It demonstrates a custom aggregation interceptor; it is used in several tests.
 var sumInterceptor = func(ctx *ClientCtx[*pb.Int32Value, *pb.Int32Value]) (*pb.Int32Value, error) {
 	var sum int32
-	for _, result := range IgnoreErrors(ctx.Responses()) {
-		sum += result.GetValue()
+	for result := range ctx.Responses().IgnoreErrors() {
+		sum += result.Value.GetValue()
 	}
 	return pb.Int32(sum), nil
 }
@@ -276,8 +299,8 @@ func TestInterceptorCustomReturnType(t *testing.T) {
 		customReturnInterceptor := func(ctx *ClientCtx[*pb.Int32Value, *pb.Int32Value]) (*CustomResult, error) {
 			var total int32
 			var count int
-			for _, result := range IgnoreErrors(ctx.Responses()) {
-				total += result.GetValue()
+			for result := range ctx.Responses().IgnoreErrors() {
+				total += result.Value.GetValue()
 				count++
 			}
 			return &CustomResult{Total: int(total), Count: count}, nil
@@ -392,8 +415,8 @@ func TestInterceptorCollectAllResponses(t *testing.T) {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	if len(result) != 2 {
-		t.Errorf("Expected 2 responses, got %d", len(result))
+	if len(result) != 3 {
+		t.Errorf("Expected 3 responses, got %d", len(result))
 	}
 
 	if _, ok := result[1]; !ok {
@@ -402,8 +425,8 @@ func TestInterceptorCollectAllResponses(t *testing.T) {
 	if _, ok := result[2]; !ok {
 		t.Error("Expected response from node 2")
 	}
-	if _, ok := result[3]; ok {
-		t.Error("Did not expect response from node 3 (had error)")
+	if _, ok := result[3]; !ok {
+		t.Error("Expected response from node 3 (even if error)")
 	}
 }
 
