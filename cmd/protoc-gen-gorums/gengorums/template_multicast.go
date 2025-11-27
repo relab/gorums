@@ -10,14 +10,23 @@ var _ {{$out}}
 var mcVar = `
 {{$callData := use "gorums.QuorumCallData" .GenFile}}
 {{$genFile := .GenFile}}
-{{$unexportMethod := unexport .Method.GoName}}
 {{$context := use "context.Context" .GenFile}}
 {{$callOpt := use "gorums.CallOption" .GenFile}}
 `
 
+var multicastComment = `
+{{$comments := .Method.Comments.Leading}}
+{{if ne $comments ""}}
+{{$comments -}}
+{{else}}
+// {{$method}} is a multicast call invoked on all nodes in configuration c,
+// with the same argument in. Use WithPerNodeTransform to send different messages
+// to each node. No replies are collected.
+{{end -}}
+`
+
 var multicastSignature = `func (c *Configuration) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}},` +
+	`ctx {{$context}}, in *{{$in}}, ` +
 	`opts ...{{$callOpt}}) {
 `
 
@@ -25,12 +34,6 @@ var multicastBody = `	cd := {{$callData}}{
 		Message: in,
 		Method:  "{{$fullName}}",
 	}
-{{- if hasPerNodeArg .Method}}
-{{$protoMessage := use "proto.Message" .GenFile}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
-		return f(req.(*{{$in}}), nid)
-	}
-{{- end}}
 
 	c.RawConfiguration.Multicast(ctx, cd, opts...)
 }
@@ -39,6 +42,6 @@ var multicastBody = `	cd := {{$callData}}{
 var multicastCall = commonVariables +
 	mcVar +
 	multicastRefImports +
-	quorumCallComment +
+	multicastComment +
 	multicastSignature +
 	multicastBody

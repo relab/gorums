@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/relab/gorums"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -32,7 +33,7 @@ type Bench struct {
 
 type (
 	benchFunc   func(Options) (*Result, error)
-	qcFunc      func(context.Context, *Echo) (*Echo, error)
+	qcFunc      func(context.Context, *Echo, ...gorums.QuorumCallOption) (*Echo, error)
 	asyncQCFunc func(context.Context, *Echo) *AsyncEcho
 	serverFunc  func(context.Context, *TimedMsg)
 )
@@ -93,11 +94,11 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 
 	result := s.GetResult()
 	if opts.Remote {
-		memStats, err := cfg.StopBenchmark(ctx, &StopRequest{})
+		memStat, err := cfg.StopBenchmark(ctx, &StopRequest{})
 		if err != nil {
 			return nil, err
 		}
-		result.SetServerStats(memStats.GetMemoryStats())
+		result.SetServerStats([]*MemoryStat{memStat})
 	}
 
 	return result, nil
@@ -177,11 +178,11 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 
 	result := s.GetResult()
 	if opts.Remote {
-		memStats, err := cfg.StopBenchmark(ctx, &StopRequest{})
+		memStat, err := cfg.StopBenchmark(ctx, &StopRequest{})
 		if err != nil {
 			return nil, err
 		}
-		result.SetServerStats(memStats.GetMemoryStats())
+		result.SetServerStats([]*MemoryStat{memStat})
 	}
 
 	return result, nil

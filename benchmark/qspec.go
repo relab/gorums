@@ -81,16 +81,16 @@ func (qspec *QSpec) StartBenchmarkQF(_ *StartRequest, replies map[uint32]*StartR
 }
 
 // StopBenchmarkQF is the quorum function for the StopBenchmark quorumcall.
-// It requires a response from all nodes.
-func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies map[uint32]*MemoryStat) (*MemoryStatList, bool) {
+// It requires a response from all nodes and returns the first response.
+// Note: For aggregating all responses, use CollectAllResponses or a custom interceptor.
+func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies map[uint32]*MemoryStat) (*MemoryStat, bool) {
 	if len(replies) < qspec.CfgSize {
 		return nil, false
 	}
-	replyList := make([]*MemoryStat, 0, len(replies))
 	for _, v := range replies {
-		replyList = append(replyList, v)
+		return v, true
 	}
-	return MemoryStatList_builder{MemoryStats: replyList}.Build(), true
+	return nil, false
 }
 
 // QuorumCallQF is the quorum function for the QuorumCall quorumcall

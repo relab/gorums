@@ -299,15 +299,39 @@ func QuorumSpecInterceptor[Req, Resp msg, Out any](
 	qf func(Req, map[uint32]Resp) (Out, bool),
 ) QuorumInterceptor[Req, Resp, Out] {
 	return func(_ QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
-		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
-			replies := ctx.Responses().IgnoreErrors().CollectAll()
-			resp, ok := qf(ctx.Request(), replies)
-			if !ok {
-				var zero Out
-				return zero, QuorumCallError{cause: ErrIncomplete, replies: len(replies)}
-			}
-			return resp, nil
+		return QuorumSpecFunc(qf)
+	}
+}
+
+// QuorumSpecFunc converts a legacy QuorumSpec-style quorum function to a QuorumFunc.
+// This allows gradual migration from the legacy QuorumCall approach to interceptors.
+//
+// The quorum function receives the original request and a map of replies, and returns
+// the aggregated result and a boolean indicating whether quorum was reached.
+//
+// Example:
+//
+//	// Legacy QuorumSpec function
+//	qf := func(req *Request, replies map[uint32]*Response) (*Result, bool) {
+//	    if len(replies) > len(config)/2 {
+//	        return replies[0], true
+//	    }
+//	    return nil, false
+//	}
+//
+//	// Convert to QuorumFunc
+//	quorumFunc := QuorumSpecFunc(qf)
+func QuorumSpecFunc[Req, Resp msg, Out any](
+	qf func(Req, map[uint32]Resp) (Out, bool),
+) QuorumFunc[Req, Resp, Out] {
+	return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
+		replies := ctx.Responses().IgnoreErrors().CollectAll()
+		resp, ok := qf(ctx.Request(), replies)
+		if !ok {
+			var zero Out
+			return zero, QuorumCallError{cause: ErrIncomplete, replies: len(replies)}
 		}
+		return resp, nil
 	}
 }
 
@@ -415,6 +439,66 @@ func Chain[Req, Resp msg, Out any](
 }
 
 // -------------------------------------------------------------------------
+// QuorumCallOption
+// -------------------------------------------------------------------------
+
+// QuorumCallOption configures a quorum call. Options are applied before the call is executed.
+type QuorumCallOption interface {
+	apply(*quorumCallConfig)
+}
+
+// quorumCallConfig holds configuration for a quorum call.
+type quorumCallConfig struct {
+	// transform is an optional per-node request transformation function.
+	// It uses type erasure (proto.Message) for simplicity in generated code.
+	transform func(proto.Message, *RawNode) proto.Message
+}
+
+// funcOption implements QuorumCallOption using a function.
+type funcOption struct {
+	f func(*quorumCallConfig)
+}
+
+func (fo funcOption) apply(cfg *quorumCallConfig) {
+	fo.f(cfg)
+}
+
+// WithTransformFunc returns an option that applies per-node request transformations.
+// The transform function receives the original request and a node, and returns
+// the transformed request to send to that node. If the function returns nil,
+// the request to that node is skipped.
+//
+// Multiple WithTransformFunc options can be provided; transforms are applied in order.
+//
+// Example:
+//
+//	resp, err := config.Method(ctx, req, gorums.WithTransformFunc(
+//	    func(req *Request, node *gorums.RawNode) *Request {
+//	        return &Request{Value: fmt.Sprintf("%s-%d", req.Value, node.ID())}
+//	    },
+//	))
+func WithTransformFunc[Req msg](fn func(Req, *RawNode) Req) QuorumCallOption {
+	return funcOption{func(cfg *quorumCallConfig) {
+		if cfg.transform == nil {
+			// First transform
+			cfg.transform = func(req proto.Message, node *RawNode) proto.Message {
+				return fn(req.(Req), node)
+			}
+		} else {
+			// Chain with existing transform
+			prev := cfg.transform
+			cfg.transform = func(req proto.Message, node *RawNode) proto.Message {
+				intermediate := prev(req, node)
+				if intermediate == nil {
+					return nil
+				}
+				return fn(intermediate.(Req), node)
+			}
+		}
+	}}
+}
+
+// -------------------------------------------------------------------------
 // QuorumCallWithInterceptor
 // -------------------------------------------------------------------------
 
@@ -427,6 +511,7 @@ func Chain[Req, Resp msg, Out any](
 //
 // The base parameter is the terminal handler that processes responses (e.g., MajorityQuorum).
 // The interceptors parameter accepts one or more interceptors that wrap the base handler.
+// The opts parameter accepts QuorumCallOption values such as WithTransformFunc.
 //
 // Execution order:
 //  1. interceptors[0] (outermost wrapper)
@@ -445,13 +530,32 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	req Req,
 	method string,
 	base QuorumFunc[Req, Resp, Out],
+	opts []QuorumCallOption,
 	interceptors ...QuorumInterceptor[Req, Resp, Out],
 ) (Out, error) {
+	// Apply options
+	cfg := &quorumCallConfig{}
+	for _, opt := range opts {
+		opt.apply(cfg)
+	}
+
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
 
 	// Create ClientCtx first so sendOnce can access it
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
+
+	// Register transform from options if provided
+	if cfg.transform != nil {
+		clientCtx.RegisterTransformFunc(func(r Req, node *RawNode) Req {
+			result := cfg.transform(r, node)
+			if result == nil {
+				var zero Req
+				return zero
+			}
+			return result.(Req)
+		})
+	}
 
 	// Create sendOnce function that will be called lazily on first Responses() call
 	sendOnce := func() {

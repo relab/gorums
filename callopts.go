@@ -1,10 +1,14 @@
 package gorums
 
-import "google.golang.org/protobuf/runtime/protoimpl"
+import (
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/runtime/protoimpl"
+)
 
 type callOptions struct {
 	callType     *protoimpl.ExtensionInfo
 	waitSendDone bool
+	transform    func(proto.Message, *RawNode) proto.Message
 }
 
 // mustWaitSendDone returns true if the caller of a one-way call type must wait
@@ -38,5 +42,38 @@ func getCallOptions(callType *protoimpl.ExtensionInfo, opts []CallOption) callOp
 func WithNoSendWaiting() CallOption {
 	return func(o *callOptions) {
 		o.waitSendDone = false
+	}
+}
+
+// WithPerNodeTransform returns a CallOption that applies per-node request transformations
+// for Unicast or Multicast calls. The transform function receives the original request
+// and a node, and returns the transformed request to send to that node.
+// If the function returns nil or an invalid message, the request to that node is skipped.
+//
+// Example:
+//
+//	config.Multicast(ctx, req, gorums.WithPerNodeTransform(
+//	    func(req *Request, node *gorums.RawNode) *Request {
+//	        return &Request{Value: fmt.Sprintf("%s-%d", req.Value, node.ID())}
+//	    },
+//	))
+func WithPerNodeTransform[Req proto.Message](fn func(Req, *RawNode) Req) CallOption {
+	return func(o *callOptions) {
+		if o.transform == nil {
+			// First transform
+			o.transform = func(req proto.Message, node *RawNode) proto.Message {
+				return fn(req.(Req), node)
+			}
+		} else {
+			// Chain with existing transform
+			prev := o.transform
+			o.transform = func(req proto.Message, node *RawNode) proto.Message {
+				intermediate := prev(req, node)
+				if intermediate == nil {
+					return nil
+				}
+				return fn(intermediate.(Req), node)
+			}
+		}
 	}
 }

@@ -16,6 +16,8 @@ import (
 // With the WithNoSendWaiting call option, the method returns immediately after
 // enqueueing messages to all nodes (fire-and-forget semantics).
 //
+// Use WithPerNodeTransform to send different messages to each node.
+//
 // This method should be used by generated code only.
 func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
@@ -28,9 +30,9 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 	}
 	for _, n := range c {
 		msg := d.Message
-		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
-			if !msg.ProtoReflect().IsValid() {
+		if o.transform != nil {
+			msg = o.transform(d.Message, n)
+			if msg == nil || !msg.ProtoReflect().IsValid() {
 				continue // don't send if no msg
 			}
 		}

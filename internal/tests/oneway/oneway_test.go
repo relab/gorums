@@ -34,14 +34,6 @@ func (s *onewaySrv) Multicast(ctx gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func (s *onewaySrv) MulticastPerNode(ctx gorums.ServerCtx, r *oneway.Request) {
-	if s.benchmark {
-		return
-	}
-	s.received <- r
-	s.wg.Done()
-}
-
 type testQSpec struct{}
 
 func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*onewaySrv, teardown func()) {
@@ -139,9 +131,9 @@ func TestOnewayCalls(t *testing.T) {
 func TestMulticastPerNode(t *testing.T) {
 	add := func(n uint64, id uint32) uint64 { return n + uint64(id) }
 
-	// simple transformation function
-	f := func(msg *oneway.Request, id uint32) *oneway.Request {
-		return oneway.Request_builder{Num: add(msg.GetNum(), id)}.Build()
+	// simple transformation function - uses WithPerNodeTransform API
+	f := func(msg *oneway.Request, node *gorums.RawNode) *oneway.Request {
+		return oneway.Request_builder{Num: add(msg.GetNum(), node.ID())}.Build()
 	}
 	ignoreNodes := []int{}
 	ignore := func(id uint32) bool {
@@ -151,11 +143,11 @@ func TestMulticastPerNode(t *testing.T) {
 		return false
 	}
 	// transformation of all except some nodes
-	g := func(msg *oneway.Request, id uint32) *oneway.Request {
-		if ignore(id) {
+	g := func(msg *oneway.Request, node *gorums.RawNode) *oneway.Request {
+		if ignore(node.ID()) {
 			return nil
 		}
-		return oneway.Request_builder{Num: add(msg.GetNum(), id)}.Build()
+		return oneway.Request_builder{Num: add(msg.GetNum(), node.ID())}.Build()
 	}
 	tests := []struct {
 		name        string
@@ -163,7 +155,7 @@ func TestMulticastPerNode(t *testing.T) {
 		servers     int
 		sendWait    bool
 		ignoreNodes []int
-		f           func(*oneway.Request, uint32) *oneway.Request
+		f           func(*oneway.Request, *gorums.RawNode) *oneway.Request
 	}{
 		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 1, sendWait: false, f: f},
 		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 3, sendWait: false, f: f},
@@ -198,9 +190,9 @@ func TestMulticastPerNode(t *testing.T) {
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				if test.sendWait {
-					cfg.MulticastPerNode(context.Background(), in, test.f)
+					cfg.Multicast(context.Background(), in, gorums.WithPerNodeTransform(test.f))
 				} else {
-					cfg.MulticastPerNode(context.Background(), in, test.f, gorums.WithNoSendWaiting())
+					cfg.Multicast(context.Background(), in, gorums.WithPerNodeTransform(test.f), gorums.WithNoSendWaiting())
 				}
 			}
 

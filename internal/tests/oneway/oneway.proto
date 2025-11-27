@@ -14,10 +14,6 @@ service OnewayTest {
     rpc Multicast(Request) returns (Empty) {
         option (gorums.multicast) = true;
     }
-    rpc MulticastPerNode(Request) returns (Empty) {
-        option (gorums.multicast)    = true;
-        option (gorums.per_node_arg) = true;
-    }
 }
 
 message Request {

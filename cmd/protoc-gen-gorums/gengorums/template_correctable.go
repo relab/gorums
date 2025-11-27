@@ -5,15 +5,6 @@ var correctableCallComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-{{if hasPerNodeArg .Method}}
-// {{$method}} asynchronously invokes a correctable quorum call on each node
-// in configuration c, with the argument returned by the provided function f
-// and returns a {{$correctableOut}}, which can be used to inspect
-// the reply and error when available.
-// The provide per node function f takes the provided {{$in}} argument
-// and returns an {{$out}} object to be passed to the given nodeID.
-// The per node function f should be thread-safe.
-{{else}}
 // {{$method}} asynchronously invokes a correctable quorum call on each node
 // in configuration c and returns a {{$correctableOut}}, which can be used
 // to inspect any replies or errors when available.
@@ -21,21 +12,18 @@ var correctableCallComment = `
 // This method supports server-side preliminary replies (correctable stream).
 {{end -}}
 {{end -}}
-{{end -}}
 `
 
 var correctableVar = `
-{{$correctableOut := outType .Method $customOut}}
+{{$correctableOut := outType .Method $out}}
 {{$protoMessage := use "proto.Message" .GenFile}}
 {{$callData := use "gorums.CorrectableCallData" .GenFile}}
 {{$genFile := .GenFile}}
-{{$unexportMethod := unexport .Method.GoName}}
 {{$context := use "context.Context" .GenFile}}
 `
 
 var correctableSignature = `func (c *Configuration) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}) ` +
+	`ctx {{$context}}, in *{{$in}}) ` +
 	`*{{$correctableOut}} {`
 
 var correctableBody = `	cd := {{$callData}}{
@@ -50,11 +38,6 @@ var correctableBody = `	cd := {{$callData}}{
 		}
 		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
 	}
-{{- if hasPerNodeArg .Method}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
-		return f(req.(*{{$in}}), nid)
-	}
-{{- end}}
 
 	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
 	return &{{$correctableOut}}{corr}

@@ -8,8 +8,6 @@ import (
 
 	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
 // importMap holds the mapping between short-hand import name
@@ -59,22 +57,6 @@ var funcMap = template.FuncMap{
 		}
 		return g.QualifiedGoIdent(pkg.Ident(ident))
 	},
-	"hasPerNodeArg": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_PerNodeArg)
-	},
-	"perNodeArg": func(method *protogen.Method, arg string) string {
-		if hasMethodOption(method, gorums.E_PerNodeArg) {
-			return arg
-		}
-		return ""
-	},
-	"perNodeFnType": func(g *protogen.GeneratedFile, method *protogen.Method, arg string) string {
-		if hasMethodOption(method, gorums.E_PerNodeArg) {
-			inType := g.QualifiedGoIdent(method.Input.GoIdent)
-			return arg + " func(*" + inType + ", uint32) *" + inType
-		}
-		return ""
-	},
 	"correctableStream": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer()
 	},
@@ -114,7 +96,6 @@ var funcMap = template.FuncMap{
 	"out":                    out,
 	"outType":                outType,
 	"internalOut":            internalOut,
-	"customOut":              customOut,
 	"mapInternalOutType":     mapInternalOutType,
 	"mapCorrectableOutType":  mapCorrectableOutType,
 	"mapAsyncOutType":        mapAsyncOutType,
@@ -154,20 +135,6 @@ func internalOut(out string) string {
 	return fmt.Sprintf("internal%s", field(out))
 }
 
-// customOut returns the output type to be used for the given method.
-// This may be the output type specified in the rpc line,
-// or if a custom_return_type option is provided for the method,
-// this provided custom type will be returned.
-func customOut(g *protogen.GeneratedFile, method *protogen.Method) string {
-	ext := protoimpl.X.MessageOf(method.Desc.Options()).Interface()
-	customOutType := fmt.Sprintf("%v", proto.GetExtension(ext, gorums.E_CustomReturnType))
-	outType := method.Output.GoIdent
-	if customOutType != "" {
-		outType.GoName = customOutType
-	}
-	return g.QualifiedGoIdent(outType)
-}
-
 func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 		if hasMethodOption(method, callTypesWithInternal...) {
@@ -181,9 +148,9 @@ func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service)
 func mapAsyncOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 		if hasAllMethodOption(method, gorums.E_Quorumcall, gorums.E_Async) {
-			out := customOut(g, method)
-			futOut := outType(method, out)
-			s[futOut] = out
+			o := out(g, method)
+			futOut := outType(method, o)
+			s[futOut] = o
 		}
 	})
 }
@@ -191,9 +158,9 @@ func mapAsyncOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s
 func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
 		if hasMethodOption(method, gorums.E_Correctable) {
-			out := customOut(g, method)
-			corrOut := outType(method, out)
-			s[corrOut] = out
+			o := out(g, method)
+			corrOut := outType(method, o)
+			s[corrOut] = o
 		}
 	})
 }

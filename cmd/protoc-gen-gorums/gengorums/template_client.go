@@ -13,6 +13,7 @@ var clientVariables = `
 
 var clientConfigurationInterface = `
 {{- $genFile := .GenFile}}
+{{- $qcOpt := use "gorums.QuorumCallOption" .GenFile}}
 {{- range configurationsServices .Services}}
 	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sClient" $service}}
@@ -21,13 +22,13 @@ var clientConfigurationInterface = `
 		{{- range configurationMethods .Methods}}
 			{{- $method := .GoName}}
 			{{- if isOneway .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}, opts ...{{$callOpt}})
 			{{- else if or (isCorrectable .) (isAsync .)}}
-				{{- $customOut := outType . (customOut $genFile .)}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) *{{$customOut}}
+				{{- $out := out $genFile .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}) *{{outType . $out}}
 			{{- else}}
-				{{- $customOut := customOut $genFile .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
+				{{- $out := out $genFile .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}, opts ...{{$qcOpt}}) (resp *{{$out}}, err error)
 			{{- end}}
 		{{- end}}
 	}
@@ -46,10 +47,10 @@ var clientNodeInterface = `
 		{{- range nodeMethods .Methods}}
 			{{- $method := .GoName}}
 			{{- if isOneway .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}, opts ...{{$callOpt}})
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}, opts ...{{$callOpt}})
 			{{- else}}
-				{{- $customOut := customOut $genFile .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}} {{perNodeFnType $genFile . ", f"}}) (resp *{{$customOut}}, err error)
+				{{- $out := out $genFile .}}
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}) (resp *{{$out}}, err error)
 			{{- end}}
 		{{- end}}
 	}
