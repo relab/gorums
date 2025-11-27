@@ -16,6 +16,10 @@ import (
 
 // Test helper types and functions
 
+// ctxTimeout is the timeout for test contexts. If this is exceeded,
+// the test will fail, indicating a bug in the test or the code under test.
+const ctxTimeout = 2 * time.Second
+
 // testContext creates a context with timeout for testing.
 // It uses t.Context() as the parent and automatically cancels on cleanup.
 func testContext(t *testing.T, timeout time.Duration) context.Context {
@@ -25,7 +29,22 @@ func testContext(t *testing.T, timeout time.Duration) context.Context {
 	return ctx
 }
 
-// checkError is a helper to validate error expectations in tests.
+// checkQuorumCall returns true if the quorum call was successful.
+// It returns false if an error occurred or the context timed out.
+func checkQuorumCall(t *testing.T, ctx context.Context, err error) bool {
+	t.Helper()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		t.Error(ctx.Err())
+		return false
+	}
+	if err != nil {
+		t.Errorf("QuorumCall failed: %v", err)
+		return false
+	}
+	return true
+}
+
+// checkError returns true if the error matches the expected error.
 func checkError(t *testing.T, wantErr bool, err, wantErrType error) bool {
 	t.Helper()
 	if wantErr {
@@ -335,15 +354,16 @@ func TestInterceptorIntegration_MajorityQuorum(t *testing.T) {
 	addrs, closeServers := TestSetup(t, 3, echoServerFn)
 	t.Cleanup(closeServers)
 
+	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		testContext(t, 2*time.Second),
+		ctx,
 		NewConfig(t, addrs),
 		pb.String("test"),
 		mock.TestMethod,
 		MajorityQuorum[*pb.StringValue, *pb.StringValue],
 	)
-	if err != nil {
-		t.Fatalf("QuorumCall failed: %v", err)
+	if !checkQuorumCall(t, ctx, err) {
+		return
 	}
 	if got, want := result.GetValue(), "echo: test"; got != want {
 		t.Errorf("Response = %q, want %q", got, want)
@@ -355,17 +375,17 @@ func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
 	addrs, closeServers := TestSetup(t, 3, nil)
 	t.Cleanup(closeServers)
 
+	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		testContext(t, 2*time.Second),
+		ctx,
 		NewConfig(t, addrs),
 		pb.Int32(0),
 		mock.GetValueMethod,
 		sumInterceptor,
 	)
-	if err != nil {
-		t.Fatalf("QuorumCall failed: %v", err)
+	if !checkQuorumCall(t, ctx, err) {
+		return
 	}
-
 	// Expected: 10 + 20 + 30 = 60
 	if result.GetValue() != 60 {
 		t.Errorf("Expected sum of 60, got %d", result.GetValue())
@@ -380,19 +400,18 @@ func TestInterceptorIntegration_Chaining(t *testing.T) {
 	// Track interceptor execution
 	tracker := &executionTracker{}
 
-	// Chain interceptors
+	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		testContext(t, 2*time.Second),
+		ctx,
 		NewConfig(t, addrs),
 		pb.String("test"),
 		mock.TestMethod,
-		MajorityQuorum[*pb.StringValue, *pb.StringValue], // Base
+		MajorityQuorum[*pb.StringValue, *pb.StringValue],              // Base
 		loggingInterceptor[*pb.StringValue, *pb.StringValue](tracker), // Interceptor
 	)
-	if err != nil {
-		t.Fatalf("QuorumCall failed: %v", err)
+	if !checkQuorumCall(t, ctx, err) {
+		return
 	}
-
 	if result.GetValue() != "echo: test" {
 		t.Errorf("Expected 'echo: test', got '%s'", result.GetValue())
 	}
@@ -444,24 +463,23 @@ func TestInterceptorIntegration_CollectAll(t *testing.T) {
 	t.Cleanup(closeServers)
 
 	config := NewConfig(t, addrs)
+	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		testContext(t, 2*time.Second),
+		ctx,
 		config,
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue],
 	)
-	if err != nil {
-		t.Fatalf("QuorumCall failed: %v", err)
+	if !checkQuorumCall(t, ctx, err) {
+		return
 	}
-
 	if len(result) != 3 {
 		t.Errorf("Expected 3 responses, got %d", len(result))
 	}
 
 	// Verify we got responses from all nodes in the configuration
-	nodes := config.Nodes()
-	for _, node := range nodes {
+	for _, node := range config.Nodes() {
 		if _, ok := result[node.ID()]; !ok {
 			t.Errorf("Missing response from node %d", node.ID())
 		}
@@ -480,18 +498,18 @@ func TestInterceptorIntegration_PerNodeTransform(t *testing.T) {
 		},
 	)
 
+	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		testContext(t, 2*time.Second),
+		ctx,
 		NewConfig(t, addrs),
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
 		transformInterceptor, // Interceptor
 	)
-	if err != nil {
-		t.Fatalf("QuorumCall failed: %v", err)
+	if !checkQuorumCall(t, ctx, err) {
+		return
 	}
-
 	if len(result) != 3 {
 		t.Errorf("Expected 3 responses, got %d", len(result))
 	}
@@ -526,18 +544,18 @@ func TestInterceptorIntegration_PerNodeTransformSkip(t *testing.T) {
 		},
 	)
 
+	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		testContext(t, 2*time.Second),
+		ctx,
 		config,
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
 		transformInterceptor, // Interceptor
 	)
-	if err != nil {
-		t.Fatalf("QuorumCall failed: %v", err)
+	if !checkQuorumCall(t, ctx, err) {
+		return
 	}
-
 	if len(result) != 2 {
 		t.Errorf("Expected 2 responses (one node skipped), got %d", len(result))
 	}
