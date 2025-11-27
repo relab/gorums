@@ -15,25 +15,25 @@ func TestQuorumCallErrorIs(t *testing.T) {
 	}{
 		{
 			name:   "SameCauseError",
-			err:    QuorumCallError{cause: Incomplete},
-			target: Incomplete,
+			err:    QuorumCallError{cause: ErrIncomplete},
+			target: ErrIncomplete,
 			want:   true,
 		},
 		{
 			name:   "SameCauseQCError",
-			err:    QuorumCallError{cause: Incomplete},
-			target: QuorumCallError{cause: Incomplete},
+			err:    QuorumCallError{cause: ErrIncomplete},
+			target: QuorumCallError{cause: ErrIncomplete},
 			want:   true,
 		},
 		{
 			name:   "DifferentError",
-			err:    QuorumCallError{cause: Incomplete},
+			err:    QuorumCallError{cause: ErrIncomplete},
 			target: errors.New("incomplete call"),
 			want:   false,
 		},
 		{
 			name:   "DifferentQCError",
-			err:    QuorumCallError{cause: Incomplete},
+			err:    QuorumCallError{cause: ErrIncomplete},
 			target: QuorumCallError{cause: errors.New("incomplete call")},
 			want:   false,
 		},
