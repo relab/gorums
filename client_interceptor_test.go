@@ -111,7 +111,7 @@ func loggingInterceptor[Req, Resp proto.Message](tracker *executionTracker) Quor
 }
 
 // makeClientCtx is a helper to create a ClientCtx with mock responses for unit tests.
-// It creates a channel with the provided responses and returns a ClientCtx with a short timeout.
+// It creates a channel with the provided responses and returns a ClientCtx.
 func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, responses []Result[proto.Message]) *ClientCtx[Req, Resp] {
 	t.Helper()
 
@@ -127,9 +127,10 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 	}
 
 	return &ClientCtx[Req, Resp]{
-		Context:   testContext(t, 100*time.Millisecond),
-		config:    config,
-		replyChan: resultChan,
+		Context:         t.Context(),
+		config:          config,
+		replyChan:       resultChan,
+		expectedReplies: numNodes,
 	}
 }
 

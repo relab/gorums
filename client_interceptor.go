@@ -45,6 +45,10 @@ type ClientCtx[Req, Resp msg] struct {
 	replyChan     <-chan Result[msg]
 	reqTransforms []func(Req, *RawNode) Req
 
+	// expectedReplies is the number of responses we expect to receive.
+	// It defaults to the configuration size but may be lower if nodes are skipped.
+	expectedReplies int
+
 	// sendOnce is called lazily on the first call to Responses().
 	sendOnce func()
 }
@@ -58,12 +62,13 @@ func newClientCtx[Req, Resp msg](
 	replyChan <-chan Result[msg],
 ) *ClientCtx[Req, Resp] {
 	return &ClientCtx[Req, Resp]{
-		Context:       ctx,
-		config:        config,
-		request:       req,
-		method:        method,
-		replyChan:     replyChan,
-		reqTransforms: nil,
+		Context:         ctx,
+		config:          config,
+		request:         req,
+		method:          method,
+		replyChan:       replyChan,
+		reqTransforms:   nil,
+		expectedReplies: config.Size(),
 	}
 }
 
@@ -149,8 +154,8 @@ func (c *ClientCtx[Req, Resp]) Responses() Results[Resp] {
 		c.sendOnce()
 	}
 	return func(yield func(Result[Resp]) bool) {
-		// Wait for at most c.Size() responses
-		for range c.Size() {
+		// Wait for at most c.expectedReplies
+		for range c.expectedReplies {
 			select {
 			case r := <-c.replyChan:
 				// We get a Result[proto.Message] from the channel layer's
@@ -450,14 +455,17 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 
 	// Create sendOnce function that will be called lazily on first Responses() call
 	sendOnce := func() {
+		var expected int
 		for _, n := range config {
 			// Apply registered request transformations (if any)
 			msg := clientCtx.applyTransforms(req, n)
 			if msg == nil {
 				continue // Skip node if transformation function returns nil
 			}
+			expected++
 			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 		}
+		clientCtx.expectedReplies = expected
 	}
 
 	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
