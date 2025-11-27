@@ -14,6 +14,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Result wraps a response value from node ID, and an error if any.
+type Result[T any] struct {
+	NodeID uint32
+	Value  T
+	Err    error
+}
+
 var streamDownErr = status.Error(codes.Unavailable, "stream is down")
 
 type request struct {
@@ -22,13 +29,6 @@ type request struct {
 	opts         callOptions
 	streaming    bool
 	responseChan chan<- Result[proto.Message]
-}
-
-// Result wraps a response value with its associated error and node ID.
-type Result[T any] struct {
-	NodeID uint32
-	Value  T
-	Err    error
 }
 
 type channel struct {

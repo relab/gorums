@@ -223,9 +223,9 @@ func (seq Results[Resp]) Filter(keep func(Result[Resp]) bool) Results[Resp] {
 	}
 }
 
-// CollectN collects up to n responses from the iterator into a map by node ID.
-// It includes both successful and error responses.
-// It returns early if n responses are collected or the iterator is exhausted.
+// CollectN collects up to n responses, including errors, from the iterator
+// into a map by node ID. It returns early if n responses are collected or
+// the iterator is exhausted.
 func (seq Results[Resp]) CollectN(n int) map[uint32]Resp {
 	replies := make(map[uint32]Resp, n)
 	for result := range seq {
@@ -237,8 +237,8 @@ func (seq Results[Resp]) CollectN(n int) map[uint32]Resp {
 	return replies
 }
 
-// CollectAll collects all responses from the iterator into a map by node ID.
-// It includes both successful and error responses.
+// CollectAll collects all responses, including errors, from the iterator
+// into a map by node ID.
 func (seq Results[Resp]) CollectAll() map[uint32]Resp {
 	replies := make(map[uint32]Resp)
 	for result := range seq {
