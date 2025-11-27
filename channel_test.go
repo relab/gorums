@@ -55,13 +55,13 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, fu
 	return NewNode(t, addrs[0]), teardown
 }
 
-func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) Result[proto.Message] {
+func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) NodeResponse[proto.Message] {
 	t.Helper()
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
 	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, mock.TestMethod), nil)
-	replyChan := make(chan Result[proto.Message], 1)
+	replyChan := make(chan NodeResponse[proto.Message], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
 
@@ -70,13 +70,13 @@ func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) Result[
 		return resp
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("timeout waiting for response to message %d", msgID)
-		return Result[proto.Message]{}
+		return NodeResponse[proto.Message]{}
 	}
 }
 
 type msgResponse struct {
 	msgID uint64
-	resp  Result[proto.Message]
+	resp  NodeResponse[proto.Message]
 }
 
 func send(t testing.TB, results chan<- msgResponse, node *RawNode, goroutineID, msgsToSend int, req request) {

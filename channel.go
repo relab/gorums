@@ -14,8 +14,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Result wraps a response value from node ID, and an error if any.
-type Result[T any] struct {
+// NodeResponse wraps a response value from node ID, and an error if any.
+type NodeResponse[T any] struct {
 	NodeID uint32
 	Value  T
 	Err    error
@@ -28,7 +28,7 @@ type request struct {
 	msg          *Message
 	opts         callOptions
 	streaming    bool
-	responseChan chan<- Result[proto.Message]
+	responseChan chan<- NodeResponse[proto.Message]
 }
 
 type channel struct {
@@ -132,7 +132,7 @@ func (c *channel) enqueue(req request) {
 	select {
 	case <-c.parentCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(msgID, Result[proto.Message]{NodeID: c.node.ID(), Err: fmt.Errorf("node closed")})
+		c.routeResponse(msgID, NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: fmt.Errorf("node closed")})
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
@@ -141,7 +141,7 @@ func (c *channel) enqueue(req request) {
 
 // routeResponse routes the response to the appropriate response channel based on msgID.
 // If no matching request is found, the response is discarded.
-func (c *channel) routeResponse(msgID uint64, resp Result[proto.Message]) {
+func (c *channel) routeResponse(msgID uint64, resp NodeResponse[proto.Message]) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	if req, ok := c.responseRouters[msgID]; ok {
@@ -159,7 +159,7 @@ func (c *channel) cancelPendingMsgs() {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	for msgID, req := range c.responseRouters {
-		req.responseChan <- Result[proto.Message]{NodeID: c.node.ID(), Err: streamDownErr}
+		req.responseChan <- NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: streamDownErr}
 		// delete the router if we are only expecting a single reply message
 		if !req.streaming {
 			delete(c.responseRouters, msgID)
@@ -188,11 +188,11 @@ func (c *channel) sender() {
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), Result[proto.Message]{NodeID: c.node.ID(), Err: err})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: err})
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), Result[proto.Message]{NodeID: c.node.ID(), Err: err})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: err})
 		}
 	}
 }
@@ -217,7 +217,7 @@ func (c *channel) receiver() {
 			c.clearStream()
 		} else {
 			err := resp.GetStatus().Err()
-			c.routeResponse(resp.GetMessageID(), Result[proto.Message]{NodeID: c.node.ID(), Value: resp.GetProtoMessage(), Err: err})
+			c.routeResponse(resp.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.node.ID(), Value: resp.GetProtoMessage(), Err: err})
 		}
 
 		select {
@@ -247,7 +247,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// wait for actual server responses, so mustWaitSendDone() returns false for them.
 		if req.opts.mustWaitSendDone() && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
-			c.routeResponse(req.msg.GetMessageID(), Result[proto.Message]{})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{})
 		}
 	}()
 

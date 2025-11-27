@@ -32,8 +32,8 @@ type QuorumInterceptor[Req, Resp msg, Out any] func(QuorumFunc[Req, Resp, Out]) 
 // (e.g. MajorityQuorum) that actually collects and aggregates responses.
 type QuorumFunc[Req, Resp msg, Out any] func(*ClientCtx[Req, Resp]) (Out, error)
 
-// Results is an iterator that yields Result[T] values from a quorum call.
-type Results[T msg] iter.Seq[Result[T]]
+// Responses is an iterator that yields Result[T] values from a quorum call.
+type Responses[T msg] iter.Seq[NodeResponse[T]]
 
 // ClientCtx provides context and access to the quorum call state for interceptors.
 // It exposes the request, configuration, and an iterator over node responses.
@@ -42,7 +42,7 @@ type ClientCtx[Req, Resp msg] struct {
 	config        RawConfiguration
 	request       Req
 	method        string
-	replyChan     <-chan Result[msg]
+	replyChan     <-chan NodeResponse[msg]
 	reqTransforms []func(Req, *RawNode) Req
 
 	// expectedReplies is the number of responses we expect to receive.
@@ -59,7 +59,7 @@ func newClientCtx[Req, Resp msg](
 	config RawConfiguration,
 	req Req,
 	method string,
-	replyChan <-chan Result[msg],
+	replyChan <-chan NodeResponse[msg],
 ) *ClientCtx[Req, Resp] {
 	return &ClientCtx[Req, Resp]{
 		Context:         ctx,
@@ -148,12 +148,12 @@ func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Mes
 //	    }
 //	    // Process result.Value
 //	}
-func (c *ClientCtx[Req, Resp]) Responses() Results[Resp] {
+func (c *ClientCtx[Req, Resp]) Responses() Responses[Resp] {
 	// Trigger lazy sending
 	if c.sendOnce != nil {
 		c.sendOnce()
 	}
-	return func(yield func(Result[Resp]) bool) {
+	return func(yield func(NodeResponse[Resp]) bool) {
 		// Wait for at most c.expectedReplies
 		for range c.expectedReplies {
 			select {
@@ -161,7 +161,7 @@ func (c *ClientCtx[Req, Resp]) Responses() Results[Resp] {
 				// We get a Result[proto.Message] from the channel layer's
 				// response router; however, we convert it to Result[Resp]
 				// here to match the calltype's expected response type.
-				res := Result[Resp]{
+				res := NodeResponse[Resp]{
 					NodeID: r.NodeID,
 					Err:    r.Err,
 				}
@@ -196,8 +196,8 @@ func (c *ClientCtx[Req, Resp]) Responses() Results[Resp] {
 //	    // resp is guaranteed to be a successful response
 //	    process(resp)
 //	}
-func (seq Results[Resp]) IgnoreErrors() Results[Resp] {
-	return func(yield func(Result[Resp]) bool) {
+func (seq Responses[Resp]) IgnoreErrors() Responses[Resp] {
+	return func(yield func(NodeResponse[Resp]) bool) {
 		for result := range seq {
 			if result.Err == nil {
 				if !yield(result) {
@@ -211,8 +211,8 @@ func (seq Results[Resp]) IgnoreErrors() Results[Resp] {
 // Filter returns an iterator that yields only the responses for which the
 // provided keep function returns true. This is useful for verifying or filtering
 // responses from servers before further processing.
-func (seq Results[Resp]) Filter(keep func(Result[Resp]) bool) Results[Resp] {
-	return func(yield func(Result[Resp]) bool) {
+func (seq Responses[Resp]) Filter(keep func(NodeResponse[Resp]) bool) Responses[Resp] {
+	return func(yield func(NodeResponse[Resp]) bool) {
 		for result := range seq {
 			if keep(result) {
 				if !yield(result) {
@@ -226,7 +226,7 @@ func (seq Results[Resp]) Filter(keep func(Result[Resp]) bool) Results[Resp] {
 // CollectN collects up to n responses, including errors, from the iterator
 // into a map by node ID. It returns early if n responses are collected or
 // the iterator is exhausted.
-func (seq Results[Resp]) CollectN(n int) map[uint32]Resp {
+func (seq Responses[Resp]) CollectN(n int) map[uint32]Resp {
 	replies := make(map[uint32]Resp, n)
 	for result := range seq {
 		replies[result.NodeID] = result.Value
@@ -239,7 +239,7 @@ func (seq Results[Resp]) CollectN(n int) map[uint32]Resp {
 
 // CollectAll collects all responses, including errors, from the iterator
 // into a map by node ID.
-func (seq Results[Resp]) CollectAll() map[uint32]Resp {
+func (seq Responses[Resp]) CollectAll() map[uint32]Resp {
 	replies := make(map[uint32]Resp)
 	for result := range seq {
 		replies[result.NodeID] = result.Value
@@ -448,7 +448,7 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	interceptors ...QuorumInterceptor[Req, Resp, Out],
 ) (Out, error) {
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
-	replyChan := make(chan Result[msg], len(config))
+	replyChan := make(chan NodeResponse[msg], len(config))
 
 	// Create ClientCtx first so sendOnce can access it
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)

@@ -28,7 +28,7 @@ func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
 	}
 
 	// Default: block until send completes
-	replyChan := make(chan Result[proto.Message], 1)
+	replyChan := make(chan NodeResponse[proto.Message], 1)
 	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message), opts: o, responseChan: replyChan})
 	<-replyChan
 }

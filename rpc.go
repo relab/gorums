@@ -20,7 +20,7 @@ type CallData struct {
 // This method should be used by generated code only.
 func (n *RawNode) RPCCall(ctx context.Context, d CallData) (proto.Message, error) {
 	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
-	replyChan := make(chan Result[proto.Message], 1)
+	replyChan := make(chan NodeResponse[proto.Message], 1)
 	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message), responseChan: replyChan})
 
 	select {

@@ -37,7 +37,7 @@ func (f *Async) Done() bool {
 type asyncCallState struct {
 	md              *ordering.Metadata
 	data            QuorumCallData
-	replyChan       <-chan Result[proto.Message]
+	replyChan       <-chan NodeResponse[proto.Message]
 	expectedReplies int
 }
 
@@ -47,7 +47,7 @@ type asyncCallState struct {
 func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
 	expectedReplies := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
-	replyChan := make(chan Result[proto.Message], expectedReplies)
+	replyChan := make(chan NodeResponse[proto.Message], expectedReplies)
 
 	for _, n := range c {
 		msg := d.Message

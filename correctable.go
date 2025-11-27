@@ -93,7 +93,7 @@ type CorrectableCallData struct {
 type correctableCallState struct {
 	md              *ordering.Metadata
 	data            CorrectableCallData
-	replyChan       <-chan Result[proto.Message]
+	replyChan       <-chan NodeResponse[proto.Message]
 	expectedReplies int
 }
 
@@ -104,7 +104,7 @@ func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCall
 	expectedReplies := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
-	replyChan := make(chan Result[proto.Message], expectedReplies)
+	replyChan := make(chan NodeResponse[proto.Message], expectedReplies)
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {

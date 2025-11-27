@@ -26,7 +26,7 @@ func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (res
 	expectedReplies := len(c)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 
-	replyChan := make(chan Result[proto.Message], expectedReplies)
+	replyChan := make(chan NodeResponse[proto.Message], expectedReplies)
 	for _, n := range c {
 		msg := d.Message
 		if d.PerNodeArgFn != nil {

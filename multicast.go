@@ -22,9 +22,9 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
 	sentMsgs := 0
 
-	var replyChan chan Result[proto.Message]
+	var replyChan chan NodeResponse[proto.Message]
 	if o.waitSendDone {
-		replyChan = make(chan Result[proto.Message], len(c))
+		replyChan = make(chan NodeResponse[proto.Message], len(c))
 	}
 	for _, n := range c {
 		msg := d.Message

@@ -112,10 +112,10 @@ func loggingInterceptor[Req, Resp proto.Message](tracker *executionTracker) Quor
 
 // makeClientCtx is a helper to create a ClientCtx with mock responses for unit tests.
 // It creates a channel with the provided responses and returns a ClientCtx.
-func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, responses []Result[proto.Message]) *ClientCtx[Req, Resp] {
+func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *ClientCtx[Req, Resp] {
 	t.Helper()
 
-	resultChan := make(chan Result[proto.Message], len(responses))
+	resultChan := make(chan NodeResponse[proto.Message], len(responses))
 	for _, r := range responses {
 		resultChan <- r
 	}
@@ -140,7 +140,7 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 func TestIteratorUtilities(t *testing.T) {
 	tests := []struct {
 		name            string
-		responses       []Result[proto.Message]
+		responses       []NodeResponse[proto.Message]
 		operation       string // "ignoreErrors", "collectN", "collectAll", "filter"
 		collectN        int
 		wantCount       int
@@ -148,7 +148,7 @@ func TestIteratorUtilities(t *testing.T) {
 	}{
 		{
 			name: "IgnoreErrors",
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: nil, Err: errors.New("node error")},
 				{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -161,7 +161,7 @@ func TestIteratorUtilities(t *testing.T) {
 		},
 		{
 			name: "CollectN",
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("response"), Err: nil},
 				{NodeID: 2, Value: nil, Err: errors.New("error")},
 				{NodeID: 3, Value: pb.String("response"), Err: nil},
@@ -174,7 +174,7 @@ func TestIteratorUtilities(t *testing.T) {
 		},
 		{
 			name: "CollectAll",
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("response"), Err: nil},
 				{NodeID: 2, Value: nil, Err: errors.New("error")},
 				{NodeID: 3, Value: pb.String("response"), Err: nil},
@@ -184,7 +184,7 @@ func TestIteratorUtilities(t *testing.T) {
 		},
 		{
 			name: "Filter",
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("keep"), Err: nil},
 				{NodeID: 2, Value: pb.String("drop"), Err: nil},
 				{NodeID: 3, Value: pb.String("keep"), Err: nil},
@@ -227,7 +227,7 @@ func TestIteratorUtilities(t *testing.T) {
 
 			case "filter":
 				count := 0
-				for resp := range clientCtx.Responses().Filter(func(r Result[*pb.StringValue]) bool {
+				for resp := range clientCtx.Responses().Filter(func(r NodeResponse[*pb.StringValue]) bool {
 					return r.Value.GetValue() == "keep"
 				}) {
 					count++
@@ -252,7 +252,7 @@ func TestInterceptorChaining(t *testing.T) {
 		tracker := &executionTracker{}
 
 		// Create mock responses
-		responses := []Result[proto.Message]{
+		responses := []NodeResponse[proto.Message]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -289,7 +289,7 @@ var sumInterceptor = func(ctx *ClientCtx[*pb.Int32Value, *pb.Int32Value]) (*pb.I
 // TestInterceptorCustomAggregation demonstrates custom interceptor for aggregation
 func TestInterceptorCustomAggregation(t *testing.T) {
 	t.Run("SumAggregation", func(t *testing.T) {
-		responses := []Result[proto.Message]{
+		responses := []NodeResponse[proto.Message]{
 			{NodeID: 1, Value: pb.Int32(10), Err: nil},
 			{NodeID: 2, Value: pb.Int32(20), Err: nil},
 			{NodeID: 3, Value: pb.Int32(30), Err: nil},
@@ -326,7 +326,7 @@ func TestInterceptorCustomReturnType(t *testing.T) {
 			return &CustomResult{Total: int(total), Count: count}, nil
 		}
 
-		responses := []Result[proto.Message]{
+		responses := []NodeResponse[proto.Message]{
 			{NodeID: 1, Value: pb.Int32(10), Err: nil},
 			{NodeID: 2, Value: pb.Int32(20), Err: nil},
 			{NodeID: 3, Value: pb.Int32(30), Err: nil},
@@ -423,7 +423,7 @@ func TestInterceptorIntegration_Chaining(t *testing.T) {
 
 // TestInterceptorCollectAllResponses tests the CollectAllResponses interceptor
 func TestInterceptorCollectAllResponses(t *testing.T) {
-	responses := []Result[proto.Message]{
+	responses := []NodeResponse[proto.Message]{
 		{NodeID: 1, Value: pb.String("response1"), Err: nil},
 		{NodeID: 2, Value: pb.String("response2"), Err: nil},
 		{NodeID: 3, Value: nil, Err: errors.New("error3")},
@@ -579,7 +579,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 		name        string
 		quorumFunc  QuorumFunc[*pb.StringValue, *pb.StringValue, *pb.StringValue]
 		numNodes    int
-		responses   []Result[proto.Message]
+		responses   []NodeResponse[proto.Message]
 		wantErr     bool
 		wantErrType error
 		wantValue   string
@@ -588,7 +588,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 		{
 			name:       "FirstResponse_Success",
 			quorumFunc: FirstResponse[*pb.StringValue, *pb.StringValue],
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("first"), Err: nil},
 				{NodeID: 2, Value: pb.String("second"), Err: nil},
 				{NodeID: 3, Value: pb.String("third"), Err: nil},
@@ -599,7 +599,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 		{
 			name:       "FirstResponse_AfterErrors",
 			quorumFunc: FirstResponse[*pb.StringValue, *pb.StringValue],
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: nil, Err: errors.New("error1")},
 				{NodeID: 2, Value: pb.String("second"), Err: nil},
 				{NodeID: 3, Value: pb.String("third"), Err: nil},
@@ -610,7 +610,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 		{
 			name:       "FirstResponse_AllErrors",
 			quorumFunc: FirstResponse[*pb.StringValue, *pb.StringValue],
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: nil, Err: errors.New("error1")},
 				{NodeID: 2, Value: nil, Err: errors.New("error2")},
 				{NodeID: 3, Value: nil, Err: errors.New("error3")},
@@ -621,7 +621,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 		{
 			name:        "FirstResponse_NoResponses",
 			quorumFunc:  FirstResponse[*pb.StringValue, *pb.StringValue],
-			responses:   []Result[proto.Message]{},
+			responses:   []NodeResponse[proto.Message]{},
 			wantErr:     true,
 			wantErrType: ErrIncomplete,
 		},
@@ -631,7 +631,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "AllResponses_AllSuccess",
 			quorumFunc: AllResponses[*pb.StringValue, *pb.StringValue],
 			numNodes:   3,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("first"), Err: nil},
 				{NodeID: 2, Value: pb.String("second"), Err: nil},
 				{NodeID: 3, Value: pb.String("third"), Err: nil},
@@ -643,7 +643,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "AllResponses_OneError",
 			quorumFunc: AllResponses[*pb.StringValue, *pb.StringValue],
 			numNodes:   3,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("first"), Err: nil},
 				{NodeID: 2, Value: nil, Err: errors.New("error2")},
 				{NodeID: 3, Value: pb.String("third"), Err: nil},
@@ -657,7 +657,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "MajorityQuorum_Success",
 			quorumFunc: MajorityQuorum[*pb.StringValue, *pb.StringValue],
 			numNodes:   5,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 				{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -671,7 +671,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "MajorityQuorum_Insufficient",
 			quorumFunc: MajorityQuorum[*pb.StringValue, *pb.StringValue],
 			numNodes:   5,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 				{NodeID: 3, Value: nil, Err: errors.New("error3")},
@@ -685,7 +685,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "MajorityQuorum_Exact",
 			quorumFunc: MajorityQuorum[*pb.StringValue, *pb.StringValue],
 			numNodes:   3,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("first"), Err: nil},
 				{NodeID: 2, Value: pb.String("second"), Err: nil},
 				{NodeID: 3, Value: nil, Err: errors.New("error")},
@@ -697,7 +697,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "MajorityQuorum_Even_Success",
 			quorumFunc: MajorityQuorum[*pb.StringValue, *pb.StringValue],
 			numNodes:   4,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("first"), Err: nil},
 				{NodeID: 2, Value: pb.String("second"), Err: nil},
 				{NodeID: 3, Value: pb.String("third"), Err: nil},
@@ -710,7 +710,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "MajorityQuorum_Even_Insufficient",
 			quorumFunc: MajorityQuorum[*pb.StringValue, *pb.StringValue],
 			numNodes:   4,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("first"), Err: nil},
 				{NodeID: 2, Value: pb.String("second"), Err: nil},
 				{NodeID: 3, Value: nil, Err: errors.New("error3")},
@@ -725,7 +725,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "ThresholdQuorum_Met",
 			quorumFunc: ThresholdQuorum[*pb.StringValue, *pb.StringValue](2),
 			numNodes:   3,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("first"), Err: nil},
 				{NodeID: 2, Value: pb.String("second"), Err: nil},
 				{NodeID: 3, Value: nil, Err: errors.New("error3")},
@@ -737,7 +737,7 @@ func TestBaseQuorumFunctions(t *testing.T) {
 			name:       "ThresholdQuorum_NotMet",
 			quorumFunc: ThresholdQuorum[*pb.StringValue, *pb.StringValue](3),
 			numNodes:   3,
-			responses: []Result[proto.Message]{
+			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("first"), Err: nil},
 				{NodeID: 2, Value: nil, Err: errors.New("error2")},
 				{NodeID: 3, Value: nil, Err: errors.New("error3")},
@@ -783,7 +783,7 @@ func TestInterceptorQuorumSpecAdapter(t *testing.T) {
 			return nil, false
 		}
 
-		responses := []Result[proto.Message]{
+		responses := []NodeResponse[proto.Message]{
 			{NodeID: 1, Value: pb.String("first"), Err: nil},
 			{NodeID: 2, Value: pb.String("second"), Err: nil},
 			{NodeID: 3, Value: nil, Err: errors.New("error3")},
@@ -812,7 +812,7 @@ func TestInterceptorQuorumSpecAdapter(t *testing.T) {
 			return nil, false
 		}
 
-		responses := []Result[proto.Message]{
+		responses := []NodeResponse[proto.Message]{
 			{NodeID: 1, Value: pb.String("first"), Err: nil},
 			{NodeID: 2, Value: nil, Err: errors.New("error2")},
 			{NodeID: 3, Value: nil, Err: errors.New("error3")},
@@ -836,7 +836,7 @@ func TestInterceptorUsage(t *testing.T) {
 			return pb.String(req.GetValue() + "-transformed")
 		}
 
-		responses := []Result[proto.Message]{
+		responses := []NodeResponse[proto.Message]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
