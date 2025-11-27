@@ -31,10 +31,10 @@ func testContext(t *testing.T, timeout time.Duration) context.Context {
 
 // checkQuorumCall returns true if the quorum call was successful.
 // It returns false if an error occurred or the context timed out.
-func checkQuorumCall(t *testing.T, ctx context.Context, err error) bool {
+func checkQuorumCall(t *testing.T, ctxErr, err error) bool {
 	t.Helper()
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		t.Error(ctx.Err())
+	if errors.Is(ctxErr, context.DeadlineExceeded) {
+		t.Error(ctxErr)
 		return false
 	}
 	if err != nil {
@@ -363,7 +363,7 @@ func TestInterceptorIntegration_MajorityQuorum(t *testing.T) {
 		mock.TestMethod,
 		MajorityQuorum[*pb.StringValue, *pb.StringValue],
 	)
-	if !checkQuorumCall(t, ctx, err) {
+	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
 	}
 	if got, want := result.GetValue(), "echo: test"; got != want {
@@ -384,7 +384,7 @@ func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
 		mock.GetValueMethod,
 		sumInterceptor,
 	)
-	if !checkQuorumCall(t, ctx, err) {
+	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
 	}
 	// Expected: 10 + 20 + 30 = 60
@@ -410,7 +410,7 @@ func TestInterceptorIntegration_Chaining(t *testing.T) {
 		MajorityQuorum[*pb.StringValue, *pb.StringValue],              // Base
 		loggingInterceptor[*pb.StringValue, *pb.StringValue](tracker), // Interceptor
 	)
-	if !checkQuorumCall(t, ctx, err) {
+	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
 	}
 	if result.GetValue() != "echo: test" {
@@ -472,7 +472,7 @@ func TestInterceptorIntegration_CollectAll(t *testing.T) {
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue],
 	)
-	if !checkQuorumCall(t, ctx, err) {
+	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
 	}
 	if len(result) != 3 {
@@ -508,7 +508,7 @@ func TestInterceptorIntegration_PerNodeTransform(t *testing.T) {
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
 		transformInterceptor, // Interceptor
 	)
-	if !checkQuorumCall(t, ctx, err) {
+	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
 	}
 	if len(result) != 3 {
@@ -554,7 +554,7 @@ func TestInterceptorIntegration_PerNodeTransformSkip(t *testing.T) {
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
 		transformInterceptor, // Interceptor
 	)
-	if !checkQuorumCall(t, ctx, err) {
+	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
 	}
 	if len(result) != 2 {
