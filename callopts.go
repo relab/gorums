@@ -37,6 +37,14 @@ func getCallOptions(callType *protoimpl.ExtensionInfo, opts ...CallOption) callO
 	return o
 }
 
+func interceptorsFromCallOptions[Req, Resp proto.Message, Out any](o callOptions) []QuorumInterceptor[Req, Resp, Out] {
+	interceptors := make([]QuorumInterceptor[Req, Resp, Out], len(o.interceptors))
+	for i, ic := range o.interceptors {
+		interceptors[i] = ic.(QuorumInterceptor[Req, Resp, Out])
+	}
+	return interceptors
+}
+
 // WithNoSendWaiting is a CallOption that makes Unicast or Multicast methods
 // return immediately instead of blocking until the message has been sent.
 // By default, Unicast and Multicast methods wait for send completion.

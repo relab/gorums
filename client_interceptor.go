@@ -474,14 +474,6 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	// Apply options
 	callOpts := getCallOptions(E_Quorumcall, opts...)
 
-	// Extract and type-assert interceptors from options
-	interceptors := make([]QuorumInterceptor[Req, Resp, Out], 0, len(callOpts.interceptors))
-	for _, i := range callOpts.interceptors {
-		if interceptor, ok := i.(QuorumInterceptor[Req, Resp, Out]); ok {
-			interceptors = append(interceptors, interceptor)
-		}
-	}
-
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
 
@@ -518,6 +510,6 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
 	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
 
-	handler := Chain(base, interceptors...)
+	handler := Chain(base, interceptorsFromCallOptions[Req, Resp, Out](callOpts)...)
 	return handler(clientCtx)
 }
