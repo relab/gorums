@@ -150,7 +150,7 @@ type Node struct {
 
 // ConfigTestClient is the client interface for the ConfigTest service.
 type ConfigTestClient interface {
-	Config(ctx context.Context, in *Request, opts ...gorums.QuorumCallOption) (resp *Response, err error)
+	Config(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error)
 }
 
 // enforce interface compliance
@@ -170,7 +170,7 @@ type QuorumSpec interface {
 
 // Config is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) Config(ctx context.Context, in *Request, opts ...gorums.QuorumCallOption) (resp *Response, err error) {
+func (c *Configuration) Config(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "config.ConfigTest.Config",
 		gorums.QuorumSpecFunc(c.qspec.ConfigQF),

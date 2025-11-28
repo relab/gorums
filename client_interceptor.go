@@ -439,66 +439,6 @@ func Chain[Req, Resp msg, Out any](
 }
 
 // -------------------------------------------------------------------------
-// QuorumCallOption
-// -------------------------------------------------------------------------
-
-// QuorumCallOption configures a quorum call. Options are applied before the call is executed.
-type QuorumCallOption interface {
-	apply(*quorumCallConfig)
-}
-
-// quorumCallConfig holds configuration for a quorum call.
-type quorumCallConfig struct {
-	// transform is an optional per-node request transformation function.
-	// It uses type erasure (proto.Message) for simplicity in generated code.
-	transform func(proto.Message, *RawNode) proto.Message
-}
-
-// funcOption implements QuorumCallOption using a function.
-type funcOption struct {
-	f func(*quorumCallConfig)
-}
-
-func (fo funcOption) apply(cfg *quorumCallConfig) {
-	fo.f(cfg)
-}
-
-// WithTransformFunc returns an option that applies per-node request transformations.
-// The transform function receives the original request and a node, and returns
-// the transformed request to send to that node. If the function returns nil,
-// the request to that node is skipped.
-//
-// Multiple WithTransformFunc options can be provided; transforms are applied in order.
-//
-// Example:
-//
-//	resp, err := config.Method(ctx, req, gorums.WithTransformFunc(
-//	    func(req *Request, node *gorums.RawNode) *Request {
-//	        return &Request{Value: fmt.Sprintf("%s-%d", req.Value, node.ID())}
-//	    },
-//	))
-func WithTransformFunc[Req msg](fn func(Req, *RawNode) Req) QuorumCallOption {
-	return funcOption{func(cfg *quorumCallConfig) {
-		if cfg.transform == nil {
-			// First transform
-			cfg.transform = func(req proto.Message, node *RawNode) proto.Message {
-				return fn(req.(Req), node)
-			}
-		} else {
-			// Chain with existing transform
-			prev := cfg.transform
-			cfg.transform = func(req proto.Message, node *RawNode) proto.Message {
-				intermediate := prev(req, node)
-				if intermediate == nil {
-					return nil
-				}
-				return fn(intermediate.(Req), node)
-			}
-		}
-	}}
-}
-
-// -------------------------------------------------------------------------
 // QuorumCallWithInterceptor
 // -------------------------------------------------------------------------
 
@@ -511,7 +451,7 @@ func WithTransformFunc[Req msg](fn func(Req, *RawNode) Req) QuorumCallOption {
 //
 // The base parameter is the terminal handler that processes responses (e.g., MajorityQuorum).
 // The interceptors parameter accepts one or more interceptors that wrap the base handler.
-// The opts parameter accepts QuorumCallOption values such as WithTransformFunc.
+// The opts parameter accepts CallOption values such as WithPerNodeTransform.
 //
 // Execution order:
 //  1. interceptors[0] (outermost wrapper)
@@ -530,14 +470,11 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	req Req,
 	method string,
 	base QuorumFunc[Req, Resp, Out],
-	opts []QuorumCallOption,
+	opts []CallOption,
 	interceptors ...QuorumInterceptor[Req, Resp, Out],
 ) (Out, error) {
 	// Apply options
-	cfg := &quorumCallConfig{}
-	for _, opt := range opts {
-		opt.apply(cfg)
-	}
+	callOpts := getCallOptions(E_Quorumcall, opts)
 
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
@@ -546,9 +483,9 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
 
 	// Register transform from options if provided
-	if cfg.transform != nil {
+	if callOpts.transform != nil {
 		clientCtx.RegisterTransformFunc(func(r Req, node *RawNode) Req {
-			result := cfg.transform(r, node)
+			result := callOpts.transform(r, node)
 			if result == nil {
 				var zero Req
 				return zero

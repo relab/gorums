@@ -172,13 +172,13 @@ func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEch
 
 // BenchmarkClient is the client interface for the Benchmark service.
 type BenchmarkClient interface {
-	StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.QuorumCallOption) (resp *StartResponse, err error)
-	StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.QuorumCallOption) (resp *Result, err error)
-	StartBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.QuorumCallOption) (resp *StartResponse, err error)
-	StopBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.QuorumCallOption) (resp *MemoryStat, err error)
-	QuorumCall(ctx context.Context, in *Echo, opts ...gorums.QuorumCallOption) (resp *Echo, err error)
+	StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error)
+	StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.CallOption) (resp *Result, err error)
+	StartBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error)
+	StopBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.CallOption) (resp *MemoryStat, err error)
+	QuorumCall(ctx context.Context, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error)
 	AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho
-	SlowServer(ctx context.Context, in *Echo, opts ...gorums.QuorumCallOption) (resp *Echo, err error)
+	SlowServer(ctx context.Context, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error)
 	Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption)
 }
 
@@ -251,7 +251,7 @@ type QuorumSpec interface {
 
 // StartServerBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.QuorumCallOption) (resp *StartResponse, err error) {
+func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StartServerBenchmark",
 		gorums.QuorumSpecFunc(c.qspec.StartServerBenchmarkQF),
@@ -261,7 +261,7 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 
 // StopServerBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.QuorumCallOption) (resp *Result, err error) {
+func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.CallOption) (resp *Result, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StopServerBenchmark",
 		gorums.QuorumSpecFunc(c.qspec.StopServerBenchmarkQF),
@@ -271,7 +271,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 
 // StartBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.QuorumCallOption) (resp *StartResponse, err error) {
+func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StartBenchmark",
 		gorums.QuorumSpecFunc(c.qspec.StartBenchmarkQF),
@@ -281,7 +281,7 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest, op
 
 // StopBenchmark is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.QuorumCallOption) (resp *MemoryStat, err error) {
+func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.CallOption) (resp *MemoryStat, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StopBenchmark",
 		gorums.QuorumSpecFunc(c.qspec.StopBenchmarkQF),
@@ -290,7 +290,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest, opts
 }
 
 // benchmarks
-func (c *Configuration) QuorumCall(ctx context.Context, in *Echo, opts ...gorums.QuorumCallOption) (resp *Echo, err error) {
+func (c *Configuration) QuorumCall(ctx context.Context, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.QuorumCall",
 		gorums.QuorumSpecFunc(c.qspec.QuorumCallQF),
@@ -300,7 +300,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo, opts ...gorums
 
 // SlowServer is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) SlowServer(ctx context.Context, in *Echo, opts ...gorums.QuorumCallOption) (resp *Echo, err error) {
+func (c *Configuration) SlowServer(ctx context.Context, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.SlowServer",
 		gorums.QuorumSpecFunc(c.qspec.SlowServerQF),

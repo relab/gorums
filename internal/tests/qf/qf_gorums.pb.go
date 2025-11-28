@@ -150,8 +150,8 @@ type Node struct {
 
 // QuorumFunctionClient is the client interface for the QuorumFunction service.
 type QuorumFunctionClient interface {
-	UseReq(ctx context.Context, in *Request, opts ...gorums.QuorumCallOption) (resp *Response, err error)
-	IgnoreReq(ctx context.Context, in *Request, opts ...gorums.QuorumCallOption) (resp *Response, err error)
+	UseReq(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error)
+	IgnoreReq(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error)
 }
 
 // enforce interface compliance
@@ -178,7 +178,7 @@ type QuorumSpec interface {
 
 // UseReq is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) UseReq(ctx context.Context, in *Request, opts ...gorums.QuorumCallOption) (resp *Response, err error) {
+func (c *Configuration) UseReq(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "qf.QuorumFunction.UseReq",
 		gorums.QuorumSpecFunc(c.qspec.UseReqQF),
@@ -188,7 +188,7 @@ func (c *Configuration) UseReq(ctx context.Context, in *Request, opts ...gorums.
 
 // IgnoreReq is a quorum call invoked on all nodes in configuration c,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) IgnoreReq(ctx context.Context, in *Request, opts ...gorums.QuorumCallOption) (resp *Response, err error) {
+func (c *Configuration) IgnoreReq(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "qf.QuorumFunction.IgnoreReq",
 		gorums.QuorumSpecFunc(c.qspec.IgnoreReqQF),

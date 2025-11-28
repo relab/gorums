@@ -20,18 +20,18 @@ var quorumCallComment = `
 {{end -}}
 `
 
-var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}, ` +
-	`opts ...{{$quorumCallOption}})` +
-	`(resp *{{$out}}, err error) {
-`
-
 var qcVar = `
 {{$genFile := .GenFile}}
 {{$context := use "context.Context" .GenFile}}
 {{$quorumCallWithInterceptor := use "gorums.QuorumCallWithInterceptor" .GenFile}}
 {{$quorumSpecFunc := use "gorums.QuorumSpecFunc" .GenFile}}
-{{$quorumCallOption := use "gorums.QuorumCallOption" .GenFile}}
+{{$callOption := use "gorums.CallOption" .GenFile}}
+`
+
+var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
+	`ctx {{$context}}, in *{{$in}}, ` +
+	`opts ...{{$callOption}})` +
+	`(resp *{{$out}}, err error) {
 `
 
 var quorumCallBody = `	return {{$quorumCallWithInterceptor}}(

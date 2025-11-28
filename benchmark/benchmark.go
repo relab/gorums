@@ -33,7 +33,7 @@ type Bench struct {
 
 type (
 	benchFunc   func(Options) (*Result, error)
-	qcFunc      func(context.Context, *Echo, ...gorums.QuorumCallOption) (*Echo, error)
+	qcFunc      func(context.Context, *Echo, ...gorums.CallOption) (*Echo, error)
 	asyncQCFunc func(context.Context, *Echo) *AsyncEcho
 	serverFunc  func(context.Context, *TimedMsg)
 )

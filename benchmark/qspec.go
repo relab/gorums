@@ -83,6 +83,8 @@ func (qspec *QSpec) StartBenchmarkQF(_ *StartRequest, replies map[uint32]*StartR
 // StopBenchmarkQF is the quorum function for the StopBenchmark quorumcall.
 // It requires a response from all nodes and returns the first response.
 // Note: For aggregating all responses, use CollectAllResponses or a custom interceptor.
+// TODO(meling): This needs to be fixed to return all responses via MemoryStatList.
+// We can do that when we migrate away from QSpec-based quorum functions.
 func (qspec *QSpec) StopBenchmarkQF(_ *StopRequest, replies map[uint32]*MemoryStat) (*MemoryStat, bool) {
 	if len(replies) < qspec.CfgSize {
 		return nil, false

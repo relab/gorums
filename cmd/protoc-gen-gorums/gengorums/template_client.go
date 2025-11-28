@@ -13,7 +13,6 @@ var clientVariables = `
 
 var clientConfigurationInterface = `
 {{- $genFile := .GenFile}}
-{{- $qcOpt := use "gorums.QuorumCallOption" .GenFile}}
 {{- range configurationsServices .Services}}
 	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sClient" $service}}
@@ -28,7 +27,7 @@ var clientConfigurationInterface = `
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}) *{{outType . $out}}
 			{{- else}}
 				{{- $out := out $genFile .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}, opts ...{{$qcOpt}}) (resp *{{$out}}, err error)
+				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}, opts ...{{$callOpt}}) (resp *{{$out}}, err error)
 			{{- end}}
 		{{- end}}
 	}

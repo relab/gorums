@@ -38,7 +38,7 @@ This is done at runtime using call options rather than proto options.
 
 ```go
 // Send different requests to each node
-resp, err := cfg.Write(ctx, req, gorums.WithTransformFunc(
+resp, err := cfg.Write(ctx, req, gorums.WithPerNodeTransform(
     func(req *WriteRequest, node *gorums.RawNode) *WriteRequest {
         // Customize request for each node based on node.ID() or other properties
         return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
@@ -100,7 +100,7 @@ service Storage {
   }
 
   // Write is a synchronous quorum call.
-  // Per-node transformations can be applied at runtime using WithTransformFunc.
+  // Per-node transformations can be applied at runtime using WithPerNodeTransform.
   rpc Write(State) returns (WriteResponse) {
     option (gorums.quorumcall) = true;
   }
