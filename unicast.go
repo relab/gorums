@@ -18,7 +18,7 @@ import (
 //
 // This method should be used by generated code only.
 func (n *RawNode) Unicast(ctx context.Context, msg proto.Message, method string, opts ...CallOption) {
-	o := getCallOptions(E_Unicast, opts)
+	o := getCallOptions(E_Unicast, opts...)
 	waitSendDone := o.mustWaitSendDone()
 
 	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), method)

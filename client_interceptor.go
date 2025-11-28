@@ -472,7 +472,7 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	opts ...CallOption,
 ) (Out, error) {
 	// Apply options
-	callOpts := getCallOptions(E_Quorumcall, opts)
+	callOpts := getCallOptions(E_Quorumcall, opts...)
 
 	// Extract and type-assert interceptors from options
 	interceptors := make([]QuorumInterceptor[Req, Resp, Out], 0, len(callOpts.interceptors))

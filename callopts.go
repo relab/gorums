@@ -26,7 +26,7 @@ func (o callOptions) mustWaitSendDone() bool {
 // CallOption is a function that sets a value in the given callOptions struct
 type CallOption func(*callOptions)
 
-func getCallOptions(callType *protoimpl.ExtensionInfo, opts []CallOption) callOptions {
+func getCallOptions(callType *protoimpl.ExtensionInfo, opts ...CallOption) callOptions {
 	o := callOptions{
 		callType:     callType,
 		waitSendDone: true, // default: wait for send completion
