@@ -623,6 +623,101 @@ func TestInterceptorIntegration_PerNodeTransformSkip(t *testing.T) {
 	}
 }
 
+// TestInterceptorIntegration_ChainedTransforms tests chaining multiple transform functions
+func TestInterceptorIntegration_ChainedTransforms(t *testing.T) {
+	addrs, closeServers := TestSetup(t, 3, echoServerFn)
+	t.Cleanup(closeServers)
+
+	// First transform: append node ID
+	transform1 := func(req *pb.StringValue, node *RawNode) *pb.StringValue {
+		return pb.String(req.GetValue() + "-node-" + strconv.Itoa(int(node.ID())))
+	}
+
+	// Second transform: append suffix
+	transform2 := func(req *pb.StringValue, _ *RawNode) *pb.StringValue {
+		return pb.String(req.GetValue() + "-suffix")
+	}
+
+	ctx := testContext(t, ctxTimeout)
+	result, err := QuorumCallWithInterceptor(
+		ctx,
+		NewConfig(t, addrs),
+		pb.String("test"),
+		mock.TestMethod,
+		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
+		Transform(transform1), // First transform
+		Transform(transform2), // Second transform (chained)
+	)
+	if !checkQuorumCall(t, ctx.Err(), err) {
+		return
+	}
+	if len(result) != 3 {
+		t.Errorf("Expected 3 responses, got %d", len(result))
+	}
+
+	// Verify each node received both transforms applied in order
+	for nodeID, resp := range result {
+		// Expected: "echo: test-node-<id>-suffix"
+		expected := "echo: test-node-" + strconv.Itoa(int(nodeID)) + "-suffix"
+		if resp.GetValue() != expected {
+			t.Errorf("Node %d: expected %q, got %q", nodeID, expected, resp.GetValue())
+		}
+	}
+}
+
+// TestInterceptorIntegration_ChainedTransformsWithSkip tests chaining transforms where one skips a node
+func TestInterceptorIntegration_ChainedTransformsWithSkip(t *testing.T) {
+	addrs, closeServers := TestSetup(t, 3, echoServerFn)
+	t.Cleanup(closeServers)
+
+	config := NewConfig(t, addrs)
+	nodes := config.Nodes()
+	skipNodeID := nodes[1].ID()
+
+	// First transform: append node ID
+	transform1 := func(req *pb.StringValue, node *RawNode) *pb.StringValue {
+		return pb.String(req.GetValue() + "-node-" + strconv.Itoa(int(node.ID())))
+	}
+
+	// Second transform: skip specific node and append suffix for others
+	transform2 := func(req *pb.StringValue, node *RawNode) *pb.StringValue {
+		if node.ID() == skipNodeID {
+			return nil // Skip this node
+		}
+		return pb.String(req.GetValue() + "-suffix")
+	}
+
+	ctx := testContext(t, ctxTimeout)
+	result, err := QuorumCallWithInterceptor(
+		ctx,
+		config,
+		pb.String("test"),
+		mock.TestMethod,
+		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
+		Transform(transform1), // First transform
+		Transform(transform2), // Second transform (chained, with skip)
+	)
+	if !checkQuorumCall(t, ctx.Err(), err) {
+		return
+	}
+	if len(result) != 2 {
+		t.Errorf("Expected 2 responses (one node skipped), got %d", len(result))
+	}
+
+	// Verify skipped node is not in result
+	if _, ok := result[skipNodeID]; ok {
+		t.Errorf("Did not expect response from skipped node %d", skipNodeID)
+	}
+
+	// Verify other nodes received both transforms
+	for nodeID, resp := range result {
+		expected := "echo: test-node-" + strconv.Itoa(int(nodeID)) + "-suffix"
+		if resp.GetValue() != expected {
+			t.Errorf("Node %d: expected %q, got %q", nodeID, expected, resp.GetValue())
+		}
+	}
+}
+
 // TestBaseQuorumFunctions tests all base quorum functions (FirstResponse, AllResponses, ThresholdQuorum, MajorityQuorum)
 func TestBaseQuorumFunctions(t *testing.T) {
 	tests := []struct {
