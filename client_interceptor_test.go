@@ -348,6 +348,56 @@ func TestInterceptorCustomReturnType(t *testing.T) {
 	})
 }
 
+// AggregateResult is a custom return type that aggregates all responses.
+type AggregateResult struct {
+	Values []string
+	Count  int
+}
+
+// TestInterceptorIntegration_CustomReturnType demonstrates using QuorumCallWithInterceptor
+// with a custom return type through a user-defined quorum function.
+func TestInterceptorIntegration_CustomReturnType(t *testing.T) {
+	addrs, closeServers := TestSetup(t, 3, echoServerFn)
+	t.Cleanup(closeServers)
+
+	// Define a custom quorum function that returns an AggregateResult
+	aggregateQF := func(ctx *ClientCtx[*pb.StringValue, *pb.StringValue]) (*AggregateResult, error) {
+		result := &AggregateResult{
+			Values: make([]string, 0),
+		}
+		for resp := range ctx.Responses().IgnoreErrors() {
+			result.Values = append(result.Values, resp.Value.GetValue())
+			result.Count++
+		}
+		if result.Count < 2 { // require at least 2 responses
+			return nil, errors.New("not enough responses")
+		}
+		return result, nil
+	}
+
+	ctx := testContext(t, ctxTimeout)
+	// QuorumCallWithInterceptor infers Out = *AggregateResult from aggregateQF
+	result, err := QuorumCallWithInterceptor(
+		ctx,
+		NewConfig(t, addrs),
+		pb.String("custom"),
+		mock.TestMethod,
+		aggregateQF,
+	)
+	if !checkQuorumCall(t, ctx.Err(), err) {
+		return
+	}
+	if result.Count < 2 {
+		t.Errorf("Expected at least 2 responses, got %d", result.Count)
+	}
+	// Each value should be "echo: custom" since echoServerFn prepends "echo: "
+	for _, v := range result.Values {
+		if v != "echo: custom" {
+			t.Errorf("Expected 'echo: custom', got %q", v)
+		}
+	}
+}
+
 // Interceptor Integration Tests with Real Servers
 
 // TestInterceptorIntegration_MajorityQuorum tests the complete flow with real servers
