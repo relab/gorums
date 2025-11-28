@@ -132,7 +132,7 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 		replyChan:       resultChan,
 		expectedReplies: numNodes,
 	}
-	c.responseFunc = c.defaultResponses
+	c.responses = c.defaultResponses()
 	return c
 }
 

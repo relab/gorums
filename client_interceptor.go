@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"iter"
+	"slices"
 	"sync"
 
 	"github.com/relab/gorums/ordering"
@@ -52,9 +53,9 @@ type ClientCtx[Req, Resp msg] struct {
 	// sendOnce is called lazily on the first call to Responses().
 	sendOnce func()
 
-	// responseFunc is the internal function that produces the response iterator.
-	// Interceptors can wrap this function to modify responses.
-	responseFunc func() Responses[Resp]
+	// responses is the iterator that yields node responses.
+	// Interceptors can wrap this iterator to modify responses.
+	responses Responses[Resp]
 }
 
 // newClientCtx creates a new ClientCtx for a quorum call.
@@ -74,7 +75,7 @@ func newClientCtx[Req, Resp msg](
 		reqTransforms:   nil,
 		expectedReplies: config.Size(),
 	}
-	c.responseFunc = c.defaultResponses
+	c.responses = c.defaultResponses()
 	return c
 }
 
@@ -100,6 +101,18 @@ func (c ClientCtx[Req, Resp]) Method() string {
 // Nodes returns the slice of nodes in this configuration.
 func (c ClientCtx[Req, Resp]) Nodes() []*RawNode {
 	return c.config.Nodes()
+}
+
+// Node returns the node with the given ID.
+func (c ClientCtx[Req, Resp]) Node(id uint32) *RawNode {
+	nodes := c.config.Nodes()
+	index := slices.IndexFunc(nodes, func(n *RawNode) bool {
+		return n.ID() == id
+	})
+	if index != -1 {
+		return nodes[index]
+	}
+	return nil
 }
 
 // Size returns the number of nodes in this configuration.
@@ -155,15 +168,15 @@ func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Mes
 //	    // Process result.Value
 //	}
 func (c *ClientCtx[Req, Resp]) Responses() Responses[Resp] {
-	return c.responseFunc()
+	return c.responses
 }
 
 func (c *ClientCtx[Req, Resp]) defaultResponses() Responses[Resp] {
-	// Trigger lazy sending
-	if c.sendOnce != nil {
-		c.sendOnce()
-	}
 	return func(yield func(NodeResponse[Resp]) bool) {
+		// Trigger lazy sending
+		if c.sendOnce != nil {
+			c.sendOnce()
+		}
 		// Wait for at most c.expectedReplies
 		for range c.expectedReplies {
 			select {
@@ -295,27 +308,21 @@ func Map[Req, Resp msg, Out any](
 				ctx.RegisterTransformFunc(reqFunc)
 			}
 			if respFunc != nil {
-				oldResponses := ctx.responseFunc
-				ctx.responseFunc = func() Responses[Resp] {
-					seq := oldResponses()
-					return func(yield func(NodeResponse[Resp]) bool) {
-						for resp := range seq {
-							if resp.Err == nil {
-								// Find node
-								var node *RawNode
-								for _, n := range ctx.Config() {
-									if n.ID() == resp.NodeID {
-										node = n
-										break
-									}
-								}
-								if node != nil {
-									resp.Value = respFunc(resp.Value, node)
-								}
+				// Wrap the existing response iterator with the transformation logic.
+				// We capture the current iterator (oldResponses) and replace it with a new one
+				// that applies respFunc to each successful response.
+				oldResponses := ctx.responses
+				ctx.responses = func(yield func(NodeResponse[Resp]) bool) {
+					for resp := range oldResponses {
+						// We only apply the transformation if there is no error.
+						// Errors are passed through as-is.
+						if resp.Err == nil {
+							if node := ctx.Node(resp.NodeID); node != nil {
+								resp.Value = respFunc(resp.Value, node)
 							}
-							if !yield(resp) {
-								return
-							}
+						}
+						if !yield(resp) {
+							return
 						}
 					}
 				}
