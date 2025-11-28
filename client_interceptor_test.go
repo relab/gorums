@@ -126,12 +126,14 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 		config[i] = &RawNode{id: uint32(i + 1)}
 	}
 
-	return &ClientCtx[Req, Resp]{
+	c := &ClientCtx[Req, Resp]{
 		Context:         t.Context(),
 		config:          config,
 		replyChan:       resultChan,
 		expectedReplies: numNodes,
 	}
+	c.responseFunc = c.defaultResponses
+	return c
 }
 
 // Iterator Utility Tests
@@ -543,10 +545,11 @@ func TestInterceptorIntegration_PerNodeTransform(t *testing.T) {
 	t.Cleanup(closeServers)
 
 	// Create a transform that sends different values to each node
-	transformInterceptor := PerNodeTransform[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](
+	transformInterceptor := Map[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](
 		func(req *pb.StringValue, node *RawNode) *pb.StringValue {
 			return pb.String(req.GetValue() + "-node-" + strconv.Itoa(int(node.ID())))
 		},
+		nil,
 	)
 
 	ctx := testContext(t, ctxTimeout)
@@ -586,13 +589,14 @@ func TestInterceptorIntegration_PerNodeTransformSkip(t *testing.T) {
 	skipNodeID := nodes[1].ID()
 
 	// Create a transform that skips one node by returning an invalid message
-	transformInterceptor := PerNodeTransform[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](
+	transformInterceptor := Map[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](
 		func(req *pb.StringValue, node *RawNode) *pb.StringValue {
 			if node.ID() == skipNodeID {
 				return nil // Skip this node
 			}
 			return pb.String(req.GetValue() + "-node-" + strconv.Itoa(int(node.ID())))
 		},
+		nil,
 	)
 
 	ctx := testContext(t, ctxTimeout)
@@ -991,7 +995,7 @@ func TestInterceptorUsage(t *testing.T) {
 		// Correct chain: transform -> aggregator (MajorityQuorum completes the call)
 		handler := Chain(
 			MajorityQuorum[*pb.StringValue, *pb.StringValue],
-			PerNodeTransform[*pb.StringValue, *pb.StringValue, *pb.StringValue](transform),
+			Map[*pb.StringValue, *pb.StringValue, *pb.StringValue](transform, nil),
 		)
 
 		result, err := handler(clientCtx)
@@ -1002,4 +1006,46 @@ func TestInterceptorUsage(t *testing.T) {
 			t.Errorf("Expected 'response1', got %v", result)
 		}
 	})
+}
+
+// TestInterceptorIntegration_Map tests combined request and response mapping
+func TestInterceptorIntegration_Map(t *testing.T) {
+	addrs, closeServers := TestSetup(t, 3, echoServerFn)
+	t.Cleanup(closeServers)
+
+	// Request mapper: append node ID
+	reqMapper := func(req *pb.StringValue, node *RawNode) *pb.StringValue {
+		return pb.String(req.GetValue() + "-req-" + strconv.Itoa(int(node.ID())))
+	}
+
+	// Response mapper: append node ID to response
+	respMapper := func(resp *pb.StringValue, node *RawNode) *pb.StringValue {
+		return pb.String(resp.GetValue() + "-resp-" + strconv.Itoa(int(node.ID())))
+	}
+
+	ctx := testContext(t, ctxTimeout)
+	result, err := QuorumCallWithInterceptor(
+		ctx,
+		NewConfig(t, addrs),
+		pb.String("test"),
+		mock.TestMethod,
+		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
+		Interceptors(Map[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](reqMapper, respMapper)),
+	)
+	if !checkQuorumCall(t, ctx.Err(), err) {
+		return
+	}
+	if len(result) != 3 {
+		t.Errorf("Expected 3 responses, got %d", len(result))
+	}
+
+	// Verify each node received transformed request and returned transformed response
+	for nodeID, resp := range result {
+		// Expected: "echo: test-req-<id>-resp-<id>"
+		// Note: echoServerFn prepends "echo: " to the request value
+		expected := "echo: test-req-" + strconv.Itoa(int(nodeID)) + "-resp-" + strconv.Itoa(int(nodeID))
+		if resp.GetValue() != expected {
+			t.Errorf("Node %d: expected %q, got %q", nodeID, expected, resp.GetValue())
+		}
+	}
 }

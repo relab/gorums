@@ -51,6 +51,10 @@ type ClientCtx[Req, Resp msg] struct {
 
 	// sendOnce is called lazily on the first call to Responses().
 	sendOnce func()
+
+	// responseFunc is the internal function that produces the response iterator.
+	// Interceptors can wrap this function to modify responses.
+	responseFunc func() Responses[Resp]
 }
 
 // newClientCtx creates a new ClientCtx for a quorum call.
@@ -61,7 +65,7 @@ func newClientCtx[Req, Resp msg](
 	method string,
 	replyChan <-chan NodeResponse[msg],
 ) *ClientCtx[Req, Resp] {
-	return &ClientCtx[Req, Resp]{
+	c := &ClientCtx[Req, Resp]{
 		Context:         ctx,
 		config:          config,
 		request:         req,
@@ -70,6 +74,8 @@ func newClientCtx[Req, Resp msg](
 		reqTransforms:   nil,
 		expectedReplies: config.Size(),
 	}
+	c.responseFunc = c.defaultResponses
+	return c
 }
 
 // -------------------------------------------------------------------------
@@ -149,6 +155,10 @@ func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Mes
 //	    // Process result.Value
 //	}
 func (c *ClientCtx[Req, Resp]) Responses() Responses[Resp] {
+	return c.responseFunc()
+}
+
+func (c *ClientCtx[Req, Resp]) defaultResponses() Responses[Resp] {
 	// Trigger lazy sending
 	if c.sendOnce != nil {
 		c.sendOnce()
@@ -251,24 +261,65 @@ func (seq Responses[Resp]) CollectAll() map[uint32]Resp {
 // Interceptors (Middleware)
 // -------------------------------------------------------------------------
 
-// PerNodeTransform returns an interceptor that applies per-node request transformations.
+// Map returns an interceptor that applies per-node request and response transformations.
 //
-// The transform function receives the original request and a node, and returns the transformed
-// request to send to that node. If the function returns an invalid message or nil, the request to
-// that node is skipped.
+// The reqFunc receives the original request and a node, and returns the transformed
+// request to send to that node. If the function returns an invalid message or nil,
+// the request to that node is skipped.
 //
-// Multiple PerNodeTransform interceptors can be chained together, with transforms applied in order.
+// The respFunc receives the response from a node and the node itself, and returns the
+// transformed response.
+//
+// Multiple Map interceptors can be chained together, with transforms applied in order.
 //
 // Example:
 //
-//	interceptor := PerNodeTransform(func(req *Request, node *gorums.RawNode) *Request {
-//	    // Send different shard to each node
-//	    return &Request{Shard: int(node.ID())}
-//	})
-func PerNodeTransform[Req, Resp msg, Out any](transform func(Req, *RawNode) Req) QuorumInterceptor[Req, Resp, Out] {
+//	interceptor := Map(
+//	    func(req *Request, node *gorums.RawNode) *Request {
+//	        // Send different shard to each node
+//	        return &Request{Shard: int(node.ID())}
+//	    },
+//	    func(resp *Response, node *gorums.RawNode) *Response {
+//	        // Add node ID to response
+//	        resp.NodeID = node.ID()
+//	        return resp
+//	    },
+//	)
+func Map[Req, Resp msg, Out any](
+	reqFunc func(Req, *RawNode) Req,
+	respFunc func(Resp, *RawNode) Resp,
+) QuorumInterceptor[Req, Resp, Out] {
 	return func(next QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
 		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
-			ctx.RegisterTransformFunc(transform)
+			if reqFunc != nil {
+				ctx.RegisterTransformFunc(reqFunc)
+			}
+			if respFunc != nil {
+				oldResponses := ctx.responseFunc
+				ctx.responseFunc = func() Responses[Resp] {
+					seq := oldResponses()
+					return func(yield func(NodeResponse[Resp]) bool) {
+						for resp := range seq {
+							if resp.Err == nil {
+								// Find node
+								var node *RawNode
+								for _, n := range ctx.Config() {
+									if n.ID() == resp.NodeID {
+										node = n
+										break
+									}
+								}
+								if node != nil {
+									resp.Value = respFunc(resp.Value, node)
+								}
+							}
+							if !yield(resp) {
+								return
+							}
+						}
+					}
+				}
+			}
 			return next(ctx)
 		}
 	}
