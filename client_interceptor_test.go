@@ -458,7 +458,7 @@ func TestInterceptorIntegration_Chaining(t *testing.T) {
 		pb.String("test"),
 		mock.TestMethod,
 		MajorityQuorum[*pb.StringValue, *pb.StringValue], // Base
-		WithQuorumInterceptors(loggingInterceptor[*pb.StringValue, *pb.StringValue](tracker)),
+		Interceptors(loggingInterceptor[*pb.StringValue, *pb.StringValue](tracker)),
 	)
 	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
@@ -556,7 +556,7 @@ func TestInterceptorIntegration_PerNodeTransform(t *testing.T) {
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
-		WithQuorumInterceptors(transformInterceptor),
+		Interceptors(transformInterceptor),
 	)
 	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
@@ -602,7 +602,7 @@ func TestInterceptorIntegration_PerNodeTransformSkip(t *testing.T) {
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
-		WithQuorumInterceptors(transformInterceptor),
+		Interceptors(transformInterceptor),
 	)
 	if !checkQuorumCall(t, ctx.Err(), err) {
 		return

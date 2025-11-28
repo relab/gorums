@@ -46,16 +46,16 @@ func WithNoSendWaiting() CallOption {
 	}
 }
 
-// WithQuorumInterceptors returns a CallOption that adds quorum call interceptors.
+// Interceptors returns a CallOption that adds quorum call interceptors.
 // Multiple interceptors are executed in the order provided, wrapping the base
 // quorum function.
 //
 // Example:
 //
 //	resp, err := cfg.Read(ctx, req,
-//	    gorums.WithQuorumInterceptors(loggingInterceptor, retryInterceptor),
+//	    gorums.Interceptors(loggingInterceptor, retryInterceptor),
 //	)
-func WithQuorumInterceptors[Req, Resp proto.Message, Out any](interceptors ...QuorumInterceptor[Req, Resp, Out]) CallOption {
+func Interceptors[Req, Resp proto.Message, Out any](interceptors ...QuorumInterceptor[Req, Resp, Out]) CallOption {
 	return func(o *callOptions) {
 		for _, interceptor := range interceptors {
 			o.interceptors = append(o.interceptors, interceptor)
@@ -63,19 +63,19 @@ func WithQuorumInterceptors[Req, Resp proto.Message, Out any](interceptors ...Qu
 	}
 }
 
-// WithPerNodeTransform returns a CallOption that applies per-node request transformations
+// Transform returns a CallOption that applies per-node request transformations
 // for Unicast or Multicast calls. The transform function receives the original request
 // and a node, and returns the transformed request to send to that node.
 // If the function returns nil or an invalid message, the request to that node is skipped.
 //
 // Example:
 //
-//	config.Multicast(ctx, req, gorums.WithPerNodeTransform(
+//	config.Multicast(ctx, req, gorums.Transform(
 //	    func(req *Request, node *gorums.RawNode) *Request {
 //	        return &Request{Value: fmt.Sprintf("%s-%d", req.Value, node.ID())}
 //	    },
 //	))
-func WithPerNodeTransform[Req proto.Message](fn func(Req, *RawNode) Req) CallOption {
+func Transform[Req proto.Message](fn func(Req, *RawNode) Req) CallOption {
 	return func(o *callOptions) {
 		if o.transform == nil {
 			// First transform

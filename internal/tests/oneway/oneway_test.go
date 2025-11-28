@@ -190,9 +190,9 @@ func TestMulticastPerNode(t *testing.T) {
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				if test.sendWait {
-					cfg.Multicast(context.Background(), in, gorums.WithPerNodeTransform(test.f))
+					cfg.Multicast(context.Background(), in, gorums.Transform(test.f))
 				} else {
-					cfg.Multicast(context.Background(), in, gorums.WithPerNodeTransform(test.f), gorums.WithNoSendWaiting())
+					cfg.Multicast(context.Background(), in, gorums.Transform(test.f), gorums.WithNoSendWaiting())
 				}
 			}
 
