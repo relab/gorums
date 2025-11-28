@@ -37,7 +37,7 @@ var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
 var quorumCallBody = `	return {{$quorumCallWithInterceptor}}(
 		ctx, c.RawConfiguration, in, "{{$fullName}}",
 		{{$quorumSpecFunc}}(c.qspec.{{$method}}QF),
-		opts,
+		opts...,
 	)
 }
 `

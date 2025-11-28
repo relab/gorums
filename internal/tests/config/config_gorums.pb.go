@@ -174,7 +174,7 @@ func (c *Configuration) Config(ctx context.Context, in *Request, opts ...gorums.
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "config.ConfigTest.Config",
 		gorums.QuorumSpecFunc(c.qspec.ConfigQF),
-		opts,
+		opts...,
 	)
 }
 

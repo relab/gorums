@@ -33,7 +33,7 @@ func TestQuorumCallSuccess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	response, err := gorums.QuorumCallWithInterceptor(
-		ctx, cfg, pb.String(""), mock.TestMethod, qf, nil,
+		ctx, cfg, pb.String(""), mock.TestMethod, qf,
 	)
 	if err != nil {
 		t.Fatalf("Unexpected error, got: %v, want: %v", err, nil)

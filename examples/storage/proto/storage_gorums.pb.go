@@ -203,7 +203,7 @@ func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest, opts ...gor
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "storage.Storage.ReadQC",
 		gorums.QuorumSpecFunc(c.qspec.ReadQCQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -213,7 +213,7 @@ func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest, opts ...g
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "storage.Storage.WriteQC",
 		gorums.QuorumSpecFunc(c.qspec.WriteQCQF),
-		opts,
+		opts...,
 	)
 }
 

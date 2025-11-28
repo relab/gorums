@@ -24,7 +24,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...gor
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "dev.ZorumsService.QuorumCall",
 		gorums.QuorumSpecFunc(c.qspec.QuorumCallQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -33,7 +33,7 @@ func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty, 
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "dev.ZorumsService.QuorumCallEmpty",
 		gorums.QuorumSpecFunc(c.qspec.QuorumCallEmptyQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -42,6 +42,6 @@ func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts 
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "dev.ZorumsService.QuorumCallEmpty2",
 		gorums.QuorumSpecFunc(c.qspec.QuorumCallEmpty2QF),
-		opts,
+		opts...,
 	)
 }

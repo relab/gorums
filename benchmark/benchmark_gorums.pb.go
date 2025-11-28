@@ -255,7 +255,7 @@ func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartReque
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StartServerBenchmark",
 		gorums.QuorumSpecFunc(c.qspec.StartServerBenchmarkQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -265,7 +265,7 @@ func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StopServerBenchmark",
 		gorums.QuorumSpecFunc(c.qspec.StopServerBenchmarkQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -275,7 +275,7 @@ func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest, op
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StartBenchmark",
 		gorums.QuorumSpecFunc(c.qspec.StartBenchmarkQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -285,7 +285,7 @@ func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest, opts
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StopBenchmark",
 		gorums.QuorumSpecFunc(c.qspec.StopBenchmarkQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -294,7 +294,7 @@ func (c *Configuration) QuorumCall(ctx context.Context, in *Echo, opts ...gorums
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.QuorumCall",
 		gorums.QuorumSpecFunc(c.qspec.QuorumCallQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -304,7 +304,7 @@ func (c *Configuration) SlowServer(ctx context.Context, in *Echo, opts ...gorums
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "benchmark.Benchmark.SlowServer",
 		gorums.QuorumSpecFunc(c.qspec.SlowServerQF),
-		opts,
+		opts...,
 	)
 }
 

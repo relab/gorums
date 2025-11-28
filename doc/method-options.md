@@ -106,3 +106,50 @@ service Storage {
   }
 }
 ```
+
+## Quorum Call Interceptors
+
+Interceptors allow you to wrap quorum calls with additional behavior such as logging,
+retries, or request/response modification. Interceptors are passed via the `WithQuorumInterceptors`
+call option, similar to gRPC interceptors.
+
+### Using Interceptors
+
+```go
+// Add interceptors to a quorum call
+resp, err := cfg.Read(ctx, req,
+    gorums.WithQuorumInterceptors(loggingInterceptor, retryInterceptor),
+)
+```
+
+Multiple interceptors are executed in the order they are provided, wrapping the base
+quorum function.
+
+### Built-in Interceptors
+
+Gorums provides several built-in interceptors:
+
+- `PerNodeTransform`: Apply per-node request transformations
+- `QuorumSpecInterceptor`: Wrap legacy QuorumSpec functions
+
+### Custom Interceptors
+
+You can create custom interceptors by implementing the `QuorumInterceptor` type:
+
+```go
+func myInterceptor[Req, Resp proto.Message, Out any](
+    next gorums.QuorumFunc[Req, Resp, Out],
+) gorums.QuorumFunc[Req, Resp, Out] {
+    return func(ctx *gorums.ClientCtx[Req, Resp]) (Out, error) {
+        // Pre-processing
+        log.Println("Before quorum call")
+
+        // Call the next handler in the chain
+        result, err := next(ctx)
+
+        // Post-processing
+        log.Println("After quorum call")
+        return result, err
+    }
+}
+```

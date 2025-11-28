@@ -182,7 +182,7 @@ func (c *Configuration) UseReq(ctx context.Context, in *Request, opts ...gorums.
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "qf.QuorumFunction.UseReq",
 		gorums.QuorumSpecFunc(c.qspec.UseReqQF),
-		opts,
+		opts...,
 	)
 }
 
@@ -192,7 +192,7 @@ func (c *Configuration) IgnoreReq(ctx context.Context, in *Request, opts ...goru
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "qf.QuorumFunction.IgnoreReq",
 		gorums.QuorumSpecFunc(c.qspec.IgnoreReqQF),
-		opts,
+		opts...,
 	)
 }
 

@@ -211,7 +211,7 @@ func (c *Configuration) QC(ctx context.Context, in *Request, opts ...gorums.Call
 	return gorums.QuorumCallWithInterceptor(
 		ctx, c.RawConfiguration, in, "ordering.GorumsTest.QC",
 		gorums.QuorumSpecFunc(c.qspec.QCQF),
-		opts,
+		opts...,
 	)
 }
 

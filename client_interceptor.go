@@ -450,12 +450,11 @@ func Chain[Req, Resp msg, Out any](
 //   - Out: The final output type returned by the interceptor chain
 //
 // The base parameter is the terminal handler that processes responses (e.g., MajorityQuorum).
-// The interceptors parameter accepts one or more interceptors that wrap the base handler.
-// The opts parameter accepts CallOption values such as WithPerNodeTransform.
+// The opts parameter accepts CallOption values such as WithQuorumInterceptors and WithPerNodeTransform.
 //
-// Execution order:
-//  1. interceptors[0] (outermost wrapper)
-//  2. interceptors[1]
+// Interceptors are applied in the order they are provided via WithQuorumInterceptors:
+//  1. First interceptor (outermost wrapper)
+//  2. Second interceptor
 //     ...
 //  3. base (innermost handler, e.g. aggregation)
 //
@@ -470,11 +469,18 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	req Req,
 	method string,
 	base QuorumFunc[Req, Resp, Out],
-	opts []CallOption,
-	interceptors ...QuorumInterceptor[Req, Resp, Out],
+	opts ...CallOption,
 ) (Out, error) {
 	// Apply options
 	callOpts := getCallOptions(E_Quorumcall, opts)
+
+	// Extract and type-assert interceptors from options
+	interceptors := make([]QuorumInterceptor[Req, Resp, Out], 0, len(callOpts.interceptors))
+	for _, i := range callOpts.interceptors {
+		if interceptor, ok := i.(QuorumInterceptor[Req, Resp, Out]); ok {
+			interceptors = append(interceptors, interceptor)
+		}
+	}
 
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))

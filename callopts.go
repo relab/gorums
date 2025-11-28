@@ -9,6 +9,7 @@ type callOptions struct {
 	callType     *protoimpl.ExtensionInfo
 	waitSendDone bool
 	transform    func(proto.Message, *RawNode) proto.Message
+	interceptors []any // Type-erased interceptors, restored by QuorumCallWithInterceptor
 }
 
 // mustWaitSendDone returns true if the caller of a one-way call type must wait
@@ -42,6 +43,23 @@ func getCallOptions(callType *protoimpl.ExtensionInfo, opts []CallOption) callOp
 func WithNoSendWaiting() CallOption {
 	return func(o *callOptions) {
 		o.waitSendDone = false
+	}
+}
+
+// WithQuorumInterceptors returns a CallOption that adds quorum call interceptors.
+// Multiple interceptors are executed in the order provided, wrapping the base
+// quorum function.
+//
+// Example:
+//
+//	resp, err := cfg.Read(ctx, req,
+//	    gorums.WithQuorumInterceptors(loggingInterceptor, retryInterceptor),
+//	)
+func WithQuorumInterceptors[Req, Resp proto.Message, Out any](interceptors ...QuorumInterceptor[Req, Resp, Out]) CallOption {
+	return func(o *callOptions) {
+		for _, interceptor := range interceptors {
+			o.interceptors = append(o.interceptors, interceptor)
+		}
 	}
 }
 
