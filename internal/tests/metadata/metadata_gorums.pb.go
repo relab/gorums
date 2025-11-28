@@ -163,12 +163,7 @@ type QuorumSpec interface{}
 
 // IDFromMD returns the 'id' field from the metadata.
 func (n *Node) IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, err error) {
-	cd := gorums.CallData{
-		Message: in,
-		Method:  "metadata.MetadataTest.IDFromMD",
-	}
-
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.RawNode.RPCCall(ctx, in, "metadata.MetadataTest.IDFromMD")
 	if err != nil {
 		return nil, err
 	}
@@ -177,12 +172,7 @@ func (n *Node) IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, e
 
 // WhatIP returns the address of the client that calls it.
 func (n *Node) WhatIP(ctx context.Context, in *emptypb.Empty) (resp *IPAddr, err error) {
-	cd := gorums.CallData{
-		Message: in,
-		Method:  "metadata.MetadataTest.WhatIP",
-	}
-
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.RawNode.RPCCall(ctx, in, "metadata.MetadataTest.WhatIP")
 	if err != nil {
 		return nil, err
 	}

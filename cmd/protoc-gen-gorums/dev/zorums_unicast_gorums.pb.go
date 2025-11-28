@@ -22,12 +22,7 @@ const (
 // Unicast is a unicast call invoked on a single node.
 // No reply is returned to the client.
 func (n *Node) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	cd := gorums.CallData{
-		Message: in,
-		Method:  "dev.ZorumsService.Unicast",
-	}
-
-	n.RawNode.Unicast(ctx, cd, opts...)
+	n.RawNode.Unicast(ctx, in, "dev.ZorumsService.Unicast", opts...)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -36,10 +31,5 @@ var _ emptypb.Empty
 // Unicast2 is a unicast call invoked on a single node.
 // No reply is returned to the client.
 func (n *Node) Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	cd := gorums.CallData{
-		Message: in,
-		Method:  "dev.ZorumsService.Unicast2",
-	}
-
-	n.RawNode.Unicast(ctx, cd, opts...)
+	n.RawNode.Unicast(ctx, in, "dev.ZorumsService.Unicast2", opts...)
 }

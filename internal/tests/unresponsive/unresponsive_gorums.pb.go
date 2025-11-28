@@ -161,12 +161,7 @@ type QuorumSpec interface{}
 
 // TestUnresponsive is an RPC call invoked on a single node.
 func (n *Node) TestUnresponsive(ctx context.Context, in *Empty) (resp *Empty, err error) {
-	cd := gorums.CallData{
-		Message: in,
-		Method:  "unresponsive.Unresponsive.TestUnresponsive",
-	}
-
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.RawNode.RPCCall(ctx, in, "unresponsive.Unresponsive.TestUnresponsive")
 	if err != nil {
 		return nil, err
 	}

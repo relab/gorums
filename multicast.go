@@ -19,9 +19,9 @@ import (
 // Use WithPerNodeTransform to send different messages to each node.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts ...CallOption) {
+func (c RawConfiguration) Multicast(ctx context.Context, msg proto.Message, method string, opts ...CallOption) {
 	o := getCallOptions(E_Multicast, opts)
-	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
+	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), method)
 	sentMsgs := 0
 
 	var replyChan chan NodeResponse[proto.Message]
@@ -29,14 +29,14 @@ func (c RawConfiguration) Multicast(ctx context.Context, d QuorumCallData, opts 
 		replyChan = make(chan NodeResponse[proto.Message], len(c))
 	}
 	for _, n := range c {
-		msg := d.Message
+		m := msg
 		if o.transform != nil {
-			msg = o.transform(d.Message, n)
-			if msg == nil || !msg.ProtoReflect().IsValid() {
+			m = o.transform(msg, n)
+			if m == nil || !m.ProtoReflect().IsValid() {
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), opts: o, responseChan: replyChan})
+		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, m), opts: o, responseChan: replyChan})
 		sentMsgs++
 	}
 

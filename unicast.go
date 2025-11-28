@@ -17,18 +17,18 @@ import (
 // enqueueing the message (fire-and-forget semantics).
 //
 // This method should be used by generated code only.
-func (n *RawNode) Unicast(ctx context.Context, d CallData, opts ...CallOption) {
+func (n *RawNode) Unicast(ctx context.Context, msg proto.Message, method string, opts ...CallOption) {
 	o := getCallOptions(E_Unicast, opts)
 
-	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
+	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), method)
 
 	if !o.waitSendDone {
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message), opts: o})
+		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), opts: o})
 		return // fire-and-forget: don't wait for send completion
 	}
 
 	// Default: block until send completes
 	replyChan := make(chan NodeResponse[proto.Message], 1)
-	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message), opts: o, responseChan: replyChan})
+	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), opts: o, responseChan: replyChan})
 	<-replyChan
 }

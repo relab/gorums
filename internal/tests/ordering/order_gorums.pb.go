@@ -217,12 +217,7 @@ func (c *Configuration) QC(ctx context.Context, in *Request, opts ...gorums.Quor
 
 // UnaryRPC is an RPC call invoked on a single node.
 func (n *Node) UnaryRPC(ctx context.Context, in *Request) (resp *Response, err error) {
-	cd := gorums.CallData{
-		Message: in,
-		Method:  "ordering.GorumsTest.UnaryRPC",
-	}
-
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.RawNode.RPCCall(ctx, in, "ordering.GorumsTest.UnaryRPC")
 	if err != nil {
 		return nil, err
 	}

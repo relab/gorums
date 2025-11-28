@@ -192,12 +192,7 @@ var _ emptypb.Empty
 // with the same argument in. Use WithPerNodeTransform to send different messages
 // to each node. No replies are collected.
 func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption) {
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "benchmark.Benchmark.Multicast",
-	}
-
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+	c.RawConfiguration.Multicast(ctx, in, "benchmark.Benchmark.Multicast", opts...)
 }
 
 // QuorumSpec is the interface of quorum functions for Benchmark.

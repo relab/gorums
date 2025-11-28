@@ -8,7 +8,6 @@ var _ {{$out}}
 `
 
 var mcVar = `
-{{$callData := use "gorums.QuorumCallData" .GenFile}}
 {{$genFile := .GenFile}}
 {{$context := use "context.Context" .GenFile}}
 {{$callOpt := use "gorums.CallOption" .GenFile}}
@@ -30,12 +29,7 @@ var multicastSignature = `func (c *Configuration) {{$method}}(` +
 	`opts ...{{$callOpt}}) {
 `
 
-var multicastBody = `	cd := {{$callData}}{
-		Message: in,
-		Method:  "{{$fullName}}",
-	}
-
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+var multicastBody = `	c.RawConfiguration.Multicast(ctx, in, "{{$fullName}}", opts...)
 }
 `
 

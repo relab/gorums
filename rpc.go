@@ -7,21 +7,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// CallData contains data needed to make a remote procedure call.
-//
-// This struct should be used by generated code only.
-type CallData struct {
-	Message proto.Message
-	Method  string
-}
-
 // RPCCall executes a remote procedure call on the node.
 //
 // This method should be used by generated code only.
-func (n *RawNode) RPCCall(ctx context.Context, d CallData) (proto.Message, error) {
-	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
+func (n *RawNode) RPCCall(ctx context.Context, msg proto.Message, method string) (proto.Message, error) {
+	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), method)
 	replyChan := make(chan NodeResponse[proto.Message], 1)
-	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message), responseChan: replyChan})
+	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 
 	select {
 	case r := <-replyChan:

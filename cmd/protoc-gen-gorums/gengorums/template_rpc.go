@@ -14,17 +14,12 @@ var rpcSignature = `func (n *Node) {{$method}}(` +
 `
 
 var rpcVar = `
-{{$callData := use "gorums.CallData" .GenFile}}
 {{$genFile := .GenFile}}
 {{$context := use "context.Context" .GenFile}}
+{{$_ := use "gorums.EnforceVersion" .GenFile}}
 `
 
-var rpcBody = `	cd := {{$callData}}{
-		Message:  in,
-		Method: "{{$fullName}}",
-	}
-
-	res, err := n.RawNode.RPCCall(ctx, cd)
+var rpcBody = `	res, err := n.RawNode.RPCCall(ctx, in, "{{$fullName}}")
 	if err != nil {
 		return nil, err
 	}

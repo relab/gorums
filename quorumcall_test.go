@@ -7,7 +7,6 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/mock"
-	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -17,26 +16,25 @@ func TestQuorumCallSuccess(t *testing.T) {
 
 	cfg := gorums.NewConfig(t, addrs)
 
-	cd := gorums.QuorumCallData{
-		Message: pb.String(""),
-		Method:  mock.TestMethod,
-		QuorumFunction: func(_ proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
-			t.Logf("Received %d replies: %v", len(replies), replies)
-			if len(replies) > 2 {
-				for _, reply := range replies {
-					if reply == nil {
-						continue
-					}
-					return reply, true
+	// Use QuorumSpecFunc to create a quorum function that requires all 3 responses
+	qf := gorums.QuorumSpecFunc(func(_ *pb.StringValue, replies map[uint32]*pb.StringValue) (*pb.StringValue, bool) {
+		t.Logf("Received %d replies: %v", len(replies), replies)
+		if len(replies) > 2 {
+			for _, reply := range replies {
+				if reply == nil {
+					continue
 				}
+				return reply, true
 			}
-			return nil, false
-		},
-	}
+		}
+		return nil, false
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	response, err := cfg.QuorumCall(ctx, cd)
+	response, err := gorums.QuorumCallWithInterceptor(
+		ctx, cfg, pb.String(""), mock.TestMethod, qf, nil,
+	)
 	if err != nil {
 		t.Fatalf("Unexpected error, got: %v, want: %v", err, nil)
 	}

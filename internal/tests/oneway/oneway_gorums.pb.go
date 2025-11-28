@@ -168,12 +168,7 @@ var _ OnewayTestNodeClient = (*Node)(nil)
 // with the same argument in. Use WithPerNodeTransform to send different messages
 // to each node. No replies are collected.
 func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "oneway.OnewayTest.Multicast",
-	}
-
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+	c.RawConfiguration.Multicast(ctx, in, "oneway.OnewayTest.Multicast", opts...)
 }
 
 // There are no quorum calls.
@@ -201,10 +196,5 @@ func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTestServer) {
 // Unicast is a unicast call invoked on a single node.
 // No reply is returned to the client.
 func (n *Node) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	cd := gorums.CallData{
-		Message: in,
-		Method:  "oneway.OnewayTest.Unicast",
-	}
-
-	n.RawNode.Unicast(ctx, cd, opts...)
+	n.RawNode.Unicast(ctx, in, "oneway.OnewayTest.Unicast", opts...)
 }

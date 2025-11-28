@@ -161,12 +161,7 @@ type QuorumSpec interface{}
 
 // TestTLS is an RPC call invoked on a single node.
 func (n *Node) TestTLS(ctx context.Context, in *Request) (resp *Response, err error) {
-	cd := gorums.CallData{
-		Message: in,
-		Method:  "tls.TLS.TestTLS",
-	}
-
-	res, err := n.RawNode.RPCCall(ctx, cd)
+	res, err := n.RawNode.RPCCall(ctx, in, "tls.TLS.TestTLS")
 	if err != nil {
 		return nil, err
 	}
