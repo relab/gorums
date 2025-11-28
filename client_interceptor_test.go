@@ -649,8 +649,10 @@ func TestInterceptorIntegration_ChainedTransforms(t *testing.T) {
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
-		Transform(transform1), // First transform
-		Transform(transform2), // Second transform (chained)
+		Interceptors(
+			Map[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](transform1, nil),
+			Map[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](transform2, nil),
+		),
 	)
 	if !checkQuorumCall(t, ctx.Err(), err) {
 		return
@@ -698,8 +700,10 @@ func TestInterceptorIntegration_ChainedTransformsWithSkip(t *testing.T) {
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
-		Transform(transform1), // First transform
-		Transform(transform2), // Second transform (chained, with skip)
+		Interceptors(
+			Map[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](transform1, nil),
+			Map[*pb.StringValue, *pb.StringValue, map[uint32]*pb.StringValue](transform2, nil),
+		),
 	)
 	if !checkQuorumCall(t, ctx.Err(), err) {
 		return

@@ -45,23 +45,6 @@ func interceptorsFromCallOptions[Req, Resp proto.Message, Out any](o callOptions
 	return interceptors
 }
 
-// registerTransformFromCallOptions registers the transform function from callOptions
-// onto the ClientCtx. This adapts the non-generic callOptions.transform (which works with
-// proto.Message) to the generic RegisterTransformFunc (which works with Req).
-func registerTransformFromCallOptions[Req, Resp proto.Message](ctx *ClientCtx[Req, Resp], o callOptions) {
-	if o.transform == nil {
-		return
-	}
-	ctx.RegisterTransformFunc(func(r Req, node *RawNode) Req {
-		result := o.transform(r, node)
-		if result == nil {
-			var zero Req
-			return zero
-		}
-		return result.(Req)
-	})
-}
-
 // WithNoSendWaiting is a CallOption that makes Unicast or Multicast methods
 // return immediately instead of blocking until the message has been sent.
 // By default, Unicast and Multicast methods wait for send completion.
@@ -88,19 +71,22 @@ func Interceptors[Req, Resp proto.Message, Out any](interceptors ...QuorumInterc
 	}
 }
 
-// Transform returns a CallOption that applies per-node request transformations
+// MapRequest returns a CallOption that applies per-node request transformations
 // for Unicast or Multicast calls. The transform function receives the original request
 // and a node, and returns the transformed request to send to that node.
 // If the function returns nil or an invalid message, the request to that node is skipped.
 //
+// This is a simpler alternative to the Map interceptor for one-way calls that don't
+// use the interceptor chain.
+//
 // Example:
 //
-//	config.Multicast(ctx, req, gorums.Transform(
+//	config.Multicast(ctx, req, gorums.MapRequest(
 //	    func(req *Request, node *gorums.RawNode) *Request {
 //	        return &Request{Value: fmt.Sprintf("%s-%d", req.Value, node.ID())}
 //	    },
 //	))
-func Transform[Req proto.Message](fn func(Req, *RawNode) Req) CallOption {
+func MapRequest[Req proto.Message](fn func(Req, *RawNode) Req) CallOption {
 	return func(o *callOptions) {
 		if o.transform == nil {
 			// First transform

@@ -541,9 +541,6 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	// Create ClientCtx first so sendOnce can access it
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
 
-	// Register transform from options if provided
-	registerTransformFromCallOptions(clientCtx, callOpts)
-
 	// Create sendOnce function that will be called lazily on first Responses() call
 	sendOnce := func() {
 		var expected int
