@@ -45,6 +45,23 @@ func interceptorsFromCallOptions[Req, Resp proto.Message, Out any](o callOptions
 	return interceptors
 }
 
+// registerTransformFromCallOptions registers the transform function from callOptions
+// onto the ClientCtx. This adapts the non-generic callOptions.transform (which works with
+// proto.Message) to the generic RegisterTransformFunc (which works with Req).
+func registerTransformFromCallOptions[Req, Resp proto.Message](ctx *ClientCtx[Req, Resp], o callOptions) {
+	if o.transform == nil {
+		return
+	}
+	ctx.RegisterTransformFunc(func(r Req, node *RawNode) Req {
+		result := o.transform(r, node)
+		if result == nil {
+			var zero Req
+			return zero
+		}
+		return result.(Req)
+	})
+}
+
 // WithNoSendWaiting is a CallOption that makes Unicast or Multicast methods
 // return immediately instead of blocking until the message has been sent.
 // By default, Unicast and Multicast methods wait for send completion.

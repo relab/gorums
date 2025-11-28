@@ -450,13 +450,16 @@ func Chain[Req, Resp msg, Out any](
 //   - Out: The final output type returned by the interceptor chain
 //
 // The base parameter is the terminal handler that processes responses (e.g., MajorityQuorum).
-// The opts parameter accepts CallOption values such as WithQuorumInterceptors and WithPerNodeTransform.
+// The opts parameter accepts CallOption values such as Interceptors and Transform.
 //
-// Interceptors are applied in the order they are provided via WithQuorumInterceptors:
+// Interceptors are applied in the order they are provided via Interceptors:
 //  1. First interceptor (outermost wrapper)
 //  2. Second interceptor
 //     ...
 //  3. base (innermost handler, e.g. aggregation)
+//
+// Transform options are also applied in order, with each transform receiving the output
+// of the previous transform. Multiple Transform options can be chained.
 //
 // Note: Messages are not sent to nodes before ctx.Responses() is called, applying any
 // registered request transformations. This lazy sending is necessary to allow interceptors
@@ -481,16 +484,7 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
 
 	// Register transform from options if provided
-	if callOpts.transform != nil {
-		clientCtx.RegisterTransformFunc(func(r Req, node *RawNode) Req {
-			result := callOpts.transform(r, node)
-			if result == nil {
-				var zero Req
-				return zero
-			}
-			return result.(Req)
-		})
-	}
+	registerTransformFromCallOptions(clientCtx, callOpts)
 
 	// Create sendOnce function that will be called lazily on first Responses() call
 	sendOnce := func() {
