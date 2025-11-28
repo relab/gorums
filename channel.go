@@ -26,7 +26,7 @@ var streamDownErr = status.Error(codes.Unavailable, "stream is down")
 type request struct {
 	ctx          context.Context
 	msg          *Message
-	opts         callOptions
+	waitSendDone bool
 	streaming    bool
 	responseChan chan<- NodeResponse[proto.Message]
 }
@@ -244,8 +244,8 @@ func (c *channel) sendMsg(req request) (err error) {
 		//    - Provides fire-and-forget semantics
 		//
 		// Note: Two-way call types (RPCCall, QuorumCall) do not use this mechanism, they always
-		// wait for actual server responses, so mustWaitSendDone() returns false for them.
-		if req.opts.mustWaitSendDone() && err == nil {
+		// wait for actual server responses, so waitSendDone is false for them.
+		if req.waitSendDone && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
 			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{})
 		}

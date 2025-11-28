@@ -23,9 +23,10 @@ func (c RawConfiguration) Multicast(ctx context.Context, msg proto.Message, meth
 	o := getCallOptions(E_Multicast, opts)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), method)
 	sentMsgs := 0
+	waitSendDone := o.mustWaitSendDone()
 
 	var replyChan chan NodeResponse[proto.Message]
-	if o.waitSendDone {
+	if waitSendDone {
 		replyChan = make(chan NodeResponse[proto.Message], len(c))
 	}
 	for _, n := range c {
@@ -36,12 +37,12 @@ func (c RawConfiguration) Multicast(ctx context.Context, msg proto.Message, meth
 				continue // don't send if no msg
 			}
 		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, m), opts: o, responseChan: replyChan})
+		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, m), waitSendDone: waitSendDone, responseChan: replyChan})
 		sentMsgs++
 	}
 
 	// Fire-and-forget: return immediately without waiting for send completion
-	if !o.waitSendDone {
+	if !waitSendDone {
 		return
 	}
 

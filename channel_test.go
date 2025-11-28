@@ -18,11 +18,6 @@ import (
 
 const defaultTestTimeout = 3 * time.Second
 
-var (
-	waitSendDone  = getCallOptions(E_Multicast, nil)
-	noSendWaiting = getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()})
-)
-
 // newNodeWithServer creates a node connected to a live server that will delay
 // responding by the given duration. If delay is 0, the server responds immediately.
 func newNodeWithServer(t testing.TB, delay time.Duration) *RawNode {
@@ -104,7 +99,7 @@ func TestChannelCreation(t *testing.T) {
 	node := NewNode(t, "127.0.0.1:5000")
 
 	// send message when server is down
-	resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
+	resp := sendRequest(t, node, request{waitSendDone: true}, 1)
 	if resp.Err == nil {
 		t.Error("response err: got <nil>, want error")
 	}
@@ -153,16 +148,16 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 	node := newNodeWithServer(t, 0)
 
 	tests := []struct {
-		name string
-		opts callOptions
+		name         string
+		waitSendDone bool
 	}{
-		{name: "WaitForSend", opts: waitSendDone},
-		{name: "NoSendWaiting", opts: noSendWaiting},
+		{name: "WaitForSend", waitSendDone: true},
+		{name: "NoSendWaiting", waitSendDone: false},
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
-			resp := sendRequest(t, node, request{opts: tt.opts}, uint64(i))
+			resp := sendRequest(t, node, request{waitSendDone: tt.waitSendDone}, uint64(i))
 			elapsed := time.Since(start)
 			if resp.Err != nil {
 				t.Errorf("unexpected error: %v", resp.Err)
@@ -214,7 +209,7 @@ func TestChannelErrors(t *testing.T) {
 			name: "ServerFailureDuringCommunication",
 			setup: func(t *testing.T) *RawNode {
 				node, stopServer := newNodeWithStoppableServer(t, 0)
-				resp := sendRequest(t, node, request{opts: waitSendDone}, 1)
+				resp := sendRequest(t, node, request{waitSendDone: true}, 1)
 				if resp.Err != nil {
 					t.Errorf("first message should succeed, got error: %v", resp.Err)
 				}
@@ -230,7 +225,7 @@ func TestChannelErrors(t *testing.T) {
 			time.Sleep(100 * time.Millisecond)
 
 			// Send message and verify error
-			resp := sendRequest(t, node, request{opts: waitSendDone}, uint64(i))
+			resp := sendRequest(t, node, request{waitSendDone: true}, uint64(i))
 			if resp.Err == nil {
 				t.Errorf("expected error '%s' but got nil", tt.wantErr)
 			} else if !strings.Contains(resp.Err.Error(), tt.wantErr) {
@@ -394,8 +389,8 @@ func TestChannelConcurrentSends(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 	for goID := range numGoroutines {
 		go func() {
-			send(t, results, node, goID, msgsPerGoroutine, request{opts: waitSendDone})
-			send(t, results, node, goID, msgsPerGoroutine, request{opts: noSendWaiting})
+			send(t, results, node, goID, msgsPerGoroutine, request{waitSendDone: true})
+			send(t, results, node, goID, msgsPerGoroutine, request{waitSendDone: false})
 		}()
 	}
 
@@ -438,35 +433,35 @@ func TestChannelContext(t *testing.T) {
 		name         string
 		serverDelay  time.Duration
 		contextSetup func(context.Context) (context.Context, context.CancelFunc)
-		callOpts     callOptions
+		waitSendDone bool
 		wantErr      error
 	}{
 		{
 			name:         "CancelBeforeSend/WaitSending",
 			serverDelay:  0,
 			contextSetup: cancelledContext,
-			callOpts:     waitSendDone,
+			waitSendDone: true,
 			wantErr:      context.Canceled,
 		},
 		{
 			name:         "CancelBeforeSend/NoSendWaiting",
 			serverDelay:  0,
 			contextSetup: cancelledContext,
-			callOpts:     noSendWaiting,
+			waitSendDone: false,
 			wantErr:      context.Canceled,
 		},
 		{
 			name:         "CancelDuringSend/WaitSending",
 			serverDelay:  3 * time.Second,
 			contextSetup: expireBeforeSend,
-			callOpts:     waitSendDone,
+			waitSendDone: true,
 			wantErr:      context.DeadlineExceeded,
 		},
 		{
 			name:         "CancelDuringSend/NoSendWaiting",
 			serverDelay:  3 * time.Second,
 			contextSetup: expireBeforeSend,
-			callOpts:     noSendWaiting,
+			waitSendDone: false,
 			wantErr:      context.DeadlineExceeded,
 		},
 	}
@@ -477,7 +472,7 @@ func TestChannelContext(t *testing.T) {
 			t.Cleanup(cancel)
 
 			node := newNodeWithServer(t, tt.serverDelay)
-			resp := sendRequest(t, node, request{ctx: ctx, opts: tt.callOpts}, uint64(i))
+			resp := sendRequest(t, node, request{ctx: ctx, waitSendDone: tt.waitSendDone}, uint64(i))
 			if !errors.Is(resp.Err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.Err)
 			}
@@ -505,7 +500,7 @@ func TestChannelDeadlock(t *testing.T) {
 	}
 
 	// Send a message to activate the stream
-	sendRequest(t, node, request{opts: waitSendDone}, 1)
+	sendRequest(t, node, request{waitSendDone: true}, 1)
 
 	// Break the stream, forcing a reconnection on next send
 	node.channel.clearStream()
@@ -563,22 +558,22 @@ func TestChannelRouterLifecycle(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		opts       callOptions
-		streaming  bool
-		afterSend  func(t *testing.T, node *RawNode, msgID uint64)
-		wantRouter bool
+		name         string
+		waitSendDone bool
+		streaming    bool
+		afterSend    func(t *testing.T, node *RawNode, msgID uint64)
+		wantRouter   bool
 	}{
-		{name: "WaitSendDone/NonStreamingAutoCleanup", opts: waitSendDone, streaming: false, wantRouter: false},
-		{name: "WaitSendDone/StreamingKeepsRouterAlive", opts: waitSendDone, streaming: true, wantRouter: true},
-		{name: "NoSendWaiting/NonStreamingAutoCleanup", opts: noSendWaiting, streaming: false, wantRouter: false},
-		{name: "NoSendWaiting/StreamingKeepsRouterAlive", opts: noSendWaiting, streaming: true, wantRouter: true},
+		{name: "WaitSendDone/NonStreamingAutoCleanup", waitSendDone: true, streaming: false, wantRouter: false},
+		{name: "WaitSendDone/StreamingKeepsRouterAlive", waitSendDone: true, streaming: true, wantRouter: true},
+		{name: "NoSendWaiting/NonStreamingAutoCleanup", waitSendDone: false, streaming: false, wantRouter: false},
+		{name: "NoSendWaiting/StreamingKeepsRouterAlive", waitSendDone: false, streaming: true, wantRouter: true},
 	}
 	for i, tt := range tests {
 		name := fmt.Sprintf("msgID=%d/%s/streaming=%t", i, tt.name, tt.streaming)
 		t.Run(name, func(t *testing.T) {
 			msgID := uint64(i)
-			resp := sendRequest(t, node, request{opts: tt.opts, streaming: tt.streaming}, msgID)
+			resp := sendRequest(t, node, request{waitSendDone: tt.waitSendDone, streaming: tt.streaming}, msgID)
 			if resp.Err != nil {
 				t.Errorf("unexpected error: %v", resp.Err)
 			}
