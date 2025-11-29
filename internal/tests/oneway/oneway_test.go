@@ -34,9 +34,7 @@ func (s *onewaySrv) Multicast(ctx gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-type testQSpec struct{}
-
-func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*onewaySrv, teardown func()) {
+func setup(t testing.TB, cfgSize int) (cfg gorums.RawConfiguration, srvs []*onewaySrv, teardown func()) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := range cfgSize {
@@ -53,12 +51,12 @@ func setup(t testing.TB, cfgSize int) (cfg *oneway.Configuration, srvs []*oneway
 		nodeMap[addr] = uint32(i)
 	}
 
-	mgr := oneway.NewManager(
+	mgr := gorums.NewRawManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{}, gorums.WithNodeMap(nodeMap))
+	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,15 +96,15 @@ func TestOnewayCalls(t *testing.T) {
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				if cfg.Size() == 1 {
-					node := cfg.Nodes()[0]
-					nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+					node := cfg[0]
+					nodeCtx := gorums.WithNodeContext(context.Background(), node)
 					if test.sendWait {
 						oneway.Unicast(nodeCtx, in)
 					} else {
 						oneway.Unicast(nodeCtx, in, gorums.WithNoSendWaiting())
 					}
 				} else {
-					cfgCtx := gorums.WithConfigContext(context.Background(), cfg.RawConfiguration)
+					cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 					if test.sendWait {
 						oneway.Multicast(cfgCtx, in)
 					} else {
@@ -193,7 +191,7 @@ func TestMulticastPerNode(t *testing.T) {
 
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
-				cfgCtx := gorums.WithConfigContext(context.Background(), cfg.RawConfiguration)
+				cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 				if test.sendWait {
 					oneway.Multicast(cfgCtx, in, gorums.MapRequest(test.f))
 				} else {
@@ -226,19 +224,19 @@ func BenchmarkUnicast(b *testing.B) {
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
-	node := cfg.Nodes()[0]
+	node := cfg[0]
 	in := oneway.Request_builder{Num: 0}.Build()
 	b.Run("UnicastSendWaiting__", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
-			nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+			nodeCtx := gorums.WithNodeContext(context.Background(), node)
 			oneway.Unicast(nodeCtx, in)
 		}
 	})
 	b.Run("UnicastNoSendWaiting", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
-			nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+			nodeCtx := gorums.WithNodeContext(context.Background(), node)
 			oneway.Unicast(nodeCtx, in, gorums.WithNoSendWaiting())
 		}
 	})
@@ -254,14 +252,14 @@ func BenchmarkMulticast(b *testing.B) {
 	b.Run("MulticastSendWaiting__", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
-			cfgCtx := gorums.WithConfigContext(context.Background(), cfg.RawConfiguration)
+			cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 			oneway.Multicast(cfgCtx, in)
 		}
 	})
 	b.Run("MulticastNoSendWaiting", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
-			cfgCtx := gorums.WithConfigContext(context.Background(), cfg.RawConfiguration)
+			cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 			oneway.Multicast(cfgCtx, in, gorums.WithNoSendWaiting())
 		}
 	})

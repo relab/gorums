@@ -58,19 +58,19 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	mgr := NewManager(
+	mgr := gorums.NewRawManager(
 		gorums.WithMetadata(md),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	node := mgr.Nodes()[0]
-	nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+	node := cfg[0]
+	nodeCtx := gorums.WithNodeContext(context.Background(), node)
 	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
@@ -87,23 +87,23 @@ func TestPerMessageMetadata(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
-	mgr := NewManager(
+	mgr := gorums.NewRawManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	node := mgr.Nodes()[0]
+	node := cfg[0]
 
 	md := metadata.New(map[string]string{
 		"id": fmt.Sprint(want),
 	})
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
-	nodeCtx := gorums.WithNodeContext(ctx, node.RawNode)
+	nodeCtx := gorums.WithNodeContext(ctx, node)
 	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
@@ -124,19 +124,19 @@ func TestPerNodeMetadata(t *testing.T) {
 		})
 	}
 
-	mgr := NewManager(
+	mgr := gorums.NewRawManager(
 		gorums.WithPerNodeMetadata(perNodeMD),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, node := range mgr.Nodes() {
-		nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+	for _, node := range cfg {
+		nodeCtx := gorums.WithNodeContext(context.Background(), node)
 		resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
@@ -152,18 +152,18 @@ func TestCanGetPeerInfo(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
-	mgr := NewManager(
+	mgr := gorums.NewRawManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	node := mgr.Nodes()[0]
-	nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+	node := cfg[0]
+	nodeCtx := gorums.WithNodeContext(context.Background(), node)
 	ip, err := WhatIP(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
