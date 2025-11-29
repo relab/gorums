@@ -22,9 +22,9 @@ type (
 // Use the aliased types to add them to the reserved identifiers list.
 // This prevents users from defining message types with these names.
 var (
-	_ = Configuration{}
-	_ = Manager{}
-	_ = Node{}
+	_ = (*Configuration)(nil)
+	_ = (*Manager)(nil)
+	_ = (*Node)(nil)
 )
 
 `
