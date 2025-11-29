@@ -1,6 +1,38 @@
 package gorums
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
+
+// ConfigContext is a context that carries a configuration for quorum calls.
+// It embeds context.Context and provides access to the RawConfiguration.
+//
+// Use [WithConfigContext] to create a ConfigContext from an existing context.
+type ConfigContext struct {
+	context.Context
+	cfg RawConfiguration
+}
+
+// WithConfigContext creates a new ConfigContext from the given parent context
+// and configuration. The configuration must not be empty.
+//
+// Example:
+//
+//	cfg, _ := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+//	ctx := gorums.WithConfigContext(context.Background(), cfg)
+//	resp, err := paxos.Prepare(ctx, req)
+func WithConfigContext(parent context.Context, cfg RawConfiguration) *ConfigContext {
+	if len(cfg) == 0 {
+		panic("gorums: WithConfigContext called with empty configuration")
+	}
+	return &ConfigContext{Context: parent, cfg: cfg}
+}
+
+// Configuration returns the RawConfiguration associated with this context.
+func (c *ConfigContext) Configuration() RawConfiguration {
+	return c.cfg
+}
 
 // RawConfiguration represents a static set of nodes on which quorum calls may be invoked.
 //

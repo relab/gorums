@@ -7,7 +7,6 @@
 package config
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -165,13 +164,13 @@ type QuorumSpec interface {
 	ConfigQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 }
 
-// Config is a quorum call invoked on all nodes in configuration cfg,
+// Config is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
 // By default, a majority quorum function is used. To override the quorum function,
 // use the gorums.WithQuorumFunc call option.
-func Config(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+func Config(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, cfg, in, "config.ConfigTest.Config",
+		ctx, in, "config.ConfigTest.Config",
 		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)

@@ -7,7 +7,6 @@
 package qf
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -172,25 +171,25 @@ type QuorumSpec interface {
 	IgnoreReqQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 }
 
-// UseReq is a quorum call invoked on all nodes in configuration cfg,
+// UseReq is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
 // By default, a majority quorum function is used. To override the quorum function,
 // use the gorums.WithQuorumFunc call option.
-func UseReq(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+func UseReq(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, cfg, in, "qf.QuorumFunction.UseReq",
+		ctx, in, "qf.QuorumFunction.UseReq",
 		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
-// IgnoreReq is a quorum call invoked on all nodes in configuration cfg,
+// IgnoreReq is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
 // By default, a majority quorum function is used. To override the quorum function,
 // use the gorums.WithQuorumFunc call option.
-func IgnoreReq(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+func IgnoreReq(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, cfg, in, "qf.QuorumFunction.IgnoreReq",
+		ctx, in, "qf.QuorumFunction.IgnoreReq",
 		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)

@@ -171,14 +171,9 @@ func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEch
 }
 
 // BenchmarkClient is the client interface for the Benchmark service.
+// Note: Quorum call methods are standalone functions and not part of this interface.
 type BenchmarkClient interface {
-	StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error)
-	StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.CallOption) (resp *Result, err error)
-	StartBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error)
-	StopBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.CallOption) (resp *MemoryStat, err error)
-	QuorumCall(ctx context.Context, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error)
 	AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho
-	SlowServer(ctx context.Context, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error)
 	Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption)
 }
 
@@ -249,61 +244,71 @@ type QuorumSpec interface {
 	SlowServerQF(in *Echo, replies map[uint32]*Echo) (*Echo, bool)
 }
 
-// StartServerBenchmark is a quorum call invoked on all nodes in configuration c,
+// StartServerBenchmark is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StartServerBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StartServerBenchmark",
-		gorums.QuorumSpecFunc(c.qspec.StartServerBenchmarkQF),
+		ctx, in, "benchmark.Benchmark.StartServerBenchmark",
+		gorums.MajorityQuorum[*StartRequest, *StartResponse],
 		opts...,
 	)
 }
 
-// StopServerBenchmark is a quorum call invoked on all nodes in configuration c,
+// StopServerBenchmark is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopServerBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.CallOption) (resp *Result, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) (resp *Result, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StopServerBenchmark",
-		gorums.QuorumSpecFunc(c.qspec.StopServerBenchmarkQF),
+		ctx, in, "benchmark.Benchmark.StopServerBenchmark",
+		gorums.MajorityQuorum[*StopRequest, *Result],
 		opts...,
 	)
 }
 
-// StartBenchmark is a quorum call invoked on all nodes in configuration c,
+// StartBenchmark is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StartBenchmark(ctx context.Context, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StartBenchmark",
-		gorums.QuorumSpecFunc(c.qspec.StartBenchmarkQF),
+		ctx, in, "benchmark.Benchmark.StartBenchmark",
+		gorums.MajorityQuorum[*StartRequest, *StartResponse],
 		opts...,
 	)
 }
 
-// StopBenchmark is a quorum call invoked on all nodes in configuration c,
+// StopBenchmark is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) StopBenchmark(ctx context.Context, in *StopRequest, opts ...gorums.CallOption) (resp *MemoryStat, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) (resp *MemoryStat, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "benchmark.Benchmark.StopBenchmark",
-		gorums.QuorumSpecFunc(c.qspec.StopBenchmarkQF),
+		ctx, in, "benchmark.Benchmark.StopBenchmark",
+		gorums.MajorityQuorum[*StopRequest, *MemoryStat],
 		opts...,
 	)
 }
 
 // benchmarks
-func (c *Configuration) QuorumCall(ctx context.Context, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error) {
+func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "benchmark.Benchmark.QuorumCall",
-		gorums.QuorumSpecFunc(c.qspec.QuorumCallQF),
+		ctx, in, "benchmark.Benchmark.QuorumCall",
+		gorums.MajorityQuorum[*Echo, *Echo],
 		opts...,
 	)
 }
 
-// SlowServer is a quorum call invoked on all nodes in configuration c,
+// SlowServer is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) SlowServer(ctx context.Context, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "benchmark.Benchmark.SlowServer",
-		gorums.QuorumSpecFunc(c.qspec.SlowServerQF),
+		ctx, in, "benchmark.Benchmark.SlowServer",
+		gorums.MajorityQuorum[*Echo, *Echo],
 		opts...,
 	)
 }

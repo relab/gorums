@@ -33,7 +33,7 @@ type Bench struct {
 
 type (
 	benchFunc   func(Options) (*Result, error)
-	qcFunc      func(context.Context, *Echo, ...gorums.CallOption) (*Echo, error)
+	qcFunc      func(*gorums.ConfigContext, *Echo, ...gorums.CallOption) (*Echo, error)
 	asyncQCFunc func(context.Context, *Echo) *AsyncEcho
 	serverFunc  func(context.Context, *TimedMsg)
 )
@@ -41,6 +41,7 @@ type (
 func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
@@ -49,7 +50,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 		g.Go(func() error {
 			warmupEnd := time.Now().Add(opts.Warmup)
 			for !time.Now().After(warmupEnd) {
-				_, err := f(ctx, msg)
+				_, err := f(cfgCtx, msg)
 				if err != nil {
 					return err
 				}
@@ -64,7 +65,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 	}
 
 	if opts.Remote {
-		_, err := cfg.StartBenchmark(ctx, &StartRequest{})
+		_, err := StartBenchmark(cfgCtx, &StartRequest{})
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +77,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 			endTime := time.Now().Add(opts.Duration)
 			for !time.Now().After(endTime) {
 				start := time.Now()
-				_, err := f(ctx, msg)
+				_, err := f(cfgCtx, msg)
 				if err != nil {
 					return err
 				}
@@ -94,7 +95,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 
 	result := s.GetResult()
 	if opts.Remote {
-		memStat, err := cfg.StopBenchmark(ctx, &StopRequest{})
+		memStat, err := StopBenchmark(cfgCtx, &StopRequest{})
 		if err != nil {
 			return nil, err
 		}
@@ -107,6 +108,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
@@ -140,7 +142,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	}
 
 	if opts.Remote {
-		_, err := cfg.StartBenchmark(ctx, &StartRequest{})
+		_, err := StartBenchmark(cfgCtx, &StartRequest{})
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +180,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 
 	result := s.GetResult()
 	if opts.Remote {
-		memStat, err := cfg.StopBenchmark(ctx, &StopRequest{})
+		memStat, err := StopBenchmark(cfgCtx, &StopRequest{})
 		if err != nil {
 			return nil, err
 		}
@@ -191,6 +193,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
 	payload := make([]byte, opts.Payload)
 	var g errgroup.Group
 	var start runtime.MemStats
@@ -212,7 +215,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 		return nil, err
 	}
 
-	_, err = cfg.StartServerBenchmark(ctx, &StartRequest{})
+	_, err = StartServerBenchmark(cfgCtx, &StartRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +231,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	}
 	runtime.ReadMemStats(&end)
 
-	resp, err := cfg.StopServerBenchmark(ctx, &StopRequest{})
+	resp, err := StopServerBenchmark(cfgCtx, &StopRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +250,7 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 		{
 			Name:        "QuorumCall",
 			Description: "NodeStream based quorum call implementation with FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.QuorumCall) },
+			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, QuorumCall) },
 		},
 		{
 			Name:        "AsyncQuorumCall",
@@ -257,7 +260,7 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 		{
 			Name:        "SlowServer",
 			Description: "Quorum Call with a 10s processing time on the server",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.SlowServer) },
+			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, SlowServer) },
 		},
 		{
 			Name:        "Multicast",

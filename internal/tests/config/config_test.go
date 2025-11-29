@@ -76,8 +76,9 @@ func TestConfig(t *testing.T) {
 	callRPC := func(cfg *Configuration) {
 		// Use QuorumSpecFunc to adapt the legacy quorum function
 		qf := gorums.QuorumSpecFunc(cfg.qspec.ConfigQF)
+		cfgCtx := gorums.WithConfigContext(context.Background(), cfg.RawConfiguration)
 		for i := range 5 {
-			resp, err := Config(context.Background(), cfg.RawConfiguration,
+			resp, err := Config(cfgCtx,
 				Request_builder{Num: uint64(i)}.Build(),
 				gorums.WithQuorumFunc(qf))
 			if err != nil {

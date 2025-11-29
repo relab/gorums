@@ -523,13 +523,14 @@ func Chain[Req, Resp msg, Out any](
 //
 // This function should be used by generated code only.
 func QuorumCallWithInterceptor[Req, Resp msg, Out any](
-	ctx context.Context,
-	config RawConfiguration,
+	ctx *ConfigContext,
 	req Req,
 	method string,
 	base QuorumFunc[Req, Resp, Out],
 	opts ...CallOption,
 ) (Out, error) {
+	config := ctx.Configuration()
+
 	// Apply options
 	callOpts := getCallOptions(E_Quorumcall, opts...)
 

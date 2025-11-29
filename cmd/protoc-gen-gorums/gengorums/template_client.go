@@ -12,13 +12,18 @@ func isQuorumCall(method *protogen.Method) bool {
 
 // gorums need to be imported in the zorums file
 var clientVariables = `
-{{$context := use "context.Context" .GenFile}}
 {{$_ := use "gorums.EnforceVersion" .GenFile}}
 {{$callOpt := use "gorums.CallOption" .GenFile}}
 `
 
 var clientConfigurationInterface = `
 {{- $genFile := .GenFile}}
+{{- $context := ""}}
+{{- range configurationsServices .Services}}
+	{{- if hasConfigurationInterfaceMethods .Methods}}
+		{{- $context = use "context.Context" $genFile}}
+	{{- end}}
+{{- end}}
 {{- range configurationsServices .Services}}
 	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sClient" $service}}
@@ -47,6 +52,10 @@ var clientConfigurationInterface = `
 
 var clientNodeInterface = `
 {{- $genFile := .GenFile}}
+{{- $context := ""}}
+{{- range nodeServices .Services}}
+	{{- $context = use "context.Context" $genFile}}
+{{- end}}
 {{- range nodeServices .Services}}
 	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sNodeClient" $service}}

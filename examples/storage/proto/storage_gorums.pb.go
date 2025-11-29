@@ -150,9 +150,8 @@ type Node struct {
 }
 
 // StorageClient is the client interface for the Storage service.
+// Note: Quorum call methods are standalone functions and not part of this interface.
 type StorageClient interface {
-	ReadQC(ctx context.Context, in *ReadRequest, opts ...gorums.CallOption) (resp *ReadResponse, err error)
-	WriteQC(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption) (resp *WriteResponse, err error)
 	WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption)
 }
 
@@ -199,20 +198,20 @@ type QuorumSpec interface {
 
 // ReadQC executes the Read Quorum Call on a configuration
 // of Nodes and returns the most recent value.
-func (c *Configuration) ReadQC(ctx context.Context, in *ReadRequest, opts ...gorums.CallOption) (resp *ReadResponse, err error) {
+func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) (resp *ReadResponse, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "storage.Storage.ReadQC",
-		gorums.QuorumSpecFunc(c.qspec.ReadQCQF),
+		ctx, in, "storage.Storage.ReadQC",
+		gorums.MajorityQuorum[*ReadRequest, *ReadResponse],
 		opts...,
 	)
 }
 
 // WriteQC executes the Write Quorum Call on a configuration
 // of Nodes and returns true if a majority of Nodes were updated.
-func (c *Configuration) WriteQC(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption) (resp *WriteResponse, err error) {
+func WriteQC(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) (resp *WriteResponse, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "storage.Storage.WriteQC",
-		gorums.QuorumSpecFunc(c.qspec.WriteQCQF),
+		ctx, in, "storage.Storage.WriteQC",
+		gorums.MajorityQuorum[*WriteRequest, *WriteResponse],
 		opts...,
 	)
 }

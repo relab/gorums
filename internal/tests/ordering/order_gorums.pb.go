@@ -205,13 +205,13 @@ type QuorumSpec interface {
 	QCAsyncQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 }
 
-// QC is a quorum call invoked on all nodes in configuration cfg,
+// QC is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
 // By default, a majority quorum function is used. To override the quorum function,
 // use the gorums.WithQuorumFunc call option.
-func QC(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+func QC(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, cfg, in, "ordering.GorumsTest.QC",
+		ctx, in, "ordering.GorumsTest.QC",
 		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)

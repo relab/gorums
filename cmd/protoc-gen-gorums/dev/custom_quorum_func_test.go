@@ -1,7 +1,7 @@
 package dev_test
 
 import (
-	context "context"
+	"context"
 	"testing"
 	"time"
 
@@ -25,16 +25,16 @@ func TestQuorumCallWithDefaultQuorumFunc(t *testing.T) {
 	})
 	t.Cleanup(teardown)
 
-	// Create configuration using helper - now we just use RawConfiguration
+	// Create configuration using helper
 	rawCfg := gorums.NewConfig(t, addrs)
 
-	ctx := testContext(t, 2*time.Second)
+	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 
 	req := &dev.Request{}
 	req.SetValue("test")
 
 	// Call QuorumCall with default MajorityQuorum
-	resp, err := dev.QuorumCall(ctx, rawCfg, req)
+	resp, err := dev.QuorumCall(ctx, req)
 	if err != nil {
 		t.Fatalf("QuorumCall failed: %v", err)
 	}
@@ -78,13 +78,13 @@ func TestQuorumCallWithCustomQuorumFunc(t *testing.T) {
 		return lastResp, nil
 	}
 
-	ctx := testContext(t, 2*time.Second)
+	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 
 	req := &dev.Request{}
 	req.SetValue("test")
 
 	// Call QuorumCall with custom quorum function via call option
-	resp, err := dev.QuorumCall(ctx, rawCfg, req, gorums.WithQuorumFunc(customQF))
+	resp, err := dev.QuorumCall(ctx, req, gorums.WithQuorumFunc(customQF))
 	if err != nil {
 		t.Fatalf("QuorumCall with custom QF failed: %v", err)
 	}
@@ -124,13 +124,13 @@ func TestQuorumCallWithQuorumSpecFunc(t *testing.T) {
 		return nil, false
 	}
 
-	ctx := testContext(t, 2*time.Second)
+	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 
 	req := &dev.Request{}
 	req.SetValue("hello")
 
 	// Use QuorumSpecFunc to adapt the legacy function
-	resp, err := dev.QuorumCall(ctx, rawCfg, req,
+	resp, err := dev.QuorumCall(ctx, req,
 		gorums.WithQuorumFunc(gorums.QuorumSpecFunc(legacyQF)))
 	if err != nil {
 		t.Fatalf("QuorumCall with QuorumSpecFunc failed: %v", err)

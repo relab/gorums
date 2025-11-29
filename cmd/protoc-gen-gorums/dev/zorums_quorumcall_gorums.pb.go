@@ -7,7 +7,6 @@
 package dev
 
 import (
-	context "context"
 	gorums "github.com/relab/gorums"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
@@ -20,27 +19,27 @@ const (
 )
 
 // QuorumCall plain.
-func QuorumCall(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, cfg, in, "dev.ZorumsService.QuorumCall",
+		ctx, in, "dev.ZorumsService.QuorumCall",
 		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
 // QuorumCallEmpty for testing imported message type.
-func QuorumCallEmpty(ctx context.Context, cfg gorums.RawConfiguration, in *emptypb.Empty, opts ...gorums.CallOption) (resp *Response, err error) {
+func QuorumCallEmpty(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, cfg, in, "dev.ZorumsService.QuorumCallEmpty",
+		ctx, in, "dev.ZorumsService.QuorumCallEmpty",
 		gorums.MajorityQuorum[*emptypb.Empty, *Response],
 		opts...,
 	)
 }
 
 // QuorumCallEmpty2 for testing imported message type.
-func QuorumCallEmpty2(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *emptypb.Empty, err error) {
+func QuorumCallEmpty2(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *emptypb.Empty, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, cfg, in, "dev.ZorumsService.QuorumCallEmpty2",
+		ctx, in, "dev.ZorumsService.QuorumCallEmpty2",
 		gorums.MajorityQuorum[*Request, *emptypb.Empty],
 		opts...,
 	)

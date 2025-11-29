@@ -254,7 +254,8 @@ func (repl) readQC(args []string, cfg *pb.Configuration) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.ReadQC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
+	resp, err := pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -273,7 +274,8 @@ func (repl) writeQC(args []string, cfg *pb.Configuration) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := cfg.WriteQC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
+	resp, err := pb.WriteQC(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)

@@ -15,7 +15,7 @@ var quorumCallComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} is a quorum call invoked on all nodes in configuration cfg,
+// {{$method}} is a quorum call invoked on all nodes in the configuration,
 // with the same argument in, and returns a combined result.
 // By default, a majority quorum function is used. To override the quorum function,
 // use the gorums.WithQuorumFunc call option.
@@ -24,21 +24,20 @@ var quorumCallComment = `
 
 var qcVar = `
 {{$genFile := .GenFile}}
-{{$context := use "context.Context" .GenFile}}
-{{$rawConfiguration := use "gorums.RawConfiguration" .GenFile}}
+{{$configContext := use "gorums.ConfigContext" .GenFile}}
 {{$quorumCallWithInterceptor := use "gorums.QuorumCallWithInterceptor" .GenFile}}
 {{$majorityQuorum := use "gorums.MajorityQuorum" .GenFile}}
 {{$callOption := use "gorums.CallOption" .GenFile}}
 `
 
 var quorumCallSignature = `func {{$method}}(` +
-	`ctx {{$context}}, cfg {{$rawConfiguration}}, in *{{$in}}, ` +
+	`ctx *{{$configContext}}, in *{{$in}}, ` +
 	`opts ...{{$callOption}})` +
 	`(resp *{{$out}}, err error) {
 `
 
 var quorumCallBody = `	return {{$quorumCallWithInterceptor}}(
-		ctx, cfg, in, "{{$fullName}}",
+		ctx, in, "{{$fullName}}",
 		{{$majorityQuorum}}[*{{$in}}, *{{$out}}],
 		opts...,
 	)

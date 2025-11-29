@@ -380,8 +380,7 @@ func TestInterceptorIntegration_CustomReturnType(t *testing.T) {
 	ctx := testContext(t, ctxTimeout)
 	// QuorumCallWithInterceptor infers Out = *AggregateResult from aggregateQF
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		NewConfig(t, addrs),
+		NewTestConfigContext(t, ctx, addrs),
 		pb.String("custom"),
 		mock.TestMethod,
 		aggregateQF,
@@ -409,8 +408,7 @@ func TestInterceptorIntegration_MajorityQuorum(t *testing.T) {
 
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		NewConfig(t, addrs),
+		NewTestConfigContext(t, ctx, addrs),
 		pb.String("test"),
 		mock.TestMethod,
 		MajorityQuorum[*pb.StringValue, *pb.StringValue],
@@ -430,8 +428,7 @@ func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
 
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		NewConfig(t, addrs),
+		NewTestConfigContext(t, ctx, addrs),
 		pb.Int32(0),
 		mock.GetValueMethod,
 		sumInterceptor,
@@ -455,8 +452,7 @@ func TestInterceptorIntegration_Chaining(t *testing.T) {
 
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		NewConfig(t, addrs),
+		NewTestConfigContext(t, ctx, addrs),
 		pb.String("test"),
 		mock.TestMethod,
 		MajorityQuorum[*pb.StringValue, *pb.StringValue], // Base
@@ -518,8 +514,7 @@ func TestInterceptorIntegration_CollectAll(t *testing.T) {
 	config := NewConfig(t, addrs)
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		config,
+		WithConfigContext(ctx, config),
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue],
@@ -554,8 +549,7 @@ func TestInterceptorIntegration_PerNodeTransform(t *testing.T) {
 
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		NewConfig(t, addrs),
+		NewTestConfigContext(t, ctx, addrs),
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
@@ -601,8 +595,7 @@ func TestInterceptorIntegration_PerNodeTransformSkip(t *testing.T) {
 
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		config,
+		WithConfigContext(ctx, config),
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
@@ -644,8 +637,7 @@ func TestInterceptorIntegration_ChainedTransforms(t *testing.T) {
 
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		NewConfig(t, addrs),
+		NewTestConfigContext(t, ctx, addrs),
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
@@ -695,8 +687,7 @@ func TestInterceptorIntegration_ChainedTransformsWithSkip(t *testing.T) {
 
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		config,
+		WithConfigContext(ctx, config),
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
@@ -1029,8 +1020,7 @@ func TestInterceptorIntegration_Map(t *testing.T) {
 
 	ctx := testContext(t, ctxTimeout)
 	result, err := QuorumCallWithInterceptor(
-		ctx,
-		NewConfig(t, addrs),
+		NewTestConfigContext(t, ctx, addrs),
 		pb.String("test"),
 		mock.TestMethod,
 		CollectAllResponses[*pb.StringValue, *pb.StringValue], // Base
