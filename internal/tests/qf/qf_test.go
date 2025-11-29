@@ -18,15 +18,13 @@ func (s testSrv) UseReq(_ gorums.ServerCtx, req *Request) (resp *Response, err e
 	return Response_builder{Result: req.GetValue()}.Build(), nil
 }
 
-// TODO(meling): we only need one method now
-// TODO(meling): consider using the mock.Test server and more this benchmark to the root folder.
 func (s testSrv) IgnoreReq(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{Result: req.GetValue()}.Build(), nil
 }
 
-// TODO(meling): repurpose this benchmark to benchmark various quorum functions via gorums.WithQuorumFunc
-// - default quorum function, various chains of quorum function iterators,
-// - custom quorum function directly as iterators vs via the legacy QuorumSpecInterceptor helper
+// BenchmarkFullStackQF benchmarks a full-stack quorum call with real servers.
+// For more comprehensive benchmarks covering various quorum functions and interceptor chains,
+// see quorumfunc_bench_test.go in the root folder.
 func BenchmarkFullStackQF(b *testing.B) {
 	for n := 3; n < 20; n += 2 {
 		addrs, stop := gorums.TestSetup(b, n, func(_ int) gorums.ServerIface {
@@ -71,31 +69,6 @@ func BenchmarkFullStackQF(b *testing.B) {
 					gorums.WithQuorumFunc(qf))
 				if err != nil {
 					b.Fatalf("UseReq error: %v", err)
-				}
-				_ = resp.GetResult()
-			}
-		})
-		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
-			qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
-				quorum := ctx.Size()/2 + 1
-				replies := ctx.Responses().IgnoreErrors().CollectAll()
-				if len(replies) < quorum {
-					return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
-				}
-				var reply *Response
-				for _, r := range replies {
-					reply = r
-					break
-				}
-				return reply, nil
-			}
-			cfgCtx := gorums.WithConfigContext(context.Background(), c)
-			for b.Loop() {
-				resp, err := IgnoreReq(cfgCtx,
-					Request_builder{Value: int64(requestValue)}.Build(),
-					gorums.WithQuorumFunc(qf))
-				if err != nil {
-					b.Fatalf("IgnoreReq error: %v", err)
 				}
 				_ = resp.GetResult()
 			}
