@@ -97,8 +97,6 @@ var funcMap = template.FuncMap{
 	"outType":               outType,
 	"mapCorrectableOutType": mapCorrectableOutType,
 	"mapAsyncOutType":       mapAsyncOutType,
-	"qspecMethods":          qspecMethods,
-	"qspecServices":         qspecServices,
 	"unexport":              unexport,
 	"contains":              strings.Contains,
 	"field":                 field,

@@ -34,7 +34,7 @@ func GenerateFile(gen *protogen.Plugin, file *protogen.File) {
 	for path, ident := range pkgIdentMap {
 		addImport(path, ident, g)
 	}
-	generateFileContent(gen, file, g)
+	generateFileContent(file, g)
 }
 
 func genGeneratedHeader(gen *protogen.Plugin, g *protogen.GeneratedFile, f *protogen.File) {
@@ -97,7 +97,7 @@ func gorumsGuard(file *protogen.File) bool {
 }
 
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
-func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile) {
+func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
 	// sort the gorums types so that output remains stable across rebuilds
 	sortedTypes := make([]string, 0, len(gorumsCallTypesInfo))
 	for gorumsType := range gorumsCallTypesInfo {
@@ -239,7 +239,6 @@ func callTypeName(ext *protoimpl.ExtensionInfo) string {
 // The entries in this map is used to generate dev/zorums_{type}.pb.go
 // files for the different keys.
 var gorumsCallTypesInfo = map[string]*callTypeInfo{
-	"qspec":  {template: qspecInterface},
 	"types":  {template: dataTypes},
 	"server": {template: server},
 
