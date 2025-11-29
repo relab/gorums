@@ -7,9 +7,7 @@
 package dev
 
 import (
-	context "context"
 	gorums "github.com/relab/gorums"
-	proto "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -21,74 +19,38 @@ const (
 )
 
 // QuorumCallAsync plain.
-func (c *Configuration) QuorumCallAsync(ctx context.Context, in *Request) *AsyncResponse {
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "dev.ZorumsService.QuorumCallAsync",
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
-		r := make(map[uint32]*Response, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Response)
-		}
-		return c.qspec.QuorumCallAsyncQF(req.(*Request), r)
-	}
-
-	fut := c.RawConfiguration.AsyncCall(ctx, cd)
-	return &AsyncResponse{fut}
+func QuorumCallAsync(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncResponse {
+	return gorums.AsyncCall(
+		ctx, in, "dev.ZorumsService.QuorumCallAsync",
+		gorums.MajorityQuorum[*Request, *Response],
+		opts...,
+	)
 }
 
 // QuorumCallAsync2 plain; with same return type: Response.
-func (c *Configuration) QuorumCallAsync2(ctx context.Context, in *Request) *AsyncResponse {
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "dev.ZorumsService.QuorumCallAsync2",
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
-		r := make(map[uint32]*Response, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Response)
-		}
-		return c.qspec.QuorumCallAsync2QF(req.(*Request), r)
-	}
-
-	fut := c.RawConfiguration.AsyncCall(ctx, cd)
-	return &AsyncResponse{fut}
+func QuorumCallAsync2(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncResponse {
+	return gorums.AsyncCall(
+		ctx, in, "dev.ZorumsService.QuorumCallAsync2",
+		gorums.MajorityQuorum[*Request, *Response],
+		opts...,
+	)
 }
 
 // QuorumCallAsyncEmpty for testing imported message type.
-func (c *Configuration) QuorumCallAsyncEmpty(ctx context.Context, in *Request) *AsyncEmpty {
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "dev.ZorumsService.QuorumCallAsyncEmpty",
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
-		r := make(map[uint32]*emptypb.Empty, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*emptypb.Empty)
-		}
-		return c.qspec.QuorumCallAsyncEmptyQF(req.(*Request), r)
-	}
-
-	fut := c.RawConfiguration.AsyncCall(ctx, cd)
-	return &AsyncEmpty{fut}
+func QuorumCallAsyncEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncEmpty {
+	return gorums.AsyncCall(
+		ctx, in, "dev.ZorumsService.QuorumCallAsyncEmpty",
+		gorums.MajorityQuorum[*Request, *emptypb.Empty],
+		opts...,
+	)
 }
 
 // QuorumCallAsyncEmpty2 for testing imported message type; with same return
 // type as QuorumCallAsync: Response.
-func (c *Configuration) QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) *AsyncResponse {
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "dev.ZorumsService.QuorumCallAsyncEmpty2",
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
-		r := make(map[uint32]*Response, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Response)
-		}
-		return c.qspec.QuorumCallAsyncEmpty2QF(req.(*emptypb.Empty), r)
-	}
-
-	fut := c.RawConfiguration.AsyncCall(ctx, cd)
-	return &AsyncResponse{fut}
+func QuorumCallAsyncEmpty2(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *AsyncResponse {
+	return gorums.AsyncCall(
+		ctx, in, "dev.ZorumsService.QuorumCallAsyncEmpty2",
+		gorums.MajorityQuorum[*emptypb.Empty, *Response],
+		opts...,
+	)
 }

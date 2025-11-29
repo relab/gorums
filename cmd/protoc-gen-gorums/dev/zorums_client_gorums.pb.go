@@ -20,22 +20,11 @@ const (
 )
 
 // ZorumsServiceClient is the client interface for the ZorumsService service.
-// Note: Quorum call methods are standalone functions and not part of this interface.
 type ZorumsServiceClient interface {
 	Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
 	Multicast2(ctx context.Context, in *Request, opts ...gorums.CallOption)
 	Multicast3(ctx context.Context, in *Request, opts ...gorums.CallOption)
 	Multicast4(ctx context.Context, in *emptypb.Empty, opts ...gorums.CallOption)
-	QuorumCallAsync(ctx context.Context, in *Request) *AsyncResponse
-	QuorumCallAsync2(ctx context.Context, in *Request) *AsyncResponse
-	QuorumCallAsyncEmpty(ctx context.Context, in *Request) *AsyncEmpty
-	QuorumCallAsyncEmpty2(ctx context.Context, in *emptypb.Empty) *AsyncResponse
-	Correctable(ctx context.Context, in *Request) *CorrectableResponse
-	CorrectableEmpty(ctx context.Context, in *Request) *CorrectableEmpty
-	CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableResponse
-	CorrectableStream(ctx context.Context, in *Request) *CorrectableStreamResponse
-	CorrectableStreamEmpty(ctx context.Context, in *Request) *CorrectableStreamEmpty
-	CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse
 }
 
 // enforce interface compliance

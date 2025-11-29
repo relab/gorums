@@ -4,9 +4,7 @@ import (
 	"context"
 	"iter"
 	"slices"
-	"sync"
 
-	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -471,6 +469,60 @@ func CollectAllResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (map[uint32]R
 }
 
 // -------------------------------------------------------------------------
+// Correctable Quorum Functions
+// -------------------------------------------------------------------------
+
+// MajorityCorrectableQuorum is a correctable quorum function that returns once
+// a simple majority (⌈(n+1)/2⌉) of successful responses are received.
+// The level is set to the number of responses received, and done is true once
+// the majority threshold is reached.
+//
+// This is a base correctable quorum function for use with correctable calls.
+func MajorityCorrectableQuorum[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (Resp, int, bool, error) {
+	quorumSize := ctx.Size()/2 + 1
+	return ThresholdCorrectableQuorum[Req, Resp](quorumSize)(ctx)
+}
+
+// ThresholdCorrectableQuorum returns a CorrectableQuorumFunc that reports progress
+// as responses arrive and completes when the threshold is reached.
+// The level increases with each successful response received.
+//
+// This is a base correctable quorum function for use with correctable calls.
+func ThresholdCorrectableQuorum[Req, Resp msg](threshold int) CorrectableQuorumFunc[Req, Resp, Resp] {
+	return func(ctx *ClientCtx[Req, Resp]) (Resp, int, bool, error) {
+		var (
+			lastResp Resp
+			found    bool
+			count    int
+			errs     []nodeError
+		)
+
+		for result := range ctx.Responses() {
+			if result.Err != nil {
+				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
+				continue
+			}
+
+			count++
+			if !found {
+				lastResp = result.Value
+				found = true
+			} else {
+				lastResp = result.Value
+			}
+
+			// Check if we have reached the threshold
+			if count >= threshold {
+				return lastResp, count, true, nil
+			}
+		}
+
+		var zero Resp
+		return zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count}
+	}
+}
+
+// -------------------------------------------------------------------------
 // Chain
 // -------------------------------------------------------------------------
 
@@ -494,76 +546,4 @@ func Chain[Req, Resp msg, Out any](
 		handler = interceptors[i](handler)
 	}
 	return handler
-}
-
-// -------------------------------------------------------------------------
-// QuorumCallWithInterceptor
-// -------------------------------------------------------------------------
-
-// QuorumCallWithInterceptor performs a quorum call using an interceptor-based approach.
-//
-// Type parameters:
-//   - Req: The request message type
-//   - Resp: The response message type from individual nodes
-//   - Out: The final output type returned by the interceptor chain
-//
-// The base parameter is the default terminal handler that processes responses
-// (e.g., MajorityQuorum). This can be overridden via the WithQuorumFunc CallOption.
-// The opts parameter accepts CallOption values such as WithQuorumFunc and Interceptors.
-//
-// Interceptors are applied in the order they are provided via Interceptors:
-//  1. First interceptor (outermost wrapper)
-//  2. Second interceptor
-//     ...
-//  3. base (innermost handler, e.g. aggregation)
-//
-// Note: Messages are not sent to nodes before ctx.Responses() is called, applying any
-// registered request transformations. This lazy sending is necessary to allow interceptors
-// to register transformations prior to dispatch.
-//
-// This function should be used by generated code only.
-func QuorumCallWithInterceptor[Req, Resp msg, Out any](
-	ctx *ConfigContext,
-	req Req,
-	method string,
-	base QuorumFunc[Req, Resp, Out],
-	opts ...CallOption,
-) (Out, error) {
-	config := ctx.Configuration()
-
-	// Apply options
-	callOpts := getCallOptions(E_Quorumcall, opts...)
-
-	// Use QuorumFunc from CallOptions if provided, otherwise use the base parameter
-	qf := base
-	if callOpts.quorumFunc != nil {
-		qf = callOpts.quorumFunc.(QuorumFunc[Req, Resp, Out])
-	}
-
-	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
-	replyChan := make(chan NodeResponse[msg], len(config))
-
-	// Create ClientCtx first so sendOnce can access it
-	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
-
-	// Create sendOnce function that will be called lazily on first Responses() call
-	sendOnce := func() {
-		var expected int
-		for _, n := range config {
-			// Apply registered request transformations (if any)
-			msg := clientCtx.applyTransforms(req, n)
-			if msg == nil {
-				continue // Skip node if transformation function returns nil
-			}
-			expected++
-			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
-		}
-		clientCtx.expectedReplies = expected
-	}
-
-	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
-	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
-
-	handler := Chain(qf, interceptorsFromCallOptions[Req, Resp, Out](callOpts)...)
-	return handler(clientCtx)
 }

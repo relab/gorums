@@ -7,9 +7,7 @@
 package dev
 
 import (
-	context "context"
 	gorums "github.com/relab/gorums"
-	proto "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -21,117 +19,57 @@ const (
 )
 
 // Correctable plain.
-func (c *Configuration) Correctable(ctx context.Context, in *Request) *CorrectableResponse {
-	cd := gorums.CorrectableCallData{
-		Message:      in,
-		Method:       "dev.ZorumsService.Correctable",
-		ServerStream: false,
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Response)
-		}
-		return c.qspec.CorrectableQF(req.(*Request), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &CorrectableResponse{corr}
+func Correctable(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *CorrectableResponse {
+	return gorums.CorrectableCall(
+		ctx, in, "dev.ZorumsService.Correctable", false,
+		gorums.MajorityCorrectableQuorum[*Request, *Response],
+		opts...,
+	)
 }
 
-// CorrectableEmpty for testing imported message type.
-func (c *Configuration) CorrectableEmpty(ctx context.Context, in *Request) *CorrectableEmpty {
-	cd := gorums.CorrectableCallData{
-		Message:      in,
-		Method:       "dev.ZorumsService.CorrectableEmpty",
-		ServerStream: false,
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, int, bool) {
-		r := make(map[uint32]*emptypb.Empty, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*emptypb.Empty)
-		}
-		return c.qspec.CorrectableEmptyQF(req.(*Request), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &CorrectableEmpty{corr}
+// CorrectableWithEmpty for testing imported message type.
+func CorrectableWithEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *CorrectableEmpty {
+	return gorums.CorrectableCall(
+		ctx, in, "dev.ZorumsService.CorrectableWithEmpty", false,
+		gorums.MajorityCorrectableQuorum[*Request, *emptypb.Empty],
+		opts...,
+	)
 }
 
-// CorrectableEmpty2 for testing imported message type; with same return
+// CorrectableWithEmpty2 for testing imported message type; with same return
 // type as Correctable: Response.
-func (c *Configuration) CorrectableEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableResponse {
-	cd := gorums.CorrectableCallData{
-		Message:      in,
-		Method:       "dev.ZorumsService.CorrectableEmpty2",
-		ServerStream: false,
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Response)
-		}
-		return c.qspec.CorrectableEmpty2QF(req.(*emptypb.Empty), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &CorrectableResponse{corr}
+func CorrectableWithEmpty2(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *CorrectableResponse {
+	return gorums.CorrectableCall(
+		ctx, in, "dev.ZorumsService.CorrectableWithEmpty2", false,
+		gorums.MajorityCorrectableQuorum[*emptypb.Empty, *Response],
+		opts...,
+	)
 }
 
 // CorrectableStream plain.
-func (c *Configuration) CorrectableStream(ctx context.Context, in *Request) *CorrectableStreamResponse {
-	cd := gorums.CorrectableCallData{
-		Message:      in,
-		Method:       "dev.ZorumsService.CorrectableStream",
-		ServerStream: true,
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Response)
-		}
-		return c.qspec.CorrectableStreamQF(req.(*Request), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &CorrectableStreamResponse{corr}
+func CorrectableStream(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *CorrectableStreamResponse {
+	return gorums.CorrectableCall(
+		ctx, in, "dev.ZorumsService.CorrectableStream", true,
+		gorums.MajorityCorrectableQuorum[*Request, *Response],
+		opts...,
+	)
 }
 
-// CorrectableStreamEmpty for testing imported message type.
-func (c *Configuration) CorrectableStreamEmpty(ctx context.Context, in *Request) *CorrectableStreamEmpty {
-	cd := gorums.CorrectableCallData{
-		Message:      in,
-		Method:       "dev.ZorumsService.CorrectableStreamEmpty",
-		ServerStream: true,
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, int, bool) {
-		r := make(map[uint32]*emptypb.Empty, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*emptypb.Empty)
-		}
-		return c.qspec.CorrectableStreamEmptyQF(req.(*Request), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &CorrectableStreamEmpty{corr}
+// CorrectableStreamWithEmpty for testing imported message type.
+func CorrectableStreamWithEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *CorrectableStreamEmpty {
+	return gorums.CorrectableCall(
+		ctx, in, "dev.ZorumsService.CorrectableStreamWithEmpty", true,
+		gorums.MajorityCorrectableQuorum[*Request, *emptypb.Empty],
+		opts...,
+	)
 }
 
-// CorrectableStreamEmpty2 for testing imported message type; with same return
+// CorrectableStreamWithEmpty2 for testing imported message type; with same return
 // type as Correctable: Response.
-func (c *Configuration) CorrectableStreamEmpty2(ctx context.Context, in *emptypb.Empty) *CorrectableStreamResponse {
-	cd := gorums.CorrectableCallData{
-		Message:      in,
-		Method:       "dev.ZorumsService.CorrectableStreamEmpty2",
-		ServerStream: true,
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, int, bool) {
-		r := make(map[uint32]*Response, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Response)
-		}
-		return c.qspec.CorrectableStreamEmpty2QF(req.(*emptypb.Empty), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &CorrectableStreamResponse{corr}
+func CorrectableStreamWithEmpty2(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *CorrectableStreamResponse {
+	return gorums.CorrectableCall(
+		ctx, in, "dev.ZorumsService.CorrectableStreamWithEmpty2", true,
+		gorums.MajorityCorrectableQuorum[*emptypb.Empty, *Response],
+		opts...,
+	)
 }

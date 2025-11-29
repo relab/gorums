@@ -148,7 +148,6 @@ type Node struct {
 }
 
 // QuorumFunctionClient is the client interface for the QuorumFunction service.
-// Note: Quorum call methods are standalone functions and not part of this interface.
 type QuorumFunctionClient interface {
 }
 

@@ -34,7 +34,7 @@ type Bench struct {
 type (
 	benchFunc   func(Options) (*Result, error)
 	qcFunc      func(*gorums.ConfigContext, *Echo, ...gorums.CallOption) (*Echo, error)
-	asyncQCFunc func(context.Context, *Echo) *AsyncEcho
+	asyncQCFunc func(*gorums.ConfigContext, *Echo, ...gorums.CallOption) *AsyncEcho
 	serverFunc  func(context.Context, *TimedMsg)
 )
 
@@ -119,7 +119,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	var warmupFunc func() error
 	warmupFunc = func() error {
 		for ; !time.Now().After(warmupEnd) && atomic.LoadUint64(&async) < uint64(opts.MaxAsync); atomic.AddUint64(&async, 1) {
-			fut := f(ctx, msg)
+			fut := f(cfgCtx, msg)
 			g.Go(func() error {
 				_, err := fut.Get()
 				if err != nil {
@@ -153,7 +153,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	benchmarkFunc = func() error {
 		for ; !time.Now().After(endTime) && atomic.LoadUint64(&async) < uint64(opts.MaxAsync); atomic.AddUint64(&async, 1) {
 			start := time.Now()
-			fut := f(ctx, msg)
+			fut := f(cfgCtx, msg)
 			g.Go(func() error {
 				_, err := fut.Get()
 				if err != nil {
@@ -255,7 +255,7 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 		{
 			Name:        "AsyncQuorumCall",
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.AsyncQuorumCall) },
+			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, AsyncQuorumCall) },
 		},
 		{
 			Name:        "SlowServer",

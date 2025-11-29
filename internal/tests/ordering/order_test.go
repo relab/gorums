@@ -156,13 +156,15 @@ func TestQCAsyncOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	ctx, cancel := context.WithCancel(context.Background())
+	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
+	qf := gorums.QuorumSpecFunc(cfg.qspec.QCAsyncQF)
 	// begin test
 	var wg sync.WaitGroup
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		promise := cfg.QCAsync(ctx, Request_builder{Num: uint64(i)}.Build())
+		promise := QCAsync(cfgCtx, Request_builder{Num: uint64(i)}.Build(), gorums.WithQuorumFunc(qf))
 		wg.Go(func() {
 			resp, err := promise.Get()
 			if err != nil {

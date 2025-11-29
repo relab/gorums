@@ -20,7 +20,7 @@ var clientConfigurationInterface = `
 {{- $genFile := .GenFile}}
 {{- $context := ""}}
 {{- range configurationsServices .Services}}
-	{{- if hasConfigurationInterfaceMethods .Methods}}
+	{{- if hasOnewayMethods .Methods}}
 		{{- $context = use "context.Context" $genFile}}
 	{{- end}}
 {{- end}}
@@ -28,15 +28,11 @@ var clientConfigurationInterface = `
 	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sClient" $service}}
 	// {{$interfaceName}} is the client interface for the {{$service}} service.
-	// Note: Quorum call methods are standalone functions and not part of this interface.
 	type {{$interfaceName}} interface {
 		{{- range configurationInterfaceMethods .Methods}}
 			{{- $method := .GoName}}
 			{{- if isOneway .}}
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}, opts ...{{$callOpt}})
-			{{- else if or (isCorrectable .) (isAsync .)}}
-				{{- $out := out $genFile .}}
-				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}) *{{outType . $out}}
 			{{- else}}
 				{{- $out := out $genFile .}}
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}, opts ...{{$callOpt}}) (resp *{{$out}}, err error)
@@ -99,10 +95,11 @@ func configurationMethods(methods []*protogen.Method) (s []*protogen.Method) {
 }
 
 // configurationInterfaceMethods returns multi node methods that are still methods on Configuration.
-// This excludes quorumcall methods which are now standalone functions.
+// This excludes quorumcall, async, and correctable methods which are now standalone functions.
 func configurationInterfaceMethods(methods []*protogen.Method) (s []*protogen.Method) {
 	for _, method := range methods {
-		if hasConfigurationCallType(method) && !isQuorumCall(method) {
+		if hasConfigurationCallType(method) && !isQuorumCall(method) &&
+			!hasMethodOption(method, gorums.E_Async) && !hasMethodOption(method, gorums.E_Correctable) {
 			s = append(s, method)
 		}
 	}
@@ -112,6 +109,16 @@ func configurationInterfaceMethods(methods []*protogen.Method) (s []*protogen.Me
 // hasConfigurationInterfaceMethods returns true if there are any methods that should be in the Configuration interface.
 func hasConfigurationInterfaceMethods(methods []*protogen.Method) bool {
 	return len(configurationInterfaceMethods(methods)) > 0
+}
+
+// hasOnewayMethods returns true if there are any oneway (multicast/unicast) methods.
+func hasOnewayMethods(methods []*protogen.Method) bool {
+	for _, method := range methods {
+		if hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast) {
+			return true
+		}
+	}
+	return false
 }
 
 // nodeServices returns all services containing at least one single node method.

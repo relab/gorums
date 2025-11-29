@@ -1,31 +1,30 @@
 package gorums
 
 import (
-	"context"
-
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/proto"
 )
 
-// Async encapsulates the state of an asynchronous quorum call,
-// and has methods for checking the status of the call or waiting for it to complete.
+// Async is a generic future type for asynchronous quorum calls.
+// It encapsulates the state of an asynchronous call and provides methods
+// for checking the status or waiting for completion.
 //
-// This struct should only be used by generated code.
-type Async struct {
-	reply proto.Message
+// Type parameter Out is the output type returned by the quorum function,
+// which may differ from the RPC response type.
+type Async[Out any] struct {
+	reply Out
 	err   error
 	c     chan struct{}
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *Async) Get() (proto.Message, error) {
+func (f *Async[Out]) Get() (Out, error) {
 	<-f.c
 	return f.reply, f.err
 }
 
 // Done reports if a reply and/or error is available for the called method.
-func (f *Async) Done() bool {
+func (f *Async[Out]) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -34,74 +33,73 @@ func (f *Async) Done() bool {
 	}
 }
 
-type asyncCallState struct {
-	md              *ordering.Metadata
-	data            QuorumCallData
-	replyChan       <-chan NodeResponse[proto.Message]
-	expectedReplies int
-}
-
-// AsyncCall starts an asynchronous quorum call, returning an Async object that can be used to retrieve the results.
+// AsyncCall performs an asynchronous quorum call using an interceptor-based approach.
 //
-// This function should only be used by generated code.
-func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
-	expectedReplies := len(c)
-	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
-	replyChan := make(chan NodeResponse[proto.Message], expectedReplies)
+// Type parameters:
+//   - Req: The request message type
+//   - Resp: The response message type from individual nodes
+//   - Out: The final output type returned by the interceptor chain
+//
+// The base parameter is the default terminal handler that processes responses
+// (e.g., MajorityQuorum). This can be overridden via the WithQuorumFunc CallOption.
+// The opts parameter accepts CallOption values such as WithQuorumFunc and Interceptors.
+//
+// This function should be used by generated code only.
+func AsyncCall[Req, Resp msg, Out any](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	base QuorumFunc[Req, Resp, Out],
+	opts ...CallOption,
+) *Async[Out] {
+	config := ctx.Configuration()
 
-	for _, n := range c {
-		msg := d.Message
-		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
-			if !msg.ProtoReflect().IsValid() {
-				expectedReplies--
-				continue // don't send if no msg
-			}
+	// Apply options
+	callOpts := getCallOptions(E_Async, opts...)
+
+	// Use QuorumFunc from CallOptions if provided, otherwise use the base parameter
+	qf := base
+	if callOpts.quorumFunc != nil {
+		qf = callOpts.quorumFunc.(QuorumFunc[Req, Resp, Out])
+	}
+
+	// Create metadata with message ID and prepare reply channel.
+	// Message ID is obtained now (synchronously) to maintain ordering
+	// when multiple async calls are created in sequence.
+	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
+	replyChan := make(chan NodeResponse[msg], len(config))
+
+	// Create ClientCtx
+	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
+
+	// Send messages to all nodes synchronously (before spawning goroutine).
+	// This ensures message ordering is preserved when multiple async calls
+	// are created in sequence.
+	var expected int
+	for _, n := range config {
+		// Apply registered request transformations (if any)
+		msg := clientCtx.applyTransforms(req, n)
+		if msg == nil {
+			continue // Skip node if transformation function returns nil
 		}
+		expected++
 		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 	}
+	clientCtx.expectedReplies = expected
 
-	fut := &Async{c: make(chan struct{}, 1)}
+	// Mark messages as sent by setting sendOnce to a no-op
+	clientCtx.sendOnce = func() {}
 
-	go c.handleAsyncCall(ctx, fut, asyncCallState{
-		md:              md,
-		data:            d,
-		replyChan:       replyChan,
-		expectedReplies: expectedReplies,
-	})
+	handler := Chain(qf, interceptorsFromCallOptions[Req, Resp, Out](callOpts)...)
+
+	// Create the async future
+	fut := &Async[Out]{c: make(chan struct{}, 1)}
+
+	// Run the quorum call handler in a goroutine to collect responses
+	go func() {
+		defer close(fut.c)
+		fut.reply, fut.err = handler(clientCtx)
+	}()
 
 	return fut
-}
-
-func (RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
-	defer close(fut.c)
-
-	var (
-		resp    proto.Message
-		errs    []nodeError
-		quorum  bool
-		replies = make(map[uint32]proto.Message)
-	)
-
-	for {
-		select {
-		case r := <-state.replyChan:
-			if r.Err != nil {
-				errs = append(errs, nodeError{nodeID: r.NodeID, cause: r.Err})
-				break
-			}
-			replies[r.NodeID] = r.Value
-			if resp, quorum = state.data.QuorumFunction(state.data.Message, replies); quorum {
-				fut.reply, fut.err = resp, nil
-				return
-			}
-		case <-ctx.Done():
-			fut.reply, fut.err = resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
-			return
-		}
-		if len(errs)+len(replies) == state.expectedReplies {
-			fut.reply, fut.err = resp, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: len(replies)}
-			return
-		}
-	}
 }

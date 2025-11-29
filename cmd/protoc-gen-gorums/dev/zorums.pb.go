@@ -204,7 +204,7 @@ const file_zorums_proto_rawDesc = "" +
 	"\x06Result\x18\x01 \x01(\x03R\x06Result\"\"\n" +
 	"\n" +
 	"MyResponse\x12\x14\n" +
-	"\x05Value\x18\x01 \x01(\tR\x05Value2\xb7\t\n" +
+	"\x05Value\x18\x01 \x01(\tR\x05Value2\xc7\t\n" +
 	"\rZorumsService\x12)\n" +
 	"\bGRPCCall\x12\f.dev.Request\x1a\r.dev.Response\"\x00\x12/\n" +
 	"\n" +
@@ -222,12 +222,12 @@ const file_zorums_proto_rawDesc = "" +
 	"\x10QuorumCallAsync2\x12\f.dev.Request\x1a\r.dev.Response\"\b\xa0\xb5\x18\x01е\x18\x01\x12F\n" +
 	"\x14QuorumCallAsyncEmpty\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\b\xa0\xb5\x18\x01е\x18\x01\x12H\n" +
 	"\x15QuorumCallAsyncEmpty2\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\b\xa0\xb5\x18\x01е\x18\x01\x120\n" +
-	"\vCorrectable\x12\f.dev.Request\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x01\x12>\n" +
-	"\x10CorrectableEmpty\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\xa8\xb5\x18\x01\x12@\n" +
-	"\x11CorrectableEmpty2\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x01\x128\n" +
-	"\x11CorrectableStream\x12\f.dev.Request\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x010\x01\x12F\n" +
-	"\x16CorrectableStreamEmpty\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\xa8\xb5\x18\x010\x01\x12H\n" +
-	"\x17CorrectableStreamEmpty2\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x010\x01\x12,\n" +
+	"\vCorrectable\x12\f.dev.Request\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x01\x12B\n" +
+	"\x14CorrectableWithEmpty\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\xa8\xb5\x18\x01\x12D\n" +
+	"\x15CorrectableWithEmpty2\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x01\x128\n" +
+	"\x11CorrectableStream\x12\f.dev.Request\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x010\x01\x12J\n" +
+	"\x1aCorrectableStreamWithEmpty\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\xa8\xb5\x18\x010\x01\x12L\n" +
+	"\x1bCorrectableStreamWithEmpty2\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x010\x01\x12,\n" +
 	"\aUnicast\x12\f.dev.Request\x1a\r.dev.Response\"\x04\x90\xb5\x18\x01\x126\n" +
 	"\bUnicast2\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\x90\xb5\x18\x01B Z\x19cmd/protoc-gen-gorums/dev\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
@@ -252,11 +252,11 @@ var file_zorums_proto_depIdxs = []int32{
 	0,  // 10: dev.ZorumsService.QuorumCallAsyncEmpty:input_type -> dev.Request
 	3,  // 11: dev.ZorumsService.QuorumCallAsyncEmpty2:input_type -> google.protobuf.Empty
 	0,  // 12: dev.ZorumsService.Correctable:input_type -> dev.Request
-	0,  // 13: dev.ZorumsService.CorrectableEmpty:input_type -> dev.Request
-	3,  // 14: dev.ZorumsService.CorrectableEmpty2:input_type -> google.protobuf.Empty
+	0,  // 13: dev.ZorumsService.CorrectableWithEmpty:input_type -> dev.Request
+	3,  // 14: dev.ZorumsService.CorrectableWithEmpty2:input_type -> google.protobuf.Empty
 	0,  // 15: dev.ZorumsService.CorrectableStream:input_type -> dev.Request
-	0,  // 16: dev.ZorumsService.CorrectableStreamEmpty:input_type -> dev.Request
-	3,  // 17: dev.ZorumsService.CorrectableStreamEmpty2:input_type -> google.protobuf.Empty
+	0,  // 16: dev.ZorumsService.CorrectableStreamWithEmpty:input_type -> dev.Request
+	3,  // 17: dev.ZorumsService.CorrectableStreamWithEmpty2:input_type -> google.protobuf.Empty
 	0,  // 18: dev.ZorumsService.Unicast:input_type -> dev.Request
 	0,  // 19: dev.ZorumsService.Unicast2:input_type -> dev.Request
 	1,  // 20: dev.ZorumsService.GRPCCall:output_type -> dev.Response
@@ -272,11 +272,11 @@ var file_zorums_proto_depIdxs = []int32{
 	3,  // 30: dev.ZorumsService.QuorumCallAsyncEmpty:output_type -> google.protobuf.Empty
 	1,  // 31: dev.ZorumsService.QuorumCallAsyncEmpty2:output_type -> dev.Response
 	1,  // 32: dev.ZorumsService.Correctable:output_type -> dev.Response
-	3,  // 33: dev.ZorumsService.CorrectableEmpty:output_type -> google.protobuf.Empty
-	1,  // 34: dev.ZorumsService.CorrectableEmpty2:output_type -> dev.Response
+	3,  // 33: dev.ZorumsService.CorrectableWithEmpty:output_type -> google.protobuf.Empty
+	1,  // 34: dev.ZorumsService.CorrectableWithEmpty2:output_type -> dev.Response
 	1,  // 35: dev.ZorumsService.CorrectableStream:output_type -> dev.Response
-	3,  // 36: dev.ZorumsService.CorrectableStreamEmpty:output_type -> google.protobuf.Empty
-	1,  // 37: dev.ZorumsService.CorrectableStreamEmpty2:output_type -> dev.Response
+	3,  // 36: dev.ZorumsService.CorrectableStreamWithEmpty:output_type -> google.protobuf.Empty
+	1,  // 37: dev.ZorumsService.CorrectableStreamWithEmpty2:output_type -> dev.Response
 	1,  // 38: dev.ZorumsService.Unicast:output_type -> dev.Response
 	3,  // 39: dev.ZorumsService.Unicast2:output_type -> google.protobuf.Empty
 	20, // [20:40] is the sub-list for method output_type

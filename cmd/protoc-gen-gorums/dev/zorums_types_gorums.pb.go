@@ -30,104 +30,20 @@ type internalResponse struct {
 	err   error
 }
 
-// AsyncEmpty is a async object for processing replies.
-type AsyncEmpty struct {
-	*gorums.Async
-}
+// AsyncEmpty is a future for async quorum calls returning emptypb.Empty.
+type AsyncEmpty = gorums.Async[*emptypb.Empty]
 
-// Get returns the reply and any error associated with the called method.
-// The method blocks until a reply or error is available.
-func (f *AsyncEmpty) Get() (*emptypb.Empty, error) {
-	resp, err := f.Async.Get()
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*emptypb.Empty), err
-}
+// AsyncResponse is a future for async quorum calls returning Response.
+type AsyncResponse = gorums.Async[*Response]
 
-// AsyncResponse is a async object for processing replies.
-type AsyncResponse struct {
-	*gorums.Async
-}
+// CorrectableEmpty is a correctable future for correctable quorum calls returning emptypb.Empty.
+type CorrectableEmpty = gorums.Correctable[*emptypb.Empty]
 
-// Get returns the reply and any error associated with the called method.
-// The method blocks until a reply or error is available.
-func (f *AsyncResponse) Get() (*Response, error) {
-	resp, err := f.Async.Get()
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*Response), err
-}
+// CorrectableResponse is a correctable future for correctable quorum calls returning Response.
+type CorrectableResponse = gorums.Correctable[*Response]
 
-// CorrectableEmpty is a correctable object for processing replies.
-type CorrectableEmpty struct {
-	*gorums.Correctable
-}
+// CorrectableStreamEmpty is a correctable future for correctable quorum calls returning emptypb.Empty.
+type CorrectableStreamEmpty = gorums.Correctable[*emptypb.Empty]
 
-// Get returns the reply, level and any error associated with the
-// called method. The method does not block until a (possibly
-// intermediate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *CorrectableEmpty) Get() (*emptypb.Empty, int, error) {
-	resp, level, err := c.Correctable.Get()
-	if err != nil {
-		return nil, level, err
-	}
-	return resp.(*emptypb.Empty), level, err
-}
-
-// CorrectableResponse is a correctable object for processing replies.
-type CorrectableResponse struct {
-	*gorums.Correctable
-}
-
-// Get returns the reply, level and any error associated with the
-// called method. The method does not block until a (possibly
-// intermediate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *CorrectableResponse) Get() (*Response, int, error) {
-	resp, level, err := c.Correctable.Get()
-	if err != nil {
-		return nil, level, err
-	}
-	return resp.(*Response), level, err
-}
-
-// CorrectableStreamEmpty is a correctable object for processing replies.
-type CorrectableStreamEmpty struct {
-	*gorums.Correctable
-}
-
-// Get returns the reply, level and any error associated with the
-// called method. The method does not block until a (possibly
-// intermediate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *CorrectableStreamEmpty) Get() (*emptypb.Empty, int, error) {
-	resp, level, err := c.Correctable.Get()
-	if err != nil {
-		return nil, level, err
-	}
-	return resp.(*emptypb.Empty), level, err
-}
-
-// CorrectableStreamResponse is a correctable object for processing replies.
-type CorrectableStreamResponse struct {
-	*gorums.Correctable
-}
-
-// Get returns the reply, level and any error associated with the
-// called method. The method does not block until a (possibly
-// intermediate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *CorrectableStreamResponse) Get() (*Response, int, error) {
-	resp, level, err := c.Correctable.Get()
-	if err != nil {
-		return nil, level, err
-	}
-	return resp.(*Response), level, err
-}
+// CorrectableStreamResponse is a correctable future for correctable quorum calls returning Response.
+type CorrectableStreamResponse = gorums.Correctable[*Response]

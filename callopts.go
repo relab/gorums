@@ -6,11 +6,12 @@ import (
 )
 
 type callOptions struct {
-	callType     *protoimpl.ExtensionInfo
-	waitSendDone bool
-	transform    func(proto.Message, *RawNode) proto.Message
-	interceptors []any // Type-erased interceptors, restored by QuorumCallWithInterceptor
-	quorumFunc   any   // Type-erased QuorumFunc, restored by QuorumCallWithInterceptor
+	callType              *protoimpl.ExtensionInfo
+	waitSendDone          bool
+	transform             func(proto.Message, *RawNode) proto.Message
+	interceptors          []any // Type-erased interceptors, restored by QuorumCallWithInterceptor
+	quorumFunc            any   // Type-erased QuorumFunc, restored by QuorumCallWithInterceptor
+	correctableQuorumFunc any   // Type-erased CorrectableQuorumFunc, restored by CorrectableCallWithInterceptor
 }
 
 // mustWaitSendDone returns true if the caller of a one-way call type must wait
@@ -83,6 +84,21 @@ func Interceptors[Req, Resp proto.Message, Out any](interceptors ...QuorumInterc
 func WithQuorumFunc[Req, Resp proto.Message, Out any](qf QuorumFunc[Req, Resp, Out]) CallOption {
 	return func(o *callOptions) {
 		o.quorumFunc = qf
+	}
+}
+
+// WithCorrectableQuorumFunc returns a CallOption that sets the quorum function for a correctable call.
+// The correctable quorum function returns the response, a consistency level, and a boolean indicating
+// whether the call is complete.
+//
+// Example:
+//
+//	corr := cfg.ReadCorrectable(ctx, req,
+//	    gorums.WithCorrectableQuorumFunc(myCorrectableQF),
+//	)
+func WithCorrectableQuorumFunc[Req, Resp proto.Message, Out any](qf CorrectableQuorumFunc[Req, Resp, Out]) CallOption {
+	return func(o *callOptions) {
+		o.correctableQuorumFunc = qf
 	}
 }
 

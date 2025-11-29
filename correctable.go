@@ -1,11 +1,9 @@
 package gorums
 
 import (
-	"context"
 	"sync"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/proto"
 )
 
 // LevelNotSet is the zero value level used to indicate that no level (and
@@ -17,12 +15,15 @@ type watcher struct {
 	ch    chan struct{}
 }
 
-// Correctable encapsulates the state of a correctable quorum call.
+// Correctable is a generic type for correctable quorum calls.
+// It encapsulates the state of a correctable call and provides methods
+// for checking the status or waiting for completion at specific levels.
 //
-// This struct should be used by generated code only.
-type Correctable struct {
+// Type parameter Out is the output type returned by the quorum function,
+// which may differ from the RPC response type.
+type Correctable[Out any] struct {
 	mu       sync.Mutex
-	reply    proto.Message
+	reply    Out
 	level    int
 	err      error
 	done     bool
@@ -31,19 +32,19 @@ type Correctable struct {
 }
 
 // Get returns the latest response, the current level, and the last error.
-func (c *Correctable) Get() (proto.Message, int, error) {
+func (c *Correctable[Out]) Get() (Out, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
 }
 
 // Done returns a channel that will close when the correctable call is completed.
-func (c *Correctable) Done() <-chan struct{} {
+func (c *Correctable[Out]) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that will close when the correctable call has reached a specified level.
-func (c *Correctable) Watch(level int) <-chan struct{} {
+func (c *Correctable[Out]) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -55,7 +56,7 @@ func (c *Correctable) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *Correctable) set(reply proto.Message, level int, err error, done bool) {
+func (c *Correctable[Out]) set(reply Out, level int, err error, done bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
@@ -79,98 +80,93 @@ func (c *Correctable) set(reply proto.Message, level int, err error, done bool) 
 	}
 }
 
-// CorrectableCallData contains data for making a correctable quorum call.
+// CorrectableQuorumFunc processes a correctable quorum call and returns the aggregated result.
+// Unlike regular QuorumFunc, this also returns an integer level indicating the consistency level
+// achieved, and a boolean indicating whether the call is complete.
 //
-// This struct should only be used by generated code.
-type CorrectableCallData struct {
-	Message        proto.Message
-	Method         string
-	PerNodeArgFn   func(proto.Message, uint32) proto.Message
-	QuorumFunction func(proto.Message, map[uint32]proto.Message) (proto.Message, int, bool)
-	ServerStream   bool
-}
+// Type parameters:
+//   - Req: The request message type sent to nodes
+//   - Resp: The response message type from individual nodes
+//   - Out: The final output type returned by the interceptor chain
+type CorrectableQuorumFunc[Req, Resp msg, Out any] func(*ClientCtx[Req, Resp]) (Out, int, bool, error)
 
-type correctableCallState struct {
-	md              *ordering.Metadata
-	data            CorrectableCallData
-	replyChan       <-chan NodeResponse[proto.Message]
-	expectedReplies int
-}
-
-// CorrectableCall starts a new correctable quorum call and returns a new Correctable object.
+// CorrectableCall performs a correctable quorum call using an interceptor-based approach.
 //
-// This method should only be used by generated code.
-func (c RawConfiguration) CorrectableCall(ctx context.Context, d CorrectableCallData) *Correctable {
-	expectedReplies := len(c)
-	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
+// Type parameters:
+//   - Req: The request message type
+//   - Resp: The response message type from individual nodes
+//   - Out: The final output type returned by the quorum function
+//
+// The base parameter is the terminal handler that processes responses and determines
+// consistency levels. The opts parameter accepts CallOption values.
+//
+// This function should be used by generated code only.
+func CorrectableCall[Req, Resp msg, Out any](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	serverStream bool,
+	base CorrectableQuorumFunc[Req, Resp, Out],
+	opts ...CallOption,
+) *Correctable[Out] {
+	config := ctx.Configuration()
 
-	replyChan := make(chan NodeResponse[proto.Message], expectedReplies)
-	for _, n := range c {
-		msg := d.Message
-		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
-			if !msg.ProtoReflect().IsValid() {
-				expectedReplies--
-				continue // don't send if no msg
-			}
-		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: d.ServerStream, responseChan: replyChan})
+	// Apply options
+	callOpts := getCallOptions(E_Correctable, opts...)
+
+	// Use CorrectableQuorumFunc from CallOptions if provided, otherwise use the base parameter
+	qf := base
+	if callOpts.correctableQuorumFunc != nil {
+		qf = callOpts.correctableQuorumFunc.(CorrectableQuorumFunc[Req, Resp, Out])
 	}
 
-	corr := &Correctable{donech: make(chan struct{}, 1)}
+	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
+	replyChan := make(chan NodeResponse[msg], len(config))
 
-	go c.handleCorrectableCall(ctx, corr, correctableCallState{
-		md:              md,
-		data:            d,
-		replyChan:       replyChan,
-		expectedReplies: expectedReplies,
-	})
+	// Create ClientCtx first so sendOnce can access it
+	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
+
+	// Create sendOnce function that will be called lazily on first Responses() call
+	sendOnce := func() {
+		var expected int
+		for _, n := range config {
+			// Apply registered request transformations (if any)
+			msg := clientCtx.applyTransforms(req, n)
+			if msg == nil {
+				continue // Skip node if transformation function returns nil
+			}
+			expected++
+			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: serverStream, responseChan: replyChan})
+		}
+		clientCtx.expectedReplies = expected
+	}
+
+	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
+	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
+
+	// Create the correctable result
+	corr := &Correctable[Out]{
+		level:  LevelNotSet,
+		donech: make(chan struct{}, 1),
+	}
+
+	// Run the correctable call in a goroutine
+	go func() {
+		// For streaming calls, clean up routers when done
+		if serverStream {
+			defer func() {
+				for _, n := range config {
+					n.channel.deleteRouter(md.GetMessageID())
+				}
+			}()
+		}
+
+		// Process responses using the correctable quorum function
+		// The quorum function can return multiple times with increasing levels
+		// until it indicates completion (done=true)
+		reply, level, done, err := qf(clientCtx)
+		corr.set(reply, level, err, done)
+	}()
 
 	return corr
-}
-
-func (c RawConfiguration) handleCorrectableCall(ctx context.Context, corr *Correctable, state correctableCallState) {
-	var (
-		resp    proto.Message
-		errs    []nodeError
-		rlevel  int
-		clevel  = LevelNotSet
-		quorum  bool
-		replies = make(map[uint32]proto.Message)
-	)
-
-	if state.data.ServerStream {
-		for _, n := range c {
-			defer n.channel.deleteRouter(state.md.GetMessageID())
-		}
-	}
-
-	for {
-		select {
-		case r := <-state.replyChan:
-			if r.Err != nil {
-				errs = append(errs, nodeError{nodeID: r.NodeID, cause: r.Err})
-				break
-			}
-			replies[r.NodeID] = r.Value
-			if resp, rlevel, quorum = state.data.QuorumFunction(state.data.Message, replies); quorum {
-				if quorum {
-					corr.set(r.Value, rlevel, nil, true)
-					return
-				}
-				if rlevel > clevel {
-					clevel = rlevel
-					corr.set(r.Value, rlevel, nil, false)
-				}
-			}
-		case <-ctx.Done():
-			corr.set(resp, clevel, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}, true)
-			return
-		}
-		if (state.data.ServerStream && len(errs) == state.expectedReplies) ||
-			(!state.data.ServerStream && len(errs)+len(replies) == state.expectedReplies) {
-			corr.set(resp, clevel, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: len(replies)}, true)
-			return
-		}
-	}
 }

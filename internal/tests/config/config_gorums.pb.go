@@ -148,7 +148,6 @@ type Node struct {
 }
 
 // ConfigTestClient is the client interface for the ConfigTest service.
-// Note: Quorum call methods are standalone functions and not part of this interface.
 type ConfigTestClient interface {
 }
 

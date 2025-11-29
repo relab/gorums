@@ -109,6 +109,7 @@ var funcMap = template.FuncMap{
 	"configurationMethods":             configurationMethods,
 	"configurationInterfaceMethods":    configurationInterfaceMethods,
 	"hasConfigurationInterfaceMethods": hasConfigurationInterfaceMethods,
+	"hasOnewayMethods":                 hasOnewayMethods,
 	"nodeServices":                     nodeServices,
 	"nodeMethods":                      nodeMethods,
 }

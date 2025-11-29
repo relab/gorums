@@ -6,41 +6,35 @@ var correctableCallComment = `
 {{$comments -}}
 {{else}}
 // {{$method}} asynchronously invokes a correctable quorum call on each node
-// in configuration c and returns a {{$correctableOut}}, which can be used
+// in the configuration in ctx and returns a {{$correctableOut}}, which can be used
 // to inspect any replies or errors when available.
 {{if correctableStream .Method -}}
 // This method supports server-side preliminary replies (correctable stream).
 {{end -}}
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithCorrectableQuorumFunc call option.
 {{end -}}
 `
 
 var correctableVar = `
 {{$correctableOut := outType .Method $out}}
-{{$protoMessage := use "proto.Message" .GenFile}}
-{{$callData := use "gorums.CorrectableCallData" .GenFile}}
 {{$genFile := .GenFile}}
-{{$context := use "context.Context" .GenFile}}
+{{$configContext := use "gorums.ConfigContext" .GenFile}}
+{{$correctableCall := use "gorums.CorrectableCall" .GenFile}}
+{{$majorityCorrectableQuorum := use "gorums.MajorityCorrectableQuorum" .GenFile}}
+{{$callOption := use "gorums.CallOption" .GenFile}}
 `
 
-var correctableSignature = `func (c *Configuration) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}) ` +
+var correctableSignature = `func {{$method}}(` +
+	`ctx *{{$configContext}}, in *{{$in}}, ` +
+	`opts ...{{$callOption}}) ` +
 	`*{{$correctableOut}} {`
 
-var correctableBody = `	cd := {{$callData}}{
-		Message: in,
-		Method:  "{{$fullName}}",
-		ServerStream: {{correctableStream .Method}},
-	}
-	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, int, bool) {
-		r := make(map[uint32]*{{$out}}, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*{{$out}})
-		}
-		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &{{$correctableOut}}{corr}
+var correctableBody = `	return {{$correctableCall}}(
+		ctx, in, "{{$fullName}}", {{correctableStream .Method}},
+		{{$majorityCorrectableQuorum}}[*{{$in}}, *{{$out}}],
+		opts...,
+	)
 }
 `
 

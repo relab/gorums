@@ -11,7 +11,6 @@ import (
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
-	proto "google.golang.org/protobuf/proto"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -150,30 +149,21 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// AsyncQuorumCall asynchronously invokes a quorum call on configuration c
+// AsyncQuorumCall asynchronously invokes a quorum call on the configuration in ctx
 // and returns a AsyncEcho, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho {
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "benchmark.Benchmark.AsyncQuorumCall",
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
-		r := make(map[uint32]*Echo, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Echo)
-		}
-		return c.qspec.AsyncQuorumCallQF(req.(*Echo), r)
-	}
-
-	fut := c.RawConfiguration.AsyncCall(ctx, cd)
-	return &AsyncEcho{fut}
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func AsyncQuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *AsyncEcho {
+	return gorums.AsyncCall(
+		ctx, in, "benchmark.Benchmark.AsyncQuorumCall",
+		gorums.MajorityQuorum[*Echo, *Echo],
+		opts...,
+	)
 }
 
 // BenchmarkClient is the client interface for the Benchmark service.
-// Note: Quorum call methods are standalone functions and not part of this interface.
 type BenchmarkClient interface {
-	AsyncQuorumCall(ctx context.Context, in *Echo) *AsyncEcho
 	Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption)
 }
 
@@ -392,17 +382,5 @@ type internalStartResponse struct {
 	err   error
 }
 
-// AsyncEcho is a async object for processing replies.
-type AsyncEcho struct {
-	*gorums.Async
-}
-
-// Get returns the reply and any error associated with the called method.
-// The method blocks until a reply or error is available.
-func (f *AsyncEcho) Get() (*Echo, error) {
-	resp, err := f.Async.Get()
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*Echo), err
-}
+// AsyncEcho is a future for async quorum calls returning Echo.
+type AsyncEcho = gorums.Async[*Echo]

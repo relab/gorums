@@ -7,7 +7,6 @@
 package correctable
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -150,56 +149,34 @@ type Node struct {
 }
 
 // CorrectableTestClient is the client interface for the CorrectableTest service.
-// Note: Quorum call methods are standalone functions and not part of this interface.
 type CorrectableTestClient interface {
-	Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse
-	CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse
 }
 
-// enforce interface compliance
-var _ CorrectableTestClient = (*Configuration)(nil)
-
 // Correctable asynchronously invokes a correctable quorum call on each node
-// in configuration c and returns a CorrectableCorrectableResponse, which can be used
+// in the configuration in ctx and returns a CorrectableCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
-func (c *Configuration) Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse {
-	cd := gorums.CorrectableCallData{
-		Message:      in,
-		Method:       "correctable.CorrectableTest.Correctable",
-		ServerStream: false,
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, int, bool) {
-		r := make(map[uint32]*CorrectableResponse, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*CorrectableResponse)
-		}
-		return c.qspec.CorrectableQF(req.(*CorrectableRequest), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &CorrectableCorrectableResponse{corr}
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithCorrectableQuorumFunc call option.
+func Correctable(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableCorrectableResponse {
+	return gorums.CorrectableCall(
+		ctx, in, "correctable.CorrectableTest.Correctable", false,
+		gorums.MajorityCorrectableQuorum[*CorrectableRequest, *CorrectableResponse],
+		opts...,
+	)
 }
 
 // CorrectableStream asynchronously invokes a correctable quorum call on each node
-// in configuration c and returns a CorrectableStreamCorrectableResponse, which can be used
+// in the configuration in ctx and returns a CorrectableStreamCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
 // This method supports server-side preliminary replies (correctable stream).
-func (c *Configuration) CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse {
-	cd := gorums.CorrectableCallData{
-		Message:      in,
-		Method:       "correctable.CorrectableTest.CorrectableStream",
-		ServerStream: true,
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, int, bool) {
-		r := make(map[uint32]*CorrectableResponse, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*CorrectableResponse)
-		}
-		return c.qspec.CorrectableStreamQF(req.(*CorrectableRequest), r)
-	}
-
-	corr := c.RawConfiguration.CorrectableCall(ctx, cd)
-	return &CorrectableStreamCorrectableResponse{corr}
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithCorrectableQuorumFunc call option.
+func CorrectableStream(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableStreamCorrectableResponse {
+	return gorums.CorrectableCall(
+		ctx, in, "correctable.CorrectableTest.CorrectableStream", true,
+		gorums.MajorityCorrectableQuorum[*CorrectableRequest, *CorrectableResponse],
+		opts...,
+	)
 }
 
 // QuorumSpec is the interface of quorum functions for CorrectableTest.
@@ -250,38 +227,8 @@ type internalCorrectableResponse struct {
 	err   error
 }
 
-// CorrectableCorrectableResponse is a correctable object for processing replies.
-type CorrectableCorrectableResponse struct {
-	*gorums.Correctable
-}
+// CorrectableCorrectableResponse is a correctable future for correctable quorum calls returning CorrectableResponse.
+type CorrectableCorrectableResponse = gorums.Correctable[*CorrectableResponse]
 
-// Get returns the reply, level and any error associated with the
-// called method. The method does not block until a (possibly
-// intermediate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *CorrectableCorrectableResponse) Get() (*CorrectableResponse, int, error) {
-	resp, level, err := c.Correctable.Get()
-	if err != nil {
-		return nil, level, err
-	}
-	return resp.(*CorrectableResponse), level, err
-}
-
-// CorrectableStreamCorrectableResponse is a correctable object for processing replies.
-type CorrectableStreamCorrectableResponse struct {
-	*gorums.Correctable
-}
-
-// Get returns the reply, level and any error associated with the
-// called method. The method does not block until a (possibly
-// intermediate) reply or error is available. Level is set to LevelNotSet if no
-// reply has yet been received. The Done or Watch methods should be used to
-// ensure that a reply is available.
-func (c *CorrectableStreamCorrectableResponse) Get() (*CorrectableResponse, int, error) {
-	resp, level, err := c.Correctable.Get()
-	if err != nil {
-		return nil, level, err
-	}
-	return resp.(*CorrectableResponse), level, err
-}
+// CorrectableStreamCorrectableResponse is a correctable future for correctable quorum calls returning CorrectableResponse.
+type CorrectableStreamCorrectableResponse = gorums.Correctable[*CorrectableResponse]

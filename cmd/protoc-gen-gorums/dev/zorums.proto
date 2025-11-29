@@ -104,13 +104,13 @@ service ZorumsService {
     rpc Correctable(Request) returns (Response) {
         option (gorums.correctable) = true;
     }
-    // CorrectableEmpty for testing imported message type.
-    rpc CorrectableEmpty(Request) returns (google.protobuf.Empty) {
+    // CorrectableWithEmpty for testing imported message type.
+    rpc CorrectableWithEmpty(Request) returns (google.protobuf.Empty) {
         option (gorums.correctable) = true;
     }
-    // CorrectableEmpty2 for testing imported message type; with same return
+    // CorrectableWithEmpty2 for testing imported message type; with same return
     // type as Correctable: Response.
-    rpc CorrectableEmpty2(google.protobuf.Empty) returns (Response) {
+    rpc CorrectableWithEmpty2(google.protobuf.Empty) returns (Response) {
         option (gorums.correctable) = true;
     }
 
@@ -122,13 +122,13 @@ service ZorumsService {
     rpc CorrectableStream(Request) returns (stream Response) {
         option (gorums.correctable) = true;
     }
-    // CorrectableStreamEmpty for testing imported message type.
-    rpc CorrectableStreamEmpty(Request) returns (stream google.protobuf.Empty) {
+    // CorrectableStreamWithEmpty for testing imported message type.
+    rpc CorrectableStreamWithEmpty(Request) returns (stream google.protobuf.Empty) {
         option (gorums.correctable) = true;
     }
-    // CorrectableStreamEmpty2 for testing imported message type; with same return
+    // CorrectableStreamWithEmpty2 for testing imported message type; with same return
     // type as Correctable: Response.
-    rpc CorrectableStreamEmpty2(google.protobuf.Empty) returns (stream Response) {
+    rpc CorrectableStreamWithEmpty2(google.protobuf.Empty) returns (stream Response) {
         option (gorums.correctable) = true;
     }
 

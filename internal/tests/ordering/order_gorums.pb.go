@@ -11,7 +11,6 @@ import (
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
-	proto "google.golang.org/protobuf/proto"
 )
 
 const (
@@ -149,34 +148,22 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// QCAsync asynchronously invokes a quorum call on configuration c
+// QCAsync asynchronously invokes a quorum call on the configuration in ctx
 // and returns a AsyncResponse, which can be used to inspect the quorum call
 // reply and error when available.
-func (c *Configuration) QCAsync(ctx context.Context, in *Request) *AsyncResponse {
-	cd := gorums.QuorumCallData{
-		Message: in,
-		Method:  "ordering.GorumsTest.QCAsync",
-	}
-	cd.QuorumFunction = func(req proto.Message, replies map[uint32]proto.Message) (proto.Message, bool) {
-		r := make(map[uint32]*Response, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*Response)
-		}
-		return c.qspec.QCAsyncQF(req.(*Request), r)
-	}
-
-	fut := c.RawConfiguration.AsyncCall(ctx, cd)
-	return &AsyncResponse{fut}
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func QCAsync(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncResponse {
+	return gorums.AsyncCall(
+		ctx, in, "ordering.GorumsTest.QCAsync",
+		gorums.MajorityQuorum[*Request, *Response],
+		opts...,
+	)
 }
 
 // GorumsTestClient is the client interface for the GorumsTest service.
-// Note: Quorum call methods are standalone functions and not part of this interface.
 type GorumsTestClient interface {
-	QCAsync(ctx context.Context, in *Request) *AsyncResponse
 }
-
-// enforce interface compliance
-var _ GorumsTestClient = (*Configuration)(nil)
 
 // GorumsTestNodeClient is the single node client interface for the GorumsTest service.
 type GorumsTestNodeClient interface {
@@ -257,17 +244,5 @@ type internalResponse struct {
 	err   error
 }
 
-// AsyncResponse is a async object for processing replies.
-type AsyncResponse struct {
-	*gorums.Async
-}
-
-// Get returns the reply and any error associated with the called method.
-// The method blocks until a reply or error is available.
-func (f *AsyncResponse) Get() (*Response, error) {
-	resp, err := f.Async.Get()
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*Response), err
-}
+// AsyncResponse is a future for async quorum calls returning Response.
+type AsyncResponse = gorums.Async[*Response]

@@ -34,11 +34,11 @@ type ZorumsServiceServer interface {
 	QuorumCallAsyncEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
 	QuorumCallAsyncEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
 	Correctable(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
-	CorrectableEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
-	CorrectableEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
+	CorrectableWithEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
+	CorrectableWithEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
 	CorrectableStream(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error
-	CorrectableStreamEmpty(ctx gorums.ServerCtx, request *Request, send func(response *emptypb.Empty) error) error
-	CorrectableStreamEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty, send func(response *Response) error) error
+	CorrectableStreamWithEmpty(ctx gorums.ServerCtx, request *Request, send func(response *emptypb.Empty) error) error
+	CorrectableStreamWithEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty, send func(response *Response) error) error
 	Unicast(ctx gorums.ServerCtx, request *Request)
 	Unicast2(ctx gorums.ServerCtx, request *Request)
 }
@@ -109,14 +109,14 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 		resp, err := impl.Correctable(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableWithEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.CorrectableEmpty(ctx, req)
+		resp, err := impl.CorrectableWithEmpty(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableWithEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
-		resp, err := impl.CorrectableEmpty2(ctx, req)
+		resp, err := impl.CorrectableWithEmpty2(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
 	srv.RegisterHandler("dev.ZorumsService.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
@@ -128,18 +128,18 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 		})
 		return nil, err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamWithEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		err := impl.CorrectableStreamEmpty(ctx, req, func(resp *emptypb.Empty) error {
+		err := impl.CorrectableStreamWithEmpty(ctx, req, func(resp *emptypb.Empty) error {
 			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
 			md := proto.CloneOf(in.GetMetadata())
 			return ctx.SendMessage(gorums.NewResponseMessage(md, resp))
 		})
 		return nil, err
 	})
-	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("dev.ZorumsService.CorrectableStreamWithEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*emptypb.Empty](in)
-		err := impl.CorrectableStreamEmpty2(ctx, req, func(resp *Response) error {
+		err := impl.CorrectableStreamWithEmpty2(ctx, req, func(resp *Response) error {
 			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
 			md := proto.CloneOf(in.GetMetadata())
 			return ctx.SendMessage(gorums.NewResponseMessage(md, resp))

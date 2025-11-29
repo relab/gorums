@@ -78,19 +78,19 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Request'.
 	CorrectableQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
-	// CorrectableEmptyQF is the quorum function for the CorrectableEmpty
+	// CorrectableWithEmptyQF is the quorum function for the CorrectableWithEmpty
 	// correctable quorum call method. The in parameter is the request object
-	// supplied to the CorrectableEmpty method at call time, and may or may not
+	// supplied to the CorrectableWithEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableEmptyQF(in *Request, replies map[uint32]*emptypb.Empty) (*emptypb.Empty, int, bool)
+	CorrectableWithEmptyQF(in *Request, replies map[uint32]*emptypb.Empty) (*emptypb.Empty, int, bool)
 
-	// CorrectableEmpty2QF is the quorum function for the CorrectableEmpty2
+	// CorrectableWithEmpty2QF is the quorum function for the CorrectableWithEmpty2
 	// correctable quorum call method. The in parameter is the request object
-	// supplied to the CorrectableEmpty2 method at call time, and may or may not
+	// supplied to the CorrectableWithEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *emptypb.Empty'.
-	CorrectableEmpty2QF(in *emptypb.Empty, replies map[uint32]*Response) (*Response, int, bool)
+	CorrectableWithEmpty2QF(in *emptypb.Empty, replies map[uint32]*Response) (*Response, int, bool)
 
 	// CorrectableStreamQF is the quorum function for the CorrectableStream
 	// correctable stream quorum call method. The in parameter is the request object
@@ -99,17 +99,17 @@ type QuorumSpec interface {
 	// you should implement your quorum function with '_ *Request'.
 	CorrectableStreamQF(in *Request, replies map[uint32]*Response) (*Response, int, bool)
 
-	// CorrectableStreamEmptyQF is the quorum function for the CorrectableStreamEmpty
+	// CorrectableStreamWithEmptyQF is the quorum function for the CorrectableStreamWithEmpty
 	// correctable stream quorum call method. The in parameter is the request object
-	// supplied to the CorrectableStreamEmpty method at call time, and may or may not
+	// supplied to the CorrectableStreamWithEmpty method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *Request'.
-	CorrectableStreamEmptyQF(in *Request, replies map[uint32]*emptypb.Empty) (*emptypb.Empty, int, bool)
+	CorrectableStreamWithEmptyQF(in *Request, replies map[uint32]*emptypb.Empty) (*emptypb.Empty, int, bool)
 
-	// CorrectableStreamEmpty2QF is the quorum function for the CorrectableStreamEmpty2
+	// CorrectableStreamWithEmpty2QF is the quorum function for the CorrectableStreamWithEmpty2
 	// correctable stream quorum call method. The in parameter is the request object
-	// supplied to the CorrectableStreamEmpty2 method at call time, and may or may not
+	// supplied to the CorrectableStreamWithEmpty2 method at call time, and may or may not
 	// be used by the quorum function. If the in parameter is not needed
 	// you should implement your quorum function with '_ *emptypb.Empty'.
-	CorrectableStreamEmpty2QF(in *emptypb.Empty, replies map[uint32]*Response) (*Response, int, bool)
+	CorrectableStreamWithEmpty2QF(in *emptypb.Empty, replies map[uint32]*Response) (*Response, int, bool)
 }

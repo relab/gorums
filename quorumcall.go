@@ -1,66 +1,75 @@
 package gorums
 
 import (
-	"context"
+	"sync"
 
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/proto"
 )
 
-// QuorumCallData holds the message, destination nodes, method identifier,
-// and other information necessary to perform the various quorum call types
-// supported by Gorums.
+// QuorumCallWithInterceptor performs a quorum call using an interceptor-based approach.
 //
-// This struct should be used by generated code only.
-type QuorumCallData struct {
-	Message        proto.Message
-	Method         string
-	PerNodeArgFn   func(proto.Message, uint32) proto.Message
-	QuorumFunction func(proto.Message, map[uint32]proto.Message) (proto.Message, bool)
-}
-
-// QuorumCall performs a quorum call on the configuration.
+// Type parameters:
+//   - Req: The request message type
+//   - Resp: The response message type from individual nodes
+//   - Out: The final output type returned by the interceptor chain
 //
-// This method should be used by generated code only.
-func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp proto.Message, err error) {
-	expectedReplies := len(c)
-	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
+// The base parameter is the default terminal handler that processes responses
+// (e.g., MajorityQuorum). This can be overridden via the WithQuorumFunc CallOption.
+// The opts parameter accepts CallOption values such as WithQuorumFunc and Interceptors.
+//
+// Interceptors are applied in the order they are provided via Interceptors:
+//  1. First interceptor (outermost wrapper)
+//  2. Second interceptor
+//     ...
+//  3. base (innermost handler, e.g. aggregation)
+//
+// Note: Messages are not sent to nodes before ctx.Responses() is called, applying any
+// registered request transformations. This lazy sending is necessary to allow interceptors
+// to register transformations prior to dispatch.
+//
+// This function should be used by generated code only.
+func QuorumCallWithInterceptor[Req, Resp msg, Out any](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	base QuorumFunc[Req, Resp, Out],
+	opts ...CallOption,
+) (Out, error) {
+	config := ctx.Configuration()
 
-	replyChan := make(chan NodeResponse[proto.Message], expectedReplies)
-	for _, n := range c {
-		msg := d.Message
-		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
-			if !msg.ProtoReflect().IsValid() {
-				expectedReplies--
-				continue // don't send if no msg
-			}
-		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
+	// Apply options
+	callOpts := getCallOptions(E_Quorumcall, opts...)
+
+	// Use QuorumFunc from CallOptions if provided, otherwise use the base parameter
+	qf := base
+	if callOpts.quorumFunc != nil {
+		qf = callOpts.quorumFunc.(QuorumFunc[Req, Resp, Out])
 	}
 
-	var (
-		errs    []nodeError
-		quorum  bool
-		replies = make(map[uint32]proto.Message)
-	)
+	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
+	replyChan := make(chan NodeResponse[msg], len(config))
 
-	for {
-		select {
-		case r := <-replyChan:
-			if r.Err != nil {
-				errs = append(errs, nodeError{nodeID: r.NodeID, cause: r.Err})
-				break
+	// Create ClientCtx first so sendOnce can access it
+	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
+
+	// Create sendOnce function that will be called lazily on first Responses() call
+	sendOnce := func() {
+		var expected int
+		for _, n := range config {
+			// Apply registered request transformations (if any)
+			msg := clientCtx.applyTransforms(req, n)
+			if msg == nil {
+				continue // Skip node if transformation function returns nil
 			}
-			replies[r.NodeID] = r.Value
-			if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
+			expected++
+			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 		}
-		if len(errs)+len(replies) == expectedReplies {
-			return resp, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: len(replies)}
-		}
+		clientCtx.expectedReplies = expected
 	}
+
+	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
+	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
+
+	handler := Chain(qf, interceptorsFromCallOptions[Req, Resp, Out](callOpts)...)
+	return handler(clientCtx)
 }

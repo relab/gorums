@@ -150,7 +150,6 @@ type Node struct {
 }
 
 // StorageClient is the client interface for the Storage service.
-// Note: Quorum call methods are standalone functions and not part of this interface.
 type StorageClient interface {
 	WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption)
 }
