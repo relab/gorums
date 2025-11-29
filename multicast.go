@@ -1,8 +1,6 @@
 package gorums
 
 import (
-	"context"
-
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/proto"
 )
@@ -19,7 +17,8 @@ import (
 // Use WithPerNodeTransform to send different messages to each node.
 //
 // This method should be used by generated code only.
-func (c RawConfiguration) Multicast(ctx context.Context, msg proto.Message, method string, opts ...CallOption) {
+func Multicast(ctx *ConfigContext, msg proto.Message, method string, opts ...CallOption) {
+	c := ctx.cfg
 	o := getCallOptions(E_Multicast, opts...)
 	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), method)
 	sentMsgs := 0

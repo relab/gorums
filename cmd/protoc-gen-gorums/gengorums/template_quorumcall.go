@@ -6,7 +6,6 @@ var commonVariables = `
 {{$method := .Method.GoName}}
 {{$in := in .GenFile .Method}}
 {{$out := out .GenFile .Method}}
-{{$intOut := internalOut $out}}
 {{$unexportOutput := unexport .Method.Output.GoIdent.GoName}}
 `
 

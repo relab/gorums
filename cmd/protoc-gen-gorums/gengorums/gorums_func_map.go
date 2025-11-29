@@ -93,25 +93,15 @@ var funcMap = template.FuncMap{
 	"isAsync": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Async)
 	},
-	"isQuorumCall":                     isQuorumCall,
-	"out":                              out,
-	"outType":                          outType,
-	"internalOut":                      internalOut,
-	"mapInternalOutType":               mapInternalOutType,
-	"mapCorrectableOutType":            mapCorrectableOutType,
-	"mapAsyncOutType":                  mapAsyncOutType,
-	"qspecMethods":                     qspecMethods,
-	"qspecServices":                    qspecServices,
-	"unexport":                         unexport,
-	"contains":                         strings.Contains,
-	"field":                            field,
-	"configurationsServices":           configurationsServices,
-	"configurationMethods":             configurationMethods,
-	"configurationInterfaceMethods":    configurationInterfaceMethods,
-	"hasConfigurationInterfaceMethods": hasConfigurationInterfaceMethods,
-	"hasOnewayMethods":                 hasOnewayMethods,
-	"nodeServices":                     nodeServices,
-	"nodeMethods":                      nodeMethods,
+	"out":                   out,
+	"outType":               outType,
+	"mapCorrectableOutType": mapCorrectableOutType,
+	"mapAsyncOutType":       mapAsyncOutType,
+	"qspecMethods":          qspecMethods,
+	"qspecServices":         qspecServices,
+	"unexport":              unexport,
+	"contains":              strings.Contains,
+	"field":                 field,
 }
 
 type mapFunc func(*protogen.GeneratedFile, *protogen.Method, map[string]string)
@@ -133,20 +123,6 @@ func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 
 func outType(method *protogen.Method, out string) string {
 	return fmt.Sprintf("%s%s", callType(method).outPrefix, field(out))
-}
-
-func internalOut(out string) string {
-	return fmt.Sprintf("internal%s", field(out))
-}
-
-func mapInternalOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
-	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasMethodOption(method, callTypesWithInternal...) {
-			out := out(g, method)
-			intOut := internalOut(out)
-			s[intOut] = out
-		}
-	})
 }
 
 func mapAsyncOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {

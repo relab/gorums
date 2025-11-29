@@ -242,7 +242,6 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 	"qspec":  {template: qspecInterface},
 	"types":  {template: dataTypes},
 	"server": {template: server},
-	"client": {template: client},
 
 	callTypeName(gorums.E_Rpc): {
 		extInfo:  gorums.E_Rpc,
@@ -321,15 +320,6 @@ var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Correctable,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
-}
-
-// callTypesWithInternal should list all available call types that
-// has a quorum function and hence need an internal type that wraps
-// the return type with additional information.
-var callTypesWithInternal = []*protoimpl.ExtensionInfo{
-	gorums.E_Quorumcall,
-	gorums.E_Async,
-	gorums.E_Correctable,
 }
 
 // callTypesWithPromiseObject lists all call types that returns

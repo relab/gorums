@@ -1,8 +1,6 @@
 package gorums
 
 import (
-	"context"
-
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/proto"
 )
@@ -17,7 +15,8 @@ import (
 // enqueueing the message (fire-and-forget semantics).
 //
 // This method should be used by generated code only.
-func (n *RawNode) Unicast(ctx context.Context, msg proto.Message, method string, opts ...CallOption) {
+func Unicast(ctx *NodeContext, msg proto.Message, method string, opts ...CallOption) {
+	n := ctx.node
 	o := getCallOptions(E_Unicast, opts...)
 	waitSendDone := o.mustWaitSendDone()
 

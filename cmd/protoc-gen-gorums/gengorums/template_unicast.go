@@ -1,22 +1,27 @@
 package gengorums
 
-var unicastVar = rpcVar + `{{$callOpt := use "gorums.CallOption" .GenFile}}`
+var unicastVar = `
+{{$genFile := .GenFile}}
+{{$nodeContext := use "gorums.NodeContext" .GenFile}}
+{{$unicast := use "gorums.Unicast" .GenFile}}
+{{$callOpt := use "gorums.CallOption" .GenFile}}
+`
 
 var unicastComment = `
 {{$comments := .Method.Comments.Leading}}
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} is a unicast call invoked on a single node.
+// {{$method}} is a unicast call invoked on the node in ctx.
 // No reply is returned to the client.
 {{end -}}
 `
 
-var unicastSignature = `func (n *Node) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}, opts ...{{$callOpt}}) {
+var unicastSignature = `func {{$method}}(` +
+	`ctx *{{$nodeContext}}, in *{{$in}}, opts ...{{$callOpt}}) {
 `
 
-var unicastBody = `	n.RawNode.Unicast(ctx, in, "{{$fullName}}", opts...)
+var unicastBody = `	{{$unicast}}(ctx, in, "{{$fullName}}", opts...)
 }
 `
 

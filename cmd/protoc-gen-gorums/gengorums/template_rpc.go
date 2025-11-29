@@ -5,21 +5,22 @@ var rpcComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} is an RPC call invoked on a single node.
+// {{$method}} is an RPC call invoked on the node in ctx.
 {{end -}}
 `
 
-var rpcSignature = `func (n *Node) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}) (resp *{{$out}}, err error) {
+var rpcSignature = `func {{$method}}(` +
+	`ctx *{{$nodeContext}}, in *{{$in}}) (resp *{{$out}}, err error) {
 `
 
 var rpcVar = `
 {{$genFile := .GenFile}}
-{{$context := use "context.Context" .GenFile}}
+{{$nodeContext := use "gorums.NodeContext" .GenFile}}
+{{$rpcCall := use "gorums.RPCCall" .GenFile}}
 {{$_ := use "gorums.EnforceVersion" .GenFile}}
 `
 
-var rpcBody = `	res, err := n.RawNode.RPCCall(ctx, in, "{{$fullName}}")
+var rpcBody = `	res, err := {{$rpcCall}}(ctx, in, "{{$fullName}}")
 	if err != nil {
 		return nil, err
 	}

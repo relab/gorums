@@ -9,7 +9,8 @@ var _ {{$out}}
 
 var mcVar = `
 {{$genFile := .GenFile}}
-{{$context := use "context.Context" .GenFile}}
+{{$configContext := use "gorums.ConfigContext" .GenFile}}
+{{$multicast := use "gorums.Multicast" .GenFile}}
 {{$callOpt := use "gorums.CallOption" .GenFile}}
 `
 
@@ -18,18 +19,17 @@ var multicastComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-// {{$method}} is a multicast call invoked on all nodes in configuration c,
-// with the same argument in. Use WithPerNodeTransform to send different messages
-// to each node. No replies are collected.
+// {{$method}} is a multicast call invoked on all nodes in the configuration in ctx.
+// Use gorums.MapRequest to send different messages to each node. No replies are collected.
 {{end -}}
 `
 
-var multicastSignature = `func (c *Configuration) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}, ` +
+var multicastSignature = `func {{$method}}(` +
+	`ctx *{{$configContext}}, in *{{$in}}, ` +
 	`opts ...{{$callOpt}}) {
 `
 
-var multicastBody = `	c.RawConfiguration.Multicast(ctx, in, "{{$fullName}}", opts...)
+var multicastBody = `	{{$multicast}}(ctx, in, "{{$fullName}}", opts...)
 }
 `
 
