@@ -70,7 +70,8 @@ func TestMetadata(t *testing.T) {
 	}
 
 	node := mgr.Nodes()[0]
-	resp, err := node.IDFromMD(context.Background(), &emptypb.Empty{})
+	nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}
@@ -102,7 +103,8 @@ func TestPerMessageMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
-	resp, err := node.IDFromMD(ctx, &emptypb.Empty{})
+	nodeCtx := gorums.WithNodeContext(ctx, node.RawNode)
+	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}
@@ -134,7 +136,8 @@ func TestPerNodeMetadata(t *testing.T) {
 	}
 
 	for _, node := range mgr.Nodes() {
-		resp, err := node.IDFromMD(context.Background(), &emptypb.Empty{})
+		nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+		resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
@@ -160,7 +163,8 @@ func TestCanGetPeerInfo(t *testing.T) {
 	}
 
 	node := mgr.Nodes()[0]
-	ip, err := node.WhatIP(context.Background(), &emptypb.Empty{})
+	nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+	ip, err := WhatIP(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}

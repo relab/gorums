@@ -112,7 +112,8 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
+		nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+		resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
@@ -212,7 +213,8 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		for _, node := range nodes {
 			wg.Go(func() {
-				resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
+				nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+				resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return

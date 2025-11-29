@@ -22,7 +22,7 @@ func (t testSrv) TestTLS(ctx gorums.ServerCtx, in *Request) (resp *Response, err
 	return Response_builder{OK: true}.Build(), nil
 }
 
-func TestTLS(t *testing.T) {
+func TestTLSConnection(t *testing.T) {
 	cert, key, err := generateCert()
 	if err != nil {
 		t.Errorf("Failed to generate certificate: %v", err)
@@ -56,7 +56,7 @@ func TestTLS(t *testing.T) {
 	}
 
 	node := mgr.Nodes()[0]
-	resp, err := node.TestTLS(context.Background(), &Request{})
+	resp, err := TestTLS(gorums.WithNodeContext(context.Background(), node.RawNode), &Request{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}

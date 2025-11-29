@@ -100,7 +100,8 @@ func TestServerInterceptorsChain(t *testing.T) {
 	// call the RPC
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	res, err := node.RPCCall(ctx, pb.String("client-"), mock.TestMethod)
+	nodeCtx := gorums.WithNodeContext(ctx, node)
+	res, err := gorums.RPCCall(nodeCtx, pb.String("client-"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

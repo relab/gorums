@@ -174,7 +174,8 @@ func (r repl) multicast(args []string) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	r.cfg.WriteMulticast(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
+	cfgCtx := gorums.WithConfigContext(ctx, r.cfg.RawConfiguration)
+	pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
 	cancel()
 	fmt.Println("Multicast OK: (server output not synchronized)")
 }
@@ -216,7 +217,8 @@ func (repl) readRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := node.ReadRPC(ctx, pb.ReadRequest_builder{Key: args[0]}.Build())
+	nodeCtx := gorums.WithNodeContext(ctx, node.RawNode)
+	resp, err := pb.ReadRPC(nodeCtx, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -235,7 +237,8 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	resp, err := node.WriteRPC(ctx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	nodeCtx := gorums.WithNodeContext(ctx, node.RawNode)
+	resp, err := pb.WriteRPC(nodeCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)

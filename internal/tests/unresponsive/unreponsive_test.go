@@ -18,8 +18,8 @@ func (srv testSrv) TestUnresponsive(ctx gorums.ServerCtx, _ *Empty) (resp *Empty
 	return nil, nil
 }
 
-// TestUnresponsive checks that the client is not blocked when the server is not receiving messages
-func TestUnresponsive(t *testing.T) {
+// TestUnresponsiveServer checks that the client is not blocked when the server is not receiving messages
+func TestUnresponsiveServer(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		srv := &testSrv{}
@@ -42,7 +42,7 @@ func TestUnresponsive(t *testing.T) {
 
 	for range 1000 {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		_, err = node.TestUnresponsive(ctx, &Empty{})
+		_, err = TestUnresponsive(gorums.WithNodeContext(ctx, node.RawNode), &Empty{})
 		if err != nil && errors.Is(err, context.Canceled) {
 			t.Error(err)
 		}
