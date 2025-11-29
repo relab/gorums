@@ -170,8 +170,8 @@ func (c *Configuration) QCAsync(ctx context.Context, in *Request) *AsyncResponse
 }
 
 // GorumsTestClient is the client interface for the GorumsTest service.
+// Note: Quorum call methods are standalone functions and not part of this interface.
 type GorumsTestClient interface {
-	QC(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error)
 	QCAsync(ctx context.Context, in *Request) *AsyncResponse
 }
 
@@ -205,12 +205,14 @@ type QuorumSpec interface {
 	QCAsyncQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 }
 
-// QC is a quorum call invoked on all nodes in configuration c,
+// QC is a quorum call invoked on all nodes in configuration cfg,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) QC(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func QC(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "ordering.GorumsTest.QC",
-		gorums.QuorumSpecFunc(c.qspec.QCQF),
+		ctx, cfg, in, "ordering.GorumsTest.QC",
+		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }

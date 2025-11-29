@@ -149,6 +149,7 @@ type Node struct {
 }
 
 // OnewayTestClient is the client interface for the OnewayTest service.
+// Note: Quorum call methods are standalone functions and not part of this interface.
 type OnewayTestClient interface {
 	Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
 }

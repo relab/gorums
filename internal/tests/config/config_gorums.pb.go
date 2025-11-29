@@ -149,12 +149,9 @@ type Node struct {
 }
 
 // ConfigTestClient is the client interface for the ConfigTest service.
+// Note: Quorum call methods are standalone functions and not part of this interface.
 type ConfigTestClient interface {
-	Config(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error)
 }
-
-// enforce interface compliance
-var _ ConfigTestClient = (*Configuration)(nil)
 
 // QuorumSpec is the interface of quorum functions for ConfigTest.
 type QuorumSpec interface {
@@ -168,12 +165,14 @@ type QuorumSpec interface {
 	ConfigQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 }
 
-// Config is a quorum call invoked on all nodes in configuration c,
+// Config is a quorum call invoked on all nodes in configuration cfg,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) Config(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func Config(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "config.ConfigTest.Config",
-		gorums.QuorumSpecFunc(c.qspec.ConfigQF),
+		ctx, cfg, in, "config.ConfigTest.Config",
+		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }

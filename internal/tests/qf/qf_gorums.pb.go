@@ -149,13 +149,9 @@ type Node struct {
 }
 
 // QuorumFunctionClient is the client interface for the QuorumFunction service.
+// Note: Quorum call methods are standalone functions and not part of this interface.
 type QuorumFunctionClient interface {
-	UseReq(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error)
-	IgnoreReq(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error)
 }
-
-// enforce interface compliance
-var _ QuorumFunctionClient = (*Configuration)(nil)
 
 // QuorumSpec is the interface of quorum functions for QuorumFunction.
 type QuorumSpec interface {
@@ -176,22 +172,26 @@ type QuorumSpec interface {
 	IgnoreReqQF(in *Request, replies map[uint32]*Response) (*Response, bool)
 }
 
-// UseReq is a quorum call invoked on all nodes in configuration c,
+// UseReq is a quorum call invoked on all nodes in configuration cfg,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) UseReq(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func UseReq(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "qf.QuorumFunction.UseReq",
-		gorums.QuorumSpecFunc(c.qspec.UseReqQF),
+		ctx, cfg, in, "qf.QuorumFunction.UseReq",
+		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
-// IgnoreReq is a quorum call invoked on all nodes in configuration c,
+// IgnoreReq is a quorum call invoked on all nodes in configuration cfg,
 // with the same argument in, and returns a combined result.
-func (c *Configuration) IgnoreReq(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+// By default, a majority quorum function is used. To override the quorum function,
+// use the gorums.WithQuorumFunc call option.
+func IgnoreReq(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "qf.QuorumFunction.IgnoreReq",
-		gorums.QuorumSpecFunc(c.qspec.IgnoreReqQF),
+		ctx, cfg, in, "qf.QuorumFunction.IgnoreReq",
+		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }

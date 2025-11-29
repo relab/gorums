@@ -150,6 +150,7 @@ type Node struct {
 }
 
 // CorrectableTestClient is the client interface for the CorrectableTest service.
+// Note: Quorum call methods are standalone functions and not part of this interface.
 type CorrectableTestClient interface {
 	Correctable(ctx context.Context, in *CorrectableRequest) *CorrectableCorrectableResponse
 	CorrectableStream(ctx context.Context, in *CorrectableRequest) *CorrectableStreamCorrectableResponse

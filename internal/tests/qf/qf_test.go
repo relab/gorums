@@ -211,8 +211,11 @@ func BenchmarkFullStackQF(b *testing.B) {
 		b.ResetTimer()
 
 		b.Run(fmt.Sprintf("UseReq_%d", n), func(b *testing.B) {
+			qf := gorums.QuorumSpecFunc(c.qspec.UseReqQF)
 			for b.Loop() {
-				resp, err := c.UseReq(context.Background(), Request_builder{Value: int64(requestValue)}.Build())
+				resp, err := UseReq(context.Background(), c.RawConfiguration,
+					Request_builder{Value: int64(requestValue)}.Build(),
+					gorums.WithQuorumFunc(qf))
 				if err != nil {
 					b.Fatalf("UseReq error: %v", err)
 				}
@@ -220,8 +223,11 @@ func BenchmarkFullStackQF(b *testing.B) {
 			}
 		})
 		b.Run(fmt.Sprintf("IgnoreReq_%d", n), func(b *testing.B) {
+			qf := gorums.QuorumSpecFunc(c.qspec.IgnoreReqQF)
 			for b.Loop() {
-				resp, err := c.IgnoreReq(context.Background(), Request_builder{Value: int64(requestValue)}.Build())
+				resp, err := IgnoreReq(context.Background(), c.RawConfiguration,
+					Request_builder{Value: int64(requestValue)}.Build(),
+					gorums.WithQuorumFunc(qf))
 				if err != nil {
 					b.Fatalf("IgnoreReq error: %v", err)
 				}

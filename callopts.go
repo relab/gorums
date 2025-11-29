@@ -10,6 +10,7 @@ type callOptions struct {
 	waitSendDone bool
 	transform    func(proto.Message, *RawNode) proto.Message
 	interceptors []any // Type-erased interceptors, restored by QuorumCallWithInterceptor
+	quorumFunc   any   // Type-erased QuorumFunc, restored by QuorumCallWithInterceptor
 }
 
 // mustWaitSendDone returns true if the caller of a one-way call type must wait
@@ -68,6 +69,20 @@ func Interceptors[Req, Resp proto.Message, Out any](interceptors ...QuorumInterc
 		for _, interceptor := range interceptors {
 			o.interceptors = append(o.interceptors, interceptor)
 		}
+	}
+}
+
+// WithQuorumFunc returns a CallOption that sets the quorum function for a quorum call.
+// If not provided, a default majority quorum function is used.
+//
+// Example:
+//
+//	resp, err := paxos.Prepare(ctx, cfg, req,
+//	    gorums.WithQuorumFunc(myQuorumFunc),
+//	)
+func WithQuorumFunc[Req, Resp proto.Message, Out any](qf QuorumFunc[Req, Resp, Out]) CallOption {
+	return func(o *callOptions) {
+		o.quorumFunc = qf
 	}
 }
 

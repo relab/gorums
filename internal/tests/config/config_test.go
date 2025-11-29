@@ -74,8 +74,12 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
 	callRPC := func(cfg *Configuration) {
+		// Use QuorumSpecFunc to adapt the legacy quorum function
+		qf := gorums.QuorumSpecFunc(cfg.qspec.ConfigQF)
 		for i := range 5 {
-			resp, err := cfg.Config(context.Background(), Request_builder{Num: uint64(i)}.Build())
+			resp, err := Config(context.Background(), cfg.RawConfiguration,
+				Request_builder{Num: uint64(i)}.Build(),
+				gorums.WithQuorumFunc(qf))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -507,17 +507,15 @@ func Chain[Req, Resp msg, Out any](
 //   - Resp: The response message type from individual nodes
 //   - Out: The final output type returned by the interceptor chain
 //
-// The base parameter is the terminal handler that processes responses (e.g., MajorityQuorum).
-// The opts parameter accepts CallOption values such as Interceptors and Transform.
+// The base parameter is the default terminal handler that processes responses
+// (e.g., MajorityQuorum). This can be overridden via the WithQuorumFunc CallOption.
+// The opts parameter accepts CallOption values such as WithQuorumFunc and Interceptors.
 //
 // Interceptors are applied in the order they are provided via Interceptors:
 //  1. First interceptor (outermost wrapper)
 //  2. Second interceptor
 //     ...
 //  3. base (innermost handler, e.g. aggregation)
-//
-// Transform options are also applied in order, with each transform receiving the output
-// of the previous transform. Multiple Transform options can be chained.
 //
 // Note: Messages are not sent to nodes before ctx.Responses() is called, applying any
 // registered request transformations. This lazy sending is necessary to allow interceptors
@@ -534,6 +532,12 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 ) (Out, error) {
 	// Apply options
 	callOpts := getCallOptions(E_Quorumcall, opts...)
+
+	// Use QuorumFunc from CallOptions if provided, otherwise use the base parameter
+	qf := base
+	if callOpts.quorumFunc != nil {
+		qf = callOpts.quorumFunc.(QuorumFunc[Req, Resp, Out])
+	}
 
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
@@ -559,6 +563,6 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
 	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
 
-	handler := Chain(base, interceptorsFromCallOptions[Req, Resp, Out](callOpts)...)
+	handler := Chain(qf, interceptorsFromCallOptions[Req, Resp, Out](callOpts)...)
 	return handler(clientCtx)
 }

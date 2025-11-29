@@ -20,28 +20,28 @@ const (
 )
 
 // QuorumCall plain.
-func (c *Configuration) QuorumCall(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
+func QuorumCall(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "dev.ZorumsService.QuorumCall",
-		gorums.QuorumSpecFunc(c.qspec.QuorumCallQF),
+		ctx, cfg, in, "dev.ZorumsService.QuorumCall",
+		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
 // QuorumCallEmpty for testing imported message type.
-func (c *Configuration) QuorumCallEmpty(ctx context.Context, in *emptypb.Empty, opts ...gorums.CallOption) (resp *Response, err error) {
+func QuorumCallEmpty(ctx context.Context, cfg gorums.RawConfiguration, in *emptypb.Empty, opts ...gorums.CallOption) (resp *Response, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "dev.ZorumsService.QuorumCallEmpty",
-		gorums.QuorumSpecFunc(c.qspec.QuorumCallEmptyQF),
+		ctx, cfg, in, "dev.ZorumsService.QuorumCallEmpty",
+		gorums.MajorityQuorum[*emptypb.Empty, *Response],
 		opts...,
 	)
 }
 
 // QuorumCallEmpty2 for testing imported message type.
-func (c *Configuration) QuorumCallEmpty2(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *emptypb.Empty, err error) {
+func QuorumCallEmpty2(ctx context.Context, cfg gorums.RawConfiguration, in *Request, opts ...gorums.CallOption) (resp *emptypb.Empty, err error) {
 	return gorums.QuorumCallWithInterceptor(
-		ctx, c.RawConfiguration, in, "dev.ZorumsService.QuorumCallEmpty2",
-		gorums.QuorumSpecFunc(c.qspec.QuorumCallEmpty2QF),
+		ctx, cfg, in, "dev.ZorumsService.QuorumCallEmpty2",
+		gorums.MajorityQuorum[*Request, *emptypb.Empty],
 		opts...,
 	)
 }

@@ -20,10 +20,8 @@ const (
 )
 
 // ZorumsServiceClient is the client interface for the ZorumsService service.
+// Note: Quorum call methods are standalone functions and not part of this interface.
 type ZorumsServiceClient interface {
-	QuorumCall(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *Response, err error)
-	QuorumCallEmpty(ctx context.Context, in *emptypb.Empty, opts ...gorums.CallOption) (resp *Response, err error)
-	QuorumCallEmpty2(ctx context.Context, in *Request, opts ...gorums.CallOption) (resp *emptypb.Empty, err error)
 	Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
 	Multicast2(ctx context.Context, in *Request, opts ...gorums.CallOption)
 	Multicast3(ctx context.Context, in *Request, opts ...gorums.CallOption)

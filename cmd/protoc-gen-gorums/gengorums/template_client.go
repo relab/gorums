@@ -1,8 +1,14 @@
 package gengorums
 
 import (
+	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
 )
+
+// isQuorumCall returns true if the method is a plain quorum call (without async).
+func isQuorumCall(method *protogen.Method) bool {
+	return hasMethodOption(method, gorums.E_Quorumcall) && !hasMethodOption(method, gorums.E_Async)
+}
 
 // gorums need to be imported in the zorums file
 var clientVariables = `
@@ -17,8 +23,9 @@ var clientConfigurationInterface = `
 	{{- $service := .GoName}}
 	{{- $interfaceName := printf "%sClient" $service}}
 	// {{$interfaceName}} is the client interface for the {{$service}} service.
+	// Note: Quorum call methods are standalone functions and not part of this interface.
 	type {{$interfaceName}} interface {
-		{{- range configurationMethods .Methods}}
+		{{- range configurationInterfaceMethods .Methods}}
 			{{- $method := .GoName}}
 			{{- if isOneway .}}
 				{{$method}}(ctx {{$context}}, in *{{in $genFile .}}, opts ...{{$callOpt}})
@@ -31,8 +38,10 @@ var clientConfigurationInterface = `
 			{{- end}}
 		{{- end}}
 	}
+	{{- if hasConfigurationInterfaceMethods .Methods}}
 	// enforce interface compliance
 	var _ {{$interfaceName}} = (*Configuration)(nil)
+	{{- end}}
 {{- end}}
 `
 
@@ -78,6 +87,22 @@ func configurationMethods(methods []*protogen.Method) (s []*protogen.Method) {
 		}
 	}
 	return s
+}
+
+// configurationInterfaceMethods returns multi node methods that are still methods on Configuration.
+// This excludes quorumcall methods which are now standalone functions.
+func configurationInterfaceMethods(methods []*protogen.Method) (s []*protogen.Method) {
+	for _, method := range methods {
+		if hasConfigurationCallType(method) && !isQuorumCall(method) {
+			s = append(s, method)
+		}
+	}
+	return s
+}
+
+// hasConfigurationInterfaceMethods returns true if there are any methods that should be in the Configuration interface.
+func hasConfigurationInterfaceMethods(methods []*protogen.Method) bool {
+	return len(configurationInterfaceMethods(methods)) > 0
 }
 
 // nodeServices returns all services containing at least one single node method.

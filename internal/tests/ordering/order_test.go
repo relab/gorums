@@ -130,11 +130,14 @@ func TestQCOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	// begin test
+	qf := gorums.QuorumSpecFunc(cfg.qspec.QCQF)
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		resp, err := cfg.QC(context.Background(), Request_builder{Num: uint64(i)}.Build())
+		resp, err := QC(context.Background(), cfg.RawConfiguration,
+			Request_builder{Num: uint64(i)}.Build(),
+			gorums.WithQuorumFunc(qf))
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
 		}
@@ -185,10 +188,13 @@ func TestMixedOrdering(t *testing.T) {
 	defer teardown()
 	nodes := cfg.Nodes()
 	// begin test
+	qf := gorums.QuorumSpecFunc(cfg.qspec.QCQF)
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
-		resp, err := cfg.QC(context.Background(), Request_builder{Num: uint64(i)}.Build())
+		resp, err := QC(context.Background(), cfg.RawConfiguration,
+			Request_builder{Num: uint64(i)}.Build(),
+			gorums.WithQuorumFunc(qf))
 		i++
 		if err != nil {
 			t.Fatalf("QC error: %v", err)
