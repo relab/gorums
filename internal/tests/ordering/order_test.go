@@ -3,6 +3,7 @@ package ordering
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -46,52 +47,19 @@ func (s *testSrv) UnaryRPC(_ gorums.ServerCtx, req *Request) (resp *Response, er
 	}.Build(), nil
 }
 
-type testQSpec struct {
-	quorum int
-}
-
-func (q testQSpec) qf(replies map[uint32]*Response) (*Response, bool) {
-	if len(replies) < q.quorum {
-		return nil, false
-	}
-	for _, reply := range replies {
-		if !reply.GetInOrder() {
-			return reply, true
-		}
-	}
-	var reply *Response
-	for _, r := range replies {
-		reply = r
-		break
-	}
-	return reply, true
-}
-
-func (q testQSpec) QCQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	return q.qf(replies)
-}
-
-func (q testQSpec) QCAsyncQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	return q.qf(replies)
-}
-
-func (q testQSpec) AsyncHandlerQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	return q.qf(replies)
-}
-
-func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, cfgSize int) (cfg gorums.RawConfiguration, teardown func()) {
 	t.Helper()
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	mgr := NewManager(
+	mgr := gorums.NewRawManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,13 +74,13 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	cfg, teardown := setup(t, 1)
 	defer teardown()
-	node := cfg.Nodes()[0]
+	node := cfg[0]
 	// begin test
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+		nodeCtx := gorums.WithNodeContext(context.Background(), node)
 		resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
@@ -131,8 +99,24 @@ func TestQCOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	// begin test
-	qf := gorums.QuorumSpecFunc(cfg.qspec.QCQF)
-	cfgCtx := gorums.WithConfigContext(context.Background(), cfg.RawConfiguration)
+	qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
+		replies := ctx.Responses().IgnoreErrors().CollectAll()
+		if len(replies) < ctx.Size() {
+			return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
+		}
+		for _, reply := range replies {
+			if !reply.GetInOrder() {
+				return reply, nil
+			}
+		}
+		var reply *Response
+		for _, r := range replies {
+			reply = r
+			break
+		}
+		return reply, nil
+	}
+	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
@@ -157,8 +141,24 @@ func TestQCAsyncOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	ctx, cancel := context.WithCancel(context.Background())
-	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
-	qf := gorums.QuorumSpecFunc(cfg.qspec.QCAsyncQF)
+	cfgCtx := gorums.WithConfigContext(ctx, cfg)
+	qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
+		replies := ctx.Responses().IgnoreErrors().CollectAll()
+		if len(replies) < ctx.Size() {
+			return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
+		}
+		for _, reply := range replies {
+			if !reply.GetInOrder() {
+				return reply, nil
+			}
+		}
+		var reply *Response
+		for _, r := range replies {
+			reply = r
+			break
+		}
+		return reply, nil
+	}
 	// begin test
 	var wg sync.WaitGroup
 	stopTime := time.Now().Add(5 * time.Second)
@@ -192,8 +192,24 @@ func TestMixedOrdering(t *testing.T) {
 	defer teardown()
 	nodes := cfg.Nodes()
 	// begin test
-	qf := gorums.QuorumSpecFunc(cfg.qspec.QCQF)
-	cfgCtx := gorums.WithConfigContext(context.Background(), cfg.RawConfiguration)
+	qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
+		replies := ctx.Responses().IgnoreErrors().CollectAll()
+		if len(replies) < ctx.Size() {
+			return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
+		}
+		for _, reply := range replies {
+			if !reply.GetInOrder() {
+				return reply, nil
+			}
+		}
+		var reply *Response
+		for _, r := range replies {
+			reply = r
+			break
+		}
+		return reply, nil
+	}
+	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
@@ -213,7 +229,7 @@ func TestMixedOrdering(t *testing.T) {
 		var wg sync.WaitGroup
 		for _, node := range nodes {
 			wg.Go(func() {
-				nodeCtx := gorums.WithNodeContext(context.Background(), node.RawNode)
+				nodeCtx := gorums.WithNodeContext(context.Background(), node)
 				resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)

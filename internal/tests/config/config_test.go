@@ -14,9 +14,6 @@ type (
 	cfgSrv struct {
 		name string
 	}
-	cfgQSpec struct {
-		quorum int
-	}
 )
 
 func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
@@ -26,26 +23,10 @@ func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, er
 	}.Build(), nil
 }
 
-func newQSpec(cfgSize int) *cfgQSpec {
-	return &cfgQSpec{quorum: cfgSize/2 + 1}
-}
-
-func (q cfgQSpec) ConfigQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	if len(replies) < q.quorum {
-		return nil, false
-	}
-	var reply *Response
-	for _, r := range replies {
-		reply = r
-		break
-	}
-	return reply, true
-}
-
 // setup returns a new configuration of cfgSize and a corresponding teardown function.
 // Calling setup multiple times will return a different configuration with different
 // sets of nodes.
-func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardown func()) {
+func setup(t *testing.T, mgr *gorums.RawManager, cfgSize int) (cfg gorums.RawConfiguration, teardown func()) {
 	t.Helper()
 	srvs := make([]*cfgSrv, cfgSize)
 	for i := range srvs {
@@ -59,7 +40,7 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 	for i := range srvs {
 		srvs[i].name = addrs[i]
 	}
-	cfg, err := mgr.NewConfiguration(newQSpec(cfgSize), gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,10 +54,22 @@ func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardow
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	callRPC := func(cfg *Configuration) {
-		// Use QuorumSpecFunc to adapt the legacy quorum function
-		qf := gorums.QuorumSpecFunc(cfg.qspec.ConfigQF)
-		cfgCtx := gorums.WithConfigContext(context.Background(), cfg.RawConfiguration)
+	callRPC := func(cfg gorums.RawConfiguration) {
+		// qf is a QuorumFunc that returns a single response if the quorum is reached.
+		qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
+			quorum := ctx.Size()/2 + 1
+			replies := ctx.Responses().IgnoreErrors().CollectAll()
+			if len(replies) < quorum {
+				return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
+			}
+			var reply *Response
+			for _, r := range replies {
+				reply = r
+				break
+			}
+			return reply, nil
+		}
+		cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 		for i := range 5 {
 			resp, err := Config(cfgCtx,
 				Request_builder{Num: uint64(i)}.Build(),
@@ -89,7 +82,7 @@ func TestConfig(t *testing.T) {
 			}
 		}
 	}
-	mgr := NewManager(
+	mgr := gorums.NewRawManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
@@ -105,10 +98,7 @@ func TestConfig(t *testing.T) {
 	callRPC(c2)
 
 	newNodeList := c1.And(c2)
-	c3, err := mgr.NewConfiguration(
-		newQSpec(c1.Size()+c2.Size()),
-		newNodeList,
-	)
+	c3, err := gorums.NewRawConfiguration(mgr, newNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,10 +106,7 @@ func TestConfig(t *testing.T) {
 	callRPC(c3)
 
 	rmNodeList := c3.Except(c1)
-	c4, err := mgr.NewConfiguration(
-		newQSpec(c2.Size()),
-		rmNodeList,
-	)
+	c4, err := gorums.NewRawConfiguration(mgr, rmNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}
