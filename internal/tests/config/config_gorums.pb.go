@@ -147,10 +147,6 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// ConfigTestClient is the client interface for the ConfigTest service.
-type ConfigTestClient interface {
-}
-
 // QuorumSpec is the interface of quorum functions for ConfigTest.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -186,10 +182,4 @@ func RegisterConfigTestServer(srv *gorums.Server, impl ConfigTestServer) {
 		resp, err := impl.Config(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-}
-
-type internalResponse struct {
-	nid   uint32
-	reply *Response
-	err   error
 }

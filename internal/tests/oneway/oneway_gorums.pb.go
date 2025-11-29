@@ -7,7 +7,6 @@
 package oneway
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -148,27 +147,10 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// OnewayTestClient is the client interface for the OnewayTest service.
-type OnewayTestClient interface {
-	Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
-}
-
-// enforce interface compliance
-var _ OnewayTestClient = (*Configuration)(nil)
-
-// OnewayTestNodeClient is the single node client interface for the OnewayTest service.
-type OnewayTestNodeClient interface {
-	Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption)
-}
-
-// enforce interface compliance
-var _ OnewayTestNodeClient = (*Node)(nil)
-
-// Multicast is a multicast call invoked on all nodes in configuration c,
-// with the same argument in. Use WithPerNodeTransform to send different messages
-// to each node. No replies are collected.
-func (c *Configuration) Multicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	c.RawConfiguration.Multicast(ctx, in, "oneway.OnewayTest.Multicast", opts...)
+// Multicast is a multicast call invoked on all nodes in the configuration in ctx.
+// Use gorums.MapRequest to send different messages to each node. No replies are collected.
+func Multicast(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) {
+	gorums.Multicast(ctx, in, "oneway.OnewayTest.Multicast", opts...)
 }
 
 // There are no quorum calls.
@@ -193,8 +175,8 @@ func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTestServer) {
 	})
 }
 
-// Unicast is a unicast call invoked on a single node.
+// Unicast is a unicast call invoked on the node in ctx.
 // No reply is returned to the client.
-func (n *Node) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	n.RawNode.Unicast(ctx, in, "oneway.OnewayTest.Unicast", opts...)
+func Unicast(ctx *gorums.NodeContext, in *Request, opts ...gorums.CallOption) {
+	gorums.Unicast(ctx, in, "oneway.OnewayTest.Unicast", opts...)
 }

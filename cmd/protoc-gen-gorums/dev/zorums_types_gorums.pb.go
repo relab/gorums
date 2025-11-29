@@ -18,18 +18,6 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 10)
 )
 
-type internalEmpty struct {
-	nid   uint32
-	reply *emptypb.Empty
-	err   error
-}
-
-type internalResponse struct {
-	nid   uint32
-	reply *Response
-	err   error
-}
-
 // AsyncEmpty is a future for async quorum calls returning emptypb.Empty.
 type AsyncEmpty = gorums.Async[*emptypb.Empty]
 

@@ -147,10 +147,6 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// QuorumFunctionClient is the client interface for the QuorumFunction service.
-type QuorumFunctionClient interface {
-}
-
 // QuorumSpec is the interface of quorum functions for QuorumFunction.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -211,10 +207,4 @@ func RegisterQuorumFunctionServer(srv *gorums.Server, impl QuorumFunctionServer)
 		resp, err := impl.IgnoreReq(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-}
-
-type internalResponse struct {
-	nid   uint32
-	reply *Response
-	err   error
 }

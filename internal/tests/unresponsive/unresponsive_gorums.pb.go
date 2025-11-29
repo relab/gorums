@@ -7,7 +7,6 @@
 package unresponsive
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -148,20 +147,12 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// UnresponsiveNodeClient is the single node client interface for the Unresponsive service.
-type UnresponsiveNodeClient interface {
-	TestUnresponsive(ctx context.Context, in *Empty) (resp *Empty, err error)
-}
-
-// enforce interface compliance
-var _ UnresponsiveNodeClient = (*Node)(nil)
-
 // There are no quorum calls.
 type QuorumSpec interface{}
 
-// TestUnresponsive is an RPC call invoked on a single node.
-func (n *Node) TestUnresponsive(ctx context.Context, in *Empty) (resp *Empty, err error) {
-	res, err := n.RawNode.RPCCall(ctx, in, "unresponsive.Unresponsive.TestUnresponsive")
+// TestUnresponsive is an RPC call invoked on the node in ctx.
+func TestUnresponsive(ctx *gorums.NodeContext, in *Empty) (resp *Empty, err error) {
+	res, err := gorums.RPCCall(ctx, in, "unresponsive.Unresponsive.TestUnresponsive")
 	if err != nil {
 		return nil, err
 	}

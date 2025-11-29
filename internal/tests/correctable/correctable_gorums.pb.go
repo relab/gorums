@@ -148,10 +148,6 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// CorrectableTestClient is the client interface for the CorrectableTest service.
-type CorrectableTestClient interface {
-}
-
 // Correctable asynchronously invokes a correctable quorum call on each node
 // in the configuration in ctx and returns a CorrectableCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
@@ -219,12 +215,6 @@ func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServe
 		})
 		return nil, err
 	})
-}
-
-type internalCorrectableResponse struct {
-	nid   uint32
-	reply *CorrectableResponse
-	err   error
 }
 
 // CorrectableCorrectableResponse is a correctable future for correctable quorum calls returning CorrectableResponse.

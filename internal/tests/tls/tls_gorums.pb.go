@@ -7,7 +7,6 @@
 package tls
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -148,20 +147,12 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// TLSNodeClient is the single node client interface for the TLS service.
-type TLSNodeClient interface {
-	TestTLS(ctx context.Context, in *Request) (resp *Response, err error)
-}
-
-// enforce interface compliance
-var _ TLSNodeClient = (*Node)(nil)
-
 // There are no quorum calls.
 type QuorumSpec interface{}
 
-// TestTLS is an RPC call invoked on a single node.
-func (n *Node) TestTLS(ctx context.Context, in *Request) (resp *Response, err error) {
-	res, err := n.RawNode.RPCCall(ctx, in, "tls.TLS.TestTLS")
+// TestTLS is an RPC call invoked on the node in ctx.
+func TestTLS(ctx *gorums.NodeContext, in *Request) (resp *Response, err error) {
+	res, err := gorums.RPCCall(ctx, in, "tls.TLS.TestTLS")
 	if err != nil {
 		return nil, err
 	}

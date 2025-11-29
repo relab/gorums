@@ -7,7 +7,6 @@
 package dev
 
 import (
-	context "context"
 	gorums "github.com/relab/gorums"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
@@ -19,17 +18,17 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 10)
 )
 
-// Unicast is a unicast call invoked on a single node.
+// Unicast is a unicast call invoked on the node in ctx.
 // No reply is returned to the client.
-func (n *Node) Unicast(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	n.RawNode.Unicast(ctx, in, "dev.ZorumsService.Unicast", opts...)
+func Unicast(ctx *gorums.NodeContext, in *Request, opts ...gorums.CallOption) {
+	gorums.Unicast(ctx, in, "dev.ZorumsService.Unicast", opts...)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// Unicast2 is a unicast call invoked on a single node.
+// Unicast2 is a unicast call invoked on the node in ctx.
 // No reply is returned to the client.
-func (n *Node) Unicast2(ctx context.Context, in *Request, opts ...gorums.CallOption) {
-	n.RawNode.Unicast(ctx, in, "dev.ZorumsService.Unicast2", opts...)
+func Unicast2(ctx *gorums.NodeContext, in *Request, opts ...gorums.CallOption) {
+	gorums.Unicast(ctx, in, "dev.ZorumsService.Unicast2", opts...)
 }

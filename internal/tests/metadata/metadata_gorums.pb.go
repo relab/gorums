@@ -7,7 +7,6 @@
 package metadata
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -149,21 +148,12 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// MetadataTestNodeClient is the single node client interface for the MetadataTest service.
-type MetadataTestNodeClient interface {
-	IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, err error)
-	WhatIP(ctx context.Context, in *emptypb.Empty) (resp *IPAddr, err error)
-}
-
-// enforce interface compliance
-var _ MetadataTestNodeClient = (*Node)(nil)
-
 // There are no quorum calls.
 type QuorumSpec interface{}
 
 // IDFromMD returns the 'id' field from the metadata.
-func (n *Node) IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, err error) {
-	res, err := n.RawNode.RPCCall(ctx, in, "metadata.MetadataTest.IDFromMD")
+func IDFromMD(ctx *gorums.NodeContext, in *emptypb.Empty) (resp *NodeID, err error) {
+	res, err := gorums.RPCCall(ctx, in, "metadata.MetadataTest.IDFromMD")
 	if err != nil {
 		return nil, err
 	}
@@ -171,8 +161,8 @@ func (n *Node) IDFromMD(ctx context.Context, in *emptypb.Empty) (resp *NodeID, e
 }
 
 // WhatIP returns the address of the client that calls it.
-func (n *Node) WhatIP(ctx context.Context, in *emptypb.Empty) (resp *IPAddr, err error) {
-	res, err := n.RawNode.RPCCall(ctx, in, "metadata.MetadataTest.WhatIP")
+func WhatIP(ctx *gorums.NodeContext, in *emptypb.Empty) (resp *IPAddr, err error) {
+	res, err := gorums.RPCCall(ctx, in, "metadata.MetadataTest.WhatIP")
 	if err != nil {
 		return nil, err
 	}

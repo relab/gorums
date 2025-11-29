@@ -7,7 +7,6 @@
 package ordering
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -161,18 +160,6 @@ func QCAsync(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) 
 	)
 }
 
-// GorumsTestClient is the client interface for the GorumsTest service.
-type GorumsTestClient interface {
-}
-
-// GorumsTestNodeClient is the single node client interface for the GorumsTest service.
-type GorumsTestNodeClient interface {
-	UnaryRPC(ctx context.Context, in *Request) (resp *Response, err error)
-}
-
-// enforce interface compliance
-var _ GorumsTestNodeClient = (*Node)(nil)
-
 // QuorumSpec is the interface of quorum functions for GorumsTest.
 type QuorumSpec interface {
 	gorums.ConfigOption
@@ -204,9 +191,9 @@ func QC(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp
 	)
 }
 
-// UnaryRPC is an RPC call invoked on a single node.
-func (n *Node) UnaryRPC(ctx context.Context, in *Request) (resp *Response, err error) {
-	res, err := n.RawNode.RPCCall(ctx, in, "ordering.GorumsTest.UnaryRPC")
+// UnaryRPC is an RPC call invoked on the node in ctx.
+func UnaryRPC(ctx *gorums.NodeContext, in *Request) (resp *Response, err error) {
+	res, err := gorums.RPCCall(ctx, in, "ordering.GorumsTest.UnaryRPC")
 	if err != nil {
 		return nil, err
 	}
@@ -236,12 +223,6 @@ func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTestServer) {
 		resp, err := impl.UnaryRPC(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-}
-
-type internalResponse struct {
-	nid   uint32
-	reply *Response
-	err   error
 }
 
 // AsyncResponse is a future for async quorum calls returning Response.

@@ -7,7 +7,6 @@
 package benchmark
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -162,22 +161,13 @@ func AsyncQuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOpt
 	)
 }
 
-// BenchmarkClient is the client interface for the Benchmark service.
-type BenchmarkClient interface {
-	Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption)
-}
-
-// enforce interface compliance
-var _ BenchmarkClient = (*Configuration)(nil)
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// Multicast is a multicast call invoked on all nodes in configuration c,
-// with the same argument in. Use WithPerNodeTransform to send different messages
-// to each node. No replies are collected.
-func (c *Configuration) Multicast(ctx context.Context, in *TimedMsg, opts ...gorums.CallOption) {
-	c.RawConfiguration.Multicast(ctx, in, "benchmark.Benchmark.Multicast", opts...)
+// Multicast is a multicast call invoked on all nodes in the configuration in ctx.
+// Use gorums.MapRequest to send different messages to each node. No replies are collected.
+func Multicast(ctx *gorums.ConfigContext, in *TimedMsg, opts ...gorums.CallOption) {
+	gorums.Multicast(ctx, in, "benchmark.Benchmark.Multicast", opts...)
 }
 
 // QuorumSpec is the interface of quorum functions for Benchmark.
@@ -356,30 +346,6 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl BenchmarkServer) {
 		impl.Multicast(ctx, req)
 		return nil, nil
 	})
-}
-
-type internalEcho struct {
-	nid   uint32
-	reply *Echo
-	err   error
-}
-
-type internalMemoryStat struct {
-	nid   uint32
-	reply *MemoryStat
-	err   error
-}
-
-type internalResult struct {
-	nid   uint32
-	reply *Result
-	err   error
-}
-
-type internalStartResponse struct {
-	nid   uint32
-	reply *StartResponse
-	err   error
 }
 
 // AsyncEcho is a future for async quorum calls returning Echo.

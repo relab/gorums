@@ -7,7 +7,6 @@
 package proto
 
 import (
-	context "context"
 	fmt "fmt"
 	gorums "github.com/relab/gorums"
 	encoding "google.golang.org/grpc/encoding"
@@ -149,31 +148,13 @@ type Node struct {
 	*gorums.RawNode
 }
 
-// StorageClient is the client interface for the Storage service.
-type StorageClient interface {
-	WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption)
-}
-
-// enforce interface compliance
-var _ StorageClient = (*Configuration)(nil)
-
-// StorageNodeClient is the single node client interface for the Storage service.
-type StorageNodeClient interface {
-	ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error)
-	WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error)
-}
-
-// enforce interface compliance
-var _ StorageNodeClient = (*Node)(nil)
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// WriteMulticast is a multicast call invoked on all nodes in configuration c,
-// with the same argument in. Use WithPerNodeTransform to send different messages
-// to each node. No replies are collected.
-func (c *Configuration) WriteMulticast(ctx context.Context, in *WriteRequest, opts ...gorums.CallOption) {
-	c.RawConfiguration.Multicast(ctx, in, "storage.Storage.WriteMulticast", opts...)
+// WriteMulticast is a multicast call invoked on all nodes in the configuration in ctx.
+// Use gorums.MapRequest to send different messages to each node. No replies are collected.
+func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) {
+	gorums.Multicast(ctx, in, "storage.Storage.WriteMulticast", opts...)
 }
 
 // QuorumSpec is the interface of quorum functions for Storage.
@@ -216,8 +197,8 @@ func WriteQC(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOpt
 }
 
 // ReadRPC executes the Read RPC on a single Node
-func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse, err error) {
-	res, err := n.RawNode.RPCCall(ctx, in, "storage.Storage.ReadRPC")
+func ReadRPC(ctx *gorums.NodeContext, in *ReadRequest) (resp *ReadResponse, err error) {
+	res, err := gorums.RPCCall(ctx, in, "storage.Storage.ReadRPC")
 	if err != nil {
 		return nil, err
 	}
@@ -225,8 +206,8 @@ func (n *Node) ReadRPC(ctx context.Context, in *ReadRequest) (resp *ReadResponse
 }
 
 // WriteRPC executes the Write RPC on a single Node
-func (n *Node) WriteRPC(ctx context.Context, in *WriteRequest) (resp *WriteResponse, err error) {
-	res, err := n.RawNode.RPCCall(ctx, in, "storage.Storage.WriteRPC")
+func WriteRPC(ctx *gorums.NodeContext, in *WriteRequest) (resp *WriteResponse, err error) {
+	res, err := gorums.RPCCall(ctx, in, "storage.Storage.WriteRPC")
 	if err != nil {
 		return nil, err
 	}
@@ -268,16 +249,4 @@ func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
 		impl.WriteMulticast(ctx, req)
 		return nil, nil
 	})
-}
-
-type internalReadResponse struct {
-	nid   uint32
-	reply *ReadResponse
-	err   error
-}
-
-type internalWriteResponse struct {
-	nid   uint32
-	reply *WriteResponse
-	err   error
 }
