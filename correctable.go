@@ -56,7 +56,7 @@ func (c *Correctable[Out]) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-func (c *Correctable[Out]) set(reply Out, level int, err error, done bool) {
+func (c *Correctable[Out]) set(reply Out, level int, done bool, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
@@ -105,13 +105,10 @@ func CorrectableCall[Req, Resp msg, Out any](
 	ctx *ConfigContext,
 	req Req,
 	method string,
-	serverStream bool,
 	base CorrectableQuorumFunc[Req, Resp, Out],
 	opts ...CallOption,
 ) *Correctable[Out] {
 	config := ctx.Configuration()
-
-	// Apply options
 	callOpts := getCallOptions(E_Correctable, opts...)
 
 	// Use CorrectableQuorumFunc from CallOptions if provided, otherwise use the base parameter
@@ -136,7 +133,77 @@ func CorrectableCall[Req, Resp msg, Out any](
 				continue // Skip node if transformation function returns nil
 			}
 			expected++
-			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: serverStream, responseChan: replyChan})
+			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: false, responseChan: replyChan})
+		}
+		clientCtx.expectedReplies = expected
+	}
+
+	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
+	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
+
+	// Create the correctable result
+	corr := &Correctable[Out]{
+		level:  LevelNotSet,
+		donech: make(chan struct{}, 1),
+	}
+
+	// Run the correctable call in a goroutine
+	go func() {
+		// Process responses using the correctable quorum function
+		// The quorum function can return multiple times with increasing levels
+		// until it indicates completion (done=true)
+		corr.set(qf(clientCtx))
+	}()
+
+	return corr
+}
+
+// CorrectableStreamCall performs a correctable streaming quorum call using an interceptor-based approach.
+//
+// Type parameters:
+//   - Req: The request message type
+//   - Resp: The response message type from individual nodes
+//   - Out: The final output type returned by the quorum function
+//
+// The base parameter is the terminal handler that processes responses and determines
+// consistency levels. The opts parameter accepts CallOption values.
+//
+// This function should be used by generated code only.
+func CorrectableStreamCall[Req, Resp msg, Out any](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	base CorrectableQuorumFunc[Req, Resp, Out],
+	opts ...CallOption,
+) *Correctable[Out] {
+	config := ctx.Configuration()
+	callOpts := getCallOptions(E_Correctable, opts...)
+	qf := base
+	if callOpts.correctableQuorumFunc != nil {
+		qf = callOpts.correctableQuorumFunc.(CorrectableQuorumFunc[Req, Resp, Out])
+	}
+	// gorums.MajorityCorrectableQuorum[*CorrectableRequest, *CorrectableResponse],
+
+	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
+	// Buffer more messages for streaming
+	chanSize := len(config) * 10
+	replyChan := make(chan NodeResponse[msg], chanSize)
+
+	// Create ClientCtx first so sendOnce can access it
+	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
+	clientCtx.responses = clientCtx.streamingResponses()
+
+	// Create sendOnce function that will be called lazily on first Responses() call
+	sendOnce := func() {
+		var expected int
+		for _, n := range config {
+			// Apply registered request transformations (if any)
+			msg := clientCtx.applyTransforms(req, n)
+			if msg == nil {
+				continue // Skip node if transformation function returns nil
+			}
+			expected++
+			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: true, responseChan: replyChan})
 		}
 		clientCtx.expectedReplies = expected
 	}
@@ -153,19 +220,16 @@ func CorrectableCall[Req, Resp msg, Out any](
 	// Run the correctable call in a goroutine
 	go func() {
 		// For streaming calls, clean up routers when done
-		if serverStream {
-			defer func() {
-				for _, n := range config {
-					n.channel.deleteRouter(md.GetMessageID())
-				}
-			}()
-		}
+		defer func() {
+			for _, n := range config {
+				n.channel.deleteRouter(md.GetMessageID())
+			}
+		}()
 
 		// Process responses using the correctable quorum function
 		// The quorum function can return multiple times with increasing levels
 		// until it indicates completion (done=true)
-		reply, level, done, err := qf(clientCtx)
-		corr.set(reply, level, err, done)
+		corr.set(qf(clientCtx))
 	}()
 
 	return corr

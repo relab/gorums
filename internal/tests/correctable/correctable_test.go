@@ -6,15 +6,14 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // run a test on a correctable call.
 // n is the number of replicas, and div is a divider.
 // the target level is n, and the level is calculated by the quorum function
 // by dividing the sum of levels from the servers with the divider.
-func run(t *testing.T, n int, div int, corr func(*gorums.ConfigContext) *CorrectableCorrectableResponse) {
+func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *CorrectableCorrectableResponse) {
+	t.Helper()
 	addrs, teardown := gorums.TestSetup(t, n, func(i int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
@@ -22,85 +21,60 @@ func run(t *testing.T, n int, div int, corr func(*gorums.ConfigContext) *Correct
 	})
 	defer teardown()
 
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-
-	cfg, err := mgr.NewConfiguration(qspec{div, n}, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	cfg := gorums.NewConfig(t, addrs)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	configCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
+	configCtx := gorums.WithConfigContext(ctx, cfg)
 	res := corr(configCtx)
 
 	donech := res.Done()
-
 	for i := 1; i <= n; i++ {
 		select {
 		case <-res.Watch(i):
 		case <-donech:
 		}
 	}
-
 	<-donech
-
-	_, _, err = res.Get()
-	if err != nil {
+	if _, _, err := res.Get(); err != nil {
 		t.Error(err)
 	}
 }
 
+var correctableQF = func(div, doneLevel int) gorums.CorrectableQuorumFunc[*CorrectableRequest, *CorrectableResponse, *CorrectableResponse] {
+	return func(ctx *gorums.ClientCtx[*CorrectableRequest, *CorrectableResponse]) (*CorrectableResponse, int, bool, error) {
+		replies := make(map[uint32]*CorrectableResponse)
+		for resp := range ctx.Responses().IgnoreErrors() {
+			replies[resp.NodeID] = resp.Value
+		}
+		sum := 0
+		for _, r := range replies {
+			sum += int(r.GetLevel())
+		}
+		level := sum / div
+		return CorrectableResponse_builder{Level: int32(level)}.Build(), level, level >= doneLevel, nil
+	}
+}
+
 func TestCorrectable(t *testing.T) {
-	run(t, 4, 1, func(ctx *gorums.ConfigContext) *CorrectableCorrectableResponse {
-		return Correctable(ctx, &CorrectableRequest{})
+	run(t, 4, func(ctx *gorums.ConfigContext) *CorrectableCorrectableResponse {
+		qf := correctableQF(1, 4)
+		return Correctable(ctx, &CorrectableRequest{}, gorums.WithCorrectableQuorumFunc(qf))
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
-	run(t, 4, 4, func(ctx *gorums.ConfigContext) *CorrectableCorrectableResponse {
-		return CorrectableStream(ctx, &CorrectableRequest{})
+	run(t, 4, func(ctx *gorums.ConfigContext) *CorrectableStreamCorrectableResponse {
+		qf := correctableQF(4, 4)
+		return CorrectableStream(ctx, &CorrectableRequest{}, gorums.WithCorrectableQuorumFunc(qf))
 	})
-}
-
-type qspec struct {
-	div       int
-	doneLevel int
-}
-
-func (q qspec) q(replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool) {
-	sum := 0
-	for _, reply := range replies {
-		sum += int(reply.GetLevel())
-	}
-	level := sum / q.div
-	return CorrectableResponse_builder{Level: int32(level)}.Build(), level, level >= q.doneLevel
-}
-
-// CorrectableStreamQF is the quorum function for the CorrectableStream
-// correctable stream quorum call method. The in parameter is the request object
-// supplied to the CorrectableStream method at call time, and may or may not
-// be used by the quorum function. If the in parameter is not needed
-// you should implement your quorum function with '_ *CorrectableRequest'.
-func (q qspec) CorrectableStreamQF(_ *CorrectableRequest, replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool) {
-	return q.q(replies)
-}
-
-// CorrectableQF is the quorum function for the Correctable
-// correctable quorum call method. The in parameter is the request object
-// supplied to the Correctable method at call time, and may or may not
-// be used by the quorum function. If the in parameter is not needed
-// you should implement your quorum function with '_ *CorrectableRequest'.
-func (q qspec) CorrectableQF(_ *CorrectableRequest, replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool) {
-	return q.q(replies)
 }
 
 type testSrv struct {
 	n int
+}
+
+func (srv testSrv) Correctable(_ gorums.ServerCtx, request *CorrectableRequest) (*CorrectableResponse, error) {
+	return CorrectableResponse_builder{Level: 1}.Build(), nil
 }
 
 func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error {
@@ -111,8 +85,4 @@ func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableReq
 		}
 	}
 	return nil
-}
-
-func (srv testSrv) Correctable(_ gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error) {
-	return CorrectableResponse_builder{Level: 1}.Build(), nil
 }
