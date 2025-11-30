@@ -53,11 +53,11 @@ The command performs the write quorum call on node 0 and 2
 
 type repl struct {
 	mgr  *pb.Manager
-	cfg  *pb.Configuration
+	cfg  pb.Configuration
 	term *term.Terminal
 }
 
-func newRepl(mgr *pb.Manager, cfg *pb.Configuration) *repl {
+func newRepl(mgr *pb.Manager, cfg pb.Configuration) *repl {
 	return &repl{
 		mgr: mgr,
 		cfg: cfg,
@@ -90,7 +90,7 @@ func (r repl) ReadLine() (string, error) {
 
 // Repl runs an interactive Read-eval-print loop, that allows users to run commands that perform
 // RPCs and quorum calls using the manager and configuration.
-func Repl(mgr *pb.Manager, defaultCfg *pb.Configuration) error {
+func Repl(mgr *pb.Manager, defaultCfg pb.Configuration) error {
 	r := newRepl(mgr, defaultCfg)
 
 	fmt.Println(help)
@@ -157,7 +157,7 @@ func (r repl) rpc(args []string) {
 		return
 	}
 
-	node := r.cfg.Nodes()[index]
+	node := r.cfg[index]
 
 	switch args[1] {
 	case "read":
@@ -174,7 +174,7 @@ func (r repl) multicast(args []string) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := gorums.WithConfigContext(ctx, r.cfg.RawConfiguration)
+	cfgCtx := gorums.WithConfigContext(ctx, r.cfg)
 	pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
 	cancel()
 	fmt.Println("Multicast OK: (server output not synchronized)")
@@ -217,7 +217,7 @@ func (repl) readRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	nodeCtx := gorums.WithNodeContext(ctx, node.RawNode)
+	nodeCtx := gorums.WithNodeContext(ctx, node)
 	resp, err := pb.ReadRPC(nodeCtx, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
@@ -237,7 +237,7 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	nodeCtx := gorums.WithNodeContext(ctx, node.RawNode)
+	nodeCtx := gorums.WithNodeContext(ctx, node)
 	resp, err := pb.WriteRPC(nodeCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
 	cancel()
 	if err != nil {
@@ -251,14 +251,14 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 	fmt.Println("Write OK")
 }
 
-func (repl) readQC(args []string, cfg *pb.Configuration) {
+func (repl) readQC(args []string, cfg pb.Configuration) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
-	resp, err := pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build())
+	cfgCtx := gorums.WithConfigContext(ctx, cfg)
+	resp, err := pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build(), gorums.WithQuorumFunc(newestValue))
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -271,14 +271,14 @@ func (repl) readQC(args []string, cfg *pb.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeQC(args []string, cfg *pb.Configuration) {
+func (repl) writeQC(args []string, cfg pb.Configuration) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
-	resp, err := pb.WriteQC(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
+	cfgCtx := gorums.WithConfigContext(ctx, cfg)
+	resp, err := pb.WriteQC(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build(), gorums.WithQuorumFunc(numUpdated))
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)
@@ -291,7 +291,7 @@ func (repl) writeQC(args []string, cfg *pb.Configuration) {
 	fmt.Println("Write OK")
 }
 
-func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
+func (r repl) parseConfiguration(cfgStr string) (cfg pb.Configuration) {
 	// configuration using range syntax
 	if i := strings.Index(cfgStr, ":"); i > -1 {
 		var start, stop int
@@ -323,7 +323,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 		for _, node := range r.mgr.Nodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = r.mgr.NewConfiguration(&qspec{cfgSize: stop - start}, gorums.WithNodeList(nodes))
+		cfg, err = gorums.NewRawConfiguration(r.mgr, gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -346,7 +346,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg *pb.Configuration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := r.mgr.NewConfiguration(&qspec{cfgSize: len(selectedNodes)}, gorums.WithNodeList(selectedNodes))
+		cfg, err := gorums.NewRawConfiguration(r.mgr, gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
