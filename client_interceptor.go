@@ -282,6 +282,54 @@ func (seq Responses[Resp]) CollectAll() map[uint32]Resp {
 // Interceptors (Middleware)
 // -------------------------------------------------------------------------
 
+// MapRequest returns an interceptor that applies per-node request transformations.
+//
+// The fn receives the original request and a node, and returns the transformed
+// request to send to that node. If the function returns an invalid message or nil,
+// the request to that node is skipped.
+func MapRequest[Req, Resp msg, Out any](fn func(Req, *RawNode) Req) QuorumInterceptor[Req, Resp, Out] {
+	return func(next QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
+		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
+			if fn != nil {
+				ctx.RegisterTransformFunc(fn)
+			}
+			return next(ctx)
+		}
+	}
+}
+
+// MapResponse returns an interceptor that applies per-node response transformations.
+//
+// The fn receives the response from a node and the node itself, and returns the
+// transformed response.
+func MapResponse[Req, Resp msg, Out any](fn func(Resp, *RawNode) Resp) QuorumInterceptor[Req, Resp, Out] {
+	return func(next QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
+		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
+			if fn != nil {
+				// Wrap the existing response iterator with the transformation logic.
+				// We capture the current iterator (oldResponses) and replace it with a new one
+				// that applies fn to each successful response.
+				oldResponses := ctx.responses
+				ctx.responses = func(yield func(NodeResponse[Resp]) bool) {
+					for resp := range oldResponses {
+						// We only apply the transformation if there is no error.
+						// Errors are passed through as-is.
+						if resp.Err == nil {
+							if node := ctx.Node(resp.NodeID); node != nil {
+								resp.Value = fn(resp.Value, node)
+							}
+						}
+						if !yield(resp) {
+							return
+						}
+					}
+				}
+			}
+			return next(ctx)
+		}
+	}
+}
+
 // Map returns an interceptor that applies per-node request and response transformations.
 //
 // The reqFunc receives the original request and a node, and returns the transformed
@@ -311,32 +359,11 @@ func Map[Req, Resp msg, Out any](
 	respFunc func(Resp, *RawNode) Resp,
 ) QuorumInterceptor[Req, Resp, Out] {
 	return func(next QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
-		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
-			if reqFunc != nil {
-				ctx.RegisterTransformFunc(reqFunc)
-			}
-			if respFunc != nil {
-				// Wrap the existing response iterator with the transformation logic.
-				// We capture the current iterator (oldResponses) and replace it with a new one
-				// that applies respFunc to each successful response.
-				oldResponses := ctx.responses
-				ctx.responses = func(yield func(NodeResponse[Resp]) bool) {
-					for resp := range oldResponses {
-						// We only apply the transformation if there is no error.
-						// Errors are passed through as-is.
-						if resp.Err == nil {
-							if node := ctx.Node(resp.NodeID); node != nil {
-								resp.Value = respFunc(resp.Value, node)
-							}
-						}
-						if !yield(resp) {
-							return
-						}
-					}
-				}
-			}
-			return next(ctx)
-		}
+		// Apply MapResponse first (wrapping the iterator), then MapRequest (registering transform).
+		// This ensures MapRequest registers its transform before MapResponse wraps the iterator
+		// (though order doesn't strictly matter for these two specific operations as they affect different phases).
+		// However, logically, we want to construct the chain such that both are applied.
+		return MapRequest[Req, Resp, Out](reqFunc)(MapResponse[Req, Resp, Out](respFunc)(next))
 	}
 }
 
@@ -488,47 +515,59 @@ func CollectAllResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (map[uint32]R
 // the majority threshold is reached.
 //
 // This is a base correctable quorum function for use with correctable calls.
-func MajorityCorrectableQuorum[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (Resp, int, bool, error) {
+func MajorityCorrectableQuorum[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (*Correctable[Resp], error) {
 	quorumSize := ctx.Size()/2 + 1
 	return ThresholdCorrectableQuorum[Req, Resp](quorumSize)(ctx)
 }
 
-// ThresholdCorrectableQuorum returns a CorrectableQuorumFunc that reports progress
+// ThresholdCorrectableQuorum returns a QuorumFunc that reports progress
 // as responses arrive and completes when the threshold is reached.
 // The level increases with each successful response received.
 //
 // This is a base correctable quorum function for use with correctable calls.
-func ThresholdCorrectableQuorum[Req, Resp msg](threshold int) CorrectableQuorumFunc[Req, Resp, Resp] {
-	return func(ctx *ClientCtx[Req, Resp]) (Resp, int, bool, error) {
-		var (
-			lastResp Resp
-			found    bool
-			count    int
-			errs     []nodeError
-		)
-
-		for result := range ctx.Responses() {
-			if result.Err != nil {
-				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
-				continue
-			}
-
-			count++
-			if !found {
-				lastResp = result.Value
-				found = true
-			} else {
-				lastResp = result.Value
-			}
-
-			// Check if we have reached the threshold
-			if count >= threshold {
-				return lastResp, count, true, nil
-			}
+func ThresholdCorrectableQuorum[Req, Resp msg](threshold int) QuorumFunc[Req, Resp, *Correctable[Resp]] {
+	return func(ctx *ClientCtx[Req, Resp]) (*Correctable[Resp], error) {
+		corr := &Correctable[Resp]{
+			level:  LevelNotSet,
+			donech: make(chan struct{}, 1),
 		}
+		go func() {
+			var (
+				lastResp Resp
+				found    bool
+				count    int
+				errs     []nodeError
+			)
 
-		var zero Resp
-		return zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count}
+			for result := range ctx.Responses() {
+				if result.Err != nil {
+					errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
+					continue
+				}
+
+				count++
+				if !found {
+					lastResp = result.Value
+					found = true
+				} else {
+					lastResp = result.Value
+				}
+
+				// Check if we have reached the threshold
+				done := count >= threshold
+				corr.Update(lastResp, count, done, nil)
+				if done {
+					return
+				}
+			}
+
+			var zero Resp
+			// If we didn't reach the threshold, return error
+			// Note: we might have updated with some level < threshold already.
+			// Now we update with done=true and error.
+			corr.Update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
+		}()
+		return corr, nil
 	}
 }
 

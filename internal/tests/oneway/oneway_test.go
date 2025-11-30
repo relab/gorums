@@ -10,6 +10,7 @@ import (
 	"github.com/relab/gorums/internal/tests/oneway"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type onewaySrv struct {
@@ -193,9 +194,9 @@ func TestMulticastPerNode(t *testing.T) {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 				if test.sendWait {
-					oneway.Multicast(cfgCtx, in, gorums.MapRequest(test.f))
+					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty, *emptypb.Empty](test.f)))
 				} else {
-					oneway.Multicast(cfgCtx, in, gorums.MapRequest(test.f), gorums.WithNoSendWaiting())
+					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty, *emptypb.Empty](test.f)), gorums.WithNoSendWaiting())
 				}
 			}
 
