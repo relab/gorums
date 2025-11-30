@@ -21,6 +21,24 @@ type NodeResponse[T any] struct {
 	Err    error
 }
 
+// newNodeResponse converts a NodeResponse[msg] to a NodeResponse[Resp].
+// This is necessary because the channel layer's response router returns a
+// NodeResponse[msg], while the calltype expects a NodeResponse[Resp].
+func newNodeResponse[Resp msg](r NodeResponse[msg]) NodeResponse[Resp] {
+	res := NodeResponse[Resp]{
+		NodeID: r.NodeID,
+		Err:    r.Err,
+	}
+	if r.Err == nil {
+		if val, ok := r.Value.(Resp); ok {
+			res.Value = val
+		} else {
+			res.Err = ErrTypeMismatch
+		}
+	}
+	return res
+}
+
 var streamDownErr = status.Error(codes.Unavailable, "stream is down")
 
 type request struct {

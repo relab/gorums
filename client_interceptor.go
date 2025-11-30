@@ -169,6 +169,7 @@ func (c *ClientCtx[Req, Resp]) Responses() Responses[Resp] {
 	return c.responses
 }
 
+// defaultResponses returns an iterator that yields at most c.expectedReplies responses.
 func (c *ClientCtx[Req, Resp]) defaultResponses() Responses[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger lazy sending
@@ -179,20 +180,29 @@ func (c *ClientCtx[Req, Resp]) defaultResponses() Responses[Resp] {
 		for range c.expectedReplies {
 			select {
 			case r := <-c.replyChan:
-				// We get a Result[proto.Message] from the channel layer's
-				// response router; however, we convert it to Result[Resp]
-				// here to match the calltype's expected response type.
-				res := NodeResponse[Resp]{
-					NodeID: r.NodeID,
-					Err:    r.Err,
+				res := newNodeResponse[Resp](r)
+				if !yield(res) {
+					return // Consumer stopped iteration
 				}
-				if r.Err == nil {
-					if val, ok := r.Value.(Resp); ok {
-						res.Value = val
-					} else {
-						res.Err = ErrTypeMismatch
-					}
-				}
+			case <-c.Done():
+				return // Context canceled
+			}
+		}
+	}
+}
+
+// streamingResponses returns an iterator that yields responses as they arrive from nodes
+// until the context is canceled or breaking from the range loop.
+func (c *ClientCtx[Req, Resp]) streamingResponses() Responses[Resp] {
+	return func(yield func(NodeResponse[Resp]) bool) {
+		// Trigger lazy sending
+		if c.sendOnce != nil {
+			c.sendOnce()
+		}
+		for {
+			select {
+			case r := <-c.replyChan:
+				res := newNodeResponse[Resp](r)
 				if !yield(res) {
 					return // Consumer stopped iteration
 				}
