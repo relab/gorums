@@ -41,7 +41,7 @@ var (
 // use the gorums.WithCorrectableQuorumFunc call option.
 func Correctable(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableCorrectableResponse {
 	return gorums.CorrectableCall(
-		ctx, in, "correctable.CorrectableTest.Correctable", false,
+		ctx, in, "correctable.CorrectableTest.Correctable",
 		gorums.MajorityCorrectableQuorum[*CorrectableRequest, *CorrectableResponse],
 		opts...,
 	)
@@ -54,8 +54,8 @@ func Correctable(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...goru
 // By default, a majority quorum function is used. To override the quorum function,
 // use the gorums.WithCorrectableQuorumFunc call option.
 func CorrectableStream(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableStreamCorrectableResponse {
-	return gorums.CorrectableCall(
-		ctx, in, "correctable.CorrectableTest.CorrectableStream", true,
+	return gorums.CorrectableStreamCall(
+		ctx, in, "correctable.CorrectableTest.CorrectableStream",
 		gorums.MajorityCorrectableQuorum[*CorrectableRequest, *CorrectableResponse],
 		opts...,
 	)
