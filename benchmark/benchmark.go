@@ -38,10 +38,10 @@ type (
 	serverFunc  func(context.Context, *TimedMsg)
 )
 
-func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error) {
+func runQCBenchmark(opts Options, cfg Configuration, f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
+	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
@@ -65,7 +65,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 	}
 
 	if opts.Remote {
-		_, err := StartBenchmark(cfgCtx, &StartRequest{})
+		_, err := StartBenchmark(cfgCtx, &StartRequest{}, gorums.WithQuorumFunc(StartBenchmarkQF(opts.NumNodes)))
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +95,8 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 
 	result := s.GetResult()
 	if opts.Remote {
-		memStat, err := StopBenchmark(cfgCtx, &StopRequest{})
+		// TODO(meling): How can we get memStat to be of type *MemoryStatList?
+		memStat, err := StopBenchmark(cfgCtx, &StopRequest{}, gorums.WithQuorumFunc(StopBenchmarkQF(opts.NumNodes)))
 		if err != nil {
 			return nil, err
 		}
@@ -105,10 +106,10 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 	return result, nil
 }
 
-func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Result, error) {
+func runAsyncQCBenchmark(opts Options, cfg Configuration, f asyncQCFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
+	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
@@ -142,7 +143,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	}
 
 	if opts.Remote {
-		_, err := StartBenchmark(cfgCtx, &StartRequest{})
+		_, err := StartBenchmark(cfgCtx, &StartRequest{}, gorums.WithQuorumFunc(StartBenchmarkQF(opts.NumNodes)))
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +181,8 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 
 	result := s.GetResult()
 	if opts.Remote {
-		memStat, err := StopBenchmark(cfgCtx, &StopRequest{})
+		// TODO(meling): How can we get memStat to be of type *MemoryStatList?
+		memStat, err := StopBenchmark(cfgCtx, &StopRequest{}, gorums.WithQuorumFunc(StopBenchmarkQF(opts.NumNodes)))
 		if err != nil {
 			return nil, err
 		}
@@ -190,10 +192,10 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	return result, nil
 }
 
-func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result, error) {
+func runServerBenchmark(opts Options, cfg Configuration, f serverFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
+	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 	payload := make([]byte, opts.Payload)
 	var g errgroup.Group
 	var start runtime.MemStats
@@ -215,7 +217,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 		return nil, err
 	}
 
-	_, err = StartServerBenchmark(cfgCtx, &StartRequest{})
+	_, err = StartServerBenchmark(cfgCtx, &StartRequest{}, gorums.WithQuorumFunc(StartServerBenchmarkQF(opts.NumNodes)))
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +233,7 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 	}
 	runtime.ReadMemStats(&end)
 
-	resp, err := StopServerBenchmark(cfgCtx, &StopRequest{})
+	resp, err := StopServerBenchmark(cfgCtx, &StopRequest{}, gorums.WithQuorumFunc(StopServerBenchmarkQF(opts.NumNodes)))
 	if err != nil {
 		return nil, err
 	}
@@ -245,29 +247,41 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 }
 
 // GetBenchmarks returns a list of Benchmarks that can be performed on the configuration
-func GetBenchmarks(cfg *Configuration) []Bench {
+func GetBenchmarks(cfg Configuration) []Bench {
 	m := []Bench{
 		{
 			Name:        "QuorumCall",
 			Description: "NodeStream based quorum call implementation with FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, QuorumCall) },
+			runBench: func(opts Options) (*Result, error) {
+				return runQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, callOpts ...gorums.CallOption) (*Echo, error) {
+					return QuorumCall(ctx, in, append(callOpts, gorums.WithQuorumFunc(qf(opts.QuorumSize)))...)
+				})
+			},
 		},
 		{
 			Name:        "AsyncQuorumCall",
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, AsyncQuorumCall) },
+			runBench: func(opts Options) (*Result, error) {
+				return runAsyncQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, callOpts ...gorums.CallOption) *AsyncEcho {
+					return AsyncQuorumCall(ctx, in, append(callOpts, gorums.WithQuorumFunc(qf(opts.QuorumSize)))...)
+				})
+			},
 		},
 		{
 			Name:        "SlowServer",
 			Description: "Quorum Call with a 10s processing time on the server",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, SlowServer) },
+			runBench: func(opts Options) (*Result, error) {
+				return runQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, callOpts ...gorums.CallOption) (*Echo, error) {
+					return SlowServer(ctx, in, append(callOpts, gorums.WithQuorumFunc(qf(opts.QuorumSize)))...)
+				})
+			},
 		},
 		{
 			Name:        "Multicast",
 			Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
 			runBench: func(opts Options) (*Result, error) {
 				return runServerBenchmark(opts, cfg, func(ctx context.Context, msg *TimedMsg) {
-					cfgCtx := gorums.WithConfigContext(ctx, cfg.RawConfiguration)
+					cfgCtx := gorums.WithConfigContext(ctx, cfg)
 					Multicast(cfgCtx, msg)
 				})
 			},
@@ -277,7 +291,7 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 }
 
 // RunBenchmarks runs all the benchmarks that match the given regex with the given options
-func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg *Configuration) ([]*Result, error) {
+func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg Configuration) ([]*Result, error) {
 	benchmarks := GetBenchmarks(cfg)
 	var results []*Result
 	for _, b := range benchmarks {
