@@ -12,27 +12,181 @@ import (
 type msg = proto.Message
 
 // QuorumInterceptor intercepts and processes quorum calls, allowing modification of
-// requests, responses, and aggregation logic. Interceptors can be chained together,
-// with each interceptor wrapping a QuorumFunc.
+// requests, responses, and aggregation logic. Interceptors can be chained together.
 //
 // Type parameters:
 //   - Req: The request message type sent to nodes
 //   - Resp: The response message type from individual nodes
-//   - Out: The final output type returned by the interceptor chain
-//
-// The Out type parameter allows interceptors to transform responses to a type different
-// from the original response type specified in the service method's definition.
-type QuorumInterceptor[Req, Resp msg, Out any] func(QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out]
+type QuorumInterceptor[Req, Resp msg] func(*Responses[Req, Resp])
 
-// QuorumFunc processes a quorum call and returns the aggregated result.
-// This is the function type that interceptors call to continue the chain.
-//
-// In a chain of interceptors, the final QuorumFunc is the base quorum function
-// (e.g. MajorityQuorum) that actually collects and aggregates responses.
-type QuorumFunc[Req, Resp msg, Out any] func(*ClientCtx[Req, Resp]) (Out, error)
+// ResponseSeq is an iterator that yields NodeResponse[T] values from a quorum call.
+type ResponseSeq[T msg] iter.Seq[NodeResponse[T]]
 
-// Responses is an iterator that yields Result[T] values from a quorum call.
-type Responses[T msg] iter.Seq[NodeResponse[T]]
+// Responses provides access to quorum call responses and terminal methods.
+// It is returned by quorum call functions and allows fluent-style API usage:
+//
+//	resp, err := ReadQC(ctx, req).Majority()
+//	// or
+//	resp, err := ReadQC(ctx, req).First()
+//	// or
+//	replies := ReadQC(ctx, req).IgnoreErrors().CollectAll()
+//
+// Type parameters:
+//   - Req: The request message type sent to nodes
+//   - Resp: The response message type from individual nodes
+type Responses[Req, Resp msg] struct {
+	ctx *ClientCtx[Req, Resp]
+}
+
+// Size returns the number of nodes in the configuration.
+func (r *Responses[Req, Resp]) Size() int {
+	return r.ctx.Size()
+}
+
+// Seq returns the underlying response iterator for advanced use cases.
+// Users can use this to implement custom aggregation logic.
+//
+// Note: This method triggers lazy sending of requests.
+func (r *Responses[Req, Resp]) Seq() ResponseSeq[Resp] {
+	return r.ctx.Responses()
+}
+
+// IgnoreErrors returns a Responses that yields only successful responses,
+// discarding any responses with errors.
+func (r *Responses[Req, Resp]) IgnoreErrors() *Responses[Req, Resp] {
+	old := r.ctx.responseSeq
+	r.ctx.responseSeq = old.IgnoreErrors()
+	return r
+}
+
+// Filter returns a Responses that yields only the responses for which the
+// provided keep function returns true.
+func (r *Responses[Req, Resp]) Filter(keep func(NodeResponse[Resp]) bool) *Responses[Req, Resp] {
+	old := r.ctx.responseSeq
+	r.ctx.responseSeq = old.Filter(keep)
+	return r
+}
+
+// CollectN collects up to n responses, including errors, into a map by node ID.
+// It returns early if n responses are collected or the iterator is exhausted.
+func (r *Responses[Req, Resp]) CollectN(n int) map[uint32]Resp {
+	return r.ctx.Responses().CollectN(n)
+}
+
+// CollectAll collects all responses, including errors, into a map by node ID.
+func (r *Responses[Req, Resp]) CollectAll() map[uint32]Resp {
+	return r.ctx.Responses().CollectAll()
+}
+
+// -------------------------------------------------------------------------
+// Terminal Methods (Aggregators)
+// -------------------------------------------------------------------------
+
+// First returns the first successful response received from any node.
+// This is useful for read-any patterns where any single response is sufficient.
+func (r *Responses[Req, Resp]) First() (Resp, error) {
+	return r.Threshold(1)
+}
+
+// Majority returns the first response once a simple majority (⌈(n+1)/2⌉)
+// of successful responses are received.
+func (r *Responses[Req, Resp]) Majority() (Resp, error) {
+	quorumSize := r.ctx.Size()/2 + 1
+	return r.Threshold(quorumSize)
+}
+
+// All returns the first response once all nodes have responded successfully.
+// If any node fails, it returns an error.
+func (r *Responses[Req, Resp]) All() (Resp, error) {
+	return r.Threshold(r.ctx.Size())
+}
+
+// Threshold waits for a threshold number of successful responses.
+// It returns the first response once the threshold is reached.
+func (r *Responses[Req, Resp]) Threshold(threshold int) (Resp, error) {
+	var (
+		firstResp Resp
+		found     bool
+		count     int
+		errs      []nodeError
+	)
+
+	for result := range r.ctx.Responses() {
+		if result.Err != nil {
+			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
+			continue
+		}
+
+		count++
+		if !found {
+			firstResp = result.Value
+			found = true
+		}
+
+		// Check if we have reached the threshold
+		if count >= threshold {
+			return firstResp, nil
+		}
+	}
+
+	var zero Resp
+	return zero, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count}
+}
+
+// WaitForLevel returns a Correctable that provides progressive updates
+// as responses arrive. The level increases with each successful response.
+// Use this for correctable quorum patterns where you want to observe
+// intermediate states.
+//
+// Example:
+//
+//	corr := ReadQC(ctx, req).WaitForLevel(2)
+//	// Wait for level 2 to be reached
+//	<-corr.Watch(2)
+//	resp, level, err := corr.Get()
+func (r *Responses[Req, Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
+	corr := &Correctable[Resp]{
+		level:  LevelNotSet,
+		donech: make(chan struct{}, 1),
+	}
+
+	go func() {
+		var (
+			lastResp Resp
+			found    bool
+			count    int
+			errs     []nodeError
+		)
+
+		for result := range r.ctx.Responses() {
+			if result.Err != nil {
+				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
+				continue
+			}
+
+			count++
+			lastResp = result.Value
+			found = true
+
+			// Check if we have reached the threshold
+			done := count >= threshold
+			corr.Update(lastResp, count, done, nil)
+			if done {
+				return
+			}
+		}
+
+		// If we didn't reach the threshold, mark as done with error
+		if !found {
+			var zero Resp
+			corr.Update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
+		} else {
+			corr.Update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
+		}
+	}()
+
+	return corr
+}
 
 // ClientCtx provides context and access to the quorum call state for interceptors.
 // It exposes the request, configuration, and an iterator over node responses.
@@ -51,9 +205,9 @@ type ClientCtx[Req, Resp msg] struct {
 	// sendOnce is called lazily on the first call to Responses().
 	sendOnce func()
 
-	// responses is the iterator that yields node responses.
+	// responseSeq is the iterator that yields node responses.
 	// Interceptors can wrap this iterator to modify responses.
-	responses Responses[Resp]
+	responseSeq ResponseSeq[Resp]
 }
 
 // newClientCtx creates a new ClientCtx for a quorum call.
@@ -73,7 +227,7 @@ func newClientCtx[Req, Resp msg](
 		reqTransforms:   nil,
 		expectedReplies: config.Size(),
 	}
-	c.responses = c.defaultResponses()
+	c.responseSeq = c.defaultResponseSeq()
 	return c
 }
 
@@ -165,12 +319,12 @@ func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Mes
 //	    }
 //	    // Process result.Value
 //	}
-func (c *ClientCtx[Req, Resp]) Responses() Responses[Resp] {
-	return c.responses
+func (c *ClientCtx[Req, Resp]) Responses() ResponseSeq[Resp] {
+	return c.responseSeq
 }
 
-// defaultResponses returns an iterator that yields at most c.expectedReplies responses.
-func (c *ClientCtx[Req, Resp]) defaultResponses() Responses[Resp] {
+// defaultResponseSeq returns an iterator that yields at most c.expectedReplies responses.
+func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger lazy sending
 		if c.sendOnce != nil {
@@ -191,9 +345,9 @@ func (c *ClientCtx[Req, Resp]) defaultResponses() Responses[Resp] {
 	}
 }
 
-// streamingResponses returns an iterator that yields responses as they arrive from nodes
+// streamingResponseSeq returns an iterator that yields responses as they arrive from nodes
 // until the context is canceled or breaking from the range loop.
-func (c *ClientCtx[Req, Resp]) streamingResponses() Responses[Resp] {
+func (c *ClientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger lazy sending
 		if c.sendOnce != nil {
@@ -227,7 +381,7 @@ func (c *ClientCtx[Req, Resp]) streamingResponses() Responses[Resp] {
 //	    // resp is guaranteed to be a successful response
 //	    process(resp)
 //	}
-func (seq Responses[Resp]) IgnoreErrors() Responses[Resp] {
+func (seq ResponseSeq[Resp]) IgnoreErrors() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		for result := range seq {
 			if result.Err == nil {
@@ -242,7 +396,7 @@ func (seq Responses[Resp]) IgnoreErrors() Responses[Resp] {
 // Filter returns an iterator that yields only the responses for which the
 // provided keep function returns true. This is useful for verifying or filtering
 // responses from servers before further processing.
-func (seq Responses[Resp]) Filter(keep func(NodeResponse[Resp]) bool) Responses[Resp] {
+func (seq ResponseSeq[Resp]) Filter(keep func(NodeResponse[Resp]) bool) ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		for result := range seq {
 			if keep(result) {
@@ -257,7 +411,7 @@ func (seq Responses[Resp]) Filter(keep func(NodeResponse[Resp]) bool) Responses[
 // CollectN collects up to n responses, including errors, from the iterator
 // into a map by node ID. It returns early if n responses are collected or
 // the iterator is exhausted.
-func (seq Responses[Resp]) CollectN(n int) map[uint32]Resp {
+func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
 	replies := make(map[uint32]Resp, n)
 	for result := range seq {
 		replies[result.NodeID] = result.Value
@@ -270,7 +424,7 @@ func (seq Responses[Resp]) CollectN(n int) map[uint32]Resp {
 
 // CollectAll collects all responses, including errors, from the iterator
 // into a map by node ID.
-func (seq Responses[Resp]) CollectAll() map[uint32]Resp {
+func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 	replies := make(map[uint32]Resp)
 	for result := range seq {
 		replies[result.NodeID] = result.Value
@@ -287,13 +441,10 @@ func (seq Responses[Resp]) CollectAll() map[uint32]Resp {
 // The fn receives the original request and a node, and returns the transformed
 // request to send to that node. If the function returns an invalid message or nil,
 // the request to that node is skipped.
-func MapRequest[Req, Resp msg, Out any](fn func(Req, *RawNode) Req) QuorumInterceptor[Req, Resp, Out] {
-	return func(next QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
-		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
-			if fn != nil {
-				ctx.RegisterTransformFunc(fn)
-			}
-			return next(ctx)
+func MapRequest[Req, Resp msg](fn func(Req, *RawNode) Req) QuorumInterceptor[Req, Resp] {
+	return func(r *Responses[Req, Resp]) {
+		if fn != nil {
+			r.ctx.RegisterTransformFunc(fn)
 		}
 	}
 }
@@ -302,30 +453,27 @@ func MapRequest[Req, Resp msg, Out any](fn func(Req, *RawNode) Req) QuorumInterc
 //
 // The fn receives the response from a node and the node itself, and returns the
 // transformed response.
-func MapResponse[Req, Resp msg, Out any](fn func(Resp, *RawNode) Resp) QuorumInterceptor[Req, Resp, Out] {
-	return func(next QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
-		return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
-			if fn != nil {
-				// Wrap the existing response iterator with the transformation logic.
-				// We capture the current iterator (oldResponses) and replace it with a new one
-				// that applies fn to each successful response.
-				oldResponses := ctx.responses
-				ctx.responses = func(yield func(NodeResponse[Resp]) bool) {
-					for resp := range oldResponses {
-						// We only apply the transformation if there is no error.
-						// Errors are passed through as-is.
-						if resp.Err == nil {
-							if node := ctx.Node(resp.NodeID); node != nil {
-								resp.Value = fn(resp.Value, node)
-							}
+func MapResponse[Req, Resp msg](fn func(Resp, *RawNode) Resp) QuorumInterceptor[Req, Resp] {
+	return func(r *Responses[Req, Resp]) {
+		if fn != nil {
+			// Wrap the existing response iterator with the transformation logic.
+			// We capture the current iterator (oldResponses) and replace it with a new one
+			// that applies fn to each successful response.
+			oldResponses := r.ctx.responseSeq
+			r.ctx.responseSeq = func(yield func(NodeResponse[Resp]) bool) {
+				for resp := range oldResponses {
+					// We only apply the transformation if there is no error.
+					// Errors are passed through as-is.
+					if resp.Err == nil {
+						if node := r.ctx.Node(resp.NodeID); node != nil {
+							resp.Value = fn(resp.Value, node)
 						}
-						if !yield(resp) {
-							return
-						}
+					}
+					if !yield(resp) {
+						return
 					}
 				}
 			}
-			return next(ctx)
 		}
 	}
 }
@@ -354,245 +502,12 @@ func MapResponse[Req, Resp msg, Out any](fn func(Resp, *RawNode) Resp) QuorumInt
 //	        return resp
 //	    },
 //	)
-func Map[Req, Resp msg, Out any](
+func Map[Req, Resp msg](
 	reqFunc func(Req, *RawNode) Req,
 	respFunc func(Resp, *RawNode) Resp,
-) QuorumInterceptor[Req, Resp, Out] {
-	return func(next QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
-		// Apply MapResponse first (wrapping the iterator), then MapRequest (registering transform).
-		// This ensures MapRequest registers its transform before MapResponse wraps the iterator
-		// (though order doesn't strictly matter for these two specific operations as they affect different phases).
-		// However, logically, we want to construct the chain such that both are applied.
-		return MapRequest[Req, Resp, Out](reqFunc)(MapResponse[Req, Resp, Out](respFunc)(next))
+) QuorumInterceptor[Req, Resp] {
+	return func(r *Responses[Req, Resp]) {
+		MapRequest[Req, Resp](reqFunc)(r)
+		MapResponse[Req, Resp](respFunc)(r)
 	}
-}
-
-// QuorumSpecInterceptor returns an interceptor that wraps a legacy QuorumSpec-style quorum function.
-// This adapter allows gradual migration from the legacy QuorumCall approach to interceptors.
-//
-// The quorum function receives the original request and a map of replies, and returns
-// the aggregated result and a boolean indicating whether quorum was reached.
-//
-// Note: This is a terminal handler that collects all responses itself. Any base quorum function
-// passed when using this interceptor will be ignored.
-//
-// Example:
-//
-//	// Legacy QuorumSpec function
-//	qf := func(req *Request, replies map[uint32]*Response) (*Result, bool) {
-//	    if len(replies) > len(config)/2 {
-//	        return replies[0], true
-//	    }
-//	    return nil, false
-//	}
-//
-//	// Convert to interceptor
-//	interceptor := QuorumSpecInterceptor(qf)
-func QuorumSpecInterceptor[Req, Resp msg, Out any](
-	qf func(Req, map[uint32]Resp) (Out, bool),
-) QuorumInterceptor[Req, Resp, Out] {
-	return func(_ QuorumFunc[Req, Resp, Out]) QuorumFunc[Req, Resp, Out] {
-		return QuorumSpecFunc(qf)
-	}
-}
-
-// QuorumSpecFunc converts a legacy QuorumSpec-style quorum function to a QuorumFunc.
-// This allows gradual migration from the legacy QuorumCall approach to interceptors.
-//
-// The quorum function receives the original request and a map of replies, and returns
-// the aggregated result and a boolean indicating whether quorum was reached.
-//
-// Example:
-//
-//	// Legacy QuorumSpec function
-//	qf := func(req *Request, replies map[uint32]*Response) (*Result, bool) {
-//	    if len(replies) > len(config)/2 {
-//	        return replies[0], true
-//	    }
-//	    return nil, false
-//	}
-//
-//	// Convert to QuorumFunc
-//	quorumFunc := QuorumSpecFunc(qf)
-func QuorumSpecFunc[Req, Resp msg, Out any](
-	qf func(Req, map[uint32]Resp) (Out, bool),
-) QuorumFunc[Req, Resp, Out] {
-	return func(ctx *ClientCtx[Req, Resp]) (Out, error) {
-		replies := ctx.Responses().IgnoreErrors().CollectAll()
-		resp, ok := qf(ctx.Request(), replies)
-		if !ok {
-			var zero Out
-			return zero, QuorumCallError{cause: ErrIncomplete, replies: len(replies)}
-		}
-		return resp, nil
-	}
-}
-
-// -------------------------------------------------------------------------
-// Base Quorum Functions (Aggregators)
-// -------------------------------------------------------------------------
-
-// ThresholdQuorum returns a QuorumFunc that waits for a threshold number of
-// successful responses. It returns the first response once the threshold is reached.
-//
-// This is a base quorum function that terminates the interceptor chain.
-//
-// Example:
-//
-//	// Create a quorum that needs 2 out of 3 responses
-//	qf := ThresholdQuorum[*Request, *Response](2)
-func ThresholdQuorum[Req, Resp msg](threshold int) QuorumFunc[Req, Resp, Resp] {
-	return func(ctx *ClientCtx[Req, Resp]) (Resp, error) {
-		var (
-			firstResp Resp
-			found     bool
-			count     int
-			errs      []nodeError
-		)
-
-		for result := range ctx.Responses() {
-			if result.Err != nil {
-				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
-				continue
-			}
-
-			count++
-			if !found {
-				firstResp = result.Value
-				found = true
-			}
-
-			// Check if we have reached the threshold
-			if count >= threshold {
-				return firstResp, nil
-			}
-		}
-
-		var zero Resp
-		return zero, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count}
-	}
-}
-
-// MajorityQuorum returns the first response once a simple majority (⌈(n+1)/2⌉)
-// of successful responses are received.
-//
-// This is a base quorum function that terminates the interceptor chain.
-func MajorityQuorum[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (Resp, error) {
-	quorumSize := ctx.Size()/2 + 1
-	return ThresholdQuorum[Req, Resp](quorumSize)(ctx)
-}
-
-// FirstResponse returns the first successful response received from any node.
-// This is useful for read-any patterns where any single response is sufficient.
-//
-// This is a base quorum function that terminates the interceptor chain.
-func FirstResponse[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (Resp, error) {
-	return ThresholdQuorum[Req, Resp](1)(ctx)
-}
-
-// AllResponses returns the first response once all nodes have responded successfully.
-// If any node fails, it returns an error. This is useful for write-all patterns.
-//
-// This is a base quorum function that terminates the interceptor chain.
-func AllResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (Resp, error) {
-	return ThresholdQuorum[Req, Resp](ctx.Size())(ctx)
-}
-
-// CollectAllResponses returns a map of all successful responses indexed by node ID.
-//
-// This is a base quorum function that terminates the interceptor chain.
-func CollectAllResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (map[uint32]Resp, error) {
-	return ctx.Responses().CollectAll(), nil
-}
-
-// -------------------------------------------------------------------------
-// Correctable Quorum Functions
-// -------------------------------------------------------------------------
-
-// MajorityCorrectableQuorum is a correctable quorum function that returns once
-// a simple majority (⌈(n+1)/2⌉) of successful responses are received.
-// The level is set to the number of responses received, and done is true once
-// the majority threshold is reached.
-//
-// This is a base correctable quorum function for use with correctable calls.
-func MajorityCorrectableQuorum[Req, Resp msg](ctx *ClientCtx[Req, Resp]) (*Correctable[Resp], error) {
-	quorumSize := ctx.Size()/2 + 1
-	return ThresholdCorrectableQuorum[Req, Resp](quorumSize)(ctx)
-}
-
-// ThresholdCorrectableQuorum returns a QuorumFunc that reports progress
-// as responses arrive and completes when the threshold is reached.
-// The level increases with each successful response received.
-//
-// This is a base correctable quorum function for use with correctable calls.
-func ThresholdCorrectableQuorum[Req, Resp msg](threshold int) QuorumFunc[Req, Resp, *Correctable[Resp]] {
-	return func(ctx *ClientCtx[Req, Resp]) (*Correctable[Resp], error) {
-		corr := &Correctable[Resp]{
-			level:  LevelNotSet,
-			donech: make(chan struct{}, 1),
-		}
-		go func() {
-			var (
-				lastResp Resp
-				found    bool
-				count    int
-				errs     []nodeError
-			)
-
-			for result := range ctx.Responses() {
-				if result.Err != nil {
-					errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
-					continue
-				}
-
-				count++
-				if !found {
-					lastResp = result.Value
-					found = true
-				} else {
-					lastResp = result.Value
-				}
-
-				// Check if we have reached the threshold
-				done := count >= threshold
-				corr.Update(lastResp, count, done, nil)
-				if done {
-					return
-				}
-			}
-
-			var zero Resp
-			// If we didn't reach the threshold, return error
-			// Note: we might have updated with some level < threshold already.
-			// Now we update with done=true and error.
-			corr.Update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
-		}()
-		return corr, nil
-	}
-}
-
-// -------------------------------------------------------------------------
-// Chain
-// -------------------------------------------------------------------------
-
-// Chain returns a QuorumFunc that composes the provided interceptors around the base function.
-// The interceptors are executed in the order provided, wrapping the base QuorumFunc.
-//
-// The base QuorumFunc is the terminal handler that actually processes the responses.
-// Interceptors can wrap this handler to add behavior before or after the base handler.
-//
-// Execution order:
-//  1. interceptors[0] (outermost wrapper)
-//  2. interceptors[1]
-//     ...
-//  3. base (innermost handler, e.g. aggregation)
-func Chain[Req, Resp msg, Out any](
-	base QuorumFunc[Req, Resp, Out],
-	interceptors ...QuorumInterceptor[Req, Resp, Out],
-) QuorumFunc[Req, Resp, Out] {
-	handler := base
-	for i := len(interceptors) - 1; i >= 0; i-- {
-		handler = interceptors[i](handler)
-	}
-	return handler
 }

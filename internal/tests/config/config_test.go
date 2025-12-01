@@ -55,25 +55,11 @@ func setup(t *testing.T, mgr *gorums.RawManager, cfgSize int) (cfg gorums.RawCon
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
 	callRPC := func(cfg gorums.RawConfiguration) {
-		// qf is a QuorumFunc that returns a single response if the quorum is reached.
-		qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
-			quorum := ctx.Size()/2 + 1
-			replies := ctx.Responses().IgnoreErrors().CollectAll()
-			if len(replies) < quorum {
-				return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
-			}
-			var reply *Response
-			for _, r := range replies {
-				reply = r
-				break
-			}
-			return reply, nil
-		}
 		cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 		for i := range 5 {
+			// Use the new terminal method API - wait for a majority
 			resp, err := Config(cfgCtx,
-				Request_builder{Num: uint64(i)}.Build(),
-				gorums.WithQuorumFunc(qf))
+				Request_builder{Num: uint64(i)}.Build()).Majority()
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -37,12 +37,9 @@ var (
 // Correctable asynchronously invokes a correctable quorum call on each node
 // in the configuration in ctx and returns a CorrectableCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithCorrectableQuorumFunc call option.
 func Correctable(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableCorrectableResponse {
-	return gorums.CorrectableCall(
+	return gorums.CorrectableCall[*CorrectableRequest, *CorrectableResponse](
 		ctx, in, "correctable.CorrectableTest.Correctable",
-		gorums.MajorityCorrectableQuorum[*CorrectableRequest, *CorrectableResponse],
 		opts...,
 	)
 }
@@ -51,12 +48,9 @@ func Correctable(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...goru
 // in the configuration in ctx and returns a CorrectableStreamCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
 // This method supports server-side preliminary replies (correctable stream).
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithCorrectableQuorumFunc call option.
 func CorrectableStream(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableStreamCorrectableResponse {
-	return gorums.CorrectableStreamCall(
+	return gorums.CorrectableStreamCall[*CorrectableRequest, *CorrectableResponse](
 		ctx, in, "correctable.CorrectableTest.CorrectableStream",
-		gorums.MajorityCorrectableQuorum[*CorrectableRequest, *CorrectableResponse],
 		opts...,
 	)
 }

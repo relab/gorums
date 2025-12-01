@@ -8,8 +8,6 @@ var asyncCallComment = `
 // {{$method}} asynchronously invokes a quorum call on the configuration in ctx
 // and returns a {{$asyncOut}}, which can be used to inspect the quorum call
 // reply and error when available.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
 {{end -}}
 `
 
@@ -17,7 +15,6 @@ var asyncVar = `
 {{$genFile := .GenFile}}
 {{$configContext := use "gorums.ConfigContext" .GenFile}}
 {{$asyncCall := use "gorums.AsyncCall" .GenFile}}
-{{$majorityQuorum := use "gorums.MajorityQuorum" .GenFile}}
 {{$callOption := use "gorums.CallOption" .GenFile}}
 {{$asyncOut := outType .Method $out}}
 `
@@ -27,9 +24,8 @@ var asyncSignature = `func {{$method}}(` +
 	`opts ...{{$callOption}}) ` +
 	`*{{$asyncOut}} {`
 
-var asyncBody = `	return {{$asyncCall}}(
+var asyncBody = `	return {{$asyncCall}}[*{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
-		{{$majorityQuorum}}[*{{$in}}, *{{$out}}],
 		opts...,
 	)
 }

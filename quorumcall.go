@@ -6,45 +6,32 @@ import (
 	"github.com/relab/gorums/ordering"
 )
 
-// QuorumCallWithInterceptor performs a quorum call using an interceptor-based approach.
+// QuorumCallWithInterceptor performs a quorum call and returns a Responses object
+// that provides access to node responses via terminal methods and fluent iteration.
 //
 // Type parameters:
 //   - Req: The request message type
 //   - Resp: The response message type from individual nodes
-//   - Out: The final output type returned by the interceptor chain
 //
-// The base parameter is the default terminal handler that processes responses
-// (e.g., MajorityQuorum). This can be overridden via the WithQuorumFunc CallOption.
-// The opts parameter accepts CallOption values such as WithQuorumFunc and Interceptors.
+// The opts parameter accepts CallOption values such as Interceptors.
+// Interceptors are applied in the order they are provided via Interceptors,
+// modifying the Responses object before the user calls a terminal method.
 //
-// Interceptors are applied in the order they are provided via Interceptors:
-//  1. First interceptor (outermost wrapper)
-//  2. Second interceptor
-//     ...
-//  3. base (innermost handler, e.g. aggregation)
-//
-// Note: Messages are not sent to nodes before ctx.Responses() is called, applying any
-// registered request transformations. This lazy sending is necessary to allow interceptors
-// to register transformations prior to dispatch.
+// Note: Messages are not sent to nodes until a terminal method (like Majority, First)
+// or iterator method (like Seq) is called, applying any registered request transformations.
+// This lazy sending is necessary to allow interceptors to register transformations prior to dispatch.
 //
 // This function should be used by generated code only.
-func QuorumCallWithInterceptor[Req, Resp msg, Out any](
+func QuorumCallWithInterceptor[Req, Resp msg](
 	ctx *ConfigContext,
 	req Req,
 	method string,
-	base QuorumFunc[Req, Resp, Out],
 	opts ...CallOption,
-) (Out, error) {
+) *Responses[Req, Resp] {
 	config := ctx.Configuration()
 
 	// Apply options
 	callOpts := getCallOptions(E_Quorumcall, opts...)
-
-	// Use QuorumFunc from CallOptions if provided, otherwise use the base parameter
-	qf := base
-	if callOpts.quorumFunc != nil {
-		qf = callOpts.quorumFunc.(QuorumFunc[Req, Resp, Out])
-	}
 
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
@@ -70,6 +57,14 @@ func QuorumCallWithInterceptor[Req, Resp msg, Out any](
 	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
 	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
 
-	handler := Chain(qf, interceptorsFromCallOptions[Req, Resp, Out](callOpts)...)
-	return handler(clientCtx)
+	// Create the Responses object
+	responses := &Responses[Req, Resp]{ctx: clientCtx}
+
+	// Apply interceptors
+	for _, ic := range callOpts.interceptors {
+		interceptor := ic.(QuorumInterceptor[Req, Resp])
+		interceptor(responses)
+	}
+
+	return responses
 }

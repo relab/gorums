@@ -258,7 +258,8 @@ func (repl) readQC(args []string, cfg pb.Configuration) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
-	resp, err := pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build(), gorums.WithQuorumFunc(newestValue))
+	// Use the responses iterator to find the newest value
+	resp, err := newestValue(pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()))
 	cancel()
 	if err != nil {
 		fmt.Printf("Read RPC finished with error: %v\n", err)
@@ -278,7 +279,8 @@ func (repl) writeQC(args []string, cfg pb.Configuration) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
-	resp, err := pb.WriteQC(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build(), gorums.WithQuorumFunc(numUpdated))
+	// Use the responses iterator to count successful updates
+	resp, err := numUpdated(pb.WriteQC(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()))
 	cancel()
 	if err != nil {
 		fmt.Printf("Write RPC finished with error: %v\n", err)

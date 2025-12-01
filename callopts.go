@@ -9,7 +9,6 @@ type callOptions struct {
 	callType     *protoimpl.ExtensionInfo
 	waitSendDone bool
 	interceptors []any // Type-erased interceptors, restored by QuorumCallWithInterceptor
-	quorumFunc   any   // Type-erased QuorumFunc, restored by QuorumCallWithInterceptor
 }
 
 // mustWaitSendDone returns true if the caller of a one-way call type must wait
@@ -37,14 +36,6 @@ func getCallOptions(callType *protoimpl.ExtensionInfo, opts ...CallOption) callO
 	return o
 }
 
-func interceptorsFromCallOptions[Req, Resp proto.Message, Out any](o callOptions) []QuorumInterceptor[Req, Resp, Out] {
-	interceptors := make([]QuorumInterceptor[Req, Resp, Out], len(o.interceptors))
-	for i, ic := range o.interceptors {
-		interceptors[i] = ic.(QuorumInterceptor[Req, Resp, Out])
-	}
-	return interceptors
-}
-
 // WithNoSendWaiting is a CallOption that makes Unicast or Multicast methods
 // return immediately instead of blocking until the message has been sent.
 // By default, Unicast and Multicast methods wait for send completion.
@@ -55,32 +46,18 @@ func WithNoSendWaiting() CallOption {
 }
 
 // Interceptors returns a CallOption that adds quorum call interceptors.
-// Multiple interceptors are executed in the order provided, wrapping the base
-// quorum function.
+// Interceptors are executed in the order provided, modifying the Responses object
+// before the user calls a terminal method.
 //
 // Example:
 //
-//	resp, err := cfg.Read(ctx, req,
-//	    gorums.Interceptors(loggingInterceptor, retryInterceptor),
-//	)
-func Interceptors[Req, Resp proto.Message, Out any](interceptors ...QuorumInterceptor[Req, Resp, Out]) CallOption {
+//	resp, err := ReadQC(ctx, req,
+//	    gorums.Interceptors(loggingInterceptor, filterInterceptor),
+//	).Majority()
+func Interceptors[Req, Resp proto.Message](interceptors ...QuorumInterceptor[Req, Resp]) CallOption {
 	return func(o *callOptions) {
 		for _, interceptor := range interceptors {
 			o.interceptors = append(o.interceptors, interceptor)
 		}
-	}
-}
-
-// WithQuorumFunc returns a CallOption that sets the quorum function for a quorum call.
-// If not provided, a default majority quorum function is used.
-//
-// Example:
-//
-//	resp, err := paxos.Prepare(ctx, cfg, req,
-//	    gorums.WithQuorumFunc(myQuorumFunc),
-//	)
-func WithQuorumFunc[Req, Resp proto.Message, Out any](qf QuorumFunc[Req, Resp, Out]) CallOption {
-	return func(o *callOptions) {
-		o.quorumFunc = qf
 	}
 }

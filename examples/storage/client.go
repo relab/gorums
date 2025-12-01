@@ -29,10 +29,11 @@ func runClient(addresses []string) error {
 	return Repl(mgr, cfg)
 }
 
-// newestValue returns the reply that had the most recent timestamp
-func newestValue(ctx *gorums.ClientCtx[*proto.ReadRequest, *proto.ReadResponse]) (*proto.ReadResponse, error) {
+// newestValue processes responses from a ReadQC call and returns the reply
+// with the most recent timestamp.
+func newestValue(responses *gorums.Responses[*proto.ReadRequest, *proto.ReadResponse]) (*proto.ReadResponse, error) {
 	var newest *proto.ReadResponse
-	for resp := range ctx.Responses() {
+	for resp := range responses.Seq() {
 		if resp.Err != nil {
 			continue
 		}
@@ -46,10 +47,12 @@ func newestValue(ctx *gorums.ClientCtx[*proto.ReadRequest, *proto.ReadResponse])
 	return newest, nil
 }
 
-// numUpdated returns the number of replicas that updated their value
-func numUpdated(ctx *gorums.ClientCtx[*proto.WriteRequest, *proto.WriteResponse]) (*proto.WriteResponse, error) {
+// numUpdated processes responses from a WriteQC call and returns true if
+// a majority of nodes updated their value.
+func numUpdated(responses *gorums.Responses[*proto.WriteRequest, *proto.WriteResponse]) (*proto.WriteResponse, error) {
 	var count int
-	for resp := range ctx.Responses() {
+	size := responses.Size()
+	for resp := range responses.Seq() {
 		if resp.Err != nil {
 			continue
 		}
@@ -58,7 +61,7 @@ func numUpdated(ctx *gorums.ClientCtx[*proto.WriteRequest, *proto.WriteResponse]
 		}
 	}
 	// We need a majority of nodes to have updated the value
-	if count > ctx.Size()/2 {
+	if count > size/2 {
 		return proto.WriteResponse_builder{New: true}.Build(), nil
 	}
 	return proto.WriteResponse_builder{New: false}.Build(), nil

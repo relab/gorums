@@ -37,12 +37,9 @@ var (
 // AsyncQuorumCall asynchronously invokes a quorum call on the configuration in ctx
 // and returns a AsyncEcho, which can be used to inspect the quorum call
 // reply and error when available.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
 func AsyncQuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *AsyncEcho {
-	return gorums.AsyncCall(
+	return gorums.AsyncCall[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.AsyncQuorumCall",
-		gorums.MajorityQuorum[*Echo, *Echo],
 		opts...,
 	)
 }
@@ -57,70 +54,79 @@ func Multicast(ctx *gorums.ConfigContext, in *TimedMsg, opts ...gorums.CallOptio
 }
 
 // StartServerBenchmark is a quorum call invoked on all nodes in the configuration,
-// with the same argument in, and returns a combined result.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
-func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error) {
-	return gorums.QuorumCallWithInterceptor(
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//
+//	resp, err := StartServerBenchmark(ctx, in).Majority()
+func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartRequest, *StartResponse] {
+	return gorums.QuorumCallWithInterceptor[*StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartServerBenchmark",
-		gorums.MajorityQuorum[*StartRequest, *StartResponse],
 		opts...,
 	)
 }
 
 // StopServerBenchmark is a quorum call invoked on all nodes in the configuration,
-// with the same argument in, and returns a combined result.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
-func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) (resp *Result, err error) {
-	return gorums.QuorumCallWithInterceptor(
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//
+//	resp, err := StopServerBenchmark(ctx, in).Majority()
+func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*StopRequest, *Result] {
+	return gorums.QuorumCallWithInterceptor[*StopRequest, *Result](
 		ctx, in, "benchmark.Benchmark.StopServerBenchmark",
-		gorums.MajorityQuorum[*StopRequest, *Result],
 		opts...,
 	)
 }
 
 // StartBenchmark is a quorum call invoked on all nodes in the configuration,
-// with the same argument in, and returns a combined result.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
-func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) (resp *StartResponse, err error) {
-	return gorums.QuorumCallWithInterceptor(
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//
+//	resp, err := StartBenchmark(ctx, in).Majority()
+func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartRequest, *StartResponse] {
+	return gorums.QuorumCallWithInterceptor[*StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartBenchmark",
-		gorums.MajorityQuorum[*StartRequest, *StartResponse],
 		opts...,
 	)
 }
 
 // StopBenchmark is a quorum call invoked on all nodes in the configuration,
-// with the same argument in, and returns a combined result.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
-func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) (resp *MemoryStat, err error) {
-	return gorums.QuorumCallWithInterceptor(
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//
+//	resp, err := StopBenchmark(ctx, in).Majority()
+func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*StopRequest, *MemoryStat] {
+	return gorums.QuorumCallWithInterceptor[*StopRequest, *MemoryStat](
 		ctx, in, "benchmark.Benchmark.StopBenchmark",
-		gorums.MajorityQuorum[*StopRequest, *MemoryStat],
 		opts...,
 	)
 }
 
 // benchmarks
-func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error) {
-	return gorums.QuorumCallWithInterceptor(
+func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo, *Echo] {
+	return gorums.QuorumCallWithInterceptor[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.QuorumCall",
-		gorums.MajorityQuorum[*Echo, *Echo],
 		opts...,
 	)
 }
 
 // SlowServer is a quorum call invoked on all nodes in the configuration,
-// with the same argument in, and returns a combined result.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
-func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) (resp *Echo, err error) {
-	return gorums.QuorumCallWithInterceptor(
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//
+//	resp, err := SlowServer(ctx, in).Majority()
+func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo, *Echo] {
+	return gorums.QuorumCallWithInterceptor[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.SlowServer",
-		gorums.MajorityQuorum[*Echo, *Echo],
 		opts...,
 	)
 }

@@ -19,28 +19,25 @@ const (
 )
 
 // QuorumCall plain.
-func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
-	return gorums.QuorumCallWithInterceptor(
+func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Request, *Response] {
+	return gorums.QuorumCallWithInterceptor[*Request, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCall",
-		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
 // QuorumCallEmpty for testing imported message type.
-func QuorumCallEmpty(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) (resp *Response, err error) {
-	return gorums.QuorumCallWithInterceptor(
+func QuorumCallEmpty(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *gorums.Responses[*emptypb.Empty, *Response] {
+	return gorums.QuorumCallWithInterceptor[*emptypb.Empty, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCallEmpty",
-		gorums.MajorityQuorum[*emptypb.Empty, *Response],
 		opts...,
 	)
 }
 
 // QuorumCallEmpty2 for testing imported message type.
-func QuorumCallEmpty2(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *emptypb.Empty, err error) {
-	return gorums.QuorumCallWithInterceptor(
+func QuorumCallEmpty2(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Request, *emptypb.Empty] {
+	return gorums.QuorumCallWithInterceptor[*Request, *emptypb.Empty](
 		ctx, in, "dev.ZorumsService.QuorumCallEmpty2",
-		gorums.MajorityQuorum[*Request, *emptypb.Empty],
 		opts...,
 	)
 }

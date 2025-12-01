@@ -45,20 +45,18 @@ func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.
 
 // ReadQC executes the Read Quorum Call on a configuration
 // of Nodes and returns the most recent value.
-func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) (resp *ReadResponse, err error) {
-	return gorums.QuorumCallWithInterceptor(
+func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadRequest, *ReadResponse] {
+	return gorums.QuorumCallWithInterceptor[*ReadRequest, *ReadResponse](
 		ctx, in, "storage.Storage.ReadQC",
-		gorums.MajorityQuorum[*ReadRequest, *ReadResponse],
 		opts...,
 	)
 }
 
 // WriteQC executes the Write Quorum Call on a configuration
 // of Nodes and returns true if a majority of Nodes were updated.
-func WriteQC(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) (resp *WriteResponse, err error) {
-	return gorums.QuorumCallWithInterceptor(
+func WriteQC(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteRequest, *WriteResponse] {
+	return gorums.QuorumCallWithInterceptor[*WriteRequest, *WriteResponse](
 		ctx, in, "storage.Storage.WriteQC",
-		gorums.MajorityQuorum[*WriteRequest, *WriteResponse],
 		opts...,
 	)
 }

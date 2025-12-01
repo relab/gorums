@@ -20,27 +20,24 @@ const (
 
 // QuorumCallAsync plain.
 func QuorumCallAsync(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncResponse {
-	return gorums.AsyncCall(
+	return gorums.AsyncCall[*Request, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCallAsync",
-		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
 // QuorumCallAsync2 plain; with same return type: Response.
 func QuorumCallAsync2(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncResponse {
-	return gorums.AsyncCall(
+	return gorums.AsyncCall[*Request, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCallAsync2",
-		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
 // QuorumCallAsyncEmpty for testing imported message type.
 func QuorumCallAsyncEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncEmpty {
-	return gorums.AsyncCall(
+	return gorums.AsyncCall[*Request, *emptypb.Empty](
 		ctx, in, "dev.ZorumsService.QuorumCallAsyncEmpty",
-		gorums.MajorityQuorum[*Request, *emptypb.Empty],
 		opts...,
 	)
 }
@@ -48,9 +45,8 @@ func QuorumCallAsyncEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums
 // QuorumCallAsyncEmpty2 for testing imported message type; with same return
 // type as QuorumCallAsync: Response.
 func QuorumCallAsyncEmpty2(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *AsyncResponse {
-	return gorums.AsyncCall(
+	return gorums.AsyncCall[*emptypb.Empty, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCallAsyncEmpty2",
-		gorums.MajorityQuorum[*emptypb.Empty, *Response],
 		opts...,
 	)
 }

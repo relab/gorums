@@ -34,13 +34,15 @@ var (
 )
 
 // Config is a quorum call invoked on all nodes in the configuration,
-// with the same argument in, and returns a combined result.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
-func Config(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
-	return gorums.QuorumCallWithInterceptor(
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//
+//	resp, err := Config(ctx, in).Majority()
+func Config(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Request, *Response] {
+	return gorums.QuorumCallWithInterceptor[*Request, *Response](
 		ctx, in, "config.ConfigTest.Config",
-		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }

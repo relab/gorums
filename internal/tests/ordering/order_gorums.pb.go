@@ -36,24 +36,23 @@ var (
 // QCAsync asynchronously invokes a quorum call on the configuration in ctx
 // and returns a AsyncResponse, which can be used to inspect the quorum call
 // reply and error when available.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
 func QCAsync(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncResponse {
-	return gorums.AsyncCall(
+	return gorums.AsyncCall[*Request, *Response](
 		ctx, in, "ordering.GorumsTest.QCAsync",
-		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
 // QC is a quorum call invoked on all nodes in the configuration,
-// with the same argument in, and returns a combined result.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
-func QC(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) (resp *Response, err error) {
-	return gorums.QuorumCallWithInterceptor(
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//
+//	resp, err := QC(ctx, in).Majority()
+func QC(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Request, *Response] {
+	return gorums.QuorumCallWithInterceptor[*Request, *Response](
 		ctx, in, "ordering.GorumsTest.QC",
-		gorums.MajorityQuorum[*Request, *Response],
 		opts...,
 	)
 }

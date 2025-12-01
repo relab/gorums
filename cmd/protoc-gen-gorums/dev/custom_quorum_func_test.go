@@ -11,7 +11,7 @@ import (
 
 const quorumCallMethod = "dev.ZorumsService.QuorumCall"
 
-func TestQuorumCallWithDefaultQuorumFunc(t *testing.T) {
+func TestQuorumCallWithMajority(t *testing.T) {
 	// Setup servers with handler for the QuorumCall method
 	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
@@ -33,10 +33,10 @@ func TestQuorumCallWithDefaultQuorumFunc(t *testing.T) {
 	req := &dev.Request{}
 	req.SetValue("test")
 
-	// Call QuorumCall with default MajorityQuorum
-	resp, err := dev.QuorumCall(ctx, req)
+	// Call QuorumCall and wait for a majority to respond
+	resp, err := dev.QuorumCall(ctx, req).Majority()
 	if err != nil {
-		t.Fatalf("QuorumCall failed: %v", err)
+		t.Fatalf("QuorumCall.Majority() failed: %v", err)
 	}
 
 	// The server returns len(req.Value) which is 4 for "test"
@@ -45,7 +45,7 @@ func TestQuorumCallWithDefaultQuorumFunc(t *testing.T) {
 	}
 }
 
-func TestQuorumCallWithCustomQuorumFunc(t *testing.T) {
+func TestQuorumCallWithAll(t *testing.T) {
 	// Setup servers
 	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
@@ -62,31 +62,15 @@ func TestQuorumCallWithCustomQuorumFunc(t *testing.T) {
 	// Create configuration using helper
 	rawCfg := gorums.NewConfig(t, addrs)
 
-	// Custom QuorumFunc that requires all responses
-	customQF := func(ctx *gorums.ClientCtx[*dev.Request, *dev.Response]) (*dev.Response, error) {
-		var lastResp *dev.Response
-		count := 0
-		for result := range ctx.Responses() {
-			if result.Err == nil {
-				lastResp = result.Value
-				count++
-			}
-		}
-		if count < ctx.Size() {
-			return nil, gorums.QuorumCallError{} // Not all responded
-		}
-		return lastResp, nil
-	}
-
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 
 	req := &dev.Request{}
 	req.SetValue("test")
 
-	// Call QuorumCall with custom quorum function via call option
-	resp, err := dev.QuorumCall(ctx, req, gorums.WithQuorumFunc(customQF))
+	// Call QuorumCall and wait for all responses
+	resp, err := dev.QuorumCall(ctx, req).All()
 	if err != nil {
-		t.Fatalf("QuorumCall with custom QF failed: %v", err)
+		t.Fatalf("QuorumCall.All() failed: %v", err)
 	}
 
 	// The server returns len(req.Value) which is 4 for "test"
@@ -95,8 +79,7 @@ func TestQuorumCallWithCustomQuorumFunc(t *testing.T) {
 	}
 }
 
-// TestQuorumCallWithQuorumSpecFunc tests using a legacy QuorumSpec-style function
-func TestQuorumCallWithQuorumSpecFunc(t *testing.T) {
+func TestQuorumCallWithThreshold(t *testing.T) {
 	// Setup servers
 	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()
@@ -112,33 +95,56 @@ func TestQuorumCallWithQuorumSpecFunc(t *testing.T) {
 
 	rawCfg := gorums.NewConfig(t, addrs)
 
-	// Legacy-style quorum function (like the old QuorumSpec methods)
-	legacyQF := func(_ *dev.Request, replies map[uint32]*dev.Response) (*dev.Response, bool) {
-		if len(replies) < 2 {
-			return nil, false
-		}
-		// Return any reply
-		for _, r := range replies {
-			return r, true
-		}
-		return nil, false
+	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
+
+	req := &dev.Request{}
+	req.SetValue("hello")
+
+	// Use Threshold to wait for at least 2 responses
+	resp, err := dev.QuorumCall(ctx, req).Threshold(2)
+	if err != nil {
+		t.Fatalf("QuorumCall.Threshold() failed: %v", err)
 	}
+
+	// The server returns len(req.Value) which is 5 for "hello"
+	if resp.GetResult() != 5 {
+		t.Errorf("Expected result 5, got %d", resp.GetResult())
+	}
+}
+
+func TestQuorumCallWithCustomAggregation(t *testing.T) {
+	// Setup servers
+	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
+		srv := gorums.NewServer()
+		srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+			req := gorums.AsProto[*dev.Request](in)
+			resp := &dev.Response{}
+			resp.SetResult(int64(len(req.GetValue())))
+			return gorums.NewResponseMessage(in.GetMetadata(), resp), nil
+		})
+		return srv
+	})
+	t.Cleanup(teardown)
+
+	rawCfg := gorums.NewConfig(t, addrs)
 
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 
 	req := &dev.Request{}
 	req.SetValue("hello")
 
-	// Use QuorumSpecFunc to adapt the legacy function
-	resp, err := dev.QuorumCall(ctx, req,
-		gorums.WithQuorumFunc(gorums.QuorumSpecFunc(legacyQF)))
-	if err != nil {
-		t.Fatalf("QuorumCall with QuorumSpecFunc failed: %v", err)
+	// Use CollectAll for custom aggregation (sum all results)
+	responses := dev.QuorumCall(ctx, req)
+	results := responses.CollectAll()
+
+	var total int64
+	for _, resp := range results {
+		total += resp.GetResult()
 	}
 
-	// The server returns len(req.Value) which is 5 for "hello"
-	if resp.GetResult() != 5 {
-		t.Errorf("Expected result 5, got %d", resp.GetResult())
+	// Each server returns 5 (len("hello")), so 3 servers = 15
+	if total != 15 {
+		t.Errorf("Expected total result 15, got %d", total)
 	}
 }
 

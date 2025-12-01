@@ -9,10 +9,9 @@ import (
 )
 
 // run a test on a correctable call.
-// n is the number of replicas, and div is a divider.
-// the target level is n, and the level is calculated by the quorum function
-// by dividing the sum of levels from the servers with the divider.
-func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *CorrectableCorrectableResponse) {
+// n is the number of replicas.
+// the target level is n (quorum size).
+func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *gorums.Correctable[*CorrectableResponse]) {
 	t.Helper()
 	addrs, teardown := gorums.TestSetup(t, n, func(i int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
@@ -40,42 +39,19 @@ func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *CorrectableCorre
 	}
 }
 
-var correctableQF = func(div, doneLevel int) gorums.QuorumFunc[*CorrectableRequest, *CorrectableResponse, *gorums.Correctable[*CorrectableResponse]] {
-	return func(ctx *gorums.ClientCtx[*CorrectableRequest, *CorrectableResponse]) (*gorums.Correctable[*CorrectableResponse], error) {
-		corr := gorums.NewCorrectable[*CorrectableResponse]()
-		go func() {
-			replies := make(map[uint32]*CorrectableResponse)
-			for resp := range ctx.Responses().IgnoreErrors() {
-				replies[resp.NodeID] = resp.Value
-
-				// Incremental update logic
-				sum := 0
-				for _, r := range replies {
-					sum += int(r.GetLevel())
-				}
-				level := sum / div
-				done := level >= doneLevel
-				corr.Update(CorrectableResponse_builder{Level: int32(level)}.Build(), level, done, nil)
-				if done {
-					return
-				}
-			}
-		}()
-		return corr, nil
-	}
-}
-
 func TestCorrectable(t *testing.T) {
-	run(t, 4, func(ctx *gorums.ConfigContext) *CorrectableCorrectableResponse {
-		qf := correctableQF(1, 4)
-		return Correctable(ctx, &CorrectableRequest{}, gorums.WithQuorumFunc(qf))
+	run(t, 4, func(ctx *gorums.ConfigContext) *gorums.Correctable[*CorrectableResponse] {
+		// Use the new API - Correctable returns *Correctable[*CorrectableResponse] directly
+		// with a default majority threshold
+		return Correctable(ctx, &CorrectableRequest{})
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
-	run(t, 4, func(ctx *gorums.ConfigContext) *CorrectableStreamCorrectableResponse {
-		qf := correctableQF(4, 4)
-		return CorrectableStream(ctx, &CorrectableRequest{}, gorums.WithQuorumFunc(qf))
+	run(t, 4, func(ctx *gorums.ConfigContext) *gorums.Correctable[*CorrectableResponse] {
+		// Use the new API - CorrectableStream returns *Correctable[*CorrectableResponse] directly
+		// with a default majority threshold
+		return CorrectableStream(ctx, &CorrectableRequest{})
 	})
 }
 

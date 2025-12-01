@@ -3,7 +3,6 @@ package ordering
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -99,39 +98,21 @@ func TestQCOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	// begin test
-	qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
-		replies := ctx.Responses().IgnoreErrors().CollectAll()
-		if len(replies) < ctx.Size() {
-			return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
-		}
-		for _, reply := range replies {
-			if !reply.GetInOrder() {
-				return reply, nil
-			}
-		}
-		var reply *Response
-		for _, r := range replies {
-			reply = r
-			break
-		}
-		return reply, nil
-	}
 	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		resp, err := QC(cfgCtx,
-			Request_builder{Num: uint64(i)}.Build(),
-			gorums.WithQuorumFunc(qf))
-		if err != nil {
-			t.Fatalf("QC error: %v", err)
+		// Use CollectAll to get all responses and check for ordering
+		responses := QC(cfgCtx, Request_builder{Num: uint64(i)}.Build())
+		replies := responses.CollectAll()
+		if len(replies) < cfg.Size() {
+			t.Fatalf("incomplete call: %d replies", len(replies))
 		}
-		if resp == nil {
-			t.Fatal("Got nil response")
-		}
-		if !resp.GetInOrder() {
-			t.Fatalf("Message received out of order.")
+		for _, reply := range replies {
+			if !reply.GetInOrder() {
+				t.Fatalf("Message received out of order.")
+			}
 		}
 	}
 }
@@ -142,30 +123,14 @@ func TestQCAsyncOrdering(t *testing.T) {
 	defer teardown()
 	ctx, cancel := context.WithCancel(context.Background())
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
-	qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
-		replies := ctx.Responses().IgnoreErrors().CollectAll()
-		if len(replies) < ctx.Size() {
-			return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
-		}
-		for _, reply := range replies {
-			if !reply.GetInOrder() {
-				return reply, nil
-			}
-		}
-		var reply *Response
-		for _, r := range replies {
-			reply = r
-			break
-		}
-		return reply, nil
-	}
 	// begin test
 	var wg sync.WaitGroup
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
-		promise := QCAsync(cfgCtx, Request_builder{Num: uint64(i)}.Build(), gorums.WithQuorumFunc(qf))
+		// QCAsync returns an Async future that uses majority quorum by default
+		promise := QCAsync(cfgCtx, Request_builder{Num: uint64(i)}.Build())
 		wg.Go(func() {
 			resp, err := promise.Get()
 			if err != nil {
@@ -192,39 +157,21 @@ func TestMixedOrdering(t *testing.T) {
 	defer teardown()
 	nodes := cfg.Nodes()
 	// begin test
-	qf := func(ctx *gorums.ClientCtx[*Request, *Response]) (*Response, error) {
-		replies := ctx.Responses().IgnoreErrors().CollectAll()
-		if len(replies) < ctx.Size() {
-			return nil, fmt.Errorf("incomplete call: %d replies", len(replies))
-		}
-		for _, reply := range replies {
-			if !reply.GetInOrder() {
-				return reply, nil
-			}
-		}
-		var reply *Response
-		for _, r := range replies {
-			reply = r
-			break
-		}
-		return reply, nil
-	}
 	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 	stopTime := time.Now().Add(5 * time.Second)
 	i := 1
 	for time.Now().Before(stopTime) {
-		resp, err := QC(cfgCtx,
-			Request_builder{Num: uint64(i)}.Build(),
-			gorums.WithQuorumFunc(qf))
+		// Use CollectAll to get all responses and check for ordering
+		responses := QC(cfgCtx, Request_builder{Num: uint64(i)}.Build())
+		replies := responses.CollectAll()
 		i++
-		if err != nil {
-			t.Fatalf("QC error: %v", err)
+		if len(replies) < cfg.Size() {
+			t.Fatalf("incomplete call: %d replies", len(replies))
 		}
-		if resp == nil {
-			t.Fatal("Got nil response")
-		}
-		if !resp.GetInOrder() {
-			t.Fatalf("Message received out of order.")
+		for _, reply := range replies {
+			if !reply.GetInOrder() {
+				t.Fatalf("Message received out of order.")
+			}
 		}
 		var wg sync.WaitGroup
 		for _, node := range nodes {

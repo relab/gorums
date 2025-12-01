@@ -194,9 +194,9 @@ func TestMulticastPerNode(t *testing.T) {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 				if test.sendWait {
-					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty, *emptypb.Empty](test.f)))
+					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.f)))
 				} else {
-					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty, *emptypb.Empty](test.f)), gorums.WithNoSendWaiting())
+					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.f)), gorums.WithNoSendWaiting())
 				}
 			}
 

@@ -20,18 +20,16 @@ const (
 
 // Correctable plain.
 func Correctable(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *CorrectableResponse {
-	return gorums.CorrectableCall(
+	return gorums.CorrectableCall[*Request, *Response](
 		ctx, in, "dev.ZorumsService.Correctable",
-		gorums.MajorityCorrectableQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
 // CorrectableWithEmpty for testing imported message type.
 func CorrectableWithEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *CorrectableEmpty {
-	return gorums.CorrectableCall(
+	return gorums.CorrectableCall[*Request, *emptypb.Empty](
 		ctx, in, "dev.ZorumsService.CorrectableWithEmpty",
-		gorums.MajorityCorrectableQuorum[*Request, *emptypb.Empty],
 		opts...,
 	)
 }
@@ -39,27 +37,24 @@ func CorrectableWithEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums
 // CorrectableWithEmpty2 for testing imported message type; with same return
 // type as Correctable: Response.
 func CorrectableWithEmpty2(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *CorrectableResponse {
-	return gorums.CorrectableCall(
+	return gorums.CorrectableCall[*emptypb.Empty, *Response](
 		ctx, in, "dev.ZorumsService.CorrectableWithEmpty2",
-		gorums.MajorityCorrectableQuorum[*emptypb.Empty, *Response],
 		opts...,
 	)
 }
 
 // CorrectableStream plain.
 func CorrectableStream(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *CorrectableStreamResponse {
-	return gorums.CorrectableStreamCall(
+	return gorums.CorrectableStreamCall[*Request, *Response](
 		ctx, in, "dev.ZorumsService.CorrectableStream",
-		gorums.MajorityCorrectableQuorum[*Request, *Response],
 		opts...,
 	)
 }
 
 // CorrectableStreamWithEmpty for testing imported message type.
 func CorrectableStreamWithEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *CorrectableStreamEmpty {
-	return gorums.CorrectableStreamCall(
+	return gorums.CorrectableStreamCall[*Request, *emptypb.Empty](
 		ctx, in, "dev.ZorumsService.CorrectableStreamWithEmpty",
-		gorums.MajorityCorrectableQuorum[*Request, *emptypb.Empty],
 		opts...,
 	)
 }
@@ -67,9 +62,8 @@ func CorrectableStreamWithEmpty(ctx *gorums.ConfigContext, in *Request, opts ...
 // CorrectableStreamWithEmpty2 for testing imported message type; with same return
 // type as Correctable: Response.
 func CorrectableStreamWithEmpty2(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *CorrectableStreamResponse {
-	return gorums.CorrectableStreamCall(
+	return gorums.CorrectableStreamCall[*emptypb.Empty, *Response](
 		ctx, in, "dev.ZorumsService.CorrectableStreamWithEmpty2",
-		gorums.MajorityCorrectableQuorum[*emptypb.Empty, *Response],
 		opts...,
 	)
 }

@@ -11,8 +11,6 @@ var correctableCallComment = `
 {{if correctableStream .Method -}}
 // This method supports server-side preliminary replies (correctable stream).
 {{end -}}
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithCorrectableQuorumFunc call option.
 {{end -}}
 `
 
@@ -21,20 +19,27 @@ var correctableVar = `
 {{$genFile := .GenFile}}
 {{$configContext := use "gorums.ConfigContext" .GenFile}}
 {{$correctableCall := use "gorums.CorrectableCall" .GenFile}}
-{{$majorityCorrectableQuorum := use "gorums.MajorityCorrectableQuorum" .GenFile}}
+{{$correctableStreamCall := use "gorums.CorrectableStreamCall" .GenFile}}
 {{$callOption := use "gorums.CallOption" .GenFile}}
 `
 
 var correctableSignature = `func {{$method}}(` +
 	`ctx *{{$configContext}}, in *{{$in}}, ` +
 	`opts ...{{$callOption}}) ` +
-	`*{{$correctableOut}} {`
+	`*{{$correctableOut}} {
+`
 
-var correctableBody = `	return {{$correctableCall}}(
-		ctx, in, "{{$fullName}}", {{correctableStream .Method}},
-		{{$majorityCorrectableQuorum}}[*{{$in}}, *{{$out}}],
+var correctableBody = `{{- if correctableStream .Method}}
+	return {{$correctableStreamCall}}[*{{$in}}, *{{$out}}](
+		ctx, in, "{{$fullName}}",
 		opts...,
 	)
+{{- else}}
+	return {{$correctableCall}}[*{{$in}}, *{{$out}}](
+		ctx, in, "{{$fullName}}",
+		opts...,
+	)
+{{- end}}
 }
 `
 

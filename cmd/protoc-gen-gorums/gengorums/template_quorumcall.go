@@ -15,9 +15,11 @@ var quorumCallComment = `
 {{$comments -}}
 {{else}}
 // {{$method}} is a quorum call invoked on all nodes in the configuration,
-// with the same argument in, and returns a combined result.
-// By default, a majority quorum function is used. To override the quorum function,
-// use the gorums.WithQuorumFunc call option.
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//   resp, err := {{$method}}(ctx, in).Majority()
 {{end -}}
 `
 
@@ -25,19 +27,18 @@ var qcVar = `
 {{$genFile := .GenFile}}
 {{$configContext := use "gorums.ConfigContext" .GenFile}}
 {{$quorumCallWithInterceptor := use "gorums.QuorumCallWithInterceptor" .GenFile}}
-{{$majorityQuorum := use "gorums.MajorityQuorum" .GenFile}}
+{{$responses := use "gorums.Responses" .GenFile}}
 {{$callOption := use "gorums.CallOption" .GenFile}}
 `
 
 var quorumCallSignature = `func {{$method}}(` +
 	`ctx *{{$configContext}}, in *{{$in}}, ` +
 	`opts ...{{$callOption}})` +
-	`(resp *{{$out}}, err error) {
+	` *{{$responses}}[*{{$in}}, *{{$out}}] {
 `
 
-var quorumCallBody = `	return {{$quorumCallWithInterceptor}}(
+var quorumCallBody = `	return {{$quorumCallWithInterceptor}}[*{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
-		{{$majorityQuorum}}[*{{$in}}, *{{$out}}],
 		opts...,
 	)
 }

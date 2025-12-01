@@ -1,6 +1,8 @@
 package gorums
 
 import (
+	"sync"
+
 	"github.com/relab/gorums/ordering"
 )
 
@@ -8,23 +10,22 @@ import (
 // It encapsulates the state of an asynchronous call and provides methods
 // for checking the status or waiting for completion.
 //
-// Type parameter Out is the output type returned by the quorum function,
-// which may differ from the RPC response type.
-type Async[Out any] struct {
-	reply Out
+// Type parameter Resp is the response type from nodes.
+type Async[Resp any] struct {
+	reply Resp
 	err   error
 	c     chan struct{}
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *Async[Out]) Get() (Out, error) {
+func (f *Async[Resp]) Get() (Resp, error) {
 	<-f.c
 	return f.reply, f.err
 }
 
 // Done reports if a reply and/or error is available for the called method.
-func (f *Async[Out]) Done() bool {
+func (f *Async[Resp]) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -33,35 +34,56 @@ func (f *Async[Out]) Done() bool {
 	}
 }
 
-// AsyncCall performs an asynchronous quorum call using an interceptor-based approach.
-//
-// Type parameters:
-//   - Req: The request message type
-//   - Resp: The response message type from individual nodes
-//   - Out: The final output type returned by the interceptor chain
-//
-// The base parameter is the default terminal handler that processes responses
-// (e.g., MajorityQuorum). This can be overridden via the WithQuorumFunc CallOption.
-// The opts parameter accepts CallOption values such as WithQuorumFunc and Interceptors.
+// AsyncMajority returns an Async future that resolves when a majority quorum is reached.
+// Messages are sent immediately (synchronously) to preserve ordering when multiple
+// async calls are created in sequence.
+func (r *Responses[Req, Resp]) AsyncMajority() *Async[Resp] {
+	quorumSize := r.ctx.Size()/2 + 1
+	return r.AsyncThreshold(quorumSize)
+}
+
+// AsyncFirst returns an Async future that resolves when the first response is received.
+// Messages are sent immediately (synchronously) to preserve ordering.
+func (r *Responses[Req, Resp]) AsyncFirst() *Async[Resp] {
+	return r.AsyncThreshold(1)
+}
+
+// AsyncAll returns an Async future that resolves when all nodes have responded.
+// Messages are sent immediately (synchronously) to preserve ordering.
+func (r *Responses[Req, Resp]) AsyncAll() *Async[Resp] {
+	return r.AsyncThreshold(r.ctx.Size())
+}
+
+// AsyncThreshold returns an Async future that resolves when the threshold is reached.
+// Messages are sent immediately (synchronously) to preserve ordering when multiple
+// async calls are created in sequence.
+func (r *Responses[Req, Resp]) AsyncThreshold(threshold int) *Async[Resp] {
+	// Force immediate sending for ordering
+	r.ctx.sendOnce()
+
+	fut := &Async[Resp]{c: make(chan struct{}, 1)}
+
+	go func() {
+		defer close(fut.c)
+		fut.reply, fut.err = r.Threshold(threshold)
+	}()
+
+	return fut
+}
+
+// AsyncCall performs an asynchronous quorum call and returns an Async future.
+// Messages are sent immediately (synchronously) to preserve ordering when multiple
+// async calls are created in sequence.
 //
 // This function should be used by generated code only.
-func AsyncCall[Req, Resp msg, Out any](
+func AsyncCall[Req, Resp msg](
 	ctx *ConfigContext,
 	req Req,
 	method string,
-	base QuorumFunc[Req, Resp, Out],
 	opts ...CallOption,
-) *Async[Out] {
+) *Async[Resp] {
 	config := ctx.Configuration()
-
-	// Apply options
 	callOpts := getCallOptions(E_Async, opts...)
-
-	// Use QuorumFunc from CallOptions if provided, otherwise use the base parameter
-	qf := base
-	if callOpts.quorumFunc != nil {
-		qf = callOpts.quorumFunc.(QuorumFunc[Req, Resp, Out])
-	}
 
 	// Create metadata with message ID and prepare reply channel.
 	// Message ID is obtained now (synchronously) to maintain ordering
@@ -88,18 +110,15 @@ func AsyncCall[Req, Resp msg, Out any](
 	clientCtx.expectedReplies = expected
 
 	// Mark messages as sent by setting sendOnce to a no-op
-	clientCtx.sendOnce = func() {}
+	clientCtx.sendOnce = sync.OnceFunc(func() {})
 
-	handler := Chain(qf, interceptorsFromCallOptions[Req, Resp, Out](callOpts)...)
+	// Create the Responses object and apply interceptors
+	responses := &Responses[Req, Resp]{ctx: clientCtx}
+	for _, ic := range callOpts.interceptors {
+		interceptor := ic.(QuorumInterceptor[Req, Resp])
+		interceptor(responses)
+	}
 
-	// Create the async future
-	fut := &Async[Out]{c: make(chan struct{}, 1)}
-
-	// Run the quorum call handler in a goroutine to collect responses
-	go func() {
-		defer close(fut.c)
-		fut.reply, fut.err = handler(clientCtx)
-	}()
-
-	return fut
+	// Return async majority by default (matching old behavior)
+	return responses.AsyncMajority()
 }
