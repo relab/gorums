@@ -20,9 +20,9 @@ const (
 // Type aliases for important Gorums types to make them more accessible
 // from user code already interacting with the generated code.
 type (
-	Configuration = gorums.RawConfiguration
-	Manager       = gorums.RawManager
-	Node          = gorums.RawNode
+	Configuration = gorums.Configuration
+	Manager       = gorums.Manager
+	Node          = gorums.Node
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
