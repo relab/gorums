@@ -1,7 +1,5 @@
 package gorums
 
-import "github.com/relab/gorums/ordering"
-
 // QuorumCallWithInterceptor performs a quorum call and returns a Responses object
 // that provides access to node responses via terminal methods and fluent iteration.
 //
@@ -24,12 +22,8 @@ func QuorumCallWithInterceptor[Req, Resp msg](
 	method string,
 	opts ...CallOption,
 ) *Responses[Resp] {
-	config := ctx.Configuration()
 	callOpts := getCallOptions(E_Quorumcall, opts...)
-	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
-	replyChan := make(chan NodeResponse[msg], len(config))
-
-	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, md, replyChan)
+	clientCtx := newClientCtxBuilder[Req, Resp](ctx, req, method).Build()
 
 	for _, ic := range callOpts.interceptors {
 		interceptor := ic.(QuorumInterceptor[Req, Resp])

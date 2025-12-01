@@ -54,28 +54,66 @@ type clientCtx[Req, Resp msg] struct {
 	sendOnce sync.Once
 }
 
-// newClientCtx creates a new clientCtx for a quorum call.
-// The ctx is initialized with all immutable state; mutable state (responseSeq,
-// expectedReplies) is set up via methods to avoid circular references during construction.
-func newClientCtx[Req, Resp msg](
-	ctx context.Context,
-	config RawConfiguration,
+// clientCtxBuilder provides a fluent interface for constructing clientCtx instances.
+// Using a builder pattern allows flexible configuration without multiple constructors
+// and enables potential future optimizations like object pooling.
+type clientCtxBuilder[Req, Resp msg] struct {
+	c *clientCtx[Req, Resp]
+	// chanMultiplier is the buffer multiplier for the reply channel.
+	// Default is 1; streaming calls use a larger multiplier.
+	chanMultiplier int
+}
+
+// newClientCtxBuilder creates a new builder for constructing a clientCtx.
+// The required parameters are provided upfront; optional settings use builder methods.
+// The metadata and reply channel are created at Build() time.
+func newClientCtxBuilder[Req, Resp msg](
+	ctx *ConfigContext,
 	req Req,
 	method string,
-	md *ordering.Metadata,
-	replyChan chan NodeResponse[msg],
-) *clientCtx[Req, Resp] {
-	c := &clientCtx[Req, Resp]{
-		Context:         ctx,
-		config:          config,
-		request:         req,
-		method:          method,
-		md:              md,
-		replyChan:       replyChan,
-		expectedReplies: config.Size(),
+) *clientCtxBuilder[Req, Resp] {
+	return &clientCtxBuilder[Req, Resp]{
+		c: &clientCtx[Req, Resp]{
+			Context:         ctx,
+			config:          ctx.Configuration(),
+			request:         req,
+			method:          method,
+			expectedReplies: ctx.Configuration().Size(),
+		},
+		chanMultiplier: 1,
 	}
-	c.responseSeq = c.defaultResponseSeq()
-	return c
+}
+
+// WithStreaming configures the clientCtx for streaming responses.
+// When enabled, the response iterator continues until context cancellation
+// rather than stopping after expectedReplies responses.
+// It also increases the reply channel buffer size (10x) to handle streaming volume.
+func (b *clientCtxBuilder[Req, Resp]) WithStreaming() *clientCtxBuilder[Req, Resp] {
+	b.c.streaming = true
+	b.chanMultiplier = 10
+	return b
+}
+
+// WithWaitSendDone configures the clientCtx to wait for send completion.
+// Used by multicast calls to ensure messages are sent before returning.
+func (b *clientCtxBuilder[Req, Resp]) WithWaitSendDone(waitSendDone bool) *clientCtxBuilder[Req, Resp] {
+	b.c.waitSendDone = waitSendDone
+	return b
+}
+
+// Build finalizes the clientCtx configuration and returns the constructed instance.
+// It creates the metadata and reply channel, and sets up the appropriate response iterator.
+func (b *clientCtxBuilder[Req, Resp]) Build() *clientCtx[Req, Resp] {
+	// Create metadata and reply channel at build time
+	b.c.md = ordering.NewGorumsMetadata(b.c.Context, b.c.config.getMsgID(), b.c.method)
+	b.c.replyChan = make(chan NodeResponse[msg], b.c.config.Size()*b.chanMultiplier)
+
+	if b.c.streaming {
+		b.c.responseSeq = b.c.streamingResponseSeq()
+	} else {
+		b.c.responseSeq = b.c.defaultResponseSeq()
+	}
+	return b.c
 }
 
 // -------------------------------------------------------------------------

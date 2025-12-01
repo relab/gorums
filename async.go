@@ -1,7 +1,5 @@
 package gorums
 
-import "github.com/relab/gorums/ordering"
-
 // Async is a generic future type for asynchronous quorum calls.
 // It encapsulates the state of an asynchronous call and provides methods
 // for checking the status or waiting for completion.
@@ -75,16 +73,8 @@ func AsyncCall[Req, Resp msg](
 	method string,
 	opts ...CallOption,
 ) *Async[Resp] {
-	config := ctx.Configuration()
 	callOpts := getCallOptions(E_Async, opts...)
-
-	// Create metadata with message ID and prepare reply channel.
-	// Message ID is obtained now (synchronously) to maintain ordering
-	// when multiple async calls are created in sequence.
-	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
-	replyChan := make(chan NodeResponse[msg], len(config))
-
-	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, md, replyChan)
+	clientCtx := newClientCtxBuilder[Req, Resp](ctx, req, method).Build()
 
 	// Send messages to all nodes synchronously (before spawning goroutine).
 	// This ensures message ordering is preserved when multiple async calls

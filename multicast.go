@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -20,20 +19,13 @@ import (
 //
 // This method should be used by generated code only.
 func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, opts ...CallOption) {
-	c := ctx.cfg
-	o := getCallOptions(E_Multicast, opts...)
-	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), method)
+	callOpts := getCallOptions(E_Multicast, opts...)
+	waitSendDone := callOpts.mustWaitSendDone()
 
-	// Create reply channel to receive send confirmations
-	replyChan := make(chan NodeResponse[proto.Message], len(c))
-
-	waitSendDone := o.mustWaitSendDone()
-
-	// Create clientCtx for interceptor support
-	clientCtx := newMulticastClientCtx(ctx, c, msg, method, md, replyChan, waitSendDone)
+	clientCtx := newClientCtxBuilder[Req, *emptypb.Empty](ctx, msg, method).WithWaitSendDone(waitSendDone).Build()
 
 	// Apply interceptors to set up transformations
-	for _, ic := range o.interceptors {
+	for _, ic := range callOpts.interceptors {
 		interceptor := ic.(QuorumInterceptor[Req, *emptypb.Empty])
 		interceptor(clientCtx)
 	}
@@ -45,32 +37,10 @@ func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, op
 	if waitSendDone {
 		for range clientCtx.expectedReplies {
 			select {
-			case <-replyChan:
+			case <-clientCtx.replyChan:
 			case <-ctx.Done():
 				return
 			}
 		}
-	}
-}
-
-// newMulticastClientCtx creates a clientCtx configured for multicast calls.
-func newMulticastClientCtx[Req msg](
-	ctx *ConfigContext,
-	config RawConfiguration,
-	req Req,
-	method string,
-	md *ordering.Metadata,
-	replyChan chan NodeResponse[msg],
-	waitSendDone bool,
-) *clientCtx[Req, *emptypb.Empty] {
-	return &clientCtx[Req, *emptypb.Empty]{
-		Context:         ctx,
-		config:          config,
-		request:         req,
-		method:          method,
-		md:              md,
-		replyChan:       replyChan,
-		expectedReplies: config.Size(),
-		waitSendDone:    waitSendDone,
 	}
 }

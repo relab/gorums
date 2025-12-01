@@ -2,8 +2,6 @@ package gorums
 
 import (
 	"sync"
-
-	"github.com/relab/gorums/ordering"
 )
 
 // LevelNotSet is the zero value level used to indicate that no level (and
@@ -101,13 +99,8 @@ func CorrectableCall[Req, Resp msg](
 	method string,
 	opts ...CallOption,
 ) *Correctable[Resp] {
-	config := ctx.Configuration()
 	callOpts := getCallOptions(E_Correctable, opts...)
-
-	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
-	replyChan := make(chan NodeResponse[msg], len(config))
-
-	clientCtx := newCorrectableClientCtx[Req, Resp](ctx, config, req, method, md, replyChan, false)
+	clientCtx := newClientCtxBuilder[Req, Resp](ctx, req, method).Build()
 
 	// Apply interceptors
 	for _, ic := range callOpts.interceptors {
@@ -131,15 +124,8 @@ func CorrectableStreamCall[Req, Resp msg](
 	method string,
 	opts ...CallOption,
 ) *Correctable[Resp] {
-	config := ctx.Configuration()
 	callOpts := getCallOptions(E_Correctable, opts...)
-
-	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
-	// Buffer more messages for streaming
-	chanSize := len(config) * 10
-	replyChan := make(chan NodeResponse[msg], chanSize)
-
-	clientCtx := newCorrectableClientCtx[Req, Resp](ctx, config, req, method, md, replyChan, true)
+	clientCtx := newClientCtxBuilder[Req, Resp](ctx, req, method).WithStreaming().Build()
 
 	// Apply interceptors
 	for _, ic := range callOpts.interceptors {
@@ -150,33 +136,4 @@ func CorrectableStreamCall[Req, Resp msg](
 	// Default to majority threshold for correctable
 	quorumSize := clientCtx.Size()/2 + 1
 	return NewResponses(clientCtx).WaitForLevel(quorumSize)
-}
-
-// newCorrectableClientCtx creates a clientCtx configured for correctable calls.
-// If streaming is true, it uses a streaming response iterator.
-func newCorrectableClientCtx[Req, Resp msg](
-	ctx *ConfigContext,
-	config RawConfiguration,
-	req Req,
-	method string,
-	md *ordering.Metadata,
-	replyChan chan NodeResponse[msg],
-	streaming bool,
-) *clientCtx[Req, Resp] {
-	c := &clientCtx[Req, Resp]{
-		Context:         ctx,
-		config:          config,
-		request:         req,
-		method:          method,
-		md:              md,
-		replyChan:       replyChan,
-		expectedReplies: config.Size(),
-		streaming:       streaming,
-	}
-	if streaming {
-		c.responseSeq = c.streamingResponseSeq()
-	} else {
-		c.responseSeq = c.defaultResponseSeq()
-	}
-	return c
 }
