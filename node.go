@@ -60,8 +60,8 @@ type Node struct {
 	channel *channel
 }
 
-// NewRawNode returns a new node for the provided address.
-func NewRawNode(addr string) (*Node, error) {
+// NewNode returns a new node for the provided address.
+func NewNode(addr string) (*Node, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -74,8 +74,8 @@ func NewRawNode(addr string) (*Node, error) {
 	}, nil
 }
 
-// NewRawNodeWithID returns a new node for the provided address and id.
-func NewRawNodeWithID(addr string, id uint32) (*Node, error) {
+// NewNodeWithID returns a new node for the provided address and id.
+func NewNodeWithID(addr string, id uint32) (*Node, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err

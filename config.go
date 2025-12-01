@@ -42,11 +42,11 @@ func (c *ConfigContext) Configuration() Configuration {
 // You should use the generated `Configuration` type instead.
 type Configuration []*Node
 
-// NewRawConfiguration returns a configuration based on the provided list of nodes.
+// NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func NewRawConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
+func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
 	if opt == nil {
 		return nil, fmt.Errorf("config: missing required node list")
 	}

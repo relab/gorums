@@ -40,7 +40,7 @@ func setup(t *testing.T, mgr *gorums.Manager, cfgSize int) (cfg gorums.Configura
 	for i := range srvs {
 		srvs[i].name = addrs[i]
 	}
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestConfig(t *testing.T) {
 			}
 		}
 	}
-	mgr := gorums.NewRawManager(
+	mgr := gorums.NewManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
@@ -84,7 +84,7 @@ func TestConfig(t *testing.T) {
 	callRPC(c2)
 
 	newNodeList := c1.And(c2)
-	c3, err := gorums.NewRawConfiguration(mgr, newNodeList)
+	c3, err := gorums.NewConfiguration(mgr, newNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestConfig(t *testing.T) {
 	callRPC(c3)
 
 	rmNodeList := c3.Except(c1)
-	c4, err := gorums.NewRawConfiguration(mgr, rmNodeList)
+	c4, err := gorums.NewConfiguration(mgr, rmNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}

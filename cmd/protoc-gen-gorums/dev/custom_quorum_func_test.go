@@ -26,7 +26,7 @@ func TestQuorumCallWithMajority(t *testing.T) {
 	t.Cleanup(teardown)
 
 	// Create configuration using helper
-	rawCfg := gorums.NewConfig(t, addrs)
+	rawCfg := gorums.NewTestConfig(t, addrs)
 
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 
@@ -60,7 +60,7 @@ func TestQuorumCallWithAll(t *testing.T) {
 	t.Cleanup(teardown)
 
 	// Create configuration using helper
-	rawCfg := gorums.NewConfig(t, addrs)
+	rawCfg := gorums.NewTestConfig(t, addrs)
 
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 
@@ -93,7 +93,7 @@ func TestQuorumCallWithThreshold(t *testing.T) {
 	})
 	t.Cleanup(teardown)
 
-	rawCfg := gorums.NewConfig(t, addrs)
+	rawCfg := gorums.NewTestConfig(t, addrs)
 
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 
@@ -126,7 +126,7 @@ func TestQuorumCallWithCustomAggregation(t *testing.T) {
 	})
 	t.Cleanup(teardown)
 
-	rawCfg := gorums.NewConfig(t, addrs)
+	rawCfg := gorums.NewTestConfig(t, addrs)
 
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
 

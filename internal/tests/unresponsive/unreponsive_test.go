@@ -28,12 +28,12 @@ func TestUnresponsiveServer(t *testing.T) {
 	})
 	defer teardown()
 
-	mgr := gorums.NewRawManager(
+	mgr := gorums.NewManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

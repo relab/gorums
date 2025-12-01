@@ -53,12 +53,12 @@ func setup(t *testing.T, cfgSize int) (cfg gorums.Configuration, teardown func()
 		RegisterGorumsTestServer(srv, &testSrv{})
 		return srv
 	})
-	mgr := gorums.NewRawManager(
+	mgr := gorums.NewManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -47,7 +47,7 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*Node, func(
 		return srv
 	})
 
-	return NewNode(t, addrs[0]), teardown
+	return NewTestNode(t, addrs[0]), teardown
 }
 
 func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeResponse[proto.Message] {
@@ -96,7 +96,7 @@ func getStream(node *Node) grpc.ClientStream {
 }
 
 func TestChannelCreation(t *testing.T) {
-	node := NewNode(t, "127.0.0.1:5000")
+	node := NewTestNode(t, "127.0.0.1:5000")
 
 	// send message when server is down
 	resp := sendRequest(t, node, request{waitSendDone: true}, 1)
@@ -177,14 +177,14 @@ func TestChannelErrors(t *testing.T) {
 		{
 			name: "EnqueueWithoutServer",
 			setup: func(t *testing.T) *Node {
-				return NewNode(t, "127.0.0.1:5002")
+				return NewTestNode(t, "127.0.0.1:5002")
 			},
 			wantErr: "connect: connection refused",
 		},
 		{
 			name: "EnqueueToClosedChannel",
 			setup: func(t *testing.T) *Node {
-				node := NewNode(t, "127.0.0.1:5000")
+				node := NewTestNode(t, "127.0.0.1:5000")
 				err := node.close()
 				if err != nil {
 					t.Errorf("failed to close node: %v", err)
@@ -269,7 +269,7 @@ func TestChannelEnsureStream(t *testing.T) {
 	}{
 		{
 			name:  "UnconnectedNodeHasNoStream",
-			setup: func(t *testing.T) *Node { return NewNode(t, "") },
+			setup: func(t *testing.T) *Node { return NewTestNode(t, "") },
 			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
 				if err := node.channel.ensureStream(); err == nil {
 					t.Error("ensureStream succeeded unexpectedly")
@@ -345,7 +345,7 @@ func TestChannelConnectionState(t *testing.T) {
 	}{
 		{
 			name:          "WithoutServer",
-			node:          NewNode(t, "127.0.0.1:5003"),
+			node:          NewTestNode(t, "127.0.0.1:5003"),
 			wantConnected: false,
 		},
 		{

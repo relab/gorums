@@ -20,7 +20,7 @@ func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *gorums.Correctab
 	})
 	defer teardown()
 
-	cfg := gorums.NewConfig(t, addrs)
+	cfg := gorums.NewTestConfig(t, addrs)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	configCtx := gorums.WithConfigContext(ctx, cfg)

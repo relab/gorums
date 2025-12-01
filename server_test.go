@@ -42,7 +42,7 @@ func TestServerCallback(t *testing.T) {
 	defer srv.Stop()
 
 	md := metadata.New(map[string]string{"message": "hello"})
-	gorums.NewNode(t, lis.Addr().String(), gorums.WithMetadata(md))
+	gorums.NewTestNode(t, lis.Addr().String(), gorums.WithMetadata(md))
 
 	select {
 	case <-time.After(100 * time.Millisecond):
@@ -95,7 +95,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 	})
 	defer teardown()
 
-	node := gorums.NewNode(t, addrs[0])
+	node := gorums.NewTestNode(t, addrs[0])
 
 	// call the RPC
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -52,12 +52,12 @@ func setup(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs []*onewayS
 		nodeMap[addr] = uint32(i)
 	}
 
-	mgr := gorums.NewRawManager(
+	mgr := gorums.NewManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap(nodeMap))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}

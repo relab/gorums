@@ -325,7 +325,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg pb.Configuration) {
 		for _, node := range r.mgr.Nodes()[start:stop] {
 			nodes = append(nodes, node.Address())
 		}
-		cfg, err = gorums.NewRawConfiguration(r.mgr, gorums.WithNodeList(nodes))
+		cfg, err = gorums.NewConfiguration(r.mgr, gorums.WithNodeList(nodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil
@@ -348,7 +348,7 @@ func (r repl) parseConfiguration(cfgStr string) (cfg pb.Configuration) {
 			}
 			selectedNodes = append(selectedNodes, nodes[i].Address())
 		}
-		cfg, err := gorums.NewRawConfiguration(r.mgr, gorums.WithNodeList(selectedNodes))
+		cfg, err := gorums.NewConfiguration(r.mgr, gorums.WithNodeList(selectedNodes))
 		if err != nil {
 			fmt.Printf("Failed to create configuration: %v\n", err)
 			return nil

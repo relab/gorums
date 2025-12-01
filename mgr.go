@@ -25,11 +25,11 @@ type Manager struct {
 	nextMsgID uint64
 }
 
-// NewRawManager returns a new RawManager for managing connection to nodes added
+// NewManager returns a new Manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager. This function is meant for internal use.
 // You should use the `NewManager` function in the generated code instead.
-func NewRawManager(opts ...ManagerOption) *Manager {
+func NewManager(opts ...ManagerOption) *Manager {
 	m := &Manager{
 		lookup: make(map[uint32]*Node),
 		opts:   newManagerOptions(),

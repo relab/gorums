@@ -21,8 +21,8 @@ func init() {
 
 func TestNewConfigurationEmptyNodeList(t *testing.T) {
 	wantErr := errors.New("config: missing required node addresses")
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	_, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList([]string{}))
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList([]string{}))
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, wantErr)
 	}
@@ -32,8 +32,8 @@ func TestNewConfigurationEmptyNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeList(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(nodes))
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,8 +68,8 @@ func TestNewConfigurationNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeMap(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeMap(nodeMap))
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,8 +92,8 @@ func TestNewConfigurationNodeMap(t *testing.T) {
 }
 
 func TestNewConfigurationNodeIDs(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(nodes))
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 
 	// Identical configurations c1 == c2
 	nodeIDs := c1.NodeIDs()
-	c2, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeIDs(nodeIDs))
+	c2, err := gorums.NewConfiguration(mgr, gorums.WithNodeIDs(nodeIDs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 	}
 
 	// Configuration with one less node |c3| == |c1| - 1
-	c3, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeIDs(nodeIDs[:len(nodeIDs)-1]))
+	c3, err := gorums.NewConfiguration(mgr, gorums.WithNodeIDs(nodeIDs[:len(nodeIDs)-1]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,20 +128,20 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 }
 
 func TestNewConfigurationAnd(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(nodes))
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
 	c2Nodes := []string{"127.0.0.1:8080"}
-	c2, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(c2Nodes))
+	c2, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(c2Nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Add newNodes to c1, giving a new c3 with a total of 3+2 nodes
 	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
-	c3, err := gorums.NewRawConfiguration(
+	c3, err := gorums.NewConfiguration(
 		mgr,
 		c1.WithNewNodes(gorums.WithNodeList(newNodes)),
 	)
@@ -153,7 +153,7 @@ func TestNewConfigurationAnd(t *testing.T) {
 	}
 
 	// Combine c2 to c1, giving a new c4 with a total of 3+1 nodes
-	c4, err := gorums.NewRawConfiguration(
+	c4, err := gorums.NewConfiguration(
 		mgr,
 		c1.And(c2),
 	)
@@ -167,7 +167,7 @@ func TestNewConfigurationAnd(t *testing.T) {
 	// Combine c2 to c4, giving a new c5 with a total of 4 nodes
 	// c4 already contains all nodes from c2 (see above): c4 = c1+c2
 	// c5 should essentially just be a copy of c4 (ignoring duplicates from c2)
-	c5, err := gorums.NewRawConfiguration(
+	c5, err := gorums.NewConfiguration(
 		mgr,
 		c4.And(c2),
 	)
@@ -180,12 +180,12 @@ func TestNewConfigurationAnd(t *testing.T) {
 }
 
 func TestNewConfigurationExcept(t *testing.T) {
-	mgr := gorums.NewRawManager(gorums.WithNoConnect())
-	c1, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(nodes))
+	mgr := gorums.NewManager(gorums.WithNoConnect())
+	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
 	if err != nil {
 		t.Fatal(err)
 	}
-	c2, err := gorums.NewRawConfiguration(
+	c2, err := gorums.NewConfiguration(
 		mgr,
 		c1.WithoutNodes(c1[0].ID()),
 	)
@@ -197,14 +197,14 @@ func TestNewConfigurationExcept(t *testing.T) {
 	}
 
 	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
-	c3, err := gorums.NewRawConfiguration(
+	c3, err := gorums.NewConfiguration(
 		mgr,
 		c1.WithNewNodes(gorums.WithNodeList(newNodes)),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c4, err := gorums.NewRawConfiguration(
+	c4, err := gorums.NewConfiguration(
 		mgr,
 		c3.Except(c1),
 	)
@@ -220,7 +220,7 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, nil)
 	defer teardown()
 
-	node := gorums.NewNode(t, addrs[0])
+	node := gorums.NewTestNode(t, addrs[0])
 
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup

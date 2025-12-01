@@ -19,9 +19,9 @@ type ServerIface interface {
 	Stop()
 }
 
-// NewNode creates a node for the given server address and adds it to a new manager.
+// NewTestNode creates a node for the given server address and adds it to a new manager.
 // The manager is automatically closed when the test finishes.
-func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
+func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 	t.Helper()
 	mgrOpts := []ManagerOption{
 		WithGrpcDialOptions(
@@ -29,9 +29,9 @@ func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 		),
 	}
 	mgrOpts = append(mgrOpts, opts...)
-	mgr := NewRawManager(mgrOpts...)
+	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
-	node, err := NewRawNode(srvAddr)
+	node, err := NewNode(srvAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,9 +41,9 @@ func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 	return node
 }
 
-// NewConfig creates a configuration for the given node addresses and adds it to a new manager.
+// NewTestConfig creates a configuration for the given node addresses and adds it to a new manager.
 // The manager is automatically closed when the test finishes.
-func NewConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuration {
+func NewTestConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuration {
 	t.Helper()
 	mgrOpts := []ManagerOption{
 		WithGrpcDialOptions(
@@ -51,11 +51,11 @@ func NewConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuratio
 		),
 	}
 	mgrOpts = append(mgrOpts, opts...)
-	mgr := NewRawManager(mgrOpts...)
+	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
 
 	for _, addr := range addrs {
-		node, err := NewRawNode(addr)
+		node, err := NewNode(addr)
 		if err != nil {
 			t.Fatalf("Failed to create node: %v", err)
 		}
@@ -63,7 +63,7 @@ func NewConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuratio
 			t.Fatalf("Failed to add node: %v", err)
 		}
 	}
-	cfg, err := NewRawConfiguration(mgr, WithNodeList(addrs))
+	cfg, err := NewConfiguration(mgr, WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func NewConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuratio
 // node addresses, and optional manager options. It combines NewConfig with WithConfigContext.
 func NewTestConfigContext(t testing.TB, ctx context.Context, addrs []string, opts ...ManagerOption) *ConfigContext {
 	t.Helper()
-	return WithConfigContext(ctx, NewConfig(t, addrs, opts...))
+	return WithConfigContext(ctx, NewTestConfig(t, addrs, opts...))
 }
 
 // TestSetup starts numServers gRPC servers using the given registration

@@ -58,13 +58,13 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	mgr := gorums.NewRawManager(
+	mgr := gorums.NewManager(
 		gorums.WithMetadata(md),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,12 +87,12 @@ func TestPerMessageMetadata(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
-	mgr := gorums.NewRawManager(
+	mgr := gorums.NewManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,13 +124,13 @@ func TestPerNodeMetadata(t *testing.T) {
 		})
 	}
 
-	mgr := gorums.NewRawManager(
+	mgr := gorums.NewManager(
 		gorums.WithPerNodeMetadata(perNodeMD),
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,12 +152,12 @@ func TestCanGetPeerInfo(t *testing.T) {
 	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
 	defer teardown()
 
-	mgr := gorums.NewRawManager(
+	mgr := gorums.NewManager(
 		gorums.WithGrpcDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 	)
-	cfg, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
