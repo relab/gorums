@@ -24,14 +24,14 @@ type QuorumInterceptor[Req, Resp msg] func(*clientCtx[Req, Resp])
 // It exposes the request, configuration, and an iterator over node responses.
 type clientCtx[Req, Resp msg] struct {
 	context.Context
-	config    RawConfiguration
+	config    Configuration
 	request   Req
 	method    string
 	md        *ordering.Metadata
 	replyChan chan NodeResponse[msg]
 
 	// reqTransforms holds request transformation functions registered by interceptors.
-	reqTransforms []func(Req, *RawNode) Req
+	reqTransforms []func(Req, *Node) Req
 
 	// responseSeq is the iterator that yields node responses.
 	// Interceptors can wrap this iterator to modify responses.
@@ -126,7 +126,7 @@ func (c *clientCtx[Req, Resp]) Request() Req {
 }
 
 // Config returns the configuration (set of nodes) for this quorum call.
-func (c *clientCtx[Req, Resp]) Config() RawConfiguration {
+func (c *clientCtx[Req, Resp]) Config() Configuration {
 	return c.config
 }
 
@@ -136,14 +136,14 @@ func (c *clientCtx[Req, Resp]) Method() string {
 }
 
 // Nodes returns the slice of nodes in this configuration.
-func (c *clientCtx[Req, Resp]) Nodes() []*RawNode {
+func (c *clientCtx[Req, Resp]) Nodes() []*Node {
 	return c.config.Nodes()
 }
 
 // Node returns the node with the given ID.
-func (c *clientCtx[Req, Resp]) Node(id uint32) *RawNode {
+func (c *clientCtx[Req, Resp]) Node(id uint32) *Node {
 	nodes := c.config.Nodes()
-	index := slices.IndexFunc(nodes, func(n *RawNode) bool {
+	index := slices.IndexFunc(nodes, func(n *Node) bool {
 		return n.ID() == id
 	})
 	if index != -1 {
@@ -161,7 +161,7 @@ func (c *clientCtx[Req, Resp]) Size() int {
 // invalid or the node should be skipped. It applies the registered transformation functions to
 // the given request for the specified node. Transformation functions are applied in the order
 // they were registered.
-func (c *clientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Message {
+func (c *clientCtx[Req, Resp]) applyTransforms(req Req, node *Node) proto.Message {
 	result := req
 	for _, transform := range c.reqTransforms {
 		result = transform(result, node)
@@ -270,7 +270,7 @@ func (c *clientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 // The fn receives the original request and a node, and returns the transformed
 // request to send to that node. If the function returns an invalid message or nil,
 // the request to that node is skipped.
-func MapRequest[Req, Resp msg](fn func(Req, *RawNode) Req) QuorumInterceptor[Req, Resp] {
+func MapRequest[Req, Resp msg](fn func(Req, *Node) Req) QuorumInterceptor[Req, Resp] {
 	return func(ctx *clientCtx[Req, Resp]) {
 		if fn != nil {
 			ctx.reqTransforms = append(ctx.reqTransforms, fn)
@@ -282,7 +282,7 @@ func MapRequest[Req, Resp msg](fn func(Req, *RawNode) Req) QuorumInterceptor[Req
 //
 // The fn receives the response from a node and the node itself, and returns the
 // transformed response.
-func MapResponse[Req, Resp msg](fn func(Resp, *RawNode) Resp) QuorumInterceptor[Req, Resp] {
+func MapResponse[Req, Resp msg](fn func(Resp, *Node) Resp) QuorumInterceptor[Req, Resp] {
 	return func(ctx *clientCtx[Req, Resp]) {
 		if fn != nil {
 			// Wrap the existing response iterator with the transformation logic.
@@ -332,8 +332,8 @@ func MapResponse[Req, Resp msg](fn func(Resp, *RawNode) Resp) QuorumInterceptor[
 //	    },
 //	)
 func Map[Req, Resp msg](
-	reqFunc func(Req, *RawNode) Req,
-	respFunc func(Resp, *RawNode) Resp,
+	reqFunc func(Req, *Node) Req,
+	respFunc func(Resp, *Node) Resp,
 ) QuorumInterceptor[Req, Resp] {
 	return func(ctx *clientCtx[Req, Resp]) {
 		MapRequest[Req, Resp](reqFunc)(ctx)

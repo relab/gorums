@@ -20,7 +20,7 @@ const defaultTestTimeout = 3 * time.Second
 
 // newNodeWithServer creates a node connected to a live server that will delay
 // responding by the given duration. If delay is 0, the server responds immediately.
-func newNodeWithServer(t testing.TB, delay time.Duration) *RawNode {
+func newNodeWithServer(t testing.TB, delay time.Duration) *Node {
 	t.Helper()
 	node, teardown := newNodeWithStoppableServer(t, delay)
 	t.Cleanup(teardown)
@@ -33,7 +33,7 @@ func (mockSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
 	return pb.String(mock.GetVal(req) + "-mocked-"), nil
 }
 
-func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, func()) {
+func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*Node, func()) {
 	t.Helper()
 	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
 		mockSrv := &mockSrv{}
@@ -50,7 +50,7 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*RawNode, fu
 	return NewNode(t, addrs[0]), teardown
 }
 
-func sendRequest(t testing.TB, node *RawNode, req request, msgID uint64) NodeResponse[proto.Message] {
+func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeResponse[proto.Message] {
 	t.Helper()
 	if req.ctx == nil {
 		req.ctx = t.Context()
@@ -74,7 +74,7 @@ type msgResponse struct {
 	resp  NodeResponse[proto.Message]
 }
 
-func send(t testing.TB, results chan<- msgResponse, node *RawNode, goroutineID, msgsToSend int, req request) {
+func send(t testing.TB, results chan<- msgResponse, node *Node, goroutineID, msgsToSend int, req request) {
 	for j := range msgsToSend {
 		msgID := uint64(goroutineID*1000 + j)
 		resp := sendRequest(t, node, req, msgID)
@@ -84,14 +84,14 @@ func send(t testing.TB, results chan<- msgResponse, node *RawNode, goroutineID, 
 
 // Helper functions for accessing channel internals
 
-func routerExists(node *RawNode, msgID uint64) bool {
+func routerExists(node *Node, msgID uint64) bool {
 	node.channel.responseMut.Lock()
 	defer node.channel.responseMut.Unlock()
 	_, exists := node.channel.responseRouters[msgID]
 	return exists
 }
 
-func getStream(node *RawNode) grpc.ClientStream {
+func getStream(node *Node) grpc.ClientStream {
 	return node.channel.getStream()
 }
 
@@ -171,19 +171,19 @@ func TestChannelSendCompletionWaiting(t *testing.T) {
 func TestChannelErrors(t *testing.T) {
 	tests := []struct {
 		name    string
-		setup   func(t *testing.T) *RawNode
+		setup   func(t *testing.T) *Node
 		wantErr string
 	}{
 		{
 			name: "EnqueueWithoutServer",
-			setup: func(t *testing.T) *RawNode {
+			setup: func(t *testing.T) *Node {
 				return NewNode(t, "127.0.0.1:5002")
 			},
 			wantErr: "connect: connection refused",
 		},
 		{
 			name: "EnqueueToClosedChannel",
-			setup: func(t *testing.T) *RawNode {
+			setup: func(t *testing.T) *Node {
 				node := NewNode(t, "127.0.0.1:5000")
 				err := node.close()
 				if err != nil {
@@ -195,7 +195,7 @@ func TestChannelErrors(t *testing.T) {
 		},
 		{
 			name: "EnqueueToServerWithClosedNode",
-			setup: func(t *testing.T) *RawNode {
+			setup: func(t *testing.T) *Node {
 				node := newNodeWithServer(t, 0)
 				err := node.close()
 				if err != nil {
@@ -207,7 +207,7 @@ func TestChannelErrors(t *testing.T) {
 		},
 		{
 			name: "ServerFailureDuringCommunication",
-			setup: func(t *testing.T) *RawNode {
+			setup: func(t *testing.T) *Node {
 				node, stopServer := newNodeWithStoppableServer(t, 0)
 				resp := sendRequest(t, node, request{waitSendDone: true}, 1)
 				if resp.Err != nil {
@@ -238,7 +238,7 @@ func TestChannelErrors(t *testing.T) {
 // TestChannelEnsureStream verifies that ensureStream correctly manages stream lifecycle.
 func TestChannelEnsureStream(t *testing.T) {
 	// Helper to prepare a fresh node with no stream
-	newNodeWithoutStream := func(t *testing.T) *RawNode {
+	newNodeWithoutStream := func(t *testing.T) *Node {
 		node := newNodeWithServer(t, 0)
 		node.cancel() // ensure sender and receiver goroutines are stopped
 		node.channel = newChannel(node)
@@ -263,14 +263,14 @@ func TestChannelEnsureStream(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		setup    func(t *testing.T) *RawNode
-		action   func(node *RawNode) (first, second grpc.ClientStream)
+		setup    func(t *testing.T) *Node
+		action   func(node *Node) (first, second grpc.ClientStream)
 		wantSame bool
 	}{
 		{
 			name:  "UnconnectedNodeHasNoStream",
-			setup: func(t *testing.T) *RawNode { return NewNode(t, "") },
-			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
+			setup: func(t *testing.T) *Node { return NewNode(t, "") },
+			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
 				if err := node.channel.ensureStream(); err == nil {
 					t.Error("ensureStream succeeded unexpectedly")
 				}
@@ -283,7 +283,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "CreatesStreamWhenConnected",
 			setup: newNodeWithoutStream,
-			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
 				if err := node.channel.ensureStream(); err != nil {
 					t.Errorf("ensureStream failed: %v", err)
 				}
@@ -293,7 +293,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "RepeatedCallsReturnSameStream",
 			setup: newNodeWithoutStream,
-			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
 				if err := node.channel.ensureStream(); err != nil {
 					t.Errorf("first ensureStream failed: %v", err)
 				}
@@ -308,7 +308,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "StreamDisconnectionCreatesNewStream",
 			setup: newNodeWithoutStream,
-			action: func(node *RawNode) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
 				if err := node.channel.ensureStream(); err != nil {
 					t.Errorf("initial ensureStream failed: %v", err)
 				}
@@ -339,8 +339,8 @@ func TestChannelEnsureStream(t *testing.T) {
 func TestChannelConnectionState(t *testing.T) {
 	tests := []struct {
 		name          string
-		node          *RawNode
-		setup         func(node *RawNode)
+		node          *Node
+		setup         func(node *Node)
 		wantConnected bool
 	}{
 		{
@@ -356,7 +356,7 @@ func TestChannelConnectionState(t *testing.T) {
 		{
 			name: "RequiresBothReadyAndStream",
 			node: newNodeWithServer(t, 0),
-			setup: func(node *RawNode) {
+			setup: func(node *Node) {
 				if !node.channel.isConnected() {
 					t.Fatal("node should be connected before clearing stream")
 				}
@@ -561,7 +561,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 		name         string
 		waitSendDone bool
 		streaming    bool
-		afterSend    func(t *testing.T, node *RawNode, msgID uint64)
+		afterSend    func(t *testing.T, node *Node, msgID uint64)
 		wantRouter   bool
 	}{
 		{name: "WaitSendDone/NonStreamingAutoCleanup", waitSendDone: true, streaming: false, wantRouter: false},

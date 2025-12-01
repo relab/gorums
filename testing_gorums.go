@@ -21,7 +21,7 @@ type ServerIface interface {
 
 // NewNode creates a node for the given server address and adds it to a new manager.
 // The manager is automatically closed when the test finishes.
-func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *RawNode {
+func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 	t.Helper()
 	mgrOpts := []ManagerOption{
 		WithGrpcDialOptions(
@@ -43,7 +43,7 @@ func NewNode(t testing.TB, srvAddr string, opts ...ManagerOption) *RawNode {
 
 // NewConfig creates a configuration for the given node addresses and adds it to a new manager.
 // The manager is automatically closed when the test finishes.
-func NewConfig(t testing.TB, addrs []string, opts ...ManagerOption) RawConfiguration {
+func NewConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuration {
 	t.Helper()
 	mgrOpts := []ManagerOption{
 		WithGrpcDialOptions(

@@ -106,9 +106,9 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 	}
 	close(resultChan)
 
-	config := make(RawConfiguration, numNodes)
+	config := make(Configuration, numNodes)
 	for i := range numNodes {
-		config[i] = &RawNode{id: uint32(i + 1)}
+		config[i] = &Node{id: uint32(i + 1)}
 	}
 
 	c := &clientCtx[Req, Resp]{

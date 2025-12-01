@@ -51,7 +51,7 @@ type request struct {
 
 type channel struct {
 	sendQ chan request
-	node  *RawNode
+	node  *Node
 
 	// Error and latency tracking
 	mu        sync.Mutex
@@ -82,7 +82,7 @@ type channel struct {
 // have not yet been established. This is to prevent deadlock when invoking
 // a call type. The sender blocks on the sendQ and the receiver waits for
 // the stream to become available.
-func newChannel(n *RawNode) *channel {
+func newChannel(n *Node) *channel {
 	c := &channel{
 		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
 		node:            n,

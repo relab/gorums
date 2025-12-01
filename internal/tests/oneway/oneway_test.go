@@ -35,7 +35,7 @@ func (s *onewaySrv) Multicast(ctx gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func setup(t testing.TB, cfgSize int) (cfg gorums.RawConfiguration, srvs []*onewaySrv, teardown func()) {
+func setup(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs []*onewaySrv, teardown func()) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := range cfgSize {
@@ -135,7 +135,7 @@ func TestMulticastPerNode(t *testing.T) {
 	add := func(n uint64, id uint32) uint64 { return n + uint64(id) }
 
 	// simple transformation function - uses WithPerNodeTransform API
-	f := func(msg *oneway.Request, node *gorums.RawNode) *oneway.Request {
+	f := func(msg *oneway.Request, node *gorums.Node) *oneway.Request {
 		return oneway.Request_builder{Num: add(msg.GetNum(), node.ID())}.Build()
 	}
 	ignoreNodes := []int{}
@@ -146,7 +146,7 @@ func TestMulticastPerNode(t *testing.T) {
 		return false
 	}
 	// transformation of all except some nodes
-	g := func(msg *oneway.Request, node *gorums.RawNode) *oneway.Request {
+	g := func(msg *oneway.Request, node *gorums.Node) *oneway.Request {
 		if ignore(node.ID()) {
 			return nil
 		}
@@ -158,7 +158,7 @@ func TestMulticastPerNode(t *testing.T) {
 		servers     int
 		sendWait    bool
 		ignoreNodes []int
-		f           func(*oneway.Request, *gorums.RawNode) *oneway.Request
+		f           func(*oneway.Request, *gorums.Node) *oneway.Request
 	}{
 		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 1, sendWait: false, f: f},
 		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 3, sendWait: false, f: f},

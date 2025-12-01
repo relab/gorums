@@ -46,7 +46,7 @@ func (s *testSrv) UnaryRPC(_ gorums.ServerCtx, req *Request) (resp *Response, er
 	}.Build(), nil
 }
 
-func setup(t *testing.T, cfgSize int) (cfg gorums.RawConfiguration, teardown func()) {
+func setup(t *testing.T, cfgSize int) (cfg gorums.Configuration, teardown func()) {
 	t.Helper()
 	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer()

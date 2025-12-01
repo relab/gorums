@@ -41,7 +41,7 @@ func TestNewConfigurationNodeList(t *testing.T) {
 		t.Errorf("cfg.Size() = %d, expected %d", cfg.Size(), len(nodes))
 	}
 
-	contains := func(nodes []*gorums.RawNode, addr string) bool {
+	contains := func(nodes []*gorums.Node, addr string) bool {
 		for _, node := range nodes {
 			if addr == node.Address() {
 				return true

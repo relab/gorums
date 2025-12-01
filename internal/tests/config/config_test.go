@@ -26,7 +26,7 @@ func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, er
 // setup returns a new configuration of cfgSize and a corresponding teardown function.
 // Calling setup multiple times will return a different configuration with different
 // sets of nodes.
-func setup(t *testing.T, mgr *gorums.RawManager, cfgSize int) (cfg gorums.RawConfiguration, teardown func()) {
+func setup(t *testing.T, mgr *gorums.Manager, cfgSize int) (cfg gorums.Configuration, teardown func()) {
 	t.Helper()
 	srvs := make([]*cfgSrv, cfgSize)
 	for i := range srvs {
@@ -54,7 +54,7 @@ func setup(t *testing.T, mgr *gorums.RawManager, cfgSize int) (cfg gorums.RawCon
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	callRPC := func(cfg gorums.RawConfiguration) {
+	callRPC := func(cfg gorums.Configuration) {
 		cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 		for i := range 5 {
 			// Use the new terminal method API - wait for a majority
