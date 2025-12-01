@@ -134,15 +134,9 @@ func CorrectableCall[Req, Resp msg](
 		interceptor(clientCtx)
 	}
 
-	// Create the Responses object
-	responses := &Responses[Resp]{
-		responseSeq: clientCtx.responseSeq,
-		size:        clientCtx.Size(),
-	}
-
 	// Default to majority threshold for correctable
 	quorumSize := clientCtx.Size()/2 + 1
-	return responses.WaitForLevel(quorumSize)
+	return NewResponses(clientCtx).WaitForLevel(quorumSize)
 }
 
 // CorrectableStreamCall performs a correctable streaming quorum call.
@@ -192,13 +186,7 @@ func CorrectableStreamCall[Req, Resp msg](
 		interceptor(clientCtx)
 	}
 
-	// Create the Responses object
-	responses := &Responses[Resp]{
-		responseSeq: clientCtx.responseSeq,
-		size:        clientCtx.Size(),
-	}
-
 	// Default to majority threshold for correctable
 	quorumSize := clientCtx.Size()/2 + 1
-	return responses.WaitForLevel(quorumSize)
+	return NewResponses(clientCtx).WaitForLevel(quorumSize)
 }

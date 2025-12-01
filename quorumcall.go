@@ -63,9 +63,5 @@ func QuorumCallWithInterceptor[Req, Resp msg](
 		interceptor(clientCtx)
 	}
 
-	// Create the Responses object
-	return &Responses[Resp]{
-		responseSeq: clientCtx.responseSeq,
-		size:        clientCtx.Size(),
-	}
+	return NewResponses(clientCtx)
 }

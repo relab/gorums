@@ -121,14 +121,6 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 	return c
 }
 
-// makeResponses creates a Responses object from a clientCtx for testing terminal methods.
-func makeResponses[Req, Resp proto.Message](ctx *clientCtx[Req, Resp]) *Responses[Resp] {
-	return &Responses[Resp]{
-		responseSeq: ctx.responseSeq,
-		size:        ctx.Size(),
-	}
-}
-
 // -------------------------------------------------------------------------
 // Terminal Method Tests
 // -------------------------------------------------------------------------
@@ -255,7 +247,7 @@ func TestTerminalMethods(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses)
-			responses := makeResponses(clientCtx)
+			responses := NewResponses(clientCtx)
 
 			var result *pb.StringValue
 			var err error
@@ -295,7 +287,7 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := makeResponses(clientCtx)
+		r := NewResponses(clientCtx)
 
 		var count int
 		for range r.Seq().IgnoreErrors() {
@@ -313,7 +305,7 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := makeResponses(clientCtx)
+		r := NewResponses(clientCtx)
 
 		// Filter to only node 2
 		var count int
@@ -337,7 +329,7 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := makeResponses(clientCtx)
+		r := NewResponses(clientCtx)
 
 		collected := r.CollectN(2)
 		if len(collected) != 2 {
@@ -352,7 +344,7 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
-		r := makeResponses(clientCtx)
+		r := NewResponses(clientCtx)
 
 		collected := r.CollectAll()
 		if len(collected) != 3 {

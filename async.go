@@ -114,12 +114,6 @@ func AsyncCall[Req, Resp msg](
 		interceptor(clientCtx)
 	}
 
-	// Create the Responses object
-	responses := &Responses[Resp]{
-		responseSeq: clientCtx.responseSeq,
-		size:        clientCtx.Size(),
-	}
-
 	// Return async majority by default (matching old behavior)
-	return responses.AsyncMajority()
+	return NewResponses(clientCtx).AsyncMajority()
 }
