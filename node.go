@@ -43,6 +43,16 @@ func (c *NodeContext) Node() *Node {
 	return c.node
 }
 
+// enqueue enqueues a request to this node's channel.
+func (c *NodeContext) enqueue(req request) {
+	c.node.channel.enqueue(req)
+}
+
+// nextMsgID returns the next message ID from this client's manager.
+func (c *NodeContext) nextMsgID() uint64 {
+	return c.node.mgr.getMsgID()
+}
+
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
 //

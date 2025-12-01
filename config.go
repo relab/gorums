@@ -87,6 +87,7 @@ func (c Configuration) Equal(b Configuration) bool {
 	return true
 }
 
-func (c Configuration) getMsgID() uint64 {
+// nextMsgID returns the next message ID from this client's manager.
+func (c Configuration) nextMsgID() uint64 {
 	return c[0].mgr.getMsgID()
 }

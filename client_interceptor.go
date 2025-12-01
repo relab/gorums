@@ -105,7 +105,7 @@ func (b *clientCtxBuilder[Req, Resp]) WithWaitSendDone(waitSendDone bool) *clien
 // It creates the metadata and reply channel, and sets up the appropriate response iterator.
 func (b *clientCtxBuilder[Req, Resp]) Build() *clientCtx[Req, Resp] {
 	// Create metadata and reply channel at build time
-	b.c.md = ordering.NewGorumsMetadata(b.c.Context, b.c.config.getMsgID(), b.c.method)
+	b.c.md = ordering.NewGorumsMetadata(b.c.Context, b.c.config.nextMsgID(), b.c.method)
 	b.c.replyChan = make(chan NodeResponse[msg], b.c.config.Size()*b.chanMultiplier)
 
 	if b.c.streaming {

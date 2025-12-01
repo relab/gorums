@@ -131,7 +131,7 @@ func (m *Manager) AddNode(node *Node) error {
 	return nil
 }
 
-// getMsgID returns a unique message ID.
+// getMsgID returns a unique message ID for a new RPC from this client's manager.
 func (m *Manager) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)
 }

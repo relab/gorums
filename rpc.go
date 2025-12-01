@@ -9,10 +9,9 @@ import (
 //
 // This method should be used by generated code only.
 func RPCCall(ctx *NodeContext, msg proto.Message, method string) (proto.Message, error) {
-	n := ctx.node
-	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), method)
+	md := ordering.NewGorumsMetadata(ctx, ctx.nextMsgID(), method)
 	replyChan := make(chan NodeResponse[proto.Message], 1)
-	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
+	ctx.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 
 	select {
 	case r := <-replyChan:
