@@ -58,9 +58,10 @@ type channel struct {
 	lastError error
 	latency   time.Duration
 
-	// Stream management for FIFO ordering
-	// gorumsStream is a bidirectional stream for FIFO message delivery
-	gorumsStream grpc.ClientStream
+	// Stream management for FIFO ordered message delivery
+	// gorumsStream is a bidirectional stream for
+	// sending and receiving ordering.Metadata messages.
+	gorumsStream ordering.Gorums_NodeStreamClient
 	streamMut    sync.RWMutex
 	streamCtx    context.Context
 	cancelStream context.CancelFunc
