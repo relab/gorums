@@ -37,30 +37,27 @@ func (f *Async[Resp]) Done() bool {
 // AsyncMajority returns an Async future that resolves when a majority quorum is reached.
 // Messages are sent immediately (synchronously) to preserve ordering when multiple
 // async calls are created in sequence.
-func (r *Responses[Req, Resp]) AsyncMajority() *Async[Resp] {
-	quorumSize := r.ctx.Size()/2 + 1
+func (r *Responses[Resp]) AsyncMajority() *Async[Resp] {
+	quorumSize := r.size/2 + 1
 	return r.AsyncThreshold(quorumSize)
 }
 
 // AsyncFirst returns an Async future that resolves when the first response is received.
 // Messages are sent immediately (synchronously) to preserve ordering.
-func (r *Responses[Req, Resp]) AsyncFirst() *Async[Resp] {
+func (r *Responses[Resp]) AsyncFirst() *Async[Resp] {
 	return r.AsyncThreshold(1)
 }
 
 // AsyncAll returns an Async future that resolves when all nodes have responded.
 // Messages are sent immediately (synchronously) to preserve ordering.
-func (r *Responses[Req, Resp]) AsyncAll() *Async[Resp] {
-	return r.AsyncThreshold(r.ctx.Size())
+func (r *Responses[Resp]) AsyncAll() *Async[Resp] {
+	return r.AsyncThreshold(r.size)
 }
 
 // AsyncThreshold returns an Async future that resolves when the threshold is reached.
 // Messages are sent immediately (synchronously) to preserve ordering when multiple
 // async calls are created in sequence.
-func (r *Responses[Req, Resp]) AsyncThreshold(threshold int) *Async[Resp] {
-	// Force immediate sending for ordering
-	r.ctx.sendOnce()
-
+func (r *Responses[Resp]) AsyncThreshold(threshold int) *Async[Resp] {
 	fut := &Async[Resp]{c: make(chan struct{}, 1)}
 
 	go func() {
@@ -91,7 +88,6 @@ func AsyncCall[Req, Resp msg](
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
 
-	// Create ClientCtx
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
 
 	// Send messages to all nodes synchronously (before spawning goroutine).
@@ -112,11 +108,16 @@ func AsyncCall[Req, Resp msg](
 	// Mark messages as sent by setting sendOnce to a no-op
 	clientCtx.sendOnce = sync.OnceFunc(func() {})
 
-	// Create the Responses object and apply interceptors
-	responses := &Responses[Req, Resp]{ctx: clientCtx}
+	// Apply interceptors
 	for _, ic := range callOpts.interceptors {
 		interceptor := ic.(QuorumInterceptor[Req, Resp])
-		interceptor(responses)
+		interceptor(clientCtx)
+	}
+
+	// Create the Responses object
+	responses := &Responses[Resp]{
+		responseSeq: clientCtx.responseSeq,
+		size:        clientCtx.Size(),
 	}
 
 	// Return async majority by default (matching old behavior)

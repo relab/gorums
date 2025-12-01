@@ -31,13 +31,13 @@ func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, op
 
 	waitSendDone := o.mustWaitSendDone()
 
-	// Create ClientCtx for interceptor support
+	// Create clientCtx for interceptor support
 	clientCtx := newClientCtx[Req, *emptypb.Empty](ctx, c, msg, method, replyChan)
 
 	// Apply interceptors to set up transformations
 	for _, ic := range o.interceptors {
 		interceptor := ic.(QuorumInterceptor[Req, *emptypb.Empty])
-		interceptor(&Responses[Req, *emptypb.Empty]{ctx: clientCtx})
+		interceptor(clientCtx)
 	}
 
 	var expected int

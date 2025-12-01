@@ -15,7 +15,7 @@ import (
 //
 // The opts parameter accepts CallOption values such as Interceptors.
 // Interceptors are applied in the order they are provided via Interceptors,
-// modifying the Responses object before the user calls a terminal method.
+// modifying the clientCtx before the user calls a terminal method.
 //
 // Note: Messages are not sent to nodes until a terminal method (like Majority, First)
 // or iterator method (like Seq) is called, applying any registered request transformations.
@@ -27,7 +27,7 @@ func QuorumCallWithInterceptor[Req, Resp msg](
 	req Req,
 	method string,
 	opts ...CallOption,
-) *Responses[Req, Resp] {
+) *Responses[Resp] {
 	config := ctx.Configuration()
 
 	// Apply options
@@ -36,7 +36,7 @@ func QuorumCallWithInterceptor[Req, Resp msg](
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
 
-	// Create ClientCtx first so sendOnce can access it
+	// Create clientCtx first so sendOnce can access it
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
 
 	// Create sendOnce function that will be called lazily on first Responses() call
@@ -57,14 +57,15 @@ func QuorumCallWithInterceptor[Req, Resp msg](
 	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
 	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
 
-	// Create the Responses object
-	responses := &Responses[Req, Resp]{ctx: clientCtx}
-
 	// Apply interceptors
 	for _, ic := range callOpts.interceptors {
 		interceptor := ic.(QuorumInterceptor[Req, Resp])
-		interceptor(responses)
+		interceptor(clientCtx)
 	}
 
-	return responses
+	// Create the Responses object
+	return &Responses[Resp]{
+		responseSeq: clientCtx.responseSeq,
+		size:        clientCtx.Size(),
+	}
 }

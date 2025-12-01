@@ -60,7 +60,7 @@ func Multicast(ctx *gorums.ConfigContext, in *TimedMsg, opts ...gorums.CallOptio
 // Example:
 //
 //	resp, err := StartServerBenchmark(ctx, in).Majority()
-func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartRequest, *StartResponse] {
+func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
 	return gorums.QuorumCallWithInterceptor[*StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartServerBenchmark",
 		opts...,
@@ -74,7 +74,7 @@ func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...g
 // Example:
 //
 //	resp, err := StopServerBenchmark(ctx, in).Majority()
-func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*StopRequest, *Result] {
+func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*Result] {
 	return gorums.QuorumCallWithInterceptor[*StopRequest, *Result](
 		ctx, in, "benchmark.Benchmark.StopServerBenchmark",
 		opts...,
@@ -88,7 +88,7 @@ func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gor
 // Example:
 //
 //	resp, err := StartBenchmark(ctx, in).Majority()
-func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartRequest, *StartResponse] {
+func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
 	return gorums.QuorumCallWithInterceptor[*StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartBenchmark",
 		opts...,
@@ -102,7 +102,7 @@ func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.
 // Example:
 //
 //	resp, err := StopBenchmark(ctx, in).Majority()
-func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*StopRequest, *MemoryStat] {
+func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*MemoryStat] {
 	return gorums.QuorumCallWithInterceptor[*StopRequest, *MemoryStat](
 		ctx, in, "benchmark.Benchmark.StopBenchmark",
 		opts...,
@@ -110,7 +110,7 @@ func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.Ca
 }
 
 // benchmarks
-func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo, *Echo] {
+func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
 	return gorums.QuorumCallWithInterceptor[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.QuorumCall",
 		opts...,
@@ -124,7 +124,7 @@ func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) 
 // Example:
 //
 //	resp, err := SlowServer(ctx, in).Majority()
-func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo, *Echo] {
+func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
 	return gorums.QuorumCallWithInterceptor[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.SlowServer",
 		opts...,

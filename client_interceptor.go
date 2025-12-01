@@ -17,7 +17,10 @@ type msg = proto.Message
 // Type parameters:
 //   - Req: The request message type sent to nodes
 //   - Resp: The response message type from individual nodes
-type QuorumInterceptor[Req, Resp msg] func(*Responses[Req, Resp])
+//
+// The interceptor receives the internal clientCtx for request transformations
+// and returns a Responses object for the user.
+type QuorumInterceptor[Req, Resp msg] func(*clientCtx[Req, Resp])
 
 // ResponseSeq is an iterator that yields NodeResponse[T] values from a quorum call.
 type ResponseSeq[T msg] iter.Seq[NodeResponse[T]]
@@ -31,51 +34,49 @@ type ResponseSeq[T msg] iter.Seq[NodeResponse[T]]
 //	// or
 //	replies := ReadQC(ctx, req).IgnoreErrors().CollectAll()
 //
-// Type parameters:
-//   - Req: The request message type sent to nodes
+// Type parameter:
 //   - Resp: The response message type from individual nodes
-type Responses[Req, Resp msg] struct {
-	ctx *ClientCtx[Req, Resp]
+type Responses[Resp msg] struct {
+	responseSeq ResponseSeq[Resp]
+	size        int
 }
 
 // Size returns the number of nodes in the configuration.
-func (r *Responses[Req, Resp]) Size() int {
-	return r.ctx.Size()
+func (r *Responses[Resp]) Size() int {
+	return r.size
 }
 
 // Seq returns the underlying response iterator for advanced use cases.
 // Users can use this to implement custom aggregation logic.
 //
 // Note: This method triggers lazy sending of requests.
-func (r *Responses[Req, Resp]) Seq() ResponseSeq[Resp] {
-	return r.ctx.Responses()
+func (r *Responses[Resp]) Seq() ResponseSeq[Resp] {
+	return r.responseSeq
 }
 
 // IgnoreErrors returns a Responses that yields only successful responses,
 // discarding any responses with errors.
-func (r *Responses[Req, Resp]) IgnoreErrors() *Responses[Req, Resp] {
-	old := r.ctx.responseSeq
-	r.ctx.responseSeq = old.IgnoreErrors()
+func (r *Responses[Resp]) IgnoreErrors() *Responses[Resp] {
+	r.responseSeq = r.responseSeq.IgnoreErrors()
 	return r
 }
 
 // Filter returns a Responses that yields only the responses for which the
 // provided keep function returns true.
-func (r *Responses[Req, Resp]) Filter(keep func(NodeResponse[Resp]) bool) *Responses[Req, Resp] {
-	old := r.ctx.responseSeq
-	r.ctx.responseSeq = old.Filter(keep)
+func (r *Responses[Resp]) Filter(keep func(NodeResponse[Resp]) bool) *Responses[Resp] {
+	r.responseSeq = r.responseSeq.Filter(keep)
 	return r
 }
 
 // CollectN collects up to n responses, including errors, into a map by node ID.
 // It returns early if n responses are collected or the iterator is exhausted.
-func (r *Responses[Req, Resp]) CollectN(n int) map[uint32]Resp {
-	return r.ctx.Responses().CollectN(n)
+func (r *Responses[Resp]) CollectN(n int) map[uint32]Resp {
+	return r.responseSeq.CollectN(n)
 }
 
 // CollectAll collects all responses, including errors, into a map by node ID.
-func (r *Responses[Req, Resp]) CollectAll() map[uint32]Resp {
-	return r.ctx.Responses().CollectAll()
+func (r *Responses[Resp]) CollectAll() map[uint32]Resp {
+	return r.responseSeq.CollectAll()
 }
 
 // -------------------------------------------------------------------------
@@ -84,26 +85,26 @@ func (r *Responses[Req, Resp]) CollectAll() map[uint32]Resp {
 
 // First returns the first successful response received from any node.
 // This is useful for read-any patterns where any single response is sufficient.
-func (r *Responses[Req, Resp]) First() (Resp, error) {
+func (r *Responses[Resp]) First() (Resp, error) {
 	return r.Threshold(1)
 }
 
 // Majority returns the first response once a simple majority (⌈(n+1)/2⌉)
 // of successful responses are received.
-func (r *Responses[Req, Resp]) Majority() (Resp, error) {
-	quorumSize := r.ctx.Size()/2 + 1
+func (r *Responses[Resp]) Majority() (Resp, error) {
+	quorumSize := r.size/2 + 1
 	return r.Threshold(quorumSize)
 }
 
 // All returns the first response once all nodes have responded successfully.
 // If any node fails, it returns an error.
-func (r *Responses[Req, Resp]) All() (Resp, error) {
-	return r.Threshold(r.ctx.Size())
+func (r *Responses[Resp]) All() (Resp, error) {
+	return r.Threshold(r.size)
 }
 
 // Threshold waits for a threshold number of successful responses.
 // It returns the first response once the threshold is reached.
-func (r *Responses[Req, Resp]) Threshold(threshold int) (Resp, error) {
+func (r *Responses[Resp]) Threshold(threshold int) (Resp, error) {
 	var (
 		firstResp Resp
 		found     bool
@@ -111,7 +112,7 @@ func (r *Responses[Req, Resp]) Threshold(threshold int) (Resp, error) {
 		errs      []nodeError
 	)
 
-	for result := range r.ctx.Responses() {
+	for result := range r.responseSeq {
 		if result.Err != nil {
 			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 			continue
@@ -144,7 +145,7 @@ func (r *Responses[Req, Resp]) Threshold(threshold int) (Resp, error) {
 //	// Wait for level 2 to be reached
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
-func (r *Responses[Req, Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
+func (r *Responses[Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
 	corr := &Correctable[Resp]{
 		level:  LevelNotSet,
 		donech: make(chan struct{}, 1),
@@ -158,7 +159,7 @@ func (r *Responses[Req, Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
 			errs     []nodeError
 		)
 
-		for result := range r.ctx.Responses() {
+		for result := range r.responseSeq {
 			if result.Err != nil {
 				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 				continue
@@ -188,9 +189,9 @@ func (r *Responses[Req, Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
 	return corr
 }
 
-// ClientCtx provides context and access to the quorum call state for interceptors.
+// clientCtx provides context and access to the quorum call state for interceptors.
 // It exposes the request, configuration, and an iterator over node responses.
-type ClientCtx[Req, Resp msg] struct {
+type clientCtx[Req, Resp msg] struct {
 	context.Context
 	config        RawConfiguration
 	request       Req
@@ -210,15 +211,15 @@ type ClientCtx[Req, Resp msg] struct {
 	responseSeq ResponseSeq[Resp]
 }
 
-// newClientCtx creates a new ClientCtx for a quorum call.
+// newClientCtx creates a new clientCtx for a quorum call.
 func newClientCtx[Req, Resp msg](
 	ctx context.Context,
 	config RawConfiguration,
 	req Req,
 	method string,
 	replyChan <-chan NodeResponse[msg],
-) *ClientCtx[Req, Resp] {
-	c := &ClientCtx[Req, Resp]{
+) *clientCtx[Req, Resp] {
+	c := &clientCtx[Req, Resp]{
 		Context:         ctx,
 		config:          config,
 		request:         req,
@@ -232,31 +233,31 @@ func newClientCtx[Req, Resp msg](
 }
 
 // -------------------------------------------------------------------------
-// ClientCtx Methods
+// clientCtx Methods
 // -------------------------------------------------------------------------
 
 // Request returns the original request message for this quorum call.
-func (c ClientCtx[Req, Resp]) Request() Req {
+func (c clientCtx[Req, Resp]) Request() Req {
 	return c.request
 }
 
 // Config returns the configuration (set of nodes) for this quorum call.
-func (c ClientCtx[Req, Resp]) Config() RawConfiguration {
+func (c clientCtx[Req, Resp]) Config() RawConfiguration {
 	return c.config
 }
 
 // Method returns the name of the RPC method being called.
-func (c ClientCtx[Req, Resp]) Method() string {
+func (c clientCtx[Req, Resp]) Method() string {
 	return c.method
 }
 
 // Nodes returns the slice of nodes in this configuration.
-func (c ClientCtx[Req, Resp]) Nodes() []*RawNode {
+func (c clientCtx[Req, Resp]) Nodes() []*RawNode {
 	return c.config.Nodes()
 }
 
 // Node returns the node with the given ID.
-func (c ClientCtx[Req, Resp]) Node(id uint32) *RawNode {
+func (c clientCtx[Req, Resp]) Node(id uint32) *RawNode {
 	nodes := c.config.Nodes()
 	index := slices.IndexFunc(nodes, func(n *RawNode) bool {
 		return n.ID() == id
@@ -268,7 +269,7 @@ func (c ClientCtx[Req, Resp]) Node(id uint32) *RawNode {
 }
 
 // Size returns the number of nodes in this configuration.
-func (c ClientCtx[Req, Resp]) Size() int {
+func (c clientCtx[Req, Resp]) Size() int {
 	return c.config.Size()
 }
 
@@ -277,7 +278,7 @@ func (c ClientCtx[Req, Resp]) Size() int {
 //
 // This method is intended to be used by interceptors to modify requests before they are sent.
 // It must be called before the first call to Responses(), which triggers the actual sending.
-func (c *ClientCtx[Req, Resp]) RegisterTransformFunc(fn func(Req, *RawNode) Req) {
+func (c *clientCtx[Req, Resp]) RegisterTransformFunc(fn func(Req, *RawNode) Req) {
 	c.reqTransforms = append(c.reqTransforms, fn)
 }
 
@@ -285,7 +286,7 @@ func (c *ClientCtx[Req, Resp]) RegisterTransformFunc(fn func(Req, *RawNode) Req)
 // invalid or the node should be skipped. It applies the registered transformation functions to
 // the given request for the specified node. Transformation functions are applied in the order
 // they were registered.
-func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Message {
+func (c *clientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Message {
 	result := req
 	for _, transform := range c.reqTransforms {
 		result = transform(result, node)
@@ -319,12 +320,12 @@ func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *RawNode) proto.Mes
 //	    }
 //	    // Process result.Value
 //	}
-func (c *ClientCtx[Req, Resp]) Responses() ResponseSeq[Resp] {
+func (c *clientCtx[Req, Resp]) Responses() ResponseSeq[Resp] {
 	return c.responseSeq
 }
 
 // defaultResponseSeq returns an iterator that yields at most c.expectedReplies responses.
-func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
+func (c *clientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger lazy sending
 		if c.sendOnce != nil {
@@ -347,7 +348,7 @@ func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 
 // streamingResponseSeq returns an iterator that yields responses as they arrive from nodes
 // until the context is canceled or breaking from the range loop.
-func (c *ClientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
+func (c *clientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger lazy sending
 		if c.sendOnce != nil {
@@ -442,9 +443,9 @@ func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 // request to send to that node. If the function returns an invalid message or nil,
 // the request to that node is skipped.
 func MapRequest[Req, Resp msg](fn func(Req, *RawNode) Req) QuorumInterceptor[Req, Resp] {
-	return func(r *Responses[Req, Resp]) {
+	return func(ctx *clientCtx[Req, Resp]) {
 		if fn != nil {
-			r.ctx.RegisterTransformFunc(fn)
+			ctx.RegisterTransformFunc(fn)
 		}
 	}
 }
@@ -454,18 +455,18 @@ func MapRequest[Req, Resp msg](fn func(Req, *RawNode) Req) QuorumInterceptor[Req
 // The fn receives the response from a node and the node itself, and returns the
 // transformed response.
 func MapResponse[Req, Resp msg](fn func(Resp, *RawNode) Resp) QuorumInterceptor[Req, Resp] {
-	return func(r *Responses[Req, Resp]) {
+	return func(ctx *clientCtx[Req, Resp]) {
 		if fn != nil {
 			// Wrap the existing response iterator with the transformation logic.
 			// We capture the current iterator (oldResponses) and replace it with a new one
 			// that applies fn to each successful response.
-			oldResponses := r.ctx.responseSeq
-			r.ctx.responseSeq = func(yield func(NodeResponse[Resp]) bool) {
+			oldResponses := ctx.responseSeq
+			ctx.responseSeq = func(yield func(NodeResponse[Resp]) bool) {
 				for resp := range oldResponses {
 					// We only apply the transformation if there is no error.
 					// Errors are passed through as-is.
 					if resp.Err == nil {
-						if node := r.ctx.Node(resp.NodeID); node != nil {
+						if node := ctx.Node(resp.NodeID); node != nil {
 							resp.Value = fn(resp.Value, node)
 						}
 					}
@@ -506,8 +507,8 @@ func Map[Req, Resp msg](
 	reqFunc func(Req, *RawNode) Req,
 	respFunc func(Resp, *RawNode) Resp,
 ) QuorumInterceptor[Req, Resp] {
-	return func(r *Responses[Req, Resp]) {
-		MapRequest[Req, Resp](reqFunc)(r)
-		MapResponse[Req, Resp](respFunc)(r)
+	return func(ctx *clientCtx[Req, Resp]) {
+		MapRequest[Req, Resp](reqFunc)(ctx)
+		MapResponse[Req, Resp](respFunc)(ctx)
 	}
 }

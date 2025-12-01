@@ -50,7 +50,7 @@ func QCAsync(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) 
 // Example:
 //
 //	resp, err := QC(ctx, in).Majority()
-func QC(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Request, *Response] {
+func QC(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
 	return gorums.QuorumCallWithInterceptor[*Request, *Response](
 		ctx, in, "ordering.GorumsTest.QC",
 		opts...,

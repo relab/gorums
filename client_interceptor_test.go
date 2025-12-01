@@ -95,9 +95,9 @@ func (et *executionTracker) check(t *testing.T, want []string) {
 	}
 }
 
-// makeClientCtx is a helper to create a ClientCtx with mock responses for unit tests.
-// It creates a channel with the provided responses and returns a ClientCtx.
-func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *ClientCtx[Req, Resp] {
+// makeClientCtx is a helper to create a clientCtx with mock responses for unit tests.
+// It creates a channel with the provided responses and returns a clientCtx.
+func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *clientCtx[Req, Resp] {
 	t.Helper()
 
 	resultChan := make(chan NodeResponse[proto.Message], len(responses))
@@ -111,7 +111,7 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 		config[i] = &RawNode{id: uint32(i + 1)}
 	}
 
-	c := &ClientCtx[Req, Resp]{
+	c := &clientCtx[Req, Resp]{
 		Context:         t.Context(),
 		config:          config,
 		replyChan:       resultChan,
@@ -121,9 +121,12 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 	return c
 }
 
-// makeResponses creates a Responses object from a ClientCtx for testing terminal methods.
-func makeResponses[Req, Resp proto.Message](ctx *ClientCtx[Req, Resp]) *Responses[Req, Resp] {
-	return &Responses[Req, Resp]{ctx: ctx}
+// makeResponses creates a Responses object from a clientCtx for testing terminal methods.
+func makeResponses[Req, Resp proto.Message](ctx *clientCtx[Req, Resp]) *Responses[Resp] {
+	return &Responses[Resp]{
+		responseSeq: ctx.responseSeq,
+		size:        ctx.Size(),
+	}
 }
 
 // -------------------------------------------------------------------------
@@ -292,9 +295,10 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := makeResponses(clientCtx)
 
 		var count int
-		for range clientCtx.Responses().IgnoreErrors() {
+		for range r.Seq().IgnoreErrors() {
 			count++
 		}
 		if count != 2 {
@@ -309,15 +313,16 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := makeResponses(clientCtx)
 
 		// Filter to only node 2
 		var count int
-		for r := range clientCtx.Responses().Filter(func(r NodeResponse[*pb.StringValue]) bool {
-			return r.NodeID == 2
+		for resp := range r.Seq().Filter(func(resp NodeResponse[*pb.StringValue]) bool {
+			return resp.NodeID == 2
 		}) {
 			count++
-			if r.Value.GetValue() != "response2" {
-				t.Errorf("Expected 'response2', got '%s'", r.Value.GetValue())
+			if resp.Value.GetValue() != "response2" {
+				t.Errorf("Expected 'response2', got '%s'", resp.Value.GetValue())
 			}
 		}
 		if count != 1 {
@@ -332,8 +337,9 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := makeResponses(clientCtx)
 
-		collected := clientCtx.Responses().CollectN(2)
+		collected := r.CollectN(2)
 		if len(collected) != 2 {
 			t.Errorf("Expected 2 collected responses, got %d", len(collected))
 		}
@@ -346,8 +352,9 @@ func TestIteratorMethods(t *testing.T) {
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
 		}
 		clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, 3, responses)
+		r := makeResponses(clientCtx)
 
-		collected := clientCtx.Responses().CollectAll()
+		collected := r.CollectAll()
 		if len(collected) != 3 {
 			t.Errorf("Expected 3 collected responses, got %d", len(collected))
 		}

@@ -107,7 +107,7 @@ func CorrectableCall[Req, Resp msg](
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
 
-	// Create ClientCtx first so sendOnce can access it
+	// Create clientCtx first so sendOnce can access it
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
 
 	// Create sendOnce function that will be called lazily on first Responses() call
@@ -128,11 +128,16 @@ func CorrectableCall[Req, Resp msg](
 	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
 	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
 
-	// Create the Responses object and apply interceptors
-	responses := &Responses[Req, Resp]{ctx: clientCtx}
+	// Apply interceptors
 	for _, ic := range callOpts.interceptors {
 		interceptor := ic.(QuorumInterceptor[Req, Resp])
-		interceptor(responses)
+		interceptor(clientCtx)
+	}
+
+	// Create the Responses object
+	responses := &Responses[Resp]{
+		responseSeq: clientCtx.responseSeq,
+		size:        clientCtx.Size(),
 	}
 
 	// Default to majority threshold for correctable
@@ -159,7 +164,7 @@ func CorrectableStreamCall[Req, Resp msg](
 	chanSize := len(config) * 10
 	replyChan := make(chan NodeResponse[msg], chanSize)
 
-	// Create ClientCtx first so sendOnce can access it
+	// Create clientCtx first so sendOnce can access it
 	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
 	clientCtx.responseSeq = clientCtx.streamingResponseSeq()
 
@@ -181,11 +186,16 @@ func CorrectableStreamCall[Req, Resp msg](
 	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
 	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
 
-	// Create the Responses object and apply interceptors
-	responses := &Responses[Req, Resp]{ctx: clientCtx}
+	// Apply interceptors
 	for _, ic := range callOpts.interceptors {
 		interceptor := ic.(QuorumInterceptor[Req, Resp])
-		interceptor(responses)
+		interceptor(clientCtx)
+	}
+
+	// Create the Responses object
+	responses := &Responses[Resp]{
+		responseSeq: clientCtx.responseSeq,
+		size:        clientCtx.Size(),
 	}
 
 	// Default to majority threshold for correctable

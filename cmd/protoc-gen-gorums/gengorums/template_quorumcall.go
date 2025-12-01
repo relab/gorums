@@ -34,7 +34,7 @@ var qcVar = `
 var quorumCallSignature = `func {{$method}}(` +
 	`ctx *{{$configContext}}, in *{{$in}}, ` +
 	`opts ...{{$callOption}})` +
-	` *{{$responses}}[*{{$in}}, *{{$out}}] {
+	` *{{$responses}}[*{{$out}}] {
 `
 
 var quorumCallBody = `	return {{$quorumCallWithInterceptor}}[*{{$in}}, *{{$out}}](

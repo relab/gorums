@@ -5,7 +5,7 @@ import (
 )
 
 func BenchmarkGetCallOptions(b *testing.B) {
-	interceptor := func(r *Responses[msg, msg]) {}
+	interceptor := func(ctx *clientCtx[msg, msg]) {}
 	b.ReportAllocs()
 
 	for b.Loop() {
