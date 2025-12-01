@@ -117,6 +117,8 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 		replyChan:       resultChan,
 		expectedReplies: numNodes,
 	}
+	// Mark sendOnce as done since test responses are already in the channel
+	c.sendOnce.Do(func() {})
 	c.responseSeq = c.defaultResponseSeq()
 	return c
 }

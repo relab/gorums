@@ -3,7 +3,9 @@ package gorums
 import (
 	"context"
 	"slices"
+	"sync"
 
+	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,39 +24,54 @@ type QuorumInterceptor[Req, Resp msg] func(*clientCtx[Req, Resp])
 // It exposes the request, configuration, and an iterator over node responses.
 type clientCtx[Req, Resp msg] struct {
 	context.Context
-	config        RawConfiguration
-	request       Req
-	method        string
-	replyChan     <-chan NodeResponse[msg]
+	config    RawConfiguration
+	request   Req
+	method    string
+	md        *ordering.Metadata
+	replyChan chan NodeResponse[msg]
+
+	// reqTransforms holds request transformation functions registered by interceptors.
 	reqTransforms []func(Req, *RawNode) Req
-
-	// expectedReplies is the number of responses we expect to receive.
-	// It defaults to the configuration size but may be lower if nodes are skipped.
-	expectedReplies int
-
-	// sendOnce is called lazily on the first call to Responses().
-	sendOnce func()
 
 	// responseSeq is the iterator that yields node responses.
 	// Interceptors can wrap this iterator to modify responses.
 	responseSeq ResponseSeq[Resp]
+
+	// expectedReplies is the number of responses expected from nodes.
+	// It is set when messages are sent and may be lower than config size
+	// if some nodes are skipped by request transformations.
+	expectedReplies int
+
+	// streaming indicates whether this is a streaming call (for correctable streams).
+	streaming bool
+
+	// waitSendDone indicates whether the caller waits for send completion (for multicast).
+	waitSendDone bool
+
+	// sendOnce ensures messages are sent exactly once, on the first
+	// call to Responses(). This deferred sending allows interceptors
+	// to register request transformations before dispatch.
+	sendOnce sync.Once
 }
 
 // newClientCtx creates a new clientCtx for a quorum call.
+// The ctx is initialized with all immutable state; mutable state (responseSeq,
+// expectedReplies) is set up via methods to avoid circular references during construction.
 func newClientCtx[Req, Resp msg](
 	ctx context.Context,
 	config RawConfiguration,
 	req Req,
 	method string,
-	replyChan <-chan NodeResponse[msg],
+	md *ordering.Metadata,
+	replyChan chan NodeResponse[msg],
 ) *clientCtx[Req, Resp] {
 	c := &clientCtx[Req, Resp]{
 		Context:         ctx,
 		config:          config,
 		request:         req,
 		method:          method,
+		md:              md,
 		replyChan:       replyChan,
-		reqTransforms:   nil,
 		expectedReplies: config.Size(),
 	}
 	c.responseSeq = c.defaultResponseSeq()
@@ -66,27 +83,27 @@ func newClientCtx[Req, Resp msg](
 // -------------------------------------------------------------------------
 
 // Request returns the original request message for this quorum call.
-func (c clientCtx[Req, Resp]) Request() Req {
+func (c *clientCtx[Req, Resp]) Request() Req {
 	return c.request
 }
 
 // Config returns the configuration (set of nodes) for this quorum call.
-func (c clientCtx[Req, Resp]) Config() RawConfiguration {
+func (c *clientCtx[Req, Resp]) Config() RawConfiguration {
 	return c.config
 }
 
 // Method returns the name of the RPC method being called.
-func (c clientCtx[Req, Resp]) Method() string {
+func (c *clientCtx[Req, Resp]) Method() string {
 	return c.method
 }
 
 // Nodes returns the slice of nodes in this configuration.
-func (c clientCtx[Req, Resp]) Nodes() []*RawNode {
+func (c *clientCtx[Req, Resp]) Nodes() []*RawNode {
 	return c.config.Nodes()
 }
 
 // Node returns the node with the given ID.
-func (c clientCtx[Req, Resp]) Node(id uint32) *RawNode {
+func (c *clientCtx[Req, Resp]) Node(id uint32) *RawNode {
 	nodes := c.config.Nodes()
 	index := slices.IndexFunc(nodes, func(n *RawNode) bool {
 		return n.ID() == id
@@ -98,7 +115,7 @@ func (c clientCtx[Req, Resp]) Node(id uint32) *RawNode {
 }
 
 // Size returns the number of nodes in this configuration.
-func (c clientCtx[Req, Resp]) Size() int {
+func (c *clientCtx[Req, Resp]) Size() int {
 	return c.config.Size()
 }
 
@@ -144,14 +161,33 @@ func (c *clientCtx[Req, Resp]) Responses() ResponseSeq[Resp] {
 	return c.responseSeq
 }
 
+// send dispatches requests to all nodes, applying any registered transformations.
+// It updates expectedReplies based on how many nodes actually receive requests
+// (nodes may be skipped if a transformation returns nil).
+func (c *clientCtx[Req, Resp]) send() {
+	var expected int
+	for _, n := range c.config {
+		msg := c.applyTransforms(c.request, n)
+		if msg == nil {
+			continue // Skip node if transformation returns nil
+		}
+		expected++
+		n.channel.enqueue(request{
+			ctx:          c.Context,
+			msg:          NewRequestMessage(c.md, msg),
+			streaming:    c.streaming,
+			waitSendDone: c.waitSendDone,
+			responseChan: c.replyChan,
+		})
+	}
+	c.expectedReplies = expected
+}
+
 // defaultResponseSeq returns an iterator that yields at most c.expectedReplies responses.
 func (c *clientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
-		// Trigger lazy sending
-		if c.sendOnce != nil {
-			c.sendOnce()
-		}
-		// Wait for at most c.expectedReplies
+		// Trigger sending on first iteration
+		c.sendOnce.Do(c.send)
 		for range c.expectedReplies {
 			select {
 			case r := <-c.replyChan:
@@ -170,10 +206,8 @@ func (c *clientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 // until the context is canceled or breaking from the range loop.
 func (c *clientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
-		// Trigger lazy sending
-		if c.sendOnce != nil {
-			c.sendOnce()
-		}
+		// Trigger sending on first iteration
+		c.sendOnce.Do(c.send)
 		for {
 			select {
 			case r := <-c.replyChan:

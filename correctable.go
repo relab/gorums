@@ -107,26 +107,7 @@ func CorrectableCall[Req, Resp msg](
 	md := ordering.NewGorumsMetadata(ctx, config.getMsgID(), method)
 	replyChan := make(chan NodeResponse[msg], len(config))
 
-	// Create clientCtx first so sendOnce can access it
-	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
-
-	// Create sendOnce function that will be called lazily on first Responses() call
-	sendOnce := func() {
-		var expected int
-		for _, n := range config {
-			// Apply registered request transformations (if any)
-			msg := clientCtx.applyTransforms(req, n)
-			if msg == nil {
-				continue // Skip node if transformation function returns nil
-			}
-			expected++
-			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: false, responseChan: replyChan})
-		}
-		clientCtx.expectedReplies = expected
-	}
-
-	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
-	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
+	clientCtx := newCorrectableClientCtx[Req, Resp](ctx, config, req, method, md, replyChan, false)
 
 	// Apply interceptors
 	for _, ic := range callOpts.interceptors {
@@ -158,27 +139,7 @@ func CorrectableStreamCall[Req, Resp msg](
 	chanSize := len(config) * 10
 	replyChan := make(chan NodeResponse[msg], chanSize)
 
-	// Create clientCtx first so sendOnce can access it
-	clientCtx := newClientCtx[Req, Resp](ctx, config, req, method, replyChan)
-	clientCtx.responseSeq = clientCtx.streamingResponseSeq()
-
-	// Create sendOnce function that will be called lazily on first Responses() call
-	sendOnce := func() {
-		var expected int
-		for _, n := range config {
-			// Apply registered request transformations (if any)
-			msg := clientCtx.applyTransforms(req, n)
-			if msg == nil {
-				continue // Skip node if transformation function returns nil
-			}
-			expected++
-			n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), streaming: true, responseChan: replyChan})
-		}
-		clientCtx.expectedReplies = expected
-	}
-
-	// Wrap sendOnce with sync.OnceFunc to ensure it's only called once
-	clientCtx.sendOnce = sync.OnceFunc(sendOnce)
+	clientCtx := newCorrectableClientCtx[Req, Resp](ctx, config, req, method, md, replyChan, true)
 
 	// Apply interceptors
 	for _, ic := range callOpts.interceptors {
@@ -189,4 +150,33 @@ func CorrectableStreamCall[Req, Resp msg](
 	// Default to majority threshold for correctable
 	quorumSize := clientCtx.Size()/2 + 1
 	return NewResponses(clientCtx).WaitForLevel(quorumSize)
+}
+
+// newCorrectableClientCtx creates a clientCtx configured for correctable calls.
+// If streaming is true, it uses a streaming response iterator.
+func newCorrectableClientCtx[Req, Resp msg](
+	ctx *ConfigContext,
+	config RawConfiguration,
+	req Req,
+	method string,
+	md *ordering.Metadata,
+	replyChan chan NodeResponse[msg],
+	streaming bool,
+) *clientCtx[Req, Resp] {
+	c := &clientCtx[Req, Resp]{
+		Context:         ctx,
+		config:          config,
+		request:         req,
+		method:          method,
+		md:              md,
+		replyChan:       replyChan,
+		expectedReplies: config.Size(),
+		streaming:       streaming,
+	}
+	if streaming {
+		c.responseSeq = c.streamingResponseSeq()
+	} else {
+		c.responseSeq = c.defaultResponseSeq()
+	}
+	return c
 }
