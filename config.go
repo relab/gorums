@@ -6,7 +6,7 @@ import (
 )
 
 // ConfigContext is a context that carries a configuration for quorum calls.
-// It embeds context.Context and provides access to the RawConfiguration.
+// It embeds context.Context and provides access to the Configuration.
 //
 // Use [WithConfigContext] to create a ConfigContext from an existing context.
 type ConfigContext struct {
@@ -19,7 +19,7 @@ type ConfigContext struct {
 //
 // Example:
 //
-//	cfg, _ := gorums.NewRawConfiguration(mgr, gorums.WithNodeList(addrs))
+//	cfg, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 //	ctx := gorums.WithConfigContext(context.Background(), cfg)
 //	resp, err := paxos.Prepare(ctx, req)
 func WithConfigContext(parent context.Context, cfg Configuration) *ConfigContext {
@@ -29,7 +29,7 @@ func WithConfigContext(parent context.Context, cfg Configuration) *ConfigContext
 	return &ConfigContext{Context: parent, cfg: cfg}
 }
 
-// Configuration returns the RawConfiguration associated with this context.
+// Configuration returns the Configuration associated with this context.
 func (c *ConfigContext) Configuration() Configuration {
 	return c.cfg
 }

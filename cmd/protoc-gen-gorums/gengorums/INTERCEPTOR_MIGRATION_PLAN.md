@@ -12,7 +12,7 @@ The following breaking changes will be made as part of this migration:
 
 2. **Remove `gorums.custom_return_type` option** — The `Out` type parameter can be any type (not restricted to `proto.Message`), giving users full flexibility in their quorum functions.
 
-3. **New per-node transform signature** — Changes from `func(*Request, uint32)` (node ID) to `func(*Request, *gorums.RawNode)` (full node access).
+3. **New per-node transform signature** — Changes from `func(*Request, uint32)` (node ID) to `func(*Request, *gorums.Node)` (full node access).
 
 4. **Defer async migration** — Focus on synchronous quorum calls first to reduce risk.
 
@@ -122,7 +122,7 @@ Replace `quorumCallBody` to use `QuorumCallWithInterceptor`:
 ```go
 var quorumCallBody = `
 	return {{$quorumCallWithInterceptor}}(
-		ctx, c.RawConfiguration, in, "{{$fullName}}",
+		ctx, c.Configuration, in, "{{$fullName}}",
 		{{$quorumSpecInterceptor}}(c.qspec.{{$method}}QF),
 		opts...,
 	)
@@ -154,7 +154,7 @@ type QuorumCallOption interface {
 // WithTransformFunc returns an option that applies per-node request transformations.
 // The transform function receives the original request and a node, and returns
 // the transformed request to send to that node.
-func WithTransformFunc[Req msg](fn func(Req, *RawNode) Req) QuorumCallOption {
+func WithTransformFunc[Req msg](fn func(Req, *Node) Req) QuorumCallOption {
     // Implementation
 }
 ```
@@ -183,7 +183,7 @@ config.Method(ctx, req, f)
 
 To:
 ```go
-f := func(req *Request, node *gorums.RawNode) *Request { ... }
+f := func(req *Request, node *gorums.Node) *Request { ... }
 config.Method(ctx, req, gorums.WithTransformFunc(f))
 ```
 
@@ -218,7 +218,7 @@ func (c *Configuration) Method(ctx context.Context, in *Request) (*Response, err
         for k, v := range replies { r[k] = v.(*Response) }
         return c.qspec.MethodQF(req.(*Request), r)
     }
-    res, err := c.RawConfiguration.QuorumCall(ctx, cd)
+    res, err := c.Configuration.QuorumCall(ctx, cd)
     return res.(*Response), err
 }
 
@@ -246,7 +246,7 @@ type QuorumSpec interface {
 func (c *Configuration) Method(ctx context.Context, in *Request,
     opts ...gorums.QuorumCallOption) (*Response, error) {
     return gorums.QuorumCallWithInterceptor(
-        ctx, c.RawConfiguration, in, "service.Method",
+        ctx, c.Configuration, in, "service.Method",
         gorums.QuorumSpecInterceptor(c.qspec.MethodQF),
         opts...,
     )
@@ -254,7 +254,7 @@ func (c *Configuration) Method(ctx context.Context, in *Request,
 
 // Usage with per-node transform
 resp, err := config.Method(ctx, req, gorums.WithTransformFunc(
-    func(req *Request, node *gorums.RawNode) *Request {
+    func(req *Request, node *gorums.Node) *Request {
         return &Request{Value: fmt.Sprintf("%s-%d", req.Value, node.ID())}
     },
 ))
@@ -306,7 +306,7 @@ resp, err := config.Method(ctx, req, gorums.WithTransformFunc(
 
 ## Design Decisions (Resolved)
 
-1. **QuorumCallOption implementation**: Use type erasure internally (`func(proto.Message, *RawNode) proto.Message`) for simpler generated code. Users still get compile-time type checks at call sites.
+1. **QuorumCallOption implementation**: Use type erasure internally (`func(proto.Message, *Node) proto.Message`) for simpler generated code. Users still get compile-time type checks at call sites.
 
 2. **Correctable calls**: Defer to Phase 5 with async, since it has similar complexity.
 

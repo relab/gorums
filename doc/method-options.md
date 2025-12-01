@@ -39,7 +39,7 @@ This is done at runtime using call options rather than proto options.
 ```go
 // Send different requests to each node
 resp, err := cfg.Write(ctx, req, gorums.WithPerNodeTransform(
-    func(req *WriteRequest, node *gorums.RawNode) *WriteRequest {
+    func(req *WriteRequest, node *gorums.Node) *WriteRequest {
         // Customize request for each node based on node.ID() or other properties
         return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
     },
@@ -51,7 +51,7 @@ resp, err := cfg.Write(ctx, req, gorums.WithPerNodeTransform(
 ```go
 // Send different messages to each node in a multicast
 cfg.WriteMulticast(ctx, msg, gorums.WithPerNodeTransform(
-    func(msg *WriteMessage, node *gorums.RawNode) *WriteMessage {
+    func(msg *WriteMessage, node *gorums.Node) *WriteMessage {
         return &WriteMessage{Shard: node.ID()}
     },
 ))

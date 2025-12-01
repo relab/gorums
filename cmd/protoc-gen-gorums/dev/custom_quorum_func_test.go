@@ -26,9 +26,9 @@ func TestQuorumCallWithMajority(t *testing.T) {
 	t.Cleanup(teardown)
 
 	// Create configuration using helper
-	rawCfg := gorums.NewTestConfig(t, addrs)
+	cfg := gorums.NewTestConfig(t, addrs)
 
-	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
+	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
 	req.SetValue("test")
@@ -60,9 +60,9 @@ func TestQuorumCallWithAll(t *testing.T) {
 	t.Cleanup(teardown)
 
 	// Create configuration using helper
-	rawCfg := gorums.NewTestConfig(t, addrs)
+	cfg := gorums.NewTestConfig(t, addrs)
 
-	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
+	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
 	req.SetValue("test")
@@ -93,9 +93,9 @@ func TestQuorumCallWithThreshold(t *testing.T) {
 	})
 	t.Cleanup(teardown)
 
-	rawCfg := gorums.NewTestConfig(t, addrs)
+	cfg := gorums.NewTestConfig(t, addrs)
 
-	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
+	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
 	req.SetValue("hello")
@@ -126,9 +126,9 @@ func TestQuorumCallWithCustomAggregation(t *testing.T) {
 	})
 	t.Cleanup(teardown)
 
-	rawCfg := gorums.NewTestConfig(t, addrs)
+	cfg := gorums.NewTestConfig(t, addrs)
 
-	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), rawCfg)
+	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
 	req.SetValue("hello")

@@ -16,7 +16,7 @@ import (
 const nilAngleString = "<nil>"
 
 // NodeContext is a context that carries a node for unicast and RPC calls.
-// It embeds context.Context and provides access to the RawNode.
+// It embeds context.Context and provides access to the Node.
 //
 // Use [WithNodeContext] to create a NodeContext from an existing context.
 type NodeContext struct {
@@ -38,7 +38,7 @@ func WithNodeContext(parent context.Context, node *Node) *NodeContext {
 	return &NodeContext{Context: parent, node: node}
 }
 
-// Node returns the RawNode associated with this context.
+// Node returns the Node associated with this context.
 func (c *NodeContext) Node() *Node {
 	return c.node
 }

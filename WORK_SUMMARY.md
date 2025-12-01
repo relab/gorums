@@ -193,7 +193,7 @@ result, err := QuorumCallWithInterceptor(
 ### Per-Node Transformation
 
 ```go
-transform := func(req *Request, node *RawNode) *Request {
+transform := func(req *Request, node *Node) *Request {
     return &Request{Shard: int(node.ID())}
 }
 

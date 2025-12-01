@@ -37,7 +37,7 @@ type Responses[Req, Resp msg] struct {
 The `Responses` struct holds a `*ClientCtx[Req, Resp]`, and `ClientCtx` needs `Req` for:
 
 - `Request()` method to return the original request
-- `RegisterTransformFunc(fn func(Req, *RawNode) Req)` for per-node request transformation
+- `RegisterTransformFunc(fn func(Req, *Node) Req)` for per-node request transformation
 - Interceptors (`MapRequest`, `MapResponse`, `Map`) that need both types
 
 ### Problems with Current Design

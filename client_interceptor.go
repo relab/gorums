@@ -321,11 +321,11 @@ func MapResponse[Req, Resp msg](fn func(Resp, *Node) Resp) QuorumInterceptor[Req
 // Example:
 //
 //	interceptor := Map(
-//	    func(req *Request, node *gorums.RawNode) *Request {
+//	    func(req *Request, node *gorums.Node) *Request {
 //	        // Send different shard to each node
 //	        return &Request{Shard: int(node.ID())}
 //	    },
-//	    func(resp *Response, node *gorums.RawNode) *Response {
+//	    func(resp *Response, node *gorums.Node) *Response {
 //	        // Add node ID to response
 //	        resp.NodeID = node.ID()
 //	        return resp
