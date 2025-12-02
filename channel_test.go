@@ -615,3 +615,193 @@ func TestChannelResponseRouting(t *testing.T) {
 		t.Errorf("got %d unique responses, want %d", len(received), numMessages)
 	}
 }
+
+// TestChannelStreamReadySignaling verifies that the receiver goroutine is properly notified
+// when a stream becomes available. This tests the stream-ready signaling mechanism
+// that replaces the old time.Sleep polling approach.
+func TestChannelStreamReadySignaling(t *testing.T) {
+	node := newNodeWithServer(t, 0)
+
+	// The first request triggers stream creation. We measure how quickly
+	// the receiver starts processing after the stream is ready.
+	start := time.Now()
+	resp := sendRequest(t, node, request{}, 1)
+	firstLatency := time.Since(start)
+
+	if resp.Err != nil {
+		t.Fatalf("unexpected error on first request: %v", resp.Err)
+	}
+
+	// Second request should be faster since stream is already established
+	start = time.Now()
+	resp = sendRequest(t, node, request{}, 2)
+	secondLatency := time.Since(start)
+
+	if resp.Err != nil {
+		t.Fatalf("unexpected error on second request: %v", resp.Err)
+	}
+
+	t.Logf("first request latency: %v", firstLatency)
+	t.Logf("second request latency: %v", secondLatency)
+
+	// The first request should complete in reasonable time (not waiting for polling timeout).
+	// With the old 10ms polling, the first request could take 10-20ms just waiting for the stream.
+	// With proper signaling, it should be much faster (sub-millisecond for the signal itself).
+	const maxAcceptableLatency = 100 * time.Millisecond // generous bound for CI environments
+	if firstLatency > maxAcceptableLatency {
+		t.Errorf("first request took %v, expected < %v (possible stream-ready polling delay)", firstLatency, maxAcceptableLatency)
+	}
+}
+
+// TestChannelStreamReadyAfterReconnect verifies that the receiver is properly notified
+// when a stream is re-established after being cleared (simulating reconnection).
+func TestChannelStreamReadyAfterReconnect(t *testing.T) {
+	node, teardown := newNodeWithStoppableServer(t, 0)
+	defer teardown()
+
+	// First request to establish the stream
+	resp := sendRequest(t, node, request{}, 1)
+	if resp.Err != nil {
+		t.Fatalf("unexpected error on first request: %v", resp.Err)
+	}
+
+	// Clear the stream to simulate disconnection.
+	// Note: In production, clearStream is called by the receiver when it detects an error.
+	// The next request will trigger stream re-creation via ensureStream().
+	node.channel.clearStream()
+
+	// The sender's ensureStream() will recreate the stream.
+	// We may need to retry a few times since there's a race between
+	// clearStream and the sender's stream check.
+	var reconnectLatency time.Duration
+	var lastErr error
+	start := time.Now()
+	for i := range 5 {
+		resp = sendRequest(t, node, request{}, uint64(i+2))
+		if resp.Err == nil {
+			reconnectLatency = time.Since(start)
+			break
+		}
+		lastErr = resp.Err
+		// Give the sender a chance to reconnect
+		time.Sleep(5 * time.Millisecond)
+	}
+	if resp.Err != nil {
+		t.Fatalf("failed to reconnect after 5 attempts: %v", lastErr)
+	}
+
+	t.Logf("reconnect latency: %v", reconnectLatency)
+
+	// Even after reconnection, the latency should be reasonable
+	const maxAcceptableLatency = 200 * time.Millisecond
+	if reconnectLatency > maxAcceptableLatency {
+		t.Errorf("reconnect took %v, expected < %v", reconnectLatency, maxAcceptableLatency)
+	}
+}
+
+// BenchmarkChannelStreamReadyFirstRequest measures the latency of the first request,
+// which includes stream creation and the stream-ready signaling.
+// Note: This benchmark includes server setup overhead, so absolute numbers
+// should be interpreted with caution. The goal is to detect regressions.
+func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
+	for b.Loop() {
+		node, teardown := newNodeWithStoppableServer(b, 0)
+
+		// Use a fresh context for the benchmark request
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		req := request{ctx: ctx}
+		req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, 1, mock.TestMethod), nil)
+		replyChan := make(chan NodeResponse[proto.Message], 1)
+		req.responseChan = replyChan
+		node.channel.enqueue(req)
+
+		select {
+		case resp := <-replyChan:
+			if resp.Err != nil {
+				b.Logf("request error (may occur during rapid cycles): %v", resp.Err)
+			}
+		case <-ctx.Done():
+			b.Logf("timeout (may occur during rapid cycles)")
+		}
+
+		cancel()
+		// Close the node before stopping the server to ensure clean shutdown
+		_ = node.close()
+		teardown()
+	}
+}
+
+// BenchmarkChannelStreamReadySubsequentRequest measures the latency of requests
+// after the stream is already established (steady-state performance).
+func BenchmarkChannelStreamReadySubsequentRequest(b *testing.B) {
+	node, teardown := newNodeWithStoppableServer(b, 0)
+	defer teardown()
+
+	// Warm up: establish the stream
+	resp := sendRequest(b, node, request{}, 0)
+	if resp.Err != nil {
+		b.Fatalf("warmup error: %v", resp.Err)
+	}
+
+	b.ResetTimer()
+	for i := range b.N {
+		resp := sendRequest(b, node, request{}, uint64(i+1))
+		if resp.Err != nil {
+			b.Fatalf("unexpected error: %v", resp.Err)
+		}
+	}
+}
+
+// BenchmarkChannelStreamReadyReconnect measures the latency of reconnecting
+// after the stream has been cleared.
+// Note: This benchmark has inherent variability due to the race between
+// clearStream and the sender's ensureStream call.
+func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
+	node, teardown := newNodeWithStoppableServer(b, 0)
+	defer teardown()
+
+	// Establish initial stream with a fresh context
+	ctx := context.Background()
+	req := request{ctx: ctx}
+	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, 0, mock.TestMethod), nil)
+	replyChan := make(chan NodeResponse[proto.Message], 1)
+	req.responseChan = replyChan
+	node.channel.enqueue(req)
+
+	select {
+	case resp := <-replyChan:
+		if resp.Err != nil {
+			b.Fatalf("initial request error: %v", resp.Err)
+		}
+	case <-time.After(defaultTestTimeout):
+		b.Fatal("timeout on initial request")
+	}
+
+	b.ResetTimer()
+	for i := range b.N {
+		node.channel.clearStream()
+
+		// Wait a tiny bit for the receiver to notice the stream is gone
+		// and be ready for the signal. This simulates real-world behavior
+		// where the receiver detects the error before reconnection.
+		time.Sleep(100 * time.Microsecond)
+
+		// Now send a request which will trigger ensureStream -> newNodeStream -> signal
+		ctx := context.Background()
+		req := request{ctx: ctx}
+		req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, uint64(i+1), mock.TestMethod), nil)
+		replyChan := make(chan NodeResponse[proto.Message], 1)
+		req.responseChan = replyChan
+		node.channel.enqueue(req)
+
+		select {
+		case resp := <-replyChan:
+			if resp.Err != nil {
+				// Stream down error is expected sometimes due to race; just continue
+				b.Logf("request %d error: %v", i, resp.Err)
+			}
+		case <-time.After(500 * time.Millisecond):
+			b.Fatalf("timeout on request %d", i)
+		}
+	}
+}
