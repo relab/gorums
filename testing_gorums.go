@@ -164,9 +164,12 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 // the required types are registered in the global protobuf registry.
 func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []string {
 	t.Helper()
-	// Register goleak check FIRST so it runs LAST (after all other cleanup)
-	// t.Cleanup runs in LIFO order: last registered runs first
-	t.Cleanup(func() { goleak.VerifyNone(t) })
+	if _, ok := t.(*testing.B); !ok {
+		// Skip goleak check for benchmarks
+		// Register goleak check FIRST so it runs LAST (after all other cleanup)
+		// t.Cleanup runs in LIFO order: last registered runs first
+		t.Cleanup(func() { goleak.VerifyNone(t) })
+	}
 	addrs, stopFn := testSetupServers(t, numServers, srvFn)
 	// Register server cleanup SECOND so it runs BEFORE goleak check
 	t.Cleanup(stopFn)

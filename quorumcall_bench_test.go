@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -20,11 +19,8 @@ import (
 // BenchmarkTerminalMethods benchmarks the built-in terminal methods with real servers.
 func BenchmarkTerminalMethods(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
-		addrs, stop := TestSetup(b, numNodes, echoServerFn)
-		b.Cleanup(stop)
-
-		ctx := context.Background()
-		cfgCtx := NewTestConfigContext(b, ctx, addrs)
+		cfg := SetupConfiguration(b, numNodes, echoServerFn)
+		cfgCtx := WithConfigContext(b.Context(), cfg)
 
 		b.Run(fmt.Sprintf("Majority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
@@ -92,11 +88,8 @@ func BenchmarkTerminalMethods(b *testing.B) {
 // BenchmarkIteratorPatterns benchmarks custom aggregation using different iterator patterns.
 func BenchmarkIteratorPatterns(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
-		addrs, stop := TestSetup(b, numNodes, echoServerFn)
-		b.Cleanup(stop)
-
-		ctx := context.Background()
-		cfgCtx := NewTestConfigContext(b, ctx, addrs)
+		cfg := SetupConfiguration(b, numNodes, echoServerFn)
+		cfgCtx := WithConfigContext(b.Context(), cfg)
 
 		// Using CollectAll and then checking quorum
 		b.Run(fmt.Sprintf("CollectAllThenCheck/%d", numNodes), func(b *testing.B) {
