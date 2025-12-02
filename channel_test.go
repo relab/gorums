@@ -33,9 +33,9 @@ func (mockSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
 	return pb.String(mock.GetVal(req) + "-mocked-"), nil
 }
 
-func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*Node, func()) {
-	t.Helper()
-	addrs, teardown := TestSetup(t, 1, func(_ int) ServerIface {
+// delayServerFn returns a server function that delays responses by the given duration.
+func delayServerFn(delay time.Duration) func(_ int) ServerIface {
+	return func(_ int) ServerIface {
 		mockSrv := &mockSrv{}
 		srv := NewServer()
 		srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
@@ -45,8 +45,16 @@ func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*Node, func(
 			return NewResponseMessage(in.GetMetadata(), resp), err
 		})
 		return srv
-	})
+	}
+}
 
+// newNodeWithStoppableServer creates a node with a server that can be stopped early.
+// This is needed for tests that verify behavior when servers go down.
+// Note: This uses TestSetup instead of TestServers to avoid goleak checks in
+// table-driven tests where subtests may intentionally create nodes without servers.
+func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*Node, func()) {
+	t.Helper()
+	addrs, teardown := TestSetup(t, 1, delayServerFn(delay))
 	return NewTestNode(t, addrs[0]), teardown
 }
 

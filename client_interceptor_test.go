@@ -361,12 +361,11 @@ func TestIteratorMethods(t *testing.T) {
 
 // TestInterceptorIntegration_First tests the complete flow with real servers
 func TestInterceptorIntegration_First(t *testing.T) {
-	addrs, closeServers := TestSetup(t, 3, echoServerFn)
-	t.Cleanup(closeServers)
+	cfg := SetupConfiguration(t, 3, echoServerFn)
 
 	ctx := testContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
-		NewTestConfigContext(t, ctx, addrs),
+		WithConfigContext(ctx, cfg),
 		pb.String("test"),
 		mock.TestMethod,
 	)
@@ -383,12 +382,11 @@ func TestInterceptorIntegration_First(t *testing.T) {
 
 // TestInterceptorIntegration_Majority tests majority quorum with real servers
 func TestInterceptorIntegration_Majority(t *testing.T) {
-	addrs, closeServers := TestSetup(t, 3, echoServerFn)
-	t.Cleanup(closeServers)
+	cfg := SetupConfiguration(t, 3, echoServerFn)
 
 	ctx := testContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
-		NewTestConfigContext(t, ctx, addrs),
+		WithConfigContext(ctx, cfg),
 		pb.String("test"),
 		mock.TestMethod,
 	)
@@ -405,12 +403,11 @@ func TestInterceptorIntegration_Majority(t *testing.T) {
 
 // TestInterceptorIntegration_CustomAggregation tests custom response aggregation
 func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
-	addrs, closeServers := TestSetup(t, 3, nil) // uses default server that returns (i+1)*10
-	t.Cleanup(closeServers)
+	cfg := SetupConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
 
 	ctx := testContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.Int32Value, *pb.Int32Value](
-		NewTestConfigContext(t, ctx, addrs),
+		WithConfigContext(ctx, cfg),
 		pb.Int32(0),
 		mock.GetValueMethod,
 	)
@@ -429,12 +426,11 @@ func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
 
 // TestInterceptorIntegration_CollectAll tests collecting all responses
 func TestInterceptorIntegration_CollectAll(t *testing.T) {
-	addrs, closeServers := TestSetup(t, 3, echoServerFn)
-	t.Cleanup(closeServers)
+	cfg := SetupConfiguration(t, 3, echoServerFn)
 
 	ctx := testContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
-		NewTestConfigContext(t, ctx, addrs),
+		WithConfigContext(ctx, cfg),
 		pb.String("test"),
 		mock.TestMethod,
 	)

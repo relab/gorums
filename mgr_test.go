@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/relab/gorums"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
 )
 
@@ -64,14 +62,9 @@ func TestManagerAddNode(t *testing.T) {
 }
 
 func TestManagerAddNodeWithConn(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 3, nil)
-	defer teardown()
-	mgr := gorums.NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	defer mgr.Close()
+	addrs := gorums.TestServers(t, 3, nil)
+	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
+	t.Cleanup(mgr.Close)
 
 	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs[:2]))
 	if err != nil {

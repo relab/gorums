@@ -11,12 +11,9 @@ import (
 )
 
 func TestQuorumCallSuccess(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 3, nil)
-	t.Cleanup(teardown)
+	cfg := gorums.SetupConfiguration(t, 3, nil)
 
-	cfg := gorums.NewTestConfig(t, addrs)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
 	defer cancel()
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 

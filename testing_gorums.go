@@ -20,8 +20,8 @@ type ServerIface interface {
 	Stop()
 }
 
-// defaultGrpcDialOpts returns the default gRPC dial options for testing.
-func defaultGrpcDialOpts() ManagerOption {
+// InsecureGrpcDialOptions returns the default insecure gRPC dial options for testing.
+func InsecureGrpcDialOptions(_ testing.TB) ManagerOption {
 	return WithGrpcDialOptions(
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
@@ -31,7 +31,7 @@ func defaultGrpcDialOpts() ManagerOption {
 // The manager is automatically closed when the test finishes.
 func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 	t.Helper()
-	mgrOpts := []ManagerOption{defaultGrpcDialOpts()}
+	mgrOpts := []ManagerOption{InsecureGrpcDialOptions(t)}
 	mgrOpts = append(mgrOpts, opts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
@@ -49,7 +49,7 @@ func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 // The manager is automatically closed when the test finishes.
 func NewTestConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuration {
 	t.Helper()
-	mgrOpts := []ManagerOption{defaultGrpcDialOpts()}
+	mgrOpts := []ManagerOption{InsecureGrpcDialOptions(t)}
 	mgrOpts = append(mgrOpts, opts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)

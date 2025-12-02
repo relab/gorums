@@ -84,6 +84,7 @@ stressdev
 stressgen
 stresstest
 struct
+subtests
 syncrq
 testprotos
 testrace

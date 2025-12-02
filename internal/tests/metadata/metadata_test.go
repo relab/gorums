@@ -1,15 +1,12 @@
 package metadata
 
 import (
-	"context"
 	"fmt"
 	"strconv"
 	"testing"
 
 	"github.com/relab/gorums"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -42,7 +39,7 @@ func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr,
 	return IPAddr_builder{Addr: peerInfo.Addr.String()}.Build(), nil
 }
 
-func initServer() *gorums.Server {
+func serverFn(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
 	RegisterMetadataTestServer(srv, &testSrv{})
 	return srv
@@ -50,27 +47,12 @@ func initServer() *gorums.Server {
 
 func TestMetadata(t *testing.T) {
 	want := uint32(1)
-
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
-	defer teardown()
-
 	md := metadata.New(map[string]string{
 		"id": fmt.Sprint(want),
 	})
 
-	mgr := gorums.NewManager(
-		gorums.WithMetadata(md),
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	node := cfg[0]
-	nodeCtx := gorums.WithNodeContext(context.Background(), node)
+	node := gorums.SetupNode(t, serverFn, gorums.WithMetadata(md))
+	nodeCtx := gorums.WithNodeContext(t.Context(), node)
 	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
@@ -82,27 +64,13 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestPerMessageMetadata(t *testing.T) {
+	node := gorums.SetupNode(t, serverFn)
+
 	want := uint32(1)
-
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
-	defer teardown()
-
-	mgr := gorums.NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	node := cfg[0]
-
 	md := metadata.New(map[string]string{
 		"id": fmt.Sprint(want),
 	})
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	ctx := metadata.NewOutgoingContext(t.Context(), md)
 	nodeCtx := gorums.WithNodeContext(ctx, node)
 	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
@@ -115,28 +83,16 @@ func TestPerMessageMetadata(t *testing.T) {
 }
 
 func TestPerNodeMetadata(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 2, func(_ int) gorums.ServerIface { return initServer() })
-	defer teardown()
-
 	perNodeMD := func(nid uint32) metadata.MD {
 		return metadata.New(map[string]string{
 			"id": fmt.Sprintf("%d", nid),
 		})
 	}
 
-	mgr := gorums.NewManager(
-		gorums.WithPerNodeMetadata(perNodeMD),
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := gorums.SetupConfiguration(t, 2, serverFn, gorums.WithPerNodeMetadata(perNodeMD))
 
 	for _, node := range cfg {
-		nodeCtx := gorums.WithNodeContext(context.Background(), node)
+		nodeCtx := gorums.WithNodeContext(t.Context(), node)
 		resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
@@ -149,21 +105,8 @@ func TestPerNodeMetadata(t *testing.T) {
 }
 
 func TestCanGetPeerInfo(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
-	defer teardown()
-
-	mgr := gorums.NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	node := cfg[0]
-	nodeCtx := gorums.WithNodeContext(context.Background(), node)
+	node := gorums.SetupNode(t, serverFn)
+	nodeCtx := gorums.WithNodeContext(t.Context(), node)
 	ip, err := WhatIP(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)

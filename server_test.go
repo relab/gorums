@@ -80,7 +80,7 @@ func (interceptorSrv) Test(_ gorums.ServerCtx, req proto.Message) (proto.Message
 
 func TestServerInterceptorsChain(t *testing.T) {
 	// set up a server with two interceptors: i1, i2
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
+	interceptorServerFn := func(_ int) gorums.ServerIface {
 		interceptorSrv := &interceptorSrv{}
 		s := gorums.NewServer(gorums.WithInterceptors(
 			appendStringInterceptor("i1in-", "i1out"),
@@ -92,13 +92,11 @@ func TestServerInterceptorsChain(t *testing.T) {
 			return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 		})
 		return s
-	})
-	defer teardown()
-
-	node := gorums.NewTestNode(t, addrs[0])
+	}
+	node := gorums.SetupNode(t, interceptorServerFn)
 
 	// call the RPC
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	nodeCtx := gorums.WithNodeContext(ctx, node)
 	res, err := gorums.RPCCall(nodeCtx, pb.String("client-"), mock.TestMethod)

@@ -1,7 +1,6 @@
 package gorums_test
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -217,16 +216,13 @@ func TestNewConfigurationExcept(t *testing.T) {
 }
 
 func TestConfigConcurrentAccess(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, nil)
-	defer teardown()
-
-	node := gorums.NewTestNode(t, addrs[0])
+	node := gorums.SetupNode(t, nil)
 
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup
 	for range 2 {
 		wg.Go(func() {
-			nodeCtx := gorums.WithNodeContext(context.Background(), node)
+			nodeCtx := gorums.WithNodeContext(t.Context(), node)
 			_, err := gorums.RPCCall(nodeCtx, pb.String(""), mock.TestMethod)
 			if err != nil {
 				errCh <- err
