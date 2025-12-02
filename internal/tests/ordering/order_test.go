@@ -13,6 +13,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// The duration that each ordering test will run
+const testDuration = 5 * time.Second
+
 type testSrv struct {
 	sync.Mutex
 	lastNum uint64
@@ -74,8 +77,8 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 1)
 	defer teardown()
 	node := cfg[0]
-	// begin test
-	stopTime := time.Now().Add(5 * time.Second)
+
+	stopTime := time.Now().Add(testDuration)
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
@@ -97,9 +100,9 @@ func TestQCOrdering(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	cfg, teardown := setup(t, 4)
 	defer teardown()
-	// begin test
+
 	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
-	stopTime := time.Now().Add(5 * time.Second)
+	stopTime := time.Now().Add(testDuration)
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
@@ -122,10 +125,10 @@ func TestQCAsyncOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	ctx, cancel := context.WithCancel(context.Background())
+
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
-	// begin test
 	var wg sync.WaitGroup
-	stopTime := time.Now().Add(5 * time.Second)
+	stopTime := time.Now().Add(testDuration)
 	i := 1
 	for time.Now().Before(stopTime) {
 		i++
@@ -156,9 +159,9 @@ func TestMixedOrdering(t *testing.T) {
 	cfg, teardown := setup(t, 4)
 	defer teardown()
 	nodes := cfg.Nodes()
-	// begin test
+
 	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
-	stopTime := time.Now().Add(5 * time.Second)
+	stopTime := time.Now().Add(testDuration)
 	i := 1
 	for time.Now().Before(stopTime) {
 		// Use CollectAll to get all responses and check for ordering
