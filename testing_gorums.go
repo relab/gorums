@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/relab/gorums/internal/testutils/mock"
+	"go.uber.org/goleak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -19,15 +20,18 @@ type ServerIface interface {
 	Stop()
 }
 
+// defaultGrpcDialOpts returns the default gRPC dial options for testing.
+func defaultGrpcDialOpts() ManagerOption {
+	return WithGrpcDialOptions(
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+}
+
 // NewTestNode creates a node for the given server address and adds it to a new manager.
 // The manager is automatically closed when the test finishes.
 func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 	t.Helper()
-	mgrOpts := []ManagerOption{
-		WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	}
+	mgrOpts := []ManagerOption{defaultGrpcDialOpts()}
 	mgrOpts = append(mgrOpts, opts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
@@ -45,11 +49,7 @@ func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 // The manager is automatically closed when the test finishes.
 func NewTestConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuration {
 	t.Helper()
-	mgrOpts := []ManagerOption{
-		WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	}
+	mgrOpts := []ManagerOption{defaultGrpcDialOpts()}
 	mgrOpts = append(mgrOpts, opts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
@@ -88,7 +88,26 @@ func NewTestConfigContext(t testing.TB, ctx context.Context, addrs []string, opt
 //
 // This function can be used by other packages for testing purposes, as long as
 // the required types are registered in the global protobuf registry.
+//
+// IMPORTANT: To avoid goroutine leaks, ensure the manager is closed before
+// calling the stop function. The recommended pattern is:
+//
+//	addrs, stopServers := gorums.TestSetup(t, 3, serverFn)
+//	mgr := gorums.NewManager(...)
+//	defer func() {
+//		mgr.Close()
+//		stopServers()
+//	}()
+//
+// Or use [TestServers] which handles cleanup ordering via t.Cleanup.
 func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
+	t.Helper()
+	return testSetupServers(t, numServers, srvFn)
+}
+
+// testSetupServers is the internal implementation of server setup.
+// It starts servers and returns addresses and a stop function.
+func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
 	t.Helper()
 	servers := make([]ServerIface, numServers)
 	listeners := make([]net.Listener, numServers)
@@ -128,6 +147,75 @@ func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]s
 		}
 	})
 	return addrs, stopFn
+}
+
+// TestServers starts numServers gRPC servers using the given registration
+// function. Servers are automatically stopped when the test finishes via t.Cleanup.
+// The cleanup is registered first, so it runs after any subsequently registered
+// cleanups (e.g., manager.Close()), ensuring proper shutdown ordering.
+//
+// Goroutine leak detection via goleak is automatically enabled and runs after
+// all other cleanup functions complete.
+//
+// The provided srvFn is used to create and register the server handlers.
+// If srvFn is nil, a default mock server implementation is used.
+//
+// This function can be used by other packages for testing purposes, as long as
+// the required types are registered in the global protobuf registry.
+func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []string {
+	t.Helper()
+	// Register goleak check FIRST so it runs LAST (after all other cleanup)
+	// t.Cleanup runs in LIFO order: last registered runs first
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+	addrs, stopFn := testSetupServers(t, numServers, srvFn)
+	// Register server cleanup SECOND so it runs BEFORE goleak check
+	t.Cleanup(stopFn)
+	return addrs
+}
+
+// SetupConfiguration creates servers and a configuration for testing.
+// Both server and manager cleanup are handled via t.Cleanup in the correct order:
+// manager is closed first, then servers are stopped.
+//
+// The provided srvFn is used to create and register the server handlers.
+// If srvFn is nil, a default mock server implementation is used.
+//
+// Optional ManagerOptions can be provided to customize the manager.
+//
+// This is the recommended way to set up tests that need both servers and a configuration.
+func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...ManagerOption) Configuration {
+	t.Helper()
+	// Register server cleanup FIRST so it runs LAST (after manager cleanup)
+	// t.Cleanup runs in LIFO order: last registered runs first
+	addrs := TestServers(t, numServers, srvFn)
+	// NewTestConfig registers manager cleanup, which will run BEFORE server cleanup
+	return NewTestConfig(t, addrs, opts...)
+}
+
+// SetupNodes creates servers and returns all nodes for testing.
+// Both server and manager cleanup are handled via t.Cleanup in the correct order.
+//
+// The provided srvFn is used to create and register the server handlers.
+// If srvFn is nil, a default mock server implementation is used.
+//
+// Optional ManagerOptions can be provided to customize the manager.
+func SetupNodes(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...ManagerOption) []*Node {
+	t.Helper()
+	cfg := SetupConfiguration(t, numServers, srvFn, opts...)
+	return cfg.Nodes()
+}
+
+// SetupNode creates a single server and returns the node for testing.
+// Both server and manager cleanup are handled via t.Cleanup in the correct order.
+//
+// The provided srvFn is used to create and register the server handler.
+// If srvFn is nil, a default mock server implementation is used.
+//
+// Optional ManagerOptions can be provided to customize the manager.
+func SetupNode(t testing.TB, srvFn func(i int) ServerIface, opts ...ManagerOption) *Node {
+	t.Helper()
+	nodes := SetupNodes(t, 1, srvFn, opts...)
+	return nodes[0]
 }
 
 func initServer(i int) *Server {

@@ -9,9 +9,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums"
-	"go.uber.org/goleak"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // stressMode controls whether tests run in stress mode (time-based) or normal mode (iteration-based).
@@ -80,37 +77,19 @@ func (s *testSrv) UnaryRPC(_ gorums.ServerCtx, req *Request) (resp *Response, er
 	}.Build(), nil
 }
 
-func setup(t *testing.T, cfgSize int) (cfg gorums.Configuration, teardown func()) {
-	t.Helper()
-	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		RegisterGorumsTestServer(srv, &testSrv{})
-		return srv
-	})
-	mgr := gorums.NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	teardown = func() {
-		mgr.Close()
-		closeServers()
-	}
-	return cfg, teardown
+// serverFn creates a new server with an independent testSrv instance.
+// Each server needs its own testSrv to track ordering independently.
+func serverFn(_ int) gorums.ServerIface {
+	srv := gorums.NewServer()
+	RegisterGorumsTestServer(srv, &testSrv{})
+	return srv
 }
 
 func TestUnaryRPCOrdering(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	cfg, teardown := setup(t, 1)
-	defer teardown()
-	node := cfg[0]
+	node := gorums.SetupNode(t, serverFn)
 
 	for i := range iterations() {
-		nodeCtx := gorums.WithNodeContext(context.Background(), node)
+		nodeCtx := gorums.WithNodeContext(t.Context(), node)
 		resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
@@ -125,11 +104,9 @@ func TestUnaryRPCOrdering(t *testing.T) {
 }
 
 func TestQCOrdering(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	cfg, teardown := setup(t, 4)
-	defer teardown()
+	cfg := gorums.SetupConfiguration(t, 4, serverFn)
+	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
 
-	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
 		responses := QC(cfgCtx, Request_builder{Num: uint64(i)}.Build())
@@ -146,12 +123,9 @@ func TestQCOrdering(t *testing.T) {
 }
 
 func TestQCAsyncOrdering(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	cfg, teardown := setup(t, 4)
-	defer teardown()
-	ctx := t.Context()
+	cfg := gorums.SetupConfiguration(t, 4, serverFn)
+	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
 
-	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 	var wg sync.WaitGroup
 	for i := range iterations() {
 		// QCAsync returns an Async future that uses majority quorum by default
@@ -176,12 +150,9 @@ func TestQCAsyncOrdering(t *testing.T) {
 }
 
 func TestMixedOrdering(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	cfg, teardown := setup(t, 4)
-	defer teardown()
-	nodes := cfg.Nodes()
+	cfg := gorums.SetupConfiguration(t, 4, serverFn)
+	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
 
-	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
 		responses := QC(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
@@ -195,9 +166,9 @@ func TestMixedOrdering(t *testing.T) {
 			}
 		}
 		var wg sync.WaitGroup
-		for _, node := range nodes {
+		for _, node := range cfg.Nodes() {
 			wg.Go(func() {
-				nodeCtx := gorums.WithNodeContext(context.Background(), node)
+				nodeCtx := gorums.WithNodeContext(t.Context(), node)
 				resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(2 * i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
