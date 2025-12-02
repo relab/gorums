@@ -8,10 +8,10 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/tests/oneway"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+const numCalls = 50
 
 type onewaySrv struct {
 	benchmark bool
@@ -35,14 +35,17 @@ func (s *onewaySrv) Multicast(ctx gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func setup(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs []*onewaySrv, teardown func()) {
+// setupWithNodeMap is a specialized setup for tests that need sequential node IDs
+// (0, 1, 2, ...) matching the server array indices. This is needed for tests like
+// TestMulticastPerNode that verify per-node message transformations based on node ID.
+func setupWithNodeMap(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs []*onewaySrv) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := range cfgSize {
 		srvs[i] = &onewaySrv{received: make(chan *oneway.Request, numCalls)}
 	}
 
-	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(i int) gorums.ServerIface {
+	addrs := gorums.TestServers(t, cfgSize, func(i int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		oneway.RegisterOnewayTestServer(srv, srvs[i])
 		return srv
@@ -52,23 +55,15 @@ func setup(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs []*onewayS
 		nodeMap[addr] = uint32(i)
 	}
 
-	mgr := gorums.NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
+	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
+	t.Cleanup(mgr.Close)
+
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}
-	teardown = func() {
-		mgr.Close()
-		closeServers()
-	}
-	return cfg, srvs, teardown
+	return cfg, srvs
 }
-
-const numCalls = 50
 
 func TestOnewayCalls(t *testing.T) {
 	tests := []struct {
@@ -89,7 +84,7 @@ func TestOnewayCalls(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s/Servers=%d", test.name, test.servers), func(t *testing.T) {
-			cfg, srvs, teardown := setup(t, test.servers)
+			cfg, srvs := setupWithNodeMap(t, test.servers)
 			for i := range srvs {
 				srvs[i].wg.Add(test.calls)
 			}
@@ -126,7 +121,6 @@ func TestOnewayCalls(t *testing.T) {
 					expected++
 				}
 			}
-			teardown()
 		})
 	}
 }
@@ -134,7 +128,8 @@ func TestOnewayCalls(t *testing.T) {
 func TestMulticastPerNode(t *testing.T) {
 	add := func(n uint64, id uint32) uint64 { return n + uint64(id) }
 
-	// simple transformation function - uses WithPerNodeTransform API
+	// transformation function that uses the MapRequest interceptor
+	// to add the msg ID + node ID to the Num field
 	f := func(msg *oneway.Request, node *gorums.Node) *oneway.Request {
 		return oneway.Request_builder{Num: add(msg.GetNum(), node.ID())}.Build()
 	}
@@ -145,7 +140,7 @@ func TestMulticastPerNode(t *testing.T) {
 		}
 		return false
 	}
-	// transformation of all except some nodes
+	// transformation for all except some nodes that are ignored
 	g := func(msg *oneway.Request, node *gorums.Node) *oneway.Request {
 		if ignore(node.ID()) {
 			return nil
@@ -158,27 +153,27 @@ func TestMulticastPerNode(t *testing.T) {
 		servers     int
 		sendWait    bool
 		ignoreNodes []int
-		f           func(*oneway.Request, *gorums.Node) *oneway.Request
+		mapFunc     func(*oneway.Request, *gorums.Node) *oneway.Request
 	}{
-		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 1, sendWait: false, f: f},
-		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 3, sendWait: false, f: f},
-		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 9, sendWait: false, f: f},
-		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 1, sendWait: true, f: f},
-		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 3, sendWait: true, f: f},
-		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 9, sendWait: true, f: f},
-		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, f: g, ignoreNodes: []int{0}},
-		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, f: g, ignoreNodes: []int{1}},
-		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, f: g, ignoreNodes: []int{0, 1}},
-		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, f: g, ignoreNodes: []int{0, 1, 2}},
-		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, f: g, ignoreNodes: []int{0}},
-		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, f: g, ignoreNodes: []int{1}},
-		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, f: g, ignoreNodes: []int{0, 1}},
-		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, f: g, ignoreNodes: []int{0, 1, 2}},
+		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 1, sendWait: false, mapFunc: f},
+		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 3, sendWait: false, mapFunc: f},
+		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 9, sendWait: false, mapFunc: f},
+		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 1, sendWait: true, mapFunc: f},
+		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 3, sendWait: true, mapFunc: f},
+		{name: "MulticastPerNodeSendWaiting", calls: numCalls, servers: 9, sendWait: true, mapFunc: f},
+		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, mapFunc: g, ignoreNodes: []int{0}},
+		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, mapFunc: g, ignoreNodes: []int{1}},
+		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, mapFunc: g, ignoreNodes: []int{0, 1}},
+		{name: "MulticastPerNodeNoSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: false, mapFunc: g, ignoreNodes: []int{0, 1, 2}},
+		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, mapFunc: g, ignoreNodes: []int{0}},
+		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, mapFunc: g, ignoreNodes: []int{1}},
+		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, mapFunc: g, ignoreNodes: []int{0, 1}},
+		{name: "MulticastPerNodeSendWaitingIgnoreNodes", calls: numCalls, servers: 3, sendWait: true, mapFunc: g, ignoreNodes: []int{0, 1, 2}},
 	}
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s/Servers=%d/IgnoredNodes=%v", test.name, test.servers, test.ignoreNodes), func(t *testing.T) {
-			cfg, srvs, teardown := setup(t, test.servers)
+			cfg, srvs := setupWithNodeMap(t, test.servers)
 			nodeIDs := cfg.NodeIDs()
 			// set the ignoreNodes variable used by the ignore() function
 			ignoreNodes = test.ignoreNodes
@@ -194,9 +189,9 @@ func TestMulticastPerNode(t *testing.T) {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 				if test.sendWait {
-					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.f)))
+					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.mapFunc)))
 				} else {
-					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.f)), gorums.WithNoSendWaiting())
+					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.mapFunc)), gorums.WithNoSendWaiting())
 				}
 			}
 
@@ -215,13 +210,12 @@ func TestMulticastPerNode(t *testing.T) {
 					expected++
 				}
 			}
-			teardown()
 		})
 	}
 }
 
 func BenchmarkUnicast(b *testing.B) {
-	cfg, srvs, teardown := setup(b, 1)
+	cfg, srvs := setupWithNodeMap(b, 1)
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
@@ -241,11 +235,10 @@ func BenchmarkUnicast(b *testing.B) {
 			oneway.Unicast(nodeCtx, in, gorums.WithNoSendWaiting())
 		}
 	})
-	teardown()
 }
 
 func BenchmarkMulticast(b *testing.B) {
-	cfg, srvs, teardown := setup(b, 3)
+	cfg, srvs := setupWithNodeMap(b, 3)
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
@@ -264,5 +257,4 @@ func BenchmarkMulticast(b *testing.B) {
 			oneway.Multicast(cfgCtx, in, gorums.WithNoSendWaiting())
 		}
 	})
-	teardown()
 }
