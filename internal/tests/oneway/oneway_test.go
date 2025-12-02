@@ -35,7 +35,7 @@ func (s *onewaySrv) Multicast(ctx gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-// setupWithNodeMap is a specialized setup for tests that need sequential node IDs
+// setupWithNodeMap sets up servers and configuration with sequential node IDs
 // (0, 1, 2, ...) matching the server array indices. This is needed for tests like
 // TestMulticastPerNode that verify per-node message transformations based on node ID.
 func setupWithNodeMap(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs []*onewaySrv) {
@@ -45,23 +45,11 @@ func setupWithNodeMap(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs
 		srvs[i] = &onewaySrv{received: make(chan *oneway.Request, numCalls)}
 	}
 
-	addrs := gorums.TestServers(t, cfgSize, func(i int) gorums.ServerIface {
+	cfg = gorums.SetupConfiguration(t, cfgSize, func(i int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		oneway.RegisterOnewayTestServer(srv, srvs[i])
 		return srv
 	})
-	nodeMap := make(map[string]uint32)
-	for i, addr := range addrs {
-		nodeMap[addr] = uint32(i)
-	}
-
-	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
-	t.Cleanup(mgr.Close)
-
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
-	if err != nil {
-		t.Fatal(err)
-	}
 	return cfg, srvs
 }
 

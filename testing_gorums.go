@@ -159,16 +159,29 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 // The provided srvFn is used to create and register the server handlers.
 // If srvFn is nil, a default mock server implementation is used.
 //
-// Optional ManagerOptions can be provided to customize the manager.
+// Optional TestOptions can be provided to customize the manager, server, or configuration.
+//
+// By default, nodes are assigned sequential IDs (0, 1, 2, ...) matching the server
+// creation order. This can be overridden by providing a NodeListOption.
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
 // It ensures proper cleanup and detects goroutine leaks.
-func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...ManagerOption) Configuration {
+func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...TestOption) Configuration {
 	t.Helper()
+
+	// Extract options by type
+	testOpts := extractTestOptions(opts)
 
 	// Register goleak check FIRST so it runs LAST (LIFO order)
 	if _, ok := t.(*testing.B); !ok {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
+	}
+
+	// If srvFn is nil but server options are provided, create servers with those options
+	if srvFn == nil && len(testOpts.serverOpts) > 0 {
+		srvFn = func(_ int) ServerIface {
+			return NewServer(testOpts.serverOpts...)
+		}
 	}
 
 	// Start servers and register cleanup
@@ -177,7 +190,7 @@ func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIf
 
 	// Check if preConnect hook is set and call it before connecting
 	var tempOpts managerOptions
-	for _, opt := range opts {
+	for _, opt := range testOpts.managerOpts {
 		opt(&tempOpts)
 	}
 	if tempOpts.preConnect != nil {
@@ -185,21 +198,25 @@ func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIf
 	}
 
 	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
-	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, opts...)
+	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, testOpts.managerOpts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
 
-	for _, addr := range addrs {
-		node, err := NewNode(addr)
-		if err != nil {
-			t.Fatalf("Failed to create node: %v", err)
+	// Use provided NodeListOption or default to sequential IDs via nodeMap
+	var nodeListOpt NodeListOption
+	if len(testOpts.nodeListOpts) > 0 {
+		// Use the last provided NodeListOption (allows overriding)
+		nodeListOpt = testOpts.nodeListOpts[len(testOpts.nodeListOpts)-1]
+	} else {
+		// Default: build nodeMap with sequential IDs (0, 1, 2, ...)
+		nodeMap := make(map[string]uint32, len(addrs))
+		for i, addr := range addrs {
+			nodeMap[addr] = uint32(i)
 		}
-		if err = mgr.AddNode(node); err != nil {
-			t.Fatalf("Failed to add node: %v", err)
-		}
+		nodeListOpt = WithNodeMap(nodeMap)
 	}
 
-	cfg, err := NewConfiguration(mgr, WithNodeList(addrs))
+	cfg, err := NewConfiguration(mgr, nodeListOpt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,11 +229,11 @@ func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIf
 // The provided srvFn is used to create and register the server handler.
 // If srvFn is nil, a default mock server implementation is used.
 //
-// Optional ManagerOptions can be provided to customize the manager.
+// Optional TestOptions can be provided to customize the manager, server, or configuration.
 //
 // This is the recommended way to set up tests that need only a single server node.
 // It ensures proper cleanup and detects goroutine leaks.
-func SetupNode(t testing.TB, srvFn func(i int) ServerIface, opts ...ManagerOption) *Node {
+func SetupNode(t testing.TB, srvFn func(i int) ServerIface, opts ...TestOption) *Node {
 	t.Helper()
 	return SetupConfiguration(t, 1, srvFn, opts...).Nodes()[0]
 }
