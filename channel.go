@@ -65,6 +65,7 @@ type channel struct {
 	streamMut    sync.RWMutex
 	streamCtx    context.Context
 	cancelStream context.CancelFunc
+	streamReady  chan struct{} // signals receiver when stream becomes available
 
 	// Response routing; the map holds pending requests waiting for responses.
 	// The request contains the responseChan on which to send the response
@@ -89,6 +90,7 @@ func newChannel(n *Node) *channel {
 		node:            n,
 		latency:         -1 * time.Second,
 		responseRouters: make(map[uint64]request),
+		streamReady:     make(chan struct{}, 1),
 	}
 	// parentCtx controls the channel and is used to shut it down
 	c.parentCtx = n.newContext()
@@ -104,6 +106,14 @@ func (c *channel) newNodeStream() (err error) {
 	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
 	c.gorumsStream, err = ordering.NewGorumsClient(c.node.conn).NodeStream(c.streamCtx)
 	c.streamMut.Unlock()
+	if err == nil {
+		// Signal receiver that stream is ready (non-blocking)
+		select {
+		case c.streamReady <- struct{}{}:
+		default:
+			// Channel already has a signal pending, no need to add another
+		}
+	}
 	return err
 }
 
@@ -223,9 +233,14 @@ func (c *channel) receiver() {
 	for {
 		stream := c.getStream()
 		if stream == nil {
-			// stream not yet available, wait and retry
-			time.Sleep(10 * time.Millisecond)
-			continue
+			// Stream not yet available; wait for signal or shutdown
+			select {
+			case <-c.streamReady:
+				// Stream is now available, continue to get it
+				continue
+			case <-c.parentCtx.Done():
+				return
+			}
 		}
 
 		resp := newMessage(responseType)
