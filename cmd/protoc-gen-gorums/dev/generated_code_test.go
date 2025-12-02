@@ -1,7 +1,15 @@
+// Package dev_test contains integration tests for the generated Gorums code.
+// These tests validate that the protoc-gen-gorums code generator produces
+// correct and functional code. They exercise the generated QuorumCall method
+// and its terminal methods (Majority, All, Threshold) along with custom
+// aggregation patterns using CollectAll.
+//
+// NOTE: These tests are intentionally separate from the core library tests
+// in the repository root. While they test similar functionality, they serve
+// a different purpose: verifying the code generation pipeline end-to-end.
 package dev_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -24,7 +32,7 @@ func quorumCallServer(_ int) gorums.ServerIface {
 
 func TestQuorumCallWithMajority(t *testing.T) {
 	cfg := gorums.SetupConfiguration(t, 3, quorumCallServer)
-	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
+	ctx := gorums.WithConfigContext(gorums.TestContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
 	req.SetValue("test")
@@ -43,7 +51,7 @@ func TestQuorumCallWithMajority(t *testing.T) {
 
 func TestQuorumCallWithAll(t *testing.T) {
 	cfg := gorums.SetupConfiguration(t, 3, quorumCallServer)
-	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
+	ctx := gorums.WithConfigContext(gorums.TestContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
 	req.SetValue("test")
@@ -62,7 +70,7 @@ func TestQuorumCallWithAll(t *testing.T) {
 
 func TestQuorumCallWithThreshold(t *testing.T) {
 	cfg := gorums.SetupConfiguration(t, 3, quorumCallServer)
-	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
+	ctx := gorums.WithConfigContext(gorums.TestContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
 	req.SetValue("hello")
@@ -81,7 +89,7 @@ func TestQuorumCallWithThreshold(t *testing.T) {
 
 func TestQuorumCallWithCustomAggregation(t *testing.T) {
 	cfg := gorums.SetupConfiguration(t, 3, quorumCallServer)
-	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
+	ctx := gorums.WithConfigContext(gorums.TestContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
 	req.SetValue("hello")
@@ -99,11 +107,4 @@ func TestQuorumCallWithCustomAggregation(t *testing.T) {
 	if total != 15 {
 		t.Errorf("Expected total result 15, got %d", total)
 	}
-}
-
-func testContext(t *testing.T, timeout time.Duration) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), timeout)
-	t.Cleanup(cancel)
-	return ctx
 }

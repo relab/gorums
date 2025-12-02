@@ -1,9 +1,11 @@
 package gorums
 
 import (
+	"context"
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
 	"go.uber.org/goleak"
@@ -17,6 +19,15 @@ import (
 type ServerIface interface {
 	Serve(net.Listener) error
 	Stop()
+}
+
+// TestContext creates a context with timeout for testing.
+// It uses t.Context() as the parent and automatically cancels on cleanup.
+func TestContext(t testing.TB, timeout time.Duration) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	t.Cleanup(cancel)
+	return ctx
 }
 
 // InsecureGrpcDialOptions returns the default insecure gRPC dial options for testing.

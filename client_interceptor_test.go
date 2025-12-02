@@ -18,15 +18,6 @@ import (
 // the test will fail, indicating a bug in the test or the code under test.
 const ctxTimeout = 2 * time.Second
 
-// testContext creates a context with timeout for testing.
-// It uses t.Context() as the parent and automatically cancels on cleanup.
-func testContext(t *testing.T, timeout time.Duration) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), timeout)
-	t.Cleanup(cancel)
-	return ctx
-}
-
 // checkQuorumCall returns true if the quorum call was successful.
 // It returns false if an error occurred or the context timed out.
 func checkQuorumCall(t *testing.T, ctxErr, err error) bool {
@@ -363,7 +354,7 @@ func TestIteratorMethods(t *testing.T) {
 func TestInterceptorIntegration_First(t *testing.T) {
 	cfg := SetupConfiguration(t, 3, echoServerFn)
 
-	ctx := testContext(t, ctxTimeout)
+	ctx := TestContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
 		WithConfigContext(ctx, cfg),
 		pb.String("test"),
@@ -384,7 +375,7 @@ func TestInterceptorIntegration_First(t *testing.T) {
 func TestInterceptorIntegration_Majority(t *testing.T) {
 	cfg := SetupConfiguration(t, 3, echoServerFn)
 
-	ctx := testContext(t, ctxTimeout)
+	ctx := TestContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
 		WithConfigContext(ctx, cfg),
 		pb.String("test"),
@@ -405,7 +396,7 @@ func TestInterceptorIntegration_Majority(t *testing.T) {
 func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
 	cfg := SetupConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
 
-	ctx := testContext(t, ctxTimeout)
+	ctx := TestContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.Int32Value, *pb.Int32Value](
 		WithConfigContext(ctx, cfg),
 		pb.Int32(0),
@@ -428,7 +419,7 @@ func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
 func TestInterceptorIntegration_CollectAll(t *testing.T) {
 	cfg := SetupConfiguration(t, 3, echoServerFn)
 
-	ctx := testContext(t, ctxTimeout)
+	ctx := TestContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
 		WithConfigContext(ctx, cfg),
 		pb.String("test"),
