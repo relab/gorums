@@ -10,11 +10,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type (
-	cfgSrv struct {
-		name string
-	}
-)
+type cfgSrv struct {
+	name string
+}
 
 func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{

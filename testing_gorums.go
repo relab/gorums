@@ -30,8 +30,7 @@ func InsecureGrpcDialOptions(_ testing.TB) ManagerOption {
 // The manager is automatically closed when the test finishes.
 func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 	t.Helper()
-	mgrOpts := []ManagerOption{InsecureGrpcDialOptions(t)}
-	mgrOpts = append(mgrOpts, opts...)
+	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, opts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
 	node, err := NewNode(srvAddr)
@@ -42,31 +41,6 @@ func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 		t.Fatal(err)
 	}
 	return node
-}
-
-// NewTestConfig creates a configuration for the given node addresses and adds it to a new manager.
-// The manager is automatically closed when the test finishes.
-func NewTestConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configuration {
-	t.Helper()
-	mgrOpts := []ManagerOption{InsecureGrpcDialOptions(t)}
-	mgrOpts = append(mgrOpts, opts...)
-	mgr := NewManager(mgrOpts...)
-	t.Cleanup(mgr.Close)
-
-	for _, addr := range addrs {
-		node, err := NewNode(addr)
-		if err != nil {
-			t.Fatalf("Failed to create node: %v", err)
-		}
-		if err = mgr.AddNode(node); err != nil {
-			t.Fatalf("Failed to add node: %v", err)
-		}
-	}
-	cfg, err := NewConfiguration(mgr, WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg
 }
 
 // TestSetup starts numServers gRPC servers using the given registration
@@ -178,26 +152,33 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 // Optional ManagerOptions can be provided to customize the manager.
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
+// It ensures proper cleanup and detects goroutine leaks.
 func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...ManagerOption) Configuration {
 	t.Helper()
 	// Register server cleanup FIRST so it runs LAST (after manager cleanup)
 	// t.Cleanup runs in LIFO order: last registered runs first
 	addrs := TestServers(t, numServers, srvFn)
-	// NewTestConfig registers manager cleanup, which will run BEFORE server cleanup
-	return NewTestConfig(t, addrs, opts...)
-}
 
-// SetupNodes creates servers and returns all nodes for testing.
-// Both server and manager cleanup are handled via t.Cleanup in the correct order.
-//
-// The provided srvFn is used to create and register the server handlers.
-// If srvFn is nil, a default mock server implementation is used.
-//
-// Optional ManagerOptions can be provided to customize the manager.
-func SetupNodes(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...ManagerOption) []*Node {
-	t.Helper()
-	cfg := SetupConfiguration(t, numServers, srvFn, opts...)
-	return cfg.Nodes()
+	// Registers manager cleanup, which will run BEFORE server cleanup
+	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, opts...)
+	mgr := NewManager(mgrOpts...)
+	t.Cleanup(mgr.Close)
+
+	for _, addr := range addrs {
+		node, err := NewNode(addr)
+		if err != nil {
+			t.Fatalf("Failed to create node: %v", err)
+		}
+		if err = mgr.AddNode(node); err != nil {
+			t.Fatalf("Failed to add node: %v", err)
+		}
+	}
+
+	cfg, err := NewConfiguration(mgr, WithNodeList(addrs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
 }
 
 // SetupNode creates a single server and returns the node for testing.
@@ -207,10 +188,12 @@ func SetupNodes(t testing.TB, numServers int, srvFn func(i int) ServerIface, opt
 // If srvFn is nil, a default mock server implementation is used.
 //
 // Optional ManagerOptions can be provided to customize the manager.
+//
+// This is the recommended way to set up tests that need only a single server node.
+// It ensures proper cleanup and detects goroutine leaks.
 func SetupNode(t testing.TB, srvFn func(i int) ServerIface, opts ...ManagerOption) *Node {
 	t.Helper()
-	nodes := SetupNodes(t, 1, srvFn, opts...)
-	return nodes[0]
+	return SetupConfiguration(t, 1, srvFn, opts...).Nodes()[0]
 }
 
 func initServer(i int) *Server {
