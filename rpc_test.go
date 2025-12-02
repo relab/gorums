@@ -33,12 +33,10 @@ func TestRPCCallSuccess(t *testing.T) {
 }
 
 func TestRPCCallDownedNode(t *testing.T) {
-	// This test needs TestSetup since it deliberately stops servers early
-	addrs, teardown := gorums.TestSetup(t, 1, nil)
-	node := gorums.NewTestNode(t, addrs[0])
-
-	teardown()                         // stop all servers on purpose
-	time.Sleep(300 * time.Millisecond) // servers are not stopped immediately
+	node := gorums.SetupNode(t, nil, gorums.WithTeardown(t, func(stopServers func()) {
+		stopServers()
+		time.Sleep(300 * time.Millisecond) // wait for servers to fully stop
+	}))
 
 	ctx := gorums.TestContext(t, 5*time.Second)
 	nodeCtx := gorums.WithNodeContext(ctx, node)

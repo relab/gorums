@@ -144,7 +144,6 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 	if _, ok := t.(*testing.B); !ok {
 		// Skip goleak check for benchmarks
 		// Register goleak check FIRST so it runs LAST (after all other cleanup)
-		// t.Cleanup runs in LIFO order: last registered runs first
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 	addrs, stopFn := testSetupServers(t, numServers, srvFn)
@@ -166,11 +165,26 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 // It ensures proper cleanup and detects goroutine leaks.
 func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...ManagerOption) Configuration {
 	t.Helper()
-	// Register server cleanup FIRST so it runs LAST (after manager cleanup)
-	// t.Cleanup runs in LIFO order: last registered runs first
-	addrs := TestServers(t, numServers, srvFn)
 
-	// Registers manager cleanup, which will run BEFORE server cleanup
+	// Register goleak check FIRST so it runs LAST (LIFO order)
+	if _, ok := t.(*testing.B); !ok {
+		t.Cleanup(func() { goleak.VerifyNone(t) })
+	}
+
+	// Start servers and register cleanup
+	addrs, stopFn := testSetupServers(t, numServers, srvFn)
+	t.Cleanup(stopFn)
+
+	// Check if preConnect hook is set and call it before connecting
+	var tempOpts managerOptions
+	for _, opt := range opts {
+		opt(&tempOpts)
+	}
+	if tempOpts.preConnect != nil {
+		tempOpts.preConnect(stopFn)
+	}
+
+	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
 	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, opts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)

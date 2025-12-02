@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"log"
+	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
@@ -16,6 +17,7 @@ type managerOptions struct {
 	sendBuffer   uint
 	metadata     metadata.MD
 	perNodeMD    func(uint32) metadata.MD
+	preConnect   func(stopServers func()) // test-only: called before connecting to nodes
 }
 
 func newManagerOptions() managerOptions {
@@ -41,14 +43,6 @@ func WithGrpcDialOptions(opts ...grpc.DialOption) ManagerOption {
 func WithLogger(logger *log.Logger) ManagerOption {
 	return func(o *managerOptions) {
 		o.logger = logger
-	}
-}
-
-// WithNoConnect returns a ManagerOption which instructs the Manager not to
-// connect to any of its nodes. Mainly used for testing purposes.
-func WithNoConnect() ManagerOption {
-	return func(o *managerOptions) {
-		o.noConnect = true
 	}
 }
 
@@ -82,5 +76,35 @@ func WithMetadata(md metadata.MD) ManagerOption {
 func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
 	return func(o *managerOptions) {
 		o.perNodeMD = f
+	}
+}
+
+// -------------------------------------------------------------------------
+// Testing-only options
+// -------------------------------------------------------------------------
+
+// WithNoConnect returns a ManagerOption which instructs the Manager not to
+// connect to any of its nodes. Mainly used for testing purposes.
+func WithNoConnect() ManagerOption {
+	return func(o *managerOptions) {
+		o.noConnect = true
+	}
+}
+
+// WithTeardown returns a ManagerOption that registers a function to be called
+// after servers are started but before nodes attempt to connect. The function
+// receives a stopServers callback that can be used to stop the test servers.
+//
+// This is useful for testing error handling when servers are unavailable:
+//
+//	node := gorums.SetupNode(t, nil, gorums.WithTeardown(t, func(stopServers func()) {
+//		stopServers()
+//		time.Sleep(300 * time.Millisecond) // wait for server to fully stop
+//	}))
+//
+// This option is intended for testing purposes only.
+func WithTeardown(_ testing.TB, fn func(stopServers func())) ManagerOption {
+	return func(o *managerOptions) {
+		o.preConnect = fn
 	}
 }
