@@ -95,9 +95,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 	}
 	node := gorums.SetupNode(t, interceptorServerFn)
 
-	// call the RPC
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
+	ctx := gorums.TestContext(t, 5*time.Second)
 	nodeCtx := gorums.WithNodeContext(ctx, node)
 	res, err := gorums.RPCCall(nodeCtx, pb.String("client-"), mock.TestMethod)
 	if err != nil {

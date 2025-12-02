@@ -1,7 +1,6 @@
 package gorums_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -13,8 +12,7 @@ import (
 func TestQuorumCallSuccess(t *testing.T) {
 	cfg := gorums.SetupConfiguration(t, 3, nil)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Second)
-	defer cancel()
+	ctx := gorums.TestContext(t, 1*time.Second)
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 
 	// Use the new Responses API with the All() terminal method

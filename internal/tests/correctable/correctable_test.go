@@ -1,7 +1,6 @@
 package correctable
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -18,8 +17,8 @@ func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *gorums.Correctab
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+
+	ctx := gorums.TestContext(t, 100*time.Millisecond)
 	configCtx := gorums.WithConfigContext(ctx, cfg)
 	res := corr(configCtx)
 

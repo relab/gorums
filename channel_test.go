@@ -519,9 +519,7 @@ func TestChannelDeadlock(t *testing.T) {
 	doneChan := make(chan bool, 10)
 	for id := range 10 {
 		go func() {
-			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
-			defer cancel()
-
+			ctx := TestContext(t, 3*time.Second)
 			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), mock.TestMethod)
 			req := request{ctx: ctx, msg: NewRequestMessage(md, nil)}
 
@@ -716,7 +714,7 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 		node, teardown := newNodeWithStoppableServer(b, 0)
 
 		// Use a fresh context for the benchmark request
-		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		ctx := TestContext(b, defaultTestTimeout)
 		req := request{ctx: ctx}
 		req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, 1, mock.TestMethod), nil)
 		replyChan := make(chan NodeResponse[proto.Message], 1)
@@ -732,7 +730,6 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 			b.Logf("timeout (may occur during rapid cycles)")
 		}
 
-		cancel()
 		// Close the node before stopping the server to ensure clean shutdown
 		_ = node.close()
 		teardown()
