@@ -11,23 +11,19 @@ import (
 
 const quorumCallMethod = "dev.ZorumsService.QuorumCall"
 
-func TestQuorumCallWithMajority(t *testing.T) {
-	// Setup servers with handler for the QuorumCall method
-	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			req := gorums.AsProto[*dev.Request](in)
-			resp := &dev.Response{}
-			resp.SetResult(int64(len(req.GetValue())))
-			return gorums.NewResponseMessage(in.GetMetadata(), resp), nil
-		})
-		return srv
+func quorumCallServer(_ int) gorums.ServerIface {
+	srv := gorums.NewServer()
+	srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		req := gorums.AsProto[*dev.Request](in)
+		resp := &dev.Response{}
+		resp.SetResult(int64(len(req.GetValue())))
+		return gorums.NewResponseMessage(in.GetMetadata(), resp), nil
 	})
-	t.Cleanup(teardown)
+	return srv
+}
 
-	// Create configuration using helper
-	cfg := gorums.NewTestConfig(t, addrs)
-
+func TestQuorumCallWithMajority(t *testing.T) {
+	cfg := gorums.SetupConfiguration(t, 3, quorumCallServer)
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
@@ -46,22 +42,7 @@ func TestQuorumCallWithMajority(t *testing.T) {
 }
 
 func TestQuorumCallWithAll(t *testing.T) {
-	// Setup servers
-	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			req := gorums.AsProto[*dev.Request](in)
-			resp := &dev.Response{}
-			resp.SetResult(int64(len(req.GetValue())))
-			return gorums.NewResponseMessage(in.GetMetadata(), resp), nil
-		})
-		return srv
-	})
-	t.Cleanup(teardown)
-
-	// Create configuration using helper
-	cfg := gorums.NewTestConfig(t, addrs)
-
+	cfg := gorums.SetupConfiguration(t, 3, quorumCallServer)
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
@@ -80,21 +61,7 @@ func TestQuorumCallWithAll(t *testing.T) {
 }
 
 func TestQuorumCallWithThreshold(t *testing.T) {
-	// Setup servers
-	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			req := gorums.AsProto[*dev.Request](in)
-			resp := &dev.Response{}
-			resp.SetResult(int64(len(req.GetValue())))
-			return gorums.NewResponseMessage(in.GetMetadata(), resp), nil
-		})
-		return srv
-	})
-	t.Cleanup(teardown)
-
-	cfg := gorums.NewTestConfig(t, addrs)
-
+	cfg := gorums.SetupConfiguration(t, 3, quorumCallServer)
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
@@ -113,21 +80,7 @@ func TestQuorumCallWithThreshold(t *testing.T) {
 }
 
 func TestQuorumCallWithCustomAggregation(t *testing.T) {
-	// Setup servers
-	addrs, teardown := gorums.TestSetup(t, 3, func(_ int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		srv.RegisterHandler(quorumCallMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-			req := gorums.AsProto[*dev.Request](in)
-			resp := &dev.Response{}
-			resp.SetResult(int64(len(req.GetValue())))
-			return gorums.NewResponseMessage(in.GetMetadata(), resp), nil
-		})
-		return srv
-	})
-	t.Cleanup(teardown)
-
-	cfg := gorums.NewTestConfig(t, addrs)
-
+	cfg := gorums.SetupConfiguration(t, 3, quorumCallServer)
 	ctx := gorums.WithConfigContext(testContext(t, 2*time.Second), cfg)
 
 	req := &dev.Request{}
