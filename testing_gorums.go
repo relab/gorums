@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"context"
 	"net"
 	"sync"
 	"testing"
@@ -68,13 +67,6 @@ func NewTestConfig(t testing.TB, addrs []string, opts ...ManagerOption) Configur
 		t.Fatal(err)
 	}
 	return cfg
-}
-
-// NewTestConfigContext creates a ConfigContext for testing with the given context,
-// node addresses, and optional manager options. It combines NewConfig with WithConfigContext.
-func NewTestConfigContext(t testing.TB, ctx context.Context, addrs []string, opts ...ManagerOption) *ConfigContext {
-	t.Helper()
-	return WithConfigContext(ctx, NewTestConfig(t, addrs, opts...))
 }
 
 // TestSetup starts numServers gRPC servers using the given registration
