@@ -38,24 +38,15 @@ func TestTLSConnection(t *testing.T) {
 		t.Errorf("Failed to parse cert: %v", err)
 	}
 
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
+	srvFn := func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer(gorums.WithGRPCServerOptions(grpc.Creds(credentials.NewServerTLSFromCert(&tlsCert))))
 		RegisterTLSServer(srv, &testSrv{})
 		return srv
-	})
-	defer teardown()
-
-	mgr := gorums.NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
-		),
-	)
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
 	}
+	node := gorums.SetupNode(t, srvFn, gorums.WithGrpcDialOptions(
+		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
+	))
 
-	node := cfg[0]
 	resp, err := TestTLS(gorums.WithNodeContext(context.Background(), node), &Request{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)

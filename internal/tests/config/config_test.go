@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	gorums "github.com/relab/gorums"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type cfgSrv struct {
@@ -66,11 +64,7 @@ func TestConfig(t *testing.T) {
 			}
 		}
 	}
-	mgr := gorums.NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
+	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
 	c1, teardown1 := setup(t, mgr, 4)
 	defer teardown1()
 	fmt.Println("--- c1 ", c1.Nodes())
