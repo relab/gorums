@@ -103,7 +103,7 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 
 	// Identical configurations c1 == c2
 	nodeIDs := c1.NodeIDs()
-	c2, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeIDs(nodeIDs))
+	c2, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeIDs(nodeIDs...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 	}
 
 	// Configuration with one less node |c3| == |c1| - 1
-	c3, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeIDs(nodeIDs[:len(nodeIDs)-1]))
+	c3, err := gorums.NewRawConfiguration(mgr, gorums.WithNodeIDs(nodeIDs[:len(nodeIDs)-1]...))
 	if err != nil {
 		t.Fatal(err)
 	}
