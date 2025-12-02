@@ -62,6 +62,11 @@ test: compiletests
 testrace: compiletests
 	go test -race -cpu=1,2,4 ./...
 
+# Run stress tests that use longer durations for thorough testing.
+# These tests are excluded from normal test runs via the 'stress' build tag.
+stresstest: compiletests
+	go test -tags=stress ./...
+
 # Warning: will probably run for 10 minutes; the timeout does not work
 stressdev: tools
 	go test -c $(dev_path)

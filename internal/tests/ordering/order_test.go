@@ -3,6 +3,7 @@ package ordering
 import (
 	"context"
 	"errors"
+	"iter"
 	"sync"
 	"testing"
 	"time"
@@ -13,8 +14,38 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// The duration that each ordering test will run
-const testDuration = 5 * time.Second
+// stressMode controls whether tests run in stress mode (time-based) or normal mode (iteration-based).
+// This is set to true in order_stress_test.go via the stress build tag.
+var stressMode = false
+
+// testIterations is the number of iterations for ordering tests in normal mode.
+const testIterations = 100
+
+// stressDuration is the duration for stress tests when stressMode is true.
+const stressDuration = 5 * time.Second
+
+// iterations returns an iterator that yields sequential integers starting from 1.
+// In normal mode, it yields testIterations values.
+// In stress mode, it yields values for stressDuration.
+func iterations() iter.Seq[int] {
+	if stressMode {
+		return func(yield func(int) bool) {
+			stopTime := time.Now().Add(stressDuration)
+			for i := 1; time.Now().Before(stopTime); i++ {
+				if !yield(i) {
+					return
+				}
+			}
+		}
+	}
+	return func(yield func(int) bool) {
+		for i := range testIterations {
+			if !yield(i + 1) {
+				return
+			}
+		}
+	}
+}
 
 type testSrv struct {
 	sync.Mutex
@@ -78,10 +109,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	defer teardown()
 	node := cfg[0]
 
-	stopTime := time.Now().Add(testDuration)
-	i := 1
-	for time.Now().Before(stopTime) {
-		i++
+	for i := range iterations() {
 		nodeCtx := gorums.WithNodeContext(context.Background(), node)
 		resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
@@ -102,10 +130,7 @@ func TestQCOrdering(t *testing.T) {
 	defer teardown()
 
 	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
-	stopTime := time.Now().Add(testDuration)
-	i := 1
-	for time.Now().Before(stopTime) {
-		i++
+	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
 		responses := QC(cfgCtx, Request_builder{Num: uint64(i)}.Build())
 		replies := responses.CollectAll()
@@ -124,14 +149,11 @@ func TestQCAsyncOrdering(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	cfg, teardown := setup(t, 4)
 	defer teardown()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx := t.Context()
 
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 	var wg sync.WaitGroup
-	stopTime := time.Now().Add(testDuration)
-	i := 1
-	for time.Now().Before(stopTime) {
-		i++
+	for i := range iterations() {
 		// QCAsync returns an Async future that uses majority quorum by default
 		promise := QCAsync(cfgCtx, Request_builder{Num: uint64(i)}.Build())
 		wg.Go(func() {
@@ -151,7 +173,6 @@ func TestQCAsyncOrdering(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	cancel()
 }
 
 func TestMixedOrdering(t *testing.T) {
@@ -161,13 +182,10 @@ func TestMixedOrdering(t *testing.T) {
 	nodes := cfg.Nodes()
 
 	cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
-	stopTime := time.Now().Add(testDuration)
-	i := 1
-	for time.Now().Before(stopTime) {
+	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
-		responses := QC(cfgCtx, Request_builder{Num: uint64(i)}.Build())
+		responses := QC(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
 		replies := responses.CollectAll()
-		i++
 		if len(replies) < cfg.Size() {
 			t.Fatalf("incomplete call: %d replies", len(replies))
 		}
@@ -180,7 +198,7 @@ func TestMixedOrdering(t *testing.T) {
 		for _, node := range nodes {
 			wg.Go(func() {
 				nodeCtx := gorums.WithNodeContext(context.Background(), node)
-				resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
+				resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(2 * i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return
@@ -195,6 +213,5 @@ func TestMixedOrdering(t *testing.T) {
 			})
 		}
 		wg.Wait()
-		i++
 	}
 }

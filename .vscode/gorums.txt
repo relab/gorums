@@ -82,6 +82,7 @@ shlex
 srvs
 stressdev
 stressgen
+stresstest
 struct
 syncrq
 testprotos
