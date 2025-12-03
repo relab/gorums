@@ -18,15 +18,6 @@ import (
 
 const defaultTestTimeout = 3 * time.Second
 
-// newNodeWithServer creates a node connected to a live server that will delay
-// responding by the given duration. If delay is 0, the server responds immediately.
-func newNodeWithServer(t testing.TB, delay time.Duration) *Node {
-	t.Helper()
-	node, teardown := newNodeWithStoppableServer(t, delay)
-	t.Cleanup(teardown)
-	return node
-}
-
 type mockSrv struct{}
 
 func (mockSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
@@ -115,7 +106,7 @@ func TestChannelCreation(t *testing.T) {
 
 // TestChannelShutdown verifies proper cleanup when channel is closed.
 func TestChannelShutdown(t *testing.T) {
-	node := newNodeWithServer(t, 0)
+	node := SetupNode(t, delayServerFn(0))
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
@@ -153,7 +144,7 @@ func TestChannelShutdown(t *testing.T) {
 
 // TestChannelSendCompletionWaiting verifies the behavior of send completion waiting.
 func TestChannelSendCompletionWaiting(t *testing.T) {
-	node := newNodeWithServer(t, 0)
+	node := SetupNode(t, delayServerFn(0))
 
 	tests := []struct {
 		name         string
@@ -204,7 +195,7 @@ func TestChannelErrors(t *testing.T) {
 		{
 			name: "EnqueueToServerWithClosedNode",
 			setup: func(t *testing.T) *Node {
-				node := newNodeWithServer(t, 0)
+				node := SetupNode(t, delayServerFn(0))
 				err := node.close()
 				if err != nil {
 					t.Errorf("failed to close node: %v", err)
@@ -247,7 +238,7 @@ func TestChannelErrors(t *testing.T) {
 func TestChannelEnsureStream(t *testing.T) {
 	// Helper to prepare a fresh node with no stream
 	newNodeWithoutStream := func(t *testing.T) *Node {
-		node := newNodeWithServer(t, 0)
+		node := SetupNode(t, delayServerFn(0))
 		node.cancel() // ensure sender and receiver goroutines are stopped
 		node.channel = newChannel(node)
 		return node
@@ -347,38 +338,36 @@ func TestChannelEnsureStream(t *testing.T) {
 func TestChannelConnectionState(t *testing.T) {
 	tests := []struct {
 		name          string
-		node          *Node
-		setup         func(node *Node)
+		setup         func(t *testing.T) *Node
 		wantConnected bool
 	}{
 		{
 			name:          "WithoutServer",
-			node:          NewTestNode(t, "127.0.0.1:5003"),
+			setup:         func(t *testing.T) *Node { return NewTestNode(t, "127.0.0.1:5003") },
 			wantConnected: false,
 		},
 		{
 			name:          "WithLiveServer",
-			node:          newNodeWithServer(t, 0),
+			setup:         func(t *testing.T) *Node { return SetupNode(t, delayServerFn(0)) },
 			wantConnected: true,
 		},
 		{
 			name: "RequiresBothReadyAndStream",
-			node: newNodeWithServer(t, 0),
-			setup: func(node *Node) {
+			setup: func(t *testing.T) *Node {
+				node := SetupNode(t, delayServerFn(0))
 				if !node.channel.isConnected() {
 					t.Fatal("node should be connected before clearing stream")
 				}
 				node.channel.clearStream()
+				return node
 			},
 			wantConnected: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.setup != nil {
-				tt.setup(tt.node)
-			}
-			connected := tt.node.channel.isConnected()
+			node := tt.setup(t)
+			connected := node.channel.isConnected()
 			if connected != tt.wantConnected {
 				t.Errorf("isConnected() = %v, want %v", connected, tt.wantConnected)
 			}
@@ -388,7 +377,7 @@ func TestChannelConnectionState(t *testing.T) {
 
 // TestChannelConcurrentSends tests sending multiple messages concurrently from multiple goroutines.
 func TestChannelConcurrentSends(t *testing.T) {
-	node := newNodeWithServer(t, 0)
+	node := SetupNode(t, delayServerFn(0))
 
 	const numMessages = 1000
 	const numGoroutines = 10
@@ -479,7 +468,7 @@ func TestChannelContext(t *testing.T) {
 			ctx, cancel := tt.contextSetup(t.Context())
 			t.Cleanup(cancel)
 
-			node := newNodeWithServer(t, tt.serverDelay)
+			node := SetupNode(t, delayServerFn(tt.serverDelay))
 			resp := sendRequest(t, node, request{ctx: ctx, waitSendDone: tt.waitSendDone}, uint64(i))
 			if !errors.Is(resp.Err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.Err)
@@ -502,7 +491,7 @@ func TestChannelContext(t *testing.T) {
 // 3. Sending multiple messages concurrently to trigger the deadlock condition
 // 4. Verifying all goroutines can successfully enqueue without hanging
 func TestChannelDeadlock(t *testing.T) {
-	node := newNodeWithServer(t, 0)
+	node := SetupNode(t, delayServerFn(0))
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
@@ -558,7 +547,7 @@ func TestChannelDeadlock(t *testing.T) {
 
 // TestChannelRouterLifecycle tests router creation, persistence, and cleanup behavior.
 func TestChannelRouterLifecycle(t *testing.T) {
-	node := newNodeWithServer(t, 0)
+	node := SetupNode(t, delayServerFn(0))
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
@@ -594,7 +583,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 // TestChannelResponseRouting sends multiple messages and verifies that
 // responses are correctly routed to their callers.
 func TestChannelResponseRouting(t *testing.T) {
-	node := newNodeWithServer(t, 0)
+	node := SetupNode(t, delayServerFn(0))
 
 	const numMessages = 20
 	results := make(chan msgResponse, numMessages)
@@ -626,7 +615,7 @@ func TestChannelResponseRouting(t *testing.T) {
 // when a stream becomes available. This tests the stream-ready signaling mechanism
 // that replaces the old time.Sleep polling approach.
 func TestChannelStreamReadySignaling(t *testing.T) {
-	node := newNodeWithServer(t, 0)
+	node := SetupNode(t, delayServerFn(0))
 
 	// The first request triggers stream creation. We measure how quickly
 	// the receiver starts processing after the stream is ready.
