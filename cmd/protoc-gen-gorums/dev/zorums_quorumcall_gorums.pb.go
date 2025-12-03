@@ -20,7 +20,7 @@ const (
 
 // QuorumCall plain.
 func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
-	return gorums.QuorumCallWithInterceptor[*Request, *Response](
+	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCall",
 		opts...,
 	)
@@ -28,7 +28,7 @@ func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOptio
 
 // QuorumCallEmpty for testing imported message type.
 func QuorumCallEmpty(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *gorums.Responses[*Response] {
-	return gorums.QuorumCallWithInterceptor[*emptypb.Empty, *Response](
+	return gorums.QuorumCall[*emptypb.Empty, *Response](
 		ctx, in, "dev.ZorumsService.QuorumCallEmpty",
 		opts...,
 	)
@@ -36,7 +36,7 @@ func QuorumCallEmpty(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorum
 
 // QuorumCallEmpty2 for testing imported message type.
 func QuorumCallEmpty2(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*emptypb.Empty] {
-	return gorums.QuorumCallWithInterceptor[*Request, *emptypb.Empty](
+	return gorums.QuorumCall[*Request, *emptypb.Empty](
 		ctx, in, "dev.ZorumsService.QuorumCallEmpty2",
 		opts...,
 	)

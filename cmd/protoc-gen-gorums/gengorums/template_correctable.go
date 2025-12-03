@@ -18,8 +18,8 @@ var correctableVar = `
 {{$correctableOut := outType .Method $out}}
 {{$genFile := .GenFile}}
 {{$configContext := use "gorums.ConfigContext" .GenFile}}
-{{$quorumCallWithInterceptor := use "gorums.QuorumCallWithInterceptor" .GenFile}}
-{{$withStreaming := use "gorums.WithStreaming" .GenFile}}
+{{$quorumCall := use "gorums.QuorumCall" .GenFile}}
+{{$quorumCallStream := use "gorums.QuorumCallStream" .GenFile}}
 {{$callOption := use "gorums.CallOption" .GenFile}}
 `
 
@@ -30,13 +30,13 @@ var correctableSignature = `func {{$method}}(` +
 `
 
 var correctableBody = `{{- if correctableStream .Method}}
-	responses := {{$quorumCallWithInterceptor}}[*{{$in}}, *{{$out}}](
+	responses := {{$quorumCallStream}}[*{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
-		append(opts, {{$withStreaming}}())...,
+		opts...,
 	)
 	return responses.WaitForLevel(responses.Size()/2 + 1)
 {{- else}}
-	responses := {{$quorumCallWithInterceptor}}[*{{$in}}, *{{$out}}](
+	responses := {{$quorumCall}}[*{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
 		opts...,
 	)

@@ -41,7 +41,7 @@ var (
 //
 //	resp, err := Config(ctx, in).Majority()
 func Config(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
-	return gorums.QuorumCallWithInterceptor[*Request, *Response](
+	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "config.ConfigTest.Config",
 		opts...,
 	)

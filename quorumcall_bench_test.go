@@ -25,7 +25,7 @@ func BenchmarkTerminalMethods(b *testing.B) {
 		b.Run(fmt.Sprintf("Majority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+				resp, err := QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -41,7 +41,7 @@ func BenchmarkTerminalMethods(b *testing.B) {
 			b.ReportAllocs()
 			threshold := numNodes/2 + 1
 			for b.Loop() {
-				resp, err := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+				resp, err := QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -56,7 +56,7 @@ func BenchmarkTerminalMethods(b *testing.B) {
 		b.Run(fmt.Sprintf("First/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+				resp, err := QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -71,7 +71,7 @@ func BenchmarkTerminalMethods(b *testing.B) {
 		b.Run(fmt.Sprintf("All/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+				resp, err := QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -96,7 +96,7 @@ func BenchmarkIteratorPatterns(b *testing.B) {
 			b.ReportAllocs()
 			quorum := numNodes/2 + 1
 			for b.Loop() {
-				responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+				responses := QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -118,7 +118,7 @@ func BenchmarkIteratorPatterns(b *testing.B) {
 			b.ReportAllocs()
 			quorum := numNodes/2 + 1
 			for b.Loop() {
-				responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+				responses := QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -140,7 +140,7 @@ func BenchmarkIteratorPatterns(b *testing.B) {
 			b.ReportAllocs()
 			quorum := numNodes/2 + 1
 			for b.Loop() {
-				responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+				responses := QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,

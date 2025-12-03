@@ -41,7 +41,7 @@ var (
 //
 //	resp, err := QuorumCall(ctx, in).Majority()
 func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
-	return gorums.QuorumCallWithInterceptor[*Request, *Response](
+	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "ordering.GorumsTest.QuorumCall",
 		opts...,
 	)

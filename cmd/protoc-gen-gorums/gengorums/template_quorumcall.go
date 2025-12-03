@@ -26,7 +26,7 @@ var quorumCallComment = `
 var qcVar = `
 {{$genFile := .GenFile}}
 {{$configContext := use "gorums.ConfigContext" .GenFile}}
-{{$quorumCallWithInterceptor := use "gorums.QuorumCallWithInterceptor" .GenFile}}
+{{$quorumCall := use "gorums.QuorumCall" .GenFile}}
 {{$responses := use "gorums.Responses" .GenFile}}
 {{$callOption := use "gorums.CallOption" .GenFile}}
 `
@@ -37,7 +37,7 @@ var quorumCallSignature = `func {{$method}}(` +
 	` *{{$responses}}[*{{$out}}] {
 `
 
-var quorumCallBody = `	return {{$quorumCallWithInterceptor}}[*{{$in}}, *{{$out}}](
+var quorumCallBody = `	return {{$quorumCall}}[*{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
 		opts...,
 	)

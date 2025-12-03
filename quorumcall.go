@@ -1,6 +1,6 @@
 package gorums
 
-// QuorumCallWithInterceptor performs a quorum call and returns a Responses object
+// QuorumCall performs a quorum call and returns a Responses object
 // that provides access to node responses via terminal methods and fluent iteration.
 //
 // Type parameters:
@@ -16,15 +16,42 @@ package gorums
 // This lazy sending is necessary to allow interceptors to register transformations prior to dispatch.
 //
 // This function should be used by generated code only.
-func QuorumCallWithInterceptor[Req, Resp msg](
+func QuorumCall[Req, Resp msg](
 	ctx *ConfigContext,
 	req Req,
 	method string,
 	opts ...CallOption,
 ) *Responses[Resp] {
+	return quorumCall[Req, Resp](ctx, req, method, false, opts...)
+}
+
+// QuorumCallStream performs a streaming quorum call and returns a Responses object.
+// This is used for correctable stream methods where the server sends multiple responses.
+//
+// In streaming mode, the response iterator continues indefinitely until the context
+// is canceled, allowing the server to send multiple responses over time.
+//
+// This function should be used by generated code only.
+func QuorumCallStream[Req, Resp msg](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	opts ...CallOption,
+) *Responses[Resp] {
+	return quorumCall[Req, Resp](ctx, req, method, true, opts...)
+}
+
+// quorumCall is the internal implementation shared by QuorumCall and QuorumCallStream.
+func quorumCall[Req, Resp msg](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	streaming bool,
+	opts ...CallOption,
+) *Responses[Resp] {
 	callOpts := getCallOptions(E_Quorumcall, opts...)
 	builder := newClientCtxBuilder[Req, Resp](ctx, req, method)
-	if callOpts.streaming {
+	if streaming {
 		builder = builder.WithStreaming()
 	}
 	clientCtx := builder.Build()

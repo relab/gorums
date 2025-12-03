@@ -355,7 +355,7 @@ func TestInterceptorIntegration_First(t *testing.T) {
 	cfg := TestConfiguration(t, 3, echoServerFn)
 
 	ctx := TestContext(t, ctxTimeout)
-	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+	responses := QuorumCall[*pb.StringValue, *pb.StringValue](
 		WithConfigContext(ctx, cfg),
 		pb.String("test"),
 		mock.TestMethod,
@@ -376,7 +376,7 @@ func TestInterceptorIntegration_Majority(t *testing.T) {
 	cfg := TestConfiguration(t, 3, echoServerFn)
 
 	ctx := TestContext(t, ctxTimeout)
-	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+	responses := QuorumCall[*pb.StringValue, *pb.StringValue](
 		WithConfigContext(ctx, cfg),
 		pb.String("test"),
 		mock.TestMethod,
@@ -397,7 +397,7 @@ func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
 	cfg := TestConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
 
 	ctx := TestContext(t, ctxTimeout)
-	responses := QuorumCallWithInterceptor[*pb.Int32Value, *pb.Int32Value](
+	responses := QuorumCall[*pb.Int32Value, *pb.Int32Value](
 		WithConfigContext(ctx, cfg),
 		pb.Int32(0),
 		mock.GetValueMethod,
@@ -420,7 +420,7 @@ func TestInterceptorIntegration_CollectAll(t *testing.T) {
 	cfg := TestConfiguration(t, 3, echoServerFn)
 
 	ctx := TestContext(t, ctxTimeout)
-	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+	responses := QuorumCall[*pb.StringValue, *pb.StringValue](
 		WithConfigContext(ctx, cfg),
 		pb.String("test"),
 		mock.TestMethod,

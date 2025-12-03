@@ -46,7 +46,7 @@ func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.
 // ReadQC executes the Read Quorum Call on a configuration
 // of Nodes and returns the most recent value.
 func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
-	return gorums.QuorumCallWithInterceptor[*ReadRequest, *ReadResponse](
+	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
 		ctx, in, "storage.Storage.ReadQC",
 		opts...,
 	)
@@ -55,7 +55,7 @@ func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOptio
 // WriteQC executes the Write Quorum Call on a configuration
 // of Nodes and returns true if a majority of Nodes were updated.
 func WriteQC(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse] {
-	return gorums.QuorumCallWithInterceptor[*WriteRequest, *WriteResponse](
+	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
 		ctx, in, "storage.Storage.WriteQC",
 		opts...,
 	)
@@ -115,3 +115,9 @@ func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
 		return nil, nil
 	})
 }
+
+// AsyncReadResponse is a future for async quorum calls returning ReadResponse.
+type AsyncReadResponse = gorums.Async[*ReadResponse]
+
+// AsyncWriteResponse is a future for async quorum calls returning WriteResponse.
+type AsyncWriteResponse = gorums.Async[*WriteResponse]

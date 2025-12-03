@@ -16,7 +16,7 @@ func TestQuorumCallSuccess(t *testing.T) {
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 
 	// Use the new Responses API with the All() terminal method
-	response, err := gorums.QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
+	response, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
 		cfgCtx, pb.String(""), mock.TestMethod,
 	).All()
 	if err != nil {
