@@ -45,7 +45,7 @@ func setupWithNodeMap(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs
 		srvs[i] = &onewaySrv{received: make(chan *oneway.Request, numCalls)}
 	}
 
-	cfg = gorums.SetupConfiguration(t, cfgSize, func(i int) gorums.ServerIface {
+	cfg = gorums.TestConfiguration(t, cfgSize, func(i int) gorums.ServerIface {
 		srv := gorums.NewServer()
 		oneway.RegisterOnewayTestServer(srv, srvs[i])
 		return srv

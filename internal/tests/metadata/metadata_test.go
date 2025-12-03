@@ -51,7 +51,7 @@ func TestMetadata(t *testing.T) {
 		"id": fmt.Sprint(want),
 	})
 
-	node := gorums.SetupNode(t, serverFn, gorums.WithMetadata(md))
+	node := gorums.TestNode(t, serverFn, gorums.WithMetadata(md))
 	nodeCtx := gorums.WithNodeContext(t.Context(), node)
 	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
@@ -64,7 +64,7 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestPerMessageMetadata(t *testing.T) {
-	node := gorums.SetupNode(t, serverFn)
+	node := gorums.TestNode(t, serverFn)
 
 	want := uint32(1)
 	md := metadata.New(map[string]string{
@@ -89,7 +89,7 @@ func TestPerNodeMetadata(t *testing.T) {
 		})
 	}
 
-	cfg := gorums.SetupConfiguration(t, 2, serverFn, gorums.WithPerNodeMetadata(perNodeMD))
+	cfg := gorums.TestConfiguration(t, 2, serverFn, gorums.WithPerNodeMetadata(perNodeMD))
 
 	for _, node := range cfg {
 		nodeCtx := gorums.WithNodeContext(t.Context(), node)
@@ -105,7 +105,7 @@ func TestPerNodeMetadata(t *testing.T) {
 }
 
 func TestCanGetPeerInfo(t *testing.T) {
-	node := gorums.SetupNode(t, serverFn)
+	node := gorums.TestNode(t, serverFn)
 	nodeCtx := gorums.WithNodeContext(t.Context(), node)
 	ip, err := WhatIP(nodeCtx, &emptypb.Empty{})
 	if err != nil {

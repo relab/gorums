@@ -86,7 +86,7 @@ func serverFn(_ int) gorums.ServerIface {
 }
 
 func TestUnaryRPCOrdering(t *testing.T) {
-	node := gorums.SetupNode(t, serverFn)
+	node := gorums.TestNode(t, serverFn)
 
 	for i := range iterations() {
 		nodeCtx := gorums.WithNodeContext(t.Context(), node)
@@ -104,7 +104,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 }
 
 func TestQCOrdering(t *testing.T) {
-	cfg := gorums.SetupConfiguration(t, 4, serverFn)
+	cfg := gorums.TestConfiguration(t, 4, serverFn)
 	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
 
 	for i := range iterations() {
@@ -123,7 +123,7 @@ func TestQCOrdering(t *testing.T) {
 }
 
 func TestQCAsyncOrdering(t *testing.T) {
-	cfg := gorums.SetupConfiguration(t, 4, serverFn)
+	cfg := gorums.TestConfiguration(t, 4, serverFn)
 	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
 
 	var wg sync.WaitGroup
@@ -150,7 +150,7 @@ func TestQCAsyncOrdering(t *testing.T) {
 }
 
 func TestMixedOrdering(t *testing.T) {
-	cfg := gorums.SetupConfiguration(t, 4, serverFn)
+	cfg := gorums.TestConfiguration(t, 4, serverFn)
 	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
 
 	for i := range iterations() {

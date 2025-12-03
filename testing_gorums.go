@@ -15,12 +15,6 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
-type ServerIface interface {
-	Serve(net.Listener) error
-	Stop()
-}
-
 // TestContext creates a context with timeout for testing.
 // It uses t.Context() as the parent and automatically cancels on cleanup.
 func TestContext(t testing.TB, timeout time.Duration) context.Context {
@@ -37,7 +31,7 @@ func InsecureGrpcDialOptions(_ testing.TB) ManagerOption {
 	)
 }
 
-// SetupConfiguration creates servers and a configuration for testing.
+// TestConfiguration creates servers and a configuration for testing.
 // Both server and manager cleanup are handled via t.Cleanup in the correct order:
 // manager is closed first, then servers are stopped.
 //
@@ -51,7 +45,7 @@ func InsecureGrpcDialOptions(_ testing.TB) ManagerOption {
 //
 // This is the recommended way to set up tests that need both servers and a configuration.
 // It ensures proper cleanup and detects goroutine leaks.
-func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...TestOption) Configuration {
+func TestConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...TestOption) Configuration {
 	t.Helper()
 
 	testOpts := extractTestOptions(opts)
@@ -84,7 +78,7 @@ func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIf
 	return cfg
 }
 
-// SetupNode creates a single server and returns the node for testing.
+// TestNode creates a single server and returns the node for testing.
 // Both server and manager cleanup are handled via t.Cleanup in the correct order.
 //
 // The provided srvFn is used to create and register the server handler.
@@ -94,9 +88,9 @@ func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIf
 //
 // This is the recommended way to set up tests that need only a single server node.
 // It ensures proper cleanup and detects goroutine leaks.
-func SetupNode(t testing.TB, srvFn func(i int) ServerIface, opts ...TestOption) *Node {
+func TestNode(t testing.TB, srvFn func(i int) ServerIface, opts ...TestOption) *Node {
 	t.Helper()
-	return SetupConfiguration(t, 1, srvFn, opts...).Nodes()[0]
+	return TestConfiguration(t, 1, srvFn, opts...).Nodes()[0]
 }
 
 // TestServers starts numServers gRPC servers using the given registration
@@ -131,6 +125,12 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 	// Register server cleanup SECOND so it runs BEFORE goleak check
 	t.Cleanup(stopFn)
 	return addrs
+}
+
+// ServerIface is the interface that must be implemented by a server in order to support the TestSetup function.
+type ServerIface interface {
+	Serve(net.Listener) error
+	Stop()
 }
 
 // testSetupServers is the internal implementation of server setup.

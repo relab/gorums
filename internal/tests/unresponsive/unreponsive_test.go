@@ -24,7 +24,7 @@ func serverFn(_ int) gorums.ServerIface {
 
 // TestUnresponsiveServer checks that the client is not blocked when the server is not receiving messages
 func TestUnresponsiveServer(t *testing.T) {
-	node := gorums.SetupNode(t, serverFn)
+	node := gorums.TestNode(t, serverFn)
 
 	for range 100 {
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)

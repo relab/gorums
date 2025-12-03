@@ -43,7 +43,7 @@ func TestTLSConnection(t *testing.T) {
 		RegisterTLSServer(srv, &testSrv{})
 		return srv
 	}
-	node := gorums.SetupNode(t, srvFn, gorums.WithGrpcDialOptions(
+	node := gorums.TestNode(t, srvFn, gorums.WithGrpcDialOptions(
 		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
 	))
 

@@ -12,7 +12,7 @@ import (
 // the target level is n (quorum size).
 func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *gorums.Correctable[*CorrectableResponse]) {
 	t.Helper()
-	cfg := gorums.SetupConfiguration(t, n, func(i int) gorums.ServerIface {
+	cfg := gorums.TestConfiguration(t, n, func(i int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv

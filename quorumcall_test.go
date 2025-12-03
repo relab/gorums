@@ -10,7 +10,7 @@ import (
 )
 
 func TestQuorumCallSuccess(t *testing.T) {
-	cfg := gorums.SetupConfiguration(t, 3, nil)
+	cfg := gorums.TestConfiguration(t, 3, nil)
 
 	ctx := gorums.TestContext(t, 1*time.Second)
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)

@@ -352,7 +352,7 @@ func TestIteratorMethods(t *testing.T) {
 
 // TestInterceptorIntegration_First tests the complete flow with real servers
 func TestInterceptorIntegration_First(t *testing.T) {
-	cfg := SetupConfiguration(t, 3, echoServerFn)
+	cfg := TestConfiguration(t, 3, echoServerFn)
 
 	ctx := TestContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
@@ -373,7 +373,7 @@ func TestInterceptorIntegration_First(t *testing.T) {
 
 // TestInterceptorIntegration_Majority tests majority quorum with real servers
 func TestInterceptorIntegration_Majority(t *testing.T) {
-	cfg := SetupConfiguration(t, 3, echoServerFn)
+	cfg := TestConfiguration(t, 3, echoServerFn)
 
 	ctx := TestContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](
@@ -394,7 +394,7 @@ func TestInterceptorIntegration_Majority(t *testing.T) {
 
 // TestInterceptorIntegration_CustomAggregation tests custom response aggregation
 func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
-	cfg := SetupConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
+	cfg := TestConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
 
 	ctx := TestContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.Int32Value, *pb.Int32Value](
@@ -417,7 +417,7 @@ func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
 
 // TestInterceptorIntegration_CollectAll tests collecting all responses
 func TestInterceptorIntegration_CollectAll(t *testing.T) {
-	cfg := SetupConfiguration(t, 3, echoServerFn)
+	cfg := TestConfiguration(t, 3, echoServerFn)
 
 	ctx := TestContext(t, ctxTimeout)
 	responses := QuorumCallWithInterceptor[*pb.StringValue, *pb.StringValue](

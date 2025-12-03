@@ -19,7 +19,7 @@ func init() {
 }
 
 func TestRPCCallSuccess(t *testing.T) {
-	node := gorums.SetupNode(t, nil)
+	node := gorums.TestNode(t, nil)
 
 	ctx := gorums.TestContext(t, 5*time.Second)
 	nodeCtx := gorums.WithNodeContext(ctx, node)
@@ -33,7 +33,7 @@ func TestRPCCallSuccess(t *testing.T) {
 }
 
 func TestRPCCallDownedNode(t *testing.T) {
-	node := gorums.SetupNode(t, nil, gorums.WithPreConnect(t, func(stopServers func()) {
+	node := gorums.TestNode(t, nil, gorums.WithPreConnect(t, func(stopServers func()) {
 		stopServers()
 		time.Sleep(300 * time.Millisecond) // wait for servers to fully stop
 	}))
@@ -50,7 +50,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 }
 
 func TestRPCCallTimedOut(t *testing.T) {
-	node := gorums.SetupNode(t, nil)
+	node := gorums.TestNode(t, nil)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 0*time.Second)
 	time.Sleep(50 * time.Millisecond)

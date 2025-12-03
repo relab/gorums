@@ -116,7 +116,7 @@ func TestChannelCreation(t *testing.T) {
 
 // TestChannelShutdown verifies proper cleanup when channel is closed.
 func TestChannelShutdown(t *testing.T) {
-	node := SetupNode(t, delayServerFn(0))
+	node := TestNode(t, delayServerFn(0))
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
@@ -154,7 +154,7 @@ func TestChannelShutdown(t *testing.T) {
 
 // TestChannelSendCompletionWaiting verifies the behavior of send completion waiting.
 func TestChannelSendCompletionWaiting(t *testing.T) {
-	node := SetupNode(t, delayServerFn(0))
+	node := TestNode(t, delayServerFn(0))
 
 	tests := []struct {
 		name         string
@@ -205,7 +205,7 @@ func TestChannelErrors(t *testing.T) {
 		{
 			name: "EnqueueToServerWithClosedNode",
 			setup: func(t *testing.T) *Node {
-				node := SetupNode(t, delayServerFn(0))
+				node := TestNode(t, delayServerFn(0))
 				err := node.close()
 				if err != nil {
 					t.Errorf("failed to close node: %v", err)
@@ -218,7 +218,7 @@ func TestChannelErrors(t *testing.T) {
 			name: "ServerFailureDuringCommunication",
 			setup: func(t *testing.T) *Node {
 				var stopServer func()
-				node := SetupNode(t, delayServerFn(0), WithStopFunc(t, &stopServer))
+				node := TestNode(t, delayServerFn(0), WithStopFunc(t, &stopServer))
 				resp := sendRequest(t, node, request{waitSendDone: true}, 1)
 				if resp.Err != nil {
 					t.Errorf("first message should succeed, got error: %v", resp.Err)
@@ -249,7 +249,7 @@ func TestChannelErrors(t *testing.T) {
 func TestChannelEnsureStream(t *testing.T) {
 	// Helper to prepare a fresh node with no stream
 	newNodeWithoutStream := func(t *testing.T) *Node {
-		node := SetupNode(t, delayServerFn(0))
+		node := TestNode(t, delayServerFn(0))
 		node.cancel() // ensure sender and receiver goroutines are stopped
 		node.channel = newChannel(node)
 		return node
@@ -359,13 +359,13 @@ func TestChannelConnectionState(t *testing.T) {
 		},
 		{
 			name:          "WithLiveServer",
-			setup:         func(t *testing.T) *Node { return SetupNode(t, delayServerFn(0)) },
+			setup:         func(t *testing.T) *Node { return TestNode(t, delayServerFn(0)) },
 			wantConnected: true,
 		},
 		{
 			name: "RequiresBothReadyAndStream",
 			setup: func(t *testing.T) *Node {
-				node := SetupNode(t, delayServerFn(0))
+				node := TestNode(t, delayServerFn(0))
 				if !node.channel.isConnected() {
 					t.Fatal("node should be connected before clearing stream")
 				}
@@ -388,7 +388,7 @@ func TestChannelConnectionState(t *testing.T) {
 
 // TestChannelConcurrentSends tests sending multiple messages concurrently from multiple goroutines.
 func TestChannelConcurrentSends(t *testing.T) {
-	node := SetupNode(t, delayServerFn(0))
+	node := TestNode(t, delayServerFn(0))
 
 	const numMessages = 1000
 	const numGoroutines = 10
@@ -479,7 +479,7 @@ func TestChannelContext(t *testing.T) {
 			ctx, cancel := tt.contextSetup(t.Context())
 			t.Cleanup(cancel)
 
-			node := SetupNode(t, delayServerFn(tt.serverDelay))
+			node := TestNode(t, delayServerFn(tt.serverDelay))
 			resp := sendRequest(t, node, request{ctx: ctx, waitSendDone: tt.waitSendDone}, uint64(i))
 			if !errors.Is(resp.Err, tt.wantErr) {
 				t.Errorf("expected %v, got: %v", tt.wantErr, resp.Err)
@@ -502,7 +502,7 @@ func TestChannelContext(t *testing.T) {
 // 3. Sending multiple messages concurrently to trigger the deadlock condition
 // 4. Verifying all goroutines can successfully enqueue without hanging
 func TestChannelDeadlock(t *testing.T) {
-	node := SetupNode(t, delayServerFn(0))
+	node := TestNode(t, delayServerFn(0))
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
@@ -558,7 +558,7 @@ func TestChannelDeadlock(t *testing.T) {
 
 // TestChannelRouterLifecycle tests router creation, persistence, and cleanup behavior.
 func TestChannelRouterLifecycle(t *testing.T) {
-	node := SetupNode(t, delayServerFn(0))
+	node := TestNode(t, delayServerFn(0))
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
@@ -594,7 +594,7 @@ func TestChannelRouterLifecycle(t *testing.T) {
 // TestChannelResponseRouting sends multiple messages and verifies that
 // responses are correctly routed to their callers.
 func TestChannelResponseRouting(t *testing.T) {
-	node := SetupNode(t, delayServerFn(0))
+	node := TestNode(t, delayServerFn(0))
 
 	const numMessages = 20
 	results := make(chan msgResponse, numMessages)
@@ -626,7 +626,7 @@ func TestChannelResponseRouting(t *testing.T) {
 // when a stream becomes available. This tests the stream-ready signaling mechanism
 // that replaces the old time.Sleep polling approach.
 func TestChannelStreamReadySignaling(t *testing.T) {
-	node := SetupNode(t, delayServerFn(0))
+	node := TestNode(t, delayServerFn(0))
 
 	// The first request triggers stream creation. We measure how quickly
 	// the receiver starts processing after the stream is ready.
@@ -662,7 +662,7 @@ func TestChannelStreamReadySignaling(t *testing.T) {
 // TestChannelStreamReadyAfterReconnect verifies that the receiver is properly notified
 // when a stream is re-established after being cleared (simulating reconnection).
 func TestChannelStreamReadyAfterReconnect(t *testing.T) {
-	node := SetupNode(t, delayServerFn(0))
+	node := TestNode(t, delayServerFn(0))
 
 	// First request to establish the stream
 	resp := sendRequest(t, node, request{}, 1)
@@ -711,7 +711,7 @@ func TestChannelStreamReadyAfterReconnect(t *testing.T) {
 func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 	for b.Loop() {
 		var stopServer func()
-		node := SetupNode(b, delayServerFn(0), WithStopFunc(b, &stopServer))
+		node := TestNode(b, delayServerFn(0), WithStopFunc(b, &stopServer))
 
 		// Use a fresh context for the benchmark request
 		ctx := TestContext(b, defaultTestTimeout)
@@ -739,7 +739,7 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 // BenchmarkChannelStreamReadySubsequentRequest measures the latency of requests
 // after the stream is already established (steady-state performance).
 func BenchmarkChannelStreamReadySubsequentRequest(b *testing.B) {
-	node := SetupNode(b, delayServerFn(0))
+	node := TestNode(b, delayServerFn(0))
 
 	// Warm up: establish the stream
 	resp := sendRequest(b, node, request{}, 0)
@@ -761,7 +761,7 @@ func BenchmarkChannelStreamReadySubsequentRequest(b *testing.B) {
 // Note: This benchmark has inherent variability due to the race between
 // clearStream and the sender's ensureStream call.
 func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
-	node := SetupNode(b, delayServerFn(0))
+	node := TestNode(b, delayServerFn(0))
 
 	// Establish initial stream with a fresh context
 	ctx := context.Background()

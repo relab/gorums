@@ -33,7 +33,7 @@ func TestServerCallback(t *testing.T) {
 	})
 	mgrOption := gorums.WithMetadata(metadata.New(map[string]string{"message": "hello"}))
 
-	gorums.SetupNode(t, nil, srvOption, mgrOption)
+	gorums.TestNode(t, nil, srvOption, mgrOption)
 
 	select {
 	case <-time.After(100 * time.Millisecond):
@@ -84,7 +84,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 		})
 		return s
 	}
-	node := gorums.SetupNode(t, interceptorServerFn)
+	node := gorums.TestNode(t, interceptorServerFn)
 
 	ctx := gorums.TestContext(t, 5*time.Second)
 	nodeCtx := gorums.WithNodeContext(ctx, node)

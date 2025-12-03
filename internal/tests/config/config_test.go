@@ -40,12 +40,12 @@ func TestConfig(t *testing.T) {
 		}
 	}
 
-	c1 := gorums.SetupConfiguration(t, 4, serverFn)
+	c1 := gorums.TestConfiguration(t, 4, serverFn)
 	fmt.Println("--- c1 ", c1.Nodes())
 	callRPC(c1)
 
 	// Create a new configuration c2 with 2 new nodes not in c1, using the same manager as c1.
-	c2 := gorums.SetupConfiguration(t, 2, serverFn, gorums.WithManager(t, c1.Manager()))
+	c2 := gorums.TestConfiguration(t, 2, serverFn, gorums.WithManager(t, c1.Manager()))
 	fmt.Println("--- c2 ", c2.Nodes())
 	callRPC(c2)
 
