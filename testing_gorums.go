@@ -181,6 +181,11 @@ func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIf
 	addrs, stopFn := testSetupServers(t, numServers, testOpts.serverFunc(srvFn))
 	t.Cleanup(stopFn)
 
+	// Capture stop function if requested
+	if testOpts.stopFuncPtr != nil {
+		*testOpts.stopFuncPtr = stopFn
+	}
+
 	// Call preConnect hook if set (before connecting to servers)
 	if hook := testOpts.preConnectHook(); hook != nil {
 		hook(stopFn)

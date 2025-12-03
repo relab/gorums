@@ -23,6 +23,7 @@ type testOptions struct {
 	serverOpts   []ServerOption
 	nodeListOpts []NodeListOption
 	existingMgr  *Manager
+	stopFuncPtr  *func() // pointer to capture the server stop function
 }
 
 // hasManager returns true if an existing manager was provided.
@@ -96,16 +97,13 @@ func extractTestOptions(opts []TestOption) testOptions {
 			result.serverOpts = append(result.serverOpts, o)
 		case NodeListOption:
 			result.nodeListOpts = append(result.nodeListOpts, o)
-		case managerProvider:
-			result.existingMgr = o.mgr
+		case *Manager:
+			result.existingMgr = o
+		case stopFuncProvider:
+			result.stopFuncPtr = o.stopFunc
 		}
 	}
 	return result
-}
-
-// managerProvider is a TestOption that provides an existing manager.
-type managerProvider struct {
-	mgr *Manager
 }
 
 // WithManager returns a TestOption that provides an existing manager to use
@@ -120,5 +118,32 @@ func WithManager(_ testing.TB, mgr *Manager) TestOption {
 	if mgr == nil {
 		panic("gorums: WithManager called with nil manager")
 	}
-	return managerProvider{mgr: mgr}
+	return mgr
+}
+
+// stopFuncProvider is a TestOption that captures the server stop function.
+// We use a provider to capture the stop function, in case multiple func
+// options will be provided in the future.
+type stopFuncProvider struct {
+	stopFunc *func()
+}
+
+// WithStopFunc returns a TestOption that captures the server stop function,
+// allowing tests to stop servers at any point during test execution.
+// This is useful for testing server failure scenarios.
+//
+// Usage:
+//
+//	var stopServer func()
+//	node := gorums.SetupNode(t, nil, gorums.WithStopFunc(&stopServer))
+//	// ... send some messages ...
+//	stopServer() // stop the server to simulate failure
+//	// ... verify error handling ...
+//
+// This option is intended for testing purposes only.
+func WithStopFunc(_ testing.TB, fn *func()) TestOption {
+	if fn == nil {
+		panic("gorums: WithStopFunc called with nil pointer")
+	}
+	return stopFuncProvider{stopFunc: fn}
 }

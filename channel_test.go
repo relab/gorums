@@ -39,16 +39,6 @@ func delayServerFn(delay time.Duration) func(_ int) ServerIface {
 	}
 }
 
-// newNodeWithStoppableServer creates a node with a server that can be stopped early.
-// This is needed for tests that verify behavior when servers go down.
-// Note: This uses TestSetup instead of TestServers to avoid goleak checks in
-// table-driven tests where subtests may intentionally create nodes without servers.
-func newNodeWithStoppableServer(t testing.TB, delay time.Duration) (*Node, func()) {
-	t.Helper()
-	addrs, teardown := TestSetup(t, 1, delayServerFn(delay))
-	return NewTestNode(t, addrs[0]), teardown
-}
-
 func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeResponse[proto.Message] {
 	t.Helper()
 	if req.ctx == nil {
@@ -207,7 +197,8 @@ func TestChannelErrors(t *testing.T) {
 		{
 			name: "ServerFailureDuringCommunication",
 			setup: func(t *testing.T) *Node {
-				node, stopServer := newNodeWithStoppableServer(t, 0)
+				var stopServer func()
+				node := SetupNode(t, delayServerFn(0), WithStopFunc(t, &stopServer))
 				resp := sendRequest(t, node, request{waitSendDone: true}, 1)
 				if resp.Err != nil {
 					t.Errorf("first message should succeed, got error: %v", resp.Err)
@@ -651,8 +642,7 @@ func TestChannelStreamReadySignaling(t *testing.T) {
 // TestChannelStreamReadyAfterReconnect verifies that the receiver is properly notified
 // when a stream is re-established after being cleared (simulating reconnection).
 func TestChannelStreamReadyAfterReconnect(t *testing.T) {
-	node, teardown := newNodeWithStoppableServer(t, 0)
-	defer teardown()
+	node := SetupNode(t, delayServerFn(0))
 
 	// First request to establish the stream
 	resp := sendRequest(t, node, request{}, 1)
@@ -700,7 +690,8 @@ func TestChannelStreamReadyAfterReconnect(t *testing.T) {
 // should be interpreted with caution. The goal is to detect regressions.
 func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 	for b.Loop() {
-		node, teardown := newNodeWithStoppableServer(b, 0)
+		var stopServer func()
+		node := SetupNode(b, delayServerFn(0), WithStopFunc(b, &stopServer))
 
 		// Use a fresh context for the benchmark request
 		ctx := TestContext(b, defaultTestTimeout)
@@ -721,15 +712,14 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 
 		// Close the node before stopping the server to ensure clean shutdown
 		_ = node.close()
-		teardown()
+		stopServer()
 	}
 }
 
 // BenchmarkChannelStreamReadySubsequentRequest measures the latency of requests
 // after the stream is already established (steady-state performance).
 func BenchmarkChannelStreamReadySubsequentRequest(b *testing.B) {
-	node, teardown := newNodeWithStoppableServer(b, 0)
-	defer teardown()
+	node := SetupNode(b, delayServerFn(0))
 
 	// Warm up: establish the stream
 	resp := sendRequest(b, node, request{}, 0)
@@ -751,8 +741,7 @@ func BenchmarkChannelStreamReadySubsequentRequest(b *testing.B) {
 // Note: This benchmark has inherent variability due to the race between
 // clearStream and the sender's ensureStream call.
 func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
-	node, teardown := newNodeWithStoppableServer(b, 0)
-	defer teardown()
+	node := SetupNode(b, delayServerFn(0))
 
 	// Establish initial stream with a fresh context
 	ctx := context.Background()
