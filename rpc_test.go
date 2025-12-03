@@ -33,7 +33,7 @@ func TestRPCCallSuccess(t *testing.T) {
 }
 
 func TestRPCCallDownedNode(t *testing.T) {
-	node := gorums.SetupNode(t, nil, gorums.WithTeardown(t, func(stopServers func()) {
+	node := gorums.SetupNode(t, nil, gorums.WithPreConnect(t, func(stopServers func()) {
 		stopServers()
 		time.Sleep(300 * time.Millisecond) // wait for servers to fully stop
 	}))

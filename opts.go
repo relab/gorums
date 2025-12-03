@@ -91,19 +91,19 @@ func WithNoConnect() ManagerOption {
 	}
 }
 
-// WithTeardown returns a ManagerOption that registers a function to be called
+// WithPreConnect returns a ManagerOption that registers a function to be called
 // after servers are started but before nodes attempt to connect. The function
 // receives a stopServers callback that can be used to stop the test servers.
 //
 // This is useful for testing error handling when servers are unavailable:
 //
-//	node := gorums.SetupNode(t, nil, gorums.WithTeardown(t, func(stopServers func()) {
+//	node := gorums.SetupNode(t, nil, gorums.WithPreConnect(t, func(stopServers func()) {
 //		stopServers()
 //		time.Sleep(300 * time.Millisecond) // wait for server to fully stop
 //	}))
 //
 // This option is intended for testing purposes only.
-func WithTeardown(_ testing.TB, fn func(stopServers func())) ManagerOption {
+func WithPreConnect(_ testing.TB, fn func(stopServers func())) ManagerOption {
 	return func(o *managerOptions) {
 		o.preConnect = fn
 	}
