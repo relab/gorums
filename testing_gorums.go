@@ -37,101 +37,6 @@ func InsecureGrpcDialOptions(_ testing.TB) ManagerOption {
 	)
 }
 
-// NewTestNode creates a node for the given server address and adds it to a new manager.
-// The manager is automatically closed when the test finishes.
-func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
-	t.Helper()
-	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, opts...)
-	mgr := NewManager(mgrOpts...)
-	t.Cleanup(mgr.Close)
-	node, err := NewNode(srvAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Fatal(err)
-	}
-	return node
-}
-
-// testSetupServers is the internal implementation of server setup.
-// It starts servers and returns addresses and a stop function.
-func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
-	t.Helper()
-	servers := make([]ServerIface, numServers)
-	listeners := make([]net.Listener, numServers)
-	addrs := make([]string, numServers)
-	srvStopped := make(chan struct{}, numServers)
-	for i := range numServers {
-		var srv ServerIface
-		if srvFn != nil {
-			srv = srvFn(i)
-		} else {
-			srv = initServer(i)
-		}
-		// listen on any available port
-		lis, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("Failed to listen on port: %v", err)
-		}
-		listeners[i] = lis
-		addrs[i] = lis.Addr().String()
-		servers[i] = srv
-		go func() {
-			_ = srv.Serve(lis) // blocks until the server is stopped
-			srvStopped <- struct{}{}
-		}()
-	}
-	stopFn := sync.OnceFunc(func() {
-		for i := range numServers {
-			err := listeners[i].Close()
-			if err != nil {
-				t.Errorf("failed to close listener: %v", err)
-			}
-			servers[i].Stop()
-		}
-		// wait for all servers to stop
-		for range numServers {
-			<-srvStopped
-		}
-	})
-	return addrs, stopFn
-}
-
-// TestServers starts numServers gRPC servers using the given registration
-// function. Servers are automatically stopped when the test finishes via t.Cleanup.
-// The cleanup is registered first, so it runs after any subsequently registered
-// cleanups (e.g., manager.Close()), ensuring proper shutdown ordering.
-//
-// Goroutine leak detection via goleak is automatically enabled and runs after
-// all other cleanup functions complete.
-//
-// The provided srvFn is used to create and register the server handlers.
-// If srvFn is nil, a default mock server implementation is used.
-//
-// Example usage:
-//
-//	addrs := gorums.TestServers(t, 3, serverFn)
-//	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
-//	t.Cleanup(mgr.Close)
-//	...
-//
-// This function can be used by other packages for testing purposes, as long as
-// the required service, method, and message types are registered in the global
-// protobuf registry before calling this function.
-func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []string {
-	t.Helper()
-	// Skip goleak check for benchmarks
-	if _, ok := t.(*testing.B); !ok {
-		// Register goleak check FIRST so it runs LAST (after all other cleanup)
-		t.Cleanup(func() { goleak.VerifyNone(t) })
-	}
-	addrs, stopFn := testSetupServers(t, numServers, srvFn)
-	// Register server cleanup SECOND so it runs BEFORE goleak check
-	t.Cleanup(stopFn)
-	return addrs
-}
-
 // SetupConfiguration creates servers and a configuration for testing.
 // Both server and manager cleanup are handled via t.Cleanup in the correct order:
 // manager is closed first, then servers are stopped.
@@ -192,6 +97,84 @@ func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIf
 func SetupNode(t testing.TB, srvFn func(i int) ServerIface, opts ...TestOption) *Node {
 	t.Helper()
 	return SetupConfiguration(t, 1, srvFn, opts...).Nodes()[0]
+}
+
+// TestServers starts numServers gRPC servers using the given registration
+// function. Servers are automatically stopped when the test finishes via t.Cleanup.
+// The cleanup is registered first, so it runs after any subsequently registered
+// cleanups (e.g., manager.Close()), ensuring proper shutdown ordering.
+//
+// Goroutine leak detection via goleak is automatically enabled and runs after
+// all other cleanup functions complete.
+//
+// The provided srvFn is used to create and register the server handlers.
+// If srvFn is nil, a default mock server implementation is used.
+//
+// Example usage:
+//
+//	addrs := gorums.TestServers(t, 3, serverFn)
+//	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
+//	t.Cleanup(mgr.Close)
+//	...
+//
+// This function can be used by other packages for testing purposes, as long as
+// the required service, method, and message types are registered in the global
+// protobuf registry before calling this function.
+func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []string {
+	t.Helper()
+	// Skip goleak check for benchmarks
+	if _, ok := t.(*testing.B); !ok {
+		// Register goleak check FIRST so it runs LAST (after all other cleanup)
+		t.Cleanup(func() { goleak.VerifyNone(t) })
+	}
+	addrs, stopFn := testSetupServers(t, numServers, srvFn)
+	// Register server cleanup SECOND so it runs BEFORE goleak check
+	t.Cleanup(stopFn)
+	return addrs
+}
+
+// testSetupServers is the internal implementation of server setup.
+// It starts servers and returns addresses and a stop function.
+func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
+	t.Helper()
+	servers := make([]ServerIface, numServers)
+	listeners := make([]net.Listener, numServers)
+	addrs := make([]string, numServers)
+	srvStopped := make(chan struct{}, numServers)
+	for i := range numServers {
+		var srv ServerIface
+		if srvFn != nil {
+			srv = srvFn(i)
+		} else {
+			srv = initServer(i)
+		}
+		// listen on any available port
+		lis, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("Failed to listen on port: %v", err)
+		}
+		listeners[i] = lis
+		addrs[i] = lis.Addr().String()
+		servers[i] = srv
+		go func() {
+			_ = srv.Serve(lis) // blocks until the server is stopped
+			srvStopped <- struct{}{}
+		}()
+	}
+	stopFn := sync.OnceFunc(func() {
+		for i := range numServers {
+			err := listeners[i].Close()
+			if err != nil {
+				t.Errorf("failed to close listener: %v", err)
+			}
+			servers[i].Stop()
+		}
+		// wait for all servers to stop
+		for range numServers {
+			<-srvStopped
+		}
+	})
+	return addrs, stopFn
 }
 
 func initServer(i int) *Server {

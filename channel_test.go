@@ -71,6 +71,26 @@ func send(t testing.TB, results chan<- msgResponse, node *Node, goroutineID, msg
 	}
 }
 
+// testNodeWithoutServer creates a node for the given server address and
+// adds it to a new manager. This is useful for testing node and channel
+// behavior without an active server. The manager is automatically closed
+// when the test finishes.
+func testNodeWithoutServer(t testing.TB, opts ...ManagerOption) *Node {
+	t.Helper()
+	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, opts...)
+	mgr := NewManager(mgrOpts...)
+	t.Cleanup(mgr.Close)
+	// Use a high port number that's unlikely to have anything listening.
+	node, err := NewNode("127.0.0.1:59999")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = mgr.AddNode(node); err != nil {
+		t.Fatal(err)
+	}
+	return node
+}
+
 // Helper functions for accessing channel internals
 
 func routerExists(node *Node, msgID uint64) bool {
@@ -85,7 +105,7 @@ func getStream(node *Node) grpc.ClientStream {
 }
 
 func TestChannelCreation(t *testing.T) {
-	node := NewTestNode(t, "127.0.0.1:5000")
+	node := testNodeWithoutServer(t)
 
 	// send message when server is down
 	resp := sendRequest(t, node, request{waitSendDone: true}, 1)
@@ -166,14 +186,14 @@ func TestChannelErrors(t *testing.T) {
 		{
 			name: "EnqueueWithoutServer",
 			setup: func(t *testing.T) *Node {
-				return NewTestNode(t, "127.0.0.1:5002")
+				return testNodeWithoutServer(t)
 			},
 			wantErr: "connect: connection refused",
 		},
 		{
 			name: "EnqueueToClosedChannel",
 			setup: func(t *testing.T) *Node {
-				node := NewTestNode(t, "127.0.0.1:5000")
+				node := testNodeWithoutServer(t)
 				err := node.close()
 				if err != nil {
 					t.Errorf("failed to close node: %v", err)
@@ -259,7 +279,7 @@ func TestChannelEnsureStream(t *testing.T) {
 	}{
 		{
 			name:  "UnconnectedNodeHasNoStream",
-			setup: func(t *testing.T) *Node { return NewTestNode(t, "") },
+			setup: func(t *testing.T) *Node { return testNodeWithoutServer(t) },
 			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
 				if err := node.channel.ensureStream(); err == nil {
 					t.Error("ensureStream succeeded unexpectedly")
@@ -334,7 +354,7 @@ func TestChannelConnectionState(t *testing.T) {
 	}{
 		{
 			name:          "WithoutServer",
-			setup:         func(t *testing.T) *Node { return NewTestNode(t, "127.0.0.1:5003") },
+			setup:         func(t *testing.T) *Node { return testNodeWithoutServer(t) },
 			wantConnected: false,
 		},
 		{
