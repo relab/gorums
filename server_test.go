@@ -2,7 +2,6 @@ package gorums_test
 
 import (
 	"context"
-	"net"
 	"testing"
 	"time"
 
@@ -24,25 +23,17 @@ func TestServerCallback(t *testing.T) {
 	var message string
 	signal := make(chan struct{})
 
-	srv := gorums.NewServer(gorums.WithConnectCallback(func(ctx context.Context) {
+	srvOption := gorums.WithConnectCallback(func(ctx context.Context) {
 		m, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			return
 		}
 		message = m.Get("message")[0]
 		signal <- struct{}{}
-	}))
+	})
+	mgrOption := gorums.WithMetadata(metadata.New(map[string]string{"message": "hello"}))
 
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	go func() { _ = srv.Serve(lis) }()
-	defer srv.Stop()
-
-	md := metadata.New(map[string]string{"message": "hello"})
-	gorums.NewTestNode(t, lis.Addr().String(), gorums.WithMetadata(md))
+	gorums.SetupNode(t, nil, srvOption, mgrOption)
 
 	select {
 	case <-time.After(100 * time.Millisecond):
