@@ -66,6 +66,7 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
 	t.Cleanup(mgr.Close)
 
+	// Create configuration with only first 2 nodes
 	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs[:2]))
 	if err != nil {
 		t.Fatal(err)
@@ -74,13 +75,13 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs)-1)
 	}
 
+	// Add the 3rd node to the manager
 	node, err := gorums.NewNode(addrs[2])
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = mgr.AddNode(node)
-	if err != nil {
-		t.Errorf("mgr.AddNode(%s) = %q, expected %q", addrs[2], err.Error(), "")
+	if err = mgr.AddNode(node); err != nil {
+		t.Errorf("mgr.AddNode(%s) = %q, expected no error", addrs[2], err.Error())
 	}
 	if mgr.Size() != len(addrs) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs))
