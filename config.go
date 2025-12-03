@@ -87,6 +87,15 @@ func (c Configuration) Equal(b Configuration) bool {
 	return true
 }
 
+// Manager returns the Manager that manages this configuration's nodes.
+// Returns nil if the configuration is empty.
+func (c Configuration) Manager() *Manager {
+	if len(c) == 0 {
+		return nil
+	}
+	return c[0].mgr
+}
+
 // nextMsgID returns the next message ID from this client's manager.
 func (c Configuration) nextMsgID() uint64 {
 	return c[0].mgr.getMsgID()

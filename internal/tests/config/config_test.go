@@ -2,49 +2,24 @@ package config
 
 import (
 	"context"
-	fmt "fmt"
+	"fmt"
 	"testing"
 
 	gorums "github.com/relab/gorums"
 )
 
-type cfgSrv struct {
-	name string
-}
+type cfgSrv struct{}
 
 func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{
-		Name: srv.name,
-		Num:  req.GetNum(),
+		Num: req.GetNum(),
 	}.Build(), nil
 }
 
-// setup returns a new configuration of cfgSize and a corresponding teardown function.
-// Calling setup multiple times will return a different configuration with different
-// sets of nodes.
-func setup(t *testing.T, mgr *gorums.Manager, cfgSize int) (cfg gorums.Configuration, teardown func()) {
-	t.Helper()
-	srvs := make([]*cfgSrv, cfgSize)
-	for i := range srvs {
-		srvs[i] = &cfgSrv{}
-	}
-	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(i int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		RegisterConfigTestServer(srv, srvs[i])
-		return srv
-	})
-	for i := range srvs {
-		srvs[i].name = addrs[i]
-	}
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	teardown = func() {
-		mgr.Close()
-		closeServers()
-	}
-	return cfg, teardown
+func serverFn(i int) gorums.ServerIface {
+	srv := gorums.NewServer()
+	RegisterConfigTestServer(srv, &cfgSrv{})
+	return srv
 }
 
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
@@ -64,27 +39,28 @@ func TestConfig(t *testing.T) {
 			}
 		}
 	}
-	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
-	c1, teardown1 := setup(t, mgr, 4)
-	defer teardown1()
+
+	c1 := gorums.SetupConfiguration(t, 4, serverFn)
 	fmt.Println("--- c1 ", c1.Nodes())
 	callRPC(c1)
 
-	c2, teardown2 := setup(t, mgr, 2)
-	defer teardown2()
+	// Create a new configuration c2 with 2 new nodes not in c1, using the same manager as c1.
+	c2 := gorums.SetupConfiguration(t, 2, serverFn, gorums.WithManager(t, c1.Manager()))
 	fmt.Println("--- c2 ", c2.Nodes())
 	callRPC(c2)
 
+	// Create c3 = c1 ∪ c2, using the same manager as c1 (and c2).
 	newNodeList := c1.And(c2)
-	c3, err := gorums.NewConfiguration(mgr, newNodeList)
+	c3, err := gorums.NewConfiguration(c1.Manager(), newNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println("--- c3 ", c3.Nodes())
 	callRPC(c3)
 
+	// Create c4 = c3 \ c1, using the same manager as c1 (and c2, c3).
 	rmNodeList := c3.Except(c1)
-	c4, err := gorums.NewConfiguration(mgr, rmNodeList)
+	c4, err := gorums.NewConfiguration(c1.Manager(), rmNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}

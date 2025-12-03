@@ -169,54 +169,25 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIface, opts ...TestOption) Configuration {
 	t.Helper()
 
-	// Extract options by type
 	testOpts := extractTestOptions(opts)
 
 	// Register goleak check FIRST so it runs LAST (LIFO order)
-	if _, ok := t.(*testing.B); !ok {
+	// Only register if not reusing an existing manager (to avoid duplicate checks)
+	if _, ok := t.(*testing.B); !ok && !testOpts.hasManager() {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 
-	// If srvFn is nil but server options are provided, create servers with those options
-	if srvFn == nil && len(testOpts.serverOpts) > 0 {
-		srvFn = func(_ int) ServerIface {
-			return NewServer(testOpts.serverOpts...)
-		}
-	}
-
 	// Start servers and register cleanup
-	addrs, stopFn := testSetupServers(t, numServers, srvFn)
+	addrs, stopFn := testSetupServers(t, numServers, testOpts.serverFunc(srvFn))
 	t.Cleanup(stopFn)
 
-	// Check if preConnect hook is set and call it before connecting
-	var tempOpts managerOptions
-	for _, opt := range testOpts.managerOpts {
-		opt(&tempOpts)
-	}
-	if tempOpts.preConnect != nil {
-		tempOpts.preConnect(stopFn)
+	// Call preConnect hook if set (before connecting to servers)
+	if hook := testOpts.preConnectHook(); hook != nil {
+		hook(stopFn)
 	}
 
-	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
-	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, testOpts.managerOpts...)
-	mgr := NewManager(mgrOpts...)
-	t.Cleanup(mgr.Close)
-
-	// Use provided NodeListOption or default to sequential IDs via nodeMap
-	var nodeListOpt NodeListOption
-	if len(testOpts.nodeListOpts) > 0 {
-		// Use the last provided NodeListOption (allows overriding)
-		nodeListOpt = testOpts.nodeListOpts[len(testOpts.nodeListOpts)-1]
-	} else {
-		// Default: build nodeMap with sequential IDs (0, 1, 2, ...)
-		nodeMap := make(map[string]uint32, len(addrs))
-		for i, addr := range addrs {
-			nodeMap[addr] = uint32(i)
-		}
-		nodeListOpt = WithNodeMap(nodeMap)
-	}
-
-	cfg, err := NewConfiguration(mgr, nodeListOpt)
+	mgr := testOpts.getOrCreateManager(t)
+	cfg, err := NewConfiguration(mgr, testOpts.nodeListOption(addrs))
 	if err != nil {
 		t.Fatal(err)
 	}
