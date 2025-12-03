@@ -38,10 +38,11 @@ var (
 // in the configuration in ctx and returns a CorrectableCorrectableResponse, which can be used
 // to inspect any replies or errors when available.
 func Correctable(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableCorrectableResponse {
-	return gorums.CorrectableCall[*CorrectableRequest, *CorrectableResponse](
+	responses := gorums.QuorumCallWithInterceptor[*CorrectableRequest, *CorrectableResponse](
 		ctx, in, "correctable.CorrectableTest.Correctable",
 		opts...,
 	)
+	return responses.WaitForLevel(responses.Size()/2 + 1)
 }
 
 // CorrectableStream asynchronously invokes a correctable quorum call on each node
@@ -49,10 +50,11 @@ func Correctable(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...goru
 // to inspect any replies or errors when available.
 // This method supports server-side preliminary replies (correctable stream).
 func CorrectableStream(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableStreamCorrectableResponse {
-	return gorums.CorrectableStreamCall[*CorrectableRequest, *CorrectableResponse](
+	responses := gorums.QuorumCallWithInterceptor[*CorrectableRequest, *CorrectableResponse](
 		ctx, in, "correctable.CorrectableTest.CorrectableStream",
-		opts...,
+		append(opts, gorums.WithStreaming())...,
 	)
+	return responses.WaitForLevel(responses.Size()/2 + 1)
 }
 
 // CorrectableTest is the server-side API for the CorrectableTest Service

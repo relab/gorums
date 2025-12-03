@@ -264,7 +264,7 @@ func GetBenchmarks(cfg Configuration) []Bench {
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
 			runBench: func(opts Options) (*Result, error) {
 				return runAsyncQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) *AsyncEcho {
-					return AsyncQuorumCall(ctx, in, callOpts...)
+					return QuorumCall(ctx, in, callOpts...).AsyncThreshold(quorumSize)
 				})
 			},
 		},

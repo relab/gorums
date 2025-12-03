@@ -34,16 +34,6 @@ var (
 	_ = (*Node)(nil)
 )
 
-// AsyncQuorumCall asynchronously invokes a quorum call on the configuration in ctx
-// and returns a AsyncEcho, which can be used to inspect the quorum call
-// reply and error when available.
-func AsyncQuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *AsyncEcho {
-	return gorums.AsyncCall[*Echo, *Echo](
-		ctx, in, "benchmark.Benchmark.AsyncQuorumCall",
-		opts...,
-	)
-}
-
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
@@ -138,7 +128,6 @@ type BenchmarkServer interface {
 	StartBenchmark(ctx gorums.ServerCtx, request *StartRequest) (response *StartResponse, err error)
 	StopBenchmark(ctx gorums.ServerCtx, request *StopRequest) (response *MemoryStat, err error)
 	QuorumCall(ctx gorums.ServerCtx, request *Echo) (response *Echo, err error)
-	AsyncQuorumCall(ctx gorums.ServerCtx, request *Echo) (response *Echo, err error)
 	SlowServer(ctx gorums.ServerCtx, request *Echo) (response *Echo, err error)
 	Multicast(ctx gorums.ServerCtx, request *TimedMsg)
 }
@@ -169,11 +158,6 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl BenchmarkServer) {
 		resp, err := impl.QuorumCall(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-	srv.RegisterHandler("benchmark.Benchmark.AsyncQuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*Echo](in)
-		resp, err := impl.AsyncQuorumCall(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
-	})
 	srv.RegisterHandler("benchmark.Benchmark.SlowServer", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Echo](in)
 		resp, err := impl.SlowServer(ctx, req)
@@ -188,3 +172,12 @@ func RegisterBenchmarkServer(srv *gorums.Server, impl BenchmarkServer) {
 
 // AsyncEcho is a future for async quorum calls returning Echo.
 type AsyncEcho = gorums.Async[*Echo]
+
+// AsyncMemoryStat is a future for async quorum calls returning MemoryStat.
+type AsyncMemoryStat = gorums.Async[*MemoryStat]
+
+// AsyncResult is a future for async quorum calls returning Result.
+type AsyncResult = gorums.Async[*Result]
+
+// AsyncStartResponse is a future for async quorum calls returning StartResponse.
+type AsyncStartResponse = gorums.Async[*StartResponse]

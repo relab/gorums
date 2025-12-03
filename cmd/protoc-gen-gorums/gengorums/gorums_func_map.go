@@ -90,9 +90,6 @@ var funcMap = template.FuncMap{
 	"isOneway": func(method *protogen.Method) bool {
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
-	"isAsync": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Async)
-	},
 	"out":                   out,
 	"outType":               outType,
 	"mapCorrectableOutType": mapCorrectableOutType,
@@ -125,9 +122,11 @@ func outType(method *protogen.Method, out string) string {
 
 func mapAsyncOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasAllMethodOption(method, gorums.E_Quorumcall, gorums.E_Async) {
+		// Generate Async type aliases for quorumcall methods since users can
+		// call .AsyncMajority() on any quorum call result
+		if hasMethodOption(method, gorums.E_Quorumcall) {
 			o := out(g, method)
-			futOut := outType(method, o)
+			futOut := fmt.Sprintf("Async%s", field(o))
 			s[futOut] = o
 		}
 	})

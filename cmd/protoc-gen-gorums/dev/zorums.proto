@@ -71,32 +71,6 @@ service ZorumsService {
     }
 
     // ---------------------------------------------------------------
-    // Async variants
-    // ---------------------------------------------------------------
-
-    // QuorumCallAsync plain.
-    rpc QuorumCallAsync(Request) returns (Response) {
-        option (gorums.quorumcall) = true;
-        option (gorums.async)      = true;
-    }
-    // QuorumCallAsync2 plain; with same return type: Response.
-    rpc QuorumCallAsync2(Request) returns (Response) {
-        option (gorums.quorumcall) = true;
-        option (gorums.async)      = true;
-    }
-    // QuorumCallAsyncEmpty for testing imported message type.
-    rpc QuorumCallAsyncEmpty(Request) returns (google.protobuf.Empty) {
-        option (gorums.quorumcall) = true;
-        option (gorums.async)      = true;
-    }
-    // QuorumCallAsyncEmpty2 for testing imported message type; with same return
-    // type as QuorumCallAsync: Response.
-    rpc QuorumCallAsyncEmpty2(google.protobuf.Empty) returns (Response) {
-        option (gorums.quorumcall) = true;
-        option (gorums.async)      = true;
-    }
-
-    // ---------------------------------------------------------------
     // Correctable variants
     // ---------------------------------------------------------------
 

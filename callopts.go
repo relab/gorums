@@ -8,6 +8,7 @@ import (
 type callOptions struct {
 	callType     *protoimpl.ExtensionInfo
 	waitSendDone bool
+	streaming    bool  // streaming indicates whether this is a streaming call
 	interceptors []any // Type-erased interceptors, restored by QuorumCallWithInterceptor
 }
 
@@ -59,5 +60,15 @@ func Interceptors[Req, Resp proto.Message](interceptors ...QuorumInterceptor[Req
 		for _, interceptor := range interceptors {
 			o.interceptors = append(o.interceptors, interceptor)
 		}
+	}
+}
+
+// WithStreaming returns a CallOption that enables streaming mode for correctable calls.
+// In streaming mode, the response iterator continues indefinitely until the context
+// is canceled, allowing the server to send multiple responses over time.
+// The reply channel buffer is also increased (10x) to handle streaming volume.
+func WithStreaming() CallOption {
+	return func(o *callOptions) {
+		o.streaming = true
 	}
 }

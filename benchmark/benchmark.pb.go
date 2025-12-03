@@ -620,15 +620,14 @@ const file_benchmark_benchmark_proto_rawDesc = "" +
 	"\x06Allocs\x18\x01 \x01(\x04R\x06Allocs\x12\x16\n" +
 	"\x06Memory\x18\x02 \x01(\x04R\x06Memory\"I\n" +
 	"\x0eMemoryStatList\x127\n" +
-	"\vMemoryStats\x18\x01 \x03(\v2\x15.benchmark.MemoryStatR\vMemoryStats2\xa0\x04\n" +
+	"\vMemoryStats\x18\x01 \x03(\v2\x15.benchmark.MemoryStatR\vMemoryStats2\xe1\x03\n" +
 	"\tBenchmark\x12O\n" +
 	"\x14StartServerBenchmark\x12\x17.benchmark.StartRequest\x1a\x18.benchmark.StartResponse\"\x04\xa0\xb5\x18\x01\x12F\n" +
 	"\x13StopServerBenchmark\x12\x16.benchmark.StopRequest\x1a\x11.benchmark.Result\"\x04\xa0\xb5\x18\x01\x12I\n" +
 	"\x0eStartBenchmark\x12\x17.benchmark.StartRequest\x1a\x18.benchmark.StartResponse\"\x04\xa0\xb5\x18\x01\x12D\n" +
 	"\rStopBenchmark\x12\x16.benchmark.StopRequest\x1a\x15.benchmark.MemoryStat\"\x04\xa0\xb5\x18\x01\x124\n" +
 	"\n" +
-	"QuorumCall\x12\x0f.benchmark.Echo\x1a\x0f.benchmark.Echo\"\x04\xa0\xb5\x18\x01\x12=\n" +
-	"\x0fAsyncQuorumCall\x12\x0f.benchmark.Echo\x1a\x0f.benchmark.Echo\"\b\xa0\xb5\x18\x01е\x18\x01\x124\n" +
+	"QuorumCall\x12\x0f.benchmark.Echo\x1a\x0f.benchmark.Echo\"\x04\xa0\xb5\x18\x01\x124\n" +
 	"\n" +
 	"SlowServer\x12\x0f.benchmark.Echo\x1a\x0f.benchmark.Echo\"\x04\xa0\xb5\x18\x01\x12>\n" +
 	"\tMulticast\x12\x13.benchmark.TimedMsg\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01B(Z!github.com/relab/gorums/benchmark\x92\x03\x02\b\x02b\beditionsp\xe8\a"
@@ -646,29 +645,27 @@ var file_benchmark_benchmark_proto_goTypes = []any{
 	(*emptypb.Empty)(nil),  // 8: google.protobuf.Empty
 }
 var file_benchmark_benchmark_proto_depIdxs = []int32{
-	6,  // 0: benchmark.Result.ServerStats:type_name -> benchmark.MemoryStat
-	6,  // 1: benchmark.MemoryStatList.MemoryStats:type_name -> benchmark.MemoryStat
-	2,  // 2: benchmark.Benchmark.StartServerBenchmark:input_type -> benchmark.StartRequest
-	4,  // 3: benchmark.Benchmark.StopServerBenchmark:input_type -> benchmark.StopRequest
-	2,  // 4: benchmark.Benchmark.StartBenchmark:input_type -> benchmark.StartRequest
-	4,  // 5: benchmark.Benchmark.StopBenchmark:input_type -> benchmark.StopRequest
-	0,  // 6: benchmark.Benchmark.QuorumCall:input_type -> benchmark.Echo
-	0,  // 7: benchmark.Benchmark.AsyncQuorumCall:input_type -> benchmark.Echo
-	0,  // 8: benchmark.Benchmark.SlowServer:input_type -> benchmark.Echo
-	1,  // 9: benchmark.Benchmark.Multicast:input_type -> benchmark.TimedMsg
-	3,  // 10: benchmark.Benchmark.StartServerBenchmark:output_type -> benchmark.StartResponse
-	5,  // 11: benchmark.Benchmark.StopServerBenchmark:output_type -> benchmark.Result
-	3,  // 12: benchmark.Benchmark.StartBenchmark:output_type -> benchmark.StartResponse
-	6,  // 13: benchmark.Benchmark.StopBenchmark:output_type -> benchmark.MemoryStat
-	0,  // 14: benchmark.Benchmark.QuorumCall:output_type -> benchmark.Echo
-	0,  // 15: benchmark.Benchmark.AsyncQuorumCall:output_type -> benchmark.Echo
-	0,  // 16: benchmark.Benchmark.SlowServer:output_type -> benchmark.Echo
-	8,  // 17: benchmark.Benchmark.Multicast:output_type -> google.protobuf.Empty
-	10, // [10:18] is the sub-list for method output_type
-	2,  // [2:10] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	6, // 0: benchmark.Result.ServerStats:type_name -> benchmark.MemoryStat
+	6, // 1: benchmark.MemoryStatList.MemoryStats:type_name -> benchmark.MemoryStat
+	2, // 2: benchmark.Benchmark.StartServerBenchmark:input_type -> benchmark.StartRequest
+	4, // 3: benchmark.Benchmark.StopServerBenchmark:input_type -> benchmark.StopRequest
+	2, // 4: benchmark.Benchmark.StartBenchmark:input_type -> benchmark.StartRequest
+	4, // 5: benchmark.Benchmark.StopBenchmark:input_type -> benchmark.StopRequest
+	0, // 6: benchmark.Benchmark.QuorumCall:input_type -> benchmark.Echo
+	0, // 7: benchmark.Benchmark.SlowServer:input_type -> benchmark.Echo
+	1, // 8: benchmark.Benchmark.Multicast:input_type -> benchmark.TimedMsg
+	3, // 9: benchmark.Benchmark.StartServerBenchmark:output_type -> benchmark.StartResponse
+	5, // 10: benchmark.Benchmark.StopServerBenchmark:output_type -> benchmark.Result
+	3, // 11: benchmark.Benchmark.StartBenchmark:output_type -> benchmark.StartResponse
+	6, // 12: benchmark.Benchmark.StopBenchmark:output_type -> benchmark.MemoryStat
+	0, // 13: benchmark.Benchmark.QuorumCall:output_type -> benchmark.Echo
+	0, // 14: benchmark.Benchmark.SlowServer:output_type -> benchmark.Echo
+	8, // 15: benchmark.Benchmark.Multicast:output_type -> google.protobuf.Empty
+	9, // [9:16] is the sub-list for method output_type
+	2, // [2:9] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_benchmark_benchmark_proto_init() }

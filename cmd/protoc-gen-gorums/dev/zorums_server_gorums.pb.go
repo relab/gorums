@@ -29,10 +29,6 @@ type ZorumsServiceServer interface {
 	Multicast2(ctx gorums.ServerCtx, request *Request)
 	Multicast3(ctx gorums.ServerCtx, request *Request)
 	Multicast4(ctx gorums.ServerCtx, request *emptypb.Empty)
-	QuorumCallAsync(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
-	QuorumCallAsync2(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
-	QuorumCallAsyncEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
-	QuorumCallAsyncEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
 	Correctable(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	CorrectableWithEmpty(ctx gorums.ServerCtx, request *Request) (response *emptypb.Empty, err error)
 	CorrectableWithEmpty2(ctx gorums.ServerCtx, request *emptypb.Empty) (response *Response, err error)
@@ -83,26 +79,6 @@ func RegisterZorumsServiceServer(srv *gorums.Server, impl ZorumsServiceServer) {
 		req := gorums.AsProto[*emptypb.Empty](in)
 		impl.Multicast4(ctx, req)
 		return nil, nil
-	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*Request](in)
-		resp, err := impl.QuorumCallAsync(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
-	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsync2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*Request](in)
-		resp, err := impl.QuorumCallAsync2(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
-	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*Request](in)
-		resp, err := impl.QuorumCallAsyncEmpty(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
-	})
-	srv.RegisterHandler("dev.ZorumsService.QuorumCallAsyncEmpty2", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*emptypb.Empty](in)
-		resp, err := impl.QuorumCallAsyncEmpty2(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
 	srv.RegisterHandler("dev.ZorumsService.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)

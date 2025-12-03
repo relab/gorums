@@ -59,3 +59,6 @@ func RegisterConfigTestServer(srv *gorums.Server, impl ConfigTestServer) {
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
 }
+
+// AsyncResponse is a future for async quorum calls returning Response.
+type AsyncResponse = gorums.Async[*Response]

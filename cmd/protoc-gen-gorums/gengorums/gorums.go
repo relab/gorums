@@ -255,16 +255,7 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		docName:  "quorum",
 		template: quorumCall,
 		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Quorumcall) && !hasMethodOption(m, gorums.E_Async)
-		},
-	},
-	callTypeName(gorums.E_Async): {
-		extInfo:   gorums.E_Async,
-		docName:   "asynchronous quorum",
-		template:  asyncCall,
-		outPrefix: "Async",
-		chkFn: func(m *protogen.Method) bool {
-			return hasAllMethodOption(m, gorums.E_Quorumcall, gorums.E_Async)
+			return hasMethodOption(m, gorums.E_Quorumcall)
 		},
 	},
 	callTypeName(gorums.E_Correctable): {
@@ -315,16 +306,14 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 // These are considered mutually incompatible.
 var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Quorumcall,
-	gorums.E_Async,
 	gorums.E_Correctable,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
 }
 
 // callTypesWithPromiseObject lists all call types that returns
-// a promise (async or correctable) object.
+// a promise (correctable) object.
 var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
-	gorums.E_Async,
 	gorums.E_Correctable,
 }
 
@@ -354,9 +343,6 @@ func hasAllMethodOption(method *protogen.Method, methodOptions ...*protoimpl.Ext
 // for the provided method are incompatible.
 func validateOptions(method *protogen.Method) error {
 	switch {
-	case hasMethodOption(method, gorums.E_Async) && !hasMethodOption(method, gorums.E_Quorumcall):
-		return optionErrorf("is required for async methods", method, gorums.E_Quorumcall)
-
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
 		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
 

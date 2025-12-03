@@ -14,6 +14,4 @@ extend google.protobuf.MethodOptions {
     bool multicast   = 50003;
     bool quorumcall  = 50004;
     bool correctable = 50005;
-    // options for call types
-    bool async = 50010;
 }

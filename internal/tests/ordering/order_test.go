@@ -59,13 +59,7 @@ func (s *testSrv) isInOrder(num uint64) bool {
 	return false
 }
 
-func (s *testSrv) QC(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return Response_builder{
-		InOrder: s.isInOrder(req.GetNum()),
-	}.Build(), nil
-}
-
-func (s *testSrv) QCAsync(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (s *testSrv) QuorumCall(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		InOrder: s.isInOrder(req.GetNum()),
 	}.Build(), nil
@@ -103,13 +97,13 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	}
 }
 
-func TestQCOrdering(t *testing.T) {
+func TestQuorumCallOrdering(t *testing.T) {
 	cfg := gorums.TestConfiguration(t, 4, serverFn)
 	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
 
 	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
-		responses := QC(cfgCtx, Request_builder{Num: uint64(i)}.Build())
+		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build())
 		replies := responses.CollectAll()
 		if len(replies) < cfg.Size() {
 			t.Fatalf("incomplete call: %d replies", len(replies))
@@ -122,21 +116,21 @@ func TestQCOrdering(t *testing.T) {
 	}
 }
 
-func TestQCAsyncOrdering(t *testing.T) {
+func TestQuorumCallAsyncOrdering(t *testing.T) {
 	cfg := gorums.TestConfiguration(t, 4, serverFn)
 	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
 
 	var wg sync.WaitGroup
 	for i := range iterations() {
-		// QCAsync returns an Async future that uses majority quorum by default
-		promise := QCAsync(cfgCtx, Request_builder{Num: uint64(i)}.Build())
+		// QuorumCall returns Responses; use .AsyncMajority() to get an Async future
+		promise := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build()).AsyncMajority()
 		wg.Go(func() {
 			resp, err := promise.Get()
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return
 				}
-				t.Errorf("QC error: %v", err)
+				t.Errorf("QuorumCall error: %v", err)
 			}
 			if resp == nil {
 				t.Errorf("Got nil response")
@@ -155,7 +149,7 @@ func TestMixedOrdering(t *testing.T) {
 
 	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
-		responses := QC(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
+		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
 		replies := responses.CollectAll()
 		if len(replies) < cfg.Size() {
 			t.Fatalf("incomplete call: %d replies", len(replies))

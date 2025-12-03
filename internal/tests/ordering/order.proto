@@ -8,13 +8,8 @@ option features.field_presence = IMPLICIT;
 import "gorums.proto";
 
 service GorumsTest {
-    rpc QC(Request) returns (Response) {
+    rpc QuorumCall(Request) returns (Response) {
         option (gorums.quorumcall) = true;
-    }
-
-    rpc QCAsync(Request) returns (Response) {
-        option (gorums.quorumcall) = true;
-        option (gorums.async)      = true;
     }
 
     rpc UnaryRPC(Request) returns (Response) {}

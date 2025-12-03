@@ -33,26 +33,16 @@ var (
 	_ = (*Node)(nil)
 )
 
-// QCAsync asynchronously invokes a quorum call on the configuration in ctx
-// and returns a AsyncResponse, which can be used to inspect the quorum call
-// reply and error when available.
-func QCAsync(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *AsyncResponse {
-	return gorums.AsyncCall[*Request, *Response](
-		ctx, in, "ordering.GorumsTest.QCAsync",
-		opts...,
-	)
-}
-
-// QC is a quorum call invoked on all nodes in the configuration,
+// QuorumCall is a quorum call invoked on all nodes in the configuration,
 // with the same argument in. Use terminal methods like Majority(), First(),
 // or Threshold(n) to retrieve the aggregated result.
 //
 // Example:
 //
-//	resp, err := QC(ctx, in).Majority()
-func QC(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+//	resp, err := QuorumCall(ctx, in).Majority()
+func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
 	return gorums.QuorumCallWithInterceptor[*Request, *Response](
-		ctx, in, "ordering.GorumsTest.QC",
+		ctx, in, "ordering.GorumsTest.QuorumCall",
 		opts...,
 	)
 }
@@ -68,20 +58,14 @@ func UnaryRPC(ctx *gorums.NodeContext, in *Request) (resp *Response, err error) 
 
 // GorumsTest is the server-side API for the GorumsTest Service
 type GorumsTestServer interface {
-	QC(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
-	QCAsync(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	QuorumCall(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 	UnaryRPC(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
 }
 
 func RegisterGorumsTestServer(srv *gorums.Server, impl GorumsTestServer) {
-	srv.RegisterHandler("ordering.GorumsTest.QC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("ordering.GorumsTest.QuorumCall", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*Request](in)
-		resp, err := impl.QC(ctx, req)
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
-	})
-	srv.RegisterHandler("ordering.GorumsTest.QCAsync", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*Request](in)
-		resp, err := impl.QCAsync(ctx, req)
+		resp, err := impl.QuorumCall(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
 	srv.RegisterHandler("ordering.GorumsTest.UnaryRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {

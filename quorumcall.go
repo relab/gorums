@@ -23,7 +23,11 @@ func QuorumCallWithInterceptor[Req, Resp msg](
 	opts ...CallOption,
 ) *Responses[Resp] {
 	callOpts := getCallOptions(E_Quorumcall, opts...)
-	clientCtx := newClientCtxBuilder[Req, Resp](ctx, req, method).Build()
+	builder := newClientCtxBuilder[Req, Resp](ctx, req, method)
+	if callOpts.streaming {
+		builder = builder.WithStreaming()
+	}
+	clientCtx := builder.Build()
 
 	for _, ic := range callOpts.interceptors {
 		interceptor := ic.(QuorumInterceptor[Req, Resp])

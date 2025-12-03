@@ -68,11 +68,6 @@ service Benchmark {
         option (gorums.quorumcall) = true;
     }
 
-    rpc AsyncQuorumCall(Echo) returns (Echo) {
-        option (gorums.quorumcall) = true;
-        option (gorums.async)      = true;
-    }
-
     rpc SlowServer(Echo) returns (Echo) {
         option (gorums.quorumcall) = true;
     }
