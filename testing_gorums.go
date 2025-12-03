@@ -54,34 +54,6 @@ func NewTestNode(t testing.TB, srvAddr string, opts ...ManagerOption) *Node {
 	return node
 }
 
-// TestSetup starts numServers gRPC servers using the given registration
-// function, and returns the server addresses along with a stop function
-// that should be called to shut down the test. The stop function will block
-// until all servers have stopped. The provided srvFn is used to register
-// the server handlers. The service, method, and message types must be registered
-// in the global protobuf registry before calling this function. See TestMain
-// for an example of how to register the required information. If srvFn is nil,
-// a default mock server implementation is used.
-//
-// This function can be used by other packages for testing purposes, as long as
-// the required types are registered in the global protobuf registry.
-//
-// IMPORTANT: To avoid goroutine leaks, ensure the manager is closed before
-// calling the stop function. The recommended pattern is:
-//
-//	addrs, stopServers := gorums.TestSetup(t, 3, serverFn)
-//	mgr := gorums.NewManager(...)
-//	defer func() {
-//		mgr.Close()
-//		stopServers()
-//	}()
-//
-// Or use [TestServers] which handles cleanup ordering via t.Cleanup.
-func TestSetup(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
-	t.Helper()
-	return testSetupServers(t, numServers, srvFn)
-}
-
 // testSetupServers is the internal implementation of server setup.
 // It starts servers and returns addresses and a stop function.
 func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
@@ -137,8 +109,16 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 // The provided srvFn is used to create and register the server handlers.
 // If srvFn is nil, a default mock server implementation is used.
 //
+// Example usage:
+//
+//	addrs := gorums.TestServers(t, 3, serverFn)
+//	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
+//	t.Cleanup(mgr.Close)
+//	...
+//
 // This function can be used by other packages for testing purposes, as long as
-// the required types are registered in the global protobuf registry.
+// the required service, method, and message types are registered in the global
+// protobuf registry before calling this function.
 func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []string {
 	t.Helper()
 	// Skip goleak check for benchmarks
