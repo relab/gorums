@@ -19,11 +19,12 @@ type TestOption any
 
 // testOptions holds extracted options from a slice of TestOption.
 type testOptions struct {
-	managerOpts  []ManagerOption
-	serverOpts   []ServerOption
-	nodeListOpts []NodeListOption
-	existingMgr  *Manager
-	stopFuncPtr  *func() // pointer to capture the server stop function
+	managerOpts    []ManagerOption
+	serverOpts     []ServerOption
+	nodeListOpts   []NodeListOption
+	existingMgr    *Manager
+	stopFuncPtr    *func()             // pointer to capture the server stop function
+	preConnectHook func(stopFn func()) // called before connecting to servers
 }
 
 // hasManager returns true if an existing manager was provided.
@@ -40,15 +41,6 @@ func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) Ser
 		}
 	}
 	return srvFn
-}
-
-// preConnectHook extracts and returns the preConnect hook from manager options, if set.
-func (to *testOptions) preConnectHook() func(stopServers func()) {
-	var tempOpts managerOptions
-	for _, opt := range to.managerOpts {
-		opt(&tempOpts)
-	}
-	return tempOpts.preConnect
 }
 
 // getOrCreateManager returns the existing manager or creates a new one.
@@ -101,6 +93,8 @@ func extractTestOptions(opts []TestOption) testOptions {
 			result.existingMgr = o
 		case stopFuncProvider:
 			result.stopFuncPtr = o.stopFunc
+		case preConnectProvider:
+			result.preConnectHook = o.hook
 		}
 	}
 	return result
@@ -146,4 +140,28 @@ func WithStopFunc(_ testing.TB, fn *func()) TestOption {
 		panic("gorums: WithStopFunc called with nil pointer")
 	}
 	return stopFuncProvider{stopFunc: fn}
+}
+
+// preConnectProvider is a TestOption that registers a pre-connect hook.
+type preConnectProvider struct {
+	hook func(stopFn func())
+}
+
+// WithPreConnect returns a TestOption that registers a function to be called
+// after servers are started but before nodes attempt to connect. The function
+// receives a stopServers callback that can be used to stop the test servers.
+//
+// This is useful for testing error handling when servers are unavailable:
+//
+//	node := gorums.SetupNode(t, nil, gorums.WithPreConnect(t, func(stopServers func()) {
+//		stopServers()
+//		time.Sleep(300 * time.Millisecond) // wait for server to fully stop
+//	}))
+//
+// This option is intended for testing purposes only.
+func WithPreConnect(_ testing.TB, fn func(stopServers func())) TestOption {
+	if fn == nil {
+		panic("gorums: WithPreConnect called with nil function")
+	}
+	return preConnectProvider{hook: fn}
 }

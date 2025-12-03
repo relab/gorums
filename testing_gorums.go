@@ -187,8 +187,8 @@ func SetupConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIf
 	}
 
 	// Call preConnect hook if set (before connecting to servers)
-	if hook := testOpts.preConnectHook(); hook != nil {
-		hook(stopFn)
+	if testOpts.preConnectHook != nil {
+		testOpts.preConnectHook(stopFn)
 	}
 
 	mgr := testOpts.getOrCreateManager(t)
