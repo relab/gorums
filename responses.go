@@ -207,7 +207,7 @@ func (r *Responses[Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
 
 			// Check if we have reached the threshold
 			done := count >= threshold
-			corr.Update(lastResp, count, done, nil)
+			corr.update(lastResp, count, done, nil)
 			if done {
 				return
 			}
@@ -216,9 +216,9 @@ func (r *Responses[Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
 		// If we didn't reach the threshold, mark as done with error
 		if !found {
 			var zero Resp
-			corr.Update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
+			corr.update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
 		} else {
-			corr.Update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
+			corr.update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
 		}
 	}()
 

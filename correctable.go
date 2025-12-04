@@ -61,10 +61,10 @@ func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 	return ch
 }
 
-// Update sets the current state of the correctable call.
+// update updates the current state of the correctable call.
 // It updates the response, level, and error, and notifies any watchers.
 // If done is true, the call is considered complete and the Done channel is closed.
-func (c *Correctable[Resp]) Update(reply Resp, level int, done bool, err error) {
+func (c *Correctable[Resp]) update(reply Resp, level int, done bool, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
