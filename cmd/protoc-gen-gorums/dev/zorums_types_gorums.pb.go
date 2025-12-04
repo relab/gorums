@@ -18,20 +18,14 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 10)
 )
 
-// AsyncEmpty is a future for async quorum calls returning emptypb.Empty.
-type AsyncEmpty = gorums.Async[*emptypb.Empty]
+// AsyncEmpty is a future for async quorum calls returning *emptypb.Empty.
+type AsyncEmpty = *gorums.Async[*emptypb.Empty]
 
-// AsyncResponse is a future for async quorum calls returning Response.
-type AsyncResponse = gorums.Async[*Response]
+// AsyncResponse is a future for async quorum calls returning *Response.
+type AsyncResponse = *gorums.Async[*Response]
 
-// CorrectableEmpty is a correctable future for correctable quorum calls returning emptypb.Empty.
-type CorrectableEmpty = gorums.Correctable[*emptypb.Empty]
+// CorrectableEmpty is a correctable object for quorum calls returning *emptypb.Empty.
+type CorrectableEmpty = *gorums.Correctable[*emptypb.Empty]
 
-// CorrectableResponse is a correctable future for correctable quorum calls returning Response.
-type CorrectableResponse = gorums.Correctable[*Response]
-
-// CorrectableStreamEmpty is a correctable future for correctable quorum calls returning emptypb.Empty.
-type CorrectableStreamEmpty = gorums.Correctable[*emptypb.Empty]
-
-// CorrectableStreamResponse is a correctable future for correctable quorum calls returning Response.
-type CorrectableStreamResponse = gorums.Correctable[*Response]
+// CorrectableResponse is a correctable object for quorum calls returning *Response.
+type CorrectableResponse = *gorums.Correctable[*Response]

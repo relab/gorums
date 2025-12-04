@@ -34,7 +34,7 @@ type Bench struct {
 type (
 	benchFunc   func(Options) (*Result, error)
 	qcFunc      func(*gorums.ConfigContext, *Echo, int, ...gorums.CallOption) (*Echo, error)
-	asyncQCFunc func(*gorums.ConfigContext, *Echo, int, ...gorums.CallOption) *AsyncEcho
+	asyncQCFunc func(*gorums.ConfigContext, *Echo, int, ...gorums.CallOption) AsyncEcho
 	serverFunc  func(context.Context, *TimedMsg)
 )
 
@@ -263,7 +263,7 @@ func GetBenchmarks(cfg Configuration) []Bench {
 			Name:        "AsyncQuorumCall",
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
 			runBench: func(opts Options) (*Result, error) {
-				return runAsyncQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) *AsyncEcho {
+				return runAsyncQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) AsyncEcho {
 					return QuorumCall(ctx, in, callOpts...).AsyncThreshold(quorumSize)
 				})
 			},

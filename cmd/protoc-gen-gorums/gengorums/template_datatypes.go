@@ -6,8 +6,8 @@ package gengorums
 var asyncDataType = `
 {{$async := use "gorums.Async" .GenFile}}
 {{range $asyncOut, $customOut := mapAsyncOutType .GenFile .Services}}
-// {{$asyncOut}} is a future for async quorum calls returning {{$customOut}}.
-type {{$asyncOut}} = {{$async}}[*{{$customOut}}]
+// {{$asyncOut}} is a future for async quorum calls returning *{{$customOut}}.
+type {{$asyncOut}} = *{{$async}}[*{{$customOut}}]
 {{end}}
 `
 
@@ -17,10 +17,9 @@ type {{$asyncOut}} = {{$async}}[*{{$customOut}}]
 var correctableDataType = `
 {{$correctable := use "gorums.Correctable" .GenFile}}
 {{range $correctableOut, $customOut := mapCorrectableOutType .GenFile .Services}}
-// {{$correctableOut}} is a correctable future for correctable quorum calls returning {{$customOut}}.
-type {{$correctableOut}} = {{$correctable}}[*{{$customOut}}]
-{{- end -}}
+// {{$correctableOut}} is a correctable object for quorum calls returning *{{$customOut}}.
+type {{$correctableOut}} = *{{$correctable}}[*{{$customOut}}]
+{{end}}
 `
 
-var dataTypes = asyncDataType +
-	correctableDataType
+var dataTypes = asyncDataType + correctableDataType

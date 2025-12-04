@@ -41,3 +41,28 @@ func QuorumCallEmpty2(ctx *gorums.ConfigContext, in *Request, opts ...gorums.Cal
 		opts...,
 	)
 }
+
+// QuorumCallStream plain.
+func QuorumCallStream(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+	return gorums.QuorumCallStream[*Request, *Response](
+		ctx, in, "dev.ZorumsService.QuorumCallStream",
+		opts...,
+	)
+}
+
+// QuorumCallStreamWithEmpty for testing imported message type.
+func QuorumCallStreamWithEmpty(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*emptypb.Empty] {
+	return gorums.QuorumCallStream[*Request, *emptypb.Empty](
+		ctx, in, "dev.ZorumsService.QuorumCallStreamWithEmpty",
+		opts...,
+	)
+}
+
+// QuorumCallStreamWithEmpty2 for testing imported message type; with same return
+// type as QuorumCallStream: Response.
+func QuorumCallStreamWithEmpty2(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+	return gorums.QuorumCallStream[*emptypb.Empty, *Response](
+		ctx, in, "dev.ZorumsService.QuorumCallStreamWithEmpty2",
+		opts...,
+	)
+}

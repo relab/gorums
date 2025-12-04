@@ -204,7 +204,7 @@ const file_zorums_proto_rawDesc = "" +
 	"\x06Result\x18\x01 \x01(\x03R\x06Result\"\"\n" +
 	"\n" +
 	"MyResponse\x12\x14\n" +
-	"\x05Value\x18\x01 \x01(\tR\x05Value2\xc0\a\n" +
+	"\x05Value\x18\x01 \x01(\tR\x05Value2\x81\x06\n" +
 	"\rZorumsService\x12)\n" +
 	"\bGRPCCall\x12\f.dev.Request\x1a\r.dev.Response\"\x00\x12/\n" +
 	"\n" +
@@ -217,13 +217,10 @@ const file_zorums_proto_rawDesc = "" +
 	"\n" +
 	"Multicast3\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01\x12B\n" +
 	"\n" +
-	"Multicast4\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01\x120\n" +
-	"\vCorrectable\x12\f.dev.Request\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x01\x12B\n" +
-	"\x14CorrectableWithEmpty\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\xa8\xb5\x18\x01\x12D\n" +
-	"\x15CorrectableWithEmpty2\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x01\x128\n" +
-	"\x11CorrectableStream\x12\f.dev.Request\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x010\x01\x12J\n" +
-	"\x1aCorrectableStreamWithEmpty\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\xa8\xb5\x18\x010\x01\x12L\n" +
-	"\x1bCorrectableStreamWithEmpty2\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa8\xb5\x18\x010\x01\x12,\n" +
+	"Multicast4\x12\x16.google.protobuf.Empty\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01\x127\n" +
+	"\x10QuorumCallStream\x12\f.dev.Request\x1a\r.dev.Response\"\x04\xa0\xb5\x18\x010\x01\x12I\n" +
+	"\x19QuorumCallStreamWithEmpty\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\xa0\xb5\x18\x010\x01\x12K\n" +
+	"\x1aQuorumCallStreamWithEmpty2\x12\x16.google.protobuf.Empty\x1a\r.dev.Response\"\x04\xa0\xb5\x18\x010\x01\x12,\n" +
 	"\aUnicast\x12\f.dev.Request\x1a\r.dev.Response\"\x04\x90\xb5\x18\x01\x126\n" +
 	"\bUnicast2\x12\f.dev.Request\x1a\x16.google.protobuf.Empty\"\x04\x90\xb5\x18\x01B Z\x19cmd/protoc-gen-gorums/dev\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
@@ -243,32 +240,26 @@ var file_zorums_proto_depIdxs = []int32{
 	0,  // 5: dev.ZorumsService.Multicast2:input_type -> dev.Request
 	0,  // 6: dev.ZorumsService.Multicast3:input_type -> dev.Request
 	3,  // 7: dev.ZorumsService.Multicast4:input_type -> google.protobuf.Empty
-	0,  // 8: dev.ZorumsService.Correctable:input_type -> dev.Request
-	0,  // 9: dev.ZorumsService.CorrectableWithEmpty:input_type -> dev.Request
-	3,  // 10: dev.ZorumsService.CorrectableWithEmpty2:input_type -> google.protobuf.Empty
-	0,  // 11: dev.ZorumsService.CorrectableStream:input_type -> dev.Request
-	0,  // 12: dev.ZorumsService.CorrectableStreamWithEmpty:input_type -> dev.Request
-	3,  // 13: dev.ZorumsService.CorrectableStreamWithEmpty2:input_type -> google.protobuf.Empty
-	0,  // 14: dev.ZorumsService.Unicast:input_type -> dev.Request
-	0,  // 15: dev.ZorumsService.Unicast2:input_type -> dev.Request
-	1,  // 16: dev.ZorumsService.GRPCCall:output_type -> dev.Response
-	1,  // 17: dev.ZorumsService.QuorumCall:output_type -> dev.Response
-	1,  // 18: dev.ZorumsService.QuorumCallEmpty:output_type -> dev.Response
-	3,  // 19: dev.ZorumsService.QuorumCallEmpty2:output_type -> google.protobuf.Empty
-	1,  // 20: dev.ZorumsService.Multicast:output_type -> dev.Response
-	1,  // 21: dev.ZorumsService.Multicast2:output_type -> dev.Response
-	3,  // 22: dev.ZorumsService.Multicast3:output_type -> google.protobuf.Empty
-	3,  // 23: dev.ZorumsService.Multicast4:output_type -> google.protobuf.Empty
-	1,  // 24: dev.ZorumsService.Correctable:output_type -> dev.Response
-	3,  // 25: dev.ZorumsService.CorrectableWithEmpty:output_type -> google.protobuf.Empty
-	1,  // 26: dev.ZorumsService.CorrectableWithEmpty2:output_type -> dev.Response
-	1,  // 27: dev.ZorumsService.CorrectableStream:output_type -> dev.Response
-	3,  // 28: dev.ZorumsService.CorrectableStreamWithEmpty:output_type -> google.protobuf.Empty
-	1,  // 29: dev.ZorumsService.CorrectableStreamWithEmpty2:output_type -> dev.Response
-	1,  // 30: dev.ZorumsService.Unicast:output_type -> dev.Response
-	3,  // 31: dev.ZorumsService.Unicast2:output_type -> google.protobuf.Empty
-	16, // [16:32] is the sub-list for method output_type
-	0,  // [0:16] is the sub-list for method input_type
+	0,  // 8: dev.ZorumsService.QuorumCallStream:input_type -> dev.Request
+	0,  // 9: dev.ZorumsService.QuorumCallStreamWithEmpty:input_type -> dev.Request
+	3,  // 10: dev.ZorumsService.QuorumCallStreamWithEmpty2:input_type -> google.protobuf.Empty
+	0,  // 11: dev.ZorumsService.Unicast:input_type -> dev.Request
+	0,  // 12: dev.ZorumsService.Unicast2:input_type -> dev.Request
+	1,  // 13: dev.ZorumsService.GRPCCall:output_type -> dev.Response
+	1,  // 14: dev.ZorumsService.QuorumCall:output_type -> dev.Response
+	1,  // 15: dev.ZorumsService.QuorumCallEmpty:output_type -> dev.Response
+	3,  // 16: dev.ZorumsService.QuorumCallEmpty2:output_type -> google.protobuf.Empty
+	1,  // 17: dev.ZorumsService.Multicast:output_type -> dev.Response
+	1,  // 18: dev.ZorumsService.Multicast2:output_type -> dev.Response
+	3,  // 19: dev.ZorumsService.Multicast3:output_type -> google.protobuf.Empty
+	3,  // 20: dev.ZorumsService.Multicast4:output_type -> google.protobuf.Empty
+	1,  // 21: dev.ZorumsService.QuorumCallStream:output_type -> dev.Response
+	3,  // 22: dev.ZorumsService.QuorumCallStreamWithEmpty:output_type -> google.protobuf.Empty
+	1,  // 23: dev.ZorumsService.QuorumCallStreamWithEmpty2:output_type -> dev.Response
+	1,  // 24: dev.ZorumsService.Unicast:output_type -> dev.Response
+	3,  // 25: dev.ZorumsService.Unicast2:output_type -> google.protobuf.Empty
+	13, // [13:26] is the sub-list for method output_type
+	0,  // [0:13] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

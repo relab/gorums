@@ -57,23 +57,8 @@ var funcMap = template.FuncMap{
 		}
 		return g.QualifiedGoIdent(pkg.Ident(ident))
 	},
-	"correctableStream": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer()
-	},
-	"isCorrectable": func(method *protogen.Method) bool {
-		return hasMethodOption(method, gorums.E_Correctable)
-	},
-	"withCorrectable": func(method *protogen.Method, arg string) string {
-		if hasMethodOption(method, gorums.E_Correctable) {
-			return arg
-		}
-		return ""
-	},
-	"withPromise": func(method *protogen.Method, arg string) string {
-		if hasMethodOption(method, callTypesWithPromiseObject...) {
-			return arg
-		}
-		return ""
+	"isStreamingServer": func(method *protogen.Method) bool {
+		return method.Desc.IsStreamingServer()
 	},
 	"docName": func(method *protogen.Method) string {
 		return callType(method).docName
@@ -91,9 +76,8 @@ var funcMap = template.FuncMap{
 		return hasMethodOption(method, gorums.E_Multicast, gorums.E_Unicast)
 	},
 	"out":                   out,
-	"outType":               outType,
-	"mapCorrectableOutType": mapCorrectableOutType,
 	"mapAsyncOutType":       mapAsyncOutType,
+	"mapCorrectableOutType": mapCorrectableOutType,
 	"unexport":              unexport,
 	"contains":              strings.Contains,
 	"field":                 field,
@@ -116,14 +100,10 @@ func out(g *protogen.GeneratedFile, method *protogen.Method) string {
 	return g.QualifiedGoIdent(method.Output.GoIdent)
 }
 
-func outType(method *protogen.Method, out string) string {
-	return fmt.Sprintf("%s%s", callType(method).outPrefix, field(out))
-}
-
 func mapAsyncOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		// Generate Async type aliases for quorumcall methods since users can
-		// call .AsyncMajority() on any quorum call result
+		// Generate Async type aliases for quorumcall methods since
+		// users can call .AsyncMajority() on any quorum call result
 		if hasMethodOption(method, gorums.E_Quorumcall) {
 			o := out(g, method)
 			futOut := fmt.Sprintf("Async%s", field(o))
@@ -134,9 +114,11 @@ func mapAsyncOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s
 
 func mapCorrectableOutType(g *protogen.GeneratedFile, services []*protogen.Service) (s map[string]string) {
 	return mapType(g, services, func(g *protogen.GeneratedFile, method *protogen.Method, s map[string]string) {
-		if hasMethodOption(method, gorums.E_Correctable) {
+		// Generate Correctable type aliases for quorumcall methods since
+		// users can call .WaitForLevel() on any quorum call result
+		if hasMethodOption(method, gorums.E_Quorumcall) {
 			o := out(g, method)
-			corrOut := outType(method, o)
+			corrOut := fmt.Sprintf("Correctable%s", field(o))
 			s[corrOut] = o
 		}
 	})

@@ -16,7 +16,7 @@ type callOptions struct {
 // call option is set. This always returns false for two-way call types, since
 // they should always wait for actual server responses.
 func (o callOptions) mustWaitSendDone() bool {
-	if o.callType == E_Rpc || o.callType == E_Quorumcall || o.callType == E_Correctable {
+	if o.callType == E_Rpc || o.callType == E_Quorumcall {
 		return false
 	}
 	return o.callType != nil && o.waitSendDone

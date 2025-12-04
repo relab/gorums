@@ -18,8 +18,6 @@ func TestCallOptionsMustWaitSendDone(t *testing.T) {
 		{name: "Rpc/WithNoSendWaiting", callOpts: getCallOptions(E_Rpc, WithNoSendWaiting()), wantWaitSendDone: false},
 		{name: "Quorumcall/WithSendWaiting", callOpts: getCallOptions(E_Quorumcall), wantWaitSendDone: false},
 		{name: "Quorumcall/WithNoSendWaiting", callOpts: getCallOptions(E_Quorumcall, WithNoSendWaiting()), wantWaitSendDone: false},
-		{name: "Correctable/WithSendWaiting", callOpts: getCallOptions(E_Correctable), wantWaitSendDone: false},
-		{name: "Correctable/WithNoSendWaiting", callOpts: getCallOptions(E_Correctable, WithNoSendWaiting()), wantWaitSendDone: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -21,26 +21,26 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type CorrectableRequest struct {
+type Request struct {
 	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *CorrectableRequest) Reset() {
-	*x = CorrectableRequest{}
+func (x *Request) Reset() {
+	*x = Request{}
 	mi := &file_correctable_correctable_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CorrectableRequest) String() string {
+func (x *Request) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CorrectableRequest) ProtoMessage() {}
+func (*Request) ProtoMessage() {}
 
-func (x *CorrectableRequest) ProtoReflect() protoreflect.Message {
+func (x *Request) ProtoReflect() protoreflect.Message {
 	mi := &file_correctable_correctable_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -52,39 +52,39 @@ func (x *CorrectableRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-type CorrectableRequest_builder struct {
+type Request_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 }
 
-func (b0 CorrectableRequest_builder) Build() *CorrectableRequest {
-	m0 := &CorrectableRequest{}
+func (b0 Request_builder) Build() *Request {
+	m0 := &Request{}
 	b, x := &b0, m0
 	_, _ = b, x
 	return m0
 }
 
-type CorrectableResponse struct {
+type Response struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Level int32                  `protobuf:"varint,1,opt,name=Level"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
-func (x *CorrectableResponse) Reset() {
-	*x = CorrectableResponse{}
+func (x *Response) Reset() {
+	*x = Response{}
 	mi := &file_correctable_correctable_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *CorrectableResponse) String() string {
+func (x *Response) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CorrectableResponse) ProtoMessage() {}
+func (*Response) ProtoMessage() {}
 
-func (x *CorrectableResponse) ProtoReflect() protoreflect.Message {
+func (x *Response) ProtoReflect() protoreflect.Message {
 	mi := &file_correctable_correctable_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -96,25 +96,25 @@ func (x *CorrectableResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *CorrectableResponse) GetLevel() int32 {
+func (x *Response) GetLevel() int32 {
 	if x != nil {
 		return x.xxx_hidden_Level
 	}
 	return 0
 }
 
-func (x *CorrectableResponse) SetLevel(v int32) {
+func (x *Response) SetLevel(v int32) {
 	x.xxx_hidden_Level = v
 }
 
-type CorrectableResponse_builder struct {
+type Response_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	Level int32
 }
 
-func (b0 CorrectableResponse_builder) Build() *CorrectableResponse {
-	m0 := &CorrectableResponse{}
+func (b0 Response_builder) Build() *Response {
+	m0 := &Response{}
 	b, x := &b0, m0
 	_, _ = b, x
 	x.xxx_hidden_Level = b.Level
@@ -125,24 +125,24 @@ var File_correctable_correctable_proto protoreflect.FileDescriptor
 
 const file_correctable_correctable_proto_rawDesc = "" +
 	"\n" +
-	"\x1dcorrectable/correctable.proto\x12\vcorrectable\x1a\fgorums.proto\"\x14\n" +
-	"\x12CorrectableRequest\"+\n" +
-	"\x13CorrectableResponse\x12\x14\n" +
-	"\x05Level\x18\x01 \x01(\x05R\x05Level2\xc9\x01\n" +
-	"\x0fCorrectableTest\x12V\n" +
-	"\vCorrectable\x12\x1f.correctable.CorrectableRequest\x1a .correctable.CorrectableResponse\"\x04\xa8\xb5\x18\x01\x12^\n" +
-	"\x11CorrectableStream\x12\x1f.correctable.CorrectableRequest\x1a .correctable.CorrectableResponse\"\x04\xa8\xb5\x18\x010\x01B0Z)github.com/relab/gorums/tests/correctable\x92\x03\x02\b\x02b\beditionsp\xe8\a"
+	"\x1dcorrectable/correctable.proto\x12\vcorrectable\x1a\fgorums.proto\"\t\n" +
+	"\aRequest\" \n" +
+	"\bResponse\x12\x14\n" +
+	"\x05Level\x18\x01 \x01(\x05R\x05Level2\x9d\x01\n" +
+	"\x0fCorrectableTest\x12@\n" +
+	"\vCorrectable\x12\x14.correctable.Request\x1a\x15.correctable.Response\"\x04\xa0\xb5\x18\x01\x12H\n" +
+	"\x11CorrectableStream\x12\x14.correctable.Request\x1a\x15.correctable.Response\"\x04\xa0\xb5\x18\x010\x01B0Z)github.com/relab/gorums/tests/correctable\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
 var file_correctable_correctable_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_correctable_correctable_proto_goTypes = []any{
-	(*CorrectableRequest)(nil),  // 0: correctable.CorrectableRequest
-	(*CorrectableResponse)(nil), // 1: correctable.CorrectableResponse
+	(*Request)(nil),  // 0: correctable.Request
+	(*Response)(nil), // 1: correctable.Response
 }
 var file_correctable_correctable_proto_depIdxs = []int32{
-	0, // 0: correctable.CorrectableTest.Correctable:input_type -> correctable.CorrectableRequest
-	0, // 1: correctable.CorrectableTest.CorrectableStream:input_type -> correctable.CorrectableRequest
-	1, // 2: correctable.CorrectableTest.Correctable:output_type -> correctable.CorrectableResponse
-	1, // 3: correctable.CorrectableTest.CorrectableStream:output_type -> correctable.CorrectableResponse
+	0, // 0: correctable.CorrectableTest.Correctable:input_type -> correctable.Request
+	0, // 1: correctable.CorrectableTest.CorrectableStream:input_type -> correctable.Request
+	1, // 2: correctable.CorrectableTest.Correctable:output_type -> correctable.Response
+	1, // 3: correctable.CorrectableTest.CorrectableStream:output_type -> correctable.Response
 	2, // [2:4] is the sub-list for method output_type
 	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name

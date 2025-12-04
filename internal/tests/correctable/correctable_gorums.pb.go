@@ -34,44 +34,50 @@ var (
 	_ = (*Node)(nil)
 )
 
-// Correctable asynchronously invokes a correctable quorum call on each node
-// in the configuration in ctx and returns a CorrectableCorrectableResponse, which can be used
-// to inspect any replies or errors when available.
-func Correctable(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableCorrectableResponse {
-	responses := gorums.QuorumCall[*CorrectableRequest, *CorrectableResponse](
+// Correctable is a quorum call invoked on all nodes in the configuration,
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//
+//	resp, err := Correctable(ctx, in).Majority()
+func Correctable(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "correctable.CorrectableTest.Correctable",
 		opts...,
 	)
-	return responses.WaitForLevel(responses.Size()/2 + 1)
 }
 
-// CorrectableStream asynchronously invokes a correctable quorum call on each node
-// in the configuration in ctx and returns a CorrectableStreamCorrectableResponse, which can be used
-// to inspect any replies or errors when available.
-// This method supports server-side preliminary replies (correctable stream).
-func CorrectableStream(ctx *gorums.ConfigContext, in *CorrectableRequest, opts ...gorums.CallOption) *CorrectableStreamCorrectableResponse {
-	responses := gorums.QuorumCallStream[*CorrectableRequest, *CorrectableResponse](
+// CorrectableStream is a streaming quorum call where the server can send multiple responses.
+// The response iterator continues until the context is canceled.
+//
+// Example:
+//
+//	corr := CorrectableStream(ctx, in).WaitForLevel(2)
+//	<-corr.Watch(2)
+//	resp, level, err := corr.Get()
+func CorrectableStream(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+	return gorums.QuorumCallStream[*Request, *Response](
 		ctx, in, "correctable.CorrectableTest.CorrectableStream",
 		opts...,
 	)
-	return responses.WaitForLevel(responses.Size()/2 + 1)
 }
 
 // CorrectableTest is the server-side API for the CorrectableTest Service
 type CorrectableTestServer interface {
-	Correctable(ctx gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error)
-	CorrectableStream(ctx gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error
+	Correctable(ctx gorums.ServerCtx, request *Request) (response *Response, err error)
+	CorrectableStream(ctx gorums.ServerCtx, request *Request, send func(response *Response) error) error
 }
 
 func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServer) {
 	srv.RegisterHandler("correctable.CorrectableTest.Correctable", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*CorrectableRequest](in)
+		req := gorums.AsProto[*Request](in)
 		resp, err := impl.Correctable(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
 	srv.RegisterHandler("correctable.CorrectableTest.CorrectableStream", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
-		req := gorums.AsProto[*CorrectableRequest](in)
-		err := impl.CorrectableStream(ctx, req, func(resp *CorrectableResponse) error {
+		req := gorums.AsProto[*Request](in)
+		err := impl.CorrectableStream(ctx, req, func(resp *Response) error {
 			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
 			md := proto.CloneOf(in.GetMetadata())
 			return ctx.SendMessage(gorums.NewResponseMessage(md, resp))
@@ -80,8 +86,8 @@ func RegisterCorrectableTestServer(srv *gorums.Server, impl CorrectableTestServe
 	})
 }
 
-// CorrectableCorrectableResponse is a correctable future for correctable quorum calls returning CorrectableResponse.
-type CorrectableCorrectableResponse = gorums.Correctable[*CorrectableResponse]
+// AsyncResponse is a future for async quorum calls returning *Response.
+type AsyncResponse = *gorums.Async[*Response]
 
-// CorrectableStreamCorrectableResponse is a correctable future for correctable quorum calls returning CorrectableResponse.
-type CorrectableStreamCorrectableResponse = gorums.Correctable[*CorrectableResponse]
+// CorrectableResponse is a correctable object for quorum calls returning *Response.
+type CorrectableResponse = *gorums.Correctable[*Response]

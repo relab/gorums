@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/correctable"
 	"github.com/relab/gorums/internal/version"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -251,35 +250,25 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 		},
 	},
 	callTypeName(gorums.E_Quorumcall): {
-		extInfo:  gorums.E_Quorumcall,
-		docName:  "quorum",
-		template: quorumCall,
+		extInfo: gorums.E_Quorumcall,
 		chkFn: func(m *protogen.Method) bool {
 			return hasMethodOption(m, gorums.E_Quorumcall)
 		},
-	},
-	callTypeName(gorums.E_Correctable): {
-		extInfo: gorums.E_Correctable,
-		chkFn: func(m *protogen.Method) bool {
-			return hasMethodOption(m, gorums.E_Correctable)
-		},
 		nestedCallType: map[string]*callTypeInfo{
-			callTypeName(correctable.E_Correctable): {
-				extInfo:   correctable.E_Correctable,
-				docName:   "correctable quorum",
-				template:  correctableCall,
-				outPrefix: "Correctable",
+			"quorumcall": {
+				extInfo:  gorums.E_Quorumcall,
+				docName:  "quorum",
+				template: quorumCall,
 				chkFn: func(m *protogen.Method) bool {
-					return hasMethodOption(m, gorums.E_Correctable) && !m.Desc.IsStreamingServer()
+					return hasMethodOption(m, gorums.E_Quorumcall) && !m.Desc.IsStreamingServer()
 				},
 			},
-			callTypeName(correctable.E_CorrectableStream): {
-				extInfo:   correctable.E_CorrectableStream,
-				docName:   "correctable stream quorum",
-				template:  correctableCall,
-				outPrefix: "CorrectableStream",
+			"quorumcall_stream": {
+				extInfo:  gorums.E_Quorumcall,
+				docName:  "streaming quorum",
+				template: quorumCallStream,
 				chkFn: func(m *protogen.Method) bool {
-					return hasMethodOption(m, gorums.E_Correctable) && m.Desc.IsStreamingServer()
+					return hasMethodOption(m, gorums.E_Quorumcall) && m.Desc.IsStreamingServer()
 				},
 			},
 		},
@@ -306,15 +295,8 @@ var gorumsCallTypesInfo = map[string]*callTypeInfo{
 // These are considered mutually incompatible.
 var gorumsCallTypes = []*protoimpl.ExtensionInfo{
 	gorums.E_Quorumcall,
-	gorums.E_Correctable,
 	gorums.E_Multicast,
 	gorums.E_Unicast,
-}
-
-// callTypesWithPromiseObject lists all call types that returns
-// a promise (correctable) object.
-var callTypesWithPromiseObject = []*protoimpl.ExtensionInfo{
-	gorums.E_Correctable,
 }
 
 // hasMethodOption returns true if the method has one of the given method options.
@@ -346,11 +328,8 @@ func validateOptions(method *protogen.Method) error {
 	case !hasMethodOption(method, gorums.E_Multicast) && method.Desc.IsStreamingClient():
 		return optionErrorf("is required for client-server stream methods", method, gorums.E_Multicast)
 
-	case !hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingServer():
-		return optionErrorf("is required for server-client stream methods", method, gorums.E_Correctable)
-
-	case hasMethodOption(method, gorums.E_Correctable) && method.Desc.IsStreamingClient():
-		return optionErrorf("is only valid for server-client stream methods", method, gorums.E_Correctable)
+	case !hasMethodOption(method, gorums.E_Quorumcall) && method.Desc.IsStreamingServer():
+		return optionErrorf("is required for server-client stream methods", method, gorums.E_Quorumcall)
 	}
 	return nil
 }

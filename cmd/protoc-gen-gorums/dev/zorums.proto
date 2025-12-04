@@ -71,39 +71,21 @@ service ZorumsService {
     }
 
     // ---------------------------------------------------------------
-    // Correctable variants
+    // Streaming quorum call variants
     // ---------------------------------------------------------------
 
-    // Correctable plain.
-    rpc Correctable(Request) returns (Response) {
-        option (gorums.correctable) = true;
+    // QuorumCallStream plain.
+    rpc QuorumCallStream(Request) returns (stream Response) {
+        option (gorums.quorumcall) = true;
     }
-    // CorrectableWithEmpty for testing imported message type.
-    rpc CorrectableWithEmpty(Request) returns (google.protobuf.Empty) {
-        option (gorums.correctable) = true;
+    // QuorumCallStreamWithEmpty for testing imported message type.
+    rpc QuorumCallStreamWithEmpty(Request) returns (stream google.protobuf.Empty) {
+        option (gorums.quorumcall) = true;
     }
-    // CorrectableWithEmpty2 for testing imported message type; with same return
-    // type as Correctable: Response.
-    rpc CorrectableWithEmpty2(google.protobuf.Empty) returns (Response) {
-        option (gorums.correctable) = true;
-    }
-
-    // ---------------------------------------------------------------
-    // CorrectableStream variants
-    // ---------------------------------------------------------------
-
-    // CorrectableStream plain.
-    rpc CorrectableStream(Request) returns (stream Response) {
-        option (gorums.correctable) = true;
-    }
-    // CorrectableStreamWithEmpty for testing imported message type.
-    rpc CorrectableStreamWithEmpty(Request) returns (stream google.protobuf.Empty) {
-        option (gorums.correctable) = true;
-    }
-    // CorrectableStreamWithEmpty2 for testing imported message type; with same return
-    // type as Correctable: Response.
-    rpc CorrectableStreamWithEmpty2(google.protobuf.Empty) returns (stream Response) {
-        option (gorums.correctable) = true;
+    // QuorumCallStreamWithEmpty2 for testing imported message type; with same return
+    // type as QuorumCallStream: Response.
+    rpc QuorumCallStreamWithEmpty2(google.protobuf.Empty) returns (stream Response) {
+        option (gorums.quorumcall) = true;
     }
 
     // ---------------------------------------------------------------

@@ -7,7 +7,7 @@ static_file				:= $(gen_path)/template_static.go
 static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
 proto_path 				:= $(dev_path):third_party:.
 
-plugin_deps				:= gorums.pb.go internal/correctable/opts.pb.go $(static_file)
+plugin_deps				:= gorums.pb.go $(static_file)
 runtime_deps			:= ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_gorums.pb.go
 

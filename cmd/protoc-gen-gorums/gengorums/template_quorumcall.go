@@ -23,10 +23,11 @@ var quorumCallComment = `
 {{end -}}
 `
 
-var qcVar = `
+var quorumCallVariables = `
 {{$genFile := .GenFile}}
 {{$configContext := use "gorums.ConfigContext" .GenFile}}
 {{$quorumCall := use "gorums.QuorumCall" .GenFile}}
+{{$quorumCallStream := use "gorums.QuorumCallStream" .GenFile}}
 {{$responses := use "gorums.Responses" .GenFile}}
 {{$callOption := use "gorums.CallOption" .GenFile}}
 `
@@ -45,7 +46,36 @@ var quorumCallBody = `	return {{$quorumCall}}[*{{$in}}, *{{$out}}](
 `
 
 var quorumCall = commonVariables +
-	qcVar +
+	quorumCallVariables +
 	quorumCallComment +
 	quorumCallSignature +
 	quorumCallBody
+
+// Streaming quorum call template
+var quorumCallStreamComment = `
+{{$comments := .Method.Comments.Leading}}
+{{if ne $comments ""}}
+{{$comments -}}
+{{else}}
+// {{$method}} is a streaming quorum call where the server can send multiple responses.
+// The response iterator continues until the context is canceled.
+//
+// Example:
+//   corr := {{$method}}(ctx, in).WaitForLevel(2)
+//   <-corr.Watch(2)
+//   resp, level, err := corr.Get()
+{{end -}}
+`
+
+var quorumCallStreamBody = `	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}](
+		ctx, in, "{{$fullName}}",
+		opts...,
+	)
+}
+`
+
+var quorumCallStream = commonVariables +
+	quorumCallVariables +
+	quorumCallStreamComment +
+	quorumCallSignature +
+	quorumCallStreamBody

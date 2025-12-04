@@ -10,7 +10,7 @@ import (
 // run a test on a correctable call.
 // n is the number of replicas.
 // the target level is n (quorum size).
-func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *gorums.Correctable[*CorrectableResponse]) {
+func run(t testing.TB, n int, corr func(*gorums.ConfigContext, int) CorrectableResponse) {
 	t.Helper()
 	cfg := gorums.TestConfiguration(t, n, func(i int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
@@ -20,48 +20,93 @@ func run(t testing.TB, n int, corr func(*gorums.ConfigContext) *gorums.Correctab
 
 	ctx := gorums.TestContext(t, 100*time.Millisecond)
 	configCtx := gorums.WithConfigContext(ctx, cfg)
-	res := corr(configCtx)
+	res := corr(configCtx, n)
 
-	donech := res.Done()
+	done := res.Done()
 	for i := 1; i <= n; i++ {
 		select {
 		case <-res.Watch(i):
-		case <-donech:
+		case <-done:
 		}
 	}
-	<-donech
+	<-done
 	if _, _, err := res.Get(); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestCorrectable(t *testing.T) {
-	run(t, 4, func(ctx *gorums.ConfigContext) *gorums.Correctable[*CorrectableResponse] {
-		// Use the new API - Correctable returns *Correctable[*CorrectableResponse] directly
-		// with a default majority threshold
-		return Correctable(ctx, &CorrectableRequest{})
+	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
+		// Correctable returns *Responses, user calls WaitForLevel to get *Correctable
+		return Correctable(ctx, &Request{}).WaitForLevel(n)
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
-	run(t, 4, func(ctx *gorums.ConfigContext) *gorums.Correctable[*CorrectableResponse] {
-		// Use the new API - CorrectableStream returns *Correctable[*CorrectableResponse] directly
-		// with a default majority threshold
-		return CorrectableStream(ctx, &CorrectableRequest{})
+	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
+		// CorrectableStream returns *Responses, user calls WaitForLevel to get *Correctable
+		return CorrectableStream(ctx, &Request{}).WaitForLevel(n)
 	})
+}
+
+// TestCorrectableWithWatch tests progressive level watching using the type alias
+func TestCorrectableWithWatch(t *testing.T) {
+	n := 4
+	cfg := gorums.TestConfiguration(t, n, func(i int) gorums.ServerIface {
+		gorumsSrv := gorums.NewServer()
+		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
+		return gorumsSrv
+	})
+
+	ctx := gorums.TestContext(t, 100*time.Millisecond)
+	configCtx := gorums.WithConfigContext(ctx, cfg)
+
+	// Use the type alias for the correctable result
+	var corr CorrectableResponse = CorrectableStream(configCtx, &Request{}).WaitForLevel(n)
+
+	// Watch for each level progressively
+	for level := 1; level <= n; level++ {
+		select {
+		case <-corr.Watch(level):
+			resp, gotLevel, err := corr.Get()
+			if err != nil {
+				t.Errorf("level %d: unexpected error: %v", level, err)
+			}
+			if gotLevel < level {
+				t.Errorf("level %d: expected level >= %d, got %d", level, level, gotLevel)
+			}
+			if resp == nil {
+				t.Errorf("level %d: expected non-nil response", level)
+			}
+		case <-corr.Done():
+			// Done is also acceptable
+		}
+	}
+
+	<-corr.Done()
+	resp, finalLevel, err := corr.Get()
+	if err != nil {
+		t.Errorf("final: unexpected error: %v", err)
+	}
+	if finalLevel != n {
+		t.Errorf("final: expected level %d, got %d", n, finalLevel)
+	}
+	if resp == nil {
+		t.Error("final: expected non-nil response")
+	}
 }
 
 type testSrv struct {
 	n int
 }
 
-func (srv testSrv) Correctable(_ gorums.ServerCtx, request *CorrectableRequest) (*CorrectableResponse, error) {
-	return CorrectableResponse_builder{Level: 1}.Build(), nil
+func (srv testSrv) Correctable(_ gorums.ServerCtx, request *Request) (*Response, error) {
+	return Response_builder{Level: 1}.Build(), nil
 }
 
-func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error {
+func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *Request, send func(response *Response) error) error {
 	for i := range srv.n {
-		err := send(CorrectableResponse_builder{Level: int32(i + 1)}.Build())
+		err := send(Response_builder{Level: int32(i + 1)}.Build())
 		if err != nil {
 			return err
 		}
