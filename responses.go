@@ -43,6 +43,16 @@ func (seq ResponseSeq[Resp]) IgnoreErrors() ResponseSeq[Resp] {
 // Filter returns an iterator that yields only the responses for which the
 // provided keep function returns true. This is useful for verifying or filtering
 // responses from servers before further processing.
+//
+// Example:
+//
+//	responses := QuorumCall(ctx, req)
+//	// Filter to only responses from a specific node
+//	for resp := range responses.Filter(func(r NodeResponse[Resp]) bool {
+//		return r.NodeID == 1
+//	}) {
+//		// process resp
+//	}
 func (seq ResponseSeq[Resp]) Filter(keep func(NodeResponse[Resp]) bool) ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		for result := range seq {
@@ -58,6 +68,14 @@ func (seq ResponseSeq[Resp]) Filter(keep func(NodeResponse[Resp]) bool) Response
 // CollectN collects up to n responses, including errors, from the iterator
 // into a map by node ID. It returns early if n responses are collected or
 // the iterator is exhausted.
+//
+// Example:
+//
+//	responses := QuorumCall(ctx, req)
+//	// Collect the first 2 responses (including errors)
+//	replies := responses.CollectN(2)
+//	// or collect 2 successful responses
+//	replies = responses.IgnoreErrors().CollectN(2)
 func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
 	replies := make(map[uint32]Resp, n)
 	for result := range seq {
@@ -71,6 +89,14 @@ func (seq ResponseSeq[Resp]) CollectN(n int) map[uint32]Resp {
 
 // CollectAll collects all responses, including errors, from the iterator
 // into a map by node ID.
+//
+// Example:
+//
+//	responses := QuorumCall(ctx, req)
+//	// Collect all responses (including errors)
+//	replies := responses.CollectAll()
+//	// or collect all successful responses
+//	replies = responses.IgnoreErrors().CollectAll()
 func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 	replies := make(map[uint32]Resp)
 	for result := range seq {

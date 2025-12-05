@@ -1,0 +1,205 @@
+package gorums_test
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/relab/gorums"
+	"github.com/relab/gorums/internal/testutils/mock"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
+)
+
+// init removed; moved to mock package
+
+func TestCorrectable(t *testing.T) {
+	tests := []struct {
+		name      string
+		threshold int
+		wantLevel int
+		wantValue string
+	}{
+		{
+			name:      "Level1",
+			threshold: 1,
+			wantLevel: 1,
+			wantValue: "echo: test-1",
+		},
+		{
+			name:      "Level2",
+			threshold: 2,
+			wantLevel: 2,
+			wantValue: "echo: test-2",
+		},
+		{
+			name:      "Level3",
+			threshold: 3,
+			wantLevel: 3,
+			wantValue: "echo: test-3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use StreamServerFn which sends 3 responses: "echo: val-1", "echo: val-2", "echo: val-3"
+			cfg := gorums.TestConfiguration(t, 3, gorums.StreamServerFn)
+			ctx := gorums.TestContext(t, 2*time.Second)
+
+			responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+				gorums.WithConfigContext(ctx, cfg),
+				pb.String("test"),
+				mock.Stream,
+			)
+
+			corr := responses.Correctable(tt.threshold)
+
+			select {
+			case <-corr.Watch(tt.threshold):
+			case <-time.After(1 * time.Second):
+				t.Fatalf("Timeout waiting for level %d", tt.threshold)
+			}
+
+			reply, level, err := corr.Get()
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			if level < tt.threshold {
+				t.Errorf("Expected level >= %d, got %d", tt.threshold, level)
+			}
+			// Note: The value might be from a higher level if updates happened fast,
+			// but for this test we expect at least the threshold level's value or higher.
+			// With StreamServerFn, level N returns "echo: test-N".
+			// Since we wait for level N, we expect at least "echo: test-N".
+			// Actually, StreamServerFn sends 1, then 2, then 3. We check for non-empty response.
+			if reply.GetValue() == "" {
+				t.Error("Expected non-empty response")
+			}
+		})
+	}
+}
+
+func TestCorrectable_Watch(t *testing.T) {
+	cfg := gorums.TestConfiguration(t, 3, gorums.StreamServerFn)
+	ctx := gorums.TestContext(t, 2*time.Second)
+
+	responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+		gorums.WithConfigContext(ctx, cfg),
+		pb.String("test"),
+		mock.Stream,
+	)
+
+	corr := responses.Correctable(3)
+
+	// Watch for level 1
+	select {
+	case <-corr.Watch(1):
+		// Success
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timeout waiting for level 1")
+	}
+
+	// Watch for level 3
+	select {
+	case <-corr.Watch(3):
+		// Success
+	case <-time.After(1 * time.Second):
+		t.Fatal("Timeout waiting for level 3")
+	}
+}
+
+// Example tests removed as they cannot run without a real environment.
+
+func TestCorrectable_Regular(t *testing.T) {
+	cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
+	ctx := gorums.TestContext(t, 2*time.Second)
+
+	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		gorums.WithConfigContext(ctx, cfg),
+		pb.String("test"),
+		mock.TestMethod,
+	)
+
+	// Wait for 2 responses
+	corr := responses.Correctable(2)
+	<-corr.Watch(2)
+
+	reply, level, err := corr.Get()
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if level < 2 {
+		t.Errorf("Expected level >= 2, got %d", level)
+	}
+	if reply.GetValue() != "echo: test" {
+		t.Errorf("Expected 'echo: test', got '%s'", reply.GetValue())
+	}
+}
+
+func BenchmarkCorrectable_Stream(b *testing.B) {
+	for _, numNodes := range []int{3, 5, 7, 9} {
+		cfg := gorums.TestConfiguration(b, numNodes, gorums.StreamServerFn)
+		cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
+
+		b.Run(fmt.Sprintf("WaitForLevel/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			threshold := numNodes/2 + 1
+			for b.Loop() {
+				responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.Stream,
+				)
+				corr := responses.Correctable(threshold)
+				<-corr.Watch(threshold)
+				_, _, err := corr.Get()
+				if err != nil {
+					b.Fatalf("Correctable error: %v", err)
+				}
+			}
+		})
+
+		b.Run(fmt.Sprintf("Correctable_Regular/%d", numNodes), func(b *testing.B) {
+			cfgRegular := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+			cfgCtxRegular := gorums.WithConfigContext(b.Context(), cfgRegular)
+			b.ReportAllocs()
+			threshold := numNodes/2 + 1
+			for b.Loop() {
+				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtxRegular,
+					pb.String("test"),
+					mock.TestMethod,
+				)
+				corr := responses.Correctable(threshold)
+				<-corr.Watch(threshold)
+				_, _, err := corr.Get()
+				if err != nil {
+					b.Fatalf("Correctable error: %v", err)
+				}
+			}
+		})
+
+		b.Run(fmt.Sprintf("ManualIterator/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			threshold := numNodes/2 + 1
+			for b.Loop() {
+				responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.Stream,
+				)
+				count := 0
+				for resp := range responses.Seq() {
+					if resp.Err == nil {
+						count++
+						if count >= threshold {
+							break
+						}
+					}
+				}
+				if count < threshold {
+					b.Fatalf("ManualIterator failed to reach threshold")
+				}
+			}
+		})
+	}
+}

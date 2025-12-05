@@ -19,7 +19,7 @@ import (
 // BenchmarkTerminalMethods benchmarks the built-in terminal methods with real servers.
 func BenchmarkTerminalMethods(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
-		cfg := TestConfiguration(b, numNodes, echoServerFn)
+		cfg := TestConfiguration(b, numNodes, EchoServerFn)
 		cfgCtx := WithConfigContext(b.Context(), cfg)
 
 		b.Run(fmt.Sprintf("Majority/%d", numNodes), func(b *testing.B) {
@@ -88,7 +88,7 @@ func BenchmarkTerminalMethods(b *testing.B) {
 // BenchmarkIteratorPatterns benchmarks custom aggregation using different iterator patterns.
 func BenchmarkIteratorPatterns(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
-		cfg := TestConfiguration(b, numNodes, echoServerFn)
+		cfg := TestConfiguration(b, numNodes, EchoServerFn)
 		cfgCtx := WithConfigContext(b.Context(), cfg)
 
 		// Using CollectAll and then checking quorum

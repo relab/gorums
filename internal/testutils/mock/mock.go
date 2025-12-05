@@ -9,12 +9,30 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
+	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
+
+func init() {
+	err := RegisterServices([]Service{
+		{
+			Name: "mock.MockService",
+			Methods: []Method{
+				{Name: "Test", Input: &pb.StringValue{}, Output: &pb.StringValue{}},
+				{Name: "GetValue", Input: &pb.Int32Value{}, Output: &pb.Int32Value{}},
+				{Name: "Stream", Input: &pb.StringValue{}, Output: &pb.StringValue{}},
+			},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+}
 
 // TestMethod and GetValueMethod are the methods supported by the mock package.
 const (
 	TestMethod     = "mock.MockService.Test"
 	GetValueMethod = "mock.MockService.GetValue"
+	Stream         = "mock.MockService.Stream"
 )
 
 // Service represents a service to be registered.

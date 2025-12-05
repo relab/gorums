@@ -88,18 +88,18 @@ func (c *Correctable[Resp]) update(reply Resp, level int, done bool, err error) 
 	}
 }
 
-// WaitForLevel returns a Correctable that provides progressive updates
+// Correctable returns a Correctable that provides progressive updates
 // as responses arrive. The level increases with each successful response.
 // Use this for correctable quorum patterns where you want to observe
 // intermediate states.
 //
 // Example:
 //
-//	corr := ReadQC(ctx, req).WaitForLevel(2)
+//	corr := ReadQC(ctx, req).Correctable(2)
 //	// Wait for level 2 to be reached
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
-func (r *Responses[Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
+func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 	corr := &Correctable[Resp]{
 		level:  LevelNotSet,
 		donech: make(chan struct{}, 1),

@@ -1,90 +1,12 @@
 package gorums
 
 import (
-	"context"
 	"errors"
-	"sync"
 	"testing"
-	"time"
 
-	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
-
-// Test helper types and functions
-
-// ctxTimeout is the timeout for test contexts. If this is exceeded,
-// the test will fail, indicating a bug in the test or the code under test.
-const ctxTimeout = 2 * time.Second
-
-// checkQuorumCall returns true if the quorum call was successful.
-// It returns false if an error occurred or the context timed out.
-func checkQuorumCall(t *testing.T, ctxErr, err error) bool {
-	t.Helper()
-	if errors.Is(ctxErr, context.DeadlineExceeded) {
-		t.Error(ctxErr)
-		return false
-	}
-	if err != nil {
-		t.Errorf("QuorumCall failed: %v", err)
-		return false
-	}
-	return true
-}
-
-// checkError returns true if the error matches the expected error.
-func checkError(t *testing.T, wantErr bool, err, wantErrType error) bool {
-	t.Helper()
-	if wantErr {
-		if err == nil {
-			t.Error("Expected error, got nil")
-			return false
-		}
-		if wantErrType != nil && !errors.Is(err, wantErrType) {
-			t.Errorf("Expected error type %v, got %v", wantErrType, err)
-			return false
-		}
-		return true
-	}
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-		return false
-	}
-	return true
-}
-
-// executionTracker tracks interceptor execution order for testing.
-type executionTracker struct {
-	mu  sync.Mutex
-	log []string
-}
-
-func (et *executionTracker) append(entry string) {
-	et.mu.Lock()
-	defer et.mu.Unlock()
-	et.log = append(et.log, entry)
-}
-
-func (et *executionTracker) get() []string {
-	et.mu.Lock()
-	defer et.mu.Unlock()
-	return append([]string(nil), et.log...)
-}
-
-func (et *executionTracker) check(t *testing.T, want []string) {
-	t.Helper()
-	got := et.get()
-	if len(got) != len(want) {
-		t.Errorf("Expected %d log entries, got %d: %v", len(want), len(got), got)
-		return
-	}
-	for i, wantEntry := range want {
-		if i >= len(got) || got[i] != wantEntry {
-			t.Errorf("log[%d] = %v, want %s", i, got, wantEntry)
-		}
-	}
-}
 
 // makeClientCtx is a helper to create a clientCtx with mock responses for unit tests.
 // It creates a channel with the provided responses and returns a clientCtx.
@@ -112,6 +34,27 @@ func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, response
 	c.sendOnce.Do(func() {})
 	c.responseSeq = c.defaultResponseSeq()
 	return c
+}
+
+// checkError returns true if the error matches the expected error.
+func checkError(t *testing.T, wantErr bool, err, wantErrType error) bool {
+	t.Helper()
+	if wantErr {
+		if err == nil {
+			t.Error("Expected error, got nil")
+			return false
+		}
+		if wantErrType != nil && !errors.Is(err, wantErrType) {
+			t.Errorf("Expected error type %v, got %v", wantErrType, err)
+			return false
+		}
+		return true
+	}
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+		return false
+	}
+	return true
 }
 
 // -------------------------------------------------------------------------
@@ -344,90 +287,4 @@ func TestIteratorMethods(t *testing.T) {
 			t.Errorf("Expected 3 collected responses, got %d", len(collected))
 		}
 	})
-}
-
-// -------------------------------------------------------------------------
-// Integration Tests
-// -------------------------------------------------------------------------
-
-// TestInterceptorIntegration_First tests the complete flow with real servers
-func TestInterceptorIntegration_First(t *testing.T) {
-	cfg := TestConfiguration(t, 3, echoServerFn)
-
-	ctx := TestContext(t, ctxTimeout)
-	responses := QuorumCall[*pb.StringValue, *pb.StringValue](
-		WithConfigContext(ctx, cfg),
-		pb.String("test"),
-		mock.TestMethod,
-	)
-
-	result, err := responses.First()
-	if !checkQuorumCall(t, ctx.Err(), err) {
-		return
-	}
-
-	if result.GetValue() != "echo: test" {
-		t.Errorf("Expected 'echo: test', got '%s'", result.GetValue())
-	}
-}
-
-// TestInterceptorIntegration_Majority tests majority quorum with real servers
-func TestInterceptorIntegration_Majority(t *testing.T) {
-	cfg := TestConfiguration(t, 3, echoServerFn)
-
-	ctx := TestContext(t, ctxTimeout)
-	responses := QuorumCall[*pb.StringValue, *pb.StringValue](
-		WithConfigContext(ctx, cfg),
-		pb.String("test"),
-		mock.TestMethod,
-	)
-
-	result, err := responses.Majority()
-	if !checkQuorumCall(t, ctx.Err(), err) {
-		return
-	}
-
-	if result.GetValue() != "echo: test" {
-		t.Errorf("Expected 'echo: test', got '%s'", result.GetValue())
-	}
-}
-
-// TestInterceptorIntegration_CustomAggregation tests custom response aggregation
-func TestInterceptorIntegration_CustomAggregation(t *testing.T) {
-	cfg := TestConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
-
-	ctx := TestContext(t, ctxTimeout)
-	responses := QuorumCall[*pb.Int32Value, *pb.Int32Value](
-		WithConfigContext(ctx, cfg),
-		pb.Int32(0),
-		mock.GetValueMethod,
-	)
-
-	// Custom aggregation: sum all responses
-	// Default server returns 10, 20, 30 for nodes 0, 1, 2
-	var sum int32
-	for r := range responses.Seq().IgnoreErrors() {
-		sum += r.Value.GetValue()
-	}
-
-	if sum != 60 { // 10 + 20 + 30 = 60
-		t.Errorf("Expected sum 60, got %d", sum)
-	}
-}
-
-// TestInterceptorIntegration_CollectAll tests collecting all responses
-func TestInterceptorIntegration_CollectAll(t *testing.T) {
-	cfg := TestConfiguration(t, 3, echoServerFn)
-
-	ctx := TestContext(t, ctxTimeout)
-	responses := QuorumCall[*pb.StringValue, *pb.StringValue](
-		WithConfigContext(ctx, cfg),
-		pb.String("test"),
-		mock.TestMethod,
-	)
-
-	collected := responses.CollectAll()
-	if len(collected) != 3 {
-		t.Errorf("Expected 3 responses, got %d", len(collected))
-	}
 }

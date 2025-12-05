@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -203,7 +204,7 @@ func (ts testSrv) GetValue(_ ServerCtx, _ proto.Message) (proto.Message, error) 
 	return pb.Int32(ts.val), nil
 }
 
-func echoServerFn(_ int) ServerIface {
+func EchoServerFn(_ int) ServerIface {
 	srv := NewServer()
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
 		resp, err := echoSrv{}.Test(ctx, in.GetProtoMessage())
@@ -218,4 +219,24 @@ type echoSrv struct{}
 
 func (echoSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
 	return pb.String("echo: " + mock.GetVal(req)), nil
+}
+
+func StreamServerFn(_ int) ServerIface {
+	srv := NewServer()
+	srv.RegisterHandler(mock.Stream, func(ctx ServerCtx, in *Message) (*Message, error) {
+		req := in.GetProtoMessage()
+		val := mock.GetVal(req)
+
+		// Send 3 responses
+		for i := 1; i <= 3; i++ {
+			resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
+			msg := NewResponseMessage(in.GetMetadata(), resp)
+			if err := ctx.SendMessage(msg); err != nil {
+				return nil, err
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		return nil, nil
+	})
+	return srv
 }

@@ -38,14 +38,14 @@ func run(t testing.TB, n int, corr func(*gorums.ConfigContext, int) CorrectableR
 func TestCorrectable(t *testing.T) {
 	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
 		// Correctable returns *Responses, user calls WaitForLevel to get *Correctable
-		return Correctable(ctx, &Request{}).WaitForLevel(n)
+		return Correctable(ctx, &Request{}).Correctable(n)
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
 	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
 		// CorrectableStream returns *Responses, user calls WaitForLevel to get *Correctable
-		return CorrectableStream(ctx, &Request{}).WaitForLevel(n)
+		return CorrectableStream(ctx, &Request{}).Correctable(n)
 	})
 }
 
@@ -62,7 +62,7 @@ func TestCorrectableWithWatch(t *testing.T) {
 	configCtx := gorums.WithConfigContext(ctx, cfg)
 
 	// Use the type alias for the correctable result
-	var corr CorrectableResponse = CorrectableStream(configCtx, &Request{}).WaitForLevel(n)
+	var corr CorrectableResponse = CorrectableStream(configCtx, &Request{}).Correctable(n)
 
 	// Watch for each level progressively
 	for level := 1; level <= n; level++ {
