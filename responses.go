@@ -22,9 +22,11 @@ type ResponseSeq[T msg] iter.Seq[NodeResponse[T]]
 //
 // Example:
 //
-//	for resp := range ctx.Responses().IgnoreErrors() {
+//	responses := QuorumCall(ctx, Request_builder{Num: uint64(42)}.Build())
+//	var sum int32
+//	for resp := range responses.IgnoreErrors() {
 //	    // resp is guaranteed to be a successful response
-//	    process(resp)
+//		sum += resp.Value.GetValue()
 //	}
 func (seq ResponseSeq[Resp]) IgnoreErrors() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
@@ -77,17 +79,21 @@ func (seq ResponseSeq[Resp]) CollectAll() map[uint32]Resp {
 	return replies
 }
 
+// -------------------------------------------------------------------------
+// Response Methods
+// -------------------------------------------------------------------------
+
 // Responses provides access to quorum call responses and terminal methods.
 // It is returned by quorum call functions and allows fluent-style API usage:
 //
-//	resp, err := ReadQC(ctx, req).Majority()
+//	resp, err := ReadQuorumCall(ctx, req).Majority()
 //	// or
-//	resp, err := ReadQC(ctx, req).First()
+//	resp, err := ReadQuorumCall(ctx, req).First()
 //	// or
-//	replies := ReadQC(ctx, req).IgnoreErrors().CollectAll()
+//	replies := ReadQuorumCall(ctx, req).IgnoreErrors().CollectAll()
 //
 // Type parameter:
-//   - Resp: The response message type from individual nodes
+//   - Resp: The response message type
 type Responses[Resp msg] struct {
 	ResponseSeq[Resp]
 	size    int
@@ -140,14 +146,12 @@ func (r *Responses[Resp]) All() (Resp, error) {
 
 // Threshold waits for a threshold number of successful responses.
 // It returns the first response once the threshold is reached.
-func (r *Responses[Resp]) Threshold(threshold int) (Resp, error) {
+func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 	var (
-		firstResp Resp
-		found     bool
-		count     int
-		errs      []nodeError
+		found bool
+		count int
+		errs  []nodeError
 	)
-
 	for result := range r.ResponseSeq {
 		if result.Err != nil {
 			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
@@ -156,71 +160,14 @@ func (r *Responses[Resp]) Threshold(threshold int) (Resp, error) {
 
 		count++
 		if !found {
-			firstResp = result.Value
+			resp = result.Value
 			found = true
 		}
 
 		// Check if we have reached the threshold
 		if count >= threshold {
-			return firstResp, nil
+			return resp, nil
 		}
 	}
-
-	var zero Resp
-	return zero, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count}
-}
-
-// WaitForLevel returns a Correctable that provides progressive updates
-// as responses arrive. The level increases with each successful response.
-// Use this for correctable quorum patterns where you want to observe
-// intermediate states.
-//
-// Example:
-//
-//	corr := ReadQC(ctx, req).WaitForLevel(2)
-//	// Wait for level 2 to be reached
-//	<-corr.Watch(2)
-//	resp, level, err := corr.Get()
-func (r *Responses[Resp]) WaitForLevel(threshold int) *Correctable[Resp] {
-	corr := &Correctable[Resp]{
-		level:  LevelNotSet,
-		donech: make(chan struct{}, 1),
-	}
-
-	go func() {
-		var (
-			lastResp Resp
-			found    bool
-			count    int
-			errs     []nodeError
-		)
-
-		for result := range r.ResponseSeq {
-			if result.Err != nil {
-				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
-				continue
-			}
-
-			count++
-			lastResp = result.Value
-			found = true
-
-			// Check if we have reached the threshold
-			done := count >= threshold
-			corr.update(lastResp, count, done, nil)
-			if done {
-				return
-			}
-		}
-
-		// If we didn't reach the threshold, mark as done with error
-		if !found {
-			var zero Resp
-			corr.update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
-		} else {
-			corr.update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
-		}
-	}()
-
-	return corr
+	return resp, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count}
 }
