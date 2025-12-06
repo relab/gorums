@@ -87,7 +87,7 @@ func TestOnewayCalls(t *testing.T) {
 							t.Error(err)
 						}
 					} else {
-						if err := oneway.Unicast(nodeCtx, in, gorums.WithNoSendWaiting()); err != nil {
+						if err := oneway.Unicast(nodeCtx, in, gorums.IgnoreErrors()); err != nil {
 							t.Error(err)
 						}
 					}
@@ -98,7 +98,7 @@ func TestOnewayCalls(t *testing.T) {
 							t.Error(err)
 						}
 					} else {
-						if err := oneway.Multicast(cfgCtx, in, gorums.WithNoSendWaiting()); err != nil {
+						if err := oneway.Multicast(cfgCtx, in, gorums.IgnoreErrors()); err != nil {
 							t.Error(err)
 						}
 					}
@@ -194,7 +194,7 @@ func TestMulticastPerNode(t *testing.T) {
 				} else {
 					if err := oneway.Multicast(cfgCtx, in,
 						gorums.Interceptors(mapInterceptor),
-						gorums.WithNoSendWaiting(),
+						gorums.IgnoreErrors(),
 					); err != nil {
 						t.Error(err)
 					}
@@ -238,7 +238,7 @@ func BenchmarkUnicast(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
 			nodeCtx := gorums.WithNodeContext(context.Background(), node)
-			oneway.Unicast(nodeCtx, in, gorums.WithNoSendWaiting())
+			oneway.Unicast(nodeCtx, in, gorums.IgnoreErrors())
 		}
 	})
 }
@@ -260,7 +260,7 @@ func BenchmarkMulticast(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
 			cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
-			oneway.Multicast(cfgCtx, in, gorums.WithNoSendWaiting())
+			oneway.Multicast(cfgCtx, in, gorums.IgnoreErrors())
 		}
 	})
 }

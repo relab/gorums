@@ -268,7 +268,7 @@ func GetBenchmarks(cfg Configuration) []Bench {
 			runBench: func(opts Options) (*Result, error) {
 				return runServerBenchmark(opts, cfg, func(ctx context.Context, msg *TimedMsg) {
 					cfgCtx := gorums.WithConfigContext(ctx, cfg)
-					Multicast(cfgCtx, msg)
+					Multicast(cfgCtx, msg, gorums.IgnoreErrors())
 				})
 			},
 		},
