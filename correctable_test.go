@@ -181,10 +181,8 @@ func BenchmarkCorrectable(b *testing.B) {
 			}
 		})
 
-		// TODO(meling): Why are the stream variants so much slower?
-
 		b.Run(fmt.Sprintf("QuorumCallStream/%d", numNodes), func(b *testing.B) {
-			cfg := gorums.TestConfiguration(b, numNodes, gorums.StreamServerFn)
+			cfg := gorums.TestConfiguration(b, numNodes, gorums.StreamBenchmarkServerFn)
 			cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
@@ -204,7 +202,7 @@ func BenchmarkCorrectable(b *testing.B) {
 		})
 
 		b.Run(fmt.Sprintf("QuorumCallStreamIterator/%d", numNodes), func(b *testing.B) {
-			cfg := gorums.TestConfiguration(b, numNodes, gorums.StreamServerFn)
+			cfg := gorums.TestConfiguration(b, numNodes, gorums.StreamBenchmarkServerFn)
 			cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()

@@ -240,3 +240,22 @@ func StreamServerFn(_ int) ServerIface {
 	})
 	return srv
 }
+
+func StreamBenchmarkServerFn(_ int) ServerIface {
+	srv := NewServer()
+	srv.RegisterHandler(mock.Stream, func(ctx ServerCtx, in *Message) (*Message, error) {
+		req := in.GetProtoMessage()
+		val := mock.GetVal(req)
+
+		// Send 3 responses
+		for i := 1; i <= 3; i++ {
+			resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
+			msg := NewResponseMessage(in.GetMetadata(), resp)
+			if err := ctx.SendMessage(msg); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	})
+	return srv
+}
