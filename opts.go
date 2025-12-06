@@ -8,6 +8,16 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// Option is a marker interface for options to NewConfig.
+type Option interface {
+	isOption()
+}
+
+// ManagerOption provides a way to set different options on a new Manager.
+type ManagerOption func(*managerOptions)
+
+func (ManagerOption) isOption() {}
+
 type managerOptions struct {
 	grpcDialOpts []grpc.DialOption
 	logger       *log.Logger
@@ -24,9 +34,6 @@ func newManagerOptions() managerOptions {
 		sendBuffer: 0,
 	}
 }
-
-// ManagerOption provides a way to set different options on a new Manager.
-type ManagerOption func(*managerOptions)
 
 // WithDialOptions returns a ManagerOption which sets any gRPC dial options
 // the Manager should use when initially connecting to each node in its pool.

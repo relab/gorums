@@ -4,18 +4,17 @@ import (
 	"fmt"
 )
 
-// ConfigOption is a marker interface for options to NewConfiguration.
-type ConfigOption any
-
 // NodeListOption must be implemented by node providers.
 type NodeListOption interface {
-	ConfigOption
+	Option
 	newConfig(*Manager) (Configuration, error)
 }
 
 type nodeIDMap struct {
 	idMap map[string]uint32
 }
+
+func (nodeIDMap) isOption() {}
 
 func (o nodeIDMap) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	if len(o.idMap) == 0 {
@@ -50,6 +49,8 @@ func WithNodeMap(idMap map[string]uint32) NodeListOption {
 type nodeList struct {
 	addrsList []string
 }
+
+func (nodeList) isOption() {}
 
 func (o nodeList) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	if len(o.addrsList) == 0 {
@@ -86,6 +87,8 @@ type nodeIDs struct {
 	nodeIDs []uint32
 }
 
+func (nodeIDs) isOption() {}
+
 func (o nodeIDs) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	if len(o.nodeIDs) == 0 {
 		return nil, fmt.Errorf("config: missing required node IDs")
@@ -116,6 +119,8 @@ type addNodes struct {
 	new NodeListOption
 }
 
+func (addNodes) isOption() {}
+
 func (o addNodes) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	newNodes, err := o.new.newConfig(mgr)
 	if err != nil {
@@ -135,6 +140,8 @@ type addConfig struct {
 	old Configuration
 	add Configuration
 }
+
+func (addConfig) isOption() {}
 
 func (o addConfig) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	nodes = make(Configuration, 0, len(o.old)+len(o.add))

@@ -51,6 +51,47 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 	return opt.newConfig(mgr)
 }
 
+// NewConfig returns a new [Configuration] based on the provided [gorums.Option]s.
+// It accepts exactly one [gorums.NodeListOption] and multiple [gorums.ManagerOption]s.
+// You may use this function to create the initial configuration for a new manager.
+//
+// Example:
+//
+//		cfg, err := NewConfig(
+//		    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
+//	        gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+//		)
+//
+// This is a convenience function for creating a configuration without explicitly
+// creating a manager first. However, the manager can be accessed using the
+// [Configuration.Manager] method. This method should only be used once since it
+// creates a new manager; if a manager already exists, use [NewConfiguration]
+// instead, and provide the existing manager as the first argument.
+func NewConfig(opts ...Option) (Configuration, error) {
+	var (
+		managerOptions []ManagerOption
+		nodeListOption NodeListOption
+	)
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case ManagerOption:
+			managerOptions = append(managerOptions, o)
+		case NodeListOption:
+			if nodeListOption != nil {
+				return nil, fmt.Errorf("gorums: multiple NodeListOptions provided")
+			}
+			nodeListOption = o
+		default:
+			return nil, fmt.Errorf("gorums: unknown option type: %T", opt)
+		}
+	}
+	if nodeListOption == nil {
+		return nil, fmt.Errorf("gorums: missing required NodeListOption")
+	}
+	mgr := NewManager(managerOptions...)
+	return NewConfiguration(mgr, nodeListOption)
+}
+
 // NodeIDs returns a slice of this configuration's Node IDs.
 func (c Configuration) NodeIDs() []uint32 {
 	ids := make([]uint32, len(c))

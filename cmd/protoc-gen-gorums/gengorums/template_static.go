@@ -34,6 +34,26 @@ func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, e
 	return gorums.NewConfiguration(mgr, opt)
 }
 
+// NewConfig returns a new [Configuration] based on the provided [gorums.Option]s.
+// It accepts exactly one [gorums.NodeListOption] and multiple [gorums.ManagerOption]s.
+// You may use this function to create the initial configuration for a new manager.
+//
+// Example:
+//
+//		cfg, err := NewConfig(
+//		    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
+//	        gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
+//		)
+//
+// This is a convenience function for creating a configuration without explicitly
+// creating a manager first. However, the manager can be accessed using the
+// [Configuration.Manager] method. This method should only be used once since it
+// creates a new manager; if a manager already exists, use [NewConfiguration]
+// instead, and provide the existing manager as the first argument.
+func NewConfig(opts ...gorums.Option) (Configuration, error) {
+	return gorums.NewConfig(opts...)
+}
+
 // NewNode returns a new node for the provided address.
 func NewNode(addr string) (*Node, error) {
 	return gorums.NewNode(addr)
