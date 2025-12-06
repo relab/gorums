@@ -39,8 +39,8 @@ var _ emptypb.Empty
 
 // WriteMulticast is a multicast call invoked on all nodes in the configuration in ctx.
 // Use gorums.MapRequest to send different messages to each node. No replies are collected.
-func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) {
-	gorums.Multicast(ctx, in, "storage.Storage.WriteMulticast", opts...)
+func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) error {
+	return gorums.Multicast(ctx, in, "storage.Storage.WriteMulticast", opts...)
 }
 
 // ReadQC executes the Read Quorum Call on a configuration

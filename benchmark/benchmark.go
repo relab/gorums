@@ -58,9 +58,7 @@ func runQCBenchmark(opts Options, cfg Configuration, f qcFunc) (*Result, error) 
 			return nil
 		})
 	}
-
-	err := g.Wait()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -86,12 +84,10 @@ func runQCBenchmark(opts Options, cfg Configuration, f qcFunc) (*Result, error) 
 			return nil
 		})
 	}
-
-	err = g.Wait()
-	s.End()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	s.End()
 
 	result := s.GetResult()
 	if opts.Remote {
@@ -137,8 +133,7 @@ func runAsyncQCBenchmark(opts Options, cfg Configuration, f asyncQCFunc) (*Resul
 	for range opts.Concurrent {
 		g.Go(warmupFunc)
 	}
-	err := g.Wait()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -173,11 +168,10 @@ func runAsyncQCBenchmark(opts Options, cfg Configuration, f asyncQCFunc) (*Resul
 	for range opts.Concurrent {
 		g.Go(benchmarkFunc)
 	}
-	err = g.Wait()
-	s.End()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	s.End()
 
 	result := s.GetResult()
 	if opts.Remote {
@@ -197,7 +191,6 @@ func runServerBenchmark(opts Options, cfg Configuration, f serverFunc) (*Result,
 	defer cancel()
 	cfgCtx := gorums.WithConfigContext(ctx, cfg)
 	payload := make([]byte, opts.Payload)
-	var g errgroup.Group
 	var start runtime.MemStats
 	var end runtime.MemStats
 
@@ -210,26 +203,18 @@ func runServerBenchmark(opts Options, cfg Configuration, f serverFunc) (*Result,
 
 	warmupEnd := time.Now().Add(opts.Warmup)
 	for range opts.Concurrent {
-		go benchmarkFunc(warmupEnd)
+		benchmarkFunc(warmupEnd)
 	}
-	err := g.Wait()
+
+	_, err := StartServerBenchmark(cfgCtx, &StartRequest{}).All()
 	if err != nil {
 		return nil, err
 	}
-
-	_, err = StartServerBenchmark(cfgCtx, &StartRequest{}).All()
-	if err != nil {
-		return nil, err
-	}
-
 	runtime.ReadMemStats(&start)
+
 	endTime := time.Now().Add(opts.Duration)
 	for range opts.Concurrent {
 		benchmarkFunc(endTime)
-	}
-	err = g.Wait()
-	if err != nil {
-		return nil, err
 	}
 	runtime.ReadMemStats(&end)
 

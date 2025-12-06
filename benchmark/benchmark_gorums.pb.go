@@ -39,8 +39,8 @@ var _ emptypb.Empty
 
 // Multicast is a multicast call invoked on all nodes in the configuration in ctx.
 // Use gorums.MapRequest to send different messages to each node. No replies are collected.
-func Multicast(ctx *gorums.ConfigContext, in *TimedMsg, opts ...gorums.CallOption) {
-	gorums.Multicast(ctx, in, "benchmark.Benchmark.Multicast", opts...)
+func Multicast(ctx *gorums.ConfigContext, in *TimedMsg, opts ...gorums.CallOption) error {
+	return gorums.Multicast(ctx, in, "benchmark.Benchmark.Multicast", opts...)
 }
 
 // StartServerBenchmark is a quorum call invoked on all nodes in the configuration,

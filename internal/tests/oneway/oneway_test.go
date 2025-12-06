@@ -83,16 +83,24 @@ func TestOnewayCalls(t *testing.T) {
 					node := cfg[0]
 					nodeCtx := gorums.WithNodeContext(context.Background(), node)
 					if test.sendWait {
-						oneway.Unicast(nodeCtx, in)
+						if err := oneway.Unicast(nodeCtx, in); err != nil {
+							t.Error(err)
+						}
 					} else {
-						oneway.Unicast(nodeCtx, in, gorums.WithNoSendWaiting())
+						if err := oneway.Unicast(nodeCtx, in, gorums.WithNoSendWaiting()); err != nil {
+							t.Error(err)
+						}
 					}
 				} else {
 					cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
 					if test.sendWait {
-						oneway.Multicast(cfgCtx, in)
+						if err := oneway.Multicast(cfgCtx, in); err != nil {
+							t.Error(err)
+						}
 					} else {
-						oneway.Multicast(cfgCtx, in, gorums.WithNoSendWaiting())
+						if err := oneway.Multicast(cfgCtx, in, gorums.WithNoSendWaiting()); err != nil {
+							t.Error(err)
+						}
 					}
 				}
 			}
@@ -176,10 +184,20 @@ func TestMulticastPerNode(t *testing.T) {
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
+				mapInterceptor := gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.mapFunc)
 				if test.sendWait {
-					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.mapFunc)))
+					if err := oneway.Multicast(cfgCtx, in,
+						gorums.Interceptors(mapInterceptor),
+					); err != nil {
+						t.Error(err)
+					}
 				} else {
-					oneway.Multicast(cfgCtx, in, gorums.Interceptors(gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.mapFunc)), gorums.WithNoSendWaiting())
+					if err := oneway.Multicast(cfgCtx, in,
+						gorums.Interceptors(mapInterceptor),
+						gorums.WithNoSendWaiting(),
+					); err != nil {
+						t.Error(err)
+					}
 				}
 			}
 

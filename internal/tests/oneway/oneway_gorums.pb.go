@@ -35,8 +35,8 @@ var (
 
 // Multicast is a multicast call invoked on all nodes in the configuration in ctx.
 // Use gorums.MapRequest to send different messages to each node. No replies are collected.
-func Multicast(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) {
-	gorums.Multicast(ctx, in, "oneway.OnewayTest.Multicast", opts...)
+func Multicast(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) error {
+	return gorums.Multicast(ctx, in, "oneway.OnewayTest.Multicast", opts...)
 }
 
 // OnewayTest is the server-side API for the OnewayTest Service
@@ -60,6 +60,6 @@ func RegisterOnewayTestServer(srv *gorums.Server, impl OnewayTestServer) {
 
 // Unicast is a unicast call invoked on the node in ctx.
 // No reply is returned to the client.
-func Unicast(ctx *gorums.NodeContext, in *Request, opts ...gorums.CallOption) {
-	gorums.Unicast(ctx, in, "oneway.OnewayTest.Unicast", opts...)
+func Unicast(ctx *gorums.NodeContext, in *Request, opts ...gorums.CallOption) error {
+	return gorums.Unicast(ctx, in, "oneway.OnewayTest.Unicast", opts...)
 }
