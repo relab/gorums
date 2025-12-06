@@ -15,7 +15,7 @@ import (
 // enqueueing the message (fire-and-forget semantics).
 //
 // This method should be used by generated code only.
-func Unicast[Req proto.Message](ctx *NodeContext, req Req, method string, opts ...CallOption) {
+func Unicast[Req proto.Message](ctx *NodeContext, req Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Unicast, opts...)
 	md := ordering.NewGorumsMetadata(ctx, ctx.nextMsgID(), method)
 	msg := NewRequestMessage(md, req)
@@ -24,7 +24,7 @@ func Unicast[Req proto.Message](ctx *NodeContext, req Req, method string, opts .
 	if !waitSendDone {
 		// Fire-and-forget: enqueue and return immediately
 		ctx.enqueue(request{ctx: ctx, msg: msg})
-		return
+		return nil
 	}
 
 	// Default: block until send completes
@@ -35,5 +35,7 @@ func Unicast[Req proto.Message](ctx *NodeContext, req Req, method string, opts .
 	select {
 	case <-replyChan:
 	case <-ctx.Done():
+		return ctx.Err()
 	}
+	return nil
 }

@@ -18,7 +18,7 @@ import (
 // option. Use gorums.MapRequest to transform requests per-node.
 //
 // This method should be used by generated code only.
-func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, opts ...CallOption) {
+func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Multicast, opts...)
 	waitSendDone := callOpts.mustWaitSendDone()
 
@@ -39,8 +39,9 @@ func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, op
 			select {
 			case <-clientCtx.replyChan:
 			case <-ctx.Done():
-				return
+				return ctx.Err()
 			}
 		}
 	}
+	return nil
 }

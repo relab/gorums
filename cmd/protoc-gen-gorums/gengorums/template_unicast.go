@@ -18,10 +18,10 @@ var unicastComment = `
 `
 
 var unicastSignature = `func {{$method}}(` +
-	`ctx *{{$nodeContext}}, in *{{$in}}, opts ...{{$callOpt}}) {
+	`ctx *{{$nodeContext}}, in *{{$in}}, opts ...{{$callOpt}}) error {
 `
 
-var unicastBody = `	{{$unicast}}(ctx, in, "{{$fullName}}", opts...)
+var unicastBody = `	return {{$unicast}}(ctx, in, "{{$fullName}}", opts...)
 }
 `
 

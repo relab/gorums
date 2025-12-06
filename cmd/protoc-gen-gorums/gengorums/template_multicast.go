@@ -26,10 +26,10 @@ var multicastComment = `
 
 var multicastSignature = `func {{$method}}(` +
 	`ctx *{{$configContext}}, in *{{$in}}, ` +
-	`opts ...{{$callOpt}}) {
+	`opts ...{{$callOpt}}) error {
 `
 
-var multicastBody = `	{{$multicast}}(ctx, in, "{{$fullName}}", opts...)
+var multicastBody = `	return {{$multicast}}(ctx, in, "{{$fullName}}", opts...)
 }
 `
 
