@@ -190,7 +190,7 @@ func main() {
 	}
 
 	mgrOpts := []gorums.ManagerOption{
-		gorums.WithGrpcDialOptions(
+		gorums.WithDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		),
 		gorums.WithSendBufferSize(*sendBuffer),

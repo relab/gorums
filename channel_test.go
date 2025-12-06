@@ -77,7 +77,7 @@ func send(t testing.TB, results chan<- msgResponse, node *Node, goroutineID, msg
 // when the test finishes.
 func testNodeWithoutServer(t testing.TB, opts ...ManagerOption) *Node {
 	t.Helper()
-	mgrOpts := append([]ManagerOption{InsecureGrpcDialOptions(t)}, opts...)
+	mgrOpts := append([]ManagerOption{InsecureDialOptions(t)}, opts...)
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
 	// Use a high port number that's unlikely to have anything listening.

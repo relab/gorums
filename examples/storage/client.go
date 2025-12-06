@@ -16,7 +16,7 @@ func runClient(addresses []string) error {
 
 	// init gorums manager
 	mgr := gorums.NewManager(
-		gorums.WithGrpcDialOptions(
+		gorums.WithDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)

@@ -63,7 +63,7 @@ func TestManagerAddNode(t *testing.T) {
 
 func TestManagerAddNodeWithConn(t *testing.T) {
 	addrs := gorums.TestServers(t, 3, nil)
-	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
 	t.Cleanup(mgr.Close)
 
 	// Create configuration with only first 2 nodes

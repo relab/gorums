@@ -25,9 +25,9 @@ func TestContext(t testing.TB, timeout time.Duration) context.Context {
 	return ctx
 }
 
-// InsecureGrpcDialOptions returns the default insecure gRPC dial options for testing.
-func InsecureGrpcDialOptions(_ testing.TB) ManagerOption {
-	return WithGrpcDialOptions(
+// InsecureDialOptions returns the default insecure gRPC dial options for testing.
+func InsecureDialOptions(_ testing.TB) ManagerOption {
+	return WithDialOptions(
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 }
