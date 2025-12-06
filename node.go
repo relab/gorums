@@ -55,9 +55,6 @@ func (c NodeContext) nextMsgID() uint64 {
 
 // Node encapsulates the state of a node on which a remote procedure call
 // can be performed.
-//
-// This struct is intended to be used by generated code.
-// You should use the generated `Node` struct instead.
 type Node struct {
 	// Only assigned at creation.
 	id     uint32

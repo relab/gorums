@@ -12,9 +12,6 @@ import (
 
 // Manager maintains a connection pool of nodes on
 // which quorum calls can be performed.
-//
-// This struct is intended to be used by generated code.
-// You should use the generated `Manager` struct instead.
 type Manager struct {
 	mu        sync.Mutex
 	nodes     []*Node
@@ -27,8 +24,7 @@ type Manager struct {
 
 // NewManager returns a new Manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
-// various aspects of the manager. This function is meant for internal use.
-// You should use the `NewManager` function in the generated code instead.
+// various aspects of the manager.
 func NewManager(opts ...ManagerOption) *Manager {
 	m := &Manager{
 		lookup: make(map[uint32]*Node),
