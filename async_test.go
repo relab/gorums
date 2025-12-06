@@ -12,28 +12,30 @@ import (
 )
 
 func TestAsync(t *testing.T) {
+	// a type alias short hand for the responses type
+	type respType = *gorums.Responses[*pb.StringValue]
 	tests := []struct {
 		name      string
-		call      func(*gorums.Responses[*pb.StringValue]) *gorums.Async[*pb.StringValue]
+		call      func(respType) *gorums.Async[*pb.StringValue]
 		numNodes  int
 		wantValue string
 		wantErr   bool
 	}{
 		{
 			name:      "Majority",
-			call:      (*gorums.Responses[*pb.StringValue]).AsyncMajority,
+			call:      respType.AsyncMajority,
 			numNodes:  3,
 			wantValue: "echo: test",
 		},
 		{
 			name:      "First",
-			call:      (*gorums.Responses[*pb.StringValue]).AsyncFirst,
+			call:      respType.AsyncFirst,
 			numNodes:  3,
 			wantValue: "echo: test",
 		},
 		{
 			name:      "All",
-			call:      (*gorums.Responses[*pb.StringValue]).AsyncAll,
+			call:      respType.AsyncAll,
 			numNodes:  3,
 			wantValue: "echo: test",
 		},
@@ -82,31 +84,7 @@ func TestAsync_Error(t *testing.T) {
 	}
 }
 
-func ExampleAsync_majority() {
-	// This example demonstrates how to use AsyncMajority.
-	// In a real application, you would set up a Gorums manager and configuration.
-	// For this runnable example, we simulate the output.
-
-	// cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn) // Requires testing.TB
-	// ctx := gorums.TestContext(t, 2*time.Second)
-	// responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-	// 	gorums.WithConfigContext(ctx, cfg),
-	// 	pb.String("request"),
-	// 	mock.TestMethod,
-	// )
-	// future := responses.AsyncMajority()
-	// // Do other work...
-	// reply, err := future.Get()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// fmt.Println(reply.GetValue())
-
-	fmt.Println("echo: request")
-	// Output: echo: request
-}
-
-func BenchmarkAsyncMajority(b *testing.B) {
+func BenchmarkAsyncQuorumCall(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9} {
 		cfg := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
 		cfgCtx := gorums.WithConfigContext(b.Context(), cfg)

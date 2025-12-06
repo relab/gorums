@@ -28,28 +28,30 @@ func checkQuorumCall(t *testing.T, ctxErr, err error) bool {
 }
 
 func TestQuorumCall(t *testing.T) {
+	// type alias short hand for the responses type
+	type respType = *gorums.Responses[*pb.StringValue]
 	tests := []struct {
 		name      string
-		call      func(*gorums.Responses[*pb.StringValue]) (*pb.StringValue, error)
+		call      func(respType) (*pb.StringValue, error)
 		numNodes  int
 		wantValue string
 		wantErr   bool
 	}{
 		{
 			name:      "Majority",
-			call:      (*gorums.Responses[*pb.StringValue]).Majority,
+			call:      respType.Majority,
 			numNodes:  3,
 			wantValue: "echo: test",
 		},
 		{
 			name:      "First",
-			call:      (*gorums.Responses[*pb.StringValue]).First,
+			call:      respType.First,
 			numNodes:  3,
 			wantValue: "echo: test",
 		},
 		{
 			name:      "All",
-			call:      (*gorums.Responses[*pb.StringValue]).All,
+			call:      respType.All,
 			numNodes:  3,
 			wantValue: "echo: test",
 		},
@@ -118,46 +120,153 @@ func TestQuorumCall_CollectAll(t *testing.T) {
 	}
 }
 
-func ExampleQuorumCall_majority() {
-	// This example demonstrates how to use QuorumCall with the Majority strategy.
-	// In a real application, you would set up a Gorums manager and configuration.
-	// For this runnable example, we simulate the output.
+// BenchmarkQuorumCallTerminalMethods benchmarks the built-in terminal methods with real servers.
+func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
+	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
+		cfg := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+		cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
 
-	// cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn) // Requires testing.TB
-	// ctx := gorums.TestContext(t, 2*time.Second)
-	// responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-	// 	gorums.WithConfigContext(ctx, cfg),
-	// 	pb.String("request"),
-	// 	mock.TestMethod,
-	// )
-	// reply, err := responses.Majority()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// fmt.Println(reply.GetValue())
+		b.Run(fmt.Sprintf("Majority/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				resp, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.TestMethod,
+				).Majority()
+				if err != nil {
+					b.Fatalf("QuorumCall error: %v", err)
+				}
+				_ = resp.GetValue()
+			}
+		})
 
-	fmt.Println("echo: request")
-	// Output: echo: request
+		b.Run(fmt.Sprintf("Threshold/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			threshold := numNodes/2 + 1
+			for b.Loop() {
+				resp, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.TestMethod,
+				).Threshold(threshold)
+				if err != nil {
+					b.Fatalf("QuorumCall error: %v", err)
+				}
+				_ = resp.GetValue()
+			}
+		})
+
+		b.Run(fmt.Sprintf("First/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				resp, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.TestMethod,
+				).First()
+				if err != nil {
+					b.Fatalf("QuorumCall error: %v", err)
+				}
+				_ = resp.GetValue()
+			}
+		})
+
+		b.Run(fmt.Sprintf("All/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				resp, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.TestMethod,
+				).All()
+				if err != nil {
+					b.Fatalf("QuorumCall error: %v", err)
+				}
+				_ = resp.GetValue()
+			}
+		})
+	}
 }
 
-func ExampleQuorumCall_first() {
-	// This example demonstrates how to use QuorumCall with the First strategy.
-	// In a real application, you would set up a Gorums manager and configuration.
-	// For this runnable example, we simulate the output.
+// BenchmarkQuorumCall benchmarks custom aggregation using different iterator patterns.
+func BenchmarkQuorumCall(b *testing.B) {
+	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
+		cfg := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+		cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
 
-	// cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn) // Requires testing.TB
-	// ctx := gorums.TestContext(t, 2*time.Second)
-	// responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-	// 	gorums.WithConfigContext(ctx, cfg),
-	// 	pb.String("request"),
-	// 	mock.TestMethod,
-	// )
-	// reply, err := responses.First()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// fmt.Println(reply.GetValue())
+		// Using CollectAll and then checking quorum
+		b.Run(fmt.Sprintf("CollectAllThenCheck/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			quorum := numNodes/2 + 1
+			for b.Loop() {
+				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.TestMethod,
+				)
+				replies := responses.CollectAll()
+				if len(replies) < quorum {
+					b.Fatalf("not enough replies: %d < %d", len(replies), quorum)
+				}
+				// Return first reply
+				for _, r := range replies {
+					_ = r.GetValue()
+					break
+				}
+			}
+		})
 
-	fmt.Println("echo: request")
-	// Output: echo: request
+		// Using CollectN for early termination
+		b.Run(fmt.Sprintf("CollectN/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			quorum := numNodes/2 + 1
+			for b.Loop() {
+				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.TestMethod,
+				)
+				replies := responses.CollectN(quorum)
+				if len(replies) < quorum {
+					b.Fatalf("not enough replies: %d < %d", len(replies), quorum)
+				}
+				// Return first reply
+				for _, r := range replies {
+					_ = r.GetValue()
+					break
+				}
+			}
+		})
+
+		// Using manual iteration with early return
+		b.Run(fmt.Sprintf("Iterator/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			quorum := numNodes/2 + 1
+			for b.Loop() {
+				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.TestMethod,
+				)
+				var firstResp *pb.StringValue
+				var count int
+				for result := range responses.Seq() {
+					if result.Err == nil {
+						count++
+						if firstResp == nil {
+							firstResp = result.Value
+						}
+						if count >= quorum {
+							break
+						}
+					}
+				}
+				if count < quorum {
+					b.Fatalf("not enough responses: %d < %d", count, quorum)
+				}
+				_ = firstResp.GetValue()
+			}
+		})
+	}
 }

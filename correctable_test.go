@@ -10,9 +10,33 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// init removed; moved to mock package
+func TestCorrectableQuorumCall(t *testing.T) {
+	cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
+	ctx := gorums.TestContext(t, 2*time.Second)
 
-func TestCorrectable(t *testing.T) {
+	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		gorums.WithConfigContext(ctx, cfg),
+		pb.String("test"),
+		mock.TestMethod,
+	)
+
+	// Wait for 2 responses
+	corr := responses.Correctable(2)
+	<-corr.Watch(2)
+
+	reply, level, err := corr.Get()
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if level < 2 {
+		t.Errorf("Expected level >= 2, got %d", level)
+	}
+	if reply.GetValue() != "echo: test" {
+		t.Errorf("Expected 'echo: test', got '%s'", reply.GetValue())
+	}
+}
+
+func TestCorrectableQuorumCallStream(t *testing.T) {
 	tests := []struct {
 		name      string
 		threshold int
@@ -41,7 +65,8 @@ func TestCorrectable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Use StreamServerFn which sends 3 responses: "echo: val-1", "echo: val-2", "echo: val-3"
+			// Using StreamServerFn which sends 3 responses:
+			// "echo: val-1", "echo: val-2", "echo: val-3"
 			cfg := gorums.TestConfiguration(t, 3, gorums.StreamServerFn)
 			ctx := gorums.TestContext(t, 2*time.Second)
 
@@ -107,62 +132,14 @@ func TestCorrectable_Watch(t *testing.T) {
 	}
 }
 
-// Example tests removed as they cannot run without a real environment.
-
-func TestCorrectable_Regular(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
-	ctx := gorums.TestContext(t, 2*time.Second)
-
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-		gorums.WithConfigContext(ctx, cfg),
-		pb.String("test"),
-		mock.TestMethod,
-	)
-
-	// Wait for 2 responses
-	corr := responses.Correctable(2)
-	<-corr.Watch(2)
-
-	reply, level, err := corr.Get()
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-	if level < 2 {
-		t.Errorf("Expected level >= 2, got %d", level)
-	}
-	if reply.GetValue() != "echo: test" {
-		t.Errorf("Expected 'echo: test', got '%s'", reply.GetValue())
-	}
-}
-
-func BenchmarkCorrectable_Stream(b *testing.B) {
+func BenchmarkCorrectable(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9} {
-		cfg := gorums.TestConfiguration(b, numNodes, gorums.StreamServerFn)
-		cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
 
-		b.Run(fmt.Sprintf("WaitForLevel/%d", numNodes), func(b *testing.B) {
-			b.ReportAllocs()
-			threshold := numNodes/2 + 1
-			for b.Loop() {
-				responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
-					cfgCtx,
-					pb.String("test"),
-					mock.Stream,
-				)
-				corr := responses.Correctable(threshold)
-				<-corr.Watch(threshold)
-				_, _, err := corr.Get()
-				if err != nil {
-					b.Fatalf("Correctable error: %v", err)
-				}
-			}
-		})
-
-		b.Run(fmt.Sprintf("Correctable_Regular/%d", numNodes), func(b *testing.B) {
+		b.Run(fmt.Sprintf("QuorumCall/%d", numNodes), func(b *testing.B) {
 			cfgRegular := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
 			cfgCtxRegular := gorums.WithConfigContext(b.Context(), cfgRegular)
-			b.ReportAllocs()
 			threshold := numNodes/2 + 1
+			b.ReportAllocs()
 			for b.Loop() {
 				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
 					cfgCtxRegular,
@@ -178,9 +155,59 @@ func BenchmarkCorrectable_Stream(b *testing.B) {
 			}
 		})
 
-		b.Run(fmt.Sprintf("ManualIterator/%d", numNodes), func(b *testing.B) {
-			b.ReportAllocs()
+		b.Run(fmt.Sprintf("QuorumCallIterator/%d", numNodes), func(b *testing.B) {
+			cfg := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+			cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
 			threshold := numNodes/2 + 1
+			b.ReportAllocs()
+			for b.Loop() {
+				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.TestMethod,
+				)
+				count := 0
+				for resp := range responses.Seq() {
+					if resp.Err == nil {
+						count++
+						if count >= threshold {
+							break
+						}
+					}
+				}
+				if count < threshold {
+					b.Fatalf("Iterator failed to reach threshold")
+				}
+			}
+		})
+
+		// TODO(meling): Why are the stream variants so much slower?
+
+		b.Run(fmt.Sprintf("QuorumCallStream/%d", numNodes), func(b *testing.B) {
+			cfg := gorums.TestConfiguration(b, numNodes, gorums.StreamServerFn)
+			cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
+			threshold := numNodes/2 + 1
+			b.ReportAllocs()
+			for b.Loop() {
+				responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("test"),
+					mock.Stream,
+				)
+				corr := responses.Correctable(threshold)
+				<-corr.Watch(threshold)
+				_, _, err := corr.Get()
+				if err != nil {
+					b.Fatalf("Correctable error: %v", err)
+				}
+			}
+		})
+
+		b.Run(fmt.Sprintf("QuorumCallStreamIterator/%d", numNodes), func(b *testing.B) {
+			cfg := gorums.TestConfiguration(b, numNodes, gorums.StreamServerFn)
+			cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
+			threshold := numNodes/2 + 1
+			b.ReportAllocs()
 			for b.Loop() {
 				responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
 					cfgCtx,
@@ -197,7 +224,7 @@ func BenchmarkCorrectable_Stream(b *testing.B) {
 					}
 				}
 				if count < threshold {
-					b.Fatalf("ManualIterator failed to reach threshold")
+					b.Fatalf("Iterator failed to reach threshold")
 				}
 			}
 		})

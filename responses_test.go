@@ -63,12 +63,12 @@ func checkError(t *testing.T, wantErr bool, err, wantErrType error) bool {
 
 // TestTerminalMethods tests the terminal methods on Responses
 func TestTerminalMethods(t *testing.T) {
+	type respType = *Responses[*pb.StringValue]
 	tests := []struct {
 		name        string
 		numNodes    int
 		responses   []NodeResponse[proto.Message]
-		method      string // "First", "Majority", "All", "Threshold"
-		threshold   int    // for Threshold method
+		call        func(resp respType) (*pb.StringValue, error)
 		wantValue   string
 		wantErr     bool
 		wantErrType error
@@ -80,7 +80,7 @@ func TestTerminalMethods(t *testing.T) {
 			responses: []NodeResponse[proto.Message]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			},
-			method:    "First",
+			call:      respType.First,
 			wantValue: "response1",
 		},
 		{
@@ -91,7 +91,7 @@ func TestTerminalMethods(t *testing.T) {
 				{NodeID: 2, Value: nil, Err: errors.New("node error")},
 				{NodeID: 3, Value: nil, Err: errors.New("node error")},
 			},
-			method:      "First",
+			call:        respType.First,
 			wantErr:     true,
 			wantErrType: ErrIncomplete,
 		},
@@ -103,7 +103,7 @@ func TestTerminalMethods(t *testing.T) {
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			},
-			method:    "Majority",
+			call:      respType.Majority,
 			wantValue: "response1",
 		},
 		{
@@ -114,7 +114,7 @@ func TestTerminalMethods(t *testing.T) {
 				{NodeID: 2, Value: nil, Err: errors.New("node error")},
 				{NodeID: 3, Value: nil, Err: errors.New("node error")},
 			},
-			method:      "Majority",
+			call:        respType.Majority,
 			wantErr:     true,
 			wantErrType: ErrIncomplete,
 		},
@@ -126,7 +126,7 @@ func TestTerminalMethods(t *testing.T) {
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 				{NodeID: 3, Value: pb.String("response3"), Err: nil},
 			},
-			method:    "Majority",
+			call:      respType.Majority,
 			wantValue: "response1",
 		},
 		// All tests
@@ -138,7 +138,7 @@ func TestTerminalMethods(t *testing.T) {
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 				{NodeID: 3, Value: pb.String("response3"), Err: nil},
 			},
-			method:    "All",
+			call:      respType.All,
 			wantValue: "response1",
 		},
 		{
@@ -149,11 +149,40 @@ func TestTerminalMethods(t *testing.T) {
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 				{NodeID: 3, Value: nil, Err: errors.New("node error")},
 			},
-			method:      "All",
+			call:        respType.All,
 			wantErr:     true,
 			wantErrType: ErrIncomplete,
 		},
-		// Threshold tests
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses)
+			responses := NewResponses(clientCtx)
+
+			result, err := tt.call(responses)
+
+			if !checkError(t, tt.wantErr, err, tt.wantErrType) {
+				return
+			}
+			if !tt.wantErr && result.GetValue() != tt.wantValue {
+				t.Errorf("Expected value %q, got %q", tt.wantValue, result.GetValue())
+			}
+		})
+	}
+}
+
+func TestTerminalMethodsThreshold(t *testing.T) {
+	type respType = *Responses[*pb.StringValue]
+	tests := []struct {
+		name        string
+		numNodes    int
+		responses   []NodeResponse[proto.Message]
+		call        func(resp respType, threshold int) (*pb.StringValue, error)
+		threshold   int
+		wantValue   string
+		wantErr     bool
+		wantErrType error
+	}{
 		{
 			name:     "Threshold_Success",
 			numNodes: 3,
@@ -161,7 +190,7 @@ func TestTerminalMethods(t *testing.T) {
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			},
-			method:    "Threshold",
+			call:      respType.Threshold,
 			threshold: 2,
 			wantValue: "response1",
 		},
@@ -173,36 +202,22 @@ func TestTerminalMethods(t *testing.T) {
 				{NodeID: 2, Value: nil, Err: errors.New("node error")},
 				{NodeID: 3, Value: nil, Err: errors.New("node error")},
 			},
-			method:      "Threshold",
+			call:        respType.Threshold,
 			threshold:   2,
 			wantErr:     true,
 			wantErrType: ErrIncomplete,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clientCtx := makeClientCtx[*pb.StringValue, *pb.StringValue](t, tt.numNodes, tt.responses)
 			responses := NewResponses(clientCtx)
 
-			var result *pb.StringValue
-			var err error
-
-			switch tt.method {
-			case "First":
-				result, err = responses.First()
-			case "Majority":
-				result, err = responses.Majority()
-			case "All":
-				result, err = responses.All()
-			case "Threshold":
-				result, err = responses.Threshold(tt.threshold)
-			}
+			result, err := tt.call(responses, tt.threshold)
 
 			if !checkError(t, tt.wantErr, err, tt.wantErrType) {
 				return
 			}
-
 			if !tt.wantErr && result.GetValue() != tt.wantValue {
 				t.Errorf("Expected value %q, got %q", tt.wantValue, result.GetValue())
 			}

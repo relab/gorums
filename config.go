@@ -30,16 +30,14 @@ func WithConfigContext(parent context.Context, cfg Configuration) *ConfigContext
 }
 
 // Configuration returns the Configuration associated with this context.
-func (c *ConfigContext) Configuration() Configuration {
+func (c ConfigContext) Configuration() Configuration {
 	return c.cfg
 }
 
 // Configuration represents a static set of nodes on which quorum calls may be invoked.
 //
-// NOTE: mutating the configuration is not supported.
-//
-// This type is intended to be used by generated code.
-// You should use the generated `Configuration` type instead.
+// Mutating the configuration is not supported; instead, use NewConfiguration to create
+// a new configuration.
 type Configuration []*Node
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
@@ -63,8 +61,6 @@ func (c Configuration) NodeIDs() []uint32 {
 }
 
 // Nodes returns the nodes in this configuration.
-//
-// NOTE: mutating the returned slice is not supported.
 func (c Configuration) Nodes() []*Node {
 	return c
 }

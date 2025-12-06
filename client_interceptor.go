@@ -221,7 +221,8 @@ func (c *clientCtx[Req, Resp]) send() {
 	c.expectedReplies = expected
 }
 
-// defaultResponseSeq returns an iterator that yields at most c.expectedReplies responses.
+// defaultResponseSeq returns an iterator that yields at most c.expectedReplies responses
+// from nodes until the context is canceled or all expected responses are received.
 func (c *clientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger sending on first iteration
@@ -240,8 +241,8 @@ func (c *clientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 	}
 }
 
-// streamingResponseSeq returns an iterator that yields responses as they arrive from nodes
-// until the context is canceled or breaking from the range loop.
+// streamingResponseSeq returns an iterator that yields responses as they arrive
+// from nodes until the context is canceled or breaking from the range loop.
 func (c *clientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 	return func(yield func(NodeResponse[Resp]) bool) {
 		// Trigger sending on first iteration
