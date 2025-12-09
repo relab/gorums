@@ -176,6 +176,37 @@ func TestChannelSendBufferSize(t *testing.T) {
 	}
 }
 
+// TestChannelLatency verifies that the channel latency is updated after requests.
+func TestChannelLatency(t *testing.T) {
+	const minDelay = 20 * time.Millisecond
+	node := TestNode(t, delayServerFn(minDelay))
+
+	// Initial latency should be -1
+	if latency := node.Latency(); latency != -1*time.Second {
+		t.Errorf("Initial latency = %v, expected -1s", latency)
+	}
+
+	// Send a few requests to update latency; we need a few samples for the
+	// exponential weighted moving average to stabilize to the real RTT.
+	for i := range 10 {
+		ctx := TestContext(t, time.Second)
+		nodeCtx := WithNodeContext(ctx, node)
+		_, err := RPCCall(nodeCtx, pb.String("ping"), mock.TestMethod)
+		if err != nil {
+			t.Fatalf("RPCCall %d failed: %v", i, err)
+		}
+	}
+
+	// Latency should be positive and roughly > 20ms
+	latency := node.Latency()
+	if latency <= 0 {
+		t.Errorf("Latency = %v, expected > 0", latency)
+	}
+	if latency < minDelay {
+		t.Errorf("Latency = %v, expected >= %v (server delay)", latency, minDelay)
+	}
+	t.Logf("Measured latency: %v", latency)
+}
 
 // TestChannelSendCompletionWaiting verifies the behavior of send completion waiting.
 func TestChannelSendCompletionWaiting(t *testing.T) {

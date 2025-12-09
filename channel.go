@@ -47,6 +47,7 @@ type request struct {
 	waitSendDone bool
 	streaming    bool
 	responseChan chan<- NodeResponse[proto.Message]
+	sendTime     time.Time
 }
 
 type channel struct {
@@ -150,8 +151,9 @@ func (c *channel) isConnected() bool {
 // enqueue adds the request to the send queue and sets up response routing if needed.
 // If the node is closed, it responds with an error instead.
 func (c *channel) enqueue(req request) {
-	msgID := req.msg.GetMessageID()
 	if req.responseChan != nil {
+		req.sendTime = time.Now()
+		msgID := req.msg.GetMessageID()
 		c.responseMut.Lock()
 		c.responseRouters[msgID] = req
 		c.responseMut.Unlock()
@@ -161,7 +163,7 @@ func (c *channel) enqueue(req request) {
 	select {
 	case <-c.parentCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(msgID, NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: fmt.Errorf("node closed")})
+		c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: fmt.Errorf("node closed")})
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
@@ -174,6 +176,9 @@ func (c *channel) routeResponse(msgID uint64, resp NodeResponse[proto.Message]) 
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	if req, ok := c.responseRouters[msgID]; ok {
+		if resp.Err == nil {
+			c.updateLatency(time.Since(req.sendTime))
+		}
 		req.responseChan <- resp
 		// delete the router if we are only expecting a single reply message
 		if !req.streaming {
@@ -352,9 +357,22 @@ func (c *channel) lastErr() error {
 	return c.lastError
 }
 
-// channelLatency returns the latency between the client and this channel.
+// channelLatency returns the latency between the client and the server associated with this channel.
 func (c *channel) channelLatency() time.Duration {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.latency
+}
+
+// updateLatency updates the latency between the client and the server associated with this channel.
+// It uses a simple moving average to calculate the latency.
+func (c *channel) updateLatency(rtt time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.latency < 0 {
+		c.latency = rtt
+	} else {
+		// Use simple moving average (alpha=0.2)
+		c.latency = time.Duration(0.8*float64(c.latency) + 0.2*float64(rtt))
+	}
 }
