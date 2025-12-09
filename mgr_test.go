@@ -1,11 +1,11 @@
-package gorums_test
+package gorums
 
 import (
 	"bytes"
 	"log"
+	"strings"
 	"testing"
 
-	"github.com/relab/gorums"
 	"google.golang.org/grpc/encoding"
 )
 
@@ -15,8 +15,8 @@ var (
 )
 
 func init() {
-	if encoding.GetCodec(gorums.ContentSubtype) == nil {
-		encoding.RegisterCodec(gorums.NewCodec())
+	if encoding.GetCodec(ContentSubtype) == nil {
+		encoding.RegisterCodec(NewCodec())
 	}
 }
 
@@ -26,16 +26,16 @@ func TestManagerLogging(t *testing.T) {
 		logger = log.New(&buf, "logger: ", log.Lshortfile)
 	)
 	buf.WriteString("\n")
-	_ = gorums.NewManager(
-		gorums.WithNoConnect(),
-		gorums.WithLogger(logger),
-	)
-	t.Log(buf.String())
+	_ = NewManager(WithNoConnect(), WithLogger(logger))
+	want := "logger: mgr.go:48: ready"
+	if strings.TrimSpace(buf.String()) != want {
+		t.Errorf("logger: got %q, want %q", buf.String(), want)
+	}
 }
 
 func TestManagerAddNode(t *testing.T) {
-	mgr := gorums.NewManager(gorums.WithNoConnect())
-	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
+	mgr := NewManager(WithNoConnect())
+	_, err := NewConfiguration(mgr, WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,30 +44,31 @@ func TestManagerAddNode(t *testing.T) {
 		id   uint32
 		err  string
 	}{
-		{"127.0.1.1:1234", 1, "config: node 1 (127.0.1.1:1234) already exists"},
+		{"127.0.1.1:1234", 4, "node 4 already exists"},
 		{"127.0.1.1:1234", 5, ""},
 		{"127.0.1.1:1234", 6, ""}, // The same addr:port can have different IDs
-		{"127.0.1.1:1234", 2, "config: node 2 (127.0.1.1:1234) already exists"},
 	}
 	for _, test := range tests {
-		node, err := gorums.NewNodeWithID(test.addr, test.id)
+		node, err := NewNodeWithID(test.addr, test.id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = mgr.AddNode(node)
-		if err != nil && err.Error() != test.err {
-			t.Errorf("mgr.AddNode(Node(%s, %d)) = %s, expected %s", test.addr, test.id, err.Error(), test.err)
+		if err := mgr.addNode(node); err != nil {
+			if err.Error() == test.err {
+				continue
+			}
+			t.Errorf("mgr.addNode(%s, %d) = %q, want %q", test.addr, test.id, err.Error(), test.err)
 		}
 	}
 }
 
 func TestManagerAddNodeWithConn(t *testing.T) {
-	addrs := gorums.TestServers(t, 3, nil)
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	addrs := TestServers(t, 3, nil)
+	mgr := NewManager(InsecureDialOptions(t))
 	t.Cleanup(mgr.Close)
 
 	// Create configuration with only first 2 nodes
-	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs[:2]))
+	_, err := NewConfiguration(mgr, WithNodeList(addrs[:2]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,12 +77,12 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 	}
 
 	// Add the 3rd node to the manager
-	node, err := gorums.NewNode(addrs[2])
+	node, err := NewNode(addrs[2])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = mgr.AddNode(node); err != nil {
-		t.Errorf("mgr.AddNode(%s) = %q, expected no error", addrs[2], err.Error())
+	if err := mgr.addNode(node); err != nil {
+		t.Errorf("mgr.addNode(%s) = %q, expected no error", addrs[2], err.Error())
 	}
 	if mgr.Size() != len(addrs) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs))
