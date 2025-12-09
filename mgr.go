@@ -104,24 +104,15 @@ func (m *Manager) Size() (nodes int) {
 	return len(m.nodes)
 }
 
-// AddNode adds the node to the manager's node pool
-// and establishes a connection to the node.
-func (m *Manager) AddNode(node *Node) error {
-	if _, found := m.Node(node.ID()); found {
-		// Node IDs must be unique
-		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
-	}
-	if m.logger != nil {
-		m.logger.Printf("Connecting to %s with id %d\n", node, node.id)
-	}
-	if err := node.connect(m); err != nil {
-		if m.logger != nil {
-			m.logger.Printf("Failed to connect to %s: %v (retrying)", node, err)
-		}
-	}
-
+func (m *Manager) addNode(node *Node) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if _, found := m.lookup[node.id]; found {
+		return fmt.Errorf("node %d already exists", node.id)
+	}
+	if err := node.connect(m); err != nil {
+		return err
+	}
 	m.lookup[node.id] = node
 	m.nodes = append(m.nodes, node)
 	return nil

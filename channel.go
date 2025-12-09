@@ -207,6 +207,9 @@ func (c *channel) deleteRouter(msgID uint64) {
 // sender goroutine takes requests from the sendQ and sends them on the stream.
 // If the stream is down, it tries to re-establish it.
 func (c *channel) sender() {
+	// eager connect; ignored if stream is down (will be retried on send)
+	_ = c.ensureStream()
+
 	var req request
 	for {
 		select {

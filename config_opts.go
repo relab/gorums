@@ -28,7 +28,7 @@ func (o nodeIDMap) newConfig(mgr *Manager) (nodes Configuration, err error) {
 			if err != nil {
 				return nil, err
 			}
-			if err = mgr.AddNode(node); err != nil {
+			if err := mgr.addNode(node); err != nil {
 				return nil, err
 			}
 		}
@@ -63,7 +63,7 @@ func (o nodeList) newConfig(mgr *Manager) (nodes Configuration, err error) {
 			return nil, err
 		}
 		if n, found := mgr.Node(node.ID()); !found {
-			if err = mgr.AddNode(node); err != nil {
+			if err := mgr.addNode(node); err != nil {
 				return nil, err
 			}
 		} else {

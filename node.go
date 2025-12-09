@@ -108,9 +108,6 @@ func (n *Node) connect(mgr *Manager) (err error) {
 
 	// Create channel and establish gRPC node stream
 	n.channel = newChannel(n)
-	if err := n.channel.ensureStream(); err != nil {
-		return nodeError{nodeID: n.id, cause: err}
-	}
 	return nil
 }
 

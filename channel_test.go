@@ -16,7 +16,10 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-const defaultTestTimeout = 3 * time.Second
+const (
+	defaultTestTimeout = 3 * time.Second
+	streamConnectDelay = 10 * time.Millisecond
+)
 
 type mockSrv struct{}
 
@@ -85,7 +88,7 @@ func testNodeWithoutServer(t testing.TB, opts ...ManagerOption) *Node {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = mgr.AddNode(node); err != nil {
+	if err = mgr.addNode(node); err != nil {
 		t.Fatal(err)
 	}
 	return node
@@ -117,6 +120,8 @@ func TestChannelCreation(t *testing.T) {
 // TestChannelShutdown verifies proper cleanup when channel is closed.
 func TestChannelShutdown(t *testing.T) {
 	node := TestNode(t, delayServerFn(0))
+	// Wait for stream to be established
+	time.Sleep(streamConnectDelay)
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
@@ -151,6 +156,26 @@ func TestChannelShutdown(t *testing.T) {
 		t.Error("channel should not be connected after close")
 	}
 }
+
+// TestChannelSendBufferSize verifies that setting the send buffer size option
+// works as expected (at least that it doesn't panic and channels are functional).
+func TestChannelSendBufferSize(t *testing.T) {
+	bufferSizes := []uint{0, 1, 10, 100, 1024}
+
+	for _, size := range bufferSizes {
+		t.Run(string(rune(size)), func(t *testing.T) {
+			node := TestNode(t, EchoServerFn, WithSendBufferSize(size))
+
+			ctx := TestContext(t, time.Second)
+			nodeCtx := WithNodeContext(ctx, node)
+			_, err := RPCCall(nodeCtx, pb.String("test"), mock.TestMethod)
+			if err != nil {
+				t.Errorf("RPCCall failed with buffer size %d: %v", size, err)
+			}
+		})
+	}
+}
+
 
 // TestChannelSendCompletionWaiting verifies the behavior of send completion waiting.
 func TestChannelSendCompletionWaiting(t *testing.T) {
@@ -366,6 +391,8 @@ func TestChannelConnectionState(t *testing.T) {
 			name: "RequiresBothReadyAndStream",
 			setup: func(t *testing.T) *Node {
 				node := TestNode(t, delayServerFn(0))
+				// Wait for stream to be established
+				time.Sleep(streamConnectDelay)
 				if !node.channel.isConnected() {
 					t.Fatal("node should be connected before clearing stream")
 				}
@@ -378,6 +405,8 @@ func TestChannelConnectionState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node := tt.setup(t)
+			// Wait for the stream to be established, as it is now done asynchronously in sender
+			time.Sleep(streamConnectDelay)
 			connected := node.channel.isConnected()
 			if connected != tt.wantConnected {
 				t.Errorf("isConnected() = %v, want %v", connected, tt.wantConnected)
@@ -503,6 +532,8 @@ func TestChannelContext(t *testing.T) {
 // 4. Verifying all goroutines can successfully enqueue without hanging
 func TestChannelDeadlock(t *testing.T) {
 	node := TestNode(t, delayServerFn(0))
+	// Wait for the stream to be established
+	time.Sleep(streamConnectDelay)
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}
@@ -559,6 +590,8 @@ func TestChannelDeadlock(t *testing.T) {
 // TestChannelRouterLifecycle tests router creation, persistence, and cleanup behavior.
 func TestChannelRouterLifecycle(t *testing.T) {
 	node := TestNode(t, delayServerFn(0))
+	// Wait for the stream to be established
+	time.Sleep(streamConnectDelay)
 	if !node.channel.isConnected() {
 		t.Error("node should be connected")
 	}

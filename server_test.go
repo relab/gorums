@@ -2,6 +2,7 @@ package gorums_test
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -98,5 +99,84 @@ func TestServerInterceptorsChain(t *testing.T) {
 	want := "client-i1in-i2in-server-i2out-i1out"
 	if mock.GetVal(res) != want {
 		t.Fatalf("unexpected response value: got %q, want %q", mock.GetVal(res), want)
+	}
+}
+
+// TestTCPReconnection verifies that a node can reconnect after the
+// underlying TCP connection is broken.
+func TestTCPReconnection(t *testing.T) {
+	srv := gorums.NewServer()
+	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		return gorums.NewResponseMessage(in.GetMetadata(), in.GetProtoMessage()), nil
+	})
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	addr := lis.Addr().String()
+
+	go func() {
+		_ = srv.Serve(lis)
+	}()
+
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList([]string{addr}))
+	if err != nil {
+		t.Fatalf("NewConfiguration failed: %v", err)
+	}
+	node := cfg.Nodes()[0]
+
+	// Send first message
+	ctx := gorums.TestContext(t, time.Second)
+	nodeCtx := gorums.WithNodeContext(ctx, node)
+	_, err = gorums.RPCCall(nodeCtx, pb.String("1"), mock.TestMethod)
+	if err != nil {
+		t.Fatalf("First call failed: %v", err)
+	}
+
+	// Stop server
+	srv.Stop()
+	lis.Close()
+
+	// Wait a bit
+	time.Sleep(100 * time.Millisecond)
+
+	// Sending now should fail or timeout
+	ctx2 := gorums.TestContext(t, 200*time.Millisecond)
+	nodeCtx2 := gorums.WithNodeContext(ctx2, node)
+	_, err = gorums.RPCCall(nodeCtx2, pb.String("2"), mock.TestMethod)
+	if err == nil {
+		// It might succeed if it just queued it? But we wait for response.
+	} else {
+		t.Logf("Got expected error during downtime: %v", err)
+	}
+
+	// Restart server
+	lis2, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Skipf("Could not re-bind to %s: %v", addr, err)
+	}
+
+	srv2 := gorums.NewServer()
+	srv2.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+		return gorums.NewResponseMessage(in.GetMetadata(), in.GetProtoMessage()), nil
+	})
+	go func() {
+		_ = srv2.Serve(lis2)
+	}()
+	defer srv2.Stop()
+
+	// Wait for client backoff/reconnect
+	time.Sleep(2 * time.Second)
+
+	// Send message again
+	ctx3 := gorums.TestContext(t, 2*time.Second)
+	nodeCtx3 := gorums.WithNodeContext(ctx3, node)
+	_, err = gorums.RPCCall(nodeCtx3, pb.String("3"), mock.TestMethod)
+	if err != nil {
+		t.Errorf("Call after reconnection failed: %v", err)
 	}
 }
