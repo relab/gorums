@@ -61,11 +61,6 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 	return gorums.NewConfig(opts...)
 }
 
-// NewNode returns a new node for the provided address.
-func NewNode(addr string) (*Node, error) {
-	return gorums.NewNode(addr)
-}
-
 // Use the aliased types to add them to the reserved identifiers list.
 // This prevents users from defining message types with these names.
 var (
