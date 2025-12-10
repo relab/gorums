@@ -115,15 +115,6 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 	return n, nil
 }
 
-// NewNode returns a new node for the provided address.
-func NewNode(addr string) (*Node, error) {
-	id, err := nodeID(addr)
-	if err != nil {
-		return nil, err
-	}
-	return newNodeWithID(addr, id)
-}
-
 // nodeID returns the ID for the provided address.
 // It resolves the address to ensure the ID is consistent.
 func nodeID(addr string) (uint32, error) {
@@ -134,18 +125,6 @@ func nodeID(addr string) (uint32, error) {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
 	return h.Sum32(), nil
-}
-
-// newNodeWithID returns a new node for the provided address and id.
-func newNodeWithID(addr string, id uint32) (*Node, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	return &Node{
-		id:   id,
-		addr: tcpAddr.String(),
-	}, nil
 }
 
 // newContext returns a new context for this node's channel.
