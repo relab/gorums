@@ -25,7 +25,9 @@ var (
 
 func TestNewConfigurationEmptyNodeList(t *testing.T) {
 	wantErr := errors.New("config: missing required node addresses")
-	mgr := gorums.NewManager(gorums.WithNoConnect())
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
 	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList([]string{}))
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, wantErr)
@@ -36,7 +38,9 @@ func TestNewConfigurationEmptyNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeList(t *testing.T) {
-	mgr := gorums.NewManager(gorums.WithNoConnect())
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +76,9 @@ func TestNewConfigurationNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeMap(t *testing.T) {
-	mgr := gorums.NewManager(gorums.WithNoConnect())
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)
@@ -96,7 +102,9 @@ func TestNewConfigurationNodeMap(t *testing.T) {
 }
 
 func TestNewConfigurationNodeIDs(t *testing.T) {
-	mgr := gorums.NewManager(gorums.WithNoConnect())
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
 	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +140,9 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 }
 
 func TestNewConfigurationAnd(t *testing.T) {
-	mgr := gorums.NewManager(gorums.WithNoConnect())
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
 	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +194,9 @@ func TestNewConfigurationAnd(t *testing.T) {
 }
 
 func TestNewConfigurationExcept(t *testing.T) {
-	mgr := gorums.NewManager(gorums.WithNoConnect())
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
 	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
 	if err != nil {
 		t.Fatal(err)

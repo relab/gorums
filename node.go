@@ -83,7 +83,6 @@ type nodeOptions struct {
 	PerNodeMD      func(uint32) metadata.MD
 	DialOpts       []grpc.DialOption
 	Manager        *Manager // only used for backward compatibility to allow Configuration.Manager()
-	NoConnect      bool
 }
 
 // newNode creates a new node using the provided options.
@@ -104,13 +103,7 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 		perNodeMD: opts.PerNodeMD,
 	}
 
-	if opts.NoConnect {
-		return n, nil
-	}
-
 	// Create gRPC connection
-	// If no DialOpts are provided, we should probably have safeguards or defaults,
-	// but Manager normally provides them.
 	n.conn, err = grpc.NewClient(n.addr, opts.DialOpts...)
 	if err != nil {
 		return nil, nodeError{nodeID: n.id, cause: err}

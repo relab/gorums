@@ -21,7 +21,6 @@ func (ManagerOption) isOption() {}
 type managerOptions struct {
 	grpcDialOpts []grpc.DialOption
 	logger       *log.Logger
-	noConnect    bool
 	backoff      backoff.Config
 	sendBuffer   uint
 	metadata     metadata.MD
@@ -81,13 +80,5 @@ func WithMetadata(md metadata.MD) ManagerOption {
 func WithPerNodeMetadata(f func(uint32) metadata.MD) ManagerOption {
 	return func(o *managerOptions) {
 		o.perNodeMD = f
-	}
-}
-
-// WithNoConnect returns a ManagerOption which instructs the Manager not to
-// connect to any of its nodes. Mainly used for testing purposes.
-func WithNoConnect() ManagerOption {
-	return func(o *managerOptions) {
-		o.noConnect = true
 	}
 }

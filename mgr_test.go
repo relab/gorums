@@ -25,8 +25,9 @@ func TestManagerLogging(t *testing.T) {
 		buf    bytes.Buffer
 		logger = log.New(&buf, "logger: ", log.Lshortfile)
 	)
-	buf.WriteString("\n")
-	_ = NewManager(WithNoConnect(), WithLogger(logger))
+	mgr := NewManager(InsecureDialOptions(t), WithLogger(logger))
+	t.Cleanup(mgr.Close)
+
 	want := "logger: mgr.go:48: ready"
 	if strings.TrimSpace(buf.String()) != want {
 		t.Errorf("logger: got %q, want %q", buf.String(), want)
@@ -34,7 +35,9 @@ func TestManagerLogging(t *testing.T) {
 }
 
 func TestManagerNewNode(t *testing.T) {
-	mgr := NewManager(WithNoConnect())
+	mgr := NewManager(InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
 	_, err := NewConfiguration(mgr, WithNodeMap(nodeMap))
 	if err != nil {
 		t.Fatal(err)

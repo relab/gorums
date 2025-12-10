@@ -124,7 +124,6 @@ func (m *Manager) newNode(addr string, id uint32) (*Node, error) {
 		PerNodeMD:      m.opts.perNodeMD,
 		DialOpts:       m.opts.grpcDialOpts,
 		Manager:        m,
-		NoConnect:      m.opts.noConnect,
 	}
 	n, err := newNode(addr, opts)
 	if err != nil {
