@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"log"
 	"net"
 	"sort"
 	"strconv"
@@ -50,7 +51,7 @@ func (c NodeContext) enqueue(req request) {
 
 // nextMsgID returns the next message ID from this client's manager.
 func (c NodeContext) nextMsgID() uint64 {
-	return c.node.mgr.getMsgID()
+	return c.node.msgIDGen()
 }
 
 // Node encapsulates the state of a node on which a remote procedure call
@@ -61,28 +62,89 @@ type Node struct {
 	addr   string
 	conn   *grpc.ClientConn
 	cancel func()
-	mgr    *Manager
+	mgr    *Manager // only used for backward compatibility to allow Configuration.Manager()
+
+	msgIDGen  func() uint64
+	logger    *log.Logger
+	metadata  metadata.MD
+	perNodeMD func(uint32) metadata.MD
 
 	// the default channel
 	channel *channel
 }
 
-// NewNode returns a new node for the provided address.
-func NewNode(addr string) (*Node, error) {
+// nodeOptions contains configuration options for creating a new Node.
+type nodeOptions struct {
+	ID             uint32
+	SendBufferSize uint
+	MsgIDGen       func() uint64
+	Logger         *log.Logger
+	Metadata       metadata.MD
+	PerNodeMD      func(uint32) metadata.MD
+	DialOpts       []grpc.DialOption
+	Manager        *Manager // only used for backward compatibility to allow Configuration.Manager()
+	NoConnect      bool
+}
+
+// newNode creates a new node using the provided options.
+// It establishes the connection (lazy dial) and initializes the channel.
+func newNode(addr string, opts nodeOptions) (*Node, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
 	}
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(tcpAddr.String()))
-	return &Node{
-		id:   h.Sum32(),
-		addr: tcpAddr.String(),
-	}, nil
+
+	n := &Node{
+		id:        opts.ID,
+		addr:      tcpAddr.String(),
+		mgr:       opts.Manager,
+		msgIDGen:  opts.MsgIDGen,
+		logger:    opts.Logger,
+		metadata:  opts.Metadata,
+		perNodeMD: opts.PerNodeMD,
+	}
+
+	if opts.NoConnect {
+		return n, nil
+	}
+
+	// Create gRPC connection
+	// If no DialOpts are provided, we should probably have safeguards or defaults,
+	// but Manager normally provides them.
+	n.conn, err = grpc.NewClient(n.addr, opts.DialOpts...)
+	if err != nil {
+		return nil, nodeError{nodeID: n.id, cause: err}
+	}
+
+	// Create channel and establish gRPC node stream
+	n.channel = newChannel(n, opts.SendBufferSize)
+
+	return n, nil
 }
 
-// NewNodeWithID returns a new node for the provided address and id.
-func NewNodeWithID(addr string, id uint32) (*Node, error) {
+// NewNode returns a new node for the provided address.
+func NewNode(addr string) (*Node, error) {
+	id, err := nodeID(addr)
+	if err != nil {
+		return nil, err
+	}
+	return newNodeWithID(addr, id)
+}
+
+// nodeID returns the ID for the provided address.
+// It resolves the address to ensure the ID is consistent.
+func nodeID(addr string) (uint32, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(tcpAddr.String()))
+	return h.Sum32(), nil
+}
+
+// newNodeWithID returns a new node for the provided address and id.
+func newNodeWithID(addr string, id uint32) (*Node, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -93,24 +155,6 @@ func NewNodeWithID(addr string, id uint32) (*Node, error) {
 	}, nil
 }
 
-// connect to this node and associate it with the manager.
-func (n *Node) connect(mgr *Manager) (err error) {
-	n.mgr = mgr
-	if n.mgr.opts.noConnect {
-		return nil
-	}
-
-	// Create gRPC connection
-	n.conn, err = grpc.NewClient(n.addr, n.mgr.opts.grpcDialOpts...)
-	if err != nil {
-		return nodeError{nodeID: n.id, cause: err}
-	}
-
-	// Create channel and establish gRPC node stream
-	n.channel = newChannel(n)
-	return nil
-}
-
 // newContext returns a new context for this node's channel.
 // This context is used by the channel implementation to stop
 // all goroutines and the NodeStream, when the context is canceled.
@@ -119,9 +163,9 @@ func (n *Node) connect(mgr *Manager) (err error) {
 // fresh contexts. Reusing contexts could result in reusing
 // a cancelled context.
 func (n *Node) newContext() context.Context {
-	md := n.mgr.opts.metadata.Copy()
-	if n.mgr.opts.perNodeMD != nil {
-		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
+	md := n.metadata.Copy()
+	if n.perNodeMD != nil {
+		md = metadata.Join(md, n.perNodeMD(n.id))
 	}
 	var ctx context.Context
 	ctx, n.cancel = context.WithCancel(context.Background())

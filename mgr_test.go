@@ -33,7 +33,7 @@ func TestManagerLogging(t *testing.T) {
 	}
 }
 
-func TestManagerAddNode(t *testing.T) {
+func TestManagerNewNode(t *testing.T) {
 	mgr := NewManager(WithNoConnect())
 	_, err := NewConfiguration(mgr, WithNodeMap(nodeMap))
 	if err != nil {
@@ -49,11 +49,8 @@ func TestManagerAddNode(t *testing.T) {
 		{"127.0.1.1:1234", 6, ""}, // The same addr:port can have different IDs
 	}
 	for _, test := range tests {
-		node, err := NewNodeWithID(test.addr, test.id)
+		_, err := mgr.newNode(test.addr, test.id)
 		if err != nil {
-			t.Fatal(err)
-		}
-		if err := mgr.addNode(node); err != nil {
 			if err.Error() == test.err {
 				continue
 			}
@@ -62,7 +59,7 @@ func TestManagerAddNode(t *testing.T) {
 	}
 }
 
-func TestManagerAddNodeWithConn(t *testing.T) {
+func TestManagerNewNodeWithConn(t *testing.T) {
 	addrs := TestServers(t, 3, nil)
 	mgr := NewManager(InsecureDialOptions(t))
 	t.Cleanup(mgr.Close)
@@ -76,13 +73,14 @@ func TestManagerAddNodeWithConn(t *testing.T) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs)-1)
 	}
 
-	// Add the 3rd node to the manager
-	node, err := NewNode(addrs[2])
+	// Obtain ID for the 3rd node
+	id, err := nodeID(addrs[2])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := mgr.addNode(node); err != nil {
-		t.Errorf("mgr.addNode(%s) = %q, expected no error", addrs[2], err.Error())
+	// Create the 3rd node and add it to the manager
+	if _, err := mgr.newNode(addrs[2], id); err != nil {
+		t.Errorf("mgr.newNode(%s) = %q, expected no error", addrs[2], err.Error())
 	}
 	if mgr.Size() != len(addrs) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs))

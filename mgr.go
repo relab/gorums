@@ -104,18 +104,34 @@ func (m *Manager) Size() (nodes int) {
 	return len(m.nodes)
 }
 
-func (m *Manager) addNode(node *Node) error {
+func (m *Manager) addNode(node *Node) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, found := m.lookup[node.id]; found {
-		return fmt.Errorf("node %d already exists", node.id)
-	}
-	if err := node.connect(m); err != nil {
-		return err
-	}
 	m.lookup[node.id] = node
 	m.nodes = append(m.nodes, node)
-	return nil
+}
+
+func (m *Manager) newNode(addr string, id uint32) (*Node, error) {
+	if _, found := m.Node(id); found {
+		return nil, fmt.Errorf("node %d already exists", id)
+	}
+	opts := nodeOptions{
+		ID:             id,
+		SendBufferSize: m.opts.sendBuffer,
+		MsgIDGen:       m.getMsgID,
+		Logger:         m.logger,
+		Metadata:       m.opts.metadata,
+		PerNodeMD:      m.opts.perNodeMD,
+		DialOpts:       m.opts.grpcDialOpts,
+		Manager:        m,
+		NoConnect:      m.opts.noConnect,
+	}
+	n, err := newNode(addr, opts)
+	if err != nil {
+		return nil, err
+	}
+	m.addNode(n)
+	return n, nil
 }
 
 // getMsgID returns a unique message ID for a new RPC from this client's manager.

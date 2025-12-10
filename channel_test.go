@@ -84,11 +84,9 @@ func testNodeWithoutServer(t testing.TB, opts ...ManagerOption) *Node {
 	mgr := NewManager(mgrOpts...)
 	t.Cleanup(mgr.Close)
 	// Use a high port number that's unlikely to have anything listening.
-	node, err := NewNode("127.0.0.1:59999")
+	// We use a fixed ID for simplicity.
+	node, err := mgr.newNode("127.0.0.1:59999", 1)
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err = mgr.addNode(node); err != nil {
 		t.Fatal(err)
 	}
 	return node
@@ -307,7 +305,7 @@ func TestChannelEnsureStream(t *testing.T) {
 	newNodeWithoutStream := func(t *testing.T) *Node {
 		node := TestNode(t, delayServerFn(0))
 		node.cancel() // ensure sender and receiver goroutines are stopped
-		node.channel = newChannel(node)
+		node.channel = newChannel(node, 10)
 		return node
 	}
 

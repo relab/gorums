@@ -85,9 +85,9 @@ type channel struct {
 // have not yet been established. This is to prevent deadlock when invoking
 // a call type. The sender blocks on the sendQ and the receiver waits for
 // the stream to become available.
-func newChannel(n *Node) *channel {
+func newChannel(n *Node, sendBufferSize uint) *channel {
 	c := &channel{
-		sendQ:           make(chan request, n.mgr.opts.sendBuffer),
+		sendQ:           make(chan request, sendBufferSize),
 		node:            n,
 		latency:         -1 * time.Second,
 		responseRouters: make(map[uint64]request),
@@ -338,10 +338,10 @@ func (c *channel) sendMsg(req request) (err error) {
 }
 
 func (c *channel) logf(format string, args ...any) {
-	if c.node.mgr.logger == nil {
+	if c.node.logger == nil {
 		return
 	}
-	c.node.mgr.logger.Printf("Node %d: %s", c.node.ID(), fmt.Sprintf(format, args...))
+	c.node.logger.Printf("Node %d: %s", c.node.ID(), fmt.Sprintf(format, args...))
 }
 
 func (c *channel) setLastErr(err error) {

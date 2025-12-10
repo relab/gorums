@@ -24,11 +24,8 @@ func (o nodeIDMap) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	for naddr, id := range o.idMap {
 		node, found := mgr.Node(id)
 		if !found {
-			node, err = NewNodeWithID(naddr, id)
+			node, err = mgr.newNode(naddr, id)
 			if err != nil {
-				return nil, err
-			}
-			if err := mgr.addNode(node); err != nil {
 				return nil, err
 			}
 		}
@@ -58,16 +55,16 @@ func (o nodeList) newConfig(mgr *Manager) (nodes Configuration, err error) {
 	}
 	nodes = make(Configuration, 0, len(o.addrsList))
 	for _, naddr := range o.addrsList {
-		node, err := NewNode(naddr)
+		id, err := nodeID(naddr)
 		if err != nil {
 			return nil, err
 		}
-		if n, found := mgr.Node(node.ID()); !found {
-			if err := mgr.addNode(node); err != nil {
+		node, found := mgr.Node(id)
+		if !found {
+			node, err = mgr.newNode(naddr, id)
+			if err != nil {
 				return nil, err
 			}
-		} else {
-			node = n
 		}
 		nodes = append(nodes, node)
 	}
