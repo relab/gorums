@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -39,7 +40,10 @@ func newNodeResponse[Resp msg](r NodeResponse[msg]) NodeResponse[Resp] {
 	return res
 }
 
-var streamDownErr = status.Error(codes.Unavailable, "stream is down")
+var (
+	nodeClosedErr = status.Error(codes.Unavailable, "node closed")
+	streamDownErr = status.Error(codes.Unavailable, "stream is down")
+)
 
 type request struct {
 	ctx          context.Context
@@ -52,20 +56,28 @@ type request struct {
 
 type channel struct {
 	sendQ chan request
-	node  *Node
+	id    uint32
+
+	logger *log.Logger
+
+	// Connection lifecycle management: node close() cancels the
+	// connection context to stop all goroutines and the NodeStream
+	conn       *grpc.ClientConn
+	connCtx    context.Context
+	connCancel context.CancelFunc
 
 	// Error and latency tracking
 	mu        sync.Mutex
 	lastError error
 	latency   time.Duration
 
-	// Stream management for FIFO ordered message delivery
+	// Stream lifecycle management for FIFO ordered message delivery
 	// gorumsStream is a bidirectional stream for
 	// sending and receiving ordering.Metadata messages.
 	gorumsStream ordering.Gorums_NodeStreamClient
 	streamMut    sync.RWMutex
 	streamCtx    context.Context
-	cancelStream context.CancelFunc
+	streamCancel context.CancelFunc
 	streamReady  chan struct{} // signals receiver when stream becomes available
 
 	// Response routing; the map holds pending requests waiting for responses.
@@ -73,9 +85,6 @@ type channel struct {
 	// to the caller.
 	responseRouters map[uint64]request
 	responseMut     sync.Mutex
-
-	// Lifecycle management: node close() cancels this context
-	parentCtx context.Context
 }
 
 // newChannel creates a new channel for the given node and starts the sender
@@ -85,27 +94,40 @@ type channel struct {
 // have not yet been established. This is to prevent deadlock when invoking
 // a call type. The sender blocks on the sendQ and the receiver waits for
 // the stream to become available.
-func newChannel(n *Node, sendBufferSize uint) *channel {
+func newChannel(parentCtx context.Context, logger *log.Logger, conn *grpc.ClientConn, id uint32, sendBufferSize uint) *channel {
+	ctx, connCancel := context.WithCancel(parentCtx)
 	c := &channel{
 		sendQ:           make(chan request, sendBufferSize),
-		node:            n,
+		id:              id,
+		logger:          logger,
+		conn:            conn,
+		connCtx:         ctx,
+		connCancel:      connCancel,
 		latency:         -1 * time.Second,
 		responseRouters: make(map[uint64]request),
 		streamReady:     make(chan struct{}, 1),
 	}
-	// parentCtx controls the channel and is used to shut it down
-	c.parentCtx = n.newContext()
 	go c.sender()
 	go c.receiver()
 	return c
+}
+
+// close closes the channel and the underlying connection.
+func (c *channel) close() error {
+	// important to cancel first to stop goroutines
+	c.connCancel()
+	if c.conn != nil {
+		return c.conn.Close()
+	}
+	return nil
 }
 
 // newNodeStream creates a new stream for this channel.
 // The receiver goroutine will detect the new stream and start using it.
 func (c *channel) newNodeStream() (err error) {
 	c.streamMut.Lock()
-	c.streamCtx, c.cancelStream = context.WithCancel(c.parentCtx)
-	c.gorumsStream, err = ordering.NewGorumsClient(c.node.conn).NodeStream(c.streamCtx)
+	c.streamCtx, c.streamCancel = context.WithCancel(c.connCtx)
+	c.gorumsStream, err = ordering.NewGorumsClient(c.conn).NodeStream(c.streamCtx)
 	c.streamMut.Unlock()
 	if err == nil {
 		// Signal receiver that stream is ready (non-blocking)
@@ -129,7 +151,7 @@ func (c *channel) getStream() grpc.ClientStream {
 // This triggers reconnection on the next send attempt.
 func (c *channel) clearStream() {
 	c.streamMut.Lock()
-	c.cancelStream()
+	c.streamCancel()
 	c.gorumsStream = nil
 	c.streamMut.Unlock()
 }
@@ -145,7 +167,7 @@ func (c *channel) ensureStream() error {
 
 // isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
 func (c *channel) isConnected() bool {
-	return c.node.conn.GetState() == connectivity.Ready && c.getStream() != nil
+	return c.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
 
 // enqueue adds the request to the send queue and sets up response routing if needed.
@@ -161,9 +183,9 @@ func (c *channel) enqueue(req request) {
 	// either enqueue the request on the sendQ or respond
 	// with error if the node is closed
 	select {
-	case <-c.parentCtx.Done():
+	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: fmt.Errorf("node closed")})
+		c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: nodeClosedErr})
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
@@ -193,7 +215,7 @@ func (c *channel) cancelPendingMsgs() {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	for msgID, req := range c.responseRouters {
-		req.responseChan <- NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: streamDownErr}
+		req.responseChan <- NodeResponse[proto.Message]{NodeID: c.id, Err: streamDownErr}
 		// delete the router if we are only expecting a single reply message
 		if !req.streaming {
 			delete(c.responseRouters, msgID)
@@ -218,18 +240,18 @@ func (c *channel) sender() {
 	var req request
 	for {
 		select {
-		case <-c.parentCtx.Done():
+		case <-c.connCtx.Done():
 			// the node's close() method was called: exit sender goroutine
 			return
 		case req = <-c.sendQ:
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: err})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: err})
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.node.ID(), Err: err})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: err})
 		}
 	}
 }
@@ -246,7 +268,7 @@ func (c *channel) receiver() {
 			case <-c.streamReady:
 				// Stream is now available, continue to get it
 				continue
-			case <-c.parentCtx.Done():
+			case <-c.connCtx.Done():
 				return
 			}
 		}
@@ -259,11 +281,11 @@ func (c *channel) receiver() {
 			c.clearStream()
 		} else {
 			err := resp.GetStatus().Err()
-			c.routeResponse(resp.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.node.ID(), Value: resp.GetProtoMessage(), Err: err})
+			c.routeResponse(resp.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Value: resp.GetProtoMessage(), Err: err})
 		}
 
 		select {
-		case <-c.parentCtx.Done():
+		case <-c.connCtx.Done():
 			// the node's close() method was called: exit receiver goroutine
 			return
 		default:
@@ -338,10 +360,10 @@ func (c *channel) sendMsg(req request) (err error) {
 }
 
 func (c *channel) logf(format string, args ...any) {
-	if c.node.logger == nil {
+	if c.logger == nil {
 		return
 	}
-	c.node.logger.Printf("Node %d: %s", c.node.ID(), fmt.Sprintf(format, args...))
+	c.logger.Printf("Node %d: %s", c.id, fmt.Sprintf(format, args...))
 }
 
 func (c *channel) setLastErr(err error) {

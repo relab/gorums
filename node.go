@@ -58,19 +58,12 @@ func (c NodeContext) nextMsgID() uint64 {
 // can be performed.
 type Node struct {
 	// Only assigned at creation.
-	id     uint32
-	addr   string
-	conn   *grpc.ClientConn
-	cancel func()
-	mgr    *Manager // only used for backward compatibility to allow Configuration.Manager()
+	id   uint32
+	addr string
+	mgr  *Manager // only used for backward compatibility to allow Configuration.Manager()
 
-	msgIDGen  func() uint64
-	logger    *log.Logger
-	metadata  metadata.MD
-	perNodeMD func(uint32) metadata.MD
-
-	// the default channel
-	channel *channel
+	msgIDGen func() uint64
+	channel  *channel
 }
 
 // nodeOptions contains configuration options for creating a new Node.
@@ -94,24 +87,27 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 	}
 
 	n := &Node{
-		id:        opts.ID,
-		addr:      tcpAddr.String(),
-		mgr:       opts.Manager,
-		msgIDGen:  opts.MsgIDGen,
-		logger:    opts.Logger,
-		metadata:  opts.Metadata,
-		perNodeMD: opts.PerNodeMD,
+		id:       opts.ID,
+		addr:     tcpAddr.String(),
+		mgr:      opts.Manager,
+		msgIDGen: opts.MsgIDGen,
 	}
 
-	// Create gRPC connection
-	n.conn, err = grpc.NewClient(n.addr, opts.DialOpts...)
+	// Create gRPC connection to the node without connecting (lazy dial).
+	conn, err := grpc.NewClient(n.addr, opts.DialOpts...)
 	if err != nil {
 		return nil, nodeError{nodeID: n.id, cause: err}
 	}
 
-	// Create channel and establish gRPC node stream
-	n.channel = newChannel(n, opts.SendBufferSize)
+	// Create outgoing context with metadata for this node's stream.
+	md := opts.Metadata.Copy()
+	if opts.PerNodeMD != nil {
+		md = metadata.Join(md, opts.PerNodeMD(n.id))
+	}
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
+	// Create channel and establish gRPC node stream
+	n.channel = newChannel(ctx, opts.Logger, conn, n.id, opts.SendBufferSize)
 	return n, nil
 }
 
@@ -127,32 +123,10 @@ func nodeID(addr string) (uint32, error) {
 	return h.Sum32(), nil
 }
 
-// newContext returns a new context for this node's channel.
-// This context is used by the channel implementation to stop
-// all goroutines and the NodeStream, when the context is canceled.
-//
-// This method must be called for each connection to ensure
-// fresh contexts. Reusing contexts could result in reusing
-// a cancelled context.
-func (n *Node) newContext() context.Context {
-	md := n.metadata.Copy()
-	if n.perNodeMD != nil {
-		md = metadata.Join(md, n.perNodeMD(n.id))
-	}
-	var ctx context.Context
-	ctx, n.cancel = context.WithCancel(context.Background())
-	return metadata.NewOutgoingContext(ctx, md)
-}
-
 // close this node.
 func (n *Node) close() error {
-	// important to cancel first to stop goroutines
-	n.cancel()
-	if n.conn == nil {
-		return nil
-	}
-	if err := n.conn.Close(); err != nil {
-		return nodeError{nodeID: n.id, cause: err}
+	if n.channel != nil {
+		return n.channel.close()
 	}
 	return nil
 }

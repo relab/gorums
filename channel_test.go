@@ -304,8 +304,13 @@ func TestChannelEnsureStream(t *testing.T) {
 	// Helper to prepare a fresh node with no stream
 	newNodeWithoutStream := func(t *testing.T) *Node {
 		node := TestNode(t, delayServerFn(0))
-		node.cancel() // ensure sender and receiver goroutines are stopped
-		node.channel = newChannel(node, 10)
+		// ensure sender and receiver goroutines are stopped
+		node.channel.connCancel()
+		// Extract dependencies from existing channel
+		conn := node.channel.conn
+		logger := node.channel.logger
+		// Create new channel with test context without metadata (real implementation captures metadata)
+		node.channel = newChannel(t.Context(), logger, conn, node.id, 10)
 		return node
 	}
 
