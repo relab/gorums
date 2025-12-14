@@ -11,7 +11,7 @@ import (
 
 type testSrv struct{}
 
-func (srv testSrv) TestUnresponsive(ctx gorums.ServerCtx, _ *Empty) (resp *Empty, err error) {
+func (testSrv) TestUnresponsive(ctx gorums.ServerCtx, _ *Empty) (resp *Empty, err error) {
 	<-ctx.Done()
 	return nil, nil
 }

@@ -10,7 +10,7 @@ import (
 
 type cfgSrv struct{}
 
-func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		Num: req.GetNum(),
 	}.Build(), nil

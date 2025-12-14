@@ -100,7 +100,7 @@ type testSrv struct {
 	n int
 }
 
-func (srv testSrv) Correctable(_ gorums.ServerCtx, request *Request) (*Response, error) {
+func (testSrv) Correctable(_ gorums.ServerCtx, request *Request) (*Response, error) {
 	return Response_builder{Level: 1}.Build(), nil
 }
 
