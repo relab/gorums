@@ -106,7 +106,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 // underlying TCP connection is broken.
 func TestTCPReconnection(t *testing.T) {
 	srv := gorums.NewServer()
-	srv.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		return gorums.NewResponseMessage(in.GetMetadata(), in.GetProtoMessage()), nil
 	})
 
@@ -161,7 +161,7 @@ func TestTCPReconnection(t *testing.T) {
 	}
 
 	srv2 := gorums.NewServer()
-	srv2.RegisterHandler(mock.TestMethod, func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv2.RegisterHandler(mock.TestMethod, func(_ gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		return gorums.NewResponseMessage(in.GetMetadata(), in.GetProtoMessage()), nil
 	})
 	go func() {

@@ -10,13 +10,13 @@ import (
 
 type cfgSrv struct{}
 
-func (cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (cfgSrv) Config(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		Num: req.GetNum(),
 	}.Build(), nil
 }
 
-func serverFn(i int) gorums.ServerIface {
+func serverFn(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
 	RegisterConfigTestServer(srv, &cfgSrv{})
 	return srv

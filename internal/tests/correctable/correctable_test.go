@@ -12,7 +12,7 @@ import (
 // the target level is n (quorum size).
 func run(t testing.TB, n int, corr func(*gorums.ConfigContext, int) CorrectableResponse) {
 	t.Helper()
-	cfg := gorums.TestConfiguration(t, n, func(i int) gorums.ServerIface {
+	cfg := gorums.TestConfiguration(t, n, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
@@ -52,7 +52,7 @@ func TestCorrectableStream(t *testing.T) {
 // TestCorrectableWithWatch tests progressive level watching using the type alias
 func TestCorrectableWithWatch(t *testing.T) {
 	n := 4
-	cfg := gorums.TestConfiguration(t, n, func(i int) gorums.ServerIface {
+	cfg := gorums.TestConfiguration(t, n, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
@@ -100,11 +100,11 @@ type testSrv struct {
 	n int
 }
 
-func (testSrv) Correctable(_ gorums.ServerCtx, request *Request) (*Response, error) {
+func (testSrv) Correctable(_ gorums.ServerCtx, _ *Request) (*Response, error) {
 	return Response_builder{Level: 1}.Build(), nil
 }
 
-func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *Request, send func(response *Response) error) error {
+func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, _ *Request, send func(response *Response) error) error {
 	for i := range srv.n {
 		err := send(Response_builder{Level: int32(i + 1)}.Build())
 		if err != nil {

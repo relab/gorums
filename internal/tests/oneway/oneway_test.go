@@ -19,7 +19,7 @@ type onewaySrv struct {
 	received  chan *oneway.Request
 }
 
-func (s *onewaySrv) Unicast(ctx gorums.ServerCtx, r *oneway.Request) {
+func (s *onewaySrv) Unicast(_ gorums.ServerCtx, r *oneway.Request) {
 	if s.benchmark {
 		return
 	}
@@ -27,7 +27,7 @@ func (s *onewaySrv) Unicast(ctx gorums.ServerCtx, r *oneway.Request) {
 	s.wg.Done()
 }
 
-func (s *onewaySrv) Multicast(ctx gorums.ServerCtx, r *oneway.Request) {
+func (s *onewaySrv) Multicast(_ gorums.ServerCtx, r *oneway.Request) {
 	if s.benchmark {
 		return
 	}
