@@ -130,8 +130,8 @@ func (o addNodes) newConfig(mgr *Manager) (nodes Configuration, err error) {
 
 // WithNewNodes returns a NodeListOption that can be used to create a new configuration
 // combining c and the new nodes.
-func (c Configuration) WithNewNodes(new NodeListOption) NodeListOption {
-	return &addNodes{old: c, new: new}
+func (c Configuration) WithNewNodes(newNodes NodeListOption) NodeListOption {
+	return &addNodes{old: c, new: newNodes}
 }
 
 type addConfig struct {
