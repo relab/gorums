@@ -271,7 +271,7 @@ func TestChannelErrors(t *testing.T) {
 		{
 			name: "ServerFailureDuringCommunication",
 			setup: func(t *testing.T) *Node {
-				var stopServer func()
+				var stopServer func(...int)
 				node := TestNode(t, delayServerFn(0), WithStopFunc(t, &stopServer))
 				resp := sendRequest(t, node, request{waitSendDone: true}, 1)
 				if resp.Err != nil {
@@ -776,7 +776,7 @@ func TestChannelStreamReadyAfterReconnect(t *testing.T) {
 // should be interpreted with caution. The goal is to detect regressions.
 func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 	for b.Loop() {
-		var stopServer func()
+		var stopServer func(...int)
 		node := TestNode(b, delayServerFn(0), WithStopFunc(b, &stopServer))
 
 		// Use a fresh context for the benchmark request

@@ -23,7 +23,7 @@ type testOptions struct {
 	serverOpts     []ServerOption
 	nodeListOpts   []NodeListOption
 	existingMgr    *Manager
-	stopFuncPtr    *func()             // pointer to capture the server stop function
+	stopFuncPtr    *func(...int)       // pointer to capture the variadic stop function
 	preConnectHook func(stopFn func()) // called before connecting to servers
 }
 
@@ -116,26 +116,27 @@ func WithManager(_ testing.TB, mgr *Manager) TestOption {
 }
 
 // stopFuncProvider is a TestOption that captures the server stop function.
-// We use a provider to capture the stop function, in case multiple func
-// options will be provided in the future.
 type stopFuncProvider struct {
-	stopFunc *func()
+	stopFunc *func(...int)
 }
 
-// WithStopFunc returns a TestOption that captures the server stop function,
+// WithStopFunc returns a TestOption that captures the variadic server stop function,
 // allowing tests to stop servers at any point during test execution.
+// Call with no arguments to stop all servers, or with specific indices to stop those servers.
 // This is useful for testing server failure scenarios.
 //
 // Usage:
 //
-//	var stopServer func()
-//	node := gorums.SetupNode(t, nil, gorums.WithStopFunc(&stopServer))
+//	var stopServers func(...int)
+//	config := gorums.TestConfiguration(t, 3, nil, gorums.WithStopFunc(t, &stopServers))
 //	// ... send some messages ...
-//	stopServer() // stop the server to simulate failure
+//	stopServers() // stop all servers
+//	// OR
+//	stopServers(0, 2) // stop servers at indices 0 and 2
 //	// ... verify error handling ...
 //
 // This option is intended for testing purposes only.
-func WithStopFunc(_ testing.TB, fn *func()) TestOption {
+func WithStopFunc(_ testing.TB, fn *func(...int)) TestOption {
 	if fn == nil {
 		panic("gorums: WithStopFunc called with nil pointer")
 	}
@@ -153,7 +154,7 @@ type preConnectProvider struct {
 //
 // This is useful for testing error handling when servers are unavailable:
 //
-//	node := gorums.SetupNode(t, nil, gorums.WithPreConnect(t, func(stopServers func()) {
+//	node := gorums.TestNode(t, nil, gorums.WithPreConnect(t, func(stopServers func()) {
 //		stopServers()
 //		time.Sleep(300 * time.Millisecond) // wait for server to fully stop
 //	}))

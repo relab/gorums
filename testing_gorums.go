@@ -3,7 +3,10 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"iter"
+	"maps"
 	"net"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -59,16 +62,17 @@ func TestConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIfa
 
 	// Start servers and register cleanup
 	addrs, stopFn := testSetupServers(t, numServers, testOpts.serverFunc(srvFn))
-	t.Cleanup(stopFn)
+	stopAllFn := func() { stopFn() } // wrap to call without arguments to stop all servers
+	t.Cleanup(stopAllFn)
 
-	// Capture stop function if requested
+	// Capture the provided stop function to stop individual servers later
 	if testOpts.stopFuncPtr != nil {
 		*testOpts.stopFuncPtr = stopFn
 	}
 
 	// Call preConnect hook if set (before connecting to servers)
 	if testOpts.preConnectHook != nil {
-		testOpts.preConnectHook(stopFn)
+		testOpts.preConnectHook(stopAllFn)
 	}
 
 	mgr := testOpts.getOrCreateManager(t)
@@ -124,7 +128,7 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 	}
 	addrs, stopFn := testSetupServers(t, numServers, srvFn)
 	// Register server cleanup SECOND so it runs BEFORE goleak check
-	t.Cleanup(stopFn)
+	t.Cleanup(func() { stopFn() }) // wrap to call without arguments to stop all servers
 	return addrs
 }
 
@@ -134,14 +138,38 @@ type ServerIface interface {
 	Stop()
 }
 
-// testSetupServers is the internal implementation of server setup.
-// It starts servers and returns addresses and a stop function.
-func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func()) {
+type serverState struct {
+	srv     ServerIface
+	lis     net.Listener
+	stopped chan struct{}
+}
+
+func (s *serverState) start(_ testing.TB) {
+	go func() {
+		_ = s.srv.Serve(s.lis)
+		s.stopped <- struct{}{}
+	}()
+}
+
+func (s *serverState) stop(t testing.TB) {
 	t.Helper()
-	servers := make([]ServerIface, numServers)
-	listeners := make([]net.Listener, numServers)
+	if err := s.lis.Close(); err != nil {
+		t.Errorf("Failed to close listener: %v", err)
+	}
+	s.srv.Stop()
+	<-s.stopped
+}
+
+// testSetupServers is the internal implementation of server setup.
+// It starts servers and returns addresses and a variadic stop function.
+// Call with no arguments to stop all servers, or with specific indices to stop those servers.
+func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func(...int)) {
+	t.Helper()
+
 	addrs := make([]string, numServers)
-	srvStopped := make(chan struct{}, numServers)
+	muActive := &sync.Mutex{}
+	active := make(map[int]*serverState)
+
 	for i := range numServers {
 		var srv ServerIface
 		if srvFn != nil {
@@ -149,33 +177,50 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 		} else {
 			srv = initServer(i)
 		}
-		// listen on any available port
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("Failed to listen on port: %v", err)
 		}
-		listeners[i] = lis
 		addrs[i] = lis.Addr().String()
-		servers[i] = srv
-		go func() {
-			_ = srv.Serve(lis) // blocks until the server is stopped
-			srvStopped <- struct{}{}
-		}()
+		state := &serverState{srv: srv, lis: lis, stopped: make(chan struct{})}
+		active[i] = state
+
+		state.start(t)
 	}
-	stopFn := sync.OnceFunc(func() {
-		for i := range numServers {
-			err := listeners[i].Close()
-			if err != nil {
-				t.Errorf("failed to close listener: %v", err)
+
+	stopNodesFn := func(indices ...int) {
+		if len(indices) == 0 {
+			// Stop all active servers
+			indices = slices.Collect(Range(numServers))
+		}
+		// Stop specific servers
+		toStop := make([]*serverState, 0, len(indices))
+		muActive.Lock()
+		maps.DeleteFunc(active, func(k int, v *serverState) bool {
+			found := slices.Contains(indices, k)
+			if found {
+				toStop = append(toStop, v)
 			}
-			servers[i].Stop()
+			return found
+		})
+		muActive.Unlock()
+
+		// Stop and wait for each server
+		for _, state := range toStop {
+			state.stop(t)
 		}
-		// wait for all servers to stop
-		for range numServers {
-			<-srvStopped
+	}
+	return addrs, stopNodesFn
+}
+
+func Range(n int) iter.Seq[int] {
+	return func(yield func(int) bool) {
+		for i := range n {
+			if !yield(i) {
+				return
+			}
 		}
-	})
-	return addrs, stopFn
+	}
 }
 
 func initServer(i int) *Server {
