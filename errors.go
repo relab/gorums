@@ -13,6 +13,9 @@ var ErrIncomplete = errors.New("incomplete call")
 // ErrTypeMismatch is returned when a response cannot be cast to the expected type.
 var ErrTypeMismatch = errors.New("response type mismatch")
 
+// ErrSendFailure is the error returned by a multicast call when message sending fails for one or more nodes.
+var ErrSendFailure = errors.New("send failure")
+
 // QuorumCallError reports on a failed quorum call.
 type QuorumCallError struct {
 	cause   error

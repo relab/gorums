@@ -10,8 +10,9 @@ import (
 // By default, this method blocks until the message has been sent to the node.
 // This ensures that send operations complete before the caller proceeds, which can
 // be useful for observing context cancellation or for pacing message sends.
+// If the sending fails, the error is returned to the caller.
 //
-// With the WithNoSendWaiting call option, the method returns immediately after
+// With the IgnoreErrors call option, the method returns nil immediately after
 // enqueueing the message (fire-and-forget semantics).
 //
 // This method should be used by generated code only.
@@ -33,9 +34,11 @@ func Unicast[Req proto.Message](ctx *NodeContext, req Req, method string, opts .
 
 	// Wait for send confirmation
 	select {
-	case <-replyChan:
+	case r := <-replyChan:
+		// Unicast doesn't expect replies, but we still
+		// want to report errors from the send attempt.
+		return r.Err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	return nil
 }

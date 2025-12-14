@@ -10,8 +10,9 @@ import (
 // By default, this method blocks until messages have been sent to all nodes.
 // This ensures that send operations complete before the caller proceeds, which can
 // be useful for observing context cancellation or for pacing message sends.
+// If the sending fails, the error is returned to the caller.
 //
-// With the WithNoSendWaiting call option, the method returns immediately after
+// With the IgnoreErrors call option, the method returns nil immediately after
 // enqueueing messages to all nodes (fire-and-forget semantics).
 //
 // Multicast supports request transformation interceptors via the gorums.Interceptors
@@ -33,14 +34,21 @@ func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, op
 	// Send messages immediately (multicast doesn't use lazy sending)
 	clientCtx.sendOnce.Do(clientCtx.send)
 
-	// If waiting for send completion, drain the reply channel
+	// If waiting for send completion, drain the reply channel and return the first error.
 	if waitSendDone {
+		var errs []nodeError
 		for range clientCtx.expectedReplies {
 			select {
-			case <-clientCtx.replyChan:
+			case r := <-clientCtx.replyChan:
+				if r.Err != nil {
+					errs = append(errs, nodeError{cause: r.Err, nodeID: r.NodeID})
+				}
 			case <-ctx.Done():
 				return ctx.Err()
 			}
+		}
+		if len(errs) > 0 {
+			return QuorumCallError{cause: ErrSendFailure, errors: errs, replies: clientCtx.expectedReplies - len(errs)}
 		}
 	}
 	return nil
