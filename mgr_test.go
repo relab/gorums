@@ -9,10 +9,7 @@ import (
 	"google.golang.org/grpc/encoding"
 )
 
-var (
-	nodes   = []string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}
-	nodeMap = map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
-)
+var nodeMap = map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
 
 func init() {
 	if encoding.GetCodec(ContentSubtype) == nil {
