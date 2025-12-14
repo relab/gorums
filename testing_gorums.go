@@ -155,10 +155,8 @@ type serverState struct {
 }
 
 func (s *serverState) start(_ testing.TB) {
-	go func() {
-		_ = s.srv.Serve(s.lis)
-		s.stopped <- struct{}{}
-	}()
+	_ = s.srv.Serve(s.lis)
+	s.stopped <- struct{}{}
 }
 
 func (s *serverState) stop(t testing.TB) {
@@ -195,7 +193,7 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 		state := &serverState{srv: srv, lis: lis, stopped: make(chan struct{})}
 		active[i] = state
 
-		state.start(t)
+		go state.start(t)
 	}
 
 	stopNodesFn := func(indices ...int) {
