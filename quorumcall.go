@@ -22,7 +22,7 @@ func QuorumCall[Req, Resp msg](
 	method string,
 	opts ...CallOption,
 ) *Responses[Resp] {
-	return quorumCall[Req, Resp](ctx, req, method, false, opts...)
+	return invokeQuorumCall[Req, Resp](ctx, req, method, false, opts...)
 }
 
 // QuorumCallStream performs a streaming quorum call and returns a Responses object.
@@ -38,11 +38,11 @@ func QuorumCallStream[Req, Resp msg](
 	method string,
 	opts ...CallOption,
 ) *Responses[Resp] {
-	return quorumCall[Req, Resp](ctx, req, method, true, opts...)
+	return invokeQuorumCall[Req, Resp](ctx, req, method, true, opts...)
 }
 
-// quorumCall is the internal implementation shared by QuorumCall and QuorumCallStream.
-func quorumCall[Req, Resp msg](
+// invokeQuorumCall is the internal implementation shared by QuorumCall and QuorumCallStream.
+func invokeQuorumCall[Req, Resp msg](
 	ctx *ConfigContext,
 	req Req,
 	method string,
