@@ -129,7 +129,9 @@ func TestMulticastPerNode(t *testing.T) {
 	f := func(msg *oneway.Request, node *gorums.Node) *oneway.Request {
 		return oneway.Request_builder{Num: add(msg.GetNum(), node.ID())}.Build()
 	}
-	ignoreNodes := []int{}
+	// the ignoreNodes slice is updated in each test case below; it is a hack
+	// to avoid having to pass it through to the ignore() function.
+	ignoreNodes := []int{} // skipcq: GO-W1027
 	ignore := func(id uint32) bool {
 		for _, ignore := range ignoreNodes {
 			return id == uint32(ignore)

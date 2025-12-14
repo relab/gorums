@@ -132,7 +132,7 @@ func TestCorrectable_Watch(t *testing.T) {
 	}
 }
 
-func BenchmarkCorrectable(b *testing.B) {
+func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 	for _, numNodes := range []int{3, 5, 7, 9} {
 
 		b.Run(fmt.Sprintf("QuorumCall/%d", numNodes), func(b *testing.B) {

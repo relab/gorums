@@ -79,6 +79,7 @@ RPC's
 RPCs
 semver
 shlex
+skipcq
 srvs
 stressdev
 stressgen
