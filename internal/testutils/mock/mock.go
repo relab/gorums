@@ -8,7 +8,6 @@ import (
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -135,7 +134,7 @@ func GetVal(msg proto.Message) string {
 	if msg == nil {
 		return ""
 	}
-	if m, ok := msg.(*wrapperspb.StringValue); ok {
+	if m, ok := msg.(*pb.StringValue); ok {
 		return m.Value
 	}
 	return ""
@@ -145,7 +144,7 @@ func SetVal(msg proto.Message, val string) {
 	if msg == nil {
 		return
 	}
-	if m, ok := msg.(*wrapperspb.StringValue); ok {
+	if m, ok := msg.(*pb.StringValue); ok {
 		m.Value = val
 	}
 }
