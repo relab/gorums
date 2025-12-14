@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -35,7 +36,6 @@ func TestQuorumCall(t *testing.T) {
 		call      func(respType) (*pb.StringValue, error)
 		numNodes  int
 		wantValue string
-		wantErr   bool
 	}{
 		{
 			name:      "Majority",
@@ -80,8 +80,127 @@ func TestQuorumCall(t *testing.T) {
 	}
 }
 
-// TestQuorumCall_CustomAggregation tests custom response aggregation
-func TestQuorumCall_CustomAggregation(t *testing.T) {
+func TestPartialFailures(t *testing.T) {
+	// Function type for the call to test
+	type callInfo struct {
+		name     string
+		callFunc func(*gorums.ConfigContext, *pb.StringValue) error
+	}
+
+	const numServers = 3
+
+	type respType = *gorums.Responses[*pb.StringValue]
+
+	// Helper to create QuorumCall variants
+	quorumcall := func(name string, aggregateFunc func(respType) (*pb.StringValue, error)) callInfo {
+		return callInfo{
+			name: "QuorumCall/" + name,
+			callFunc: func(ctx *gorums.ConfigContext, req *pb.StringValue) error {
+				_, err := aggregateFunc(gorums.QuorumCall[*pb.StringValue, *pb.StringValue](ctx, req, mock.TestMethod))
+				return err
+			},
+		}
+	}
+
+	// Helper to create Multicast variants
+	multicast := func(name string, opts ...gorums.CallOption) callInfo {
+		return callInfo{
+			name: "Multicast/" + name,
+			callFunc: func(ctx *gorums.ConfigContext, req *pb.StringValue) error {
+				return gorums.Multicast(ctx, req, mock.TestMethod, opts...)
+			},
+		}
+	}
+
+	tests := []struct {
+		call    callInfo
+		failing int // number of servers to stop (0 to 3)
+		wantErr error
+	}{
+		// Multicast: Fails if ANY node fails
+		{multicast("Wait"), 0, nil},
+		{multicast("Wait"), 1, gorums.ErrSendFailure},
+		{multicast("Wait"), 2, gorums.ErrSendFailure},
+		{multicast("Wait"), 3, gorums.ErrSendFailure},
+
+		// Multicast with IgnoreErrors: Should not return error even if nodes fail
+		{multicast("IgnoreErrors", gorums.IgnoreErrors()), 0, nil},
+		{multicast("IgnoreErrors", gorums.IgnoreErrors()), 3, nil},
+
+		// QuorumCall Majority (2/3): Tolerates 1 failure
+		{quorumcall("Majority", respType.Majority), 0, nil},
+		{quorumcall("Majority", respType.Majority), 1, nil},
+		{quorumcall("Majority", respType.Majority), 2, gorums.ErrIncomplete},
+		{quorumcall("Majority", respType.Majority), 3, gorums.ErrIncomplete},
+
+		// QuorumCall First (1/3): Tolerates 2 failures
+		{quorumcall("First", respType.First), 0, nil},
+		{quorumcall("First", respType.First), 1, nil},
+		{quorumcall("First", respType.First), 2, nil},
+		{quorumcall("First", respType.First), 3, gorums.ErrIncomplete},
+
+		// QuorumCall All (3/3): Fails if any node fails
+		{quorumcall("All", respType.All), 0, nil},
+		{quorumcall("All", respType.All), 1, gorums.ErrIncomplete},
+		{quorumcall("All", respType.All), 2, gorums.ErrIncomplete},
+		{quorumcall("All", respType.All), 3, gorums.ErrIncomplete},
+	}
+	for _, tt := range tests {
+		testName := fmt.Sprintf("%s/fail=%d", tt.call.name, tt.failing)
+		t.Run(testName, func(t *testing.T) {
+			var stopNodes func(...int)
+			cfg := gorums.TestConfiguration(t, numServers, nil, gorums.WithStopFunc(t, &stopNodes))
+			ctx := gorums.WithConfigContext(t.Context(), cfg)
+			req := pb.String("test")
+
+			// Warmup to ensure connections
+			if err := tt.call.callFunc(ctx, req); err != nil {
+				t.Fatalf("Warmup failed: %v", err)
+			}
+
+			if tt.failing > 0 {
+				// Collect indices to stop
+				stopNodes(slices.Collect(gorums.Range(tt.failing))...)
+				time.Sleep(50 * time.Millisecond)
+			}
+
+			// Execute test calls after stopping nodes, if any
+			var err error
+			for range 5 {
+				err = tt.call.callFunc(ctx, req)
+				if tt.wantErr != nil && err != nil {
+					break // failed as expected
+				}
+				if tt.wantErr == nil && err != nil {
+					break // failed unexpected
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+
+			if tt.wantErr != nil {
+				if err == nil {
+					t.Errorf("Expected error %v, got nil", tt.wantErr)
+				} else if !errors.Is(err, tt.wantErr) {
+					t.Errorf("Expected error %v, got %v", tt.wantErr, err)
+				} else {
+					var qcErr gorums.QuorumCallError
+					if errors.As(err, &qcErr) {
+						if qcErr.NodeErrors() != tt.failing {
+							t.Errorf("Expected %d node errors, got %d", tt.failing, qcErr.NodeErrors())
+						}
+					}
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected success, got error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestQuorumCallCustomAggregation tests custom response aggregation
+func TestQuorumCallCustomAggregation(t *testing.T) {
 	cfg := gorums.TestConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
 
 	ctx := gorums.TestContext(t, 2*time.Second)
@@ -103,8 +222,8 @@ func TestQuorumCall_CustomAggregation(t *testing.T) {
 	}
 }
 
-// TestQuorumCall_CollectAll tests collecting all responses
-func TestQuorumCall_CollectAll(t *testing.T) {
+// TestQuorumCallCollectAll tests collecting all responses
+func TestQuorumCallCollectAll(t *testing.T) {
 	cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
 
 	ctx := gorums.TestContext(t, 2*time.Second)
