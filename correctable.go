@@ -68,7 +68,7 @@ func (c *Correctable[Resp]) update(reply Resp, level int, done bool, err error) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
-		panic("Update(...) called on a done correctable")
+		panic("update(...) called on a done correctable")
 	}
 	c.reply, c.level, c.err, c.done = reply, level, err, done
 	if done {
@@ -108,7 +108,6 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 	go func() {
 		var (
 			lastResp Resp
-			found    bool
 			count    int
 			errs     []nodeError
 		)
@@ -121,7 +120,6 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 
 			count++
 			lastResp = result.Value
-			found = true
 
 			// Check if we have reached the threshold
 			done := count >= threshold
@@ -132,12 +130,7 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 		}
 
 		// If we didn't reach the threshold, mark as done with error
-		if !found {
-			var zero Resp
-			corr.update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs})
-		} else {
-			corr.update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs})
-		}
+		corr.update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs})
 	}()
 
 	return corr

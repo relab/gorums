@@ -174,7 +174,6 @@ func (r *Responses[Resp]) All() (Resp, error) {
 // It returns the first response once the threshold is reached.
 func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 	var (
-		found bool
 		count int
 		errs  []nodeError
 	)
@@ -183,12 +182,10 @@ func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 			continue
 		}
-
-		count++
-		if !found {
+		if count == 0 {
 			resp = result.Value
-			found = true
 		}
+		count++
 
 		// Check if we have reached the threshold
 		if count >= threshold {
