@@ -62,7 +62,7 @@ func TestCorrectableWithWatch(t *testing.T) {
 	configCtx := gorums.WithConfigContext(ctx, cfg)
 
 	// Use the type alias for the correctable result
-	var corr CorrectableResponse = CorrectableStream(configCtx, &Request{}).Correctable(n)
+	corr := CorrectableStream(configCtx, &Request{}).Correctable(n)
 
 	// Watch for each level progressively
 	for level := 1; level <= n; level++ {
