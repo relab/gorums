@@ -2,8 +2,6 @@ package gorums
 
 import (
 	"context"
-	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -58,8 +56,6 @@ type channel struct {
 	sendQ chan request
 	id    uint32
 
-	logger *log.Logger
-
 	// Connection lifecycle management: node close() cancels the
 	// connection context to stop all goroutines and the NodeStream
 	conn       *grpc.ClientConn
@@ -94,12 +90,11 @@ type channel struct {
 // have not yet been established. This is to prevent deadlock when invoking
 // a call type. The sender blocks on the sendQ and the receiver waits for
 // the stream to become available.
-func newChannel(parentCtx context.Context, logger *log.Logger, conn *grpc.ClientConn, id uint32, sendBufferSize uint) *channel {
+func newChannel(parentCtx context.Context, conn *grpc.ClientConn, id uint32, sendBufferSize uint) *channel {
 	ctx, connCancel := context.WithCancel(parentCtx)
 	c := &channel{
 		sendQ:           make(chan request, sendBufferSize),
 		id:              id,
-		logger:          logger,
 		conn:            conn,
 		connCtx:         ctx,
 		connCancel:      connCancel,
@@ -211,11 +206,11 @@ func (c *channel) routeResponse(msgID uint64, resp NodeResponse[proto.Message]) 
 
 // cancelPendingMsgs cancels all pending messages by sending an error response to each
 // associated request. This is called when the stream goes down to notify all waiting calls.
-func (c *channel) cancelPendingMsgs() {
+func (c *channel) cancelPendingMsgs(err error) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	for msgID, req := range c.responseRouters {
-		req.responseChan <- NodeResponse[proto.Message]{NodeID: c.id, Err: streamDownErr}
+		req.responseChan <- NodeResponse[proto.Message]{NodeID: c.id, Err: err}
 		// delete the router if we are only expecting a single reply message
 		if !req.streaming {
 			delete(c.responseRouters, msgID)
@@ -269,15 +264,15 @@ func (c *channel) receiver() {
 				// Stream is now available, continue to get it
 				continue
 			case <-c.connCtx.Done():
+				// the node's close() method was called: exit receiver goroutine
 				return
 			}
 		}
 
 		resp := newMessage(responseType)
 		if err := stream.RecvMsg(resp); err != nil {
-			c.logf("RecvMsg error: %v", err)
 			c.setLastErr(err)
-			c.cancelPendingMsgs()
+			c.cancelPendingMsgs(err)
 			c.clearStream()
 		} else {
 			err := resp.GetStatus().Err()
@@ -302,7 +297,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		//    - If send fails (err != nil): sender() goroutine will deliver the error
 		//    - Provides synchronous error handling with immediate feedback
 		//
-		// 2. WithNoSendWaiting option (mustWaitSendDone=false): Return immediately after enqueuing
+		// 2. With the IgnoreErrors option (mustWaitSendDone=false): Return immediately after enqueuing
 		//    - Caller returns as soon as message is queued to sendQ
 		//    - Any errors are delivered asynchronously by sender() goroutine
 		//    - Provides fire-and-forget semantics
@@ -343,27 +338,18 @@ func (c *channel) sendMsg(req request) (err error) {
 				// false alarm
 			default:
 				// trigger reconnect
-				c.logf("request context cancelled: %v", req.ctx.Err())
 				c.clearStream()
 			}
 		}
 	}()
 
 	if err = stream.SendMsg(req.msg); err != nil {
-		c.logf("SendMsg error: %v", err)
 		c.setLastErr(err)
 		c.clearStream()
 	}
 
 	close(done)
 	return err
-}
-
-func (c *channel) logf(format string, args ...any) {
-	if c.logger == nil {
-		return
-	}
-	c.logger.Printf("Node %d: %s", c.id, fmt.Sprintf(format, args...))
 }
 
 func (c *channel) setLastErr(err error) {

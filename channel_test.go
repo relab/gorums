@@ -146,7 +146,7 @@ func TestChannelShutdown(t *testing.T) {
 	resp := sendRequest(t, node, request{}, 999)
 	if resp.Err == nil {
 		t.Error("expected error when sending to closed channel")
-	} else if resp.Err.Error() != "node closed" {
+	} else if !strings.Contains(resp.Err.Error(), "node closed") {
 		t.Errorf("expected 'node closed' error, got: %v", resp.Err)
 	}
 
@@ -306,11 +306,10 @@ func TestChannelEnsureStream(t *testing.T) {
 		node := TestNode(t, delayServerFn(0))
 		// ensure sender and receiver goroutines are stopped
 		node.channel.connCancel()
-		// Extract dependencies from existing channel
+		// Extract grpc.ClientConn from existing channel
 		conn := node.channel.conn
-		logger := node.channel.logger
 		// Create new channel with test context without metadata (real implementation captures metadata)
-		node.channel = newChannel(t.Context(), logger, conn, node.id, 10)
+		node.channel = newChannel(t.Context(), conn, node.id, 10)
 		return node
 	}
 

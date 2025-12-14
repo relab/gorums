@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
-	"log"
 	"net"
 	"sort"
 	"strconv"
@@ -71,7 +70,6 @@ type nodeOptions struct {
 	ID             uint32
 	SendBufferSize uint
 	MsgIDGen       func() uint64
-	Logger         *log.Logger
 	Metadata       metadata.MD
 	PerNodeMD      func(uint32) metadata.MD
 	DialOpts       []grpc.DialOption
@@ -107,7 +105,7 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
 	// Create channel and establish gRPC node stream
-	n.channel = newChannel(ctx, opts.Logger, conn, n.id, opts.SendBufferSize)
+	n.channel = newChannel(ctx, conn, n.id, opts.SendBufferSize)
 	return n, nil
 }
 

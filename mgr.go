@@ -119,7 +119,6 @@ func (m *Manager) newNode(addr string, id uint32) (*Node, error) {
 		ID:             id,
 		SendBufferSize: m.opts.sendBuffer,
 		MsgIDGen:       m.getMsgID,
-		Logger:         m.logger,
 		Metadata:       m.opts.metadata,
 		PerNodeMD:      m.opts.perNodeMD,
 		DialOpts:       m.opts.grpcDialOpts,
