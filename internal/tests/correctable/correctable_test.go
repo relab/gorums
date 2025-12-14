@@ -37,14 +37,14 @@ func run(t testing.TB, n int, corr func(*gorums.ConfigContext, int) CorrectableR
 
 func TestCorrectable(t *testing.T) {
 	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
-		// Correctable returns *Responses, user calls WaitForLevel to get *Correctable
+		// Correctable returns *Responses, user calls Correctable to get *Correctable
 		return Correctable(ctx, &Request{}).Correctable(n)
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
 	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
-		// CorrectableStream returns *Responses, user calls WaitForLevel to get *Correctable
+		// CorrectableStream returns *Responses, user calls Correctable to get *Correctable
 		return CorrectableStream(ctx, &Request{}).Correctable(n)
 	})
 }

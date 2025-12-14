@@ -61,7 +61,7 @@ var quorumCallStreamComment = `
 // The response iterator continues until the context is canceled.
 //
 // Example:
-//   corr := {{$method}}(ctx, in).WaitForLevel(2)
+//   corr := {{$method}}(ctx, in).Correctable(2)
 //   <-corr.Watch(2)
 //   resp, level, err := corr.Get()
 {{end -}}

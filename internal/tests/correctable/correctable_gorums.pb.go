@@ -88,7 +88,7 @@ func Correctable(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOpti
 //
 // Example:
 //
-//	corr := CorrectableStream(ctx, in).WaitForLevel(2)
+//	corr := CorrectableStream(ctx, in).Correctable(2)
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
 func CorrectableStream(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
