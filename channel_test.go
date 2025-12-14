@@ -66,7 +66,7 @@ type msgResponse struct {
 	resp  NodeResponse[proto.Message]
 }
 
-func send(t testing.TB, results chan<- msgResponse, node *Node, goroutineID, msgsToSend int, req request) {
+func sendReq(t testing.TB, results chan<- msgResponse, node *Node, goroutineID, msgsToSend int, req request) {
 	for j := range msgsToSend {
 		msgID := uint64(goroutineID*1000 + j)
 		resp := sendRequest(t, node, req, msgID)
@@ -459,8 +459,8 @@ func TestChannelConcurrentSends(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 	for goID := range numGoroutines {
 		go func() {
-			send(t, results, node, goID, msgsPerGoroutine, request{waitSendDone: true})
-			send(t, results, node, goID, msgsPerGoroutine, request{waitSendDone: false})
+			sendReq(t, results, node, goID, msgsPerGoroutine, request{waitSendDone: true})
+			sendReq(t, results, node, goID, msgsPerGoroutine, request{waitSendDone: false})
 		}()
 	}
 
@@ -666,7 +666,7 @@ func TestChannelResponseRouting(t *testing.T) {
 	results := make(chan msgResponse, numMessages)
 
 	for i := range numMessages {
-		go send(t, results, node, i, 1, request{})
+		go sendReq(t, results, node, i, 1, request{})
 	}
 
 	// Collect and verify results
