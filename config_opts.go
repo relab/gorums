@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -187,6 +188,41 @@ func (c Configuration) Except(rm Configuration) NodeListOption {
 	for _, cNode := range c {
 		if !rmIDs[cNode.id] {
 			keepIDs = append(keepIDs, cNode.id)
+		}
+	}
+	return &nodeIDs{nodeIDs: keepIDs}
+}
+
+// WithoutErrors returns a NodeListOption that creates a new configuration
+// excluding nodes that failed in the given QuorumCallError.
+// If specific error types are provided, only nodes whose errors match
+// one of those types (using errors.Is) will be excluded.
+// If no error types are provided, all failed nodes are excluded.
+func (c Configuration) WithoutErrors(err QuorumCallError, errorTypes ...error) NodeListOption {
+	// Decide whether an error should exclude a node.
+	exclude := func(cause error) bool {
+		if len(errorTypes) == 0 {
+			return true // no filter => exclude all failed nodes
+		}
+		for _, t := range errorTypes {
+			if errors.Is(cause, t) {
+				return true // match found
+			}
+		}
+		return false
+	}
+
+	// Build a map of node IDs to exclude
+	rm := make(map[uint32]bool, len(err.errors))
+	for _, ne := range err.errors {
+		rm[ne.nodeID] = exclude(ne.cause)
+	}
+
+	// Build the list of node IDs to keep
+	keepIDs := make([]uint32, 0, len(c))
+	for _, node := range c {
+		if !rm[node.id] {
+			keepIDs = append(keepIDs, node.id)
 		}
 	}
 	return &nodeIDs{nodeIDs: keepIDs}

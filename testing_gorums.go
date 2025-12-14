@@ -35,6 +35,16 @@ func InsecureDialOptions(_ testing.TB) ManagerOption {
 	)
 }
 
+// TestQuorumCallError creates a QuorumCallError for testing.
+// The nodeErrors map contains node IDs and their corresponding errors.
+func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallError {
+	errs := make([]nodeError, 0, len(nodeErrors))
+	for nodeID, err := range nodeErrors {
+		errs = append(errs, nodeError{cause: err, nodeID: nodeID})
+	}
+	return QuorumCallError{cause: ErrIncomplete, errors: errs}
+}
+
 // TestConfiguration creates servers and a configuration for testing.
 // Both server and manager cleanup are handled via t.Cleanup in the correct order:
 // manager is closed first, then servers are stopped.

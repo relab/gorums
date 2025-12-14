@@ -507,13 +507,55 @@ if errors.As(err, &customErr) {
 }
 ```
 
+## Handling Failed Nodes in Configurations
+
+When a quorum call fails, you can create a new configuration that excludes the failed nodes.
+The `WithoutErrors` method allows you to filter nodes based on the errors they returned:
+
+```go
+import (
+  "context"
+  "errors"
+  "io"
+
+  "github.com/relab/gorums"
+)
+
+// Invoke a quorum call
+state, err := config.Read(ctx, &ReadRequest{})
+if err != nil {
+  var qcErr gorums.QuorumCallError
+  if errors.As(err, &qcErr) {
+    // Option 1: Exclude all failed nodes
+	  newConfig, err := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr))
+
+    // Option 2: Exclude only nodes with specific error types
+    // For example, exclude only nodes that timed out
+    newConfig, err := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr, context.DeadlineExceeded))
+
+    // Option 3: Exclude nodes with multiple specific error types
+    newConfig, err := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr,
+        context.DeadlineExceeded,
+        context.Canceled,
+        io.EOF,
+      ),
+    )
+
+    // Retry the operation with the new configuration
+    state, err = newConfig.Read(ctx, &ReadRequest{})
+  }
+}
+```
+
+The error type matching uses `errors.Is`, which properly handles wrapped errors.
+This allows you to filter nodes based on the underlying cause of their failures, enabling fine-grained control over which nodes to exclude when creating new configurations.
+
 ## Working with Configurations
 
 Below is an example demonstrating how to work with configurations.
 These configurations are viewed from the client's perspective, and to actually make quorum calls on these configurations, there must be server endpoints to connect to.
-We ignore the construction of `mgr` and error handling.
+We ignore the construction of `mgr` and error handling (except for the last configuration).
 
-Depending on the application's requirements, the `QSpec` argument may depend on the resulting configuration's size.
 In the example below, we simply use fixed quorum sizes.
 
 ```go
@@ -524,8 +566,7 @@ func ExampleConfigClient() {
     "127.0.0.1:8082",
   }
   // Make configuration c1 from addrs, giving |c1| = |addrs| = 3
-  c1, _ := mgr.NewConfiguration(
-    &QSpec{2},
+  c1, _ := gorums.NewConfiguration(mgr,
     gorums.WithNodeList(addrs),
   )
 
@@ -534,33 +575,46 @@ func ExampleConfigClient() {
     "127.0.0.1:9081",
   }
   // Make configuration c2 from newAddrs, giving |c2| = |newAddrs| = 2
-  c2, _ := mgr.NewConfiguration(
-    &QSpec{1},
+  c2, _ := gorums.NewConfiguration(mgr,
     gorums.WithNodeList(newAddrs),
   )
 
   // Make new configuration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
-  c3, _ := mgr.NewConfiguration(
-    &QSpec{3},
+  c3, _ := gorums.NewConfiguration(mgr,
     c1.WithNewNodes(gorums.WithNodeList(newAddrs)),
   )
 
   // Make new configuration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
-  c4, _ := mgr.NewConfiguration(
-    &QSpec{3},
+  c4, _ := gorums.NewConfiguration(mgr,
     c1.And(c2),
   )
 
   // Make new configuration c5 from c1 except the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
-  c5, _ := mgr.NewConfiguration(
-    &QSpec{1},
+  c5, _ := gorums.NewConfiguration(mgr,
     c1.WithoutNodes(c1.NodeIDs()[0]),
   )
 
   // Make new configuration c6 from c3 except c1, giving |c6| = |c3| - |c1| = 5-3 = 2
-  c6, _ := mgr.NewConfiguration(
-    &QSpec{1},
+  c6, _ := gorums.NewConfiguration(mgr,
     c3.Except(c1),
   )
+
+  // Example: Handling quorum call failures and creating a new configuration
+  // without failed nodes
+  state, err := c1.Read(ctx, &ReadRequest{})
+  if err != nil {
+    var qcErr gorums.QuorumCallError
+    if errors.As(err, &qcErr) {
+      // Create a new configuration excluding all nodes that failed
+      c7, _ := gorums.NewConfiguration(mgr,
+        c1.WithoutErrors(qcErr),
+      )
+
+      // Or exclude only nodes with specific error types (e.g., timeout errors)
+      c8, _ := gorums.NewConfiguration(mgr,
+        c1.WithoutErrors(qcErr, context.DeadlineExceeded),
+      )
+    }
+  }
 }
 ```

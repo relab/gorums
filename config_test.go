@@ -252,3 +252,80 @@ func TestConfigConcurrentAccess(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestConfigurationWithoutErrors(t *testing.T) {
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(mgr.Close)
+
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	timeoutErr := errors.New("timeout")
+	connRefusedErr := errors.New("connection refused")
+	otherErr := errors.New("other error")
+	differentErr := errors.New("different error")
+
+	tests := []struct {
+		name         string
+		qcErr        gorums.QuorumCallError
+		errorTypes   []error
+		wantExcluded []uint32
+	}{
+		{
+			name:         "ExcludeAllFailedNodes",
+			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{1: timeoutErr, 2: connRefusedErr}),
+			errorTypes:   nil,
+			wantExcluded: []uint32{1, 2},
+		},
+		{
+			name:         "ExcludeNodesWithSpecificError",
+			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{1: timeoutErr, 2: connRefusedErr, 3: otherErr}),
+			errorTypes:   []error{timeoutErr},
+			wantExcluded: []uint32{1},
+		},
+		{
+			name:         "ExcludeNodesWithMultipleErrorTypes",
+			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{1: timeoutErr, 2: connRefusedErr, 3: otherErr}),
+			errorTypes:   []error{timeoutErr, connRefusedErr},
+			wantExcluded: []uint32{1, 2},
+		},
+		{
+			name:         "NoMatchingErrors",
+			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{1: timeoutErr, 2: connRefusedErr}),
+			errorTypes:   []error{differentErr},
+			wantExcluded: []uint32{},
+		},
+		{
+			name:         "EmptyErrors",
+			qcErr:        gorums.TestQuorumCallError(t, map[uint32]error{}),
+			errorTypes:   nil,
+			wantExcluded: []uint32{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			newCfg, err := gorums.NewConfiguration(mgr, cfg.WithoutErrors(tt.qcErr, tt.errorTypes...))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Check that excluded nodes are not in the new configuration
+			newNodeIDs := newCfg.NodeIDs()
+			for _, excludedID := range tt.wantExcluded {
+				for _, nodeID := range newNodeIDs {
+					if nodeID == excludedID {
+						t.Errorf("Expected node %d to be excluded, but found it in configuration", excludedID)
+					}
+				}
+			}
+
+			// Check that all other nodes are still in the configuration
+			expectedSize := cfg.Size() - len(tt.wantExcluded)
+			if newCfg.Size() != expectedSize {
+				t.Errorf("newCfg.Size() = %d, expected %d", newCfg.Size(), expectedSize)
+			}
+		})
+	}
+}
