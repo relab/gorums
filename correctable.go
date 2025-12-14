@@ -134,9 +134,9 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 		// If we didn't reach the threshold, mark as done with error
 		if !found {
 			var zero Resp
-			corr.update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
+			corr.update(zero, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs})
 		} else {
-			corr.update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count})
+			corr.update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs})
 		}
 	}()
 

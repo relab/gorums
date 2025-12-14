@@ -424,6 +424,89 @@ func ExampleStorageClient() {
 }
 ```
 
+## Error Handling
+
+Gorums provides structured error types to help you understand and handle failures in quorum calls.
+The primary error type is `QuorumCallError`, which contains detailed information about which nodes failed and why.
+
+### QuorumCallError
+
+A `QuorumCallError` is returned when a quorum call fails.
+It provides the following methods:
+
+* **`Cause() error`** - Returns the underlying cause of the failure (e.g., `ErrIncomplete`, `ErrSendFailure`)
+* **`NodeErrors() int`** - Returns the number of nodes that failed
+* **`Unwrap() []error`** - Supports error unwrapping for use with `errors.Is` and `errors.As`
+
+The error implements Go's standard error unwrapping interface, allowing `errors.Is()` and `errors.As()` to check both the direct cause and any wrapped node-specific errors.
+
+#### Common Error Causes
+
+Gorums defines several sentinel errors that commonly appear as the cause of a `QuorumCallError`:
+
+* **`ErrIncomplete`** - The call could not be completed due to insufficient non-error replies to form a quorum
+* **`ErrSendFailure`** - Message sending failed for one or more nodes
+
+### Error Handling Example
+
+Here's how to properly handle errors from a quorum call:
+
+```go
+func handleQuorumCall(cfg *Configuration, req *ReadRequest) {
+  ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+  defer cancel()
+
+  reply, err := cfg.Read(ctx, req)
+  if err != nil {
+    // Check if it's a QuorumCallError
+    var qcErr gorums.QuorumCallError
+    if errors.As(err, &qcErr) {
+      log.Printf("Quorum call failed: %v", qcErr.Cause())
+      log.Printf("Failed nodes: %d", qcErr.NodeErrors())
+
+      // Handle specific cause types
+      if errors.Is(err, gorums.ErrIncomplete) {
+        // Not enough replies to form a quorum
+        log.Println("Insufficient responses to reach quorum")
+      }
+    }
+
+    // Check for context errors
+    if errors.Is(err, context.DeadlineExceeded) {
+      log.Println("Quorum call timed out")
+    } else if errors.Is(err, context.Canceled) {
+      log.Println("Quorum call was canceled")
+    }
+    return
+  }
+
+  // Process successful reply
+  log.Printf("Read successful: %v", reply)
+}
+```
+
+### Checking for Specific Error Types
+
+Use `errors.Is()` and `errors.As()` to check for specific error types, including both the direct cause and any node-specific errors:
+
+```go
+// Check if the error is caused by insufficient responses
+if errors.Is(err, gorums.ErrIncomplete) {
+  // Handle incomplete quorum
+}
+
+// Check if any node returned a specific gRPC error
+if errors.Is(err, status.Error(codes.Unavailable, "")) {
+  // Handle unavailable nodes
+}
+
+// Extract custom error types from node failures
+var customErr MyCustomError
+if errors.As(err, &customErr) {
+  // Handle custom error from a node
+}
+```
+
 ## Working with Configurations
 
 Below is an example demonstrating how to work with configurations.

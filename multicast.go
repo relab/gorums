@@ -48,7 +48,7 @@ func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, op
 			}
 		}
 		if len(errs) > 0 {
-			return QuorumCallError{cause: ErrSendFailure, errors: errs, replies: clientCtx.expectedReplies - len(errs)}
+			return QuorumCallError{cause: ErrSendFailure, errors: errs}
 		}
 	}
 	return nil

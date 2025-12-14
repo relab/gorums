@@ -195,5 +195,5 @@ func (r *Responses[Resp]) Threshold(threshold int) (resp Resp, err error) {
 			return resp, nil
 		}
 	}
-	return resp, QuorumCallError{cause: ErrIncomplete, errors: errs, replies: count}
+	return resp, QuorumCallError{cause: ErrIncomplete, errors: errs}
 }
