@@ -59,7 +59,7 @@ go get github.com/relab/gorums
 
 The file `storage.proto` should have the following content:
 
-```protobuf
+```proto
 syntax = "proto3";
 package gorumsexample;
 option go_package = ".;gorumsexample";
@@ -107,29 +107,30 @@ The above step should produce two files named `storage.pb.go` and `storage_gorum
 The former contains the Protobuf definitions of our messages.
 The latter contains the Gorums generated client and server interfaces.
 Let us examine the `storage_gorums.pb.go` file to see the code generated from our Protobuf definitions.
-Our two RPC methods have the following signatures:
+Our two RPC methods have the following client-side function signatures:
 
 ```go
-func (n *Node) Read(ctx context.Context, in *ReadRequest) (*State, error)
-func (n *Node) Write(ctx context.Context, in *State) (*WriteResponse, error)
+func Read(ctx *gorums.NodeContext, in *ReadRequest) (*State, error)
+func Write(ctx *gorums.NodeContext, in *State) (*WriteResponse, error)
 ```
 
 And this is our server interface:
 
 ```go
-type Storage interface {
+type StorageServer interface {
   Read(gorums.ServerCtx, *ReadRequest) (*State, error)
   Write(gorums.ServerCtx, *State) (*WriteResponse, error)
 }
 ```
 
-**Note:** For a real use case, you may decide to keep the `.proto` file and the generated `.pb.go` files in a separate directory/package and import that package (the generated Gorums API) into your application.
+**Note:**
+For a real use case, you may decide to keep the `.proto` file and the generated `.pb.go` files in a separate directory/package and import that package (the generated Gorums API) into your application.
 We skip that here for the sake of simplicity.
 
 ## Implementing the StorageServer
 
 We now describe how to use the generated Gorums API for the `Storage` service.
-We begin by implementing the `Storage` server interface from above:
+We begin by implementing the `StorageServer` interface from above:
 
 ```go
 type storageSrv struct {
@@ -168,7 +169,7 @@ There are some important things to note about implementing the server interfaces
   with the handlers for the next requests. The handler automatically calls `ctx.Release()` after returning.
 
   ```go
-  func (srv *storageSrv) Read(ctx gorums.ServerCtx, req *ReadRequest) (resp *State), err error {
+  func (srv *storageSrv) Read(ctx gorums.ServerCtx, req *ReadRequest) (resp *State, err error) {
     // any code running before this will be executed in-order
     ctx.Release()
     // after Release() has been called, a new request handler may be started,
@@ -184,8 +185,6 @@ There are some important things to note about implementing the server interfaces
   This context can be used to retrieve [metadata](https://github.com/grpc/grpc-go/blob/master/Documentation/grpc-metadata.md)
   and [peer](https://godoc.org/google.golang.org/grpc/peer) information from the client.
 * Errors should be returned using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
-* It is currently not possible to send more than one reply message per request.
-  This may change with other call types in the future.
 
 For more information about message ordering and why we use channels instead of `return` in our handlers, read [ordering.md](./ordering.md).
 
@@ -214,7 +213,7 @@ Nodes are added to the connection pool via new configurations, as shown below.
 The manager takes as arguments a set of optional manager options.
 We can forward gRPC dial options to the manager if needed.
 The manager will use these options when connecting to nodes.
-Three different options are specified in the example below.
+Below we use only a simple insecure connection option.
 
 ```go
 package gorumsexample
@@ -222,13 +221,14 @@ package gorumsexample
 import (
   "log"
 
+  "github.com/relab/gorums"
   "google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+  "google.golang.org/grpc/credentials/insecure"
 )
 
 func ExampleStorageClient() {
   mgr := NewManager(
-    gorums.WithGrpcDialOptions(
+    gorums.WithDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
@@ -246,7 +246,7 @@ The code below shows how to create a configuration:
     "127.0.0.1:8082",
   }
   // Create a configuration including all nodes
-  allNodesConfig, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
+  allNodesConfig, err := NewConfiguration(mgr, gorums.WithNodeList(addrs))
   if err != nil {
     log.Fatalln("error creating read config:", err)
   }
@@ -265,10 +265,12 @@ We can now invoke the Write RPC on each `node` in the configuration:
   }
 
   // Invoke Write RPC on all nodes in config
+  ctx := context.Background()
   for _, node := range allNodesConfig.Nodes() {
-    reply, err := node.Write(context.Background(), state)
+    nodeCtx := gorums.WithNodeContext(ctx, node)
+    reply, err := Write(nodeCtx, state)
     if err != nil {
-      log.Fatalln("read rpc returned error:", err)
+      log.Fatalln("write rpc returned error:", err)
     } else if !reply.New {
       log.Println("state was not new.")
     }
@@ -279,118 +281,173 @@ While Gorums allows us to call RPCs on individual nodes as we did above, Gorums 
 
 ## Quorum Calls
 
-Instead of invoking an RPC explicitly on all nodes in a configuration, Gorums allows users to invoke a *quorum call* via a method on the `Configuration` type.
-If an RPC is invoked as a quorum call, Gorums will invoke the RPCs on all nodes in parallel and collect and process the replies.
+Instead of invoking an RPC explicitly on all nodes in a configuration, Gorums allows users to invoke a *quorum call* that sends RPCs to all nodes in parallel and collects responses.
 
-For the Gorums plugin to generate quorum calls we need to specify the `quorumcall` option for our RPC methods in the proto file, as shown below:
+For the Gorums plugin to generate quorum calls, specify the `quorumcall` option for RPC methods in the proto file:
 
 ```protobuf
 import "gorums.proto";
 
-service QCStorage {
-  rpc Read(ReadRequest) returns (State) {
+service Storage {
+  rpc ReadQC(ReadRequest) returns (State) {
     option (gorums.quorumcall) = true;
-   }
-  rpc Write(State) returns (WriteResponse) {
+  }
+  rpc WriteQC(State) returns (WriteResponse) {
     option (gorums.quorumcall) = true;
-   }
+  }
 }
 ```
 
-The generated methods have the following client-side interface:
+The generated code provides a generic function for each quorum call method:
 
 ```go
-func (c *Configuration) Read(ctx context.Context, in *ReadRequest) (*State, error)
-func (c *Configuration) Write(ctx context.Context, in *State) (*WriteResponse, error)
+func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*State]
+func WriteQC(ctx *gorums.ConfigContext, in *State, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse]
 ```
 
-## The QuorumSpec Interface with Quorum Functions
+These functions return a `*gorums.Responses[T]` object that provides several ways to aggregate and process responses.
 
-Gorums uses a *quorum function*, that takes as input a set of replies from individual servers, and computes the reply to be returned from the quorum call.
-Such a quorum function has two responsibilities:
+## Terminal Methods for Response Aggregation
 
-1. Report when a set of replies form a quorum.
-2. Compute a single reply from a set of replies that form a quorum.
+The `*gorums.Responses[T]` type provides built-in *terminal methods* for common aggregation patterns:
 
-Behind the scenes, the RPCs invoked as part of a quorum call return multiple replies.
-Typically, only one of these replies should be returned to the end-user.
-However, Gorums cannot provide a generic policy for selecting a single reply from many replies.
-Instead, Gorums makes this an application-specific choice.
-For example, it may be necessary to compare the content of several reply messages when deciding which reply to return to the client's quorum call, and sometimes several replies must be combined into a new one.
-Gorums, therefore, generates a `QuorumSpec` interface that contains a quorum function for every quorum call.
-The `QuorumSpec` generated for our example is as follows:
+| Method          | Description               | Returns When                         |
+| --------------- | ------------------------- | ------------------------------------ |
+| `.First()`      | First successful response | Any node responds successfully       |
+| `.Majority()`   | Majority of responses     | ⌈(n+1)/2⌉ nodes respond successfully |
+| `.All()`        | All responses             | All n nodes respond                  |
+| `.Threshold(n)` | At least n responses      | n nodes respond successfully         |
+
+Each terminal method blocks until the threshold is met or the context is canceled, then returns a single aggregated response and an error.
+
+### Using Terminal Methods
 
 ```go
-type QuorumSpec interface {
-  // ReadQF is the quorum function for the Read
-  // quorum call method.
-  ReadQF(req *ReadRequest, replies map[uint32]*State) (*State, bool)
+func ExampleTerminalMethods(cfg *gorums.Configuration) {
+  ctx := context.Background()
+  cfgCtx := gorums.WithConfigContext(ctx, cfg)
 
-  // WriteQF is the quorum function for the Write
-  // quorum call method.
-  WriteQF(req *WriteRequest, replies map[uint32]*WriteResponse) (*WriteResponse, bool)
+  // Fast reads: return first successful response
+  reply, err := ReadQC(cfgCtx, &ReadRequest{}).First()
+
+  // Byzantine fault tolerance: require majority
+  reply, err = WriteQC(cfgCtx, &State{}).Majority()
+
+  // Wait for all nodes (useful for debugging)
+  reply, err = ReadQC(cfgCtx, &ReadRequest{}).All()
+
+  // Custom threshold (e.g., f+1 for crash tolerance)
+  f := 1
+  reply, err = ReadQC(cfgCtx, &ReadRequest{}).Threshold(f + 1)
 }
 ```
 
-A `QuorumSpec` implementation must be provided when creating a new configuration.
-Each quorum function of the `QuorumSpec` must adhere to the following rules:
+Terminal methods return `gorums.ErrIncomplete` when:
 
-* If too few replies have been received, a quorum function must return `false`, signaling to Gorums that the quorum call should wait for more replies.
-* Once sufficiently many replies have been received, the quorum function must return `true` along with an appropriate return value, signaling that the quorum call can return the value to the client.
+* The context is canceled before the threshold is met
+* Not enough successful responses are received
+* All nodes return errors
 
-The example below shows an implementation of the `QuorumSpec` interface.
-Here, `ReadQF` returns the `*State` with the highest timestamp and `true`, signaling that the quorum call can return.
-The quorum call will return the `*State` chosen by the quorum function.
+## Iterator-Based Custom Aggregation
+
+For complex aggregation logic beyond the built-in terminal methods, use the iterator API provided by `responses.Seq()`.
+The iterator yields responses progressively as they arrive, allowing custom decision-making logic.
+
+### Basic Iterator Pattern
 
 ```go
-package gorumsexample
-
-import "sort"
-
-type QSpec struct {
-  quorumSize int
-}
-
-// ReadQF is the quorum function for the Read RPC method.
-func (qs *QSpec) ReadQF(_ *ReadResponse, replies map[uint32]*State) (*State, bool) {
-  if len(replies) < qs.quorumSize {
-    return nil, false
-  }
-  return newestState(replies), true
-}
-
-// WriteQF is the quorum function for the Write RPC method.
-func (qs *QSpec) WriteQF(_ *WriteRequest, replies map[uint32]*WriteResponse) (*WriteResponse, bool) {
-  if len(replies) < qs.quorumSize {
-    return nil, false
-  }
-  // return the first response we find
-  var reply *WriteResponse
-  for _, r := range replies {
-    reply = r
-    break
-  }
-  return reply, true
-}
-
-func newestState(replies map[uint32]*State) *State {
+func newestValue(responses *gorums.Responses[*State]) (*State, error) {
   var newest *State
-  for _, s := range replies {
-    if s.GetTimestamp() >= newest.GetTimestamp() {
-      newest = s
+  for resp := range responses.Seq() {
+    // resp.Value contains the response message (may be nil if resp.Err is set)
+    // resp.Err contains any error from that node (nil if successful)
+    // resp.NodeID contains the node identifier
+
+    if resp.Err != nil {
+      continue  // Skip failed responses
+    }
+
+    if newest == nil || resp.Value.GetTimestamp() > newest.GetTimestamp() {
+      newest = resp.Value
     }
   }
-  return newest
+
+  if newest == nil {
+    return nil, gorums.ErrIncomplete
+  }
+  return newest, nil
+}
+
+// Usage
+cfgCtx := gorums.WithConfigContext(ctx, cfg)
+reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{}))
+```
+
+### Iterator Helper Methods
+
+The `ResponseSeq[T]` type provides helper methods for common operations:
+
+#### `IgnoreErrors()` - Skip Failed Responses
+
+```go
+func countSuccessful(responses *gorums.Responses[*Response]) int {
+  count := 0
+  for resp := range responses.Seq().IgnoreErrors() {
+    count++
+    // resp.Value is guaranteed to be non-nil
+    // resp.Err is guaranteed to be nil
+  }
+  return count
 }
 ```
 
-## Invoking Quorum Calls on the Configuration in the StorageClient
+#### `Filter()` - Custom Filtering
 
-In the following code snippet, we create a configuration, including an instance of the `QSpec` defined above, and invoke a quorum call.
-The quorum call will return after receiving replies from two servers.
-Gorums ignores any outstanding replies.
-Note that Gorums does not cancel any outstanding RPCs, leaving it to the client to manage any cancellations through the `Context` argument to the quorum call.
-However, canceling RPCs to a replicated server may not be the desired behavior, since then one or more servers may not have seen previous messages.
+```go
+func validResponses(responses *gorums.Responses[*Response]) []*Response {
+  var valid []*Response
+
+  // Only include responses that pass validation
+  filtered := responses.Seq().Filter(func(nr gorums.NodeResponse[*Response]) bool {
+    return nr.Err == nil && isValid(nr.Value)
+  })
+
+  for resp := range filtered {
+    valid = append(valid, resp.Value)
+  }
+  return valid
+}
+```
+
+#### `CollectN()` and `CollectAll()` - Collect Multiple Responses
+
+```go
+func majorityWrite(responses *gorums.Responses[*WriteResponse]) (*WriteResponse, error) {
+  majority := (responses.Size() + 1) / 2
+
+  // Collect first 'majority' successful responses
+  replies := responses.Seq().IgnoreErrors().CollectN(majority)
+
+  if len(replies) < majority {
+    return nil, gorums.ErrIncomplete
+  }
+
+  // Process the map[uint32]*WriteResponse
+  return aggregateWrites(replies), nil
+}
+
+// CollectAll waits for all responses
+func allResponses(responses *gorums.Responses[*Response]) map[uint32]*Response {
+  return responses.Seq().CollectAll()
+}
+
+// Combine with IgnoreErrors to collect only successful responses
+func allSuccessful(responses *gorums.Responses[*Response]) map[uint32]*Response {
+  return responses.Seq().IgnoreErrors().CollectAll()
+}
+```
+
+### Complete Example: Storage Client with Custom Aggregation
 
 ```go
 func ExampleStorageClient() {
@@ -400,27 +457,129 @@ func ExampleStorageClient() {
     "127.0.0.1:8082",
   }
 
-  mgr := NewManager(
-    gorums.WithGrpcDialOptions(
+  mgr := gorums.NewManager(
+    gorums.WithDialOptions(
       grpc.WithTransportCredentials(insecure.NewCredentials()),
     ),
   )
-  // Create a configuration including all nodes
-  allNodesConfig, err := mgr.NewConfiguration(
-    &QSpec{2},
-    gorums.WithNodeList(addrs),
-  )
+
+  // Create a configuration with all nodes
+  cfg, err := NewConfiguration(mgr, gorums.WithNodeList(addrs))
   if err != nil {
-    log.Fatalln("error creating read config:", err)
+    log.Fatalln("error creating configuration:", err)
   }
 
-  // Invoke read quorum call:
-  ctx, cancel := context.WithCancel(context.Background())
-  reply, err := allNodesConfig.Read(ctx, &ReadRequest{})
+  ctx := context.Background()
+  cfgCtx := gorums.WithConfigContext(ctx, cfg)
+
+  // Option 1: Use custom aggregation function
+  reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{Key: "x"}))
   if err != nil {
-    log.Fatalln("read rpc returned error:", err)
+    log.Fatalln("read quorum call returned error:", err)
   }
-  cancel()
+  fmt.Printf("Read value: %v\n", reply.GetValue())
+
+  // Option 2: Use built-in terminal method
+  reply, err = ReadQC(cfgCtx, &ReadRequest{Key: "x"}).Majority()
+  if err != nil {
+    log.Fatalln("read quorum call returned error:", err)
+  }
+  fmt.Printf("Read value: %v\n", reply.GetValue())
+}
+
+// newestValue returns the response with the most recent timestamp
+func newestValue(responses *gorums.Responses[*State]) (*State, error) {
+  var newest *State
+  for resp := range responses.Seq() {
+    if resp.Err != nil {
+      continue
+    }
+    if newest == nil || resp.Value.GetTimestamp() > newest.GetTimestamp() {
+      newest = resp.Value
+    }
+  }
+  if newest == nil {
+    return nil, gorums.ErrIncomplete
+  }
+  return newest, nil
+}
+```
+
+### Early Termination with Iterators
+
+Iterators allow early termination once a condition is met:
+
+```go
+func fastQuorum(responses *gorums.Responses[*Response]) (*Response, error) {
+  const threshold = 2
+  count := 0
+
+  for resp := range responses.Seq().IgnoreErrors() {
+    count++
+    if count >= threshold {
+      return resp.Value, nil  // Return immediately after threshold
+    }
+  }
+
+  return nil, gorums.ErrIncomplete
+}
+```
+
+## Custom Return Types
+
+Gorums supports custom aggregation functions that return types different from the proto response type.
+This is useful when you need to aggregate multiple responses into a summary or statistics object.
+
+### Example: Collecting Multiple Responses
+
+Consider a `StopBenchmark` RPC that returns `*MemoryStat` from each node, but you want to return `*MemoryStatList` containing all stats:
+
+```go
+// Proto definitions:
+// rpc StopBenchmark(StopRequest) returns (MemoryStat) { option (gorums.quorumcall) = true; }
+// message MemoryStat { uint64 allocs = 1; uint64 memory = 2; }
+// message MemoryStatList { repeated MemoryStat memory_stats = 1; }
+
+// Custom aggregation function with different return type
+func StopBenchmarkQF(replies map[uint32]*MemoryStat) (*MemoryStatList, error) {
+  if len(replies) == 0 {
+    return nil, gorums.ErrIncomplete
+  }
+  return &MemoryStatList{
+    MemoryStats: slices.Collect(maps.Values(replies)),
+  }, nil
+}
+
+// Usage: Two-step pattern
+cfgCtx := gorums.WithConfigContext(ctx, cfg)
+responses := StopBenchmark(cfgCtx, &StopRequest{})
+replies := responses.Seq().IgnoreErrors().CollectAll()  // map[uint32]*MemoryStat
+memStats, err := StopBenchmarkQF(replies)  // Returns *MemoryStatList
+```
+
+### Example: Computing Aggregate Statistics
+
+```go
+// Aggregate results from multiple nodes
+func AggregateResults(replies map[uint32]*Result) (*Result, error) {
+  if len(replies) == 0 {
+    return nil, gorums.ErrIncomplete
+  }
+
+  resp := &Result{}
+  for _, reply := range replies {
+    resp.TotalOps += reply.TotalOps
+    resp.TotalTime += reply.TotalTime
+    resp.Throughput += reply.Throughput
+  }
+
+  // Calculate averages
+  numNodes := len(replies)
+  resp.TotalOps /= uint64(numNodes)
+  resp.TotalTime /= int64(numNodes)
+  resp.Throughput /= float64(numNodes)
+
+  return resp, nil
 }
 ```
 
@@ -452,11 +611,13 @@ Gorums defines several sentinel errors that commonly appear as the cause of a `Q
 Here's how to properly handle errors from a quorum call:
 
 ```go
-func handleQuorumCall(cfg *Configuration, req *ReadRequest) {
+func handleQuorumCall(cfg *gorums.Configuration, req *ReadRequest) {
   ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
   defer cancel()
 
-  reply, err := cfg.Read(ctx, req)
+  cfgCtx := gorums.WithConfigContext(ctx, cfg)
+  reply, err := ReadQC(cfgCtx, req).Majority()
+
   if err != nil {
     // Check if it's a QuorumCallError
     var qcErr gorums.QuorumCallError
@@ -522,19 +683,20 @@ import (
 )
 
 // Invoke a quorum call
-state, err := config.Read(ctx, &ReadRequest{})
+cfgCtx := gorums.WithConfigContext(ctx, config)
+state, err := ReadQC(cfgCtx, &ReadRequest{}).Majority()
 if err != nil {
   var qcErr gorums.QuorumCallError
   if errors.As(err, &qcErr) {
     // Option 1: Exclude all failed nodes
-	  newConfig, err := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr))
+	  newConfig, err := NewConfiguration(mgr, config.WithoutErrors(qcErr))
 
     // Option 2: Exclude only nodes with specific error types
     // For example, exclude only nodes that timed out
-    newConfig, err := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr, context.DeadlineExceeded))
+    newConfig, err := NewConfiguration(mgr, config.WithoutErrors(qcErr, context.DeadlineExceeded))
 
     // Option 3: Exclude nodes with multiple specific error types
-    newConfig, err := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr,
+    newConfig, err := NewConfiguration(mgr, config.WithoutErrors(qcErr,
         context.DeadlineExceeded,
         context.Canceled,
         io.EOF,
@@ -542,7 +704,8 @@ if err != nil {
     )
 
     // Retry the operation with the new configuration
-    state, err = newConfig.Read(ctx, &ReadRequest{})
+    newCfgCtx := gorums.WithConfigContext(ctx, newConfig)
+    state, err = ReadQC(newCfgCtx, &ReadRequest{}).Majority()
   }
 }
 ```
@@ -566,7 +729,7 @@ func ExampleConfigClient() {
     "127.0.0.1:8082",
   }
   // Make configuration c1 from addrs, giving |c1| = |addrs| = 3
-  c1, _ := gorums.NewConfiguration(mgr,
+  c1, _ := NewConfiguration(mgr,
     gorums.WithNodeList(addrs),
   )
 
@@ -575,43 +738,44 @@ func ExampleConfigClient() {
     "127.0.0.1:9081",
   }
   // Make configuration c2 from newAddrs, giving |c2| = |newAddrs| = 2
-  c2, _ := gorums.NewConfiguration(mgr,
+  c2, _ := NewConfiguration(mgr,
     gorums.WithNodeList(newAddrs),
   )
 
   // Make new configuration c3 from c1 and newAddrs, giving |c3| = |c1| + |newAddrs| = 3+2=5
-  c3, _ := gorums.NewConfiguration(mgr,
+  c3, _ := NewConfiguration(mgr,
     c1.WithNewNodes(gorums.WithNodeList(newAddrs)),
   )
 
   // Make new configuration c4 from c1 and c2, giving |c4| = |c1| + |c2| = 3+2=5
-  c4, _ := gorums.NewConfiguration(mgr,
+  c4, _ := NewConfiguration(mgr,
     c1.And(c2),
   )
 
   // Make new configuration c5 from c1 except the first node from c1, giving |c5| = |c1| - 1 = 3-1 = 2
-  c5, _ := gorums.NewConfiguration(mgr,
+  c5, _ := NewConfiguration(mgr,
     c1.WithoutNodes(c1.NodeIDs()[0]),
   )
 
   // Make new configuration c6 from c3 except c1, giving |c6| = |c3| - |c1| = 5-3 = 2
-  c6, _ := gorums.NewConfiguration(mgr,
+  c6, _ := NewConfiguration(mgr,
     c3.Except(c1),
   )
 
   // Example: Handling quorum call failures and creating a new configuration
   // without failed nodes
-  state, err := c1.Read(ctx, &ReadRequest{})
+  cfgCtx := gorums.WithConfigContext(ctx, c1)
+  state, err := ReadQC(cfgCtx, &ReadRequest{}).Majority()
   if err != nil {
     var qcErr gorums.QuorumCallError
     if errors.As(err, &qcErr) {
       // Create a new configuration excluding all nodes that failed
-      c7, _ := gorums.NewConfiguration(mgr,
+      c7, _ := NewConfiguration(mgr,
         c1.WithoutErrors(qcErr),
       )
 
       // Or exclude only nodes with specific error types (e.g., timeout errors)
-      c8, _ := gorums.NewConfiguration(mgr,
+      c8, _ := NewConfiguration(mgr,
         c1.WithoutErrors(qcErr, context.DeadlineExceeded),
       )
     }
