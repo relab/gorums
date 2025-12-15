@@ -31,8 +31,8 @@ func quorumCallServer(_ int) gorums.ServerIface {
 }
 
 func TestQuorumCallWithMajority(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 3, quorumCallServer)
-	ctx := gorums.WithConfigContext(gorums.TestContext(t, 2*time.Second), cfg)
+	config := gorums.TestConfiguration(t, 3, quorumCallServer)
+	ctx := config.Context(gorums.TestContext(t, 2*time.Second))
 
 	req := &dev.Request{}
 	req.SetValue("test")
@@ -50,8 +50,8 @@ func TestQuorumCallWithMajority(t *testing.T) {
 }
 
 func TestQuorumCallWithAll(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 3, quorumCallServer)
-	ctx := gorums.WithConfigContext(gorums.TestContext(t, 2*time.Second), cfg)
+	config := gorums.TestConfiguration(t, 3, quorumCallServer)
+	ctx := config.Context(gorums.TestContext(t, 2*time.Second))
 
 	req := &dev.Request{}
 	req.SetValue("test")
@@ -69,8 +69,8 @@ func TestQuorumCallWithAll(t *testing.T) {
 }
 
 func TestQuorumCallWithThreshold(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 3, quorumCallServer)
-	ctx := gorums.WithConfigContext(gorums.TestContext(t, 2*time.Second), cfg)
+	config := gorums.TestConfiguration(t, 3, quorumCallServer)
+	ctx := config.Context(gorums.TestContext(t, 2*time.Second))
 
 	req := &dev.Request{}
 	req.SetValue("hello")
@@ -88,8 +88,8 @@ func TestQuorumCallWithThreshold(t *testing.T) {
 }
 
 func TestQuorumCallWithCustomAggregation(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 3, quorumCallServer)
-	ctx := gorums.WithConfigContext(gorums.TestContext(t, 2*time.Second), cfg)
+	config := gorums.TestConfiguration(t, 3, quorumCallServer)
+	ctx := config.Context(gorums.TestContext(t, 2*time.Second))
 
 	req := &dev.Request{}
 	req.SetValue("hello")

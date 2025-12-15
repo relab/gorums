@@ -47,7 +47,7 @@ Interceptors are passed as call options and can be chained together.
 Transform requests before sending to each node:
 
 ```go
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+cfgCtx := config.Context(ctx)
 resp, err := WriteQC(cfgCtx, req,
     gorums.Interceptors(
         gorums.MapRequest(func(req *WriteRequest, node *gorums.Node) *WriteRequest {
@@ -100,7 +100,8 @@ resp, err := ReadQC(cfgCtx, req,
 
 ```go
 // Send different messages to each node in a multicast
-WriteMulticast(ctx, cfg, msg,
+cfgCtx := config.Context(ctx)
+WriteMulticast(cfgCtx, msg,
     gorums.Interceptors(
         gorums.MapRequest(func(msg *WriteMessage, node *gorums.Node) *WriteMessage {
             return &WriteMessage{Shard: node.ID()}
@@ -172,7 +173,7 @@ An interceptor has access to a `clientCtx` that provides:
 Multiple interceptors can be passed to `gorums.Interceptors()` and are executed in order:
 
 ```go
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+cfgCtx := config.Context(ctx)
 resp, err := ReadQC(cfgCtx, req,
     gorums.Interceptors(
         loggingInterceptor,

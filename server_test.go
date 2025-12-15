@@ -88,7 +88,7 @@ func TestServerInterceptorsChain(t *testing.T) {
 	node := gorums.TestNode(t, interceptorServerFn)
 
 	ctx := gorums.TestContext(t, 5*time.Second)
-	nodeCtx := gorums.WithNodeContext(ctx, node)
+	nodeCtx := node.Context(ctx)
 	res, err := gorums.RPCCall(nodeCtx, pb.String("client-"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -131,7 +131,7 @@ func TestTCPReconnection(t *testing.T) {
 
 	// Send first message
 	ctx := gorums.TestContext(t, time.Second)
-	nodeCtx := gorums.WithNodeContext(ctx, node)
+	nodeCtx := node.Context(ctx)
 	_, err = gorums.RPCCall(nodeCtx, pb.String("1"), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("First call failed: %v", err)
@@ -146,7 +146,7 @@ func TestTCPReconnection(t *testing.T) {
 
 	// Sending now should fail or timeout
 	ctx2 := gorums.TestContext(t, 200*time.Millisecond)
-	nodeCtx2 := gorums.WithNodeContext(ctx2, node)
+	nodeCtx2 := node.Context(ctx2)
 	_, err = gorums.RPCCall(nodeCtx2, pb.String("2"), mock.TestMethod)
 	if err == nil {
 		// It might succeed if it just queued it? But we wait for response.
@@ -174,7 +174,7 @@ func TestTCPReconnection(t *testing.T) {
 
 	// Send message again
 	ctx3 := gorums.TestContext(t, 2*time.Second)
-	nodeCtx3 := gorums.WithNodeContext(ctx3, node)
+	nodeCtx3 := node.Context(ctx3)
 	_, err = gorums.RPCCall(nodeCtx3, pb.String("3"), mock.TestMethod)
 	if err != nil {
 		t.Errorf("Call after reconnection failed: %v", err)

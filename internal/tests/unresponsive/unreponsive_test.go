@@ -28,7 +28,7 @@ func TestUnresponsiveServer(t *testing.T) {
 
 	for range 100 {
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
-		_, err := TestUnresponsive(gorums.WithNodeContext(ctx, node), &Empty{})
+		_, err := TestUnresponsive(node.Context(ctx), &Empty{})
 		if err != nil && errors.Is(err, context.Canceled) {
 			t.Error(err)
 		}

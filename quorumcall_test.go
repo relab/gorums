@@ -59,10 +59,10 @@ func TestQuorumCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := gorums.TestConfiguration(t, tt.numNodes, gorums.EchoServerFn)
+			config := gorums.TestConfiguration(t, tt.numNodes, gorums.EchoServerFn)
 			ctx := gorums.TestContext(t, 2*time.Second)
 			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-				gorums.WithConfigContext(ctx, cfg),
+				config.Context(ctx),
 				pb.String("test"),
 				mock.TestMethod,
 			)
@@ -149,8 +149,8 @@ func TestPartialFailures(t *testing.T) {
 		testName := fmt.Sprintf("%s/fail=%d", tt.call.name, tt.failing)
 		t.Run(testName, func(t *testing.T) {
 			var stopNodes func(...int)
-			cfg := gorums.TestConfiguration(t, numServers, nil, gorums.WithStopFunc(t, &stopNodes))
-			ctx := gorums.WithConfigContext(t.Context(), cfg)
+			config := gorums.TestConfiguration(t, numServers, nil, gorums.WithStopFunc(t, &stopNodes))
+			ctx := config.Context(t.Context())
 			req := pb.String("test")
 
 			// Warmup to ensure connections
@@ -201,11 +201,11 @@ func TestPartialFailures(t *testing.T) {
 
 // TestQuorumCallCustomAggregation tests custom response aggregation
 func TestQuorumCallCustomAggregation(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
+	config := gorums.TestConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
 
 	ctx := gorums.TestContext(t, 2*time.Second)
 	responses := gorums.QuorumCall[*pb.Int32Value, *pb.Int32Value](
-		gorums.WithConfigContext(ctx, cfg),
+		config.Context(ctx),
 		pb.Int32(0),
 		mock.GetValueMethod,
 	)
@@ -224,11 +224,11 @@ func TestQuorumCallCustomAggregation(t *testing.T) {
 
 // TestQuorumCallCollectAll tests collecting all responses
 func TestQuorumCallCollectAll(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
+	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
 
 	ctx := gorums.TestContext(t, 2*time.Second)
 	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-		gorums.WithConfigContext(ctx, cfg),
+		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
 	)
@@ -242,8 +242,8 @@ func TestQuorumCallCollectAll(t *testing.T) {
 // BenchmarkQuorumCallTerminalMethods benchmarks the built-in terminal methods with real servers.
 func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
-		cfg := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
-		cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
+		config := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+		cfgCtx := config.Context(b.Context())
 
 		b.Run(fmt.Sprintf("Majority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
@@ -311,8 +311,8 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 // BenchmarkQuorumCall benchmarks custom aggregation using different iterator patterns.
 func BenchmarkQuorumCall(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9, 13, 17, 19} {
-		cfg := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
-		cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
+		config := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+		cfgCtx := config.Context(b.Context())
 
 		// Using CollectAll and then checking quorum
 		b.Run(fmt.Sprintf("CollectAllThenCheck/%d", numNodes), func(b *testing.B) {

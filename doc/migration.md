@@ -71,10 +71,10 @@ func newestValue(responses *gorums.Responses[*ReadResponse]) (*ReadResponse, err
 }
 
 // Configuration created without QuorumSpec
-cfg, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
+config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 
 // Generic function with ConfigContext
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+cfgCtx := config.Context(ctx)
 responses := ReadQC(cfgCtx, &ReadRequest{})
 
 // Option 1: Use custom aggregation
@@ -198,7 +198,7 @@ reply, err := cfg.Read(ctx, &ReadRequest{Key: "x"})
 ```go
 // Option 1: With custom aggregation
 ctx := context.Background()
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+cfgCtx := config.Context(ctx)
 reply, err := newestState(ReadQC(cfgCtx, &ReadRequest{Key: "x"}))
 
 // Option 2: With terminal method
@@ -610,10 +610,10 @@ reply, err := ReadQC(cfgCtx, req).Majority()
 // If there was a quorum error, filter out failed nodes
 if qcErr, ok := err.(gorums.QuorumCallError); ok {
     // Create new configuration without failed nodes
-    goodCfg, _ := gorums.NewConfiguration(mgr, cfg.WithoutErrors(qcErr))
+    goodCfg, _ := gorums.NewConfiguration(mgr, config.WithoutErrors(qcErr))
 
     // Retry with good nodes only
-    cfgCtx := gorums.WithConfigContext(ctx, goodCfg)
+    cfgCtx := goodCfg.Context(ctx)
     reply, err = ReadQC(cfgCtx, req).Majority()
 }
 ```
@@ -646,7 +646,7 @@ if err != nil {
 ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 defer cancel()
 
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+cfgCtx := config.Context(ctx)
 reply, err := ReadQC(cfgCtx, req).Majority()
 if err != nil {
     if ctx.Err() != nil {
@@ -704,8 +704,8 @@ reply, err := cfg.Read(ctx, req)
 ```go
 // No QuorumSpec needed
 
-cfg, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
+cfgCtx := config.Context(ctx)
 reply, err := ReadQC(cfgCtx, req).Majority()
 ```
 
@@ -837,7 +837,7 @@ func firstValid(responses *gorums.Responses[*State]) (*State, error) {
 **Solution:** Use generic functions with ConfigContext:
 
 ```go
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+cfgCtx := config.Context(ctx)
 reply, err := ReadQC(cfgCtx, req).Majority()
 ```
 

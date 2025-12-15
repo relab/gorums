@@ -72,16 +72,16 @@ func TestOnewayCalls(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s/Servers=%d", test.name, test.servers), func(t *testing.T) {
-			cfg, srvs := setupWithNodeMap(t, test.servers)
+			config, srvs := setupWithNodeMap(t, test.servers)
 			for i := range srvs {
 				srvs[i].wg.Add(test.calls)
 			}
 
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
-				if cfg.Size() == 1 {
-					node := cfg[0]
-					nodeCtx := gorums.WithNodeContext(context.Background(), node)
+				if config.Size() == 1 {
+					node := config[0]
+					nodeCtx := node.Context(context.Background())
 					if test.sendWait {
 						if err := oneway.Unicast(nodeCtx, in); err != nil {
 							t.Error(err)
@@ -92,7 +92,7 @@ func TestOnewayCalls(t *testing.T) {
 						}
 					}
 				} else {
-					cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
+					cfgCtx := config.Context(context.Background())
 					if test.sendWait {
 						if err := oneway.Multicast(cfgCtx, in); err != nil {
 							t.Error(err)
@@ -171,8 +171,8 @@ func TestMulticastPerNode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s/Servers=%d/IgnoredNodes=%v", test.name, test.servers, test.ignoreNodes), func(t *testing.T) {
-			cfg, srvs := setupWithNodeMap(t, test.servers)
-			nodeIDs := cfg.NodeIDs()
+			config, srvs := setupWithNodeMap(t, test.servers)
+			nodeIDs := config.NodeIDs()
 			// set the ignoreNodes variable used by the ignore() function
 			ignoreNodes = test.ignoreNodes
 
@@ -185,7 +185,7 @@ func TestMulticastPerNode(t *testing.T) {
 
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
-				cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
+				cfgCtx := config.Context(context.Background())
 				mapInterceptor := gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.mapFunc)
 				if test.sendWait {
 					if err := oneway.Multicast(cfgCtx, in,
@@ -232,21 +232,21 @@ func BenchmarkUnicast(b *testing.B) {
 	b.Run("UnicastSendWaiting__", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
-			nodeCtx := gorums.WithNodeContext(context.Background(), node)
+			nodeCtx := node.Context(context.Background())
 			oneway.Unicast(nodeCtx, in)
 		}
 	})
 	b.Run("UnicastNoSendWaiting", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
-			nodeCtx := gorums.WithNodeContext(context.Background(), node)
+			nodeCtx := node.Context(context.Background())
 			oneway.Unicast(nodeCtx, in, gorums.IgnoreErrors())
 		}
 	})
 }
 
 func BenchmarkMulticast(b *testing.B) {
-	cfg, srvs := setupWithNodeMap(b, 3)
+	config, srvs := setupWithNodeMap(b, 3)
 	for _, srv := range srvs {
 		srv.benchmark = true
 	}
@@ -254,14 +254,14 @@ func BenchmarkMulticast(b *testing.B) {
 	b.Run("MulticastSendWaiting__", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
-			cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
+			cfgCtx := config.Context(context.Background())
 			oneway.Multicast(cfgCtx, in)
 		}
 	})
 	b.Run("MulticastNoSendWaiting", func(b *testing.B) {
 		for c := 1; c <= b.N; c++ {
 			in.SetNum(uint64(c))
-			cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
+			cfgCtx := config.Context(context.Background())
 			oneway.Multicast(cfgCtx, in, gorums.IgnoreErrors())
 		}
 	})

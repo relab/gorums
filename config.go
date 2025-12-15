@@ -8,25 +8,10 @@ import (
 // ConfigContext is a context that carries a configuration for quorum calls.
 // It embeds context.Context and provides access to the Configuration.
 //
-// Use [WithConfigContext] to create a ConfigContext from an existing context.
+// Use [Configuration.Context] to create a ConfigContext from an existing context.
 type ConfigContext struct {
 	context.Context
 	cfg Configuration
-}
-
-// WithConfigContext creates a new ConfigContext from the given parent context
-// and configuration. The configuration must not be empty.
-//
-// Example:
-//
-//	cfg, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
-//	ctx := gorums.WithConfigContext(context.Background(), cfg)
-//	resp, err := paxos.Prepare(ctx, req)
-func WithConfigContext(parent context.Context, cfg Configuration) *ConfigContext {
-	if len(cfg) == 0 {
-		panic("gorums: WithConfigContext called with empty configuration")
-	}
-	return &ConfigContext{Context: parent, cfg: cfg}
 }
 
 // Configuration returns the Configuration associated with this context.
@@ -39,6 +24,21 @@ func (c ConfigContext) Configuration() Configuration {
 // Mutating the configuration is not supported; instead, use NewConfiguration to create
 // a new configuration.
 type Configuration []*Node
+
+// Context creates a new ConfigContext from the given parent context
+// and this configuration.
+//
+// Example:
+//
+//	config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
+//	cfgCtx := config.Context(context.Background())
+//	resp, err := paxos.Prepare(cfgCtx, req)
+func (cfg Configuration) Context(parent context.Context) *ConfigContext {
+	if len(cfg) == 0 {
+		panic("gorums: Context called with empty configuration")
+	}
+	return &ConfigContext{Context: parent, cfg: cfg}
+}
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.

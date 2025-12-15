@@ -267,7 +267,7 @@ We can now invoke the Write RPC on each `node` in the configuration:
   // Invoke Write RPC on all nodes in config
   ctx := context.Background()
   for _, node := range allNodesConfig.Nodes() {
-    nodeCtx := gorums.WithNodeContext(ctx, node)
+    nodeCtx := node.Context(ctx)
     reply, err := Write(nodeCtx, state)
     if err != nil {
       log.Fatalln("write rpc returned error:", err)
@@ -323,9 +323,9 @@ Each terminal method blocks until the threshold is met or the context is cancele
 ### Using Terminal Methods
 
 ```go
-func ExampleTerminalMethods(cfg *gorums.Configuration) {
+func ExampleTerminalMethods(config *gorums.Configuration) {
   ctx := context.Background()
-  cfgCtx := gorums.WithConfigContext(ctx, cfg)
+  cfgCtx := config.Context(ctx)
 
   // Fast reads: return first successful response
   reply, err := ReadQC(cfgCtx, &ReadRequest{}).First()
@@ -379,7 +379,7 @@ func newestValue(responses *gorums.Responses[*State]) (*State, error) {
 }
 
 // Usage
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+cfgCtx := config.Context(ctx)
 reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{}))
 ```
 
@@ -470,7 +470,7 @@ func ExampleStorageClient() {
   }
 
   ctx := context.Background()
-  cfgCtx := gorums.WithConfigContext(ctx, cfg)
+  cfgCtx := config.Context(ctx)
 
   // Option 1: Use custom aggregation function
   reply, err := newestValue(ReadQC(cfgCtx, &ReadRequest{Key: "x"}))
@@ -551,7 +551,7 @@ func StopBenchmarkQF(replies map[uint32]*MemoryStat) (*MemoryStatList, error) {
 }
 
 // Usage: Two-step pattern
-cfgCtx := gorums.WithConfigContext(ctx, cfg)
+cfgCtx := config.Context(ctx)
 responses := StopBenchmark(cfgCtx, &StopRequest{})
 replies := responses.Seq().IgnoreErrors().CollectAll()  // map[uint32]*MemoryStat
 memStats, err := StopBenchmarkQF(replies)  // Returns *MemoryStatList
@@ -615,7 +615,7 @@ func handleQuorumCall(cfg *gorums.Configuration, req *ReadRequest) {
   ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
   defer cancel()
 
-  cfgCtx := gorums.WithConfigContext(ctx, cfg)
+  cfgCtx := config.Context(ctx)
   reply, err := ReadQC(cfgCtx, req).Majority()
 
   if err != nil {
@@ -683,7 +683,7 @@ import (
 )
 
 // Invoke a quorum call
-cfgCtx := gorums.WithConfigContext(ctx, config)
+cfgCtx := config.Context(ctx)
 state, err := ReadQC(cfgCtx, &ReadRequest{}).Majority()
 if err != nil {
   var qcErr gorums.QuorumCallError
@@ -704,7 +704,7 @@ if err != nil {
     )
 
     // Retry the operation with the new configuration
-    newCfgCtx := gorums.WithConfigContext(ctx, newConfig)
+    newCfgCtx := newConfig.Context(ctx)
     state, err = ReadQC(newCfgCtx, &ReadRequest{}).Majority()
   }
 }
@@ -764,7 +764,7 @@ func ExampleConfigClient() {
 
   // Example: Handling quorum call failures and creating a new configuration
   // without failed nodes
-  cfgCtx := gorums.WithConfigContext(ctx, c1)
+  cfgCtx := c1.Context(ctx)
   state, err := ReadQC(cfgCtx, &ReadRequest{}).Majority()
   if err != nil {
     var qcErr gorums.QuorumCallError

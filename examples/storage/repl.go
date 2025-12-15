@@ -174,7 +174,7 @@ func (r repl) multicast(args []string) {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := gorums.WithConfigContext(ctx, r.cfg)
+	cfgCtx := r.cfg.Context(ctx)
 	pb.WriteMulticast(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1]}.Build())
 	cancel()
 	fmt.Println("Multicast OK: (server output not synchronized)")
@@ -217,7 +217,7 @@ func (repl) readRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	nodeCtx := gorums.WithNodeContext(ctx, node)
+	nodeCtx := node.Context(ctx)
 	resp, err := pb.ReadRPC(nodeCtx, pb.ReadRequest_builder{Key: args[0]}.Build())
 	cancel()
 	if err != nil {
@@ -237,7 +237,7 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	nodeCtx := gorums.WithNodeContext(ctx, node)
+	nodeCtx := node.Context(ctx)
 	resp, err := pb.WriteRPC(nodeCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build())
 	cancel()
 	if err != nil {
@@ -251,13 +251,13 @@ func (repl) writeRPC(args []string, node *pb.Node) {
 	fmt.Println("Write OK")
 }
 
-func (repl) readQC(args []string, cfg pb.Configuration) {
+func (repl) readQC(args []string, config pb.Configuration) {
 	if len(args) < 1 {
 		fmt.Println("Read requires a key to read.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := gorums.WithConfigContext(ctx, cfg)
+	cfgCtx := config.Context(ctx)
 	// Use the responses iterator to find the newest value
 	resp, err := newestValue(pb.ReadQC(cfgCtx, pb.ReadRequest_builder{Key: args[0]}.Build()))
 	cancel()
@@ -272,13 +272,13 @@ func (repl) readQC(args []string, cfg pb.Configuration) {
 	fmt.Printf("%s = %s\n", args[0], resp.GetValue())
 }
 
-func (repl) writeQC(args []string, cfg pb.Configuration) {
+func (repl) writeQC(args []string, config pb.Configuration) {
 	if len(args) < 2 {
 		fmt.Println("Write requires a key and a value to write.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	cfgCtx := gorums.WithConfigContext(ctx, cfg)
+	cfgCtx := config.Context(ctx)
 	// Use the responses iterator to count successful updates
 	resp, err := numUpdated(pb.WriteQC(cfgCtx, pb.WriteRequest_builder{Key: args[0], Value: args[1], Time: timestamppb.Now()}.Build()))
 	cancel()

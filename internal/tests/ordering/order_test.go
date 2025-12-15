@@ -83,7 +83,7 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	node := gorums.TestNode(t, serverFn)
 
 	for i := range iterations() {
-		nodeCtx := gorums.WithNodeContext(t.Context(), node)
+		nodeCtx := node.Context(t.Context())
 		resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
@@ -98,14 +98,14 @@ func TestUnaryRPCOrdering(t *testing.T) {
 }
 
 func TestQuorumCallOrdering(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 4, serverFn)
-	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
+	config := gorums.TestConfiguration(t, 4, serverFn)
+	cfgCtx := config.Context(t.Context())
 
 	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
 		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build())
 		replies := responses.CollectAll()
-		if len(replies) < cfg.Size() {
+		if len(replies) < config.Size() {
 			t.Fatalf("incomplete call: %d replies", len(replies))
 		}
 		for _, reply := range replies {
@@ -117,8 +117,8 @@ func TestQuorumCallOrdering(t *testing.T) {
 }
 
 func TestQuorumCallAsyncOrdering(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 4, serverFn)
-	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
+	config := gorums.TestConfiguration(t, 4, serverFn)
+	cfgCtx := config.Context(t.Context())
 
 	var wg sync.WaitGroup
 	for i := range iterations() {
@@ -144,14 +144,14 @@ func TestQuorumCallAsyncOrdering(t *testing.T) {
 }
 
 func TestMixedOrdering(t *testing.T) {
-	cfg := gorums.TestConfiguration(t, 4, serverFn)
-	cfgCtx := gorums.WithConfigContext(t.Context(), cfg)
+	config := gorums.TestConfiguration(t, 4, serverFn)
+	cfgCtx := config.Context(t.Context())
 
 	for i := range iterations() {
 		// Use CollectAll to get all responses and check for ordering
 		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
 		replies := responses.CollectAll()
-		if len(replies) < cfg.Size() {
+		if len(replies) < config.Size() {
 			t.Fatalf("incomplete call: %d replies", len(replies))
 		}
 		for _, reply := range replies {
@@ -160,9 +160,9 @@ func TestMixedOrdering(t *testing.T) {
 			}
 		}
 		var wg sync.WaitGroup
-		for _, node := range cfg.Nodes() {
+		for _, node := range config.Nodes() {
 			wg.Go(func() {
-				nodeCtx := gorums.WithNodeContext(t.Context(), node)
+				nodeCtx := node.Context(t.Context())
 				resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(2 * i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)

@@ -18,24 +18,10 @@ const nilAngleString = "<nil>"
 // NodeContext is a context that carries a node for unicast and RPC calls.
 // It embeds context.Context and provides access to the Node.
 //
-// Use [WithNodeContext] to create a NodeContext from an existing context.
+// Use [Node.Context] to create a NodeContext from an existing context.
 type NodeContext struct {
 	context.Context
 	node *Node
-}
-
-// WithNodeContext creates a new NodeContext from the given parent context
-// and node. The node must not be nil.
-//
-// Example:
-//
-//	ctx := gorums.WithNodeContext(context.Background(), node)
-//	resp, err := service.GRPCCall(ctx, req)
-func WithNodeContext(parent context.Context, node *Node) *NodeContext {
-	if node == nil {
-		panic("gorums: WithNodeContext called with nil node")
-	}
-	return &NodeContext{Context: parent, node: node}
 }
 
 // Node returns the Node associated with this context.
@@ -63,6 +49,20 @@ type Node struct {
 
 	msgIDGen func() uint64
 	channel  *channel
+}
+
+// Context creates a new NodeContext from the given parent context
+// and this node.
+//
+// Example:
+//
+//	nodeCtx := node.Context(context.Background())
+//	resp, err := service.GRPCCall(nodeCtx, req)
+func (n *Node) Context(parent context.Context) *NodeContext {
+	if n == nil {
+		panic("gorums: Context called with nil node")
+	}
+	return &NodeContext{Context: parent, node: n}
 }
 
 // nodeOptions contains configuration options for creating a new Node.

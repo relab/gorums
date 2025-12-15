@@ -43,10 +43,10 @@ func TestAsync(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg := gorums.TestConfiguration(t, tt.numNodes, gorums.EchoServerFn)
+			config := gorums.TestConfiguration(t, tt.numNodes, gorums.EchoServerFn)
 			ctx := gorums.TestContext(t, 2*time.Second)
 			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-				gorums.WithConfigContext(ctx, cfg),
+				config.Context(ctx),
 				pb.String("test"),
 				mock.TestMethod,
 			)
@@ -67,12 +67,12 @@ func TestAsync(t *testing.T) {
 
 func TestAsync_Error(t *testing.T) {
 	// Use a configuration with no servers to force an error (or timeout)
-	cfg := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
+	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
 	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
-		gorums.WithConfigContext(ctx, cfg),
+		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
 	)
@@ -86,8 +86,8 @@ func TestAsync_Error(t *testing.T) {
 
 func BenchmarkAsyncQuorumCall(b *testing.B) {
 	for _, numNodes := range []int{3, 5, 7, 9} {
-		cfg := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
-		cfgCtx := gorums.WithConfigContext(b.Context(), cfg)
+		config := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+		cfgCtx := config.Context(b.Context())
 
 		b.Run(fmt.Sprintf("AsyncMajority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()

@@ -38,10 +38,10 @@ type (
 	serverFunc  func(context.Context, *TimedMsg)
 )
 
-func runQCBenchmark(opts Options, cfg Configuration, f qcFunc) (*Result, error) {
+func runQCBenchmark(opts Options, config Configuration, f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfgCtx := gorums.WithConfigContext(ctx, cfg)
+	cfgCtx := config.Context(ctx)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
@@ -102,10 +102,10 @@ func runQCBenchmark(opts Options, cfg Configuration, f qcFunc) (*Result, error) 
 	return result, nil
 }
 
-func runAsyncQCBenchmark(opts Options, cfg Configuration, f asyncQCFunc) (*Result, error) {
+func runAsyncQCBenchmark(opts Options, config Configuration, f asyncQCFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfgCtx := gorums.WithConfigContext(ctx, cfg)
+	cfgCtx := config.Context(ctx)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
@@ -186,10 +186,10 @@ func runAsyncQCBenchmark(opts Options, cfg Configuration, f asyncQCFunc) (*Resul
 	return result, nil
 }
 
-func runServerBenchmark(opts Options, cfg Configuration, f serverFunc) (*Result, error) {
+func runServerBenchmark(opts Options, config Configuration, f serverFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfgCtx := gorums.WithConfigContext(ctx, cfg)
+	cfgCtx := config.Context(ctx)
 	payload := make([]byte, opts.Payload)
 	var start runtime.MemStats
 	var end runtime.MemStats
@@ -233,13 +233,13 @@ func runServerBenchmark(opts Options, cfg Configuration, f serverFunc) (*Result,
 }
 
 // GetBenchmarks returns a list of Benchmarks that can be performed on the configuration
-func GetBenchmarks(cfg Configuration) []Bench {
+func GetBenchmarks(config Configuration) []Bench {
 	m := []Bench{
 		{
 			Name:        "QuorumCall",
 			Description: "NodeStream based quorum call implementation with FIFO ordering",
 			runBench: func(opts Options) (*Result, error) {
-				return runQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
+				return runQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
 					return QuorumCall(ctx, in, callOpts...).Threshold(quorumSize)
 				})
 			},
@@ -248,7 +248,7 @@ func GetBenchmarks(cfg Configuration) []Bench {
 			Name:        "AsyncQuorumCall",
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
 			runBench: func(opts Options) (*Result, error) {
-				return runAsyncQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) AsyncEcho {
+				return runAsyncQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) AsyncEcho {
 					return QuorumCall(ctx, in, callOpts...).AsyncThreshold(quorumSize)
 				})
 			},
@@ -257,7 +257,7 @@ func GetBenchmarks(cfg Configuration) []Bench {
 			Name:        "SlowServer",
 			Description: "Quorum Call with a 10s processing time on the server",
 			runBench: func(opts Options) (*Result, error) {
-				return runQCBenchmark(opts, cfg, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
+				return runQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
 					return SlowServer(ctx, in, callOpts...).Threshold(quorumSize)
 				})
 			},
@@ -266,8 +266,8 @@ func GetBenchmarks(cfg Configuration) []Bench {
 			Name:        "Multicast",
 			Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
 			runBench: func(opts Options) (*Result, error) {
-				return runServerBenchmark(opts, cfg, func(ctx context.Context, msg *TimedMsg) {
-					cfgCtx := gorums.WithConfigContext(ctx, cfg)
+				return runServerBenchmark(opts, config, func(ctx context.Context, msg *TimedMsg) {
+					cfgCtx := config.Context(ctx)
 					Multicast(cfgCtx, msg, gorums.IgnoreErrors())
 				})
 			},
@@ -277,8 +277,8 @@ func GetBenchmarks(cfg Configuration) []Bench {
 }
 
 // RunBenchmarks runs all the benchmarks that match the given regex with the given options
-func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg Configuration) ([]*Result, error) {
-	benchmarks := GetBenchmarks(cfg)
+func RunBenchmarks(benchRegex *regexp.Regexp, options Options, config Configuration) ([]*Result, error) {
+	benchmarks := GetBenchmarks(config)
 	var results []*Result
 	for _, b := range benchmarks {
 		if benchRegex.MatchString(b.Name) {

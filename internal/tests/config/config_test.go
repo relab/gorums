@@ -25,8 +25,8 @@ func serverFn(_ int) gorums.ServerIface {
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	callRPC := func(cfg gorums.Configuration) {
-		cfgCtx := gorums.WithConfigContext(context.Background(), cfg)
+	callRPC := func(config gorums.Configuration) {
+		cfgCtx := config.Context(context.Background())
 		for i := range 5 {
 			// Use the new terminal method API - wait for a majority
 			resp, err := Config(cfgCtx,
