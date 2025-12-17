@@ -126,7 +126,7 @@ type Responses[Resp msg] struct {
 	sendNow func() // sendNow triggers immediate sending of requests
 }
 
-func NewResponses[Req, Resp msg](ctx *clientCtx[Req, Resp]) *Responses[Resp] {
+func NewResponses[Req, Resp msg](ctx *ClientCtx[Req, Resp]) *Responses[Resp] {
 	return &Responses[Resp]{
 		ResponseSeq: ctx.responseSeq,
 		size:        ctx.Size(),
@@ -139,10 +139,24 @@ func (r *Responses[Resp]) Size() int {
 	return r.size
 }
 
-// Seq returns the underlying response iterator for advanced use cases.
-// Users can use this to implement custom aggregation logic.
+// Seq returns the underlying response iterator that yields node responses as they arrive.
+// It returns a single-use iterator. Users can use this to implement custom aggregation logic.
+// This method triggers lazy sending of requests.
 //
-// Note: This method triggers lazy sending of requests.
+// The iterator will:
+//   - Yield responses as they arrive from nodes
+//   - Continue until the context is canceled or all expected responses have been received
+//   - Allow early termination by breaking from the range loop
+//
+// Example usage:
+//
+//	for result := range ReadQuorumCall(ctx, req).Seq() {
+//	    if result.Err != nil {
+//	        // Handle node error
+//	        continue
+//	    }
+//	    // Process result.Value
+//	}
 func (r *Responses[Resp]) Seq() ResponseSeq[Resp] {
 	return r.ResponseSeq
 }

@@ -33,7 +33,7 @@ func TestCallOptionsMustWaitSendDone(t *testing.T) {
 }
 
 func BenchmarkGetCallOptions(b *testing.B) {
-	interceptor := func(_ *clientCtx[msg, msg]) {}
+	interceptor := func(_ *ClientCtx[msg, msg], next ResponseSeq[msg]) ResponseSeq[msg] { return next }
 	tests := []struct {
 		numOpts int
 	}{

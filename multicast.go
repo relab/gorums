@@ -24,12 +24,7 @@ func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, op
 	waitSendDone := callOpts.mustWaitSendDone()
 
 	clientCtx := newClientCtxBuilder[Req, *emptypb.Empty](ctx, msg, method).WithWaitSendDone(waitSendDone).Build()
-
-	// Apply interceptors to set up transformations
-	for _, ic := range callOpts.interceptors {
-		interceptor := ic.(QuorumInterceptor[Req, *emptypb.Empty])
-		interceptor(clientCtx)
-	}
+	clientCtx.applyInterceptors(callOpts.interceptors)
 
 	// Send messages immediately (multicast doesn't use lazy sending)
 	clientCtx.sendOnce.Do(clientCtx.send)

@@ -55,11 +55,7 @@ func invokeQuorumCall[Req, Resp msg](
 		builder = builder.WithStreaming()
 	}
 	clientCtx := builder.Build()
-
-	for _, ic := range callOpts.interceptors {
-		interceptor := ic.(QuorumInterceptor[Req, Resp])
-		interceptor(clientCtx)
-	}
+	clientCtx.applyInterceptors(callOpts.interceptors)
 
 	return NewResponses(clientCtx)
 }
