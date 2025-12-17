@@ -39,10 +39,7 @@ There are a few tools that need to be installed first:
 ## Creating and Compiling a Protobuf Service Description into Gorums Code
 
 In this example we will create a simple storage service.
-The storage can store a single `{string,timestamp}` tuple and has two methods:
-
-* `Read() State`
-* `Write(State) Response`
+The storage can store a single `{value, timestamp}` tuple with methods for reading and writing state.
 
 First, we define our storage as a gRPC service by using the protocol buffers interface definition language (IDL).
 Refer to the protocol buffers [language guide](https://developers.google.com/protocol-buffers/docs/proto3) to learn more about the Protobuf IDL.
@@ -57,37 +54,78 @@ go mod init gorumsexample
 go get github.com/relab/gorums
 ```
 
-The file `storage.proto` should have the following content:
+### Call Types
+
+Gorums offers several call types including synchronous quorum calls, and one-way `unicast` and `multicast` communication.
+To select a call type for a Protobuf service method, specify one of the following options (they cannot be combined):
+
+| Call type   | Gorums option       | Description                                                       |
+| ----------- | ------------------- | ----------------------------------------------------------------- |
+| Ordered RPC | no option           | FIFO-ordered synchronous RPC to a single node.                    |
+| Unicast     | `gorums.unicast`    | FIFO-ordered one-way asynchronous unicast.                        |
+| Multicast   | `gorums.multicast`  | FIFO-ordered one-way asynchronous multicast.                      |
+| Quorum Call | `gorums.quorumcall` | FIFO-ordered synchronous quorum call on a configuration of nodes. |
+
+The generated API is similar to unary gRPC, unless the `stream` keyword is used in the proto definition.
+Server streaming is only supported for quorum calls.
+Client streaming is not supported.
+
+### Configuring Call Types in Protobuf
+
+The file `storage.proto` should have the following content, illustrating the different call types:
 
 ```proto
-syntax = "proto3";
+edition = "2023";
+
 package gorumsexample;
-option go_package = ".;gorumsexample";
+option go_package = "github.com/relab/gorums/examples/gorumsexample";
+option features.field_presence = IMPLICIT;
 
+import "google/protobuf/empty.proto";
+import "gorums.proto";
+
+// Storage service defines the RPCs for a simple key-value storage system.
 service Storage {
-  rpc Read(ReadRequest) returns (State) { }
-  rpc Write(State) returns (WriteResponse) { }
+  // ReadOrdered is a FIFO-ordered RPC to a single node.
+  rpc ReadOrdered(google.protobuf.Empty) returns (State) {}
+
+  // WriteUnicast is an asynchronous unicast to a single node.
+  // No reply is collected.
+  rpc WriteUnicast(State) returns (google.protobuf.Empty) {
+    option (gorums.unicast) = true;
+  }
+
+  // WriteMulticast is an asynchronous multicast to all nodes in a configuration.
+  // No replies are collected.
+  rpc WriteMulticast(State) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
+
+  // ReadQC is a FIFO-ordered synchronous quorum call.
+  // Use terminal methods (.Majority(), .First(), etc.) to retrieve results.
+  // Use .AsyncMajority() for async variant, .Correctable(n) for correctable variant.
+  rpc ReadQC(google.protobuf.Empty) returns (State) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // ReadQCStream is a FIFO-ordered synchronous quorum call with server streaming.
+  // The stream keyword enables correctable calls where nodes can send multiple
+  // progressive updates. Use .Correctable(n) to watch for updates as they arrive.
+  rpc ReadQCStream(google.protobuf.Empty) returns (stream State) {
+    option (gorums.quorumcall) = true;
+  }
 }
 
+// State represents the value and its timestamp stored in a node.
 message State {
-  string Value = 1;
-  int64 Timestamp = 2;
+  string value = 1;
+  int64 timestamp = 2;
 }
-
-message WriteResponse {
-  bool New = 1;
-}
-
-message ReadRequest {}
 ```
 
-Every RPC method must take and return a single Protobuf message.
-This is a requirement of the Protobuf IDL.
-The `Read` method in this example, therefore, takes an empty `ReadRequest` as input since no information is needed by the method.
+For the `unicast` and `multicast` call types, the response message type will be unused by Gorums.
 
-**Note:** Gorums offers one-way communication through the `unicast` and `multicast` call types.
-For these call types, the response message type will be unused by Gorums.
-For a detailed overview of the available method options to control the call types, see the [method options](method-options.md) document.
+### Compiling the Service Definition
 
 Next, we compile our service definition into Go code which includes:
 
@@ -106,31 +144,41 @@ protoc -I="$(go list -m -f {{.Dir}} github.com/relab/gorums):." \
 The above step should produce two files named `storage.pb.go` and `storage_gorums.pb.go` in your package directory.
 The former contains the Protobuf definitions of our messages.
 The latter contains the Gorums generated client and server interfaces.
+
+### Examining the Gorums Generated Code
+
 Let us examine the `storage_gorums.pb.go` file to see the code generated from our Protobuf definitions.
-Our two RPC methods have the following client-side function signatures:
+The client functions below are generated by Gorums based on the call type specified in the Protobuf definition.
+The first two functions are used to send requests to a single node determined by the `NodeContext`, while the last three are used to send requests to a configuration of nodes determined by the `ConfigContext`.
+The last two functions return a `*gorums.Responses[*State]` object, which is a collection of responses from the nodes in the configuration.
 
 ```go
-func Read(ctx *gorums.NodeContext, in *ReadRequest) (*State, error)
-func Write(ctx *gorums.NodeContext, in *State) (*WriteResponse, error)
+func ReadOrdered(ctx *gorums.NodeContext, in *emptypb.Empty) (resp *State, err error)
+func WriteUnicast(ctx *gorums.NodeContext, in*State, opts ...gorums.CallOption) error
+func WriteMulticast(ctx *gorums.ConfigContext, in *State, opts ...gorums.CallOption) error
+func ReadQC(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *gorums.Responses[*State]
+func ReadQCStream(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *gorums.Responses[*State]
 ```
 
 And this is our server interface:
 
 ```go
 type StorageServer interface {
-  Read(gorums.ServerCtx, *ReadRequest) (*State, error)
-  Write(gorums.ServerCtx, *State) (*WriteResponse, error)
+	ReadOrdered(ctx gorums.ServerCtx, request *emptypb.Empty) (response *State, err error)
+	WriteUnicast(ctx gorums.ServerCtx, request *State)
+	WriteMulticast(ctx gorums.ServerCtx, request *State)
+	ReadQC(ctx gorums.ServerCtx, request *emptypb.Empty) (response *State, err error)
+	ReadQCStream(ctx gorums.ServerCtx, request *emptypb.Empty, send func(response *State) error) error
 }
 ```
 
 **Note:**
-For a real use case, you may decide to keep the `.proto` file and the generated `.pb.go` files in a separate directory/package and import that package (the generated Gorums API) into your application.
+You may decide to keep the `.proto` file and the generated `.pb.go` files in a separate directory/package and import that package (the generated Gorums API) into your application.
 We skip that here for the sake of simplicity.
 
 ## Implementing the StorageServer
 
-We now describe how to use the generated Gorums API for the `Storage` service.
-We begin by implementing the `StorageServer` interface from above:
+We now describe how to implement the `StorageServer` interface from above.
 
 ```go
 type storageSrv struct {
@@ -138,22 +186,38 @@ type storageSrv struct {
   state *State
 }
 
-func (srv *storageSrv) Read(_ gorums.ServerCtx, req *ReadRequest) (resp *State, err error) {
+func (srv *storageSrv) ReadOrdered(_ gorums.ServerCtx, req *emptypb.Empty) (resp *State, err error) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
-  fmt.Println("Got Read()")
   return srv.state, nil
 }
 
-func (srv *storageSrv) Write(_ gorums.ServerCtx, req *State) (resp *WriteResponse, err error) {
+func (srv *storageSrv) WriteUnicast(_ gorums.ServerCtx, req *State) {
   srv.mut.Lock()
   defer srv.mut.Unlock()
-  if srv.state.Timestamp < req.Timestamp {
+  if srv.state.GetTimestamp() < req.GetTimestamp() {
     srv.state = req
-    fmt.Println("Got Write(", req.Value, ")")
-    return &WriteResponse{New: true}, nil
   }
-  return &WriteResponse{New: false}, nil
+}
+
+func (srv *storageSrv) WriteMulticast(_ gorums.ServerCtx, req *State) {
+  srv.mut.Lock()
+  defer srv.mut.Unlock()
+  if srv.state.GetTimestamp() < req.GetTimestamp() {
+    srv.state = req
+  }
+}
+
+func (srv *storageSrv) ReadQC(_ gorums.ServerCtx, req *emptypb.Empty) (resp *State, err error) {
+  srv.mut.Lock()
+  defer srv.mut.Unlock()
+  return srv.state, nil
+}
+
+func (srv *storageSrv) ReadQCStream(_ gorums.ServerCtx, req *emptypb.Empty, send func(response *State) error) error {
+  srv.mut.Lock()
+  defer srv.mut.Unlock()
+  return send(srv.state)
 }
 ```
 
@@ -161,22 +225,23 @@ There are some important things to note about implementing the server interfaces
 
 * The handlers run in the order messages are received.
 * Messages from the same sender are executed in FIFO order at all servers.
+  See the auxiliary documentation for more information about [message ordering](./ordering.md) in Gorums.
 * Messages from different senders may be received in a different order at the different servers.
   To guarantee messages from different senders are executed in-order at the different servers, you must use a total ordering protocol.
+* Errors should be returned using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
 * Handlers run synchronously, and hence a long-running handler will prevent other messages from being handled.
   To help solve this problem, our `ServerCtx` objects have a `Release()` function that releases the handler's lock on the server,
   which allows the next request to be processed. After `ctx.Release()` has been called, the handler may run concurrently
   with the handlers for the next requests. The handler automatically calls `ctx.Release()` after returning.
 
   ```go
-  func (srv *storageSrv) Read(ctx gorums.ServerCtx, req *ReadRequest) (resp *State, err error) {
+  func (srv *storageSrv) ReadOrdered(ctx gorums.ServerCtx, req *emptypb.Empty) (resp *State, err error) {
     // any code running before this will be executed in-order
     ctx.Release()
     // after Release() has been called, a new request handler may be started,
     // and thus it is not guaranteed that the replies will be sent back the same order.
     srv.mut.Lock()
     defer srv.mut.Unlock()
-    fmt.Println("Got Read()")
     return srv.state, nil
   }
   ```
@@ -184,9 +249,6 @@ There are some important things to note about implementing the server interfaces
 * The context passed to the handlers is the gRPC stream context of the underlying gRPC stream.
   This context can be used to retrieve [metadata](https://github.com/grpc/grpc-go/blob/master/Documentation/grpc-metadata.md)
   and [peer](https://godoc.org/google.golang.org/grpc/peer) information from the client.
-* Errors should be returned using the [`status` package](https://pkg.go.dev/google.golang.org/grpc/status?tab=doc).
-
-For more information about message ordering and why we use channels instead of `return` in our handlers, read [ordering.md](./ordering.md).
 
 To start the server, we need to create a *listener* and a *GorumsServer*, and then register our server implementation:
 
@@ -255,59 +317,48 @@ The code below shows how to create a configuration:
 The `Manager` and `Configuration` types also have few other available methods.
 Inspect the package documentation or source code for details.
 
-We can now invoke the Write RPC on each `node` in the configuration:
+We can now invoke the WriteUnicast RPC on each `node` in the configuration:
 
 ```go
-  // Test state
   state := &State{
-    Value:     "42",
-    Timestamp: time.Now().Unix(),
+    Value:     proto.String("42"),
+    Timestamp: proto.Int64(time.Now().Unix()),
   }
 
-  // Invoke Write RPC on all nodes in config
+  // Invoke WriteUnicast RPC on all nodes in config
   ctx := context.Background()
   for _, node := range allNodesConfig.Nodes() {
     nodeCtx := node.Context(ctx)
-    reply, err := Write(nodeCtx, state)
+    err := WriteUnicast(nodeCtx, state)
     if err != nil {
       log.Fatalln("write rpc returned error:", err)
-    } else if !reply.New {
-      log.Println("state was not new.")
     }
   }
 ```
 
-While Gorums allows us to call RPCs on individual nodes as we did above, Gorums also provides a call type *quorum call* that allows us to invoke an RPC on all nodes in a configuration with a single invocation, as we show in the next section.
+While Gorums allows us to call RPCs on individual nodes as we did above, Gorums also provides call types *multicast* and *quorum call* that allow us to invoke an RPC on all nodes in a configuration with a single invocation, as we show in the next section.
 
 ## Quorum Calls
 
 Instead of invoking an RPC explicitly on all nodes in a configuration, Gorums allows users to invoke a *quorum call* that sends RPCs to all nodes in parallel and collects responses.
 
-For the Gorums plugin to generate quorum calls, specify the `quorumcall` option for RPC methods in the proto file:
+Specifying the `quorumcall` option for RPC methods:
 
 ```protobuf
-import "gorums.proto";
-
-service Storage {
-  rpc ReadQC(ReadRequest) returns (State) {
-    option (gorums.quorumcall) = true;
-  }
-  rpc WriteQC(State) returns (WriteResponse) {
-    option (gorums.quorumcall) = true;
-  }
+rpc ReadQC(google.protobuf.Empty) returns (State) {
+  option (gorums.quorumcall) = true;
 }
 ```
 
-The generated code provides a generic function for each quorum call method:
+The generated code provides a function for each quorum call method:
 
 ```go
-func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*State]
-func WriteQC(ctx *gorums.ConfigContext, in *State, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse]
+func ReadQC(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) *gorums.Responses[*State]
 ```
 
-These functions return a `*gorums.Responses[T]` object that provides several ways to aggregate and process responses.
+This function returns a `*gorums.Responses[*State]` object that provides several ways to aggregate and process responses.
 
-## Terminal Methods for Response Aggregation
+### Terminal Methods for Response Aggregation
 
 The `*gorums.Responses[T]` type provides built-in *terminal methods* for common aggregation patterns:
 
@@ -323,22 +374,22 @@ Each terminal method blocks until the threshold is met or the context is cancele
 ### Using Terminal Methods
 
 ```go
-func ExampleTerminalMethods(config *gorums.Configuration) {
+func ExampleTerminalMethods(config *Configuration) {
   ctx := context.Background()
   cfgCtx := config.Context(ctx)
 
   // Fast reads: return first successful response
-  reply, err := ReadQC(cfgCtx, &ReadRequest{}).First()
+  reply, err := ReadQC(cfgCtx, &emptypb.Empty{}).First()
 
-  // Byzantine fault tolerance: require majority
-  reply, err = WriteQC(cfgCtx, &State{}).Majority()
+  // Crash fault tolerance: require simple majority
+  reply, err = ReadQC(cfgCtx, &emptypb.Empty{}).Majority()
 
   // Wait for all nodes (useful for debugging)
-  reply, err = ReadQC(cfgCtx, &ReadRequest{}).All()
+  reply, err = ReadQC(cfgCtx, &emptypb.Empty{}).All()
 
   // Custom threshold (e.g., f+1 for crash tolerance)
   f := 1
-  reply, err = ReadQC(cfgCtx, &ReadRequest{}).Threshold(f + 1)
+  reply, err = ReadQC(cfgCtx, &emptypb.Empty{}).Threshold(f + 1)
 }
 ```
 
@@ -347,6 +398,38 @@ Terminal methods return `gorums.ErrIncomplete` when:
 * The context is canceled before the threshold is met
 * Not enough successful responses are received
 * All nodes return errors
+
+### Async and Correctable Variants
+
+Quorum calls support asynchronous and correctable variants through additional *terminal methods*.
+
+**Async variants** return a future (`*Async[T]`) that can be awaited later:
+
+| Method               | Description               | Returns             |
+| -------------------- | ------------------------- | ------------------- |
+| `.AsyncFirst()`      | First response async      | `*Async[T]`         |
+| `.AsyncMajority()`   | Majority async            | `*Async[T]`         |
+| `.AsyncAll()`        | All responses async       | `*Async[T]`         |
+| `.AsyncThreshold(n)` | Threshold async           | `*Async[T]`         |
+
+```go
+future := ReadQC(cfgCtx, &emptypb.Empty{}).AsyncMajority()
+// Do other work...
+reply, err := future.Get()
+```
+
+**Correctable variant** provides progressive updates as more responses arrive:
+
+| Method             | Description                | Returns             |
+| ------------------ | -------------------------- | ------------------- |
+| `.Correctable(n)`  | Progressive updates from n | `*Correctable[T]`   |
+
+```go
+corr := ReadQCStream(cfgCtx, &emptypb.Empty{}).Correctable(2)  // Initial threshold
+reply, level, err := corr.Get()
+<-corr.Watch(3)  // Wait for higher level
+reply, level, err = corr.Get()
+```
 
 ## Iterator-Based Custom Aggregation
 
@@ -665,6 +748,191 @@ func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
   return first, nil
 }
 ```
+
+## Interceptors for Request/Response Transformation
+
+Gorums provides interceptors to transform requests and responses on a per-node basis.
+Interceptors are passed as call options and can be chained together.
+
+### MapRequest Interceptor
+
+Transform requests before sending to each node:
+
+```go
+cfgCtx := config.Context(ctx)
+resp, err := WriteQC(cfgCtx, req,
+    gorums.Interceptors(
+        gorums.MapRequest(func(req *WriteRequest, node *gorums.Node) *WriteRequest {
+            // Customize request for each node
+            return &WriteRequest{Value: fmt.Sprintf("%s-node-%d", req.Value, node.ID())}
+        }),
+    ),
+).Majority()
+```
+
+### MapResponse Interceptor
+
+Transform responses received from each node:
+
+```go
+resp, err := ReadQC(cfgCtx, req,
+    gorums.Interceptors(
+        gorums.MapResponse(func(resp *ReadResponse, node *gorums.Node) *ReadResponse {
+            // Transform response, e.g., add node ID
+            resp.NodeID = node.ID()
+            return resp
+        }),
+    ),
+).Majority()
+```
+
+### Multicast/Unicast with MapRequest
+
+```go
+// Send different messages to each node in a multicast
+cfgCtx := config.Context(ctx)
+WriteMulticast(cfgCtx, &State{},
+    gorums.Interceptors(
+        gorums.MapRequest(func(msg *State, node *gorums.Node) *State {
+            return &State{Value: proto.String(fmt.Sprintf("node-%d", node.ID()))}
+        }),
+    ),
+)
+```
+
+**Note:** If `MapRequest` returns `nil` for a node, the message will not be sent to that node.
+
+### Custom Interceptors
+
+Beyond the built-in `MapRequest` and `MapResponse` interceptors, you can create custom interceptors for logging, filtering, or other cross-cutting concerns.
+
+A custom interceptor has the signature:
+
+```go
+func(ctx *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp]
+```
+
+The interceptor receives:
+
+* `ctx` - the `ClientCtx` providing access to:
+  * `.Request()` - the original request
+  * `.Config()` - the configuration being used
+  * `.Method()` - the RPC method name
+  * `.Nodes()` - all nodes in the configuration
+  * `.Node(id)` - get a specific node by ID
+  * `.Size()` - number of nodes in the configuration
+* `next` - the response iterator from the previous interceptor (or the default iterator)
+
+The interceptor returns a new `ResponseSeq` that wraps `next` with custom logic.
+
+#### Chaining Interceptors
+
+Multiple interceptors can be passed to `gorums.Interceptors()` and are executed in order:
+
+```go
+cfgCtx := config.Context(ctx)
+resp, err := ReadQC(cfgCtx, req,
+    gorums.Interceptors(
+        loggingInterceptor,
+        gorums.MapRequest(transformFunc),
+        filterInterceptor,
+    ),
+).Majority()
+```
+
+#### Example: Logging Interceptor
+
+Create a logging interceptor that wraps the response iterator:
+
+```go
+func LoggingInterceptor[Req, Resp proto.Message](
+    ctx *gorums.ClientCtx[Req, Resp],
+    next gorums.ResponseSeq[Resp],
+) gorums.ResponseSeq[Resp] {
+    startTime := time.Now()
+    log.Printf("[%s] Starting quorum call with request: %v", ctx.Method(), ctx.Request())
+
+    // Wrap the response iterator to log each response
+    return func(yield func(gorums.NodeResponse[Resp]) bool) {
+        count := 0
+        for resp := range next {
+            count++
+            if resp.Err != nil {
+                log.Printf("[%s] Node %d error: %v", ctx.Method(), resp.NodeID, resp.Err)
+            } else {
+                log.Printf("[%s] Node %d response received", ctx.Method(), resp.NodeID)
+            }
+            if !yield(resp) {
+                log.Printf("[%s] Iteration stopped after %d responses", ctx.Method(), count)
+                return
+            }
+        }
+        log.Printf("[%s] Completed: %d responses in %v", ctx.Method(), count, time.Since(startTime))
+    }
+}
+
+// Usage
+resp, err := ReadQC(cfgCtx, req,
+    gorums.Interceptors(LoggingInterceptor[*ReadRequest, *ReadResponse]),
+).Majority()
+```
+
+#### Example: Response Filtering Interceptor
+
+Filter out responses that don't meet certain criteria:
+
+```go
+func FilterInterceptor[Req, Resp proto.Message](
+    shouldInclude func(Resp) bool,
+) gorums.QuorumInterceptor[Req, Resp] {
+    return func(ctx *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+        return func(yield func(gorums.NodeResponse[Resp]) bool) {
+            for resp := range next {
+                // Skip responses that don't pass the filter
+                if resp.Err == nil && !shouldInclude(resp.Value) {
+                    continue
+                }
+                if !yield(resp) {
+                    return
+                }
+            }
+        }
+    }
+}
+
+// Usage: only include responses with timestamp > threshold
+threshold := time.Now().Add(-1 * time.Hour)
+resp, err := ReadQC(cfgCtx, req,
+    gorums.Interceptors(
+        FilterInterceptor[*ReadRequest, *ReadResponse](func(r *ReadResponse) bool {
+            return r.GetTimestamp().AsTime().After(threshold)
+        }),
+    ),
+).Majority()
+```
+
+#### Example: Counting Interceptor
+
+Count responses passing through the interceptor:
+
+```go
+func CountingInterceptor[Req, Resp proto.Message](
+    counter *int,
+) gorums.QuorumInterceptor[Req, Resp] {
+    return func(_ *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+        return func(yield func(gorums.NodeResponse[Resp]) bool) {
+            for resp := range next {
+                *counter++
+                if !yield(resp) {
+                    return
+                }
+            }
+        }
+    }
+}
+```
+
+**Note:** Custom interceptors can be defined in any package. The `ClientCtx` type and `QuorumInterceptor` signature are exported from the gorums package.
 
 ## Error Handling
 

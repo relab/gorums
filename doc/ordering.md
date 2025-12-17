@@ -6,7 +6,7 @@ Many of the use cases for a framework like Gorums depend on messages arriving in
 Unfortunately, gRPC does not guarantee that unary RPCs invoked in order, will be received by the server in the same order.
 That is, according to the [gRPC docs](https://grpc.io/docs/what-is-grpc/core-concepts/):
 "*gRPC guarantees message ordering within an individual RPC call.*"
-Further, as explained [here](https://github.com/grpc/grpc/issues/10853#issuecomment-297478862):
+Further, as explained [in this issue comment](https://github.com/grpc/grpc/issues/10853#issuecomment-297478862):
 "*Separate requests are independent of each other, and there is no guarantee that they will be handled in any particular order. If you want to preserve the order of a set of messages between a single client and a single server, I would recommend using a streaming call. Messages within a single stream are guaranteed to be received in the order in which they are sent.*"
 This was a source of [problems](https://github.com/relab/gorums/issues/16) in early versions of Gorums.
 
@@ -81,7 +81,7 @@ func (s *testSrv) AsyncHandler(ctx gorums.ServerCtx, req *Request) (resp *Respon
   // this code will run concurrently with other handlers
   // perform slow / async work here
   time.Sleep(10 * time.Millisecond)
-  // at some point later, the response passed back to Gorums through the `ret` function,
+  // at some point later, the response passed back to the Gorums runtime,
   // and gets sent back to the client.
   return response, nil
 }
@@ -94,6 +94,6 @@ Hence, to preserve message ordering, the following rules must be adhered to:
 
 * (Client-side) Quorum calls cannot be started in separate goroutines, as the scheduling of goroutines is non-deterministic.
 
-* (Client-side) To process replies from different quorum calls concurrently, use the `async` option.
+* (Client-side) To process replies from different quorum calls concurrently, use the `Async*` terminal methods.
 
 * (Server-side) If the server must return replies in the same order as the client sent them, the server-side handler must also preserve ordering.

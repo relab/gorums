@@ -160,7 +160,7 @@ Gorums provides custom protobuf options defined in `gorums.proto`:
 
 - Method-level options for quorum call types
 - Configuration options for RPC behavior
-- See `doc/method-options.md` for details
+- See `doc/user-guide.md` for details
 
 ## Documentation
 
@@ -169,7 +169,7 @@ Before making significant changes, consult:
 - `doc/user-guide.md` - Understanding the API and usage patterns
 - `doc/dev-guide.md` - Development workflow and architecture
 - `doc/design-doc-layering.md` - System architecture and layering
-- `doc/method-options.md` - Protocol buffer options reference
+
 - `README.md` - Project overview and getting started
 - When editing markdown files, use one sentences per line, so that diffs are easier to read.
 

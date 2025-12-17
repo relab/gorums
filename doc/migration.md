@@ -885,7 +885,7 @@ func earlyTermination(responses *gorums.Responses[*Response]) (*Response, error)
 
 - [User Guide](user-guide.md) - Complete guide to using Gorums
 - [Developer Guide](dev-guide.md) - Contributing to Gorums
-- [Method Options](method-options.md) - Protocol buffer options reference
+
 - [Examples](../examples/) - Working examples demonstrating various patterns
 
 ## Summary
