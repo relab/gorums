@@ -528,20 +528,18 @@ func fastQuorum(responses *gorums.Responses[*Response]) (*Response, error) {
 ## Custom Return Types
 
 Gorums supports custom aggregation functions that return types different from the proto response type.
-This is useful when you need to aggregate multiple responses into a summary or statistics object.
+This is useful when you need to aggregate multiple responses into a summary, statistics object, or any other custom type.
 
-### Example: Collecting Multiple Responses
+### Recommended Pattern: Functions Taking `*Responses[Resp]`
 
-Consider a `StopBenchmark` RPC that returns `*MemoryStat` from each node, but you want to return `*MemoryStatList` containing all stats:
+The recommended approach is to define functions that accept `*Responses[Resp]` directly.
+This gives you full access to all iterator methods (`IgnoreErrors()`, `Filter()`, `CollectN()`, `CollectAll()`) and the ability to return any type.
 
 ```go
-// Proto definitions:
-// rpc StopBenchmark(StopRequest) returns (MemoryStat) { option (gorums.quorumcall) = true; }
-// message MemoryStat { uint64 allocs = 1; uint64 memory = 2; }
-// message MemoryStatList { repeated MemoryStat memory_stats = 1; }
-
-// Custom aggregation function with different return type
-func StopBenchmarkQF(replies map[uint32]*MemoryStat) (*MemoryStatList, error) {
+// Custom aggregation function that returns a different type
+// Input: *Responses[*MemoryStat], Output: *MemoryStatList
+func CollectStats(resp *gorums.Responses[*MemoryStat]) (*MemoryStatList, error) {
+  replies := resp.IgnoreErrors().CollectAll()
   if len(replies) == 0 {
     return nil, gorums.ErrIncomplete
   }
@@ -550,36 +548,121 @@ func StopBenchmarkQF(replies map[uint32]*MemoryStat) (*MemoryStatList, error) {
   }, nil
 }
 
-// Usage: Two-step pattern
+// Usage: Call the function directly, passing the Responses object
 cfgCtx := config.Context(ctx)
-responses := StopBenchmark(cfgCtx, &StopRequest{})
-replies := responses.Seq().IgnoreErrors().CollectAll()  // map[uint32]*MemoryStat
-memStats, err := StopBenchmarkQF(replies)  // Returns *MemoryStatList
+memStats, err := CollectStats(StopBenchmark(cfgCtx, &StopRequest{}))
+```
+
+### Example: Same Type Aggregation
+
+When the return type matches the response type, you can still use this pattern for custom quorum logic:
+
+```go
+// Custom majority quorum with validation
+func ValidatedMajority(resp *gorums.Responses[*State]) (*State, error) {
+  replies := resp.IgnoreErrors().CollectN(resp.Size()/2 + 1)
+  if len(replies) < resp.Size()/2+1 {
+    return nil, gorums.ErrIncomplete
+  }
+  // Return the first valid reply
+  for _, r := range replies {
+    if isValid(r) {
+      return r, nil
+    }
+  }
+  return nil, gorums.ErrIncomplete
+}
+
+// Usage
+cfgCtx := config.Context(ctx)
+state, err := ValidatedMajority(ReadQC(cfgCtx, &ReadRequest{}))
+```
+
+### Example: Custom Return Type (Slice)
+
+```go
+// Collect all string values from responses
+func CollectAllValues(resp *gorums.Responses[*StringValue]) ([]string, error) {
+  replies := resp.IgnoreErrors().CollectAll()
+  if len(replies) == 0 {
+    return nil, gorums.ErrIncomplete
+  }
+  result := make([]string, 0, len(replies))
+  for _, v := range replies {
+    result = append(result, v.GetValue())
+  }
+  return result, nil
+}
+
+// Usage: Returns []string instead of *StringValue
+values, err := CollectAllValues(GetValues(cfgCtx, &Request{}))
 ```
 
 ### Example: Computing Aggregate Statistics
 
 ```go
-// Aggregate results from multiple nodes
-func AggregateResults(replies map[uint32]*Result) (*Result, error) {
+// Aggregate results from multiple nodes into a summary
+func AggregateResults(resp *gorums.Responses[*Result]) (*Result, error) {
+  replies := resp.IgnoreErrors().CollectAll()
   if len(replies) == 0 {
     return nil, gorums.ErrIncomplete
   }
 
-  resp := &Result{}
+  summary := &Result{}
   for _, reply := range replies {
-    resp.TotalOps += reply.TotalOps
-    resp.TotalTime += reply.TotalTime
-    resp.Throughput += reply.Throughput
+    summary.TotalOps += reply.TotalOps
+    summary.TotalTime += reply.TotalTime
+    summary.Throughput += reply.Throughput
   }
 
   // Calculate averages
-  numNodes := len(replies)
-  resp.TotalOps /= uint64(numNodes)
-  resp.TotalTime /= int64(numNodes)
-  resp.Throughput /= float64(numNodes)
+  n := uint64(len(replies))
+  summary.TotalOps /= n
+  summary.TotalTime /= int64(n)
+  summary.Throughput /= float64(n)
 
-  return resp, nil
+  return summary, nil
+}
+```
+
+### Example: Returning a Primitive Type
+
+```go
+// Count responses from specific nodes
+func CountFromPrimaryNodes(resp *gorums.Responses[*Response]) (int, error) {
+  count := 0
+  for r := range resp.IgnoreErrors().Filter(func(nr gorums.NodeResponse[*Response]) bool {
+    return isPrimaryNode(nr.NodeID)
+  }) {
+    count++
+  }
+  if count == 0 {
+    return 0, gorums.ErrIncomplete
+  }
+  return count, nil
+}
+```
+
+### Example: Explicit Error Handling
+
+When you need to handle errors from individual nodes explicitly:
+
+```go
+// Require all nodes to succeed
+func RequireAllSuccess(resp *gorums.Responses[*Response]) (*Response, error) {
+  var first *Response
+  for r := range resp.Seq() {
+    if r.Err != nil {
+      return nil, r.Err  // Fail fast on any error
+    }
+    if first == nil {
+      first = r.Value
+    }
+  }
+  if first == nil {
+    return nil, gorums.ErrIncomplete
+  }
+  return first, nil
 }
 ```
 
