@@ -1,12 +1,5 @@
 package gengorums
 
-var multicastRefImports = `
-{{if contains $out "."}}
-// Reference imports to suppress errors if they are not otherwise used.
-var _ {{$out}}
-{{end}}
-`
-
 var mcVar = `
 {{$genFile := .GenFile}}
 {{$configContext := use "gorums.ConfigContext" .GenFile}}
@@ -35,7 +28,6 @@ var multicastBody = `	return {{$multicast}}(ctx, in, "{{$fullName}}", opts...)
 
 var multicastCall = commonVariables +
 	mcVar +
-	multicastRefImports +
 	multicastComment +
 	multicastSignature +
 	multicastBody

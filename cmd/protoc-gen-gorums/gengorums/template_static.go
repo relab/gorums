@@ -19,6 +19,14 @@ type (
 	Node          = gorums.Node
 )
 
+// Use the aliased types to add them to the reserved identifiers list.
+// This prevents users from defining message types with these names.
+var (
+	_ = (*Configuration)(nil)
+	_ = (*Manager)(nil)
+	_ = (*Node)(nil)
+)
+
 // NewManager returns a new Manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
@@ -53,13 +61,5 @@ func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, e
 func NewConfig(opts ...gorums.Option) (Configuration, error) {
 	return gorums.NewConfig(opts...)
 }
-
-// Use the aliased types to add them to the reserved identifiers list.
-// This prevents users from defining message types with these names.
-var (
-	_ = (*Configuration)(nil)
-	_ = (*Manager)(nil)
-	_ = (*Node)(nil)
-)
 
 `

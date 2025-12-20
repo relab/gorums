@@ -61,7 +61,11 @@ var funcMap = template.FuncMap{
 		return method.Desc.IsStreamingServer()
 	},
 	"docName": func(method *protogen.Method) string {
-		return callType(method).docName
+		_, info := callType(method)
+		if info != nil {
+			return info.docName
+		}
+		return "unknown"
 	},
 	"fullName": func(method *protogen.Method) string {
 		return fmt.Sprintf("/%s/%s", method.Parent.Desc.FullName(), method.Desc.Name())

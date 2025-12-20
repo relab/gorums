@@ -27,7 +27,6 @@ var unicastBody = `	return {{$unicast}}(ctx, in, "{{$fullName}}", opts...)
 
 var unicastCall = commonVariables +
 	unicastVar +
-	multicastRefImports +
 	unicastComment +
 	unicastSignature +
 	unicastBody
