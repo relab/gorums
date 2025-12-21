@@ -2,8 +2,10 @@ package benchmark
 
 import (
 	context "context"
+	"maps"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -92,11 +94,7 @@ func runQCBenchmark(opts Options, config Configuration, f qcFunc) (*Result, erro
 	result := s.GetResult()
 	if opts.Remote {
 		replies := StopBenchmark(cfgCtx, &StopRequest{}).CollectAll()
-		memStats, err := StopBenchmarkQF(replies)
-		if err != nil {
-			return nil, err
-		}
-		result.SetServerStats(memStats.GetMemoryStats())
+		result.SetServerStats(slices.Collect(maps.Values(replies)))
 	}
 
 	return result, nil
@@ -176,11 +174,7 @@ func runAsyncQCBenchmark(opts Options, config Configuration, f asyncQCFunc) (*Re
 	result := s.GetResult()
 	if opts.Remote {
 		replies := StopBenchmark(cfgCtx, &StopRequest{}).CollectAll()
-		memStats, err := StopBenchmarkQF(replies)
-		if err != nil {
-			return nil, err
-		}
-		result.SetServerStats(memStats.GetMemoryStats())
+		result.SetServerStats(slices.Collect(maps.Values(replies)))
 	}
 
 	return result, nil

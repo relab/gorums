@@ -28,7 +28,7 @@ message StartResponse {}
 // StopRequest is an empty message for stopping a benchmarking campaign.
 message StopRequest {}
 
-// Result contains the results of a server-side benchmark.
+// Result contains the results of a server-side benchmarking campaign.
 message Result {
   string              name          = 1;
   uint64              total_ops     = 2;
@@ -45,11 +45,6 @@ message Result {
 message MemoryStat {
   uint64 allocs = 1;
   uint64 memory = 2;
-}
-
-// MemoryStatList contains a list of MemoryStat messages, one per server.
-message MemoryStatList {
-  repeated MemoryStat memory_stats = 1;
 }
 
 // Benchmark is a service for running various benchmarks.

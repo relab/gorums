@@ -1,9 +1,6 @@
 package benchmark
 
 import (
-	"maps"
-	"slices"
-
 	"github.com/relab/gorums"
 )
 
@@ -37,14 +34,4 @@ func StopServerBenchmarkQF(replies map[uint32]*Result) (*Result, error) {
 	resp.SetTotalTime(resp.GetTotalTime() / int64(len(replies)))
 	resp.SetThroughput(resp.GetThroughput() / float64(len(replies)))
 	return resp, nil
-}
-
-// StopBenchmarkQF aggregates StopBenchmark responses from all nodes into a MemoryStatList.
-func StopBenchmarkQF(replies map[uint32]*MemoryStat) (*MemoryStatList, error) {
-	if len(replies) == 0 {
-		return nil, gorums.ErrIncomplete
-	}
-	return MemoryStatList_builder{
-		MemoryStats: slices.Collect(maps.Values(replies)),
-	}.Build(), nil
 }
