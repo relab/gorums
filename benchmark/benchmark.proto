@@ -1,78 +1,93 @@
-edition = "2023";
+edition = "2024";
 
 package benchmark;
-
 option go_package = "github.com/relab/gorums/benchmark";
-
 option features.field_presence = IMPLICIT;
 
 import "google/protobuf/empty.proto";
 
 import "gorums.proto";
 
+// Echo is a simple message used for echo benchmarks.
 message Echo {
-    bytes payload = 1;
+  bytes payload = 1;
 }
 
+// TimedMsg is a message with a send time and a payload used for multicast benchmarks.
 message TimedMsg {
-    int64 SendTime = 1;
-    bytes payload  = 2;
+  int64 send_time = 1;
+  bytes payload   = 2;
 }
 
+// StartRequest is an empty message for starting a benchmarking campaign.
 message StartRequest {}
 
+// StartResponse is an empty message to acknowledge the start of a benchmarking campaign.
 message StartResponse {}
 
+// StopRequest is an empty message for stopping a benchmarking campaign.
 message StopRequest {}
 
+// Result contains the results of a server-side benchmark.
 message Result {
-    string Name                     = 1;
-    uint64 TotalOps                 = 2;
-    int64 TotalTime                 = 3;
-    double Throughput               = 4;
-    double LatencyAvg               = 5;
-    double LatencyVar               = 6;
-    uint64 AllocsPerOp              = 7;
-    uint64 MemPerOp                 = 8;
-    repeated MemoryStat ServerStats = 9;
+  string              name          = 1;
+  uint64              total_ops     = 2;
+  int64               total_time    = 3;
+  double              throughput    = 4;
+  double              latency_avg   = 5;
+  double              latency_var   = 6;
+  uint64              allocs_per_op = 7;
+  uint64              mem_per_op    = 8;
+  repeated MemoryStat server_stats  = 9;
 }
 
+// MemoryStat contains memory statistics for a single server.
 message MemoryStat {
-    uint64 Allocs = 1;
-    uint64 Memory = 2;
+  uint64 allocs = 1;
+  uint64 memory = 2;
 }
 
+// MemoryStatList contains a list of MemoryStat messages, one per server.
 message MemoryStatList {
-    repeated MemoryStat MemoryStats = 1;
+  repeated MemoryStat memory_stats = 1;
 }
 
+// Benchmark is a service for running various benchmarks.
 service Benchmark {
-    rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
-        option (gorums.quorumcall) = true;
-    }
+  // StartServerBenchmark starts a server-side benchmark campaign.
+  rpc StartServerBenchmark(StartRequest) returns (StartResponse) {
+    option (gorums.quorumcall) = true;
+  }
 
-    rpc StopServerBenchmark(StopRequest) returns (Result) {
-        option (gorums.quorumcall) = true;
-    }
+  // StopServerBenchmark stops a server-side benchmark campaign.
+  rpc StopServerBenchmark(StopRequest) returns (Result) {
+    option (gorums.quorumcall) = true;
+  }
 
-    rpc StartBenchmark(StartRequest) returns (StartResponse) {
-        option (gorums.quorumcall) = true;
-    }
+  // StartBenchmark starts a client-side benchmark campaign.
+  rpc StartBenchmark(StartRequest) returns (StartResponse) {
+    option (gorums.quorumcall) = true;
+  }
 
-    rpc StopBenchmark(StopRequest) returns (MemoryStat) {
-        option (gorums.quorumcall) = true;
-    }
+  // StopBenchmark stops a client-side benchmark campaign.
+  rpc StopBenchmark(StopRequest) returns (MemoryStat) {
+    option (gorums.quorumcall) = true;
+  }
 
-    // benchmarks
-    rpc QuorumCall(Echo) returns (Echo) {
-        option (gorums.quorumcall) = true;
-    }
+  // That actual benchmark RPCs:
 
-    rpc SlowServer(Echo) returns (Echo) {
-        option (gorums.quorumcall) = true;
-    }
+  // QuorumCall performs an echo quorum call on all servers.
+  rpc QuorumCall(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+  }
 
-    rpc Multicast(TimedMsg) returns (google.protobuf.Empty) {
-        option (gorums.multicast) = true;
-    }
+  // SlowServer performs an echo quorum call on slow servers.
+  rpc SlowServer(Echo) returns (Echo) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // Multicast performs a multicast call to all servers.
+  rpc Multicast(TimedMsg) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
 }

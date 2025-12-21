@@ -22,6 +22,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Echo is a simple message used for echo benchmarks.
 type Echo struct {
 	state              protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Payload []byte                 `protobuf:"bytes,1,opt,name=payload"`
@@ -82,9 +83,10 @@ func (b0 Echo_builder) Build() *Echo {
 	return m0
 }
 
+// TimedMsg is a message with a send time and a payload used for multicast benchmarks.
 type TimedMsg struct {
 	state               protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_SendTime int64                  `protobuf:"varint,1,opt,name=SendTime"`
+	xxx_hidden_SendTime int64                  `protobuf:"varint,1,opt,name=send_time,json=sendTime"`
 	xxx_hidden_Payload  []byte                 `protobuf:"bytes,2,opt,name=payload"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
@@ -156,6 +158,7 @@ func (b0 TimedMsg_builder) Build() *TimedMsg {
 	return m0
 }
 
+// StartRequest is an empty message for starting a benchmarking campaign.
 type StartRequest struct {
 	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -199,6 +202,7 @@ func (b0 StartRequest_builder) Build() *StartRequest {
 	return m0
 }
 
+// StartResponse is an empty message to acknowledge the start of a benchmarking campaign.
 type StartResponse struct {
 	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -242,6 +246,7 @@ func (b0 StartResponse_builder) Build() *StartResponse {
 	return m0
 }
 
+// StopRequest is an empty message for stopping a benchmarking campaign.
 type StopRequest struct {
 	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -285,17 +290,18 @@ func (b0 StopRequest_builder) Build() *StopRequest {
 	return m0
 }
 
+// Result contains the results of a server-side benchmark.
 type Result struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Name        string                 `protobuf:"bytes,1,opt,name=Name"`
-	xxx_hidden_TotalOps    uint64                 `protobuf:"varint,2,opt,name=TotalOps"`
-	xxx_hidden_TotalTime   int64                  `protobuf:"varint,3,opt,name=TotalTime"`
-	xxx_hidden_Throughput  float64                `protobuf:"fixed64,4,opt,name=Throughput"`
-	xxx_hidden_LatencyAvg  float64                `protobuf:"fixed64,5,opt,name=LatencyAvg"`
-	xxx_hidden_LatencyVar  float64                `protobuf:"fixed64,6,opt,name=LatencyVar"`
-	xxx_hidden_AllocsPerOp uint64                 `protobuf:"varint,7,opt,name=AllocsPerOp"`
-	xxx_hidden_MemPerOp    uint64                 `protobuf:"varint,8,opt,name=MemPerOp"`
-	xxx_hidden_ServerStats *[]*MemoryStat         `protobuf:"bytes,9,rep,name=ServerStats"`
+	xxx_hidden_Name        string                 `protobuf:"bytes,1,opt,name=name"`
+	xxx_hidden_TotalOps    uint64                 `protobuf:"varint,2,opt,name=total_ops,json=totalOps"`
+	xxx_hidden_TotalTime   int64                  `protobuf:"varint,3,opt,name=total_time,json=totalTime"`
+	xxx_hidden_Throughput  float64                `protobuf:"fixed64,4,opt,name=throughput"`
+	xxx_hidden_LatencyAvg  float64                `protobuf:"fixed64,5,opt,name=latency_avg,json=latencyAvg"`
+	xxx_hidden_LatencyVar  float64                `protobuf:"fixed64,6,opt,name=latency_var,json=latencyVar"`
+	xxx_hidden_AllocsPerOp uint64                 `protobuf:"varint,7,opt,name=allocs_per_op,json=allocsPerOp"`
+	xxx_hidden_MemPerOp    uint64                 `protobuf:"varint,8,opt,name=mem_per_op,json=memPerOp"`
+	xxx_hidden_ServerStats *[]*MemoryStat         `protobuf:"bytes,9,rep,name=server_stats,json=serverStats"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -456,10 +462,11 @@ func (b0 Result_builder) Build() *Result {
 	return m0
 }
 
+// MemoryStat contains memory statistics for a single server.
 type MemoryStat struct {
 	state             protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Allocs uint64                 `protobuf:"varint,1,opt,name=Allocs"`
-	xxx_hidden_Memory uint64                 `protobuf:"varint,2,opt,name=Memory"`
+	xxx_hidden_Allocs uint64                 `protobuf:"varint,1,opt,name=allocs"`
+	xxx_hidden_Memory uint64                 `protobuf:"varint,2,opt,name=memory"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -527,9 +534,10 @@ func (b0 MemoryStat_builder) Build() *MemoryStat {
 	return m0
 }
 
+// MemoryStatList contains a list of MemoryStat messages, one per server.
 type MemoryStatList struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_MemoryStats *[]*MemoryStat         `protobuf:"bytes,1,rep,name=MemoryStats"`
+	xxx_hidden_MemoryStats *[]*MemoryStat         `protobuf:"bytes,1,rep,name=memory_stats,json=memoryStats"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -592,35 +600,35 @@ const file_benchmark_benchmark_proto_rawDesc = "" +
 	"\n" +
 	"\x19benchmark/benchmark.proto\x12\tbenchmark\x1a\x1bgoogle/protobuf/empty.proto\x1a\fgorums.proto\" \n" +
 	"\x04Echo\x12\x18\n" +
-	"\apayload\x18\x01 \x01(\fR\apayload\"@\n" +
-	"\bTimedMsg\x12\x1a\n" +
-	"\bSendTime\x18\x01 \x01(\x03R\bSendTime\x12\x18\n" +
+	"\apayload\x18\x01 \x01(\fR\apayload\"A\n" +
+	"\bTimedMsg\x12\x1b\n" +
+	"\tsend_time\x18\x01 \x01(\x03R\bsendTime\x12\x18\n" +
 	"\apayload\x18\x02 \x01(\fR\apayload\"\x0e\n" +
 	"\fStartRequest\"\x0f\n" +
 	"\rStartResponse\"\r\n" +
-	"\vStopRequest\"\xad\x02\n" +
+	"\vStopRequest\"\xb6\x02\n" +
 	"\x06Result\x12\x12\n" +
-	"\x04Name\x18\x01 \x01(\tR\x04Name\x12\x1a\n" +
-	"\bTotalOps\x18\x02 \x01(\x04R\bTotalOps\x12\x1c\n" +
-	"\tTotalTime\x18\x03 \x01(\x03R\tTotalTime\x12\x1e\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
+	"\ttotal_ops\x18\x02 \x01(\x04R\btotalOps\x12\x1d\n" +
 	"\n" +
-	"Throughput\x18\x04 \x01(\x01R\n" +
-	"Throughput\x12\x1e\n" +
+	"total_time\x18\x03 \x01(\x03R\ttotalTime\x12\x1e\n" +
 	"\n" +
-	"LatencyAvg\x18\x05 \x01(\x01R\n" +
-	"LatencyAvg\x12\x1e\n" +
+	"throughput\x18\x04 \x01(\x01R\n" +
+	"throughput\x12\x1f\n" +
+	"\vlatency_avg\x18\x05 \x01(\x01R\n" +
+	"latencyAvg\x12\x1f\n" +
+	"\vlatency_var\x18\x06 \x01(\x01R\n" +
+	"latencyVar\x12\"\n" +
+	"\rallocs_per_op\x18\a \x01(\x04R\vallocsPerOp\x12\x1c\n" +
 	"\n" +
-	"LatencyVar\x18\x06 \x01(\x01R\n" +
-	"LatencyVar\x12 \n" +
-	"\vAllocsPerOp\x18\a \x01(\x04R\vAllocsPerOp\x12\x1a\n" +
-	"\bMemPerOp\x18\b \x01(\x04R\bMemPerOp\x127\n" +
-	"\vServerStats\x18\t \x03(\v2\x15.benchmark.MemoryStatR\vServerStats\"<\n" +
+	"mem_per_op\x18\b \x01(\x04R\bmemPerOp\x128\n" +
+	"\fserver_stats\x18\t \x03(\v2\x15.benchmark.MemoryStatR\vserverStats\"<\n" +
 	"\n" +
 	"MemoryStat\x12\x16\n" +
-	"\x06Allocs\x18\x01 \x01(\x04R\x06Allocs\x12\x16\n" +
-	"\x06Memory\x18\x02 \x01(\x04R\x06Memory\"I\n" +
-	"\x0eMemoryStatList\x127\n" +
-	"\vMemoryStats\x18\x01 \x03(\v2\x15.benchmark.MemoryStatR\vMemoryStats2\xe1\x03\n" +
+	"\x06allocs\x18\x01 \x01(\x04R\x06allocs\x12\x16\n" +
+	"\x06memory\x18\x02 \x01(\x04R\x06memory\"J\n" +
+	"\x0eMemoryStatList\x128\n" +
+	"\fmemory_stats\x18\x01 \x03(\v2\x15.benchmark.MemoryStatR\vmemoryStats2\xe1\x03\n" +
 	"\tBenchmark\x12O\n" +
 	"\x14StartServerBenchmark\x12\x17.benchmark.StartRequest\x1a\x18.benchmark.StartResponse\"\x04\xa0\xb5\x18\x01\x12F\n" +
 	"\x13StopServerBenchmark\x12\x16.benchmark.StopRequest\x1a\x11.benchmark.Result\"\x04\xa0\xb5\x18\x01\x12I\n" +
@@ -630,7 +638,7 @@ const file_benchmark_benchmark_proto_rawDesc = "" +
 	"QuorumCall\x12\x0f.benchmark.Echo\x1a\x0f.benchmark.Echo\"\x04\xa0\xb5\x18\x01\x124\n" +
 	"\n" +
 	"SlowServer\x12\x0f.benchmark.Echo\x1a\x0f.benchmark.Echo\"\x04\xa0\xb5\x18\x01\x12>\n" +
-	"\tMulticast\x12\x13.benchmark.TimedMsg\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01B(Z!github.com/relab/gorums/benchmark\x92\x03\x02\b\x02b\beditionsp\xe8\a"
+	"\tMulticast\x12\x13.benchmark.TimedMsg\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01B(Z!github.com/relab/gorums/benchmark\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
 var file_benchmark_benchmark_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_benchmark_benchmark_proto_goTypes = []any{
@@ -645,8 +653,8 @@ var file_benchmark_benchmark_proto_goTypes = []any{
 	(*emptypb.Empty)(nil),  // 8: google.protobuf.Empty
 }
 var file_benchmark_benchmark_proto_depIdxs = []int32{
-	6, // 0: benchmark.Result.ServerStats:type_name -> benchmark.MemoryStat
-	6, // 1: benchmark.MemoryStatList.MemoryStats:type_name -> benchmark.MemoryStat
+	6, // 0: benchmark.Result.server_stats:type_name -> benchmark.MemoryStat
+	6, // 1: benchmark.MemoryStatList.memory_stats:type_name -> benchmark.MemoryStat
 	2, // 2: benchmark.Benchmark.StartServerBenchmark:input_type -> benchmark.StartRequest
 	4, // 3: benchmark.Benchmark.StopServerBenchmark:input_type -> benchmark.StopRequest
 	2, // 4: benchmark.Benchmark.StartBenchmark:input_type -> benchmark.StartRequest

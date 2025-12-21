@@ -96,13 +96,7 @@ type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// StartServerBenchmark is a quorum call invoked on all nodes in the configuration,
-// with the same argument in. Use terminal methods like Majority(), First(),
-// or Threshold(n) to retrieve the aggregated result.
-//
-// Example:
-//
-//	resp, err := StartServerBenchmark(ctx, in).Majority()
+// StartServerBenchmark starts a server-side benchmark campaign.
 func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
 	return gorums.QuorumCall[*StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartServerBenchmark",
@@ -110,13 +104,7 @@ func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...g
 	)
 }
 
-// StopServerBenchmark is a quorum call invoked on all nodes in the configuration,
-// with the same argument in. Use terminal methods like Majority(), First(),
-// or Threshold(n) to retrieve the aggregated result.
-//
-// Example:
-//
-//	resp, err := StopServerBenchmark(ctx, in).Majority()
+// StopServerBenchmark stops a server-side benchmark campaign.
 func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*Result] {
 	return gorums.QuorumCall[*StopRequest, *Result](
 		ctx, in, "benchmark.Benchmark.StopServerBenchmark",
@@ -124,13 +112,7 @@ func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gor
 	)
 }
 
-// StartBenchmark is a quorum call invoked on all nodes in the configuration,
-// with the same argument in. Use terminal methods like Majority(), First(),
-// or Threshold(n) to retrieve the aggregated result.
-//
-// Example:
-//
-//	resp, err := StartBenchmark(ctx, in).Majority()
+// StartBenchmark starts a client-side benchmark campaign.
 func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
 	return gorums.QuorumCall[*StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartBenchmark",
@@ -138,13 +120,7 @@ func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.
 	)
 }
 
-// StopBenchmark is a quorum call invoked on all nodes in the configuration,
-// with the same argument in. Use terminal methods like Majority(), First(),
-// or Threshold(n) to retrieve the aggregated result.
-//
-// Example:
-//
-//	resp, err := StopBenchmark(ctx, in).Majority()
+// StopBenchmark stops a client-side benchmark campaign.
 func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*MemoryStat] {
 	return gorums.QuorumCall[*StopRequest, *MemoryStat](
 		ctx, in, "benchmark.Benchmark.StopBenchmark",
@@ -152,7 +128,7 @@ func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.Ca
 	)
 }
 
-// benchmarks
+// QuorumCall performs an echo quorum call on all servers.
 func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
 	return gorums.QuorumCall[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.QuorumCall",
@@ -160,13 +136,7 @@ func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) 
 	)
 }
 
-// SlowServer is a quorum call invoked on all nodes in the configuration,
-// with the same argument in. Use terminal methods like Majority(), First(),
-// or Threshold(n) to retrieve the aggregated result.
-//
-// Example:
-//
-//	resp, err := SlowServer(ctx, in).Majority()
+// SlowServer performs an echo quorum call on slow servers.
 func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
 	return gorums.QuorumCall[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.SlowServer",
@@ -174,8 +144,7 @@ func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) 
 	)
 }
 
-// Multicast is a multicast call invoked on all nodes in the configuration in ctx.
-// Use gorums.MapRequest to send different messages to each node. No replies are collected.
+// Multicast performs a multicast call to all servers.
 func Multicast(ctx *gorums.ConfigContext, in *TimedMsg, opts ...gorums.CallOption) error {
 	return gorums.Multicast(ctx, in, "benchmark.Benchmark.Multicast", opts...)
 }
