@@ -19,6 +19,7 @@ errgroup
 extendee
 Frausing's
 fset
+GCFLAGS
 gengorums
 genproto
 GOBIN

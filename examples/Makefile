@@ -4,17 +4,22 @@ proto_go := $(proto_src:%.proto=%.pb.go)
 gorums_go := $(proto_src:%.proto=%_gorums.pb.go)
 binaries := storage/storage
 
-.PHONY: all debug protos download tools $(binaries)
+.PHONY: all debug proto download tools $(binaries)
 
 all: $(binaries)
 
+# Build binaries in debug mode: Tell the Go compiler to compile without
+# optimizations (-N) or inlining (-l) so that debuggers, stack traces,
+# and variable inspection behave exactly like the source code.
 debug: GCFLAGS += -gcflags='all=-N -l'
 debug: $(binaries)
 
-$(binaries): protos
+# Build binaries.
+$(binaries): proto
 	@go build -o ./$@ $(GCFLAGS) ./$(dir $@)
 
-protos: tools download $(proto_go) $(gorums_go)
+# Generate Go files from proto files.
+proto: tools download $(proto_go) $(gorums_go)
 
 download:
 	@go mod download
