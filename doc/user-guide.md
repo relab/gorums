@@ -75,7 +75,7 @@ Client streaming is not supported.
 The file `storage.proto` should have the following content, illustrating the different call types:
 
 ```proto
-edition = "2023";
+edition = "2024";
 
 package gorumsexample;
 option go_package = "github.com/relab/gorums/examples/gorumsexample";
@@ -405,12 +405,12 @@ Quorum calls support asynchronous and correctable variants through additional *t
 
 **Async variants** return a future (`*Async[T]`) that can be awaited later:
 
-| Method               | Description               | Returns             |
-| -------------------- | ------------------------- | ------------------- |
-| `.AsyncFirst()`      | First response async      | `*Async[T]`         |
-| `.AsyncMajority()`   | Majority async            | `*Async[T]`         |
-| `.AsyncAll()`        | All responses async       | `*Async[T]`         |
-| `.AsyncThreshold(n)` | Threshold async           | `*Async[T]`         |
+| Method               | Description          | Returns     |
+| -------------------- | -------------------- | ----------- |
+| `.AsyncFirst()`      | First response async | `*Async[T]` |
+| `.AsyncMajority()`   | Majority async       | `*Async[T]` |
+| `.AsyncAll()`        | All responses async  | `*Async[T]` |
+| `.AsyncThreshold(n)` | Threshold async      | `*Async[T]` |
 
 ```go
 future := ReadQC(cfgCtx, &emptypb.Empty{}).AsyncMajority()
@@ -420,9 +420,9 @@ reply, err := future.Get()
 
 **Correctable variant** provides progressive updates as more responses arrive:
 
-| Method             | Description                | Returns             |
-| ------------------ | -------------------------- | ------------------- |
-| `.Correctable(n)`  | Progressive updates from n | `*Correctable[T]`   |
+| Method            | Description                | Returns           |
+| ----------------- | -------------------------- | ----------------- |
+| `.Correctable(n)` | Progressive updates from n | `*Correctable[T]` |
 
 ```go
 corr := ReadQCStream(cfgCtx, &emptypb.Empty{}).Correctable(2)  // Initial threshold

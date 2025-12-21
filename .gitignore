@@ -30,3 +30,7 @@ cmd/benchmark/benchmark
 cmd/protoc-gen-gorums/gengorums/template_static.go.bak
 
 go.work.sum
+
+# Ignore the generated code for the tutorial example
+examples/gorumsexample/storage.pb.go
+examples/gorumsexample/storage_gorums.pb.go
