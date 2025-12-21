@@ -24,13 +24,13 @@ const (
 // Metadata is sent together with application-specific message types,
 // and contains information necessary for Gorums to handle the messages.
 type Metadata struct {
-	state                protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_MessageID uint64                 `protobuf:"varint,1,opt,name=MessageID"`
-	xxx_hidden_Method    string                 `protobuf:"bytes,2,opt,name=Method"`
-	xxx_hidden_Status    *status.Status         `protobuf:"bytes,3,opt,name=Status"`
-	xxx_hidden_Entry     *[]*MetadataEntry      `protobuf:"bytes,4,rep,name=Entry"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	state                   protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_MessageSeqNo uint64                 `protobuf:"varint,1,opt,name=message_seq_no,json=messageSeqNo"`
+	xxx_hidden_Method       string                 `protobuf:"bytes,2,opt,name=method"`
+	xxx_hidden_Status       *status.Status         `protobuf:"bytes,3,opt,name=status"`
+	xxx_hidden_Entry        *[]*MetadataEntry      `protobuf:"bytes,4,rep,name=entry"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *Metadata) Reset() {
@@ -58,9 +58,9 @@ func (x *Metadata) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *Metadata) GetMessageID() uint64 {
+func (x *Metadata) GetMessageSeqNo() uint64 {
 	if x != nil {
-		return x.xxx_hidden_MessageID
+		return x.xxx_hidden_MessageSeqNo
 	}
 	return 0
 }
@@ -88,8 +88,8 @@ func (x *Metadata) GetEntry() []*MetadataEntry {
 	return nil
 }
 
-func (x *Metadata) SetMessageID(v uint64) {
-	x.xxx_hidden_MessageID = v
+func (x *Metadata) SetMessageSeqNo(v uint64) {
+	x.xxx_hidden_MessageSeqNo = v
 }
 
 func (x *Metadata) SetMethod(v string) {
@@ -118,28 +118,28 @@ func (x *Metadata) ClearStatus() {
 type Metadata_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	MessageID uint64
-	Method    string
-	Status    *status.Status
-	// per message client-generated metadata
-	Entry []*MetadataEntry
+	MessageSeqNo uint64
+	Method       string
+	Status       *status.Status
+	Entry        []*MetadataEntry
 }
 
 func (b0 Metadata_builder) Build() *Metadata {
 	m0 := &Metadata{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.xxx_hidden_MessageID = b.MessageID
+	x.xxx_hidden_MessageSeqNo = b.MessageSeqNo
 	x.xxx_hidden_Method = b.Method
 	x.xxx_hidden_Status = b.Status
 	x.xxx_hidden_Entry = &b.Entry
 	return m0
 }
 
+// MetadataEntry is a key-value pair for Metadata entries.
 type MetadataEntry struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Key   string                 `protobuf:"bytes,1,opt,name=Key"`
-	xxx_hidden_Value string                 `protobuf:"bytes,2,opt,name=Value"`
+	xxx_hidden_Key   string                 `protobuf:"bytes,1,opt,name=key"`
+	xxx_hidden_Value string                 `protobuf:"bytes,2,opt,name=value"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -211,15 +211,15 @@ var File_ordering_ordering_proto protoreflect.FileDescriptor
 
 const file_ordering_ordering_proto_rawDesc = "" +
 	"\n" +
-	"\x17ordering/ordering.proto\x12\bordering\x1a\x17google/rpc/status.proto\"\x9b\x01\n" +
-	"\bMetadata\x12\x1c\n" +
-	"\tMessageID\x18\x01 \x01(\x04R\tMessageID\x12\x16\n" +
-	"\x06Method\x18\x02 \x01(\tR\x06Method\x12*\n" +
-	"\x06Status\x18\x03 \x01(\v2\x12.google.rpc.StatusR\x06Status\x12-\n" +
-	"\x05Entry\x18\x04 \x03(\v2\x17.ordering.MetadataEntryR\x05Entry\"7\n" +
+	"\x17ordering/ordering.proto\x12\bordering\x1a\x17google/rpc/status.proto\"\xa3\x01\n" +
+	"\bMetadata\x12$\n" +
+	"\x0emessage_seq_no\x18\x01 \x01(\x04R\fmessageSeqNo\x12\x16\n" +
+	"\x06method\x18\x02 \x01(\tR\x06method\x12*\n" +
+	"\x06status\x18\x03 \x01(\v2\x12.google.rpc.StatusR\x06status\x12-\n" +
+	"\x05entry\x18\x04 \x03(\v2\x17.ordering.MetadataEntryR\x05entry\"7\n" +
 	"\rMetadataEntry\x12\x10\n" +
-	"\x03Key\x18\x01 \x01(\tR\x03Key\x12\x14\n" +
-	"\x05Value\x18\x02 \x01(\tR\x05Value2B\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value2B\n" +
 	"\x06Gorums\x128\n" +
 	"\n" +
 	"NodeStream\x12\x12.ordering.Metadata\x1a\x12.ordering.Metadata(\x010\x01B'Z github.com/relab/gorums/ordering\x92\x03\x02\b\x02b\beditionsp\xe8\a"
@@ -231,8 +231,8 @@ var file_ordering_ordering_proto_goTypes = []any{
 	(*status.Status)(nil), // 2: google.rpc.Status
 }
 var file_ordering_ordering_proto_depIdxs = []int32{
-	2, // 0: ordering.Metadata.Status:type_name -> google.rpc.Status
-	1, // 1: ordering.Metadata.Entry:type_name -> ordering.MetadataEntry
+	2, // 0: ordering.Metadata.status:type_name -> google.rpc.Status
+	1, // 1: ordering.Metadata.entry:type_name -> ordering.MetadataEntry
 	0, // 2: ordering.Gorums.NodeStream:input_type -> ordering.Metadata
 	0, // 3: ordering.Gorums.NodeStream:output_type -> ordering.Metadata
 	3, // [3:4] is the sub-list for method output_type

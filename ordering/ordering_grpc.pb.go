@@ -25,6 +25,8 @@ const (
 // GorumsClient is the client API for Gorums service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Gorums is the main service for Gorums' per-node stream communication.
 type GorumsClient interface {
 	// NodeStream is a stream that connects a client to a Node.
 	// The messages that are sent on the stream contain both Metadata
@@ -56,6 +58,8 @@ type Gorums_NodeStreamClient = grpc.BidiStreamingClient[Metadata, Metadata]
 // GorumsServer is the server API for Gorums service.
 // All implementations must embed UnimplementedGorumsServer
 // for forward compatibility.
+//
+// Gorums is the main service for Gorums' per-node stream communication.
 type GorumsServer interface {
 	// NodeStream is a stream that connects a client to a Node.
 	// The messages that are sent on the stream contain both Metadata

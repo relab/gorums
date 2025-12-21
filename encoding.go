@@ -98,7 +98,7 @@ func (m *Message) GetMessageID() uint64 {
 	if m == nil {
 		return 0
 	}
-	return m.metadata.GetMessageID()
+	return m.metadata.GetMessageSeqNo()
 }
 
 func (m *Message) GetStatus() *status.Status {
