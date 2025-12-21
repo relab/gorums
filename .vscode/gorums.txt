@@ -52,6 +52,7 @@ memprofile
 mktemp
 multicast
 naddr
+netrwhist
 obj's
 oneway
 Paxos
