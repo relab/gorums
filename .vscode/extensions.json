@@ -1,6 +1,5 @@
 {
     "recommendations": [
-        "xaver.clang-format",
         "streetsidesoftware.code-spell-checker",
         "golang.go",
         "davidanson.vscode-markdownlint",
