@@ -53,7 +53,7 @@ func (to *testOptions) getOrCreateManager(t testing.TB) *Manager {
 	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
 	mgrOpts := append([]ManagerOption{InsecureDialOptions(t)}, to.managerOpts...)
 	mgr := NewManager(mgrOpts...)
-	t.Cleanup(mgr.Close)
+	t.Cleanup(Closer(t, mgr))
 	return mgr
 }
 

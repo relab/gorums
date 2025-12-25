@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -50,23 +51,15 @@ func NewManager(opts ...ManagerOption) *Manager {
 	return m
 }
 
-func (m *Manager) closeNodeConns() {
-	for _, node := range m.nodes {
-		err := node.close()
-		if err != nil && m.logger != nil {
-			m.logger.Printf("error closing: %v", err)
-		}
-	}
-}
-
 // Close closes all node connections and any client streams.
-func (m *Manager) Close() {
+func (m *Manager) Close() error {
+	var err error
 	m.closeOnce.Do(func() {
-		if m.logger != nil {
-			m.logger.Printf("closing")
+		for _, node := range m.nodes {
+			err = errors.Join(err, node.close())
 		}
-		m.closeNodeConns()
 	})
+	return err
 }
 
 // NodeIDs returns the identifier of each available node. IDs are returned in

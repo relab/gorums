@@ -23,9 +23,9 @@ func TestManagerLogging(t *testing.T) {
 		logger = log.New(&buf, "logger: ", log.Lshortfile)
 	)
 	mgr := NewManager(InsecureDialOptions(t), WithLogger(logger))
-	t.Cleanup(mgr.Close)
+	t.Cleanup(Closer(t, mgr))
 
-	want := "logger: mgr.go:48: ready"
+	want := "logger: mgr.go:49: ready"
 	if strings.TrimSpace(buf.String()) != want {
 		t.Errorf("logger: got %q, want %q", buf.String(), want)
 	}
@@ -33,7 +33,7 @@ func TestManagerLogging(t *testing.T) {
 
 func TestManagerNewNode(t *testing.T) {
 	mgr := NewManager(InsecureDialOptions(t))
-	t.Cleanup(mgr.Close)
+	t.Cleanup(Closer(t, mgr))
 
 	_, err := NewConfiguration(mgr, WithNodeMap(nodeMap))
 	if err != nil {
@@ -62,7 +62,7 @@ func TestManagerNewNode(t *testing.T) {
 func TestManagerNewNodeWithConn(t *testing.T) {
 	addrs := TestServers(t, 3, nil)
 	mgr := NewManager(InsecureDialOptions(t))
-	t.Cleanup(mgr.Close)
+	t.Cleanup(Closer(t, mgr))
 
 	// Create configuration with only first 2 nodes
 	_, err := NewConfiguration(mgr, WithNodeList(addrs[:2]))

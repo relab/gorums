@@ -121,7 +121,7 @@ func TestTCPReconnection(t *testing.T) {
 	}()
 
 	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(mgr.Close)
+	t.Cleanup(gorums.Closer(t, mgr))
 
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList([]string{addr}))
 	if err != nil {

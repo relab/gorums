@@ -81,6 +81,7 @@ type channel struct {
 	// to the caller.
 	responseRouters map[uint64]request
 	responseMut     sync.Mutex
+	closeOnceFunc   func() error
 }
 
 // newChannel creates a new channel for the given node and starts the sender
@@ -102,19 +103,22 @@ func newChannel(parentCtx context.Context, conn *grpc.ClientConn, id uint32, sen
 		responseRouters: make(map[uint64]request),
 		streamReady:     make(chan struct{}, 1),
 	}
+	c.closeOnceFunc = sync.OnceValue(func() error {
+		// important to cancel first to stop goroutines
+		c.connCancel()
+		if c.conn != nil {
+			return c.conn.Close()
+		}
+		return nil
+	})
 	go c.sender()
 	go c.receiver()
 	return c
 }
 
-// close closes the channel and the underlying connection.
+// close closes the channel and the underlying connection exactly once.
 func (c *channel) close() error {
-	// important to cancel first to stop goroutines
-	c.connCancel()
-	if c.conn != nil {
-		return c.conn.Close()
-	}
-	return nil
+	return c.closeOnceFunc()
 }
 
 // newNodeStream creates a new stream for this channel.

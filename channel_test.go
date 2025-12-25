@@ -82,7 +82,7 @@ func testNodeWithoutServer(t testing.TB, opts ...ManagerOption) *Node {
 	t.Helper()
 	mgrOpts := append([]ManagerOption{InsecureDialOptions(t)}, opts...)
 	mgr := NewManager(mgrOpts...)
-	t.Cleanup(mgr.Close)
+	t.Cleanup(Closer(t, mgr))
 	// Use a high port number that's unlikely to have anything listening.
 	// We use a fixed ID for simplicity.
 	node, err := mgr.newNode("127.0.0.1:59999", 1)

@@ -3,6 +3,7 @@ package gorums
 import (
 	"context"
 	"fmt"
+	"io"
 	"iter"
 	"maps"
 	"net"
@@ -146,6 +147,16 @@ func TestServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) []
 type ServerIface interface {
 	Serve(net.Listener) error
 	Stop()
+}
+
+// Closer returns a cleanup function that closes the given io.Closer.
+func Closer(t testing.TB, c io.Closer) func() {
+	t.Helper()
+	return func() {
+		if err := c.Close(); err != nil {
+			t.Errorf("c.Close() = %q, expected no error", err.Error())
+		}
+	}
 }
 
 type serverState struct {
