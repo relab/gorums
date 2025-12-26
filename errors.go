@@ -6,15 +6,32 @@ import (
 	"strings"
 )
 
-// Incomplete is the error returned by a quorum call when the call cannot completed
-// due insufficient non-error replies to form a quorum according to the quorum function.
-var Incomplete = errors.New("incomplete call")
+// ErrIncomplete is the error returned by a quorum call when the call cannot be completed
+// due to insufficient non-error replies to form a quorum according to the quorum function.
+var ErrIncomplete = errors.New("incomplete call")
+
+// ErrSendFailure is the error returned by a multicast call when message sending fails for one or more nodes.
+var ErrSendFailure = errors.New("send failure")
+
+// ErrTypeMismatch is returned when a response cannot be cast to the expected type.
+var ErrTypeMismatch = errors.New("response type mismatch")
 
 // QuorumCallError reports on a failed quorum call.
+// It provides detailed information about which nodes failed.
 type QuorumCallError struct {
-	cause   error
-	errors  []nodeError
-	replies int
+	cause  error
+	errors []nodeError
+}
+
+// Cause returns the underlying cause of the quorum call failure.
+// Common causes include ErrIncomplete and ErrSendFailure.
+func (e QuorumCallError) Cause() error {
+	return e.cause
+}
+
+// NodeErrors returns the number of nodes that failed during the quorum call.
+func (e QuorumCallError) NodeErrors() int {
+	return len(e.errors)
 }
 
 // Is reports whether the target error is the same as the cause of the QuorumCallError.
@@ -25,8 +42,17 @@ func (e QuorumCallError) Is(target error) bool {
 	return e.cause == target
 }
 
+// Unwrap returns all the underlying node errors as a slice.
+// This allows the error to work with errors.Is and errors.As for any wrapped errors.
+func (e QuorumCallError) Unwrap() (errs []error) {
+	for _, ne := range e.errors {
+		errs = append(errs, ne.cause)
+	}
+	return errs
+}
+
 func (e QuorumCallError) Error() string {
-	s := fmt.Sprintf("quorum call error: %s (errors: %d, replies: %d)", e.cause, len(e.errors), e.replies)
+	s := fmt.Sprintf("quorum call error: %s (errors: %d)", e.cause, len(e.errors))
 	var b strings.Builder
 	b.WriteString(s)
 	if len(e.errors) == 0 {
@@ -41,7 +67,7 @@ func (e QuorumCallError) Error() string {
 	return b.String()
 }
 
-// nodeError reports on a failed RPC call.
+// nodeError reports on a failed RPC call from a specific node.
 type nodeError struct {
 	cause  error
 	nodeID uint32

@@ -1,15 +1,12 @@
 package metadata
 
 import (
-	"context"
 	"fmt"
-	"strconv"
 	"testing"
 
 	"github.com/relab/gorums"
-	"google.golang.org/grpc"
+	"github.com/relab/gorums/internal/strconv"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
@@ -18,7 +15,7 @@ import (
 
 type testSrv struct{}
 
-func (srv testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeID, err error) {
+func (testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeID, err error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.NotFound, "metadata unavailable")
@@ -27,14 +24,14 @@ func (srv testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeI
 	if len(v) < 1 {
 		return nil, status.Error(codes.NotFound, "missing metadata field: id")
 	}
-	id, err := strconv.Atoi(v[0])
+	id, err := strconv.ParseInteger[uint32](v[0], 10)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "value of id field: %q is not a number: %v", v[0], err)
 	}
-	return NodeID_builder{ID: uint32(id)}.Build(), nil
+	return NodeID_builder{ID: id}.Build(), nil
 }
 
-func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr, err error) {
+func (testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.NotFound, "Peer info unavailable")
@@ -42,7 +39,7 @@ func (srv testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr,
 	return IPAddr_builder{Addr: peerInfo.Addr.String()}.Build(), nil
 }
 
-func initServer() *gorums.Server {
+func serverFn(_ int) gorums.ServerIface {
 	srv := gorums.NewServer()
 	RegisterMetadataTestServer(srv, &testSrv{})
 	return srv
@@ -50,27 +47,13 @@ func initServer() *gorums.Server {
 
 func TestMetadata(t *testing.T) {
 	want := uint32(1)
-
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
-	defer teardown()
-
 	md := metadata.New(map[string]string{
 		"id": fmt.Sprint(want),
 	})
 
-	mgr := NewManager(
-		gorums.WithMetadata(md),
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	node := mgr.Nodes()[0]
-	resp, err := node.IDFromMD(context.Background(), &emptypb.Empty{})
+	node := gorums.TestNode(t, serverFn, gorums.WithMetadata(md))
+	nodeCtx := node.Context(t.Context())
+	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}
@@ -81,28 +64,15 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestPerMessageMetadata(t *testing.T) {
+	node := gorums.TestNode(t, serverFn)
+
 	want := uint32(1)
-
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
-	defer teardown()
-
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	node := mgr.Nodes()[0]
-
 	md := metadata.New(map[string]string{
 		"id": fmt.Sprint(want),
 	})
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
-	resp, err := node.IDFromMD(ctx, &emptypb.Empty{})
+	ctx := metadata.NewOutgoingContext(t.Context(), md)
+	nodeCtx := node.Context(ctx)
+	resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}
@@ -113,28 +83,17 @@ func TestPerMessageMetadata(t *testing.T) {
 }
 
 func TestPerNodeMetadata(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 2, func(_ int) gorums.ServerIface { return initServer() })
-	defer teardown()
-
 	perNodeMD := func(nid uint32) metadata.MD {
 		return metadata.New(map[string]string{
 			"id": fmt.Sprintf("%d", nid),
 		})
 	}
 
-	mgr := NewManager(
-		gorums.WithPerNodeMetadata(perNodeMD),
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
+	cfg := gorums.TestConfiguration(t, 2, serverFn, gorums.WithPerNodeMetadata(perNodeMD))
 
-	for _, node := range mgr.Nodes() {
-		resp, err := node.IDFromMD(context.Background(), &emptypb.Empty{})
+	for _, node := range cfg {
+		nodeCtx := node.Context(t.Context())
+		resp, err := IDFromMD(nodeCtx, &emptypb.Empty{})
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
@@ -146,21 +105,9 @@ func TestPerNodeMetadata(t *testing.T) {
 }
 
 func TestCanGetPeerInfo(t *testing.T) {
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface { return initServer() })
-	defer teardown()
-
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	_, err := mgr.NewConfiguration(gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	node := mgr.Nodes()[0]
-	ip, err := node.WhatIP(context.Background(), &emptypb.Empty{})
+	node := gorums.TestNode(t, serverFn)
+	nodeCtx := node.Context(t.Context())
+	ip, err := WhatIP(nodeCtx, &emptypb.Empty{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}

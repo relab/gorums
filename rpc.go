@@ -1,31 +1,21 @@
 package gorums
 
 import (
-	"context"
-
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/protobuf/proto"
 )
 
-// CallData contains data needed to make a remote procedure call.
-//
-// This struct should be used by generated code only.
-type CallData struct {
-	Message proto.Message
-	Method  string
-}
-
 // RPCCall executes a remote procedure call on the node.
 //
 // This method should be used by generated code only.
-func (n *RawNode) RPCCall(ctx context.Context, d CallData) (proto.Message, error) {
-	md := ordering.NewGorumsMetadata(ctx, n.mgr.getMsgID(), d.Method)
-	replyChan := make(chan response, 1)
-	n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, d.Message)}, replyChan)
+func RPCCall(ctx *NodeContext, msg proto.Message, method string) (proto.Message, error) {
+	md := ordering.NewGorumsMetadata(ctx, ctx.nextMsgID(), method)
+	replyChan := make(chan NodeResponse[proto.Message], 1)
+	ctx.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 
 	select {
 	case r := <-replyChan:
-		return r.msg, r.err
+		return r.Value, r.Err
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}

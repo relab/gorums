@@ -14,7 +14,7 @@ import (
 
 type testSrv struct{}
 
-func (t testSrv) TestTLS(ctx gorums.ServerCtx, in *Request) (resp *Response, err error) {
+func (testSrv) TestTLS(ctx gorums.ServerCtx, _ *Request) (resp *Response, err error) {
 	peerInfo, ok := peer.FromContext(ctx)
 	if !ok || peerInfo.AuthInfo.AuthType() != "tls" {
 		return Response_builder{OK: false}.Build(), nil
@@ -22,7 +22,7 @@ func (t testSrv) TestTLS(ctx gorums.ServerCtx, in *Request) (resp *Response, err
 	return Response_builder{OK: true}.Build(), nil
 }
 
-func TestTLS(t *testing.T) {
+func TestTLSConnection(t *testing.T) {
 	cert, key, err := generateCert()
 	if err != nil {
 		t.Errorf("Failed to generate certificate: %v", err)
@@ -38,25 +38,16 @@ func TestTLS(t *testing.T) {
 		t.Errorf("Failed to parse cert: %v", err)
 	}
 
-	addrs, teardown := gorums.TestSetup(t, 1, func(_ int) gorums.ServerIface {
+	srvFn := func(_ int) gorums.ServerIface {
 		srv := gorums.NewServer(gorums.WithGRPCServerOptions(grpc.Creds(credentials.NewServerTLSFromCert(&tlsCert))))
 		RegisterTLSServer(srv, &testSrv{})
 		return srv
-	})
-	defer teardown()
-
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
-		),
-	)
-	_, err = mgr.NewConfiguration(gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
 	}
+	node := gorums.TestNode(t, srvFn, gorums.WithDialOptions(
+		grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(cp, "")),
+	))
 
-	node := mgr.Nodes()[0]
-	resp, err := node.TestTLS(context.Background(), &Request{})
+	resp, err := TestTLS(node.Context(context.Background()), &Request{})
 	if err != nil {
 		t.Fatalf("RPC error: %v", err)
 	}

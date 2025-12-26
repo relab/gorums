@@ -15,13 +15,13 @@ func runClient(addresses []string) error {
 	}
 
 	// init gorums manager
-	mgr := proto.NewManager(
-		gorums.WithGrpcDialOptions(
+	mgr := gorums.NewManager(
+		gorums.WithDialOptions(
 			grpc.WithTransportCredentials(insecure.NewCredentials()), // disable TLS
 		),
 	)
 	// create configuration containing all nodes
-	cfg, err := mgr.NewConfiguration(&qspec{cfgSize: len(addresses)}, gorums.WithNodeList(addresses))
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(addresses))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -29,63 +29,40 @@ func runClient(addresses []string) error {
 	return Repl(mgr, cfg)
 }
 
-type qspec struct {
-	cfgSize int
-}
-
-// ReadQCQF is the quorum function for the ReadQC
-// ordered quorum call method. The in parameter is the request object
-// supplied to the ReadQC method at call time, and may or may not
-// be used by the quorum function. If the in parameter is not needed
-// you should implement your quorum function with '_ *ReadRequest'.
-func (q qspec) ReadQCQF(_ *proto.ReadRequest, replies map[uint32]*proto.ReadResponse) (*proto.ReadResponse, bool) {
-	// wait until at least half of the replicas have responded
-	if len(replies) <= q.cfgSize/2 {
-		return nil, false
-	}
-	// return the value with the most recent timestamp
-	return newestValue(replies), true
-}
-
-// WriteQCQF is the quorum function for the WriteQC
-// ordered quorum call method. The in parameter is the request object
-// supplied to the WriteQC method at call time, and may or may not
-// be used by the quorum function. If the in parameter is not needed
-// you should implement your quorum function with '_ *WriteRequest'.
-func (q qspec) WriteQCQF(in *proto.WriteRequest, replies map[uint32]*proto.WriteResponse) (*proto.WriteResponse, bool) {
-	// wait until at least half of the replicas have responded and have updated their value
-	if numUpdated(replies) > q.cfgSize/2 {
-		return proto.WriteResponse_builder{New: true}.Build(), true
-	}
-	// if all replicas have responded, there must have been another write before ours
-	// that had a newer timestamp
-	if len(replies) == q.cfgSize {
-		return proto.WriteResponse_builder{New: false}.Build(), true
-	}
-	return nil, false
-}
-
-// newestValue returns the reply that had the most recent timestamp
-func newestValue(values map[uint32]*proto.ReadResponse) *proto.ReadResponse {
-	if len(values) < 1 {
-		return nil
-	}
+// newestValue processes responses from a ReadQC call and returns the reply
+// with the most recent timestamp.
+func newestValue(responses *gorums.Responses[*proto.ReadResponse]) (*proto.ReadResponse, error) {
 	var newest *proto.ReadResponse
-	for _, v := range values {
-		if v.GetTime().AsTime().After(newest.GetTime().AsTime()) {
-			newest = v
+	for resp := range responses.Seq() {
+		if resp.Err != nil {
+			continue
+		}
+		if newest == nil || resp.Value.GetTime().AsTime().After(newest.GetTime().AsTime()) {
+			newest = resp.Value
 		}
 	}
-	return newest
+	if newest == nil {
+		return nil, gorums.ErrIncomplete
+	}
+	return newest, nil
 }
 
-// numUpdated returns the number of replicas that updated their value
-func numUpdated(replies map[uint32]*proto.WriteResponse) int {
-	count := 0
-	for _, r := range replies {
-		if r.GetNew() {
+// numUpdated processes responses from a WriteQC call and returns true if
+// a majority of nodes updated their value.
+func numUpdated(responses *gorums.Responses[*proto.WriteResponse]) (*proto.WriteResponse, error) {
+	var count int
+	size := responses.Size()
+	for resp := range responses.Seq() {
+		if resp.Err != nil {
+			continue
+		}
+		if resp.Value.GetNew() {
 			count++
 		}
 	}
-	return count
+	// We need a majority of nodes to have updated the value
+	if count > size/2 {
+		return proto.WriteResponse_builder{New: true}.Build(), nil
+	}
+	return proto.WriteResponse_builder{New: false}.Build(), nil
 }

@@ -1,31 +1,25 @@
 package gorums
 
-import (
-	"context"
-
-	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/proto"
-)
-
-// Async encapsulates the state of an asynchronous quorum call,
-// and has methods for checking the status of the call or waiting for it to complete.
+// Async is a generic future type for asynchronous quorum calls.
+// It encapsulates the state of an asynchronous call and provides methods
+// for checking the status or waiting for completion.
 //
-// This struct should only be used by generated code.
-type Async struct {
-	reply proto.Message
+// Type parameter Resp is the response type from nodes.
+type Async[Resp any] struct {
+	reply Resp
 	err   error
 	c     chan struct{}
 }
 
 // Get returns the reply and any error associated with the called method.
 // The method blocks until a reply or error is available.
-func (f *Async) Get() (proto.Message, error) {
+func (f *Async[Resp]) Get() (Resp, error) {
 	<-f.c
 	return f.reply, f.err
 }
 
 // Done reports if a reply and/or error is available for the called method.
-func (f *Async) Done() bool {
+func (f *Async[Resp]) Done() bool {
 	select {
 	case <-f.c:
 		return true
@@ -34,74 +28,39 @@ func (f *Async) Done() bool {
 	}
 }
 
-type asyncCallState struct {
-	md              *ordering.Metadata
-	data            QuorumCallData
-	replyChan       <-chan response
-	expectedReplies int
+// AsyncMajority returns an Async future that resolves when a majority quorum is reached.
+// Messages are sent immediately (synchronously) to preserve ordering when multiple
+// async calls are created in sequence.
+func (r *Responses[Resp]) AsyncMajority() *Async[Resp] {
+	quorumSize := r.size/2 + 1
+	return r.AsyncThreshold(quorumSize)
 }
 
-// AsyncCall starts an asynchronous quorum call, returning an Async object that can be used to retrieve the results.
-//
-// This function should only be used by generated code.
-func (c RawConfiguration) AsyncCall(ctx context.Context, d QuorumCallData) *Async {
-	expectedReplies := len(c)
-	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
-	replyChan := make(chan response, expectedReplies)
+// AsyncFirst returns an Async future that resolves when the first response is received.
+// Messages are sent immediately (synchronously) to preserve ordering.
+func (r *Responses[Resp]) AsyncFirst() *Async[Resp] {
+	return r.AsyncThreshold(1)
+}
 
-	for _, n := range c {
-		msg := d.Message
-		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
-			if !msg.ProtoReflect().IsValid() {
-				expectedReplies--
-				continue // don't send if no msg
-			}
-		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg)}, replyChan)
-	}
+// AsyncAll returns an Async future that resolves when all nodes have responded.
+// Messages are sent immediately (synchronously) to preserve ordering.
+func (r *Responses[Resp]) AsyncAll() *Async[Resp] {
+	return r.AsyncThreshold(r.size)
+}
 
-	fut := &Async{c: make(chan struct{}, 1)}
+// AsyncThreshold returns an Async future that resolves when the threshold is reached.
+// Messages are sent immediately (synchronously) to preserve ordering when multiple
+// async calls are created in sequence.
+func (r *Responses[Resp]) AsyncThreshold(threshold int) *Async[Resp] {
+	// Send messages synchronously before spawning the goroutine to preserve ordering
+	r.sendNow()
 
-	go c.handleAsyncCall(ctx, fut, asyncCallState{
-		md:              md,
-		data:            d,
-		replyChan:       replyChan,
-		expectedReplies: expectedReplies,
-	})
+	fut := &Async[Resp]{c: make(chan struct{}, 1)}
+
+	go func() {
+		defer close(fut.c)
+		fut.reply, fut.err = r.Threshold(threshold)
+	}()
 
 	return fut
-}
-
-func (RawConfiguration) handleAsyncCall(ctx context.Context, fut *Async, state asyncCallState) {
-	defer close(fut.c)
-
-	var (
-		resp    proto.Message
-		errs    []nodeError
-		quorum  bool
-		replies = make(map[uint32]proto.Message)
-	)
-
-	for {
-		select {
-		case r := <-state.replyChan:
-			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
-				break
-			}
-			replies[r.nid] = r.msg
-			if resp, quorum = state.data.QuorumFunction(state.data.Message, replies); quorum {
-				fut.reply, fut.err = resp, nil
-				return
-			}
-		case <-ctx.Done():
-			fut.reply, fut.err = resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
-			return
-		}
-		if len(errs)+len(replies) == state.expectedReplies {
-			fut.reply, fut.err = resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
-			return
-		}
-	}
 }

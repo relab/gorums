@@ -2,80 +2,35 @@ package config
 
 import (
 	"context"
-	fmt "fmt"
+	"fmt"
 	"testing"
 
 	gorums "github.com/relab/gorums"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
-type (
-	cfgSrv struct {
-		name string
-	}
-	cfgQSpec struct {
-		quorum int
-	}
-)
+type cfgSrv struct{}
 
-func (srv cfgSrv) Config(ctx gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (cfgSrv) Config(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{
-		Name: srv.name,
-		Num:  req.GetNum(),
+		Num: req.GetNum(),
 	}.Build(), nil
 }
 
-func newQSpec(cfgSize int) *cfgQSpec {
-	return &cfgQSpec{quorum: cfgSize/2 + 1}
-}
-
-func (q cfgQSpec) ConfigQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	if len(replies) < q.quorum {
-		return nil, false
-	}
-	var reply *Response
-	for _, r := range replies {
-		reply = r
-		break
-	}
-	return reply, true
-}
-
-// setup returns a new configuration of cfgSize and a corresponding teardown function.
-// Calling setup multiple times will return a different configuration with different
-// sets of nodes.
-func setup(t *testing.T, mgr *Manager, cfgSize int) (cfg *Configuration, teardown func()) {
-	t.Helper()
-	srvs := make([]*cfgSrv, cfgSize)
-	for i := range srvs {
-		srvs[i] = &cfgSrv{}
-	}
-	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(i int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		RegisterConfigTestServer(srv, srvs[i])
-		return srv
-	})
-	for i := range srvs {
-		srvs[i].name = addrs[i]
-	}
-	cfg, err := mgr.NewConfiguration(newQSpec(cfgSize), gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	teardown = func() {
-		mgr.Close()
-		closeServers()
-	}
-	return cfg, teardown
+func serverFn(_ int) gorums.ServerIface {
+	srv := gorums.NewServer()
+	RegisterConfigTestServer(srv, &cfgSrv{})
+	return srv
 }
 
 // TestConfig creates and combines multiple configurations and invokes the Config RPC
 // method on the different configurations created below.
 func TestConfig(t *testing.T) {
-	callRPC := func(cfg *Configuration) {
+	callRPC := func(config gorums.Configuration) {
+		cfgCtx := config.Context(context.Background())
 		for i := range 5 {
-			resp, err := cfg.Config(context.Background(), Request_builder{Num: uint64(i)}.Build())
+			// Use the new terminal method API - wait for a majority
+			resp, err := Config(cfgCtx,
+				Request_builder{Num: uint64(i)}.Build()).Majority()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -84,37 +39,28 @@ func TestConfig(t *testing.T) {
 			}
 		}
 	}
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	c1, teardown1 := setup(t, mgr, 4)
-	defer teardown1()
+
+	c1 := gorums.TestConfiguration(t, 4, serverFn)
 	fmt.Println("--- c1 ", c1.Nodes())
 	callRPC(c1)
 
-	c2, teardown2 := setup(t, mgr, 2)
-	defer teardown2()
+	// Create a new configuration c2 with 2 new nodes not in c1, using the same manager as c1.
+	c2 := gorums.TestConfiguration(t, 2, serverFn, gorums.WithManager(t, c1.Manager()))
 	fmt.Println("--- c2 ", c2.Nodes())
 	callRPC(c2)
 
+	// Create c3 = c1 ∪ c2, using the same manager as c1 (and c2).
 	newNodeList := c1.And(c2)
-	c3, err := mgr.NewConfiguration(
-		newQSpec(c1.Size()+c2.Size()),
-		newNodeList,
-	)
+	c3, err := gorums.NewConfiguration(c1.Manager(), newNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println("--- c3 ", c3.Nodes())
 	callRPC(c3)
 
+	// Create c4 = c3 \ c1, using the same manager as c1 (and c2, c3).
 	rmNodeList := c3.Except(c1)
-	c4, err := mgr.NewConfiguration(
-		newQSpec(c2.Size()),
-		rmNodeList,
-	)
+	c4, err := gorums.NewConfiguration(c1.Manager(), rmNodeList)
 	if err != nil {
 		t.Fatal(err)
 	}

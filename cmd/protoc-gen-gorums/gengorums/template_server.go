@@ -13,7 +13,7 @@ type {{$service}}Server interface {
 	{{- range .Methods}}
 	{{- if isOneway .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}})
-	{{- else if correctableStream .}}
+	{{- else if isStreamingServer .}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}, send func(response *{{out $genFile .}}) error) error
 	{{- else}}
 	{{.GoName}}(ctx {{$context}}, request *{{in $genFile .}}) (response *{{out $genFile .}}, err error)
@@ -37,7 +37,7 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 		{{- if isOneway .}}
 		impl.{{.GoName}}(ctx, req)
 		return nil, nil
-		{{- else if correctableStream .}}
+		{{- else if isStreamingServer .}}
 		err := impl.{{.GoName}}(ctx, req, func(resp *{{out $genFile .}}) error {
 			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
 			md := {{use "proto.CloneOf" $genFile}}(in.GetMetadata())

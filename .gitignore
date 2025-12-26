@@ -20,13 +20,21 @@ Session.vim
 .netrwhist
 *~
 
-*.xo
+# IDE and scratch files
 .vscode/*.log
 .idea/
+*.xo
 z-scratch/
 
-# binary files
+# Binary files
 cmd/benchmark/benchmark
+examples/storage/storage
+
+# Gorums generated backup files
 cmd/protoc-gen-gorums/gengorums/template_static.go.bak
+
+# Ignore the generated code for the tutorial example
+examples/gorumsexample/storage.pb.go
+examples/gorumsexample/storage_gorums.pb.go
 
 go.work.sum

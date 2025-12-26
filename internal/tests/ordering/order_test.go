@@ -3,15 +3,46 @@ package ordering
 import (
 	"context"
 	"errors"
+	"iter"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums"
-	"go.uber.org/goleak"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
+
+// stressMode controls whether tests run in stress mode (time-based) or normal mode (iteration-based).
+// This is set to true in order_stress_test.go via the stress build tag.
+var stressMode = false
+
+// testIterations is the number of iterations for ordering tests in normal mode.
+const testIterations = 100
+
+// stressDuration is the duration for stress tests when stressMode is true.
+const stressDuration = 5 * time.Second
+
+// iterations returns an iterator that yields sequential integers starting from 1.
+// In normal mode, it yields testIterations values.
+// In stress mode, it yields values for stressDuration.
+func iterations() iter.Seq[int] {
+	if stressMode {
+		return func(yield func(int) bool) {
+			stopTime := time.Now().Add(stressDuration)
+			for i := 1; time.Now().Before(stopTime); i++ {
+				if !yield(i) {
+					return
+				}
+			}
+		}
+	}
+	return func(yield func(int) bool) {
+		for i := range testIterations {
+			if !yield(i + 1) {
+				return
+			}
+		}
+	}
+}
 
 type testSrv struct {
 	sync.Mutex
@@ -28,13 +59,7 @@ func (s *testSrv) isInOrder(num uint64) bool {
 	return false
 }
 
-func (s *testSrv) QC(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
-	return Response_builder{
-		InOrder: s.isInOrder(req.GetNum()),
-	}.Build(), nil
-}
-
-func (s *testSrv) QCAsync(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
+func (s *testSrv) QuorumCall(_ gorums.ServerCtx, req *Request) (resp *Response, err error) {
 	return Response_builder{
 		InOrder: s.isInOrder(req.GetNum()),
 	}.Build(), nil
@@ -46,73 +71,20 @@ func (s *testSrv) UnaryRPC(_ gorums.ServerCtx, req *Request) (resp *Response, er
 	}.Build(), nil
 }
 
-type testQSpec struct {
-	quorum int
-}
-
-func (q testQSpec) qf(replies map[uint32]*Response) (*Response, bool) {
-	if len(replies) < q.quorum {
-		return nil, false
-	}
-	for _, reply := range replies {
-		if !reply.GetInOrder() {
-			return reply, true
-		}
-	}
-	var reply *Response
-	for _, r := range replies {
-		reply = r
-		break
-	}
-	return reply, true
-}
-
-func (q testQSpec) QCQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	return q.qf(replies)
-}
-
-func (q testQSpec) QCAsyncQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	return q.qf(replies)
-}
-
-func (q testQSpec) AsyncHandlerQF(_ *Request, replies map[uint32]*Response) (*Response, bool) {
-	return q.qf(replies)
-}
-
-func setup(t *testing.T, cfgSize int) (cfg *Configuration, teardown func()) {
-	t.Helper()
-	addrs, closeServers := gorums.TestSetup(t, cfgSize, func(_ int) gorums.ServerIface {
-		srv := gorums.NewServer()
-		RegisterGorumsTestServer(srv, &testSrv{})
-		return srv
-	})
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
-	cfg, err := mgr.NewConfiguration(&testQSpec{cfgSize}, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-	teardown = func() {
-		mgr.Close()
-		closeServers()
-	}
-	return cfg, teardown
+// serverFn creates a new server with an independent testSrv instance.
+// Each server needs its own testSrv to track ordering independently.
+func serverFn(_ int) gorums.ServerIface {
+	srv := gorums.NewServer()
+	RegisterGorumsTestServer(srv, &testSrv{})
+	return srv
 }
 
 func TestUnaryRPCOrdering(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	cfg, teardown := setup(t, 1)
-	defer teardown()
-	node := cfg.Nodes()[0]
-	// begin test
-	stopTime := time.Now().Add(5 * time.Second)
-	i := 1
-	for time.Now().Before(stopTime) {
-		i++
-		resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
+	node := gorums.TestNode(t, serverFn)
+
+	for i := range iterations() {
+		nodeCtx := node.Context(t.Context())
+		resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(i)}.Build())
 		if err != nil {
 			t.Fatalf("RPC error: %v", err)
 		}
@@ -125,47 +97,40 @@ func TestUnaryRPCOrdering(t *testing.T) {
 	}
 }
 
-func TestQCOrdering(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	cfg, teardown := setup(t, 4)
-	defer teardown()
-	// begin test
-	stopTime := time.Now().Add(5 * time.Second)
-	i := 1
-	for time.Now().Before(stopTime) {
-		i++
-		resp, err := cfg.QC(context.Background(), Request_builder{Num: uint64(i)}.Build())
-		if err != nil {
-			t.Fatalf("QC error: %v", err)
+func TestQuorumCallOrdering(t *testing.T) {
+	config := gorums.TestConfiguration(t, 4, serverFn)
+	cfgCtx := config.Context(t.Context())
+
+	for i := range iterations() {
+		// Use CollectAll to get all responses and check for ordering
+		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build())
+		replies := responses.CollectAll()
+		if len(replies) < config.Size() {
+			t.Fatalf("incomplete call: %d replies", len(replies))
 		}
-		if resp == nil {
-			t.Fatal("Got nil response")
-		}
-		if !resp.GetInOrder() {
-			t.Fatalf("Message received out of order.")
+		for _, reply := range replies {
+			if !reply.GetInOrder() {
+				t.Fatalf("Message received out of order.")
+			}
 		}
 	}
 }
 
-func TestQCAsyncOrdering(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	cfg, teardown := setup(t, 4)
-	defer teardown()
-	ctx, cancel := context.WithCancel(context.Background())
-	// begin test
+func TestQuorumCallAsyncOrdering(t *testing.T) {
+	config := gorums.TestConfiguration(t, 4, serverFn)
+	cfgCtx := config.Context(t.Context())
+
 	var wg sync.WaitGroup
-	stopTime := time.Now().Add(5 * time.Second)
-	i := 1
-	for time.Now().Before(stopTime) {
-		i++
-		promise := cfg.QCAsync(ctx, Request_builder{Num: uint64(i)}.Build())
+	for i := range iterations() {
+		// QuorumCall returns Responses; use .AsyncMajority() to get an Async future
+		promise := QuorumCall(cfgCtx, Request_builder{Num: uint64(i)}.Build()).AsyncMajority()
 		wg.Go(func() {
 			resp, err := promise.Get()
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return
 				}
-				t.Errorf("QC error: %v", err)
+				t.Errorf("QuorumCall error: %v", err)
 			}
 			if resp == nil {
 				t.Errorf("Got nil response")
@@ -176,33 +141,29 @@ func TestQCAsyncOrdering(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	cancel()
 }
 
 func TestMixedOrdering(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	cfg, teardown := setup(t, 4)
-	defer teardown()
-	nodes := cfg.Nodes()
-	// begin test
-	stopTime := time.Now().Add(5 * time.Second)
-	i := 1
-	for time.Now().Before(stopTime) {
-		resp, err := cfg.QC(context.Background(), Request_builder{Num: uint64(i)}.Build())
-		i++
-		if err != nil {
-			t.Fatalf("QC error: %v", err)
+	config := gorums.TestConfiguration(t, 4, serverFn)
+	cfgCtx := config.Context(t.Context())
+
+	for i := range iterations() {
+		// Use CollectAll to get all responses and check for ordering
+		responses := QuorumCall(cfgCtx, Request_builder{Num: uint64(2*i - 1)}.Build())
+		replies := responses.CollectAll()
+		if len(replies) < config.Size() {
+			t.Fatalf("incomplete call: %d replies", len(replies))
 		}
-		if resp == nil {
-			t.Fatal("Got nil response")
-		}
-		if !resp.GetInOrder() {
-			t.Fatalf("Message received out of order.")
+		for _, reply := range replies {
+			if !reply.GetInOrder() {
+				t.Fatalf("Message received out of order.")
+			}
 		}
 		var wg sync.WaitGroup
-		for _, node := range nodes {
+		for _, node := range config.Nodes() {
 			wg.Go(func() {
-				resp, err := node.UnaryRPC(context.Background(), Request_builder{Num: uint64(i)}.Build())
+				nodeCtx := node.Context(t.Context())
+				resp, err := UnaryRPC(nodeCtx, Request_builder{Num: uint64(2 * i)}.Build())
 				if err != nil {
 					t.Errorf("RPC error: %v", err)
 					return
@@ -217,6 +178,5 @@ func TestMixedOrdering(t *testing.T) {
 			})
 		}
 		wg.Wait()
-		i++
 	}
 }

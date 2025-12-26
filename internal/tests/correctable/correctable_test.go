@@ -1,119 +1,115 @@
 package correctable
 
 import (
-	"context"
 	"testing"
 	"time"
 
 	"github.com/relab/gorums"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // run a test on a correctable call.
-// n is the number of replicas, and div is a divider.
-// the target level is n, and the level is calculated by the quorum function
-// by dividing the sum of levels from the servers with the divider.
-func run(t *testing.T, n int, div int, corr func(context.Context, *Configuration) *gorums.Correctable) {
-	addrs, teardown := gorums.TestSetup(t, n, func(i int) gorums.ServerIface {
+// n is the number of replicas.
+// the target level is n (quorum size).
+func run(t testing.TB, n int, corr func(*gorums.ConfigContext, int) CorrectableResponse) {
+	t.Helper()
+	config := gorums.TestConfiguration(t, n, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
 		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
 		return gorumsSrv
 	})
-	defer teardown()
 
-	mgr := NewManager(
-		gorums.WithGrpcDialOptions(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		),
-	)
+	ctx := gorums.TestContext(t, 100*time.Millisecond)
+	configCtx := config.Context(ctx)
+	res := corr(configCtx, n)
 
-	cfg, err := mgr.NewConfiguration(qspec{div, n}, gorums.WithNodeList(addrs))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	res := corr(ctx, cfg)
-
-	donech := res.Done()
-
+	done := res.Done()
 	for i := 1; i <= n; i++ {
 		select {
 		case <-res.Watch(i):
-		case <-donech:
+		case <-done:
 		}
 	}
-
-	<-donech
-
-	_, _, err = res.Get()
-	if err != nil {
+	<-done
+	if _, _, err := res.Get(); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestCorrectable(t *testing.T) {
-	run(t, 4, 1, func(ctx context.Context, c *Configuration) *gorums.Correctable {
-		corr := c.Correctable(ctx, &CorrectableRequest{})
-		return corr.Correctable
+	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
+		// Correctable returns *Responses, user calls Correctable to get *Correctable
+		return Correctable(ctx, &Request{}).Correctable(n)
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
-	run(t, 4, 4, func(ctx context.Context, c *Configuration) *gorums.Correctable {
-		corr := c.CorrectableStream(ctx, &CorrectableRequest{})
-		return corr.Correctable
+	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
+		// CorrectableStream returns *Responses, user calls Correctable to get *Correctable
+		return CorrectableStream(ctx, &Request{}).Correctable(n)
 	})
 }
 
-type qspec struct {
-	div       int
-	doneLevel int
-}
+// TestCorrectableWithWatch tests progressive level watching using the type alias
+func TestCorrectableWithWatch(t *testing.T) {
+	n := 4
+	config := gorums.TestConfiguration(t, n, func(_ int) gorums.ServerIface {
+		gorumsSrv := gorums.NewServer()
+		RegisterCorrectableTestServer(gorumsSrv, &testSrv{n})
+		return gorumsSrv
+	})
 
-func (q qspec) q(replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool) {
-	sum := 0
-	for _, reply := range replies {
-		sum += int(reply.GetLevel())
+	ctx := gorums.TestContext(t, 100*time.Millisecond)
+	configCtx := config.Context(ctx)
+
+	// Use the type alias for the correctable result
+	corr := CorrectableStream(configCtx, &Request{}).Correctable(n)
+
+	// Watch for each level progressively
+	for level := 1; level <= n; level++ {
+		select {
+		case <-corr.Watch(level):
+			resp, gotLevel, err := corr.Get()
+			if err != nil {
+				t.Errorf("level %d: unexpected error: %v", level, err)
+			}
+			if gotLevel < level {
+				t.Errorf("level %d: expected level >= %d, got %d", level, level, gotLevel)
+			}
+			if resp == nil {
+				t.Errorf("level %d: expected non-nil response", level)
+			}
+		case <-corr.Done():
+			// Done is also acceptable
+		}
 	}
-	level := sum / q.div
-	return CorrectableResponse_builder{Level: int32(level)}.Build(), level, level >= q.doneLevel
-}
 
-// CorrectableStreamQF is the quorum function for the CorrectableStream
-// correctable stream quorum call method. The in parameter is the request object
-// supplied to the CorrectableStream method at call time, and may or may not
-// be used by the quorum function. If the in parameter is not needed
-// you should implement your quorum function with '_ *CorrectableRequest'.
-func (q qspec) CorrectableStreamQF(_ *CorrectableRequest, replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool) {
-	return q.q(replies)
-}
-
-// CorrectableQF is the quorum function for the Correctable
-// correctable quorum call method. The in parameter is the request object
-// supplied to the Correctable method at call time, and may or may not
-// be used by the quorum function. If the in parameter is not needed
-// you should implement your quorum function with '_ *CorrectableRequest'.
-func (q qspec) CorrectableQF(_ *CorrectableRequest, replies map[uint32]*CorrectableResponse) (*CorrectableResponse, int, bool) {
-	return q.q(replies)
+	<-corr.Done()
+	resp, finalLevel, err := corr.Get()
+	if err != nil {
+		t.Errorf("final: unexpected error: %v", err)
+	}
+	if finalLevel != n {
+		t.Errorf("final: expected level %d, got %d", n, finalLevel)
+	}
+	if resp == nil {
+		t.Error("final: expected non-nil response")
+	}
 }
 
 type testSrv struct {
 	n int
 }
 
-func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, request *CorrectableRequest, send func(response *CorrectableResponse) error) error {
+func (testSrv) Correctable(_ gorums.ServerCtx, _ *Request) (*Response, error) {
+	return Response_builder{Level: 1}.Build(), nil
+}
+
+func (srv testSrv) CorrectableStream(_ gorums.ServerCtx, _ *Request, send func(response *Response) error) error {
 	for i := range srv.n {
-		err := send(CorrectableResponse_builder{Level: int32(i + 1)}.Build())
+		err := send(Response_builder{Level: int32(i + 1)}.Build())
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func (srv testSrv) Correctable(_ gorums.ServerCtx, request *CorrectableRequest) (response *CorrectableResponse, err error) {
-	return CorrectableResponse_builder{Level: 1}.Build(), nil
 }

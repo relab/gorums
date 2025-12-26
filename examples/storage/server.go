@@ -67,7 +67,7 @@ type state struct {
 // storageServer is an implementation of pb.Storage
 type storageServer struct {
 	storage map[string]state
-	mut     sync.RWMutex
+	mut     sync.Mutex
 	logger  *log.Logger
 }
 
@@ -107,8 +107,8 @@ func (s *storageServer) WriteMulticast(_ gorums.ServerCtx, req *pb.WriteRequest)
 // Read reads a value from storage
 func (s *storageServer) Read(req *pb.ReadRequest) (*pb.ReadResponse, error) {
 	s.logger.Printf("Read '%s'\n", req.GetKey())
-	s.mut.RLock()
-	defer s.mut.RUnlock()
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	state, ok := s.storage[req.GetKey()]
 	if !ok {
 		return pb.ReadResponse_builder{OK: false}.Build(), nil

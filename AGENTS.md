@@ -1,6 +1,7 @@
 # Agent Instructions for Gorums Project
 
-You are working on the Gorums project - a framework for building fault-tolerant distributed systems using quorum-based abstractions. This document provides critical context and rules for AI coding assistants.
+Gorums is a framework for building fault-tolerant distributed systems using quorum-based abstractions.
+This document provides context and rules for AI coding assistants.
 
 ## Project Overview
 
@@ -34,7 +35,7 @@ gorums/
 └── *.go                       # Core library files
 ```
 
-## Critical Development Rules
+## Development Rules
 
 ### Code Generation Workflow
 
@@ -43,21 +44,16 @@ gorums/
 These files are generated from templates. Instead:
 
 1. **For Template Changes:**
-   - Edit the corresponding template in `cmd/protoc-gen-gorums/gengorums/template_*.go`
-   - Run `make` to regenerate code
-   - The `zorums_*` files will be automatically updated
+   - Edit template in `cmd/protoc-gen-gorums/gengorums/template_*.go`
+   - Run `make dev` to regenerate `zorums_*_gorums.pb.go` files
 
 2. **For Static Code Changes:**
    - Edit files in `cmd/protoc-gen-gorums/dev/` that are NOT prefixed with `zorums_*`
-   - Run `make` to bundle changes into `template_static.go`
-   - Changes propagate to generated code automatically
+   - Run `make dev` to bundle changes into `template_static.go`
 
 3. **After Any Template or Static Code Changes:**
-
-   ```bash
-   make          # Normal rebuild
-   make -B       # Force rebuild (e.g., after protoc update)
-   ```
+   - Run `make dev` to regenerate `zorums_*_gorums.pb.go` files
+   - Or run `make genproto` to regenerate all _gorums.pb.go files
 
 ### Testing Requirements
 
@@ -65,6 +61,9 @@ These files are generated from templates. Instead:
 - Tests verify the correctness and stability of generated code
 - ALL test failures must be addressed before considering work complete
 - Never delete failing tests - fix the underlying issue
+- If suitable, tests should be table-driven
+- If suitable, tests should be organized as subtests
+- Test names should be capitalized, like TestFileNameFeatureName, e.g., TestQuorumCallFeatureName, for some feature in `quorumcall_test.go`
 
 ### Code Style and Conventions
 
@@ -105,6 +104,12 @@ These files are generated from templates. Instead:
 ### Common Commands
 
 ```bash
+# Generate `zorums_*_gorums.pb.go` files in `cmd/protoc-gen-gorums/dev/`
+make dev
+
+# Generate _gorums.pb.go files across the project
+make genproto
+
 # Build everything
 make
 
@@ -113,6 +118,9 @@ make -B
 
 # Run tests
 make test
+
+# Ensure tests are actually run (not skipped by cache)
+go test ./... -count=1
 
 # Install protoc-gen-gorums plugin
 make installgorums
@@ -152,7 +160,7 @@ Gorums provides custom protobuf options defined in `gorums.proto`:
 
 - Method-level options for quorum call types
 - Configuration options for RPC behavior
-- See `doc/method-options.md` for details
+- See `doc/user-guide.md` for details
 
 ## Documentation
 
@@ -161,8 +169,9 @@ Before making significant changes, consult:
 - `doc/user-guide.md` - Understanding the API and usage patterns
 - `doc/dev-guide.md` - Development workflow and architecture
 - `doc/design-doc-layering.md` - System architecture and layering
-- `doc/method-options.md` - Protocol buffer options reference
+
 - `README.md` - Project overview and getting started
+- When editing markdown files, use one sentences per line, so that diffs are easier to read.
 
 ## Common Pitfalls to Avoid
 

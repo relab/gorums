@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -10,28 +11,24 @@ import (
 	"google.golang.org/grpc/backoff"
 )
 
-// RawManager maintains a connection pool of nodes on
+// Manager maintains a connection pool of nodes on
 // which quorum calls can be performed.
-//
-// This struct is intended to be used by generated code.
-// You should use the generated `Manager` struct instead.
-type RawManager struct {
+type Manager struct {
 	mu        sync.Mutex
-	nodes     []*RawNode
-	lookup    map[uint32]*RawNode
+	nodes     []*Node
+	lookup    map[uint32]*Node
 	closeOnce sync.Once
 	logger    *log.Logger
 	opts      managerOptions
 	nextMsgID uint64
 }
 
-// NewRawManager returns a new RawManager for managing connection to nodes added
+// NewManager returns a new Manager for managing connection to nodes added
 // to the manager. This function accepts manager options used to configure
-// various aspects of the manager. This function is meant for internal use.
-// You should use the `NewManager` function in the generated code instead.
-func NewRawManager(opts ...ManagerOption) *RawManager {
-	m := &RawManager{
-		lookup: make(map[uint32]*RawNode),
+// various aspects of the manager.
+func NewManager(opts ...ManagerOption) *Manager {
+	m := &Manager{
+		lookup: make(map[uint32]*Node),
 		opts:   newManagerOptions(),
 	}
 	for _, opt := range opts {
@@ -54,28 +51,20 @@ func NewRawManager(opts ...ManagerOption) *RawManager {
 	return m
 }
 
-func (m *RawManager) closeNodeConns() {
-	for _, node := range m.nodes {
-		err := node.close()
-		if err != nil && m.logger != nil {
-			m.logger.Printf("error closing: %v", err)
-		}
-	}
-}
-
 // Close closes all node connections and any client streams.
-func (m *RawManager) Close() {
+func (m *Manager) Close() error {
+	var err error
 	m.closeOnce.Do(func() {
-		if m.logger != nil {
-			m.logger.Printf("closing")
+		for _, node := range m.nodes {
+			err = errors.Join(err, node.close())
 		}
-		m.closeNodeConns()
 	})
+	return err
 }
 
 // NodeIDs returns the identifier of each available node. IDs are returned in
 // the same order as they were provided in the creation of the Manager.
-func (m *RawManager) NodeIDs() []uint32 {
+func (m *Manager) NodeIDs() []uint32 {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	ids := make([]uint32, 0, len(m.nodes))
@@ -86,7 +75,7 @@ func (m *RawManager) NodeIDs() []uint32 {
 }
 
 // Node returns the node with the given identifier if present.
-func (m *RawManager) Node(id uint32) (node *RawNode, found bool) {
+func (m *Manager) Node(id uint32) (node *Node, found bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	node, found = m.lookup[id]
@@ -95,43 +84,48 @@ func (m *RawManager) Node(id uint32) (node *RawNode, found bool) {
 
 // Nodes returns a slice of each available node. IDs are returned in the same
 // order as they were provided in the creation of the Manager.
-func (m *RawManager) Nodes() []*RawNode {
+func (m *Manager) Nodes() []*Node {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.nodes
 }
 
 // Size returns the number of nodes in the Manager.
-func (m *RawManager) Size() (nodes int) {
+func (m *Manager) Size() (nodes int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.nodes)
 }
 
-// AddNode adds the node to the manager's node pool
-// and establishes a connection to the node.
-func (m *RawManager) AddNode(node *RawNode) error {
-	if _, found := m.Node(node.ID()); found {
-		// Node IDs must be unique
-		return fmt.Errorf("config: node %d (%s) already exists", node.ID(), node.Address())
-	}
-	if m.logger != nil {
-		m.logger.Printf("Connecting to %s with id %d\n", node, node.id)
-	}
-	if err := node.connect(m); err != nil {
-		if m.logger != nil {
-			m.logger.Printf("Failed to connect to %s: %v (retrying)", node, err)
-		}
-	}
-
+func (m *Manager) addNode(node *Node) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lookup[node.id] = node
 	m.nodes = append(m.nodes, node)
-	return nil
 }
 
-// getMsgID returns a unique message ID.
-func (m *RawManager) getMsgID() uint64 {
+func (m *Manager) newNode(addr string, id uint32) (*Node, error) {
+	if _, found := m.Node(id); found {
+		return nil, fmt.Errorf("node %d already exists", id)
+	}
+	opts := nodeOptions{
+		ID:             id,
+		SendBufferSize: m.opts.sendBuffer,
+		MsgIDGen:       m.getMsgID,
+		Metadata:       m.opts.metadata,
+		PerNodeMD:      m.opts.perNodeMD,
+		DialOpts:       m.opts.grpcDialOpts,
+		Manager:        m,
+	}
+	n, err := newNode(addr, opts)
+	if err != nil {
+		return nil, err
+	}
+	m.addNode(n)
+	return n, nil
+}
+
+// getMsgID returns a unique message ID for a new RPC from this client's manager.
+func (m *Manager) getMsgID() uint64 {
 	return atomic.AddUint64(&m.nextMsgID, 1)
 }

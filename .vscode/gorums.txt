@@ -1,5 +1,7 @@
 Ansible
 benchgraph
+benchtest
+benchtime
 bootstrapgorums
 calltype
 calltypes
@@ -19,6 +21,7 @@ errgroup
 extendee
 Frausing's
 fset
+GCFLAGS
 gengorums
 genproto
 GOBIN
@@ -51,11 +54,14 @@ memprofile
 mktemp
 multicast
 naddr
+netrwhist
 obj's
+objc
 oneway
 Paxos
 Pedersen
 pkgs
+pluginpb
 proto
 protobuf
 protoc
@@ -78,10 +84,13 @@ RPC's
 RPCs
 semver
 shlex
+skipcq
 srvs
 stressdev
 stressgen
+stresstest
 struct
+subtests
 syncrq
 testprotos
 testrace

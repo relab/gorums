@@ -1,44 +1,33 @@
 package gengorums
 
-var multicastRefImports = `
-{{if contains $out "."}}
-// Reference imports to suppress errors if they are not otherwise used.
-var _ {{$out}}
-{{end}}
-`
-
 var mcVar = `
-{{$callData := use "gorums.QuorumCallData" .GenFile}}
 {{$genFile := .GenFile}}
-{{$unexportMethod := unexport .Method.GoName}}
-{{$context := use "context.Context" .GenFile}}
+{{$configContext := use "gorums.ConfigContext" .GenFile}}
+{{$multicast := use "gorums.Multicast" .GenFile}}
 {{$callOpt := use "gorums.CallOption" .GenFile}}
 `
 
-var multicastSignature = `func (c *Configuration) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}},` +
-	`opts ...{{$callOpt}}) {
+var multicastComment = `
+{{$comments := .Method.Comments.Leading}}
+{{if ne $comments ""}}
+{{$comments -}}
+{{else}}
+// {{$method}} is a multicast call invoked on all nodes in the configuration in ctx.
+// Use gorums.MapRequest to send different messages to each node. No replies are collected.
+{{end -}}
 `
 
-var multicastBody = `	cd := {{$callData}}{
-		Message: in,
-		Method:  "{{$fullName}}",
-	}
-{{- if hasPerNodeArg .Method}}
-{{$protoMessage := use "proto.Message" .GenFile}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
-		return f(req.(*{{$in}}), nid)
-	}
-{{- end}}
+var multicastSignature = `func {{$method}}(` +
+	`ctx *{{$configContext}}, in *{{$in}}, ` +
+	`opts ...{{$callOpt}}) error {
+`
 
-	c.RawConfiguration.Multicast(ctx, cd, opts...)
+var multicastBody = `	return {{$multicast}}(ctx, in, "{{$fullName}}", opts...)
 }
 `
 
 var multicastCall = commonVariables +
 	mcVar +
-	multicastRefImports +
-	quorumCallComment +
+	multicastComment +
 	multicastSignature +
 	multicastBody

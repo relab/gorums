@@ -21,7 +21,7 @@ const (
 	genGoDocURL              = "https://developers.google.com/protocol-buffers/docs/reference/go-generated"
 	supportedFeatures        = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL) | uint64(pluginpb.CodeGeneratorResponse_FEATURE_SUPPORTS_EDITIONS)
 	supportedEditionsMinimum = descriptorpb.Edition_EDITION_PROTO2
-	supportedEditionsMaximum = descriptorpb.Edition_EDITION_2023
+	supportedEditionsMaximum = descriptorpb.Edition_EDITION_2024
 )
 
 func main() {

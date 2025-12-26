@@ -1,66 +1,61 @@
 package gorums
 
-import (
-	"context"
-
-	"github.com/relab/gorums/ordering"
-	"google.golang.org/protobuf/proto"
-)
-
-// QuorumCallData holds the message, destination nodes, method identifier,
-// and other information necessary to perform the various quorum call types
-// supported by Gorums.
+// QuorumCall performs a quorum call and returns a Responses object
+// that provides access to node responses via terminal methods and fluent iteration.
 //
-// This struct should be used by generated code only.
-type QuorumCallData struct {
-	Message        proto.Message
-	Method         string
-	PerNodeArgFn   func(proto.Message, uint32) proto.Message
-	QuorumFunction func(proto.Message, map[uint32]proto.Message) (proto.Message, bool)
+// Type parameters:
+//   - Req: The request message type
+//   - Resp: The response message type from individual nodes
+//
+// The opts parameter accepts CallOption values such as Interceptors.
+// Interceptors are applied in the order they are provided via Interceptors,
+// modifying the clientCtx before the user calls a terminal method.
+//
+// Note: Messages are not sent to nodes until a terminal method (like Majority, First)
+// or iterator method (like Seq) is called, applying any registered request transformations.
+// This lazy sending is necessary to allow interceptors to register transformations prior to dispatch.
+//
+// This function should be used by generated code only.
+func QuorumCall[Req, Resp msg](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	opts ...CallOption,
+) *Responses[Resp] {
+	return invokeQuorumCall[Req, Resp](ctx, req, method, false, opts...)
 }
 
-// QuorumCall performs a quorum call on the configuration.
+// QuorumCallStream performs a streaming quorum call and returns a Responses object.
+// This is used for correctable stream methods where the server sends multiple responses.
 //
-// This method should be used by generated code only.
-func (c RawConfiguration) QuorumCall(ctx context.Context, d QuorumCallData) (resp proto.Message, err error) {
-	expectedReplies := len(c)
-	md := ordering.NewGorumsMetadata(ctx, c.getMsgID(), d.Method)
+// In streaming mode, the response iterator continues indefinitely until the context
+// is canceled, allowing the server to send multiple responses over time.
+//
+// This function should be used by generated code only.
+func QuorumCallStream[Req, Resp msg](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	opts ...CallOption,
+) *Responses[Resp] {
+	return invokeQuorumCall[Req, Resp](ctx, req, method, true, opts...)
+}
 
-	replyChan := make(chan response, expectedReplies)
-	for _, n := range c {
-		msg := d.Message
-		if d.PerNodeArgFn != nil {
-			msg = d.PerNodeArgFn(d.Message, n.id)
-			if !msg.ProtoReflect().IsValid() {
-				expectedReplies--
-				continue // don't send if no msg
-			}
-		}
-		n.channel.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg)}, replyChan)
+// invokeQuorumCall is the internal implementation shared by QuorumCall and QuorumCallStream.
+func invokeQuorumCall[Req, Resp msg](
+	ctx *ConfigContext,
+	req Req,
+	method string,
+	streaming bool,
+	opts ...CallOption,
+) *Responses[Resp] {
+	callOpts := getCallOptions(E_Quorumcall, opts...)
+	builder := newClientCtxBuilder[Req, Resp](ctx, req, method)
+	if streaming {
+		builder = builder.WithStreaming()
 	}
+	clientCtx := builder.Build()
+	clientCtx.applyInterceptors(callOpts.interceptors)
 
-	var (
-		errs    []nodeError
-		quorum  bool
-		replies = make(map[uint32]proto.Message)
-	)
-
-	for {
-		select {
-		case r := <-replyChan:
-			if r.err != nil {
-				errs = append(errs, nodeError{nodeID: r.nid, cause: r.err})
-				break
-			}
-			replies[r.nid] = r.msg
-			if resp, quorum = d.QuorumFunction(d.Message, replies); quorum {
-				return resp, nil
-			}
-		case <-ctx.Done():
-			return resp, QuorumCallError{cause: ctx.Err(), errors: errs, replies: len(replies)}
-		}
-		if len(errs)+len(replies) == expectedReplies {
-			return resp, QuorumCallError{cause: Incomplete, errors: errs, replies: len(replies)}
-		}
-	}
+	return NewResponses(clientCtx)
 }

@@ -1,38 +1,35 @@
 package gengorums
 
-var rpcSignature = `func (n *Node) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}}) (resp *{{$customOut}}, err error) {
+var rpcComment = `
+{{$comments := .Method.Comments.Leading}}
+{{if ne $comments ""}}
+{{$comments -}}
+{{else}}
+// {{$method}} is an RPC call invoked on the node in ctx.
+{{end -}}
+`
+
+var rpcSignature = `func {{$method}}(` +
+	`ctx *{{$nodeContext}}, in *{{$in}}) (resp *{{$out}}, err error) {
 `
 
 var rpcVar = `
-{{$callData := use "gorums.CallData" .GenFile}}
 {{$genFile := .GenFile}}
-{{$unexportMethod := unexport .Method.GoName}}
-{{$context := use "context.Context" .GenFile}}
+{{$nodeContext := use "gorums.NodeContext" .GenFile}}
+{{$rpcCall := use "gorums.RPCCall" .GenFile}}
+{{$_ := use "gorums.EnforceVersion" .GenFile}}
 `
 
-var rpcBody = `	cd := {{$callData}}{
-		Message:  in,
-		Method: "{{$fullName}}",
-	}
-{{- if hasPerNodeArg .Method}}
-	{{$protoMessage := use "proto.Message" $genFile}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
-		return f(req.(*{{$in}}), nid)
-	}
-{{- end}}
-
-	res, err := n.RawNode.RPCCall(ctx, cd)
+var rpcBody = `	res, err := {{$rpcCall}}(ctx, in, "{{$fullName}}")
 	if err != nil {
 		return nil, err
 	}
-	return res.(*{{$customOut}}), err
+	return res.(*{{$out}}), err
 }
 `
 
 var rpcCall = commonVariables +
 	rpcVar +
-	quorumCallComment +
+	rpcComment +
 	rpcSignature +
 	rpcBody

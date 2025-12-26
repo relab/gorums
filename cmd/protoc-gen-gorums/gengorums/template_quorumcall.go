@@ -6,9 +6,6 @@ var commonVariables = `
 {{$method := .Method.GoName}}
 {{$in := in .GenFile .Method}}
 {{$out := out .GenFile .Method}}
-{{$intOut := internalOut $out}}
-{{$customOut := customOut .GenFile .Method}}
-{{$customOutField := field $customOut}}
 {{$unexportOutput := unexport .Method.Output.GoIdent.GoName}}
 `
 
@@ -17,60 +14,68 @@ var quorumCallComment = `
 {{if ne $comments ""}}
 {{$comments -}}
 {{else}}
-{{if hasPerNodeArg .Method}}
-// {{$method}} is a quorum call invoked on each node in configuration c,
-// with the argument returned by the provided function f, and returns the combined result.
-// The per node function f receives a copy of the {{$in}} request argument and
-// returns a {{$in}} manipulated to be passed to the given nodeID.
-// The function f must be thread-safe.
-{{else}}
-// {{$method}} is a quorum call invoked on all nodes in configuration c,
-// with the same argument in, and returns a combined result.
-{{end -}}
+// {{$method}} is a quorum call invoked on all nodes in the configuration,
+// with the same argument in. Use terminal methods like Majority(), First(),
+// or Threshold(n) to retrieve the aggregated result.
+//
+// Example:
+//   resp, err := {{$method}}(ctx, in).Majority()
 {{end -}}
 `
 
-var quorumCallSignature = `func (c *Configuration) {{$method}}(` +
-	`ctx {{$context}}, in *{{$in}}` +
-	`{{perNodeFnType .GenFile .Method ", f"}})` +
-	`(resp *{{$customOut}}, err error) {
-`
-
-var qcVar = `
-{{$protoMessage := use "proto.Message" .GenFile}}
-{{$callData := use "gorums.QuorumCallData" .GenFile}}
+var quorumCallVariables = `
 {{$genFile := .GenFile}}
-{{$unexportMethod := unexport .Method.GoName}}
-{{$context := use "context.Context" .GenFile}}
+{{$configContext := use "gorums.ConfigContext" .GenFile}}
+{{$quorumCall := use "gorums.QuorumCall" .GenFile}}
+{{$quorumCallStream := use "gorums.QuorumCallStream" .GenFile}}
+{{$responses := use "gorums.Responses" .GenFile}}
+{{$callOption := use "gorums.CallOption" .GenFile}}
 `
 
-var quorumCallBody = `	cd := {{$callData}}{
-		Message: in,
-		Method:  "{{$fullName}}",
-	}
-	cd.QuorumFunction = func(req {{$protoMessage}}, replies map[uint32]{{$protoMessage}}) ({{$protoMessage}}, bool) {
-		r := make(map[uint32]*{{$out}}, len(replies))
-		for k, v := range replies {
-			r[k] = v.(*{{$out}})
-		}
-		return c.qspec.{{$method}}QF(req.(*{{$in}}), r)
-	}
-{{- if hasPerNodeArg .Method}}
-	cd.PerNodeArgFn = func(req {{$protoMessage}}, nid uint32) {{$protoMessage}} {
-		return f(req.(*{{$in}}), nid)
-	}
-{{- end}}
+var quorumCallSignature = `func {{$method}}(` +
+	`ctx *{{$configContext}}, in *{{$in}}, ` +
+	`opts ...{{$callOption}})` +
+	` *{{$responses}}[*{{$out}}] {
+`
 
-	res, err := c.RawConfiguration.QuorumCall(ctx, cd)
-	if err != nil {
-		return nil, err
-	}
-	return res.(*{{$customOut}}), err
+var quorumCallBody = `	return {{$quorumCall}}[*{{$in}}, *{{$out}}](
+		ctx, in, "{{$fullName}}",
+		opts...,
+	)
 }
 `
 
 var quorumCall = commonVariables +
-	qcVar +
+	quorumCallVariables +
 	quorumCallComment +
 	quorumCallSignature +
 	quorumCallBody
+
+// Streaming quorum call template
+var quorumCallStreamComment = `
+{{$comments := .Method.Comments.Leading}}
+{{if ne $comments ""}}
+{{$comments -}}
+{{else}}
+// {{$method}} is a streaming quorum call where the server can send multiple responses.
+// The response iterator continues until the context is canceled.
+//
+// Example:
+//   corr := {{$method}}(ctx, in).Correctable(2)
+//   <-corr.Watch(2)
+//   resp, level, err := corr.Get()
+{{end -}}
+`
+
+var quorumCallStreamBody = `	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}](
+		ctx, in, "{{$fullName}}",
+		opts...,
+	)
+}
+`
+
+var quorumCallStream = commonVariables +
+	quorumCallVariables +
+	quorumCallStreamComment +
+	quorumCallSignature +
+	quorumCallStreamBody

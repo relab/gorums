@@ -2,12 +2,15 @@ package benchmark
 
 import (
 	context "context"
+	"maps"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"sync/atomic"
 	"time"
 
+	"github.com/relab/gorums"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -32,14 +35,15 @@ type Bench struct {
 
 type (
 	benchFunc   func(Options) (*Result, error)
-	qcFunc      func(context.Context, *Echo) (*Echo, error)
-	asyncQCFunc func(context.Context, *Echo) *AsyncEcho
+	qcFunc      func(*gorums.ConfigContext, *Echo, int, ...gorums.CallOption) (*Echo, error)
+	asyncQCFunc func(*gorums.ConfigContext, *Echo, int, ...gorums.CallOption) AsyncEcho
 	serverFunc  func(context.Context, *TimedMsg)
 )
 
-func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error) {
+func runQCBenchmark(opts Options, config Configuration, f qcFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cfgCtx := config.Context(ctx)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
@@ -48,7 +52,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 		g.Go(func() error {
 			warmupEnd := time.Now().Add(opts.Warmup)
 			for !time.Now().After(warmupEnd) {
-				_, err := f(ctx, msg)
+				_, err := f(cfgCtx, msg, opts.QuorumSize)
 				if err != nil {
 					return err
 				}
@@ -56,14 +60,12 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 			return nil
 		})
 	}
-
-	err := g.Wait()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
 	if opts.Remote {
-		_, err := cfg.StartBenchmark(ctx, &StartRequest{})
+		_, err := StartBenchmark(cfgCtx, &StartRequest{}).All()
 		if err != nil {
 			return nil, err
 		}
@@ -75,7 +77,7 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 			endTime := time.Now().Add(opts.Duration)
 			for !time.Now().After(endTime) {
 				start := time.Now()
-				_, err := f(ctx, msg)
+				_, err := f(cfgCtx, msg, opts.QuorumSize)
 				if err != nil {
 					return err
 				}
@@ -84,28 +86,24 @@ func runQCBenchmark(opts Options, cfg *Configuration, f qcFunc) (*Result, error)
 			return nil
 		})
 	}
-
-	err = g.Wait()
-	s.End()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	s.End()
 
 	result := s.GetResult()
 	if opts.Remote {
-		memStats, err := cfg.StopBenchmark(ctx, &StopRequest{})
-		if err != nil {
-			return nil, err
-		}
-		result.SetServerStats(memStats.GetMemoryStats())
+		replies := StopBenchmark(cfgCtx, &StopRequest{}).CollectAll()
+		result.SetServerStats(slices.Collect(maps.Values(replies)))
 	}
 
 	return result, nil
 }
 
-func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Result, error) {
+func runAsyncQCBenchmark(opts Options, config Configuration, f asyncQCFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cfgCtx := config.Context(ctx)
 	msg := Echo_builder{Payload: make([]byte, opts.Payload)}.Build()
 	s := &Stats{}
 	var g errgroup.Group
@@ -116,7 +114,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	var warmupFunc func() error
 	warmupFunc = func() error {
 		for ; !time.Now().After(warmupEnd) && atomic.LoadUint64(&async) < uint64(opts.MaxAsync); atomic.AddUint64(&async, 1) {
-			fut := f(ctx, msg)
+			fut := f(cfgCtx, msg, opts.QuorumSize)
 			g.Go(func() error {
 				_, err := fut.Get()
 				if err != nil {
@@ -133,13 +131,12 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	for range opts.Concurrent {
 		g.Go(warmupFunc)
 	}
-	err := g.Wait()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
 	if opts.Remote {
-		_, err := cfg.StartBenchmark(ctx, &StartRequest{})
+		_, err := StartBenchmark(cfgCtx, &StartRequest{}).All()
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +147,7 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	benchmarkFunc = func() error {
 		for ; !time.Now().After(endTime) && atomic.LoadUint64(&async) < uint64(opts.MaxAsync); atomic.AddUint64(&async, 1) {
 			start := time.Now()
-			fut := f(ctx, msg)
+			fut := f(cfgCtx, msg, opts.QuorumSize)
 			g.Go(func() error {
 				_, err := fut.Get()
 				if err != nil {
@@ -169,29 +166,25 @@ func runAsyncQCBenchmark(opts Options, cfg *Configuration, f asyncQCFunc) (*Resu
 	for range opts.Concurrent {
 		g.Go(benchmarkFunc)
 	}
-	err = g.Wait()
-	s.End()
-	if err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	s.End()
 
 	result := s.GetResult()
 	if opts.Remote {
-		memStats, err := cfg.StopBenchmark(ctx, &StopRequest{})
-		if err != nil {
-			return nil, err
-		}
-		result.SetServerStats(memStats.GetMemoryStats())
+		replies := StopBenchmark(cfgCtx, &StopRequest{}).CollectAll()
+		result.SetServerStats(slices.Collect(maps.Values(replies)))
 	}
 
 	return result, nil
 }
 
-func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result, error) {
+func runServerBenchmark(opts Options, config Configuration, f serverFunc) (*Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	cfgCtx := config.Context(ctx)
 	payload := make([]byte, opts.Payload)
-	var g errgroup.Group
 	var start runtime.MemStats
 	var end runtime.MemStats
 
@@ -204,30 +197,23 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 
 	warmupEnd := time.Now().Add(opts.Warmup)
 	for range opts.Concurrent {
-		go benchmarkFunc(warmupEnd)
+		benchmarkFunc(warmupEnd)
 	}
-	err := g.Wait()
+
+	_, err := StartServerBenchmark(cfgCtx, &StartRequest{}).All()
 	if err != nil {
 		return nil, err
 	}
-
-	_, err = cfg.StartServerBenchmark(ctx, &StartRequest{})
-	if err != nil {
-		return nil, err
-	}
-
 	runtime.ReadMemStats(&start)
+
 	endTime := time.Now().Add(opts.Duration)
 	for range opts.Concurrent {
 		benchmarkFunc(endTime)
 	}
-	err = g.Wait()
-	if err != nil {
-		return nil, err
-	}
 	runtime.ReadMemStats(&end)
 
-	resp, err := cfg.StopServerBenchmark(ctx, &StopRequest{})
+	replies := StopServerBenchmark(cfgCtx, &StopRequest{}).CollectAll()
+	resp, err := StopServerBenchmarkQF(replies)
 	if err != nil {
 		return nil, err
 	}
@@ -241,28 +227,43 @@ func runServerBenchmark(opts Options, cfg *Configuration, f serverFunc) (*Result
 }
 
 // GetBenchmarks returns a list of Benchmarks that can be performed on the configuration
-func GetBenchmarks(cfg *Configuration) []Bench {
+func GetBenchmarks(config Configuration) []Bench {
 	m := []Bench{
 		{
 			Name:        "QuorumCall",
 			Description: "NodeStream based quorum call implementation with FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.QuorumCall) },
+			runBench: func(opts Options) (*Result, error) {
+				return runQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
+					return QuorumCall(ctx, in, callOpts...).Threshold(quorumSize)
+				})
+			},
 		},
 		{
 			Name:        "AsyncQuorumCall",
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
-			runBench:    func(opts Options) (*Result, error) { return runAsyncQCBenchmark(opts, cfg, cfg.AsyncQuorumCall) },
+			runBench: func(opts Options) (*Result, error) {
+				return runAsyncQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) AsyncEcho {
+					return QuorumCall(ctx, in, callOpts...).AsyncThreshold(quorumSize)
+				})
+			},
 		},
 		{
 			Name:        "SlowServer",
 			Description: "Quorum Call with a 10s processing time on the server",
-			runBench:    func(opts Options) (*Result, error) { return runQCBenchmark(opts, cfg, cfg.SlowServer) },
+			runBench: func(opts Options) (*Result, error) {
+				return runQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
+					return SlowServer(ctx, in, callOpts...).Threshold(quorumSize)
+				})
+			},
 		},
 		{
 			Name:        "Multicast",
 			Description: "NodeStream based multicast implementation (servers measure latency and throughput)",
 			runBench: func(opts Options) (*Result, error) {
-				return runServerBenchmark(opts, cfg, func(ctx context.Context, msg *TimedMsg) { cfg.Multicast(ctx, msg) })
+				return runServerBenchmark(opts, config, func(ctx context.Context, msg *TimedMsg) {
+					cfgCtx := config.Context(ctx)
+					Multicast(cfgCtx, msg, gorums.IgnoreErrors())
+				})
 			},
 		},
 	}
@@ -270,8 +271,8 @@ func GetBenchmarks(cfg *Configuration) []Bench {
 }
 
 // RunBenchmarks runs all the benchmarks that match the given regex with the given options
-func RunBenchmarks(benchRegex *regexp.Regexp, options Options, cfg *Configuration) ([]*Result, error) {
-	benchmarks := GetBenchmarks(cfg)
+func RunBenchmarks(benchRegex *regexp.Regexp, options Options, config Configuration) ([]*Result, error) {
+	benchmarks := GetBenchmarks(config)
 	var results []*Result
 	for _, b := range benchmarks {
 		if benchRegex.MatchString(b.Name) {

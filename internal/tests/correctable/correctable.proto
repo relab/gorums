@@ -1,24 +1,22 @@
 edition = "2023";
 
 package correctable;
-
-option go_package = "github.com/relab/gorums/tests/correctable";
-
+option go_package              = "github.com/relab/gorums/tests/correctable";
 option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
 
 service CorrectableTest {
-    rpc Correctable(CorrectableRequest) returns (CorrectableResponse) {
-        option (gorums.correctable) = true;
+    rpc Correctable(Request) returns (Response) {
+        option (gorums.quorumcall) = true;
     }
-    rpc CorrectableStream(CorrectableRequest) returns (stream CorrectableResponse) {
-        option (gorums.correctable) = true;
+    rpc CorrectableStream(Request) returns (stream Response) {
+        option (gorums.quorumcall) = true;
     }
 }
 
-message CorrectableRequest {}
+message Request {}
 
-message CorrectableResponse {
+message Response {
     int32 Level = 1;
 }

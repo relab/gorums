@@ -13,7 +13,7 @@ import (
 // This is used to pass client-specific metadata to the server via Gorums.
 // This method should be used by generated code only.
 func NewGorumsMetadata(ctx context.Context, msgID uint64, method string) *Metadata {
-	gorumsMetadata := Metadata_builder{MessageID: msgID, Method: method}
+	gorumsMetadata := Metadata_builder{MessageSeqNo: msgID, Method: method}
 	md, _ := metadata.FromOutgoingContext(ctx)
 	for k, vv := range md {
 		for _, v := range vv {

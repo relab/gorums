@@ -15,102 +15,122 @@ import (
 
 const nilAngleString = "<nil>"
 
-// RawNode encapsulates the state of a node on which a remote procedure call
-// can be performed.
+// NodeContext is a context that carries a node for unicast and RPC calls.
+// It embeds context.Context and provides access to the Node.
 //
-// This struct is intended to be used by generated code.
-// You should use the generated `Node` struct instead.
-type RawNode struct {
-	// Only assigned at creation.
-	id     uint32
-	addr   string
-	conn   *grpc.ClientConn
-	cancel func()
-	mgr    *RawManager
-
-	// the default channel
-	channel *channel
+// Use [Node.Context] to create a NodeContext from an existing context.
+type NodeContext struct {
+	context.Context
+	node *Node
 }
 
-// NewRawNode returns a new node for the provided address.
-func NewRawNode(addr string) (*RawNode, error) {
+// Node returns the Node associated with this context.
+func (c NodeContext) Node() *Node {
+	return c.node
+}
+
+// enqueue enqueues a request to this node's channel.
+func (c NodeContext) enqueue(req request) {
+	c.node.channel.enqueue(req)
+}
+
+// nextMsgID returns the next message ID from this client's manager.
+func (c NodeContext) nextMsgID() uint64 {
+	return c.node.msgIDGen()
+}
+
+// Node encapsulates the state of a node on which a remote procedure call
+// can be performed.
+type Node struct {
+	// Only assigned at creation.
+	id   uint32
+	addr string
+	mgr  *Manager // only used for backward compatibility to allow Configuration.Manager()
+
+	msgIDGen func() uint64
+	channel  *channel
+}
+
+// Context creates a new NodeContext from the given parent context
+// and this node.
+//
+// Example:
+//
+//	nodeCtx := node.Context(context.Background())
+//	resp, err := service.GRPCCall(nodeCtx, req)
+func (n *Node) Context(parent context.Context) *NodeContext {
+	if n == nil {
+		panic("gorums: Context called with nil node")
+	}
+	return &NodeContext{Context: parent, node: n}
+}
+
+// nodeOptions contains configuration options for creating a new Node.
+type nodeOptions struct {
+	ID             uint32
+	SendBufferSize uint
+	MsgIDGen       func() uint64
+	Metadata       metadata.MD
+	PerNodeMD      func(uint32) metadata.MD
+	DialOpts       []grpc.DialOption
+	Manager        *Manager // only used for backward compatibility to allow Configuration.Manager()
+}
+
+// newNode creates a new node using the provided options.
+// It establishes the connection (lazy dial) and initializes the channel.
+func newNode(addr string, opts nodeOptions) (*Node, error) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
 		return nil, err
+	}
+
+	n := &Node{
+		id:       opts.ID,
+		addr:     tcpAddr.String(),
+		mgr:      opts.Manager,
+		msgIDGen: opts.MsgIDGen,
+	}
+
+	// Create gRPC connection to the node without connecting (lazy dial).
+	conn, err := grpc.NewClient(n.addr, opts.DialOpts...)
+	if err != nil {
+		return nil, nodeError{nodeID: n.id, cause: err}
+	}
+
+	// Create outgoing context with metadata for this node's stream.
+	md := opts.Metadata.Copy()
+	if opts.PerNodeMD != nil {
+		md = metadata.Join(md, opts.PerNodeMD(n.id))
+	}
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	// Create channel and establish gRPC node stream
+	n.channel = newChannel(ctx, conn, n.id, opts.SendBufferSize)
+	return n, nil
+}
+
+// nodeID returns the ID for the provided address.
+// It resolves the address to ensure the ID is consistent.
+func nodeID(addr string) (uint32, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return 0, err
 	}
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(tcpAddr.String()))
-	return &RawNode{
-		id:   h.Sum32(),
-		addr: tcpAddr.String(),
-	}, nil
-}
-
-// NewRawNodeWithID returns a new node for the provided address and id.
-func NewRawNodeWithID(addr string, id uint32) (*RawNode, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	return &RawNode{
-		id:   id,
-		addr: tcpAddr.String(),
-	}, nil
-}
-
-// connect to this node and associate it with the manager.
-func (n *RawNode) connect(mgr *RawManager) (err error) {
-	n.mgr = mgr
-	if n.mgr.opts.noConnect {
-		return nil
-	}
-
-	// Create gRPC connection
-	n.conn, err = grpc.NewClient(n.addr, n.mgr.opts.grpcDialOpts...)
-	if err != nil {
-		return nodeError{nodeID: n.id, cause: err}
-	}
-
-	// Create channel and establish gRPC node stream
-	n.channel = newChannel(n)
-	if err := n.channel.ensureStream(); err != nil {
-		return nodeError{nodeID: n.id, cause: err}
-	}
-	return nil
-}
-
-// newContext returns a new context for this node's channel.
-// This context is used by the channel implementation to stop
-// all goroutines and the NodeStream, when the context is canceled.
-//
-// This method must be called for each connection to ensure
-// fresh contexts. Reusing contexts could result in reusing
-// a cancelled context.
-func (n *RawNode) newContext() context.Context {
-	md := n.mgr.opts.metadata.Copy()
-	if n.mgr.opts.perNodeMD != nil {
-		md = metadata.Join(md, n.mgr.opts.perNodeMD(n.id))
-	}
-	var ctx context.Context
-	ctx, n.cancel = context.WithCancel(context.Background())
-	return metadata.NewOutgoingContext(ctx, md)
+	return h.Sum32(), nil
 }
 
 // close this node.
-func (n *RawNode) close() error {
-	// important to cancel first to stop goroutines
-	n.cancel()
-	if n.conn == nil {
-		return nil
-	}
-	if err := n.conn.Close(); err != nil {
-		return nodeError{nodeID: n.id, cause: err}
+func (n *Node) close() error {
+	if n.channel != nil {
+		return n.channel.close()
 	}
 	return nil
 }
 
 // ID returns the ID of n.
-func (n *RawNode) ID() uint32 {
+func (n *Node) ID() uint32 {
 	if n != nil {
 		return n.id
 	}
@@ -118,7 +138,7 @@ func (n *RawNode) ID() uint32 {
 }
 
 // Address returns network address of n.
-func (n *RawNode) Address() string {
+func (n *Node) Address() string {
 	if n != nil {
 		return n.addr
 	}
@@ -126,7 +146,7 @@ func (n *RawNode) Address() string {
 }
 
 // Host returns the network host of n.
-func (n *RawNode) Host() string {
+func (n *Node) Host() string {
 	if n == nil {
 		return nilAngleString
 	}
@@ -135,7 +155,7 @@ func (n *RawNode) Host() string {
 }
 
 // Port returns network port of n.
-func (n *RawNode) Port() string {
+func (n *Node) Port() string {
 	if n != nil {
 		_, port, _ := net.SplitHostPort(n.addr)
 		return port
@@ -143,7 +163,7 @@ func (n *RawNode) Port() string {
 	return nilAngleString
 }
 
-func (n *RawNode) String() string {
+func (n *Node) String() string {
 	if n != nil {
 		return fmt.Sprintf("addr: %s", n.addr)
 	}
@@ -152,7 +172,7 @@ func (n *RawNode) String() string {
 
 // FullString returns a more descriptive string representation of n that
 // includes id, network address and latency information.
-func (n *RawNode) FullString() string {
+func (n *Node) FullString() string {
 	if n != nil {
 		return fmt.Sprintf("node %d | addr: %s", n.id, n.addr)
 	}
@@ -160,26 +180,26 @@ func (n *RawNode) FullString() string {
 }
 
 // LastErr returns the last error encountered (if any) for this node.
-func (n *RawNode) LastErr() error {
+func (n *Node) LastErr() error {
 	return n.channel.lastErr()
 }
 
 // Latency returns the latency between the client and this node.
-func (n *RawNode) Latency() time.Duration {
+func (n *Node) Latency() time.Duration {
 	return n.channel.channelLatency()
 }
 
-type lessFunc func(n1, n2 *RawNode) bool
+type lessFunc func(n1, n2 *Node) bool
 
 // MultiSorter implements the Sort interface, sorting the nodes within.
 type MultiSorter struct {
-	nodes []*RawNode
+	nodes []*Node
 	less  []lessFunc
 }
 
 // Sort sorts the argument slice according to the less functions passed to
 // OrderedBy.
-func (ms *MultiSorter) Sort(nodes []*RawNode) {
+func (ms *MultiSorter) Sort(nodes []*Node) {
 	ms.nodes = nodes
 	sort.Sort(ms)
 }
@@ -229,13 +249,13 @@ func (ms *MultiSorter) Less(i, j int) bool {
 }
 
 // ID sorts nodes by their identifier in increasing order.
-var ID = func(n1, n2 *RawNode) bool {
+var ID = func(n1, n2 *Node) bool {
 	return n1.id < n2.id
 }
 
 // Port sorts nodes by their port number in increasing order.
 // Warning: This function may be removed in the future.
-var Port = func(n1, n2 *RawNode) bool {
+var Port = func(n1, n2 *Node) bool {
 	p1, _ := strconv.Atoi(n1.Port())
 	p2, _ := strconv.Atoi(n2.Port())
 	return p1 < p2
@@ -243,7 +263,7 @@ var Port = func(n1, n2 *RawNode) bool {
 
 // LastNodeError sorts nodes by their LastErr() status in increasing order. A
 // node with LastErr() != nil is larger than a node with LastErr() == nil.
-var LastNodeError = func(n1, n2 *RawNode) bool {
+var LastNodeError = func(n1, n2 *Node) bool {
 	if n1.channel.lastErr() != nil && n2.channel.lastErr() == nil {
 		return false
 	}

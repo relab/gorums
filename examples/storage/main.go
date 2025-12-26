@@ -24,7 +24,7 @@ func main() {
 	if len(addrs) == 1 && addrs[0] == "" {
 		addrs = nil
 		srvs := make([]*gorums.Server, 0, 4)
-		for i := 0; i < 4; i++ {
+		for range 4 {
 			srv, addr := startServer("127.0.0.1:0")
 			srvs = append(srvs, srv)
 			addrs = append(addrs, addr)

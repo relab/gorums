@@ -7,11 +7,11 @@ static_file				:= $(gen_path)/template_static.go
 static_files			:= $(shell find $(dev_path) -name "*.go" -not -name "zorums*" -not -name "*_test.go")
 proto_path 				:= $(dev_path):third_party:.
 
-plugin_deps				:= gorums.pb.go internal/correctable/opts.pb.go $(static_file)
+plugin_deps				:= gorums.pb.go $(static_file)
 runtime_deps			:= ordering/ordering.pb.go ordering/ordering_grpc.pb.go
 benchmark_deps			:= benchmark/benchmark.pb.go benchmark/benchmark_gorums.pb.go
 
-.PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests genproto
+.PHONY: all dev tools bootstrapgorums installgorums benchmark test compiletests genproto benchtest bench
 
 all: dev benchmark compiletests
 
@@ -56,11 +56,34 @@ endif
 compiletests: installgorums
 	@$(MAKE) --no-print-directory -C ./internal/tests all
 
-test: compiletests
+test: compiletests benchtest
 	@go test ./...
 
 testrace: compiletests
 	go test -race -cpu=1,2,4 ./...
+
+# Run benchmarks with validation (short runs to verify they don't fail).
+# Uses -benchtime=100x for limited iterations to avoid port exhaustion on macOS.
+# Suppresses output on success; shows details on failure.
+benchtest: compiletests
+	@if ! go test -run=^$$ -bench=. -benchtime=100x -count=1 ./... > /tmp/benchtest.out 2>&1; then \
+		echo "Benchmark validation failed:"; \
+		cat /tmp/benchtest.out; \
+		exit 1; \
+	fi
+	@echo "Benchmark validation passed"
+
+# Run benchmarks with proper measurement (longer runs for performance analysis).
+# Use -count=10 or more for statistically significant results.
+# This only runs benchmarks in the main module and in internal/tests/oneway
+# (when adding benchmarks elsewhere, update this target accordingly).
+bench: compiletests
+	go test -run=^$$ -bench=. -benchtime=1s -count=10 . ./internal/tests/oneway
+
+# Run stress tests that use longer durations for thorough testing.
+# These tests are excluded from normal test runs via the 'stress' build tag.
+stresstest: compiletests
+	go test -tags=stress ./...
 
 # Warning: will probably run for 10 minutes; the timeout does not work
 stressdev: tools

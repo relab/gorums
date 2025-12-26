@@ -1,0 +1,46 @@
+edition = "2024";
+
+package gorumsexample;
+option go_package = "github.com/relab/gorums/examples/gorumsexample";
+option features.field_presence = IMPLICIT;
+
+import "google/protobuf/empty.proto";
+import "gorums.proto";
+
+// Storage service defines the RPCs for a simple key-value storage system.
+service Storage {
+  // ReadOrdered is a FIFO-ordered RPC to a single node.
+  rpc ReadOrdered(google.protobuf.Empty) returns (State) {}
+
+  // WriteUnicast is an asynchronous unicast to a single node.
+  // No reply is collected.
+  rpc WriteUnicast(State) returns (google.protobuf.Empty) {
+    option (gorums.unicast) = true;
+  }
+
+  // WriteMulticast is an asynchronous multicast to all nodes in a configuration.
+  // No replies are collected.
+  rpc WriteMulticast(State) returns (google.protobuf.Empty) {
+    option (gorums.multicast) = true;
+  }
+
+  // ReadQC is a FIFO-ordered synchronous quorum call.
+  // Use terminal methods (.Majority(), .First(), etc.) to retrieve results.
+  // Use .AsyncMajority() for async variant, .Correctable(n) for correctable variant.
+  rpc ReadQC(google.protobuf.Empty) returns (State) {
+    option (gorums.quorumcall) = true;
+  }
+
+  // ReadQCStream is a FIFO-ordered synchronous quorum call with server streaming.
+  // The stream keyword enables correctable calls where nodes can send multiple
+  // progressive updates. Use .Correctable(n) to watch for updates as they arrive.
+  rpc ReadQCStream(google.protobuf.Empty) returns (stream State) {
+    option (gorums.quorumcall) = true;
+  }
+}
+
+// State represents the value and its timestamp stored in a node.
+message State {
+  string value = 1;
+  int64 timestamp = 2;
+}

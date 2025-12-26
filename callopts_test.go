@@ -1,6 +1,9 @@
 package gorums
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestCallOptionsMustWaitSendDone(t *testing.T) {
 	tests := []struct {
@@ -9,23 +12,43 @@ func TestCallOptionsMustWaitSendDone(t *testing.T) {
 		wantWaitSendDone bool
 	}{
 		// One-way call types
-		{name: "Unicast/WithSendWaiting", callOpts: getCallOptions(E_Unicast, nil), wantWaitSendDone: true},
-		{name: "Unicast/WithNoSendWaiting", callOpts: getCallOptions(E_Unicast, []CallOption{WithNoSendWaiting()}), wantWaitSendDone: false},
-		{name: "Multicast/WithSendWaiting", callOpts: getCallOptions(E_Multicast, nil), wantWaitSendDone: true},
-		{name: "Multicast/WithNoSendWaiting", callOpts: getCallOptions(E_Multicast, []CallOption{WithNoSendWaiting()}), wantWaitSendDone: false},
+		{name: "Unicast/Default", callOpts: getCallOptions(E_Unicast), wantWaitSendDone: true},
+		{name: "Unicast/IgnoreErrors", callOpts: getCallOptions(E_Unicast, IgnoreErrors()), wantWaitSendDone: false},
+		{name: "Multicast/Default", callOpts: getCallOptions(E_Multicast), wantWaitSendDone: true},
+		{name: "Multicast/IgnoreErrors", callOpts: getCallOptions(E_Multicast, IgnoreErrors()), wantWaitSendDone: false},
 		// Two-way call types (never wait for send completion, regardless of option)
-		{name: "Rpc/WithSendWaiting", callOpts: getCallOptions(E_Rpc, nil), wantWaitSendDone: false},
-		{name: "Rpc/WithNoSendWaiting", callOpts: getCallOptions(E_Rpc, []CallOption{WithNoSendWaiting()}), wantWaitSendDone: false},
-		{name: "Quorumcall/WithSendWaiting", callOpts: getCallOptions(E_Quorumcall, nil), wantWaitSendDone: false},
-		{name: "Quorumcall/WithNoSendWaiting", callOpts: getCallOptions(E_Quorumcall, []CallOption{WithNoSendWaiting()}), wantWaitSendDone: false},
-		{name: "Correctable/WithSendWaiting", callOpts: getCallOptions(E_Correctable, nil), wantWaitSendDone: false},
-		{name: "Correctable/WithNoSendWaiting", callOpts: getCallOptions(E_Correctable, []CallOption{WithNoSendWaiting()}), wantWaitSendDone: false},
+		{name: "Rpc/Default", callOpts: getCallOptions(E_Rpc), wantWaitSendDone: false},
+		{name: "Rpc/IgnoreErrors", callOpts: getCallOptions(E_Rpc, IgnoreErrors()), wantWaitSendDone: false},
+		{name: "Quorumcall/Default", callOpts: getCallOptions(E_Quorumcall), wantWaitSendDone: false},
+		{name: "Quorumcall/IgnoreErrors", callOpts: getCallOptions(E_Quorumcall, IgnoreErrors()), wantWaitSendDone: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotWaitSendDone := tt.callOpts.mustWaitSendDone()
 			if gotWaitSendDone != tt.wantWaitSendDone {
 				t.Errorf("mustWaitSendDone() = %v, want %v", gotWaitSendDone, tt.wantWaitSendDone)
+			}
+		})
+	}
+}
+
+func BenchmarkGetCallOptions(b *testing.B) {
+	interceptor := func(_ *ClientCtx[msg, msg], next ResponseSeq[msg]) ResponseSeq[msg] { return next }
+	tests := []struct {
+		numOpts int
+	}{
+		{0}, {1}, {2}, {3}, {4}, {5},
+	}
+
+	for _, tc := range tests {
+		opts := make([]CallOption, tc.numOpts)
+		for i := range tc.numOpts {
+			opts[i] = Interceptors(interceptor)
+		}
+		b.Run(fmt.Sprintf("options=%d", tc.numOpts), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				_ = getCallOptions(E_Quorumcall, opts...)
 			}
 		})
 	}

@@ -5,12 +5,17 @@ import (
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
+
+func init() {
+	encoding.RegisterCodec(NewCodec())
+}
 
 // ContentSubtype is the subtype used by gorums when sending messages via gRPC.
 const ContentSubtype = "gorums"
@@ -93,7 +98,7 @@ func (m *Message) GetMessageID() uint64 {
 	if m == nil {
 		return 0
 	}
-	return m.metadata.GetMessageID()
+	return m.metadata.GetMessageSeqNo()
 }
 
 func (m *Message) GetStatus() *status.Status {

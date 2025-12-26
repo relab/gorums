@@ -30,6 +30,7 @@
     },
     "files.exclude": {
         "**/.git": true,
+        "**/.jj": true,
         "**/.DS_Store": true,
     },
     "files.insertFinalNewline": true,
@@ -53,19 +54,24 @@
         "usePlaceholders": true,
         "staticcheck": false
     },
-    "protoc": {
-        "compile_on_save": false,
-        "options": [
-            "--proto_path=${workspaceRoot}",
-            "--proto_path=${workspaceRoot}/cmd/protoc-gen-gorums/dev",
-            "--proto_path=${workspaceRoot}/third_party"
-        ]
-    },
-    "clang-format.executable": "/usr/bin/clang-format",
-    "clang-format.style": "{ IndentWidth: 4, BasedOnStyle: google, AlignConsecutiveAssignments: true, ColumnLimit: 120 }",
-    "[proto3]": {
-        "editor.defaultFormatter": "zxh404.vscode-proto3"
-    },
+    "protobuf.protoc.path": "protoc",
+    "protobuf.formatOnSave": true,
+    "protobuf.formatter.enabled": true,
+    "protobuf.formatter.alignFields": true,
+    "protobuf.protoc.options": [
+        "--proto_path=${workspaceFolder}",
+        "--proto_path=${workspaceFolder}/cmd/protoc-gen-gorums/dev",
+        "--proto_path=${workspaceFolder}/third_party",
+        "--go_opt=paths=source_relative",
+        "--go-grpc_opt=paths=source_relative",
+        "--gorums_opt=paths=source_relative",
+        "--go_opt=default_api_level=API_OPAQUE"
+    ],
+    "protobuf.buf.path": "buf",
+    "protobuf.externalLinter.bufPath": "buf",
+    "protobuf.externalLinter.enabled": true,
+    "protobuf.externalLinter.runOnSave": true,
+    "protobuf.externalLinter.linter": "buf",
     "markdownlint.config": {
         "MD024": false,
         "default": true,
