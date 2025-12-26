@@ -767,9 +767,19 @@ func TestChannelStreamReadyAfterReconnect(t *testing.T) {
 
 // BenchmarkChannelStreamReadyFirstRequest measures the latency of the first request,
 // which includes stream creation and the stream-ready signaling.
+//
+// This benchmark creates a new server and node per iteration to measure true
+// "cold start" latency. Due to TCP port exhaustion on macOS (ephemeral ports
+// enter TIME_WAIT state and take time to recycle), this benchmark should be
+// run with limited iterations (e.g., -benchtime=100x).
+//
 // Note: This benchmark includes server setup overhead, so absolute numbers
 // should be interpreted with caution. The goal is to detect regressions.
 func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
+	if b.N > 500 {
+		b.Skip("Skipping to avoid port exhaustion; use -benchtime=100x")
+	}
+
 	for b.Loop() {
 		var stopServer func(...int)
 		node := TestNode(b, delayServerFn(0), WithStopFunc(b, &stopServer))

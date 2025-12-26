@@ -1,5 +1,7 @@
 Ansible
 benchgraph
+benchtest
+benchtime
 bootstrapgorums
 calltype
 calltypes
