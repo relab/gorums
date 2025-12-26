@@ -121,21 +121,19 @@ func (c *channel) close() error {
 	return c.closeOnceFunc()
 }
 
-// newNodeStream creates a new stream for this channel.
+// newNodeStream creates a new stream for this channel if one doesn't already exist.
 // The receiver goroutine will detect the new stream and start using it.
+// This method is safe for concurrent use.
 func (c *channel) newNodeStream() (err error) {
 	c.streamMut.Lock()
+	defer c.streamMut.Unlock()
+	// if we already have a ready connection and an active stream, do nothing
+	// (cannot reuse isConnected() here since it uses the streamMut lock)
+	if c.conn.GetState() == connectivity.Ready && c.gorumsStream != nil {
+		return nil
+	}
 	c.streamCtx, c.streamCancel = context.WithCancel(c.connCtx)
 	c.gorumsStream, err = ordering.NewGorumsClient(c.conn).NodeStream(c.streamCtx)
-	c.streamMut.Unlock()
-	if err == nil {
-		// Signal receiver that stream is ready (non-blocking)
-		select {
-		case c.streamReady <- struct{}{}:
-		default:
-			// Channel already has a signal pending, no need to add another
-		}
-	}
 	return err
 }
 
@@ -157,14 +155,22 @@ func (c *channel) clearStream() {
 
 // ensureStream ensures there's an active NodeStream for the sender and receiver goroutines.
 // gRPC automatically handles TCP connection state when creating the stream.
+// This method is safe for concurrent use.
 func (c *channel) ensureStream() error {
-	if c.isConnected() {
-		return nil
+	if err := c.newNodeStream(); err != nil {
+		return err
 	}
-	return c.newNodeStream()
+	// signal receiver that stream is ready (non-blocking)
+	select {
+	case c.streamReady <- struct{}{}:
+	default:
+		// channel already has a signal pending, no need to add another
+	}
+	return nil
 }
 
 // isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
+// This method is safe for concurrent use.
 func (c *channel) isConnected() bool {
 	return c.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
