@@ -71,7 +71,7 @@ type channel struct {
 	// gorumsStream is a bidirectional stream for
 	// sending and receiving ordering.Metadata messages.
 	gorumsStream ordering.Gorums_NodeStreamClient
-	streamMut    sync.RWMutex
+	streamMut    sync.Mutex
 	streamCtx    context.Context
 	streamCancel context.CancelFunc
 	streamReady  chan struct{} // signals receiver when stream becomes available
@@ -155,8 +155,8 @@ func (c *channel) newNodeStream() (err error) {
 
 // getStream returns the current stream, or nil if no stream is available.
 func (c *channel) getStream() grpc.ClientStream {
-	c.streamMut.RLock()
-	defer c.streamMut.RUnlock()
+	c.streamMut.Lock()
+	defer c.streamMut.Unlock()
 	return c.gorumsStream
 }
 
