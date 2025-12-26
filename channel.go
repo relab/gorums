@@ -121,11 +121,12 @@ func (c *channel) close() error {
 	return c.closeOnceFunc()
 }
 
-// ensureStream ensures there's an active NodeStream for the sender and receiver goroutines.
+// ensureStream ensures there is an active NodeStream for the sender and
+// receiver goroutines, and signals the receiver when the stream is ready.
 // gRPC automatically handles TCP connection state when creating the stream.
 // This method is safe for concurrent use.
 func (c *channel) ensureStream() error {
-	if err := c.newNodeStream(); err != nil {
+	if err := c.ensureConnectedNodeStream(); err != nil {
 		return err
 	}
 	// signal receiver that stream is ready (non-blocking)
@@ -137,10 +138,10 @@ func (c *channel) ensureStream() error {
 	return nil
 }
 
-// newNodeStream creates a new stream for this channel if one doesn't already exist.
-// The receiver goroutine will detect the new stream and start using it.
+// ensureConnectedNodeStream ensures there is an active and connected
+// NodeStream, or creates a new stream if one doesn't already exist.
 // This method is safe for concurrent use.
-func (c *channel) newNodeStream() (err error) {
+func (c *channel) ensureConnectedNodeStream() (err error) {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	// if we already have a ready connection and an active stream, do nothing
