@@ -14,12 +14,21 @@ type System struct {
 	lis     net.Listener
 }
 
-// NewSystem creates a new Gorums System with the provided listener and server options.
-func NewSystem(lis net.Listener, opts ...ServerOption) *System {
+// NewSystem creates a new Gorums System listening on the specified address with the provided server options.
+func NewSystem(addr string, opts ...ServerOption) (*System, error) {
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
 	return &System{
 		srv: NewServer(opts...),
 		lis: lis,
-	}
+	}, nil
+}
+
+// Addr returns the address the system is listening on.
+func (s *System) Addr() string {
+	return s.lis.Addr().String()
 }
 
 // RegisterService registers the service with the server using the provided register function.

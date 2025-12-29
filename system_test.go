@@ -2,7 +2,6 @@ package gorums_test
 
 import (
 	"errors"
-	"net"
 	"testing"
 	"time"
 
@@ -20,14 +19,9 @@ func (m *mockCloser) Close() error {
 }
 
 func TestSystemLifecycle(t *testing.T) {
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	sys, err := gorums.NewSystem("127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
-	}
-
-	sys := gorums.NewSystem(lis)
-	if sys == nil {
-		t.Fatal("NewSystem returned nil")
+		t.Fatalf("Failed to create system: %v", err)
 	}
 
 	closer1 := &mockCloser{}
@@ -65,12 +59,11 @@ func TestSystemLifecycle(t *testing.T) {
 }
 
 func TestSystemStopError(t *testing.T) {
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	sys, err := gorums.NewSystem("127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("failed to listen: %v", err)
+		t.Fatalf("Failed to create system: %v", err)
 	}
 
-	sys := gorums.NewSystem(lis)
 	errCloser := &mockCloser{err: errors.New("closer error")}
 
 	sys.RegisterService(errCloser, func(srv *gorums.Server) {})
