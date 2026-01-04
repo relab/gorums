@@ -3,6 +3,7 @@ edition = "2024";
 package proto;
 option go_package = "github.com/relab/gorums/examples/storage/proto";
 option features.field_presence = IMPLICIT;
+option features.enforce_naming_style = STYLE_LEGACY;
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -45,7 +46,7 @@ message ReadRequest {
 
 // ReadResponse is the response message for Read RPCs and Read quorum calls.
 message ReadResponse {
-  bool                      ok    = 1;
+  bool                      OK    = 1;
   string                    value = 2;
   google.protobuf.Timestamp time  = 3;
 }
