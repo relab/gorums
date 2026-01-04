@@ -23,9 +23,10 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// ReadRequest is the request message for Read RPCs and Read quorum calls.
 type ReadRequest struct {
 	state          protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Key string                 `protobuf:"bytes,1,opt,name=Key"`
+	xxx_hidden_Key string                 `protobuf:"bytes,1,opt,name=key"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -80,11 +81,12 @@ func (b0 ReadRequest_builder) Build() *ReadRequest {
 	return m0
 }
 
+// ReadResponse is the response message for Read RPCs and Read quorum calls.
 type ReadResponse struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_OK    bool                   `protobuf:"varint,1,opt,name=OK"`
-	xxx_hidden_Value string                 `protobuf:"bytes,2,opt,name=Value"`
-	xxx_hidden_Time  *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=Time"`
+	xxx_hidden_Value string                 `protobuf:"bytes,2,opt,name=value"`
+	xxx_hidden_Time  *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=time"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -176,11 +178,12 @@ func (b0 ReadResponse_builder) Build() *ReadResponse {
 	return m0
 }
 
+// WriteRequest is the request message for Write RPCs, Write quorum calls, and Write multicast calls.
 type WriteRequest struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Key   string                 `protobuf:"bytes,1,opt,name=Key"`
-	xxx_hidden_Value string                 `protobuf:"bytes,2,opt,name=Value"`
-	xxx_hidden_Time  *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=Time"`
+	xxx_hidden_Key   string                 `protobuf:"bytes,1,opt,name=key"`
+	xxx_hidden_Value string                 `protobuf:"bytes,2,opt,name=value"`
+	xxx_hidden_Time  *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=time"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -272,9 +275,10 @@ func (b0 WriteRequest_builder) Build() *WriteRequest {
 	return m0
 }
 
+// WriteResponse is the response message for Write RPCs and Write quorum calls.
 type WriteResponse struct {
 	state          protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_New bool                   `protobuf:"varint,1,opt,name=New"`
+	xxx_hidden_New bool                   `protobuf:"varint,1,opt,name=new"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -333,48 +337,48 @@ var File_storage_proto_storage_proto protoreflect.FileDescriptor
 
 const file_storage_proto_storage_proto_rawDesc = "" +
 	"\n" +
-	"\x1bstorage/proto/storage.proto\x12\astorage\x1a\fgorums.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bgoogle/protobuf/empty.proto\"\x1f\n" +
+	"\x1bstorage/proto/storage.proto\x12\x05proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\fgorums.proto\"\x1f\n" +
 	"\vReadRequest\x12\x10\n" +
-	"\x03Key\x18\x01 \x01(\tR\x03Key\"d\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\"d\n" +
 	"\fReadResponse\x12\x0e\n" +
 	"\x02OK\x18\x01 \x01(\bR\x02OK\x12\x14\n" +
-	"\x05Value\x18\x02 \x01(\tR\x05Value\x12.\n" +
-	"\x04Time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04Time\"f\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12.\n" +
+	"\x04time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"f\n" +
 	"\fWriteRequest\x12\x10\n" +
-	"\x03Key\x18\x01 \x01(\tR\x03Key\x12\x14\n" +
-	"\x05Value\x18\x02 \x01(\tR\x05Value\x12.\n" +
-	"\x04Time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04Time\"!\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12.\n" +
+	"\x04time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\"!\n" +
 	"\rWriteResponse\x12\x10\n" +
-	"\x03New\x18\x01 \x01(\bR\x03New2\xc4\x02\n" +
-	"\aStorage\x128\n" +
-	"\aReadRPC\x12\x14.storage.ReadRequest\x1a\x15.storage.ReadResponse\"\x00\x12;\n" +
-	"\bWriteRPC\x12\x15.storage.WriteRequest\x1a\x16.storage.WriteResponse\"\x00\x12;\n" +
-	"\x06ReadQC\x12\x14.storage.ReadRequest\x1a\x15.storage.ReadResponse\"\x04\xa0\xb5\x18\x01\x12>\n" +
-	"\aWriteQC\x12\x15.storage.WriteRequest\x1a\x16.storage.WriteResponse\"\x04\xa0\xb5\x18\x01\x12E\n" +
-	"\x0eWriteMulticast\x12\x15.storage.WriteRequest\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01B5Z.github.com/relab/gorums/examples/storage/proto\x92\x03\x02\b\x02b\beditionsp\xe8\a"
+	"\x03new\x18\x01 \x01(\bR\x03new2\xb2\x02\n" +
+	"\aStorage\x124\n" +
+	"\aReadRPC\x12\x12.proto.ReadRequest\x1a\x13.proto.ReadResponse\"\x00\x127\n" +
+	"\bWriteRPC\x12\x13.proto.WriteRequest\x1a\x14.proto.WriteResponse\"\x00\x127\n" +
+	"\x06ReadQC\x12\x12.proto.ReadRequest\x1a\x13.proto.ReadResponse\"\x04\xa0\xb5\x18\x01\x12:\n" +
+	"\aWriteQC\x12\x13.proto.WriteRequest\x1a\x14.proto.WriteResponse\"\x04\xa0\xb5\x18\x01\x12C\n" +
+	"\x0eWriteMulticast\x12\x13.proto.WriteRequest\x1a\x16.google.protobuf.Empty\"\x04\x98\xb5\x18\x01B5Z.github.com/relab/gorums/examples/storage/proto\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
 var file_storage_proto_storage_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_storage_proto_storage_proto_goTypes = []any{
-	(*ReadRequest)(nil),           // 0: storage.ReadRequest
-	(*ReadResponse)(nil),          // 1: storage.ReadResponse
-	(*WriteRequest)(nil),          // 2: storage.WriteRequest
-	(*WriteResponse)(nil),         // 3: storage.WriteResponse
+	(*ReadRequest)(nil),           // 0: proto.ReadRequest
+	(*ReadResponse)(nil),          // 1: proto.ReadResponse
+	(*WriteRequest)(nil),          // 2: proto.WriteRequest
+	(*WriteResponse)(nil),         // 3: proto.WriteResponse
 	(*timestamppb.Timestamp)(nil), // 4: google.protobuf.Timestamp
 	(*emptypb.Empty)(nil),         // 5: google.protobuf.Empty
 }
 var file_storage_proto_storage_proto_depIdxs = []int32{
-	4, // 0: storage.ReadResponse.Time:type_name -> google.protobuf.Timestamp
-	4, // 1: storage.WriteRequest.Time:type_name -> google.protobuf.Timestamp
-	0, // 2: storage.Storage.ReadRPC:input_type -> storage.ReadRequest
-	2, // 3: storage.Storage.WriteRPC:input_type -> storage.WriteRequest
-	0, // 4: storage.Storage.ReadQC:input_type -> storage.ReadRequest
-	2, // 5: storage.Storage.WriteQC:input_type -> storage.WriteRequest
-	2, // 6: storage.Storage.WriteMulticast:input_type -> storage.WriteRequest
-	1, // 7: storage.Storage.ReadRPC:output_type -> storage.ReadResponse
-	3, // 8: storage.Storage.WriteRPC:output_type -> storage.WriteResponse
-	1, // 9: storage.Storage.ReadQC:output_type -> storage.ReadResponse
-	3, // 10: storage.Storage.WriteQC:output_type -> storage.WriteResponse
-	5, // 11: storage.Storage.WriteMulticast:output_type -> google.protobuf.Empty
+	4, // 0: proto.ReadResponse.time:type_name -> google.protobuf.Timestamp
+	4, // 1: proto.WriteRequest.time:type_name -> google.protobuf.Timestamp
+	0, // 2: proto.Storage.ReadRPC:input_type -> proto.ReadRequest
+	2, // 3: proto.Storage.WriteRPC:input_type -> proto.WriteRequest
+	0, // 4: proto.Storage.ReadQC:input_type -> proto.ReadRequest
+	2, // 5: proto.Storage.WriteQC:input_type -> proto.WriteRequest
+	2, // 6: proto.Storage.WriteMulticast:input_type -> proto.WriteRequest
+	1, // 7: proto.Storage.ReadRPC:output_type -> proto.ReadResponse
+	3, // 8: proto.Storage.WriteRPC:output_type -> proto.WriteResponse
+	1, // 9: proto.Storage.ReadQC:output_type -> proto.ReadResponse
+	3, // 10: proto.Storage.WriteQC:output_type -> proto.WriteResponse
+	5, // 11: proto.Storage.WriteMulticast:output_type -> google.protobuf.Empty
 	7, // [7:12] is the sub-list for method output_type
 	2, // [2:7] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name

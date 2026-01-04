@@ -84,46 +84,48 @@ type CorrectableWriteResponse = *gorums.Correctable[*WriteResponse]
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
 
-// ReadRPC executes the Read RPC on a single Node
+// ReadRPC executes a Read RPC on a single node and
+// returns the value for the provided key.
 func ReadRPC(ctx *gorums.NodeContext, in *ReadRequest) (resp *ReadResponse, err error) {
-	res, err := gorums.RPCCall(ctx, in, "storage.Storage.ReadRPC")
+	res, err := gorums.RPCCall(ctx, in, "proto.Storage.ReadRPC")
 	if err != nil {
 		return nil, err
 	}
 	return res.(*ReadResponse), err
 }
 
-// WriteRPC executes the Write RPC on a single Node
+// WriteRPC executes a Write RPC on a single node and
+// returns true if the value was updated.
 func WriteRPC(ctx *gorums.NodeContext, in *WriteRequest) (resp *WriteResponse, err error) {
-	res, err := gorums.RPCCall(ctx, in, "storage.Storage.WriteRPC")
+	res, err := gorums.RPCCall(ctx, in, "proto.Storage.WriteRPC")
 	if err != nil {
 		return nil, err
 	}
 	return res.(*WriteResponse), err
 }
 
-// ReadQC executes the Read Quorum Call on a configuration
-// of Nodes and returns the most recent value.
+// ReadQC executes a Read quorum call on a configuration of nodes and
+// returns the most recent value.
 func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
 	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
-		ctx, in, "storage.Storage.ReadQC",
+		ctx, in, "proto.Storage.ReadQC",
 		opts...,
 	)
 }
 
-// WriteQC executes the Write Quorum Call on a configuration
-// of Nodes and returns true if a majority of Nodes were updated.
+// WriteQC executes a Write quorum call on a configuration of nodes and
+// returns true if a majority of nodes were updated.
 func WriteQC(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse] {
 	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
-		ctx, in, "storage.Storage.WriteQC",
+		ctx, in, "proto.Storage.WriteQC",
 		opts...,
 	)
 }
 
-// WriteMulticast is a multicast call invoked on all nodes in the configuration in ctx.
-// Use gorums.MapRequest to send different messages to each node. No replies are collected.
+// WriteMulticast executes a Write multicast call on a configuration of nodes.
+// It does not wait for any responses.
 func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) error {
-	return gorums.Multicast(ctx, in, "storage.Storage.WriteMulticast", opts...)
+	return gorums.Multicast(ctx, in, "proto.Storage.WriteMulticast", opts...)
 }
 
 // Storage is the server-side API for the Storage Service
@@ -136,27 +138,27 @@ type StorageServer interface {
 }
 
 func RegisterStorageServer(srv *gorums.Server, impl StorageServer) {
-	srv.RegisterHandler("storage.Storage.ReadRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
 		resp, err := impl.ReadRPC(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-	srv.RegisterHandler("storage.Storage.WriteRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteRPC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
 		resp, err := impl.WriteRPC(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-	srv.RegisterHandler("storage.Storage.ReadQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.ReadQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*ReadRequest](in)
 		resp, err := impl.ReadQC(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-	srv.RegisterHandler("storage.Storage.WriteQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteQC", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
 		resp, err := impl.WriteQC(ctx, req)
 		return gorums.NewResponseMessage(in.GetMetadata(), resp), err
 	})
-	srv.RegisterHandler("storage.Storage.WriteMulticast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
+	srv.RegisterHandler("proto.Storage.WriteMulticast", func(ctx gorums.ServerCtx, in *gorums.Message) (*gorums.Message, error) {
 		req := gorums.AsProto[*WriteRequest](in)
 		impl.WriteMulticast(ctx, req)
 		return nil, nil
