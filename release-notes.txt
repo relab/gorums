@@ -1,0 +1,230 @@
+# github.com/relab/gorums
+## incompatible changes
+(*RawNode).RPCCall: removed
+(*RawNode).Unicast: removed
+Async: changed from Async to Async[Resp any]
+CallData: removed
+ConfigOption: removed
+Correctable: changed from Correctable to Correctable[Resp any]
+CorrectableCallData: removed
+E_Async: removed
+E_Correctable: removed
+E_CustomReturnType: removed
+E_PerNodeArg: removed
+Incomplete: removed
+NewRawConfiguration: removed
+NewRawManager: removed
+NewRawNode: removed
+NewRawNodeWithID: removed
+QuorumCallData: removed
+RawConfiguration: removed
+RawManager: removed
+RawNode: removed
+TestSetup: removed
+WithGrpcDialOptions: removed
+WithNoConnect: removed
+WithNoSendWaiting: removed
+callOptions: old is comparable, new is not
+## compatible changes
+(*Node).Context: added
+ClientCtx: added
+Closer: added
+ConfigContext: added
+Configuration: added
+EchoServerFn: added
+ErrIncomplete: added
+ErrSendFailure: added
+ErrTypeMismatch: added
+IgnoreErrors: added
+InsecureDialOptions: added
+Interceptors: added
+Manager: added
+MapRequest: added
+MapResponse: added
+Multicast: added
+NewConfig: added
+NewConfiguration: added
+NewCorrectable: added
+NewManager: added
+NewRequestMessage: added
+NewResponses: added
+NewSystem: added
+Node: added
+NodeContext: added
+NodeResponse: added
+Option: added
+QuorumCall: added
+QuorumCallError.Cause: added
+QuorumCallError.NodeErrors: added
+QuorumCallError.Unwrap: added
+QuorumCallStream: added
+QuorumInterceptor: added
+RPCCall: added
+Range: added
+ResponseSeq: added
+Responses: added
+StreamBenchmarkServerFn: added
+StreamServerFn: added
+System: added
+TestConfiguration: added
+TestContext: added
+TestNode: added
+TestOption: added
+TestQuorumCallError: added
+TestServers: added
+Unicast: added
+WithDialOptions: added
+WithManager: added
+WithPreConnect: added
+WithStopFunc: added
+
+# github.com/relab/gorums/benchmark
+## incompatible changes
+AsyncEcho: changed from AsyncEcho to *github.com/relab/gorums.Async[*Echo]
+BenchmarkClient: removed
+BenchmarkServer.AsyncQuorumCall: removed
+Configuration: changed from Configuration to github.com/relab/gorums.Configuration
+ConfigurationFromRaw: removed
+GetBenchmarks: changed from func(*Configuration) []Bench to func(Configuration) []Bench
+Manager: changed from Manager to github.com/relab/gorums.Manager
+MemoryStatList: removed
+MemoryStatList_builder: removed
+NewManager: changed from func(...github.com/relab/gorums.ManagerOption) *Manager to func(...github.com/relab/gorums.ManagerOption) *Manager
+Node: changed from Node to github.com/relab/gorums.Node
+QSpec: removed
+QuorumSpec: removed
+RunBenchmarks: changed from func(*regexp.Regexp, Options, *Configuration) ([]*Result, error) to func(*regexp.Regexp, Options, Configuration) ([]*Result, error)
+## compatible changes
+AsyncMemoryStat: added
+AsyncResult: added
+AsyncStartResponse: added
+CorrectableEcho: added
+CorrectableMemoryStat: added
+CorrectableResult: added
+CorrectableStartResponse: added
+Multicast: added
+NewConfig: added
+NewConfiguration: added
+QuorumCall: added
+SlowServer: added
+StartBenchmark: added
+StartServerBenchmark: added
+StopBenchmark: added
+StopServerBenchmark: added
+StopServerBenchmarkQF: added
+
+# github.com/relab/gorums/cmd/protoc-gen-gorums/dev
+## incompatible changes
+AsyncEmpty: changed from AsyncEmpty to *github.com/relab/gorums.Async[*google.golang.org/protobuf/types/known/emptypb.Empty]
+AsyncMyResponse: removed
+AsyncResponse: changed from AsyncResponse to *github.com/relab/gorums.Async[*Response]
+Configuration: changed from Configuration to github.com/relab/gorums.Configuration
+ConfigurationFromRaw: removed
+CorrectableEmpty: changed from CorrectableEmpty to *github.com/relab/gorums.Correctable[*google.golang.org/protobuf/types/known/emptypb.Empty]
+CorrectableMyResponse: removed
+CorrectableResponse: changed from CorrectableResponse to *github.com/relab/gorums.Correctable[*Response]
+CorrectableStreamEmpty: removed
+CorrectableStreamMyResponse: removed
+CorrectableStreamResponse: removed
+Manager: changed from Manager to github.com/relab/gorums.Manager
+NewManager: changed from func(...github.com/relab/gorums.ManagerOption) *Manager to func(...github.com/relab/gorums.ManagerOption) *Manager
+Node: changed from Node to github.com/relab/gorums.Node
+QuorumSpec: removed
+ZorumsServiceClient: removed
+ZorumsServiceNodeClient: removed
+ZorumsServiceServer.Correctable: removed
+ZorumsServiceServer.CorrectableCombo: removed
+ZorumsServiceServer.CorrectableCustomReturnType: removed
+ZorumsServiceServer.CorrectableEmpty2: removed
+ZorumsServiceServer.CorrectableEmpty: removed
+ZorumsServiceServer.CorrectablePerNodeArg: removed
+ZorumsServiceServer.CorrectableStream: removed
+ZorumsServiceServer.CorrectableStreamCombo: removed
+ZorumsServiceServer.CorrectableStreamCustomReturnType: removed
+ZorumsServiceServer.CorrectableStreamEmpty2: removed
+ZorumsServiceServer.CorrectableStreamEmpty: removed
+ZorumsServiceServer.CorrectableStreamPerNodeArg: removed
+ZorumsServiceServer.MulticastPerNodeArg: removed
+ZorumsServiceServer.QuorumCallAsync2: removed
+ZorumsServiceServer.QuorumCallAsync: removed
+ZorumsServiceServer.QuorumCallAsyncCombo: removed
+ZorumsServiceServer.QuorumCallAsyncCustomReturnType: removed
+ZorumsServiceServer.QuorumCallAsyncEmpty2: removed
+ZorumsServiceServer.QuorumCallAsyncEmpty: removed
+ZorumsServiceServer.QuorumCallAsyncPerNodeArg: removed
+ZorumsServiceServer.QuorumCallCombo: removed
+ZorumsServiceServer.QuorumCallCustomReturnType: removed
+ZorumsServiceServer.QuorumCallPerNodeArg: removed
+ZorumsServiceServer.QuorumCallStream: added
+ZorumsServiceServer.QuorumCallStreamWithEmpty2: added
+ZorumsServiceServer.QuorumCallStreamWithEmpty: added
+## compatible changes
+GRPCCall: added
+Multicast2: added
+Multicast3: added
+Multicast4: added
+Multicast: added
+NewConfig: added
+NewConfiguration: added
+QuorumCall: added
+QuorumCallEmpty2: added
+QuorumCallEmpty: added
+QuorumCallStream: added
+QuorumCallStreamWithEmpty2: added
+QuorumCallStreamWithEmpty: added
+Unicast2: added
+Unicast: added
+
+# github.com/relab/gorums/ordering
+## incompatible changes
+(*Metadata).GetMessageID: removed
+(*Metadata).SetMessageID: removed
+Metadata_builder.MessageID: removed
+## compatible changes
+(*Metadata).GetMessageSeqNo: added
+(*Metadata).SetMessageSeqNo: added
+Metadata_builder.MessageSeqNo: added
+
+# github.com/relab/gorums/tests/config
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/correctable
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/dummy
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/metadata
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/mock
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/oneway
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/ordering
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/qf
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/tls
+## incompatible changes
+package removed
+
+# github.com/relab/gorums/tests/unresponsive
+## incompatible changes
+package removed
+
+# summary
+Inferred base version: v0.10.0
+Suggested version: v0.11.0
