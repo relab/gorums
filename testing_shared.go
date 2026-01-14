@@ -191,16 +191,9 @@ func setupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface, l
 	active := make(map[int]*serverState)
 
 	for i := range numServers {
-		var srv ServerIface
-		if srvFn != nil {
-			srv = srvFn(i)
-		} else {
-			srv = initServer(i)
-		}
 		lis := listenFn(i)
-
 		addrs[i] = lis.Addr().String()
-		state := &serverState{srv: srv, lis: lis, stopped: make(chan struct{})}
+		state := &serverState{srv: srvFn(i), lis: lis, stopped: make(chan struct{})}
 		muActive.Lock()
 		active[i] = state
 		muActive.Unlock()
@@ -242,7 +235,7 @@ func Range(n int) iter.Seq[int] {
 	}
 }
 
-func initServer(i int) *Server {
+func DefaultServer(i int) ServerIface {
 	srv := NewServer()
 	ts := testSrv{val: int32((i + 1) * 10)}
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {

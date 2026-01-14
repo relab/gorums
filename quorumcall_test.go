@@ -149,7 +149,7 @@ func TestPartialFailures(t *testing.T) {
 		testName := fmt.Sprintf("%s/fail=%d", tt.call.name, tt.failing)
 		t.Run(testName, func(t *testing.T) {
 			var stopNodes func(...int)
-			config := gorums.TestConfiguration(t, numServers, nil, gorums.WithStopFunc(t, &stopNodes))
+			config := gorums.TestConfiguration(t, numServers, gorums.DefaultServer, gorums.WithStopFunc(t, &stopNodes))
 			ctx := config.Context(t.Context())
 			req := pb.String("test")
 
@@ -201,7 +201,7 @@ func TestPartialFailures(t *testing.T) {
 
 // TestQuorumCallCustomAggregation tests custom response aggregation
 func TestQuorumCallCustomAggregation(t *testing.T) {
-	config := gorums.TestConfiguration(t, 3, nil) // uses default server that returns (i+1)*10
+	config := gorums.TestConfiguration(t, 3, gorums.DefaultServer) // uses default server that returns (i+1)*10
 
 	ctx := gorums.TestContext(t, 2*time.Second)
 	responses := gorums.QuorumCall[*pb.Int32Value, *pb.Int32Value](

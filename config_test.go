@@ -233,7 +233,7 @@ func TestNewConfigurationExcept(t *testing.T) {
 }
 
 func TestConfigConcurrentAccess(t *testing.T) {
-	node := gorums.TestNode(t, nil)
+	node := gorums.TestNode(t, gorums.DefaultServer)
 
 	errCh := make(chan error, 2)
 	var wg sync.WaitGroup
