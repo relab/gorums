@@ -1,7 +1,6 @@
 package gorums_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -14,16 +13,37 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// checkQuorumCall returns true if the quorum call was successful.
-// It returns false if an error occurred or the context timed out.
-func checkQuorumCall(t *testing.T, ctxErr, err error) bool {
+// checkQuorumCall validates a quorum call's outcome against expectations.
+// If wantErr is nil, it expects success and verifies no error occurred.
+// If wantErr is non-nil, it validates that the error matches and optionally checks
+// the number of node errors in QuorumCallError (if expectedNodeErrors is provided).
+func checkQuorumCall(t *testing.T, gotErr, wantErr error, expectedNodeErrors ...int) bool {
 	t.Helper()
-	if errors.Is(ctxErr, context.DeadlineExceeded) {
-		t.Error(ctxErr)
-		return false
+
+	// Handle expected error case
+	if wantErr != nil {
+		if gotErr == nil {
+			t.Errorf("Expected error %v, got nil", wantErr)
+			return false
+		}
+		if !errors.Is(gotErr, wantErr) {
+			t.Errorf("Expected error %v, got %v", wantErr, gotErr)
+			return false
+		}
+		// Validate QuorumCallError details if expectedNodeErrors provided
+		if len(expectedNodeErrors) > 0 {
+			var qcErr gorums.QuorumCallError
+			if errors.As(gotErr, &qcErr) && qcErr.NodeErrors() != expectedNodeErrors[0] {
+				t.Errorf("Expected %d node errors, got %d", expectedNodeErrors[0], qcErr.NodeErrors())
+				return false
+			}
+		}
+		return true
 	}
-	if err != nil {
-		t.Errorf("QuorumCall failed: %v", err)
+
+	// Handle expected success case
+	if gotErr != nil {
+		t.Errorf("QuorumCall failed: %v", gotErr)
 		return false
 	}
 	return true
@@ -69,8 +89,7 @@ func TestQuorumCall(t *testing.T) {
 			)
 
 			result, err := tt.call(responses)
-
-			if !checkQuorumCall(t, ctx.Err(), err) {
+			if !checkQuorumCall(t, err, nil) {
 				return
 			}
 
@@ -178,23 +197,9 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 				time.Sleep(10 * time.Millisecond)
 			}
 
-			if tt.wantErr != nil {
-				if err == nil {
-					t.Errorf("Expected error %v, got nil", tt.wantErr)
-				} else if !errors.Is(err, tt.wantErr) {
-					t.Errorf("Expected error %v, got %v", tt.wantErr, err)
-				} else {
-					var qcErr gorums.QuorumCallError
-					if errors.As(err, &qcErr) {
-						if qcErr.NodeErrors() != tt.failing {
-							t.Errorf("Expected %d node errors, got %d", tt.failing, qcErr.NodeErrors())
-						}
-					}
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Expected success, got error: %v", err)
-				}
+			// Validate error expectations using helper
+			if !checkQuorumCall(t, err, tt.wantErr, tt.failing) {
+				return
 			}
 		})
 	}

@@ -54,7 +54,7 @@ func TestAsync(t *testing.T) {
 			future := tt.call(responses)
 
 			reply, err := future.Get()
-			if !checkQuorumCall(t, ctx.Err(), err) {
+			if !checkQuorumCall(t, err, nil) {
 				return
 			}
 
