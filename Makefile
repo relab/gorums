@@ -59,6 +59,9 @@ compiletests: installgorums
 test: compiletests benchtest
 	@go test ./...
 
+integrationtest: compiletests
+	@go test -tags=integration ./...
+
 testrace: compiletests
 	go test -race -cpu=1,2,4 ./...
 

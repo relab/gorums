@@ -27,6 +27,7 @@ gengorums
 genproto
 GOBIN
 godoc
+gofmt
 golangci
 goleak
 GOPATH
@@ -44,6 +45,7 @@ Idxs
 Iface
 Ingve
 installgorums
+integrationtest
 Jehl
 Lmsgprefix
 Mallocs
@@ -63,6 +65,7 @@ Paxos
 Pedersen
 pkgs
 pluginpb
+pprof
 proto
 protobuf
 protoc

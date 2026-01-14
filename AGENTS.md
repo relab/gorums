@@ -65,6 +65,16 @@ These files are generated from templates. Instead:
 - If suitable, tests should be organized as subtests
 - Test names should be capitalized, like TestFileNameFeatureName, e.g., TestQuorumCallFeatureName, for some feature in `quorumcall_test.go`
 
+#### Testing Modes
+
+Gorums has two testing modes:
+
+- **Default (bufconn):** Uses in-memory connections for faster tests during development.
+- **Integration:** Uses real TCP connections with `-tags=integration`, for end-to-end validation.
+
+For most development work, use the default bufconn mode.
+Use integration mode for performance benchmarking and network-specific validation.
+
 ### Code Style and Conventions
 
 - **Match existing code style** - consistency within files is paramount
@@ -116,11 +126,17 @@ make
 # Force rebuild
 make -B
 
-# Run tests
+# Run tests (uses bufconn by default)
 make test
+
+# Run integration tests (uses real TCP connections)
+make integrationtest
 
 # Ensure tests are actually run (not skipped by cache)
 go test ./... -count=1
+
+# Run integration tests directly
+go test -tags=integration ./...
 
 # Install protoc-gen-gorums plugin
 make installgorums
@@ -176,7 +192,7 @@ Before making significant changes, consult:
 ## Common Pitfalls to Avoid
 
 1. **Editing Generated Files Directly** - Always edit templates instead
-2. **Skipping `make` After Changes** - Templates must be rebundled/regenerated
+2. **Skipping `make` After Changes** - Templates must be regenerated
 3. **Breaking Backward Compatibility** - Require explicit approval from project maintainer
 4. **Adding Unnecessary Features** - Follow YAGNI (You Aren't Gonna Need It)
 5. **Ignoring Test Failures** - All tests must pass
