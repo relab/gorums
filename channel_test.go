@@ -240,7 +240,7 @@ func TestChannelErrors(t *testing.T) {
 			setup: func(t *testing.T) *Node {
 				return testNodeWithoutServer(t)
 			},
-			wantErr: "connect: connection refused",
+			wantErr: "connection error",
 		},
 		{
 			name: "EnqueueToClosedChannel",
@@ -278,7 +278,7 @@ func TestChannelErrors(t *testing.T) {
 				stopServer()
 				return node
 			},
-			wantErr: "connect: connection refused",
+			wantErr: "connection error",
 		},
 	}
 	for i, tt := range tests {
@@ -289,9 +289,9 @@ func TestChannelErrors(t *testing.T) {
 			// Send message and verify error
 			resp := sendRequest(t, node, request{waitSendDone: true}, uint64(i))
 			if resp.Err == nil {
-				t.Errorf("expected error '%s' but got nil", tt.wantErr)
+				t.Errorf("expected error containing %q but got nil", tt.wantErr)
 			} else if !strings.Contains(resp.Err.Error(), tt.wantErr) {
-				t.Errorf("expected error '%s', got: %v", tt.wantErr, resp.Err)
+				t.Errorf("expected error containing %q, got: %v", tt.wantErr, resp.Err)
 			}
 		})
 	}

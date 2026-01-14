@@ -46,20 +46,6 @@ func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) Ser
 	return srvFn
 }
 
-// getOrCreateManager returns the existing manager or creates a new one.
-// If a new manager is created, its cleanup is registered via t.Cleanup.
-func (to *testOptions) getOrCreateManager(t testing.TB) *Manager {
-	if to.existingMgr != nil {
-		// Don't register cleanup - caller is responsible for closing the manager
-		return to.existingMgr
-	}
-	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
-	mgrOpts := append([]ManagerOption{InsecureDialOptions(t)}, to.managerOpts...)
-	mgr := NewManager(mgrOpts...)
-	t.Cleanup(Closer(t, mgr))
-	return mgr
-}
-
 // nodeListOption returns the appropriate NodeListOption for the configuration.
 // It uses provided options if available, or generates defaults based on whether
 // an existing manager is being reused.

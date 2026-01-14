@@ -3,6 +3,7 @@ benchgraph
 benchtest
 benchtime
 bootstrapgorums
+bufconn
 calltype
 calltypes
 checkf
@@ -92,6 +93,7 @@ stresstest
 struct
 subtests
 syncrq
+synctest
 testprotos
 testrace
 testutils
