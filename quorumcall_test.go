@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/relab/gorums"
@@ -80,7 +81,7 @@ func TestQuorumCall(t *testing.T) {
 	}
 }
 
-func TestPartialFailures(t *testing.T) {
+func TestQuorumCallPartialFailures(t *testing.T) {
 	// Function type for the call to test
 	type callInfo struct {
 		name     string
@@ -237,6 +238,73 @@ func TestQuorumCallCollectAll(t *testing.T) {
 	if len(collected) != 3 {
 		t.Errorf("Expected 3 responses, got %d", len(collected))
 	}
+}
+
+func TestQuorumCallSynctest(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// Create configuration inside synctest bubble for controlled time
+		config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn, gorums.SkipGoleak())
+		ctx := gorums.TestContext(t, 2*time.Second)
+		cfgCtx := config.Context(ctx)
+
+		responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+			cfgCtx,
+			pb.String("synctest-demo"),
+			mock.TestMethod,
+		)
+
+		resp, err := responses.Majority()
+		if err != nil {
+			t.Fatalf("QuorumCall failed: %v", err)
+		}
+
+		if resp.GetValue() != "echo: synctest-demo" {
+			t.Errorf("Expected 'echo: synctest-demo', got '%s'", resp.GetValue())
+		}
+
+		t.Log("Gorums basic operations work with synctest!")
+	})
+}
+
+func TestQuorumCallAsyncSynctest(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		config := gorums.TestConfiguration(t, 5, gorums.EchoServerFn, gorums.SkipGoleak())
+		ctx := gorums.TestContext(t, 3*time.Second)
+		cfgCtx := config.Context(ctx)
+
+		// Test async operations
+		future1 := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+			cfgCtx,
+			pb.String("async1"),
+			mock.TestMethod,
+		).AsyncMajority()
+
+		future2 := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+			cfgCtx,
+			pb.String("async2"),
+			mock.TestMethod,
+		).AsyncMajority()
+
+		// Wait for both to complete
+		reply1, err1 := future1.Get()
+		reply2, err2 := future2.Get()
+
+		if err1 != nil {
+			t.Fatalf("Future1 error: %v", err1)
+		}
+		if err2 != nil {
+			t.Fatalf("Future2 error: %v", err2)
+		}
+
+		if reply1.GetValue() != "echo: async1" {
+			t.Errorf("Expected 'echo: async1', got '%s'", reply1.GetValue())
+		}
+		if reply2.GetValue() != "echo: async2" {
+			t.Errorf("Expected 'echo: async2', got '%s'", reply2.GetValue())
+		}
+
+		t.Log("Gorums async operations work with synctest!")
+	})
 }
 
 // BenchmarkQuorumCallTerminalMethods benchmarks the built-in terminal methods with real servers.
