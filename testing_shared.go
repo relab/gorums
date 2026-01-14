@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"maps"
 	"net"
 	"slices"
 	"sync"
@@ -67,11 +66,12 @@ func TestConfiguration(t testing.TB, numServers int, srvFn func(i int) ServerIfa
 
 	// Register goleak check FIRST so it runs LAST (LIFO order)
 	// Only register if not reusing an existing manager (to avoid duplicate checks)
-	if _, ok := t.(*testing.B); !ok && !testOpts.hasManager() {
+	// and if goleak checks are not explicitly skipped
+	if _, ok := t.(*testing.B); !ok && !testOpts.shouldSkipGoleak() {
 		t.Cleanup(func() { goleak.VerifyNone(t) })
 	}
 
-	// Start servers and register cleanup
+	// Start servers and register cleanup - implementation varies by build tag
 	addrs, stopFn := testSetupServers(t, numServers, testOpts.serverFunc(srvFn))
 	stopAllFn := func() { stopFn() } // wrap to call without arguments to stop all servers
 	t.Cleanup(stopAllFn)
@@ -123,8 +123,8 @@ func TestNode(t testing.TB, srvFn func(i int) ServerIface, opts ...TestOption) *
 // Example usage:
 //
 //	addrs := gorums.TestServers(t, 3, serverFn)
-//	mgr := gorums.NewManager(gorums.InsecureGrpcDialOptions(t))
-//	t.Cleanup(mgr.Close)
+//	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+//	t.Cleanup(gorums.Closer(t, mgr))
 //	...
 //
 // This function can be used by other packages for testing purposes, as long as
@@ -179,10 +179,11 @@ func (s *serverState) stop(t testing.TB) {
 	<-s.stopped
 }
 
-// testSetupServers is the internal implementation of server setup.
+// setupServers is the internal implementation of server setup.
 // It starts servers and returns addresses and a variadic stop function.
-// Call with no arguments to stop all servers, or with specific indices to stop those servers.
-func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func(...int)) {
+// The stop function should be called with the indices of servers to stop,
+// or with no arguments to stop all servers.
+func setupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface, listenFn func(i int) net.Listener) ([]string, func(...int)) {
 	t.Helper()
 
 	addrs := make([]string, numServers)
@@ -196,13 +197,13 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 		} else {
 			srv = initServer(i)
 		}
-		lis, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			t.Fatalf("Failed to listen on port: %v", err)
-		}
+		lis := listenFn(i)
+
 		addrs[i] = lis.Addr().String()
 		state := &serverState{srv: srv, lis: lis, stopped: make(chan struct{})}
+		muActive.Lock()
 		active[i] = state
+		muActive.Unlock()
 
 		go state.start(t)
 	}
@@ -215,13 +216,12 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 		// Stop specific servers
 		toStop := make([]*serverState, 0, len(indices))
 		muActive.Lock()
-		maps.DeleteFunc(active, func(k int, v *serverState) bool {
-			found := slices.Contains(indices, k)
-			if found {
-				toStop = append(toStop, v)
+		for _, idx := range indices {
+			if state, ok := active[idx]; ok {
+				delete(active, idx)
+				toStop = append(toStop, state)
 			}
-			return found
-		})
+		}
 		muActive.Unlock()
 
 		// Stop and wait for each server

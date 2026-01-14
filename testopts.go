@@ -25,11 +25,14 @@ type testOptions struct {
 	existingMgr    *Manager
 	stopFuncPtr    *func(...int)       // pointer to capture the variadic stop function
 	preConnectHook func(stopFn func()) // called before connecting to servers
+	skipGoleak     bool                // skip goleak checks (useful for synctest)
 }
 
-// hasManager returns true if an existing manager was provided.
-func (to *testOptions) hasManager() bool {
-	return to.existingMgr != nil
+// shouldSkipGoleak returns true if goleak checks should be skipped.
+// This includes cases where an existing manager is reused (since it may
+// already have its own goleak checks) or when SkipGoleak option is set.
+func (to *testOptions) shouldSkipGoleak() bool {
+	return to.existingMgr != nil || to.skipGoleak
 }
 
 // serverFunc returns a server creation function based on the server options.
@@ -95,6 +98,8 @@ func extractTestOptions(opts []TestOption) testOptions {
 			result.stopFuncPtr = o.stopFunc
 		case preConnectProvider:
 			result.preConnectHook = o.hook
+		case skipGoleakProvider:
+			result.skipGoleak = true
 		}
 	}
 	return result
@@ -165,4 +170,20 @@ func WithPreConnect(_ testing.TB, fn func(stopServers func())) TestOption {
 		panic("gorums: WithPreConnect called with nil function")
 	}
 	return preConnectProvider{hook: fn}
+}
+
+// skipGoleakProvider is a TestOption that disables goleak checks.
+type skipGoleakProvider struct{}
+
+// SkipGoleak returns a TestOption that disables goleak checks for the test.
+// This is useful when using synctest, which creates goroutines that goleak
+// cannot properly track.
+//
+// Usage:
+//
+//	config := gorums.TestConfiguration(t, 3, nil, gorums.SkipGoleak())
+//
+// This option is intended for testing purposes only.
+func SkipGoleak() TestOption {
+	return skipGoleakProvider{}
 }
