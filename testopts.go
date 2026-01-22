@@ -36,12 +36,20 @@ func (to *testOptions) shouldSkipGoleak() bool {
 }
 
 // serverFunc returns a server creation function based on the server options.
-// If no server options are provided, it returns nil (use default server).
+// If srvFn is nil, it returns a default server function that creates servers
+// with the provided server options and registers default handlers.
+// If srvFn is not nil and server options are provided, it panics since
+// options cannot be applied to a custom server function.
 func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) ServerIface {
-	if srvFn == nil && len(to.serverOpts) > 0 {
-		return func(_ int) ServerIface {
-			return NewServer(to.serverOpts...)
+	if srvFn == nil {
+		// Use default server, potentially with custom options
+		return func(i int) ServerIface {
+			return defaultTestServer(i, to.serverOpts...)
 		}
+	}
+	if len(to.serverOpts) > 0 {
+		// You need to pass nil as the server function to use server options with the default server
+		panic("gorums: cannot use server options with a custom server function; use nil to use the default test server")
 	}
 	return srvFn
 }

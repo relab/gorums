@@ -236,7 +236,14 @@ func Range(n int) iter.Seq[int] {
 }
 
 func DefaultTestServer(i int) ServerIface {
-	srv := NewServer()
+	return defaultTestServer(i)
+}
+
+// defaultTestServer creates a test server with optional server options.
+// This is the internal implementation used by both DefaultTestServer and
+// the test framework when server options are provided.
+func defaultTestServer(i int, opts ...ServerOption) ServerIface {
+	srv := NewServer(opts...)
 	ts := testSrv{val: int32((i + 1) * 10)}
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
 		resp, err := ts.Test(ctx, in.GetProtoMessage())
