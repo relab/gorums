@@ -60,7 +60,7 @@ func TestManagerNewNode(t *testing.T) {
 }
 
 func TestManagerNewNodeWithConn(t *testing.T) {
-	addrs := TestServers(t, 3, DefaultServer)
+	addrs := TestServers(t, 3, DefaultTestServer)
 	mgr := NewManager(InsecureDialOptions(t))
 	t.Cleanup(Closer(t, mgr))
 

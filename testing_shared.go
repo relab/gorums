@@ -235,7 +235,7 @@ func Range(n int) iter.Seq[int] {
 	}
 }
 
-func DefaultServer(i int) ServerIface {
+func DefaultTestServer(i int) ServerIface {
 	srv := NewServer()
 	ts := testSrv{val: int32((i + 1) * 10)}
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
