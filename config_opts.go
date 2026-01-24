@@ -11,6 +11,44 @@ type NodeListOption interface {
 	newConfig(*Manager) (Configuration, error)
 }
 
+// NodeAddress must be implemented by types that can be used as node addresses.
+type NodeAddress interface {
+	Addr() string
+}
+
+type structNodeMap[T NodeAddress] struct {
+	nodes map[uint32]T
+}
+
+func (structNodeMap[T]) isOption() {}
+
+func (o structNodeMap[T]) newConfig(mgr *Manager) (nodes Configuration, err error) {
+	if len(o.nodes) == 0 {
+		return nil, fmt.Errorf("config: missing required node map")
+	}
+	nodes = make(Configuration, 0, len(o.nodes))
+	for id, n := range o.nodes {
+		node, found := mgr.Node(id)
+		if !found {
+			node, err = mgr.newNode(n.Addr(), id)
+			if err != nil {
+				return nil, err
+			}
+		}
+		nodes = append(nodes, node)
+	}
+	// Sort nodes to ensure deterministic iteration.
+	OrderedBy(ID).Sort(mgr.nodes)
+	OrderedBy(ID).Sort(nodes)
+	return nodes, nil
+}
+
+// WithNodes returns a NodeListOption containing the provided
+// mapping from application-specific IDs to types implementing NodeAddress.
+func WithNodes[T NodeAddress](nodes map[uint32]T) NodeListOption {
+	return &structNodeMap[T]{nodes: nodes}
+}
+
 type nodeIDMap struct {
 	idMap map[string]uint32
 }

@@ -101,6 +101,47 @@ func TestNewConfigurationNodeMap(t *testing.T) {
 	}
 }
 
+type testNode struct {
+	addr string
+}
+
+func (n testNode) Addr() string {
+	return n.addr
+}
+
+func TestNewConfigurationWithNodes(t *testing.T) {
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(gorums.Closer(t, mgr))
+
+	nodes := map[uint32]testNode{
+		1: {addr: "127.0.0.1:9080"},
+		2: {addr: "127.0.0.1:9081"},
+		3: {addr: "127.0.0.1:9082"},
+		4: {addr: "127.0.0.1:9083"},
+	}
+
+	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodes(nodes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Size() != len(nodes) {
+		t.Errorf("cfg.Size() = %d, expected %d", cfg.Size(), len(nodes))
+	}
+	for _, node := range cfg.Nodes() {
+		if nodes[node.ID()].addr != node.Address() {
+			t.Errorf("cfg.Nodes()[%d] = %s, expected %s", node.ID(), node.Address(), nodes[node.ID()].addr)
+		}
+	}
+	if mgr.Size() != len(nodes) {
+		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes))
+	}
+	for _, node := range mgr.Nodes() {
+		if nodes[node.ID()].addr != node.Address() {
+			t.Errorf("mgr.Nodes()[%d] = %s, expected %s", node.ID(), node.Address(), nodes[node.ID()].addr)
+		}
+	}
+}
+
 func TestNewConfigurationNodeIDs(t *testing.T) {
 	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
