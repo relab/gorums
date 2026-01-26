@@ -19,11 +19,11 @@ import (
 // option. Use gorums.MapRequest to transform requests per-node.
 //
 // This method should be used by generated code only.
-func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, opts ...CallOption) error {
+func Multicast[T NodeID, Req proto.Message](ctx *ConfigContext[T], msg Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Multicast, opts...)
 	waitSendDone := callOpts.mustWaitSendDone()
 
-	clientCtx := newClientCtxBuilder[Req, *emptypb.Empty](ctx, msg, method).WithWaitSendDone(waitSendDone).Build()
+	clientCtx := newClientCtxBuilder[T, Req, *emptypb.Empty](ctx, msg, method).WithWaitSendDone(waitSendDone).Build()
 	clientCtx.applyInterceptors(callOpts.interceptors)
 
 	// Send messages immediately (multicast doesn't use lazy sending)
@@ -31,19 +31,19 @@ func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, op
 
 	// If waiting for send completion, drain the reply channel and return the first error.
 	if waitSendDone {
-		var errs []nodeError
+		var errs []nodeError[T]
 		for range clientCtx.expectedReplies {
 			select {
 			case r := <-clientCtx.replyChan:
 				if r.Err != nil {
-					errs = append(errs, nodeError{cause: r.Err, nodeID: r.NodeID})
+					errs = append(errs, nodeError[T]{cause: r.Err, nodeID: r.NodeID})
 				}
 			case <-ctx.Done():
 				return ctx.Err()
 			}
 		}
 		if len(errs) > 0 {
-			return QuorumCallError{cause: ErrSendFailure, errors: errs}
+			return QuorumCallError[T]{cause: ErrSendFailure, errors: errs}
 		}
 	}
 	return nil

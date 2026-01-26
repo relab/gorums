@@ -2,7 +2,7 @@ package gengorums
 
 var unicastVar = `
 {{$genFile := .GenFile}}
-{{$nodeContext := use "gorums.NodeContext" .GenFile}}
+{{$nodeContext := "NodeContext"}}
 {{$unicast := use "gorums.Unicast" .GenFile}}
 {{$callOpt := use "gorums.CallOption" .GenFile}}
 `

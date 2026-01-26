@@ -18,25 +18,25 @@ var ErrTypeMismatch = errors.New("response type mismatch")
 
 // QuorumCallError reports on a failed quorum call.
 // It provides detailed information about which nodes failed.
-type QuorumCallError struct {
+type QuorumCallError[T NodeID] struct {
 	cause  error
-	errors []nodeError
+	errors []nodeError[T]
 }
 
 // Cause returns the underlying cause of the quorum call failure.
 // Common causes include ErrIncomplete and ErrSendFailure.
-func (e QuorumCallError) Cause() error {
+func (e QuorumCallError[T]) Cause() error {
 	return e.cause
 }
 
 // NodeErrors returns the number of nodes that failed during the quorum call.
-func (e QuorumCallError) NodeErrors() int {
+func (e QuorumCallError[T]) NodeErrors() int {
 	return len(e.errors)
 }
 
 // Is reports whether the target error is the same as the cause of the QuorumCallError.
-func (e QuorumCallError) Is(target error) bool {
-	if t, ok := target.(QuorumCallError); ok {
+func (e QuorumCallError[T]) Is(target error) bool {
+	if t, ok := target.(QuorumCallError[T]); ok {
 		return e.cause == t.cause
 	}
 	return e.cause == target
@@ -44,14 +44,14 @@ func (e QuorumCallError) Is(target error) bool {
 
 // Unwrap returns all the underlying node errors as a slice.
 // This allows the error to work with errors.Is and errors.As for any wrapped errors.
-func (e QuorumCallError) Unwrap() (errs []error) {
+func (e QuorumCallError[T]) Unwrap() (errs []error) {
 	for _, ne := range e.errors {
 		errs = append(errs, ne.cause)
 	}
 	return errs
 }
 
-func (e QuorumCallError) Error() string {
+func (e QuorumCallError[T]) Error() string {
 	s := fmt.Sprintf("quorum call error: %s (errors: %d)", e.cause, len(e.errors))
 	var b strings.Builder
 	b.WriteString(s)
@@ -68,11 +68,11 @@ func (e QuorumCallError) Error() string {
 }
 
 // nodeError reports on a failed RPC call from a specific node.
-type nodeError struct {
+type nodeError[T NodeID] struct {
 	cause  error
-	nodeID uint32
+	nodeID T
 }
 
-func (e nodeError) Error() string {
-	return fmt.Sprintf("node %d: %v", e.nodeID, e.cause)
+func (e nodeError[T]) Error() string {
+	return fmt.Sprintf("node %v: %v", e.nodeID, e.cause)
 }

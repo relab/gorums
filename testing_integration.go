@@ -24,14 +24,14 @@ func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIfac
 
 // getOrCreateManager returns the existing manager or creates a new one with real network dialing.
 // If a new manager is created, its cleanup is registered via t.Cleanup.
-func (to *testOptions) getOrCreateManager(t testing.TB) *Manager {
+func (to *testOptions) getOrCreateManager(t testing.TB) *Manager[uint32] {
 	if to.existingMgr != nil {
 		// Don't register cleanup - caller is responsible for closing the manager
 		return to.existingMgr
 	}
 	// Create manager and register its cleanup LAST so it runs FIRST (LIFO)
 	mgrOpts := append([]ManagerOption{InsecureDialOptions(t)}, to.managerOpts...)
-	mgr := NewManager(mgrOpts...)
+	mgr := NewManager[uint32](mgrOpts...)
 	t.Cleanup(Closer(t, mgr))
 	return mgr
 }

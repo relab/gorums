@@ -15,7 +15,7 @@ var rpcSignature = `func {{$method}}(` +
 
 var rpcVar = `
 {{$genFile := .GenFile}}
-{{$nodeContext := use "gorums.NodeContext" .GenFile}}
+{{$nodeContext := "NodeContext"}}
 {{$rpcCall := use "gorums.RPCCall" .GenFile}}
 {{$_ := use "gorums.EnforceVersion" .GenFile}}
 `
