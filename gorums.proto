@@ -9,7 +9,7 @@ option go_package = "github.com/relab/gorums";
 option features.field_presence = IMPLICIT;
 
 extend google.protobuf.FileOptions {
-  string node_id = 40001;
+  string node_id_type = 40001;
 }
 
 extend google.protobuf.MethodOptions {
