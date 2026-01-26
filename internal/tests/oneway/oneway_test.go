@@ -38,7 +38,7 @@ func (s *onewaySrv) Multicast(_ gorums.ServerCtx, r *oneway.Request) {
 // setupWithNodeMap sets up servers and configuration with sequential node IDs
 // (0, 1, 2, ...) matching the server array indices. This is needed for tests like
 // TestMulticastPerNode that verify per-node message transformations based on node ID.
-func setupWithNodeMap(t testing.TB, cfgSize int) (cfg gorums.Configuration, srvs []*onewaySrv) {
+func setupWithNodeMap(t testing.TB, cfgSize int) (cfg oneway.Configuration, srvs []*onewaySrv) {
 	t.Helper()
 	srvs = make([]*onewaySrv, cfgSize)
 	for i := range cfgSize {
@@ -126,7 +126,7 @@ func TestMulticastPerNode(t *testing.T) {
 
 	// transformation function that uses the MapRequest interceptor
 	// to add the msg ID + node ID to the Num field
-	f := func(msg *oneway.Request, node *gorums.Node) *oneway.Request {
+	f := func(msg *oneway.Request, node *oneway.Node) *oneway.Request {
 		return oneway.Request_builder{Num: add(msg.GetNum(), node.ID())}.Build()
 	}
 	// the ignoreNodes slice is updated in each test case below; it is a hack
@@ -139,7 +139,7 @@ func TestMulticastPerNode(t *testing.T) {
 		return false
 	}
 	// transformation for all except some nodes that are ignored
-	g := func(msg *oneway.Request, node *gorums.Node) *oneway.Request {
+	g := func(msg *oneway.Request, node *oneway.Node) *oneway.Request {
 		if ignore(node.ID()) {
 			return nil
 		}
@@ -151,7 +151,7 @@ func TestMulticastPerNode(t *testing.T) {
 		servers     int
 		sendWait    bool
 		ignoreNodes []int
-		mapFunc     func(*oneway.Request, *gorums.Node) *oneway.Request
+		mapFunc     func(*oneway.Request, *oneway.Node) *oneway.Request
 	}{
 		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 1, sendWait: false, mapFunc: f},
 		{name: "MulticastPerNodeNoSendWaiting", calls: numCalls, servers: 3, sendWait: false, mapFunc: f},
@@ -186,7 +186,7 @@ func TestMulticastPerNode(t *testing.T) {
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				cfgCtx := config.Context(context.Background())
-				mapInterceptor := gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.mapFunc)
+				mapInterceptor := gorums.MapRequest[uint32, *oneway.Request, *emptypb.Empty](test.mapFunc)
 				if test.sendWait {
 					if err := oneway.Multicast(cfgCtx, in,
 						gorums.Interceptors(mapInterceptor),

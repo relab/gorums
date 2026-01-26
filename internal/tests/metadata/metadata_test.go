@@ -15,7 +15,7 @@ import (
 
 type testSrv struct{}
 
-func (testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeID, err error) {
+func (testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeIDMsg, err error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.NotFound, "metadata unavailable")
@@ -28,7 +28,7 @@ func (testSrv) IDFromMD(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *NodeID, e
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "value of id field: %q is not a number: %v", v[0], err)
 	}
-	return NodeID_builder{ID: id}.Build(), nil
+	return NodeIDMsg_builder{ID: id}.Build(), nil
 }
 
 func (testSrv) WhatIP(ctx gorums.ServerCtx, _ *emptypb.Empty) (resp *IPAddr, err error) {
