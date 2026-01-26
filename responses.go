@@ -190,11 +190,11 @@ func (r *Responses[T, Resp]) All() (Resp, error) {
 func (r *Responses[T, Resp]) Threshold(threshold int) (resp Resp, err error) {
 	var (
 		count int
-		errs  []nodeError[T]
+		errs  []nodeError
 	)
 	for result := range r.ResponseSeq {
 		if result.Err != nil {
-			errs = append(errs, nodeError[T]{nodeID: result.NodeID, cause: result.Err})
+			errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
 			continue
 		}
 		if count == 0 {
@@ -207,5 +207,5 @@ func (r *Responses[T, Resp]) Threshold(threshold int) (resp Resp, err error) {
 			return resp, nil
 		}
 	}
-	return resp, QuorumCallError[T]{cause: ErrIncomplete, errors: errs}
+	return resp, QuorumCallError{cause: ErrIncomplete, errors: errs}
 }

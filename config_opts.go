@@ -236,7 +236,7 @@ func (c Configuration[T]) Except(rm Configuration[T]) NodeListOption[T] {
 // If specific error types are provided, only nodes whose errors match
 // one of those types (using errors.Is) will be excluded.
 // If no error types are provided, all failed nodes are excluded.
-func (c Configuration[T]) WithoutErrors(err QuorumCallError[T], errorTypes ...error) NodeListOption[T] {
+func (c Configuration[T]) WithoutErrors(err QuorumCallError, errorTypes ...error) NodeListOption[T] {
 	// Decide whether an error should exclude a node.
 	exclude := func(cause error) bool {
 		if len(errorTypes) == 0 {
@@ -253,7 +253,7 @@ func (c Configuration[T]) WithoutErrors(err QuorumCallError[T], errorTypes ...er
 	// Build a map of node IDs to exclude
 	rm := make(map[T]bool, len(err.errors))
 	for _, ne := range err.errors {
-		rm[ne.nodeID] = exclude(ne.cause)
+		rm[ne.nodeID.(T)] = exclude(ne.cause)
 	}
 
 	// Build the list of node IDs to keep

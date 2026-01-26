@@ -77,10 +77,10 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 type NodeID = uint32
 
 // AsyncResponse is a future for async quorum calls returning *Response.
-type AsyncResponse = *gorums.Async[NodeID, *Response]
+type AsyncResponse = *gorums.Async[*Response]
 
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
-type CorrectableResponse = *gorums.Correctable[NodeID, *Response]
+type CorrectableResponse = *gorums.Correctable[*Response]
 
 // Correctable is a quorum call invoked on all nodes in the configuration,
 // with the same argument in. Use terminal methods like Majority(), First(),

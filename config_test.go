@@ -308,7 +308,7 @@ func TestConfigurationWithoutErrors(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		qcErr        gorums.QuorumCallError[uint32]
+		qcErr        gorums.QuorumCallError
 		errorTypes   []error
 		wantExcluded []uint32
 	}{

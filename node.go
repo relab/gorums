@@ -97,7 +97,7 @@ func newNode[T NodeID](addr string, opts nodeOptions[T]) (*Node[T], error) {
 	// Create gRPC connection to the node without connecting (lazy dial).
 	conn, err := grpc.NewClient(n.addr, opts.DialOpts...)
 	if err != nil {
-		return nil, nodeError[T]{nodeID: n.id, cause: err}
+		return nil, nodeError{nodeID: n.id, cause: err}
 	}
 
 	// Create outgoing context with metadata for this node's stream.

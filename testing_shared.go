@@ -37,12 +37,12 @@ func InsecureDialOptions(_ testing.TB) ManagerOption {
 
 // TestQuorumCallError creates a QuorumCallError for testing.
 // The nodeErrors map contains node IDs and their corresponding errors.
-func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallError[uint32] {
-	errs := make([]nodeError[uint32], 0, len(nodeErrors))
+func TestQuorumCallError(_ testing.TB, nodeErrors map[uint32]error) QuorumCallError {
+	errs := make([]nodeError, 0, len(nodeErrors))
 	for nodeID, err := range nodeErrors {
-		errs = append(errs, nodeError[uint32]{cause: err, nodeID: nodeID})
+		errs = append(errs, nodeError{cause: err, nodeID: nodeID})
 	}
-	return QuorumCallError[uint32]{cause: ErrIncomplete, errors: errs}
+	return QuorumCallError{cause: ErrIncomplete, errors: errs}
 }
 
 // TestConfiguration creates servers and a configuration for testing.

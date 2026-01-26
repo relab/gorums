@@ -31,19 +31,19 @@ func Multicast[T NodeID, Req proto.Message](ctx *ConfigContext[T], msg Req, meth
 
 	// If waiting for send completion, drain the reply channel and return the first error.
 	if waitSendDone {
-		var errs []nodeError[T]
+		var errs []nodeError
 		for range clientCtx.expectedReplies {
 			select {
 			case r := <-clientCtx.replyChan:
 				if r.Err != nil {
-					errs = append(errs, nodeError[T]{cause: r.Err, nodeID: r.NodeID})
+					errs = append(errs, nodeError{cause: r.Err, nodeID: r.NodeID})
 				}
 			case <-ctx.Done():
 				return ctx.Err()
 			}
 		}
 		if len(errs) > 0 {
-			return QuorumCallError[T]{cause: ErrSendFailure, errors: errs}
+			return QuorumCallError{cause: ErrSendFailure, errors: errs}
 		}
 	}
 	return nil

@@ -77,16 +77,16 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 type NodeID = uint32
 
 // AsyncReadResponse is a future for async quorum calls returning *ReadResponse.
-type AsyncReadResponse = *gorums.Async[NodeID, *ReadResponse]
+type AsyncReadResponse = *gorums.Async[*ReadResponse]
 
 // AsyncWriteResponse is a future for async quorum calls returning *WriteResponse.
-type AsyncWriteResponse = *gorums.Async[NodeID, *WriteResponse]
+type AsyncWriteResponse = *gorums.Async[*WriteResponse]
 
 // CorrectableReadResponse is a correctable object for quorum calls returning *ReadResponse.
-type CorrectableReadResponse = *gorums.Correctable[NodeID, *ReadResponse]
+type CorrectableReadResponse = *gorums.Correctable[*ReadResponse]
 
 // CorrectableWriteResponse is a correctable object for quorum calls returning *WriteResponse.
-type CorrectableWriteResponse = *gorums.Correctable[NodeID, *WriteResponse]
+type CorrectableWriteResponse = *gorums.Correctable[*WriteResponse]
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
