@@ -35,8 +35,8 @@ type Bench struct {
 
 type (
 	benchFunc   func(Options) (*Result, error)
-	qcFunc      func(*gorums.ConfigContext, *Echo, int, ...gorums.CallOption) (*Echo, error)
-	asyncQCFunc func(*gorums.ConfigContext, *Echo, int, ...gorums.CallOption) AsyncEcho
+	qcFunc      func(*ConfigContext, *Echo, int, ...gorums.CallOption) (*Echo, error)
+	asyncQCFunc func(*ConfigContext, *Echo, int, ...gorums.CallOption) AsyncEcho
 	serverFunc  func(context.Context, *TimedMsg)
 )
 
@@ -233,7 +233,7 @@ func GetBenchmarks(config Configuration) []Bench {
 			Name:        "QuorumCall",
 			Description: "NodeStream based quorum call implementation with FIFO ordering",
 			runBench: func(opts Options) (*Result, error) {
-				return runQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
+				return runQCBenchmark(opts, config, func(ctx *ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
 					return QuorumCall(ctx, in, callOpts...).Threshold(quorumSize)
 				})
 			},
@@ -242,7 +242,7 @@ func GetBenchmarks(config Configuration) []Bench {
 			Name:        "AsyncQuorumCall",
 			Description: "NodeStream based async quorum call implementation with FIFO ordering",
 			runBench: func(opts Options) (*Result, error) {
-				return runAsyncQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) AsyncEcho {
+				return runAsyncQCBenchmark(opts, config, func(ctx *ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) AsyncEcho {
 					return QuorumCall(ctx, in, callOpts...).AsyncThreshold(quorumSize)
 				})
 			},
@@ -251,7 +251,7 @@ func GetBenchmarks(config Configuration) []Bench {
 			Name:        "SlowServer",
 			Description: "Quorum Call with a 10s processing time on the server",
 			runBench: func(opts Options) (*Result, error) {
-				return runQCBenchmark(opts, config, func(ctx *gorums.ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
+				return runQCBenchmark(opts, config, func(ctx *ConfigContext, in *Echo, quorumSize int, callOpts ...gorums.CallOption) (*Echo, error) {
 					return SlowServer(ctx, in, callOpts...).Threshold(quorumSize)
 				})
 			},
