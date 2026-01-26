@@ -33,11 +33,11 @@ type Configuration[T NodeID] []*Node[T]
 //	config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 //	cfgCtx := config.Context(context.Background())
 //	resp, err := paxos.Prepare(cfgCtx, req)
-func (cfg Configuration[T]) Context(parent context.Context) *ConfigContext[T] {
-	if len(cfg) == 0 {
+func (c Configuration[T]) Context(parent context.Context) *ConfigContext[T] {
+	if len(c) == 0 {
 		panic("gorums: Context called with empty configuration")
 	}
-	return &ConfigContext[T]{Context: parent, cfg: cfg}
+	return &ConfigContext[T]{Context: parent, cfg: c}
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
