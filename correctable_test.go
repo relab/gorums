@@ -14,7 +14,7 @@ func TestCorrectableQuorumCall(t *testing.T) {
 	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
 	ctx := gorums.TestContext(t, 2*time.Second)
 
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
@@ -70,7 +70,7 @@ func TestCorrectableQuorumCallStream(t *testing.T) {
 			config := gorums.TestConfiguration(t, 3, gorums.StreamServerFn)
 			ctx := gorums.TestContext(t, 2*time.Second)
 
-			responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+			responses := gorums.QuorumCallStream[uint32, *pb.StringValue, *pb.StringValue](
 				config.Context(ctx),
 				pb.String("test"),
 				mock.Stream,
@@ -107,7 +107,7 @@ func TestCorrectableWatch(t *testing.T) {
 	config := gorums.TestConfiguration(t, 3, gorums.StreamServerFn)
 	ctx := gorums.TestContext(t, 2*time.Second)
 
-	responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+	responses := gorums.QuorumCallStream[uint32, *pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.Stream,
@@ -141,7 +141,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -161,7 +161,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -187,7 +187,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+				responses := gorums.QuorumCallStream[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.Stream,
@@ -207,7 +207,7 @@ func BenchmarkCorrectable(b *testing.B) { // skipcq: GO-R1005
 			threshold := numNodes/2 + 1
 			b.ReportAllocs()
 			for b.Loop() {
-				responses := gorums.QuorumCallStream[*pb.StringValue, *pb.StringValue](
+				responses := gorums.QuorumCallStream[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.Stream,

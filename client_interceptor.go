@@ -13,6 +13,7 @@ import (
 // requests, responses, and aggregation logic. Interceptors can be chained together.
 //
 // Type parameters:
+//   - T: The node ID type
 //   - Req: The request message type sent to nodes
 //   - Resp: The response message type from individual nodes
 //
@@ -22,35 +23,35 @@ import (
 //
 // Custom interceptors can be created like this:
 //
-//	func LoggingInterceptor[Req, Resp proto.Message](
-//	    ctx *gorums.ClientCtx[Req, Resp],
-//	    next gorums.ResponseSeq[Resp],
-//	) gorums.ResponseSeq[Resp] {
-//	    return func(yield func(gorums.NodeResponse[Resp]) bool) {
+//	func LoggingInterceptor[T NodeID, Req, Resp proto.Message](
+//	    ctx *gorums.ClientCtx[T, Req, Resp],
+//	    next gorums.ResponseSeq[T, Resp],
+//	) gorums.ResponseSeq[T, Resp] {
+//	    return func(yield func(gorums.NodeResponse[T, Resp]) bool) {
 //	        for resp := range next {
-//	            log.Printf("Response from node %d", resp.NodeID)
+//	            log.Printf("Response from node %v", resp.NodeID)
 //	            if !yield(resp) { return }
 //	        }
 //	    }
 //	}
-type QuorumInterceptor[Req, Resp msg] func(ctx *ClientCtx[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp]
+type QuorumInterceptor[T NodeID, Req, Resp msg] func(ctx *ClientCtx[T, Req, Resp], next ResponseSeq[T, Resp]) ResponseSeq[T, Resp]
 
 // ClientCtx provides context and access to the quorum call state for interceptors.
 // It exposes the request, configuration, metadata about the call, and the response iterator.
-type ClientCtx[Req, Resp msg] struct {
+type ClientCtx[T NodeID, Req, Resp msg] struct {
 	context.Context
-	config    Configuration
+	config    Configuration[T]
 	request   Req
 	method    string
 	md        *ordering.Metadata
-	replyChan chan NodeResponse[msg]
+	replyChan chan NodeResponse[T, msg]
 
 	// reqTransforms holds request transformation functions registered by interceptors.
-	reqTransforms []func(Req, *Node) Req
+	reqTransforms []func(Req, *Node[T]) Req
 
 	// responseSeq is the iterator that yields node responses.
 	// Interceptors can wrap this iterator to modify responses.
-	responseSeq ResponseSeq[Resp]
+	responseSeq ResponseSeq[T, Resp]
 
 	// expectedReplies is the number of responses expected from nodes.
 	// It is set when messages are sent and may be lower than config size
@@ -70,8 +71,8 @@ type ClientCtx[Req, Resp msg] struct {
 }
 
 // clientCtxBuilder provides an interface for constructing ClientCtx instances.
-type clientCtxBuilder[Req, Resp msg] struct {
-	c *ClientCtx[Req, Resp]
+type clientCtxBuilder[T NodeID, Req, Resp msg] struct {
+	c *ClientCtx[T, Req, Resp]
 	// chanMultiplier is the buffer multiplier for the reply channel.
 	// Default is 1; streaming calls use a larger multiplier.
 	chanMultiplier int
@@ -80,13 +81,13 @@ type clientCtxBuilder[Req, Resp msg] struct {
 // newClientCtxBuilder creates a new builder for constructing a ClientCtx.
 // The required parameters are provided upfront; optional settings use builder methods.
 // The metadata and reply channel are created at Build() time.
-func newClientCtxBuilder[Req, Resp msg](
-	ctx *ConfigContext,
+func newClientCtxBuilder[T NodeID, Req, Resp msg](
+	ctx *ConfigContext[T],
 	req Req,
 	method string,
-) *clientCtxBuilder[Req, Resp] {
-	return &clientCtxBuilder[Req, Resp]{
-		c: &ClientCtx[Req, Resp]{
+) *clientCtxBuilder[T, Req, Resp] {
+	return &clientCtxBuilder[T, Req, Resp]{
+		c: &ClientCtx[T, Req, Resp]{
 			Context:         ctx,
 			config:          ctx.Configuration(),
 			request:         req,
@@ -101,7 +102,7 @@ func newClientCtxBuilder[Req, Resp msg](
 // When enabled, the response iterator continues until context cancellation
 // rather than stopping after expectedReplies responses.
 // It also increases the reply channel buffer size (10x) to handle streaming volume.
-func (b *clientCtxBuilder[Req, Resp]) WithStreaming() *clientCtxBuilder[Req, Resp] {
+func (b *clientCtxBuilder[T, Req, Resp]) WithStreaming() *clientCtxBuilder[T, Req, Resp] {
 	b.c.streaming = true
 	b.chanMultiplier = 10
 	return b
@@ -109,17 +110,17 @@ func (b *clientCtxBuilder[Req, Resp]) WithStreaming() *clientCtxBuilder[Req, Res
 
 // WithWaitSendDone configures the clientCtx to wait for send completion.
 // Used by multicast calls to ensure messages are sent before returning.
-func (b *clientCtxBuilder[Req, Resp]) WithWaitSendDone(waitSendDone bool) *clientCtxBuilder[Req, Resp] {
+func (b *clientCtxBuilder[T, Req, Resp]) WithWaitSendDone(waitSendDone bool) *clientCtxBuilder[T, Req, Resp] {
 	b.c.waitSendDone = waitSendDone
 	return b
 }
 
 // Build finalizes the ClientCtx configuration and returns the constructed instance.
 // It creates the metadata and reply channel, and sets up the appropriate response iterator.
-func (b *clientCtxBuilder[Req, Resp]) Build() *ClientCtx[Req, Resp] {
+func (b *clientCtxBuilder[T, Req, Resp]) Build() *ClientCtx[T, Req, Resp] {
 	// Create metadata and reply channel at build time
 	b.c.md = ordering.NewGorumsMetadata(b.c.Context, b.c.config.nextMsgID(), b.c.method)
-	b.c.replyChan = make(chan NodeResponse[msg], b.c.config.Size()*b.chanMultiplier)
+	b.c.replyChan = make(chan NodeResponse[T, msg], b.c.config.Size()*b.chanMultiplier)
 
 	if b.c.streaming {
 		b.c.responseSeq = b.c.streamingResponseSeq()
@@ -134,29 +135,29 @@ func (b *clientCtxBuilder[Req, Resp]) Build() *ClientCtx[Req, Resp] {
 // -------------------------------------------------------------------------
 
 // Request returns the original request message for this quorum call.
-func (c *ClientCtx[Req, Resp]) Request() Req {
+func (c *ClientCtx[T, Req, Resp]) Request() Req {
 	return c.request
 }
 
 // Config returns the configuration (set of nodes) for this quorum call.
-func (c *ClientCtx[Req, Resp]) Config() Configuration {
+func (c *ClientCtx[T, Req, Resp]) Config() Configuration[T] {
 	return c.config
 }
 
 // Method returns the name of the RPC method being called.
-func (c *ClientCtx[Req, Resp]) Method() string {
+func (c *ClientCtx[T, Req, Resp]) Method() string {
 	return c.method
 }
 
 // Nodes returns the slice of nodes in this configuration.
-func (c *ClientCtx[Req, Resp]) Nodes() []*Node {
+func (c *ClientCtx[T, Req, Resp]) Nodes() []*Node[T] {
 	return c.config.Nodes()
 }
 
 // Node returns the node with the given ID.
-func (c *ClientCtx[Req, Resp]) Node(id uint32) *Node {
+func (c *ClientCtx[T, Req, Resp]) Node(id T) *Node[T] {
 	nodes := c.config.Nodes()
-	index := slices.IndexFunc(nodes, func(n *Node) bool {
+	index := slices.IndexFunc(nodes, func(n *Node[T]) bool {
 		return n.ID() == id
 	})
 	if index != -1 {
@@ -166,7 +167,7 @@ func (c *ClientCtx[Req, Resp]) Node(id uint32) *Node {
 }
 
 // Size returns the number of nodes in this configuration.
-func (c *ClientCtx[Req, Resp]) Size() int {
+func (c *ClientCtx[T, Req, Resp]) Size() int {
 	return c.config.Size()
 }
 
@@ -174,7 +175,7 @@ func (c *ClientCtx[Req, Resp]) Size() int {
 // invalid or the node should be skipped. It applies the registered transformation functions to
 // the given request for the specified node. Transformation functions are applied in the order
 // they were registered.
-func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *Node) proto.Message {
+func (c *ClientCtx[T, Req, Resp]) applyTransforms(req Req, node *Node[T]) proto.Message {
 	result := req
 	for _, transform := range c.reqTransforms {
 		result = transform(result, node)
@@ -190,10 +191,10 @@ func (c *ClientCtx[Req, Resp]) applyTransforms(req Req, node *Node) proto.Messag
 // applyInterceptors chains the given interceptors, wrapping the response sequence.
 // Each interceptor receives the current response sequence and returns a new one.
 // Interceptors are applied in order, with each wrapping the previous result.
-func (c *ClientCtx[Req, Resp]) applyInterceptors(interceptors []any) {
+func (c *ClientCtx[T, Req, Resp]) applyInterceptors(interceptors []any) {
 	responseSeq := c.responseSeq
 	for _, ic := range interceptors {
-		interceptor := ic.(QuorumInterceptor[Req, Resp])
+		interceptor := ic.(QuorumInterceptor[T, Req, Resp])
 		responseSeq = interceptor(c, responseSeq)
 	}
 	c.responseSeq = responseSeq
@@ -202,7 +203,7 @@ func (c *ClientCtx[Req, Resp]) applyInterceptors(interceptors []any) {
 // send dispatches requests to all nodes, applying any registered transformations.
 // It updates expectedReplies based on how many nodes actually receive requests
 // (nodes may be skipped if a transformation returns nil).
-func (c *ClientCtx[Req, Resp]) send() {
+func (c *ClientCtx[T, Req, Resp]) send() {
 	var expected int
 	for _, n := range c.config {
 		msg := c.applyTransforms(c.request, n)
@@ -210,7 +211,7 @@ func (c *ClientCtx[Req, Resp]) send() {
 			continue // Skip node if transformation returns nil
 		}
 		expected++
-		n.channel.enqueue(request{
+		n.channel.enqueue(request[T]{
 			ctx:          c.Context,
 			msg:          NewRequestMessage(c.md, msg),
 			streaming:    c.streaming,
@@ -223,14 +224,14 @@ func (c *ClientCtx[Req, Resp]) send() {
 
 // defaultResponseSeq returns an iterator that yields at most c.expectedReplies responses
 // from nodes until the context is canceled or all expected responses are received.
-func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
-	return func(yield func(NodeResponse[Resp]) bool) {
+func (c *ClientCtx[T, Req, Resp]) defaultResponseSeq() ResponseSeq[T, Resp] {
+	return func(yield func(NodeResponse[T, Resp]) bool) {
 		// Trigger sending on first iteration
 		c.sendOnce.Do(c.send)
 		for range c.expectedReplies {
 			select {
 			case r := <-c.replyChan:
-				res := newNodeResponse[Resp](r)
+				res := newNodeResponse[T, Resp](r)
 				if !yield(res) {
 					return // Consumer stopped iteration
 				}
@@ -243,14 +244,14 @@ func (c *ClientCtx[Req, Resp]) defaultResponseSeq() ResponseSeq[Resp] {
 
 // streamingResponseSeq returns an iterator that yields responses as they arrive
 // from nodes until the context is canceled or breaking from the range loop.
-func (c *ClientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
-	return func(yield func(NodeResponse[Resp]) bool) {
+func (c *ClientCtx[T, Req, Resp]) streamingResponseSeq() ResponseSeq[T, Resp] {
+	return func(yield func(NodeResponse[T, Resp]) bool) {
 		// Trigger sending on first iteration
 		c.sendOnce.Do(c.send)
 		for {
 			select {
 			case r := <-c.replyChan:
-				res := newNodeResponse[Resp](r)
+				res := newNodeResponse[T, Resp](r)
 				if !yield(res) {
 					return // Consumer stopped iteration
 				}
@@ -271,8 +272,8 @@ func (c *ClientCtx[Req, Resp]) streamingResponseSeq() ResponseSeq[Resp] {
 // The fn receives the original request and a node, and returns the transformed
 // request to send to that node. If the function returns an invalid message or nil,
 // the request to that node is skipped.
-func MapRequest[Req, Resp msg](fn func(Req, *Node) Req) QuorumInterceptor[Req, Resp] {
-	return func(ctx *ClientCtx[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp] {
+func MapRequest[T NodeID, Req, Resp msg](fn func(Req, *Node[T]) Req) QuorumInterceptor[T, Req, Resp] {
+	return func(ctx *ClientCtx[T, Req, Resp], next ResponseSeq[T, Resp]) ResponseSeq[T, Resp] {
 		if fn != nil {
 			ctx.reqTransforms = append(ctx.reqTransforms, fn)
 		}
@@ -284,13 +285,13 @@ func MapRequest[Req, Resp msg](fn func(Req, *Node) Req) QuorumInterceptor[Req, R
 //
 // The fn receives the response from a node and the node itself, and returns the
 // transformed response.
-func MapResponse[Req, Resp msg](fn func(Resp, *Node) Resp) QuorumInterceptor[Req, Resp] {
-	return func(ctx *ClientCtx[Req, Resp], next ResponseSeq[Resp]) ResponseSeq[Resp] {
+func MapResponse[T NodeID, Req, Resp msg](fn func(Resp, *Node[T]) Resp) QuorumInterceptor[T, Req, Resp] {
+	return func(ctx *ClientCtx[T, Req, Resp], next ResponseSeq[T, Resp]) ResponseSeq[T, Resp] {
 		if fn == nil {
 			return next
 		}
 		// Wrap the response iterator with the transformation logic.
-		return func(yield func(NodeResponse[Resp]) bool) {
+		return func(yield func(NodeResponse[T, Resp]) bool) {
 			for resp := range next {
 				// We only apply the transformation if there is no error.
 				// Errors are passed through as-is.

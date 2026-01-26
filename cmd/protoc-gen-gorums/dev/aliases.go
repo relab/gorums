@@ -5,11 +5,11 @@ import gorums "github.com/relab/gorums"
 // Type aliases for important Gorums types to make them more accessible
 // from user code already interacting with the generated code.
 type (
-	Configuration = gorums.Configuration
-	Manager       = gorums.Manager
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Configuration = gorums.Configuration[NodeID]
+	Manager       = gorums.Manager[NodeID]
+	Node          = gorums.Node[NodeID]
+	NodeContext   = gorums.NodeContext[NodeID]
+	ConfigContext = gorums.ConfigContext[NodeID]
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -26,14 +26,14 @@ var (
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
 func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return gorums.NewManager(opts...)
+	return gorums.NewManager[NodeID](opts...)
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, error) {
+func NewConfiguration(mgr *Manager, opt gorums.NodeListOption[NodeID]) (Configuration, error) {
 	return gorums.NewConfiguration(mgr, opt)
 }
 
@@ -54,5 +54,5 @@ func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, e
 // creates a new manager; if a manager already exists, use [NewConfiguration]
 // instead, and provide the existing manager as the first argument.
 func NewConfig(opts ...gorums.Option) (Configuration, error) {
-	return gorums.NewConfig(opts...)
+	return gorums.NewConfig[NodeID](opts...)
 }

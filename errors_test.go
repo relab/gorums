@@ -18,43 +18,43 @@ func TestQuorumCallErrorIs(t *testing.T) {
 	}{
 		{
 			name:   "SameCauseError",
-			err:    QuorumCallError{cause: ErrIncomplete},
+			err:    QuorumCallError[uint32]{cause: ErrIncomplete},
 			target: ErrIncomplete,
 			want:   true,
 		},
 		{
 			name:   "SameCauseQCError",
-			err:    QuorumCallError{cause: ErrIncomplete},
-			target: QuorumCallError{cause: ErrIncomplete},
+			err:    QuorumCallError[uint32]{cause: ErrIncomplete},
+			target: QuorumCallError[uint32]{cause: ErrIncomplete},
 			want:   true,
 		},
 		{
 			name:   "DifferentError",
-			err:    QuorumCallError{cause: ErrIncomplete},
+			err:    QuorumCallError[uint32]{cause: ErrIncomplete},
 			target: errors.New("incomplete call"),
 			want:   false,
 		},
 		{
 			name:   "DifferentQCError",
-			err:    QuorumCallError{cause: ErrIncomplete},
-			target: QuorumCallError{cause: errors.New("incomplete call")},
+			err:    QuorumCallError[uint32]{cause: ErrIncomplete},
+			target: QuorumCallError[uint32]{cause: errors.New("incomplete call")},
 			want:   false,
 		},
 		{
 			name:   "ContextCanceled",
-			err:    QuorumCallError{cause: context.Canceled},
+			err:    QuorumCallError[uint32]{cause: context.Canceled},
 			target: context.Canceled,
 			want:   true,
 		},
 		{
 			name:   "ContextCanceledQC",
-			err:    QuorumCallError{cause: context.Canceled},
-			target: QuorumCallError{cause: context.Canceled},
+			err:    QuorumCallError[uint32]{cause: context.Canceled},
+			target: QuorumCallError[uint32]{cause: context.Canceled},
 			want:   true,
 		},
 		{
 			name:   "ContextDeadlineExceeded",
-			err:    QuorumCallError{cause: context.DeadlineExceeded},
+			err:    QuorumCallError[uint32]{cause: context.DeadlineExceeded},
 			target: context.DeadlineExceeded,
 			want:   true,
 		},
@@ -71,13 +71,13 @@ func TestQuorumCallErrorIs(t *testing.T) {
 func TestQuorumCallErrorAccessors(t *testing.T) {
 	tests := []struct {
 		name           string
-		qcErr          QuorumCallError
+		qcErr          QuorumCallError[uint32]
 		wantCause      error
 		wantNodeErrors int
 	}{
 		{
 			name: "NoErrors",
-			qcErr: QuorumCallError{
+			qcErr: QuorumCallError[uint32]{
 				cause:  ErrIncomplete,
 				errors: nil,
 			},
@@ -86,9 +86,9 @@ func TestQuorumCallErrorAccessors(t *testing.T) {
 		},
 		{
 			name: "SingleError",
-			qcErr: QuorumCallError{
+			qcErr: QuorumCallError[uint32]{
 				cause: ErrIncomplete,
-				errors: []nodeError{
+				errors: []nodeError[uint32]{
 					{nodeID: 1, cause: status.Error(codes.Unavailable, "node down")},
 				},
 			},
@@ -97,9 +97,9 @@ func TestQuorumCallErrorAccessors(t *testing.T) {
 		},
 		{
 			name: "MultipleErrors",
-			qcErr: QuorumCallError{
+			qcErr: QuorumCallError[uint32]{
 				cause: ErrIncomplete,
-				errors: []nodeError{
+				errors: []nodeError[uint32]{
 					{nodeID: 1, cause: status.Error(codes.Unavailable, "node down")},
 					{nodeID: 3, cause: status.Error(codes.DeadlineExceeded, "timeout")},
 					{nodeID: 5, cause: status.Error(codes.Unavailable, "connection refused")},
@@ -110,9 +110,9 @@ func TestQuorumCallErrorAccessors(t *testing.T) {
 		},
 		{
 			name: "SendFailure",
-			qcErr: QuorumCallError{
+			qcErr: QuorumCallError[uint32]{
 				cause: ErrSendFailure,
-				errors: []nodeError{
+				errors: []nodeError[uint32]{
 					{nodeID: 2, cause: errors.New("send failed")},
 				},
 			},
@@ -138,9 +138,9 @@ func TestQuorumCallErrorUnwrap(t *testing.T) {
 	timeoutErr := status.Error(codes.DeadlineExceeded, "timeout")
 	connectionErr := errors.New("connection refused")
 
-	qcErr := QuorumCallError{
+	qcErr := QuorumCallError[uint32]{
 		cause: ErrIncomplete,
-		errors: []nodeError{
+		errors: []nodeError[uint32]{
 			{nodeID: 1, cause: unavailableErr},
 			{nodeID: 3, cause: timeoutErr},
 			{nodeID: 5, cause: connectionErr},
@@ -195,9 +195,9 @@ func (e customError) Error() string { return e.msg }
 
 func TestQuorumCallErrorUnwrapWithAs(t *testing.T) {
 	customErr := customError{msg: "custom node error"}
-	qcErr := QuorumCallError{
+	qcErr := QuorumCallError[uint32]{
 		cause: ErrIncomplete,
-		errors: []nodeError{
+		errors: []nodeError[uint32]{
 			{nodeID: 1, cause: customErr},
 			{nodeID: 2, cause: status.Error(codes.Unavailable, "down")},
 		},

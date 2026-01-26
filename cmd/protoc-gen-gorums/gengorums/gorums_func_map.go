@@ -8,6 +8,7 @@ import (
 
 	"github.com/relab/gorums"
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/proto"
 )
 
 // importMap holds the mapping between short-hand import name
@@ -72,6 +73,13 @@ var funcMap = template.FuncMap{
 	},
 	"serviceName": func(method *protogen.Method) string {
 		return string(method.Parent.Desc.Name())
+	},
+	"nodeIDType": func(service *protogen.Service) string {
+		options := service.Desc.ParentFile().Options()
+		if proto.HasExtension(options, gorums.E_NodeId) {
+			return proto.GetExtension(options, gorums.E_NodeId).(string)
+		}
+		return "uint32"
 	},
 	"in": func(g *protogen.GeneratedFile, method *protogen.Method) string {
 		return g.QualifiedGoIdent(method.Input.GoIdent)

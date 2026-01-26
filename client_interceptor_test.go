@@ -10,13 +10,15 @@ import (
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+type NodeID = gorums.NodeID
+
 // LoggingInterceptor is a custom interceptor that logs each response.
-func LoggingInterceptor[Req, Resp proto.Message](
-	ctx *gorums.ClientCtx[Req, Resp],
-	next gorums.ResponseSeq[Resp],
-) gorums.ResponseSeq[Resp] {
+func LoggingInterceptor[T NodeID, Req, Resp proto.Message](
+	ctx *gorums.ClientCtx[T, Req, Resp],
+	next gorums.ResponseSeq[T, Resp],
+) gorums.ResponseSeq[T, Resp] {
 	_ = ctx.Method() // Access method name (could be used for logging)
-	return func(yield func(gorums.NodeResponse[Resp]) bool) {
+	return func(yield func(gorums.NodeResponse[T, Resp]) bool) {
 		for resp := range next {
 			// In a real interceptor, you would log here
 			if !yield(resp) {
@@ -27,12 +29,12 @@ func LoggingInterceptor[Req, Resp proto.Message](
 }
 
 // FilterInterceptor returns an interceptor that filters responses based on a predicate.
-func FilterInterceptor[Req, Resp proto.Message](
-	keep func(resp gorums.NodeResponse[Resp]) bool,
-) gorums.QuorumInterceptor[Req, Resp] {
-	return func(ctx *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
+func FilterInterceptor[T NodeID, Req, Resp proto.Message](
+	keep func(resp gorums.NodeResponse[T, Resp]) bool,
+) gorums.QuorumInterceptor[T, Req, Resp] {
+	return func(ctx *gorums.ClientCtx[T, Req, Resp], next gorums.ResponseSeq[T, Resp]) gorums.ResponseSeq[T, Resp] {
 		_ = ctx.Method() // Access method name (could be used for filtering)
-		return func(yield func(gorums.NodeResponse[Resp]) bool) {
+		return func(yield func(gorums.NodeResponse[T, Resp]) bool) {
 			for resp := range next {
 				if keep(resp) {
 					if !yield(resp) {
@@ -45,11 +47,11 @@ func FilterInterceptor[Req, Resp proto.Message](
 }
 
 // CountingInterceptor counts the number of responses passing through.
-func CountingInterceptor[Req, Resp proto.Message](
+func CountingInterceptor[T NodeID, Req, Resp proto.Message](
 	counter *int,
-) gorums.QuorumInterceptor[Req, Resp] {
-	return func(_ *gorums.ClientCtx[Req, Resp], next gorums.ResponseSeq[Resp]) gorums.ResponseSeq[Resp] {
-		return func(yield func(gorums.NodeResponse[Resp]) bool) {
+) gorums.QuorumInterceptor[T, Req, Resp] {
+	return func(_ *gorums.ClientCtx[T, Req, Resp], next gorums.ResponseSeq[T, Resp]) gorums.ResponseSeq[T, Resp] {
+		return func(yield func(gorums.NodeResponse[T, Resp]) bool) {
 			for resp := range next {
 				*counter++
 				if !yield(resp) {
@@ -67,11 +69,11 @@ func TestCustomLoggingInterceptor(t *testing.T) {
 	ctx := gorums.TestContext(t, 2*time.Second)
 
 	// Use the custom logging interceptor from this external package
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
-		gorums.Interceptors(LoggingInterceptor[*pb.StringValue, *pb.StringValue]),
+		gorums.Interceptors(LoggingInterceptor[uint32, *pb.StringValue, *pb.StringValue]),
 	)
 
 	result, err := responses.Majority()
@@ -90,12 +92,12 @@ func TestCustomFilterInterceptor(t *testing.T) {
 
 	// Use a filter interceptor that only keeps responses from node 1
 	// (In practice, this would filter based on response content)
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
-		gorums.Interceptors(FilterInterceptor[*pb.StringValue](
-			func(resp gorums.NodeResponse[*pb.StringValue]) bool {
+		gorums.Interceptors(FilterInterceptor[uint32, *pb.StringValue](
+			func(resp gorums.NodeResponse[uint32, *pb.StringValue]) bool {
 				return resp.Err == nil // Only keep successful responses
 			},
 		)),
@@ -118,13 +120,13 @@ func TestInterceptorChaining(t *testing.T) {
 	var count int
 
 	// Chain multiple custom interceptors
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
 		gorums.Interceptors(
-			LoggingInterceptor[*pb.StringValue, *pb.StringValue],
-			CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
+			LoggingInterceptor[uint32, *pb.StringValue, *pb.StringValue],
+			CountingInterceptor[uint32, *pb.StringValue, *pb.StringValue](&count),
 		),
 	)
 
@@ -150,16 +152,16 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 	var count int
 
 	// Mix custom interceptor with built-in MapRequest
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
 		gorums.Interceptors(
 			// Custom: count responses
-			CountingInterceptor[*pb.StringValue, *pb.StringValue](&count),
+			CountingInterceptor[uint32, *pb.StringValue, *pb.StringValue](&count),
 			// Built-in: transform request (identity transform for this test)
-			gorums.MapRequest[*pb.StringValue, *pb.StringValue](
-				func(req *pb.StringValue, node *gorums.Node) *pb.StringValue {
+			gorums.MapRequest[uint32, *pb.StringValue, *pb.StringValue](
+				func(req *pb.StringValue, node *gorums.Node[uint32]) *pb.StringValue {
 					return req
 				},
 			),

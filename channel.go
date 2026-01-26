@@ -14,17 +14,17 @@ import (
 )
 
 // NodeResponse wraps a response value from node ID, and an error if any.
-type NodeResponse[T any] struct {
-	NodeID uint32
-	Value  T
+type NodeResponse[T NodeID, V any] struct {
+	NodeID T
+	Value  V
 	Err    error
 }
 
-// newNodeResponse converts a NodeResponse[msg] to a NodeResponse[Resp].
-// This is necessary because the channel layer's response router returns a
-// NodeResponse[msg], while the calltype expects a NodeResponse[Resp].
-func newNodeResponse[Resp msg](r NodeResponse[msg]) NodeResponse[Resp] {
-	res := NodeResponse[Resp]{
+// newNodeResponse converts a NodeResponse[T, msg] to a NodeResponse[T, Resp].
+// This is necessary because the channel's response router returns a
+// NodeResponse[T, msg], while the calltype expects a NodeResponse[T, Resp].
+func newNodeResponse[T NodeID, Resp msg](r NodeResponse[T, msg]) NodeResponse[T, Resp] {
+	res := NodeResponse[T, Resp]{
 		NodeID: r.NodeID,
 		Err:    r.Err,
 	}
@@ -43,18 +43,18 @@ var (
 	streamDownErr = status.Error(codes.Unavailable, "stream is down")
 )
 
-type request struct {
+type request[T NodeID] struct {
 	ctx          context.Context
 	msg          *Message
 	waitSendDone bool
 	streaming    bool
-	responseChan chan<- NodeResponse[proto.Message]
+	responseChan chan<- NodeResponse[T, proto.Message]
 	sendTime     time.Time
 }
 
-type channel struct {
-	sendQ chan request
-	id    uint32
+type channel[T NodeID] struct {
+	sendQ chan request[T]
+	id    T
 
 	// Connection lifecycle management: node close() cancels the
 	// connection context to stop all goroutines and the NodeStream
@@ -79,7 +79,7 @@ type channel struct {
 	// Response routing; the map holds pending requests waiting for responses.
 	// The request contains the responseChan on which to send the response
 	// to the caller.
-	responseRouters map[uint64]request
+	responseRouters map[uint64]request[T]
 	responseMut     sync.Mutex
 	closeOnceFunc   func() error
 }
@@ -91,16 +91,16 @@ type channel struct {
 // have not yet been established. This is to prevent deadlock when invoking
 // a call type. The sender blocks on the sendQ and the receiver waits for
 // the stream to become available.
-func newChannel(parentCtx context.Context, conn *grpc.ClientConn, id uint32, sendBufferSize uint) *channel {
+func newChannel[T NodeID](parentCtx context.Context, conn *grpc.ClientConn, id T, sendBufferSize uint) *channel[T] {
 	ctx, connCancel := context.WithCancel(parentCtx)
-	c := &channel{
-		sendQ:           make(chan request, sendBufferSize),
+	c := &channel[T]{
+		sendQ:           make(chan request[T], sendBufferSize),
 		id:              id,
 		conn:            conn,
 		connCtx:         ctx,
 		connCancel:      connCancel,
 		latency:         -1 * time.Second,
-		responseRouters: make(map[uint64]request),
+		responseRouters: make(map[uint64]request[T]),
 		streamReady:     make(chan struct{}, 1),
 	}
 	c.closeOnceFunc = sync.OnceValue(func() error {
@@ -117,7 +117,7 @@ func newChannel(parentCtx context.Context, conn *grpc.ClientConn, id uint32, sen
 }
 
 // close closes the channel and the underlying connection exactly once.
-func (c *channel) close() error {
+func (c *channel[T]) close() error {
 	return c.closeOnceFunc()
 }
 
@@ -125,7 +125,7 @@ func (c *channel) close() error {
 // receiver goroutines, and signals the receiver when the stream is ready.
 // gRPC automatically handles TCP connection state when creating the stream.
 // This method is safe for concurrent use.
-func (c *channel) ensureStream() error {
+func (c *channel[T]) ensureStream() error {
 	if err := c.ensureConnectedNodeStream(); err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func (c *channel) ensureStream() error {
 // ensureConnectedNodeStream ensures there is an active and connected
 // NodeStream, or creates a new stream if one doesn't already exist.
 // This method is safe for concurrent use.
-func (c *channel) ensureConnectedNodeStream() (err error) {
+func (c *channel[T]) ensureConnectedNodeStream() (err error) {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	// if we already have a ready connection and an active stream, do nothing
@@ -155,7 +155,7 @@ func (c *channel) ensureConnectedNodeStream() (err error) {
 }
 
 // getStream returns the current stream, or nil if no stream is available.
-func (c *channel) getStream() grpc.ClientStream {
+func (c *channel[T]) getStream() grpc.ClientStream {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	return c.gorumsStream
@@ -163,7 +163,7 @@ func (c *channel) getStream() grpc.ClientStream {
 
 // clearStream cancels the current stream context and clears the stream reference.
 // This triggers reconnection on the next send attempt.
-func (c *channel) clearStream() {
+func (c *channel[T]) clearStream() {
 	c.streamMut.Lock()
 	c.streamCancel()
 	c.gorumsStream = nil
@@ -172,13 +172,13 @@ func (c *channel) clearStream() {
 
 // isConnected returns true if the gRPC connection is in Ready state and we have an active stream.
 // This method is safe for concurrent use.
-func (c *channel) isConnected() bool {
+func (c *channel[T]) isConnected() bool {
 	return c.conn.GetState() == connectivity.Ready && c.getStream() != nil
 }
 
 // enqueue adds the request to the send queue and sets up response routing if needed.
 // If the node is closed, it responds with an error instead.
-func (c *channel) enqueue(req request) {
+func (c *channel[T]) enqueue(req request[T]) {
 	if req.responseChan != nil {
 		req.sendTime = time.Now()
 		msgID := req.msg.GetMessageID()
@@ -191,7 +191,7 @@ func (c *channel) enqueue(req request) {
 	select {
 	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: nodeClosedErr})
+		c.routeResponse(req.msg.GetMessageID(), NodeResponse[T, proto.Message]{NodeID: c.id, Err: nodeClosedErr})
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
@@ -200,7 +200,7 @@ func (c *channel) enqueue(req request) {
 
 // routeResponse routes the response to the appropriate response channel based on msgID.
 // If no matching request is found, the response is discarded.
-func (c *channel) routeResponse(msgID uint64, resp NodeResponse[proto.Message]) {
+func (c *channel[T]) routeResponse(msgID uint64, resp NodeResponse[T, proto.Message]) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	if req, ok := c.responseRouters[msgID]; ok {
@@ -217,11 +217,11 @@ func (c *channel) routeResponse(msgID uint64, resp NodeResponse[proto.Message]) 
 
 // cancelPendingMsgs cancels all pending messages by sending an error response to each
 // associated request. This is called when the stream goes down to notify all waiting calls.
-func (c *channel) cancelPendingMsgs(err error) {
+func (c *channel[T]) cancelPendingMsgs(err error) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	for msgID, req := range c.responseRouters {
-		req.responseChan <- NodeResponse[proto.Message]{NodeID: c.id, Err: err}
+		req.responseChan <- NodeResponse[T, proto.Message]{NodeID: c.id, Err: err}
 		// delete the router if we are only expecting a single reply message
 		if !req.streaming {
 			delete(c.responseRouters, msgID)
@@ -231,7 +231,7 @@ func (c *channel) cancelPendingMsgs(err error) {
 
 // deleteRouter removes the response router for the given msgID.
 // This is used for cleaning up after streaming calls are done.
-func (c *channel) deleteRouter(msgID uint64) {
+func (c *channel[T]) deleteRouter(msgID uint64) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	delete(c.responseRouters, msgID)
@@ -239,11 +239,11 @@ func (c *channel) deleteRouter(msgID uint64) {
 
 // sender goroutine takes requests from the sendQ and sends them on the stream.
 // If the stream is down, it tries to re-establish it.
-func (c *channel) sender() {
+func (c *channel[T]) sender() {
 	// eager connect; ignored if stream is down (will be retried on send)
 	_ = c.ensureStream()
 
-	var req request
+	var req request[T]
 	for {
 		select {
 		case <-c.connCtx.Done():
@@ -253,11 +253,11 @@ func (c *channel) sender() {
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: err})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[T, proto.Message]{NodeID: c.id, Err: err})
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: err})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[T, proto.Message]{NodeID: c.id, Err: err})
 		}
 	}
 }
@@ -265,7 +265,7 @@ func (c *channel) sender() {
 // receiver goroutine receives messages from the stream and routes them to
 // the appropriate response router. If the stream goes down, it clears the
 // stream reference and cancels all pending messages with a stream down error.
-func (c *channel) receiver() {
+func (c *channel[T]) receiver() {
 	for {
 		stream := c.getStream()
 		if stream == nil {
@@ -287,7 +287,7 @@ func (c *channel) receiver() {
 			c.clearStream()
 		} else {
 			err := resp.GetStatus().Err()
-			c.routeResponse(resp.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Value: resp.GetProtoMessage(), Err: err})
+			c.routeResponse(resp.GetMessageID(), NodeResponse[T, proto.Message]{NodeID: c.id, Value: resp.GetProtoMessage(), Err: err})
 		}
 
 		select {
@@ -299,7 +299,7 @@ func (c *channel) receiver() {
 	}
 }
 
-func (c *channel) sendMsg(req request) (err error) {
+func (c *channel[T]) sendMsg(req request[T]) (err error) {
 	defer func() {
 		// For one-way call types (Unicast/Multicast), the caller can choose between two behaviors:
 		//
@@ -317,7 +317,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// wait for actual server responses, so waitSendDone is false for them.
 		if req.waitSendDone && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[T, proto.Message]{})
 		}
 	}()
 
@@ -363,21 +363,21 @@ func (c *channel) sendMsg(req request) (err error) {
 	return err
 }
 
-func (c *channel) setLastErr(err error) {
+func (c *channel[T]) setLastErr(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lastError = err
 }
 
 // lastErr returns the last error encountered (if any) when using this channel.
-func (c *channel) lastErr() error {
+func (c *channel[T]) lastErr() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.lastError
 }
 
 // channelLatency returns the latency between the client and the server associated with this channel.
-func (c *channel) channelLatency() time.Duration {
+func (c *channel[T]) channelLatency() time.Duration {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.latency
@@ -385,7 +385,7 @@ func (c *channel) channelLatency() time.Duration {
 
 // updateLatency updates the latency between the client and the server associated with this channel.
 // It uses a simple moving average to calculate the latency.
-func (c *channel) updateLatency(rtt time.Duration) {
+func (c *channel[T]) updateLatency(rtt time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.latency < 0 {

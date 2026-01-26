@@ -23,6 +23,14 @@ const (
 
 var file_gorums_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
+		ExtendedType:  (*descriptorpb.FileOptions)(nil),
+		ExtensionType: (*string)(nil),
+		Field:         40001,
+		Name:          "gorums.node_id",
+		Tag:           "bytes,40001,opt,name=node_id",
+		Filename:      "gorums.proto",
+	},
+	{
 		ExtendedType:  (*descriptorpb.MethodOptions)(nil),
 		ExtensionType: (*bool)(nil),
 		Field:         50001,
@@ -56,25 +64,32 @@ var file_gorums_proto_extTypes = []protoimpl.ExtensionInfo{
 	},
 }
 
+// Extension fields to descriptorpb.FileOptions.
+var (
+	// optional string node_id = 40001;
+	E_NodeId = &file_gorums_proto_extTypes[0]
+)
+
 // Extension fields to descriptorpb.MethodOptions.
 var (
 	// call types
 	//
 	// optional bool rpc = 50001;
-	E_Rpc = &file_gorums_proto_extTypes[0]
+	E_Rpc = &file_gorums_proto_extTypes[1]
 	// optional bool unicast = 50002;
-	E_Unicast = &file_gorums_proto_extTypes[1]
+	E_Unicast = &file_gorums_proto_extTypes[2]
 	// optional bool multicast = 50003;
-	E_Multicast = &file_gorums_proto_extTypes[2]
+	E_Multicast = &file_gorums_proto_extTypes[3]
 	// optional bool quorumcall = 50004;
-	E_Quorumcall = &file_gorums_proto_extTypes[3]
+	E_Quorumcall = &file_gorums_proto_extTypes[4]
 )
 
 var File_gorums_proto protoreflect.FileDescriptor
 
 const file_gorums_proto_rawDesc = "" +
 	"\n" +
-	"\fgorums.proto\x12\x06gorums\x1a google/protobuf/descriptor.proto:2\n" +
+	"\fgorums.proto\x12\x06gorums\x1a google/protobuf/descriptor.proto:7\n" +
+	"\anode_id\x12\x1c.google.protobuf.FileOptions\x18\xc1\xb8\x02 \x01(\tR\x06nodeId:2\n" +
 	"\x03rpc\x12\x1e.google.protobuf.MethodOptions\x18ц\x03 \x01(\bR\x03rpc::\n" +
 	"\aunicast\x12\x1e.google.protobuf.MethodOptions\x18҆\x03 \x01(\bR\aunicast:>\n" +
 	"\tmulticast\x12\x1e.google.protobuf.MethodOptions\x18ӆ\x03 \x01(\bR\tmulticast:@\n" +
@@ -83,17 +98,19 @@ const file_gorums_proto_rawDesc = "" +
 	"quorumcallB\x1eZ\x17github.com/relab/gorums\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
 var file_gorums_proto_goTypes = []any{
-	(*descriptorpb.MethodOptions)(nil), // 0: google.protobuf.MethodOptions
+	(*descriptorpb.FileOptions)(nil),   // 0: google.protobuf.FileOptions
+	(*descriptorpb.MethodOptions)(nil), // 1: google.protobuf.MethodOptions
 }
 var file_gorums_proto_depIdxs = []int32{
-	0, // 0: gorums.rpc:extendee -> google.protobuf.MethodOptions
-	0, // 1: gorums.unicast:extendee -> google.protobuf.MethodOptions
-	0, // 2: gorums.multicast:extendee -> google.protobuf.MethodOptions
-	0, // 3: gorums.quorumcall:extendee -> google.protobuf.MethodOptions
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	0, // [0:4] is the sub-list for extension extendee
+	0, // 0: gorums.node_id:extendee -> google.protobuf.FileOptions
+	1, // 1: gorums.rpc:extendee -> google.protobuf.MethodOptions
+	1, // 2: gorums.unicast:extendee -> google.protobuf.MethodOptions
+	1, // 3: gorums.multicast:extendee -> google.protobuf.MethodOptions
+	1, // 4: gorums.quorumcall:extendee -> google.protobuf.MethodOptions
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	0, // [0:5] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
 }
 
@@ -109,7 +126,7 @@ func file_gorums_proto_init() {
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gorums_proto_rawDesc), len(file_gorums_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   0,
-			NumExtensions: 4,
+			NumExtensions: 5,
 			NumServices:   0,
 		},
 		GoTypes:           file_gorums_proto_goTypes,
