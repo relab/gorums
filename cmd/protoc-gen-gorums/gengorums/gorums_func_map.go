@@ -76,8 +76,8 @@ var funcMap = template.FuncMap{
 	},
 	"nodeIDType": func(service *protogen.Service) string {
 		options := service.Desc.ParentFile().Options()
-		if proto.HasExtension(options, gorums.E_NodeId) {
-			return proto.GetExtension(options, gorums.E_NodeId).(string)
+		if proto.HasExtension(options, gorums.E_NodeIdType) {
+			return proto.GetExtension(options, gorums.E_NodeIdType).(string)
 		}
 		return "uint32"
 	},

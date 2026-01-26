@@ -26,8 +26,8 @@ var file_gorums_proto_extTypes = []protoimpl.ExtensionInfo{
 		ExtendedType:  (*descriptorpb.FileOptions)(nil),
 		ExtensionType: (*string)(nil),
 		Field:         40001,
-		Name:          "gorums.node_id",
-		Tag:           "bytes,40001,opt,name=node_id",
+		Name:          "gorums.node_id_type",
+		Tag:           "bytes,40001,opt,name=node_id_type",
 		Filename:      "gorums.proto",
 	},
 	{
@@ -66,8 +66,8 @@ var file_gorums_proto_extTypes = []protoimpl.ExtensionInfo{
 
 // Extension fields to descriptorpb.FileOptions.
 var (
-	// optional string node_id = 40001;
-	E_NodeId = &file_gorums_proto_extTypes[0]
+	// optional string node_id_type = 40001;
+	E_NodeIdType = &file_gorums_proto_extTypes[0]
 )
 
 // Extension fields to descriptorpb.MethodOptions.
@@ -88,8 +88,9 @@ var File_gorums_proto protoreflect.FileDescriptor
 
 const file_gorums_proto_rawDesc = "" +
 	"\n" +
-	"\fgorums.proto\x12\x06gorums\x1a google/protobuf/descriptor.proto:7\n" +
-	"\anode_id\x12\x1c.google.protobuf.FileOptions\x18\xc1\xb8\x02 \x01(\tR\x06nodeId:2\n" +
+	"\fgorums.proto\x12\x06gorums\x1a google/protobuf/descriptor.proto:@\n" +
+	"\fnode_id_type\x12\x1c.google.protobuf.FileOptions\x18\xc1\xb8\x02 \x01(\tR\n" +
+	"nodeIdType:2\n" +
 	"\x03rpc\x12\x1e.google.protobuf.MethodOptions\x18ц\x03 \x01(\bR\x03rpc::\n" +
 	"\aunicast\x12\x1e.google.protobuf.MethodOptions\x18҆\x03 \x01(\bR\aunicast:>\n" +
 	"\tmulticast\x12\x1e.google.protobuf.MethodOptions\x18ӆ\x03 \x01(\bR\tmulticast:@\n" +
@@ -102,7 +103,7 @@ var file_gorums_proto_goTypes = []any{
 	(*descriptorpb.MethodOptions)(nil), // 1: google.protobuf.MethodOptions
 }
 var file_gorums_proto_depIdxs = []int32{
-	0, // 0: gorums.node_id:extendee -> google.protobuf.FileOptions
+	0, // 0: gorums.node_id_type:extendee -> google.protobuf.FileOptions
 	1, // 1: gorums.rpc:extendee -> google.protobuf.MethodOptions
 	1, // 2: gorums.unicast:extendee -> google.protobuf.MethodOptions
 	1, // 3: gorums.multicast:extendee -> google.protobuf.MethodOptions
