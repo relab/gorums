@@ -21,11 +21,11 @@ const (
 // Type aliases for important Gorums types to make them more accessible
 // from user code already interacting with the generated code.
 type (
-	Configuration = gorums.Configuration
-	Manager       = gorums.Manager
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Configuration = gorums.Configuration[NodeID]
+	Manager       = gorums.Manager[NodeID]
+	Node          = gorums.Node[NodeID]
+	NodeContext   = gorums.NodeContext[NodeID]
+	ConfigContext = gorums.ConfigContext[NodeID]
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -42,14 +42,14 @@ var (
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
 func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return gorums.NewManager(opts...)
+	return gorums.NewManager[NodeID](opts...)
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, error) {
+func NewConfiguration(mgr *Manager, opt gorums.NodeListOption[NodeID]) (Configuration, error) {
 	return gorums.NewConfiguration(mgr, opt)
 }
 
@@ -70,14 +70,17 @@ func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, e
 // creates a new manager; if a manager already exists, use [NewConfiguration]
 // instead, and provide the existing manager as the first argument.
 func NewConfig(opts ...gorums.Option) (Configuration, error) {
-	return gorums.NewConfig(opts...)
+	return gorums.NewConfig[NodeID](opts...)
 }
 
+// NodeID is a type alias for the type used to identify nodes.
+type NodeID = uint32
+
 // AsyncResponse is a future for async quorum calls returning *Response.
-type AsyncResponse = *gorums.Async[*Response]
+type AsyncResponse = *gorums.Async[NodeID, *Response]
 
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
-type CorrectableResponse = *gorums.Correctable[*Response]
+type CorrectableResponse = *gorums.Correctable[NodeID, *Response]
 
 // Correctable is a quorum call invoked on all nodes in the configuration,
 // with the same argument in. Use terminal methods like Majority(), First(),
@@ -86,8 +89,8 @@ type CorrectableResponse = *gorums.Correctable[*Response]
 // Example:
 //
 //	resp, err := Correctable(ctx, in).Majority()
-func Correctable(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
-	return gorums.QuorumCall[*Request, *Response](
+func Correctable(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[NodeID, *Response] {
+	return gorums.QuorumCall[NodeID, *Request, *Response](
 		ctx, in, "correctable.CorrectableTest.Correctable",
 		opts...,
 	)
@@ -101,8 +104,8 @@ func Correctable(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *go
 //	corr := CorrectableStream(ctx, in).Correctable(2)
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
-func CorrectableStream(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
-	return gorums.QuorumCallStream[*Request, *Response](
+func CorrectableStream(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[NodeID, *Response] {
+	return gorums.QuorumCallStream[NodeID, *Request, *Response](
 		ctx, in, "correctable.CorrectableTest.CorrectableStream",
 		opts...,
 	)

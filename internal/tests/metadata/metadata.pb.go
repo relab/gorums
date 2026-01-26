@@ -21,27 +21,27 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type NodeID struct {
+type NodeIDMsg struct {
 	state         protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_ID uint32                 `protobuf:"varint,1,opt,name=ID"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *NodeID) Reset() {
-	*x = NodeID{}
+func (x *NodeIDMsg) Reset() {
+	*x = NodeIDMsg{}
 	mi := &file_metadata_metadata_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *NodeID) String() string {
+func (x *NodeIDMsg) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*NodeID) ProtoMessage() {}
+func (*NodeIDMsg) ProtoMessage() {}
 
-func (x *NodeID) ProtoReflect() protoreflect.Message {
+func (x *NodeIDMsg) ProtoReflect() protoreflect.Message {
 	mi := &file_metadata_metadata_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -53,25 +53,25 @@ func (x *NodeID) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *NodeID) GetID() uint32 {
+func (x *NodeIDMsg) GetID() uint32 {
 	if x != nil {
 		return x.xxx_hidden_ID
 	}
 	return 0
 }
 
-func (x *NodeID) SetID(v uint32) {
+func (x *NodeIDMsg) SetID(v uint32) {
 	x.xxx_hidden_ID = v
 }
 
-type NodeID_builder struct {
+type NodeIDMsg_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	ID uint32
 }
 
-func (b0 NodeID_builder) Build() *NodeID {
-	m0 := &NodeID{}
+func (b0 NodeIDMsg_builder) Build() *NodeIDMsg {
+	m0 := &NodeIDMsg{}
 	b, x := &b0, m0
 	_, _ = b, x
 	x.xxx_hidden_ID = b.ID
@@ -139,25 +139,25 @@ var File_metadata_metadata_proto protoreflect.FileDescriptor
 
 const file_metadata_metadata_proto_rawDesc = "" +
 	"\n" +
-	"\x17metadata/metadata.proto\x12\bmetadata\x1a\x1bgoogle/protobuf/empty.proto\"\x18\n" +
-	"\x06NodeID\x12\x0e\n" +
+	"\x17metadata/metadata.proto\x12\bmetadata\x1a\x1bgoogle/protobuf/empty.proto\"\x1b\n" +
+	"\tNodeIDMsg\x12\x0e\n" +
 	"\x02ID\x18\x01 \x01(\rR\x02ID\"\x1c\n" +
 	"\x06IPAddr\x12\x12\n" +
-	"\x04Addr\x18\x01 \x01(\tR\x04Addr2|\n" +
-	"\fMetadataTest\x126\n" +
-	"\bIDFromMD\x12\x16.google.protobuf.Empty\x1a\x10.metadata.NodeID\"\x00\x124\n" +
+	"\x04Addr\x18\x01 \x01(\tR\x04Addr2\x7f\n" +
+	"\fMetadataTest\x129\n" +
+	"\bIDFromMD\x12\x16.google.protobuf.Empty\x1a\x13.metadata.NodeIDMsg\"\x00\x124\n" +
 	"\x06WhatIP\x12\x16.google.protobuf.Empty\x1a\x10.metadata.IPAddr\"\x00B-Z&github.com/relab/gorums/tests/metadata\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
 var file_metadata_metadata_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_metadata_metadata_proto_goTypes = []any{
-	(*NodeID)(nil),        // 0: metadata.NodeID
+	(*NodeIDMsg)(nil),     // 0: metadata.NodeIDMsg
 	(*IPAddr)(nil),        // 1: metadata.IPAddr
 	(*emptypb.Empty)(nil), // 2: google.protobuf.Empty
 }
 var file_metadata_metadata_proto_depIdxs = []int32{
 	2, // 0: metadata.MetadataTest.IDFromMD:input_type -> google.protobuf.Empty
 	2, // 1: metadata.MetadataTest.WhatIP:input_type -> google.protobuf.Empty
-	0, // 2: metadata.MetadataTest.IDFromMD:output_type -> metadata.NodeID
+	0, // 2: metadata.MetadataTest.IDFromMD:output_type -> metadata.NodeIDMsg
 	1, // 3: metadata.MetadataTest.WhatIP:output_type -> metadata.IPAddr
 	2, // [2:4] is the sub-list for method output_type
 	0, // [0:2] is the sub-list for method input_type

@@ -1,11 +1,12 @@
 edition = "2023";
 
 package config;
-option go_package = "github.com/relab/gorums/tests/config";
-
-option features.field_presence = IMPLICIT;
 
 import "gorums.proto";
+
+option go_package = "github.com/relab/gorums/tests/config";
+option features.field_presence = IMPLICIT;
+option (gorums.node_id) = "uint32";
 
 service ConfigTest {
     rpc Config(Request) returns (Response) {

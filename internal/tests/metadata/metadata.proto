@@ -9,12 +9,12 @@ import "google/protobuf/empty.proto";
 
 service MetadataTest {
     // IDFromMD returns the 'id' field from the metadata.
-    rpc IDFromMD(google.protobuf.Empty) returns (NodeID) {}
+    rpc IDFromMD(google.protobuf.Empty) returns (NodeIDMsg) {}
     // WhatIP returns the address of the client that calls it.
     rpc WhatIP(google.protobuf.Empty) returns (IPAddr) {}
 }
 
-message NodeID {
+message NodeIDMsg {
     uint32 ID = 1;
 }
 
