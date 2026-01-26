@@ -18,14 +18,17 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
 )
 
+// NodeID is a type alias for the type used to identify nodes.
+type NodeID = uint32
+
 // AsyncEmpty is a future for async quorum calls returning *emptypb.Empty.
-type AsyncEmpty = *gorums.Async[*emptypb.Empty]
+type AsyncEmpty = *gorums.Async[NodeID, *emptypb.Empty]
 
 // AsyncResponse is a future for async quorum calls returning *Response.
-type AsyncResponse = *gorums.Async[*Response]
+type AsyncResponse = *gorums.Async[NodeID, *Response]
 
 // CorrectableEmpty is a correctable object for quorum calls returning *emptypb.Empty.
-type CorrectableEmpty = *gorums.Correctable[*emptypb.Empty]
+type CorrectableEmpty = *gorums.Correctable[NodeID, *emptypb.Empty]
 
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
-type CorrectableResponse = *gorums.Correctable[*Response]
+type CorrectableResponse = *gorums.Correctable[NodeID, *Response]
