@@ -21,11 +21,11 @@ const (
 // Type aliases for important Gorums types to make them more accessible
 // from user code already interacting with the generated code.
 type (
-	Configuration = gorums.Configuration
-	Manager       = gorums.Manager
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Configuration = gorums.Configuration[NodeID]
+	Manager       = gorums.Manager[NodeID]
+	Node          = gorums.Node[NodeID]
+	NodeContext   = gorums.NodeContext[NodeID]
+	ConfigContext = gorums.ConfigContext[NodeID]
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -42,14 +42,14 @@ var (
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
 func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return gorums.NewManager(opts...)
+	return gorums.NewManager[NodeID](opts...)
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, error) {
+func NewConfiguration(mgr *Manager, opt gorums.NodeListOption[NodeID]) (Configuration, error) {
 	return gorums.NewConfiguration(mgr, opt)
 }
 
@@ -70,20 +70,23 @@ func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, e
 // creates a new manager; if a manager already exists, use [NewConfiguration]
 // instead, and provide the existing manager as the first argument.
 func NewConfig(opts ...gorums.Option) (Configuration, error) {
-	return gorums.NewConfig(opts...)
+	return gorums.NewConfig[NodeID](opts...)
 }
 
+// NodeID is a type alias for the type used to identify nodes.
+type NodeID = uint32
+
 // AsyncReadResponse is a future for async quorum calls returning *ReadResponse.
-type AsyncReadResponse = *gorums.Async[*ReadResponse]
+type AsyncReadResponse = *gorums.Async[NodeID, *ReadResponse]
 
 // AsyncWriteResponse is a future for async quorum calls returning *WriteResponse.
-type AsyncWriteResponse = *gorums.Async[*WriteResponse]
+type AsyncWriteResponse = *gorums.Async[NodeID, *WriteResponse]
 
 // CorrectableReadResponse is a correctable object for quorum calls returning *ReadResponse.
-type CorrectableReadResponse = *gorums.Correctable[*ReadResponse]
+type CorrectableReadResponse = *gorums.Correctable[NodeID, *ReadResponse]
 
 // CorrectableWriteResponse is a correctable object for quorum calls returning *WriteResponse.
-type CorrectableWriteResponse = *gorums.Correctable[*WriteResponse]
+type CorrectableWriteResponse = *gorums.Correctable[NodeID, *WriteResponse]
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty
@@ -110,8 +113,8 @@ func WriteRPC(ctx *NodeContext, in *WriteRequest) (resp *WriteResponse, err erro
 
 // ReadQC executes a Read quorum call on a configuration of nodes and
 // returns the most recent value.
-func ReadQC(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
-	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
+func ReadQC(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[NodeID, *ReadResponse] {
+	return gorums.QuorumCall[NodeID, *ReadRequest, *ReadResponse](
 		ctx, in, "proto.Storage.ReadQC",
 		opts...,
 	)
@@ -119,8 +122,8 @@ func ReadQC(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gor
 
 // WriteQC executes a Write quorum call on a configuration of nodes and
 // returns true if a majority of nodes were updated.
-func WriteQC(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse] {
-	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
+func WriteQC(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[NodeID, *WriteResponse] {
+	return gorums.QuorumCall[NodeID, *WriteRequest, *WriteResponse](
 		ctx, in, "proto.Storage.WriteQC",
 		opts...,
 	)

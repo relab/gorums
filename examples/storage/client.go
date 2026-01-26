@@ -31,7 +31,7 @@ func runClient(addresses []string) error {
 
 // newestValue processes responses from a ReadQC call and returns the reply
 // with the most recent timestamp.
-func newestValue(responses *gorums.Responses[*proto.ReadResponse]) (*proto.ReadResponse, error) {
+func newestValue(responses *gorums.Responses[proto.NodeID, *proto.ReadResponse]) (*proto.ReadResponse, error) {
 	var newest *proto.ReadResponse
 	for resp := range responses.Seq() {
 		if resp.Err != nil {
@@ -49,7 +49,7 @@ func newestValue(responses *gorums.Responses[*proto.ReadResponse]) (*proto.ReadR
 
 // numUpdated processes responses from a WriteQC call and returns true if
 // a majority of nodes updated their value.
-func numUpdated(responses *gorums.Responses[*proto.WriteResponse]) (*proto.WriteResponse, error) {
+func numUpdated(responses *gorums.Responses[proto.NodeID, *proto.WriteResponse]) (*proto.WriteResponse, error) {
 	var count int
 	size := responses.Size()
 	for resp := range responses.Seq() {
