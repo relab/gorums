@@ -17,8 +17,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
-	ConfigContext = gorums.ConfigContext
 	NodeContext   = gorums.NodeContext
+	ConfigContext = gorums.ConfigContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -27,8 +27,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
-	_ = (*ConfigContext)(nil)
 	_ = (*NodeContext)(nil)
+	_ = (*ConfigContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
