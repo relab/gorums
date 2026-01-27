@@ -10,7 +10,7 @@ import (
 // run a test on a correctable call.
 // n is the number of replicas.
 // the target level is n (quorum size).
-func run(t testing.TB, n int, corr func(*gorums.ConfigContext, int) CorrectableResponse) {
+func run(t testing.TB, n int, corr func(*ConfigContext, int) CorrectableResponse) {
 	t.Helper()
 	config := gorums.TestConfiguration(t, n, func(_ int) gorums.ServerIface {
 		gorumsSrv := gorums.NewServer()
@@ -36,14 +36,14 @@ func run(t testing.TB, n int, corr func(*gorums.ConfigContext, int) CorrectableR
 }
 
 func TestCorrectable(t *testing.T) {
-	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
+	run(t, 4, func(ctx *ConfigContext, n int) CorrectableResponse {
 		// Correctable returns *Responses, user calls Correctable to get *Correctable
 		return Correctable(ctx, &Request{}).Correctable(n)
 	})
 }
 
 func TestCorrectableStream(t *testing.T) {
-	run(t, 4, func(ctx *gorums.ConfigContext, n int) CorrectableResponse {
+	run(t, 4, func(ctx *ConfigContext, n int) CorrectableResponse {
 		// CorrectableStream returns *Responses, user calls Correctable to get *Correctable
 		return CorrectableStream(ctx, &Request{}).Correctable(n)
 	})
