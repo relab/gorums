@@ -24,6 +24,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
+	ConfigContext = gorums.ConfigContext
+	NodeContext   = gorums.NodeContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -32,6 +34,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
+	_ = (*ConfigContext)(nil)
+	_ = (*NodeContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -97,7 +101,7 @@ type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
 var _ emptypb.Empty
 
 // StartServerBenchmark starts a server-side benchmark campaign.
-func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
+func StartServerBenchmark(ctx *ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
 	return gorums.QuorumCall[*StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartServerBenchmark",
 		opts...,
@@ -105,7 +109,7 @@ func StartServerBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...g
 }
 
 // StopServerBenchmark stops a server-side benchmark campaign.
-func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*Result] {
+func StopServerBenchmark(ctx *ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*Result] {
 	return gorums.QuorumCall[*StopRequest, *Result](
 		ctx, in, "benchmark.Benchmark.StopServerBenchmark",
 		opts...,
@@ -113,7 +117,7 @@ func StopServerBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gor
 }
 
 // StartBenchmark starts a client-side benchmark campaign.
-func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
+func StartBenchmark(ctx *ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
 	return gorums.QuorumCall[*StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartBenchmark",
 		opts...,
@@ -121,7 +125,7 @@ func StartBenchmark(ctx *gorums.ConfigContext, in *StartRequest, opts ...gorums.
 }
 
 // StopBenchmark stops a client-side benchmark campaign.
-func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*MemoryStat] {
+func StopBenchmark(ctx *ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*MemoryStat] {
 	return gorums.QuorumCall[*StopRequest, *MemoryStat](
 		ctx, in, "benchmark.Benchmark.StopBenchmark",
 		opts...,
@@ -129,7 +133,7 @@ func StopBenchmark(ctx *gorums.ConfigContext, in *StopRequest, opts ...gorums.Ca
 }
 
 // QuorumCall performs an echo quorum call on all servers.
-func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
+func QuorumCall(ctx *ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
 	return gorums.QuorumCall[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.QuorumCall",
 		opts...,
@@ -137,7 +141,7 @@ func QuorumCall(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) 
 }
 
 // SlowServer performs an echo quorum call on slow servers.
-func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
+func SlowServer(ctx *ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
 	return gorums.QuorumCall[*Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.SlowServer",
 		opts...,
@@ -145,7 +149,7 @@ func SlowServer(ctx *gorums.ConfigContext, in *Echo, opts ...gorums.CallOption) 
 }
 
 // Multicast performs a multicast call to all servers.
-func Multicast(ctx *gorums.ConfigContext, in *TimedMsg, opts ...gorums.CallOption) error {
+func Multicast(ctx *ConfigContext, in *TimedMsg, opts ...gorums.CallOption) error {
 	return gorums.Multicast(ctx, in, "benchmark.Benchmark.Multicast", opts...)
 }
 

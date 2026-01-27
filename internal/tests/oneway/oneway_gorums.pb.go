@@ -23,6 +23,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
+	ConfigContext = gorums.ConfigContext
+	NodeContext   = gorums.NodeContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -31,6 +33,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
+	_ = (*ConfigContext)(nil)
+	_ = (*NodeContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -70,13 +74,13 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 
 // Unicast is a unicast call invoked on the node in ctx.
 // No reply is returned to the client.
-func Unicast(ctx *gorums.NodeContext, in *Request, opts ...gorums.CallOption) error {
+func Unicast(ctx *NodeContext, in *Request, opts ...gorums.CallOption) error {
 	return gorums.Unicast(ctx, in, "oneway.OnewayTest.Unicast", opts...)
 }
 
 // Multicast is a multicast call invoked on all nodes in the configuration in ctx.
 // Use gorums.MapRequest to send different messages to each node. No replies are collected.
-func Multicast(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) error {
+func Multicast(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error {
 	return gorums.Multicast(ctx, in, "oneway.OnewayTest.Multicast", opts...)
 }
 

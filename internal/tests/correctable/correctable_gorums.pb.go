@@ -24,6 +24,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
+	ConfigContext = gorums.ConfigContext
+	NodeContext   = gorums.NodeContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -32,6 +34,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
+	_ = (*ConfigContext)(nil)
+	_ = (*NodeContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -82,7 +86,7 @@ type CorrectableResponse = *gorums.Correctable[*Response]
 // Example:
 //
 //	resp, err := Correctable(ctx, in).Majority()
-func Correctable(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+func Correctable(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
 	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "correctable.CorrectableTest.Correctable",
 		opts...,
@@ -97,7 +101,7 @@ func Correctable(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOpti
 //	corr := CorrectableStream(ctx, in).Correctable(2)
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
-func CorrectableStream(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+func CorrectableStream(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
 	return gorums.QuorumCallStream[*Request, *Response](
 		ctx, in, "correctable.CorrectableTest.CorrectableStream",
 		opts...,

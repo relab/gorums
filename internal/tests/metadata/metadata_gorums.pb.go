@@ -24,6 +24,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
+	ConfigContext = gorums.ConfigContext
+	NodeContext   = gorums.NodeContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -32,6 +34,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
+	_ = (*ConfigContext)(nil)
+	_ = (*NodeContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -70,7 +74,7 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 }
 
 // IDFromMD returns the 'id' field from the metadata.
-func IDFromMD(ctx *gorums.NodeContext, in *emptypb.Empty) (resp *NodeID, err error) {
+func IDFromMD(ctx *NodeContext, in *emptypb.Empty) (resp *NodeID, err error) {
 	res, err := gorums.RPCCall(ctx, in, "metadata.MetadataTest.IDFromMD")
 	if err != nil {
 		return nil, err
@@ -79,7 +83,7 @@ func IDFromMD(ctx *gorums.NodeContext, in *emptypb.Empty) (resp *NodeID, err err
 }
 
 // WhatIP returns the address of the client that calls it.
-func WhatIP(ctx *gorums.NodeContext, in *emptypb.Empty) (resp *IPAddr, err error) {
+func WhatIP(ctx *NodeContext, in *emptypb.Empty) (resp *IPAddr, err error) {
 	res, err := gorums.RPCCall(ctx, in, "metadata.MetadataTest.WhatIP")
 	if err != nil {
 		return nil, err

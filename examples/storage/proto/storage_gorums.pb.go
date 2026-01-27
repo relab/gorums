@@ -24,6 +24,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
+	ConfigContext = gorums.ConfigContext
+	NodeContext   = gorums.NodeContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -32,6 +34,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
+	_ = (*ConfigContext)(nil)
+	_ = (*NodeContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -86,7 +90,7 @@ var _ emptypb.Empty
 
 // ReadRPC executes a Read RPC on a single node and
 // returns the value for the provided key.
-func ReadRPC(ctx *gorums.NodeContext, in *ReadRequest) (resp *ReadResponse, err error) {
+func ReadRPC(ctx *NodeContext, in *ReadRequest) (resp *ReadResponse, err error) {
 	res, err := gorums.RPCCall(ctx, in, "proto.Storage.ReadRPC")
 	if err != nil {
 		return nil, err
@@ -96,7 +100,7 @@ func ReadRPC(ctx *gorums.NodeContext, in *ReadRequest) (resp *ReadResponse, err 
 
 // WriteRPC executes a Write RPC on a single node and
 // returns true if the value was updated.
-func WriteRPC(ctx *gorums.NodeContext, in *WriteRequest) (resp *WriteResponse, err error) {
+func WriteRPC(ctx *NodeContext, in *WriteRequest) (resp *WriteResponse, err error) {
 	res, err := gorums.RPCCall(ctx, in, "proto.Storage.WriteRPC")
 	if err != nil {
 		return nil, err
@@ -106,7 +110,7 @@ func WriteRPC(ctx *gorums.NodeContext, in *WriteRequest) (resp *WriteResponse, e
 
 // ReadQC executes a Read quorum call on a configuration of nodes and
 // returns the most recent value.
-func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
+func ReadQC(ctx *ConfigContext, in *ReadRequest, opts ...gorums.CallOption) *gorums.Responses[*ReadResponse] {
 	return gorums.QuorumCall[*ReadRequest, *ReadResponse](
 		ctx, in, "proto.Storage.ReadQC",
 		opts...,
@@ -115,7 +119,7 @@ func ReadQC(ctx *gorums.ConfigContext, in *ReadRequest, opts ...gorums.CallOptio
 
 // WriteQC executes a Write quorum call on a configuration of nodes and
 // returns true if a majority of nodes were updated.
-func WriteQC(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse] {
+func WriteQC(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) *gorums.Responses[*WriteResponse] {
 	return gorums.QuorumCall[*WriteRequest, *WriteResponse](
 		ctx, in, "proto.Storage.WriteQC",
 		opts...,
@@ -124,7 +128,7 @@ func WriteQC(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOpt
 
 // WriteMulticast executes a Write multicast call on a configuration of nodes.
 // It does not wait for any responses.
-func WriteMulticast(ctx *gorums.ConfigContext, in *WriteRequest, opts ...gorums.CallOption) error {
+func WriteMulticast(ctx *ConfigContext, in *WriteRequest, opts ...gorums.CallOption) error {
 	return gorums.Multicast(ctx, in, "proto.Storage.WriteMulticast", opts...)
 }
 

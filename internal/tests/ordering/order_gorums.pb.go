@@ -23,6 +23,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
+	ConfigContext = gorums.ConfigContext
+	NodeContext   = gorums.NodeContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -31,6 +33,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
+	_ = (*ConfigContext)(nil)
+	_ = (*NodeContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -81,7 +85,7 @@ type CorrectableResponse = *gorums.Correctable[*Response]
 // Example:
 //
 //	resp, err := QuorumCall(ctx, in).Majority()
-func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
+func QuorumCall(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gorums.Responses[*Response] {
 	return gorums.QuorumCall[*Request, *Response](
 		ctx, in, "ordering.GorumsTest.QuorumCall",
 		opts...,
@@ -89,7 +93,7 @@ func QuorumCall(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOptio
 }
 
 // UnaryRPC is an RPC call invoked on the node in ctx.
-func UnaryRPC(ctx *gorums.NodeContext, in *Request) (resp *Response, err error) {
+func UnaryRPC(ctx *NodeContext, in *Request) (resp *Response, err error) {
 	res, err := gorums.RPCCall(ctx, in, "ordering.GorumsTest.UnaryRPC")
 	if err != nil {
 		return nil, err

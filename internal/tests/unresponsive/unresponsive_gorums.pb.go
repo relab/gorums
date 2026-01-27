@@ -23,6 +23,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
+	ConfigContext = gorums.ConfigContext
+	NodeContext   = gorums.NodeContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -31,6 +33,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
+	_ = (*ConfigContext)(nil)
+	_ = (*NodeContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added
@@ -69,7 +73,7 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 }
 
 // TestUnresponsive is an RPC call invoked on the node in ctx.
-func TestUnresponsive(ctx *gorums.NodeContext, in *Empty) (resp *Empty, err error) {
+func TestUnresponsive(ctx *NodeContext, in *Empty) (resp *Empty, err error) {
 	res, err := gorums.RPCCall(ctx, in, "unresponsive.Unresponsive.TestUnresponsive")
 	if err != nil {
 		return nil, err
