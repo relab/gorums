@@ -25,7 +25,7 @@ var quorumCallComment = `
 
 var quorumCallVariables = `
 {{$genFile := .GenFile}}
-{{$configContext := use "gorums.ConfigContext" .GenFile}}
+{{$configContext := "ConfigContext"}}
 {{$quorumCall := use "gorums.QuorumCall" .GenFile}}
 {{$quorumCallStream := use "gorums.QuorumCallStream" .GenFile}}
 {{$responses := use "gorums.Responses" .GenFile}}

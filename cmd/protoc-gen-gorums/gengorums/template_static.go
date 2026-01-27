@@ -5,11 +5,11 @@ package gengorums
 
 // pkgIdentMap maps from package name to one of the package's identifiers.
 // These identifiers are used by the Gorums protoc plugin to generate import statements.
-var pkgIdentMap = map[string]string{"github.com/relab/gorums": "Configuration"}
+var pkgIdentMap = map[string]string{"github.com/relab/gorums": "ConfigContext"}
 
 // reservedIdents holds the set of Gorums reserved identifiers.
 // These identifiers cannot be used to define message types in a proto file.
-var reservedIdents = []string{"Configuration", "Manager", "Node"}
+var reservedIdents = []string{"ConfigContext", "Configuration", "Manager", "Node", "NodeContext"}
 
 var staticCode = `// Type aliases for important Gorums types to make them more accessible
 // from user code already interacting with the generated code.
@@ -17,6 +17,8 @@ type (
 	Configuration = gorums.Configuration
 	Manager       = gorums.Manager
 	Node          = gorums.Node
+	ConfigContext = gorums.ConfigContext
+	NodeContext   = gorums.NodeContext
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -25,6 +27,8 @@ var (
 	_ = (*Configuration)(nil)
 	_ = (*Manager)(nil)
 	_ = (*Node)(nil)
+	_ = (*ConfigContext)(nil)
+	_ = (*NodeContext)(nil)
 )
 
 // NewManager returns a new Manager for managing connection to nodes added

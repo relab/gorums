@@ -22,21 +22,21 @@ const (
 var _ emptypb.Empty
 
 // Multicast plain. Response type is not needed here.
-func Multicast(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) error {
+func Multicast(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error {
 	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast", opts...)
 }
 
 // Multicast2 is testing whether multiple streams work.
-func Multicast2(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) error {
+func Multicast2(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error {
 	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast2", opts...)
 }
 
 // Multicast3 is testing imported message type.
-func Multicast3(ctx *gorums.ConfigContext, in *Request, opts ...gorums.CallOption) error {
+func Multicast3(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) error {
 	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast3", opts...)
 }
 
 // Multicast4 is testing imported message type.
-func Multicast4(ctx *gorums.ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) error {
+func Multicast4(ctx *ConfigContext, in *emptypb.Empty, opts ...gorums.CallOption) error {
 	return gorums.Multicast(ctx, in, "dev.ZorumsService.Multicast4", opts...)
 }

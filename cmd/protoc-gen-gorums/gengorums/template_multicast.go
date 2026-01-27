@@ -2,7 +2,7 @@ package gengorums
 
 var mcVar = `
 {{$genFile := .GenFile}}
-{{$configContext := use "gorums.ConfigContext" .GenFile}}
+{{$configContext := "ConfigContext"}}
 {{$multicast := use "gorums.Multicast" .GenFile}}
 {{$callOpt := use "gorums.CallOption" .GenFile}}
 `

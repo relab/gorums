@@ -19,7 +19,7 @@ const (
 
 // GRPCCall plain gRPC call; testing that Gorums can ignore these, but that
 // they are added to the _grpc.pb.go generated file.
-func GRPCCall(ctx *gorums.NodeContext, in *Request) (resp *Response, err error) {
+func GRPCCall(ctx *NodeContext, in *Request) (resp *Response, err error) {
 	res, err := gorums.RPCCall(ctx, in, "dev.ZorumsService.GRPCCall")
 	if err != nil {
 		return nil, err
