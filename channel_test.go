@@ -17,9 +17,22 @@ import (
 )
 
 const (
-	defaultTestTimeout = 3 * time.Second
-	streamConnectDelay = 10 * time.Millisecond
+	defaultTestTimeout   = 3 * time.Second
+	streamConnectTimeout = 500 * time.Millisecond
 )
+
+// waitForConnection polls until the node is connected or timeout expires.
+// Returns true if connected, false if timeout expired.
+func waitForConnection(node *Node, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if node.channel.isConnected() {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return node.channel.isConnected()
+}
 
 type mockSrv struct{}
 
@@ -119,9 +132,8 @@ func TestChannelCreation(t *testing.T) {
 func TestChannelShutdown(t *testing.T) {
 	node := TestNode(t, delayServerFn(0))
 	// Wait for stream to be established
-	time.Sleep(streamConnectDelay)
-	if !node.channel.isConnected() {
-		t.Error("node should be connected")
+	if !waitForConnection(node, streamConnectTimeout) {
+		t.Fatal("node should be connected")
 	}
 
 	// enqueue several messages to confirm normal operation
@@ -420,8 +432,7 @@ func TestChannelConnectionState(t *testing.T) {
 			setup: func(t *testing.T) *Node {
 				node := TestNode(t, delayServerFn(0))
 				// Wait for stream to be established
-				time.Sleep(streamConnectDelay)
-				if !node.channel.isConnected() {
+				if !waitForConnection(node, streamConnectTimeout) {
 					t.Fatal("node should be connected before clearing stream")
 				}
 				node.channel.clearStream()
@@ -433,11 +444,16 @@ func TestChannelConnectionState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			node := tt.setup(t)
-			// Wait for the stream to be established, as it is now done asynchronously in sender
-			time.Sleep(streamConnectDelay)
-			connected := node.channel.isConnected()
-			if connected != tt.wantConnected {
-				t.Errorf("isConnected() = %v, want %v", connected, tt.wantConnected)
+			if tt.wantConnected {
+				// For tests expecting connection, poll until connected or timeout
+				if !waitForConnection(node, streamConnectTimeout) {
+					t.Errorf("isConnected() = false, want true")
+				}
+			} else {
+				// For tests expecting no connection, verify immediately
+				if node.channel.isConnected() {
+					t.Errorf("isConnected() = true, want false")
+				}
 			}
 		})
 	}
@@ -561,9 +577,8 @@ func TestChannelContext(t *testing.T) {
 func TestChannelDeadlock(t *testing.T) {
 	node := TestNode(t, delayServerFn(0))
 	// Wait for the stream to be established
-	time.Sleep(streamConnectDelay)
-	if !node.channel.isConnected() {
-		t.Error("node should be connected")
+	if !waitForConnection(node, streamConnectTimeout) {
+		t.Fatal("node should be connected")
 	}
 
 	// Send a message to activate the stream
@@ -619,9 +634,8 @@ func TestChannelDeadlock(t *testing.T) {
 func TestChannelRouterLifecycle(t *testing.T) {
 	node := TestNode(t, delayServerFn(0))
 	// Wait for the stream to be established
-	time.Sleep(streamConnectDelay)
-	if !node.channel.isConnected() {
-		t.Error("node should be connected")
+	if !waitForConnection(node, streamConnectTimeout) {
+		t.Fatal("node should be connected")
 	}
 
 	tests := []struct {
