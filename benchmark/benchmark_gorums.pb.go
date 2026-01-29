@@ -77,28 +77,28 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 type NodeID = uint32
 
 // AsyncEcho is a future for async quorum calls returning *Echo.
-type AsyncEcho = *gorums.Async[NodeID, *Echo]
+type AsyncEcho = *gorums.Async[*Echo]
 
 // AsyncMemoryStat is a future for async quorum calls returning *MemoryStat.
-type AsyncMemoryStat = *gorums.Async[NodeID, *MemoryStat]
+type AsyncMemoryStat = *gorums.Async[*MemoryStat]
 
 // AsyncResult is a future for async quorum calls returning *Result.
-type AsyncResult = *gorums.Async[NodeID, *Result]
+type AsyncResult = *gorums.Async[*Result]
 
 // AsyncStartResponse is a future for async quorum calls returning *StartResponse.
-type AsyncStartResponse = *gorums.Async[NodeID, *StartResponse]
+type AsyncStartResponse = *gorums.Async[*StartResponse]
 
 // CorrectableEcho is a correctable object for quorum calls returning *Echo.
-type CorrectableEcho = *gorums.Correctable[NodeID, *Echo]
+type CorrectableEcho = *gorums.Correctable[*Echo]
 
 // CorrectableMemoryStat is a correctable object for quorum calls returning *MemoryStat.
-type CorrectableMemoryStat = *gorums.Correctable[NodeID, *MemoryStat]
+type CorrectableMemoryStat = *gorums.Correctable[*MemoryStat]
 
 // CorrectableResult is a correctable object for quorum calls returning *Result.
-type CorrectableResult = *gorums.Correctable[NodeID, *Result]
+type CorrectableResult = *gorums.Correctable[*Result]
 
 // CorrectableStartResponse is a correctable object for quorum calls returning *StartResponse.
-type CorrectableStartResponse = *gorums.Correctable[NodeID, *StartResponse]
+type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
 
 // Reference imports to suppress errors if they are not otherwise used.
 var _ emptypb.Empty

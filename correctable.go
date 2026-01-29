@@ -18,7 +18,7 @@ type watcher struct {
 // for checking the status or waiting for completion at specific levels.
 //
 // Type parameter Resp is the response type from nodes.
-type Correctable[T NodeID, Resp any] struct {
+type Correctable[Resp any] struct {
 	mu       sync.Mutex
 	reply    Resp
 	level    int
@@ -29,27 +29,27 @@ type Correctable[T NodeID, Resp any] struct {
 }
 
 // NewCorrectable creates a new Correctable object.
-func NewCorrectable[T NodeID, Resp any]() *Correctable[T, Resp] {
-	return &Correctable[T, Resp]{
+func NewCorrectable[Resp any]() *Correctable[Resp] {
+	return &Correctable[Resp]{
 		level:  LevelNotSet,
 		donech: make(chan struct{}, 1),
 	}
 }
 
 // Get returns the latest response, the current level, and the last error.
-func (c *Correctable[T, Resp]) Get() (Resp, int, error) {
+func (c *Correctable[Resp]) Get() (Resp, int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.reply, c.level, c.err
 }
 
 // Done returns a channel that will close when the correctable call is completed.
-func (c *Correctable[T, Resp]) Done() <-chan struct{} {
+func (c *Correctable[Resp]) Done() <-chan struct{} {
 	return c.donech
 }
 
 // Watch returns a channel that will close when the correctable call has reached a specified level.
-func (c *Correctable[T, Resp]) Watch(level int) <-chan struct{} {
+func (c *Correctable[Resp]) Watch(level int) <-chan struct{} {
 	ch := make(chan struct{})
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -64,7 +64,7 @@ func (c *Correctable[T, Resp]) Watch(level int) <-chan struct{} {
 // update updates the current state of the correctable call.
 // It updates the response, level, and error, and notifies any watchers.
 // If done is true, the call is considered complete and the Done channel is closed.
-func (c *Correctable[T, Resp]) update(reply Resp, level int, done bool, err error) {
+func (c *Correctable[Resp]) update(reply Resp, level int, done bool, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.done {
@@ -99,8 +99,8 @@ func (c *Correctable[T, Resp]) update(reply Resp, level int, done bool, err erro
 //	// Wait for level 2 to be reached
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
-func (r *Responses[T, Resp]) Correctable(threshold int) *Correctable[T, Resp] {
-	corr := &Correctable[T, Resp]{
+func (r *Responses[T, Resp]) Correctable(threshold int) *Correctable[Resp] {
+	corr := &Correctable[Resp]{
 		level:  LevelNotSet,
 		donech: make(chan struct{}, 1),
 	}

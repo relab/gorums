@@ -16,7 +16,7 @@ func TestAsync(t *testing.T) {
 	type respType = *gorums.Responses[uint32, *pb.StringValue]
 	tests := []struct {
 		name      string
-		call      func(respType) *gorums.Async[uint32, *pb.StringValue]
+		call      func(respType) *gorums.Async[*pb.StringValue]
 		numNodes  int
 		wantValue string
 		wantErr   bool

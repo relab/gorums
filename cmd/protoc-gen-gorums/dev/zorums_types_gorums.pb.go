@@ -22,13 +22,13 @@ const (
 type NodeID = uint32
 
 // AsyncEmpty is a future for async quorum calls returning *emptypb.Empty.
-type AsyncEmpty = *gorums.Async[NodeID, *emptypb.Empty]
+type AsyncEmpty = *gorums.Async[*emptypb.Empty]
 
 // AsyncResponse is a future for async quorum calls returning *Response.
-type AsyncResponse = *gorums.Async[NodeID, *Response]
+type AsyncResponse = *gorums.Async[*Response]
 
 // CorrectableEmpty is a correctable object for quorum calls returning *emptypb.Empty.
-type CorrectableEmpty = *gorums.Correctable[NodeID, *emptypb.Empty]
+type CorrectableEmpty = *gorums.Correctable[*emptypb.Empty]
 
 // CorrectableResponse is a correctable object for quorum calls returning *Response.
-type CorrectableResponse = *gorums.Correctable[NodeID, *Response]
+type CorrectableResponse = *gorums.Correctable[*Response]
