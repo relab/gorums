@@ -38,3 +38,4 @@ examples/gorumsexample/storage.pb.go
 examples/gorumsexample/storage_gorums.pb.go
 
 go.work.sum
+branch-compare-*

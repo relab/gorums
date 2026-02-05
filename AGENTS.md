@@ -57,7 +57,7 @@ These files are generated from templates. Instead:
 
 ### Testing Requirements
 
-- **Run tests after every change:** `make test`
+- **Run tests after every change**
 - Tests verify the correctness and stability of generated code
 - ALL test failures must be addressed before considering work complete
 - Never delete failing tests - fix the underlying issue
@@ -111,7 +111,7 @@ Use integration mode for performance benchmarking and network-specific validatio
 
 ## Building and Testing
 
-### Common Commands
+### Build Commands
 
 ```bash
 # Generate `zorums_*_gorums.pb.go` files in `cmd/protoc-gen-gorums/dev/`
@@ -126,18 +126,6 @@ make
 # Force rebuild
 make -B
 
-# Run tests (uses bufconn by default)
-make test
-
-# Run integration tests (uses real TCP connections)
-make integrationtest
-
-# Ensure tests are actually run (not skipped by cache)
-go test ./... -count=1
-
-# Run integration tests directly
-go test -tags=integration ./...
-
 # Install protoc-gen-gorums plugin
 make installgorums
 
@@ -146,6 +134,19 @@ make benchmark
 
 # Install required tools
 make tools
+```
+
+### Testing Commands
+
+```bash
+# Run all tests with verbose output and a timeout (use to avoid hanging tests)
+go test -v -timeout=15s ./...
+
+# Ensure tests are actually run (not skipped by cache)
+go test ./... -count=1
+
+# Run integration tests directly
+go test -tags=integration ./...
 ```
 
 ### Testing Strategy

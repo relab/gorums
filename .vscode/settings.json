@@ -20,6 +20,8 @@
         "go.mod",
         "go.sum",
         "go.work.sum",
+        "compare-branches.sh",
+        "report.md",
         "**/**/*.pb.go"
     ],
     "editor.formatOnPaste": true,
