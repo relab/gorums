@@ -69,22 +69,24 @@ func TestManagerNewNodeWithConn(t *testing.T) {
 	t.Cleanup(Closer(t, mgr))
 
 	// Create configuration with only first 2 nodes
-	_, err := NewConfiguration(mgr, WithNodeList(addrs[:2]))
+	c, err := NewConfiguration(mgr, WithNodeList(addrs[:2]))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if c.Size() != len(addrs)-1 {
+		t.Errorf("c.Size() = %d, expected %d", c.Size(), len(addrs)-1)
 	}
 	if mgr.Size() != len(addrs)-1 {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs)-1)
 	}
 
-	// Obtain ID for the 3rd node
-	id, err := nodeID(addrs[2])
+	// Extend configuration with the last node
+	c2, err := c.Extend(WithNodeList(addrs[2:]))
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Create the 3rd node and add it to the manager
-	if _, err := mgr.newNode(addrs[2], id); err != nil {
-		t.Errorf("mgr.newNode(%s) = %q, expected no error", addrs[2], err.Error())
+	if c2.Size() != len(addrs) {
+		t.Errorf("c2.Size() = %d, expected %d", c2.Size(), len(addrs))
 	}
 	if mgr.Size() != len(addrs) {
 		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(addrs))
