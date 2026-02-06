@@ -17,7 +17,15 @@ func init() {
 	}
 }
 
-var nodes = []string{"127.0.0.1:9080", "127.0.0.1:9081", "127.0.0.1:9082"}
+var (
+	nodes   = []string{"127.0.0.1:9081", "127.0.0.1:9082", "127.0.0.1:9083"}
+	nodeMap = map[uint32]testNode{
+		1: {addr: "127.0.0.1:9081"},
+		2: {addr: "127.0.0.1:9082"},
+		3: {addr: "127.0.0.1:9083"},
+		4: {addr: "127.0.0.1:9084"},
+	}
+)
 
 type testNode struct {
 	addr string
@@ -35,32 +43,48 @@ func TestNewConfiguration(t *testing.T) {
 		wantErr  string
 	}{
 		{
-			name:    "EmptyNodeList",
-			opt:     gorums.WithNodeList([]string{}),
-			wantErr: "config: missing required node addresses",
-		},
-		{
-			name:     "WithNodeList",
+			name:     "WithNodeList/Success",
 			opt:      gorums.WithNodeList(nodes),
 			wantSize: len(nodes),
 		},
 		{
-			name: "WithNodes",
-			opt: gorums.WithNodes(map[uint32]testNode{
-				1: {addr: "127.0.0.1:9080"},
-				2: {addr: "127.0.0.1:9081"},
-				3: {addr: "127.0.0.1:9082"},
-				4: {addr: "127.0.0.1:9083"},
-			}),
-			wantSize: 4,
+			name:     "WithNodes/Success",
+			opt:      gorums.WithNodes(nodeMap),
+			wantSize: len(nodeMap),
 		},
 		{
-			name: "WithNodesRejectsZeroID",
+			name:    "WithNodeList/Reject/EmptyNodeList",
+			opt:     gorums.WithNodeList([]string{}),
+			wantErr: "config: missing required node addresses",
+		},
+		{
+			name:    "WithNodes/Reject/EmptyNodeMap",
+			opt:     gorums.WithNodes(map[uint32]testNode{}),
+			wantErr: "config: missing required node map",
+		},
+		{
+			name: "WithNodes/Reject/ZeroID",
 			opt: gorums.WithNodes(map[uint32]testNode{
 				0: {addr: "127.0.0.1:9080"}, // ID 0 should be rejected
 				1: {addr: "127.0.0.1:9081"},
 			}),
-			wantErr: "config: node ID 0 is reserved; use IDs > 0",
+			wantErr: "config: node 0 is reserved",
+		},
+		{
+			name: "WithNodes/Reject/DuplicateAddress",
+			opt: gorums.WithNodes(map[uint32]testNode{
+				1: {addr: "127.0.0.1:9081"},
+				2: {addr: "127.0.0.1:9081"}, // Duplicate address
+			}),
+			wantErr: "config: address 127.0.0.1:9081 already in use by node 1",
+		},
+		{
+			name: "WithNodeList/Reject/DuplicateAddress",
+			opt: gorums.WithNodeList([]string{
+				"127.0.0.1:9081",
+				"127.0.0.1:9081", // Duplicate address
+			}),
+			wantErr: "config: address 127.0.0.1:9081 already in use by node 1",
 		},
 	}
 	for _, tt := range tests {
@@ -92,6 +116,8 @@ func TestNewConfiguration(t *testing.T) {
 }
 
 func TestConfigurationExtend(t *testing.T) {
+	nodes12 := nodes[:2] // {1,2}
+
 	tests := []struct {
 		name         string
 		initialNodes []string
@@ -100,20 +126,20 @@ func TestConfigurationExtend(t *testing.T) {
 		wantErr      string
 	}{
 		{
-			name:         "ExtendWithNil",
-			initialNodes: nodes[:2],
+			name:         "WithNil/Success",
+			initialNodes: nodes12,
 			extendOpt:    nil,
 			wantSize:     2,
 		},
 		{
-			name:         "ExtendWithNodeList",
-			initialNodes: nodes[:2],
+			name:         "WithNodeList/Success",
+			initialNodes: nodes12,
 			extendOpt:    gorums.WithNodeList(nodes[2:]),
 			wantSize:     len(nodes),
 		},
 		{
-			name:         "ExtendWithNodes",
-			initialNodes: nodes[:2],
+			name:         "WithNodes/Success",
+			initialNodes: nodes12,
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				10: {addr: "127.0.0.1:9090"},
 				11: {addr: "127.0.0.1:9091"},
@@ -121,23 +147,30 @@ func TestConfigurationExtend(t *testing.T) {
 			wantSize: 4, // 2 initial + 2 new
 		},
 		{
-			name:         "ExtendWithExistingID",
-			initialNodes: nodes[:2], // IDs 1, 2
-			extendOpt: gorums.WithNodes(map[uint32]testNode{
-				2: {addr: "127.0.0.1:9090"}, // ID 2 already exists, reuses existing node
-			}),
-			wantSize: 2, // No new nodes added (ID 2 already in config)
-		},
-		{
-			name:         "ExtendWithZeroID",
-			initialNodes: nodes[:2],
+			name:         "WithNodes/Reject/ZeroID",
+			initialNodes: nodes12,
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				0: {addr: "127.0.0.1:9090"}, // ID 0 should be rejected
 			}),
-			wantErr: "config: node ID 0 is reserved; use IDs > 0",
+			wantErr: "config: node 0 is reserved",
+		},
+		{
+			name:         "WithNodes/Reject/IDConflict",
+			initialNodes: nodes12,
+			extendOpt: gorums.WithNodes(map[uint32]testNode{
+				2: {addr: "127.0.0.1:9090"}, // ID 2 already exists, rejected
+			}),
+			wantErr: "config: node 2 already in use",
+		},
+		{
+			name:         "WithNodes/Reject/AddressConflict",
+			initialNodes: nodes12,
+			extendOpt: gorums.WithNodes(map[uint32]testNode{
+				3: {addr: "127.0.0.1:9081"}, // Same address as ID 1
+			}),
+			wantErr: "config: address 127.0.0.1:9081 already in use by node 1",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
@@ -210,7 +243,7 @@ func TestConfigurationUnion(t *testing.T) {
 	}
 
 	// Add newNodes to c1 using Extend (gets IDs 4, 5)
-	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
+	newNodes := []string{"127.0.0.1:9084", "127.0.0.1:9085"}
 	c3, err := c1.Extend(gorums.WithNodeList(newNodes)) // c3 = {1, 2, 3, 4, 5}
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +302,7 @@ func TestConfigurationDifference(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
+	newNodes := []string{"127.0.0.1:9084", "127.0.0.1:9085"}
 	c3, err := c1.Extend(gorums.WithNodeList(newNodes)) // c3 = {1, 2, 3, 4, 5}
 	if err != nil {
 		t.Fatal(err)
@@ -306,12 +339,6 @@ func TestConfigurationWithoutErrors(t *testing.T) {
 	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
-	nodeMap := map[uint32]testNode{
-		1: {addr: "127.0.0.1:9080"},
-		2: {addr: "127.0.0.1:9081"},
-		3: {addr: "127.0.0.1:9082"},
-		4: {addr: "127.0.0.1:9083"},
-	}
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodes(nodeMap))
 	if err != nil {
 		t.Fatal(err)
