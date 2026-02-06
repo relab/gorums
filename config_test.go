@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/encoding"
@@ -28,134 +27,147 @@ func (n testNode) Addr() string {
 	return n.addr
 }
 
-func TestNewConfigurationEmptyNodeList(t *testing.T) {
-	wantErr := errors.New("config: missing required node addresses")
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList([]string{}))
-	if err == nil {
-		t.Fatalf("Expected error, got: %v, want: %v", err, wantErr)
+func TestNewConfiguration(t *testing.T) {
+	tests := []struct {
+		name     string
+		opt      gorums.NodeListOption
+		wantSize int
+		wantErr  string
+	}{
+		{
+			name:    "EmptyNodeList",
+			opt:     gorums.WithNodeList([]string{}),
+			wantErr: "config: missing required node addresses",
+		},
+		{
+			name:     "WithNodeList",
+			opt:      gorums.WithNodeList(nodes),
+			wantSize: len(nodes),
+		},
+		{
+			name: "WithNodes",
+			opt: gorums.WithNodes(map[uint32]testNode{
+				1: {addr: "127.0.0.1:9080"},
+				2: {addr: "127.0.0.1:9081"},
+				3: {addr: "127.0.0.1:9082"},
+				4: {addr: "127.0.0.1:9083"},
+			}),
+			wantSize: 4,
+		},
+		{
+			name: "WithNodesRejectsZeroID",
+			opt: gorums.WithNodes(map[uint32]testNode{
+				0: {addr: "127.0.0.1:9080"}, // ID 0 should be rejected
+				1: {addr: "127.0.0.1:9081"},
+			}),
+			wantErr: "config: node ID 0 is reserved; use IDs > 0",
+		},
 	}
-	if err.Error() != wantErr.Error() {
-		t.Errorf("Error = %q, expected %q", err.Error(), wantErr)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+			t.Cleanup(gorums.Closer(t, mgr))
 
-func TestNewConfigurationNodeList(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Size() != len(nodes) {
-		t.Errorf("cfg.Size() = %d, expected %d", cfg.Size(), len(nodes))
-	}
-
-	contains := func(nodes []*gorums.Node, addr string) bool {
-		for _, node := range nodes {
-			if addr == node.Address() {
-				return true
+			cfg, err := gorums.NewConfiguration(mgr, tt.opt)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("Error = nil, want %q", tt.wantErr)
+				}
+				if err.Error() != tt.wantErr {
+					t.Errorf("Error = %q, want %q", err.Error(), tt.wantErr)
+				}
+				return
 			}
-		}
-		return false
-	}
-	cfgNodes := cfg.Nodes()
-	for _, n := range nodes {
-		if !contains(cfgNodes, n) {
-			t.Errorf("cfg.Nodes() = %v, expected %s", cfgNodes, n)
-		}
-	}
-
-	if mgr.Size() != len(nodes) {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes))
-	}
-	mgrNodes := cfg.Nodes()
-	for _, n := range nodes {
-		if !contains(mgrNodes, n) {
-			t.Errorf("mgr.Nodes() = %v, expected %s", mgrNodes, n)
-		}
-	}
-}
-
-func TestNewConfigurationWithNodes(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	nodeMap := map[uint32]testNode{
-		1: {addr: "127.0.0.1:9080"},
-		2: {addr: "127.0.0.1:9081"},
-		3: {addr: "127.0.0.1:9082"},
-		4: {addr: "127.0.0.1:9083"},
-	}
-	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodes(nodeMap))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Size() != len(nodeMap) {
-		t.Errorf("cfg.Size() = %d, expected %d", cfg.Size(), len(nodeMap))
-	}
-	for _, node := range cfg.Nodes() {
-		if nodeMap[node.ID()].addr != node.Address() {
-			t.Errorf("cfg.Nodes()[%d] = %s, expected %s", node.ID(), node.Address(), nodeMap[node.ID()].addr)
-		}
-	}
-	if mgr.Size() != len(nodeMap) {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodeMap))
-	}
-	for _, node := range mgr.Nodes() {
-		if nodeMap[node.ID()].addr != node.Address() {
-			t.Errorf("mgr.Nodes()[%d] = %s, expected %s", node.ID(), node.Address(), nodeMap[node.ID()].addr)
-		}
-	}
-}
-
-func TestWithNodesRejectsZeroID(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
-
-	nodeMap := map[uint32]testNode{
-		0: {addr: "127.0.0.1:9080"}, // ID 0 should be rejected
-		1: {addr: "127.0.0.1:9081"},
-	}
-	_, err := gorums.NewConfiguration(mgr, gorums.WithNodes(nodeMap))
-	if err == nil {
-		t.Fatal("Expected error for node ID 0, got nil")
-	}
-	wantErr := "config: node ID 0 is reserved; use IDs > 0"
-	if err.Error() != wantErr {
-		t.Errorf("Error = %q, expected %q", err.Error(), wantErr)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Size() != tt.wantSize {
+				t.Errorf("cfg.Size() = %d, want %d", cfg.Size(), tt.wantSize)
+			}
+			if mgr.Size() != tt.wantSize {
+				t.Errorf("mgr.Size() = %d, want %d", mgr.Size(), tt.wantSize)
+			}
+		})
 	}
 }
 
 func TestConfigurationExtend(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
-	t.Cleanup(gorums.Closer(t, mgr))
+	tests := []struct {
+		name         string
+		initialNodes []string
+		extendOpt    gorums.NodeListOption
+		wantSize     int
+		wantErr      string
+	}{
+		{
+			name:         "ExtendWithNil",
+			initialNodes: nodes[:2],
+			extendOpt:    nil,
+			wantSize:     2,
+		},
+		{
+			name:         "ExtendWithNodeList",
+			initialNodes: nodes[:2],
+			extendOpt:    gorums.WithNodeList(nodes[2:]),
+			wantSize:     len(nodes),
+		},
+		{
+			name:         "ExtendWithNodes",
+			initialNodes: nodes[:2],
+			extendOpt: gorums.WithNodes(map[uint32]testNode{
+				10: {addr: "127.0.0.1:9090"},
+				11: {addr: "127.0.0.1:9091"},
+			}),
+			wantSize: 4, // 2 initial + 2 new
+		},
+		{
+			name:         "ExtendWithExistingID",
+			initialNodes: nodes[:2], // IDs 1, 2
+			extendOpt: gorums.WithNodes(map[uint32]testNode{
+				2: {addr: "127.0.0.1:9090"}, // ID 2 already exists, reuses existing node
+			}),
+			wantSize: 2, // No new nodes added (ID 2 already in config)
+		},
+		{
+			name:         "ExtendWithZeroID",
+			initialNodes: nodes[:2],
+			extendOpt: gorums.WithNodes(map[uint32]testNode{
+				0: {addr: "127.0.0.1:9090"}, // ID 0 should be rejected
+			}),
+			wantErr: "config: node ID 0 is reserved; use IDs > 0",
+		},
+	}
 
-	// Create configuration with only first 2 nodes
-	c, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes[:2]))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c.Size() != len(nodes)-1 {
-		t.Errorf("c.Size() = %d, expected %d", c.Size(), len(nodes)-1)
-	}
-	if mgr.Size() != len(nodes)-1 {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes)-1)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+			t.Cleanup(gorums.Closer(t, mgr))
 
-	// Extend configuration with the last node
-	c2, err := c.Extend(gorums.WithNodeList(nodes[2:]))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c2.Size() != len(nodes) {
-		t.Errorf("c2.Size() = %d, expected %d", c2.Size(), len(nodes))
-	}
-	if mgr.Size() != len(nodes) {
-		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes))
+			c, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(tt.initialNodes))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			c2, err := c.Extend(tt.extendOpt)
+			if tt.wantErr != "" {
+				if err == nil {
+					t.Fatalf("Error = nil, want %q", tt.wantErr)
+				}
+				if err.Error() != tt.wantErr {
+					t.Errorf("Error = %q, want %q", err.Error(), tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c2.Size() != tt.wantSize {
+				t.Errorf("c2.Size() = %d, want %d", c2.Size(), tt.wantSize)
+			}
+			if mgr.Size() != tt.wantSize {
+				t.Errorf("mgr.Size() = %d, want %d", mgr.Size(), tt.wantSize)
+			}
+		})
 	}
 }
 
@@ -168,23 +180,23 @@ func TestConfigurationAdd(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c1.Size() != len(nodes) {
-		t.Errorf("c1.Size() = %d, expected %d", c1.Size(), len(nodes))
+		t.Errorf("c1.Size() = %d, want %d", c1.Size(), len(nodes))
 	}
 
 	// Add existing c1 IDs (should return same configuration)
 	nodeIDs := c1.NodeIDs()
 	c2 := c1.Add(nodeIDs...) // c2 = {1, 2, 3}
 	if c2.Size() != len(nodes) {
-		t.Errorf("c2.Size() = %d, expected %d", c2.Size(), len(nodes))
+		t.Errorf("c2.Size() = %d, want %d", c2.Size(), len(nodes))
 	}
-	if diff := cmp.Diff(c1, c2); diff != "" {
-		t.Errorf("Expected same configurations, but got (-c1 +c2):\n%s", diff)
+	if !c1.Equal(c2) {
+		t.Errorf("c1.Equal(c2) = false, want true")
 	}
 
 	// Add non-existent ID (should be ignored)
 	c3 := c1.Add(999) // c3 = {1, 2, 3}
 	if c3.Size() != len(nodes) {
-		t.Errorf("c3.Size() = %d, expected %d", c3.Size(), len(nodes))
+		t.Errorf("c3.Size() = %d, want %d", c3.Size(), len(nodes))
 	}
 }
 
@@ -204,25 +216,31 @@ func TestConfigurationUnion(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c3.Size() != len(nodes)+len(newNodes) {
-		t.Errorf("c3.Size() = %d, expected %d", c3.Size(), len(nodes)+len(newNodes))
+		t.Errorf("c3.Size() = %d, want %d", c3.Size(), len(nodes)+len(newNodes))
 	}
 
 	// Create c2 as a subset of c1 (first two nodes)
 	c2 := c1.Remove(c1[2].ID()) // c2 = {1, 2}
 	if c2.Size() != 2 {
-		t.Errorf("c2.Size() = %d, expected 2", c2.Size())
+		t.Errorf("c2.Size() = %d, want 2", c2.Size())
 	}
 
 	// Union c1 with c2 should equal c1 (since c2 is a subset)
 	c4 := c1.Union(c2) // c4 = {1, 2, 3}
 	if c4.Size() != c1.Size() {
-		t.Errorf("c4.Size() = %d, expected %d", c4.Size(), c1.Size())
+		t.Errorf("c4.Size() = %d, want %d", c4.Size(), c1.Size())
+	}
+	if !c1.Equal(c4) {
+		t.Errorf("c1.Equal(c4) = false, want true")
 	}
 
 	// Union c2 with c3 should include all 5 nodes
 	c5 := c2.Union(c3)          // c5 = {1, 2, 3, 4, 5}
 	if c5.Size() != c3.Size() { // c3 already has IDs 1,2,3,4,5
-		t.Errorf("c5.Size() = %d, expected %d", c5.Size(), c3.Size())
+		t.Errorf("c5.Size() = %d, want %d", c5.Size(), c3.Size())
+	}
+	if !c5.Equal(c3) {
+		t.Errorf("c5.Equal(c3) = false, want true")
 	}
 }
 
@@ -238,7 +256,7 @@ func TestConfigurationRemove(t *testing.T) {
 	// Remove one node using Remove
 	c2 := c1.Remove(c1[0].ID()) // c2 = {2, 3}
 	if c2.Size() != c1.Size()-1 {
-		t.Errorf("c2.Size() = %d, expected %d", c2.Size(), c1.Size()-1)
+		t.Errorf("c2.Size() = %d, want %d", c2.Size(), c1.Size()-1)
 	}
 }
 
@@ -260,7 +278,7 @@ func TestConfigurationDifference(t *testing.T) {
 	// c4 = c3 - c1 (should be just the new nodes)
 	c4 := c3.Difference(c1) // c4 = {4, 5}
 	if c4.Size() != c3.Size()-c1.Size() {
-		t.Errorf("c4.Size() = %d, expected %d", c4.Size(), c3.Size()-c1.Size())
+		t.Errorf("c4.Size() = %d, want %d", c4.Size(), c3.Size()-c1.Size())
 	}
 }
 
@@ -344,21 +362,16 @@ func TestConfigurationWithoutErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			newCfg := cfg.WithoutErrors(tt.qcErr, tt.errorTypes...)
-
 			// Check that excluded nodes are not in the new configuration
-			newNodeIDs := newCfg.NodeIDs()
 			for _, excludedID := range tt.wantExcluded {
-				for _, nodeID := range newNodeIDs {
-					if nodeID == excludedID {
-						t.Errorf("Expected node %d to be excluded, but found it in configuration", excludedID)
-					}
+				if newCfg.Contains(excludedID) {
+					t.Errorf("newCfg.Contains(%d) = true, want false", excludedID)
 				}
 			}
-
 			// Check that all other nodes are still in the configuration
-			expectedSize := cfg.Size() - len(tt.wantExcluded)
-			if newCfg.Size() != expectedSize {
-				t.Errorf("newCfg.Size() = %d, expected %d", newCfg.Size(), expectedSize)
+			wantSize := cfg.Size() - len(tt.wantExcluded)
+			if newCfg.Size() != wantSize {
+				t.Errorf("newCfg.Size() = %d, want %d", newCfg.Size(), wantSize)
 			}
 		})
 	}
