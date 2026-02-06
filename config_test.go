@@ -130,6 +130,35 @@ func TestWithNodesRejectsZeroID(t *testing.T) {
 	}
 }
 
+func TestConfigurationExtend(t *testing.T) {
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(gorums.Closer(t, mgr))
+
+	// Create configuration with only first 2 nodes
+	c, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes[:2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Size() != len(nodes)-1 {
+		t.Errorf("c.Size() = %d, expected %d", c.Size(), len(nodes)-1)
+	}
+	if mgr.Size() != len(nodes)-1 {
+		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes)-1)
+	}
+
+	// Extend configuration with the last node
+	c2, err := c.Extend(gorums.WithNodeList(nodes[2:]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2.Size() != len(nodes) {
+		t.Errorf("c2.Size() = %d, expected %d", c2.Size(), len(nodes))
+	}
+	if mgr.Size() != len(nodes) {
+		t.Errorf("mgr.Size() = %d, expected %d", mgr.Size(), len(nodes))
+	}
+}
+
 func TestConfigurationAdd(t *testing.T) {
 	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
@@ -169,13 +198,13 @@ func TestConfigurationUnion(t *testing.T) {
 	}
 
 	// Add newNodes to c1 using Extend (gets IDs 4, 5)
-	newAddrs := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
-	c3, err := c1.Extend(gorums.WithNodeList(newAddrs)) // c3 = {1, 2, 3, 4, 5}
+	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
+	c3, err := c1.Extend(gorums.WithNodeList(newNodes)) // c3 = {1, 2, 3, 4, 5}
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c3.Size() != len(nodes)+len(newAddrs) {
-		t.Errorf("c3.Size() = %d, expected %d", c3.Size(), len(nodes)+len(newAddrs))
+	if c3.Size() != len(nodes)+len(newNodes) {
+		t.Errorf("c3.Size() = %d, expected %d", c3.Size(), len(nodes)+len(newNodes))
 	}
 
 	// Create c2 as a subset of c1 (first two nodes)
@@ -222,8 +251,8 @@ func TestConfigurationDifference(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newAddrs := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
-	c3, err := c1.Extend(gorums.WithNodeList(newAddrs)) // c3 = {1, 2, 3, 4, 5}
+	newNodes := []string{"127.0.0.1:9083", "127.0.0.1:9084"}
+	c3, err := c1.Extend(gorums.WithNodeList(newNodes)) // c3 = {1, 2, 3, 4, 5}
 	if err != nil {
 		t.Fatal(err)
 	}
