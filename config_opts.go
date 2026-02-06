@@ -2,6 +2,7 @@ package gorums
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 )
 
@@ -32,8 +33,10 @@ func (o structNodeMap[T]) newConfig(mgr *Manager) (nodes Configuration, err erro
 	for _, existingNode := range mgr.Nodes() {
 		addrToID[existingNode.Address()] = existingNode.ID()
 	}
+	// Sort IDs to ensure deterministic processing order
 	nodes = make(Configuration, 0, len(o.nodes))
-	for id, n := range o.nodes {
+	for _, id := range slices.Sorted(maps.Keys(o.nodes)) {
+		n := o.nodes[id]
 		if id == 0 {
 			return nil, fmt.Errorf("config: node 0 is reserved")
 		}
