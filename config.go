@@ -94,6 +94,23 @@ func NewConfig(opts ...Option) (Configuration, error) {
 	return NewConfiguration(mgr, nodeListOption)
 }
 
+// Extend returns a new Configuration combining c with new nodes from the provided NodeListOption.
+// This is the only way to add nodes that are not yet registered with the manager.
+func (c Configuration) Extend(opt NodeListOption) (Configuration, error) {
+	if len(c) == 0 {
+		return nil, fmt.Errorf("config: cannot extend empty configuration")
+	}
+	if opt == nil {
+		return slices.Clone(c), nil
+	}
+	mgr := c.Manager()
+	newNodes, err := opt.newConfig(mgr)
+	if err != nil {
+		return nil, err
+	}
+	return c.Union(newNodes), nil
+}
+
 // NodeIDs returns a slice of this configuration's Node IDs.
 func (c Configuration) NodeIDs() []uint32 {
 	ids := make([]uint32, len(c))
@@ -145,18 +162,24 @@ func (c Configuration) Contains(id uint32) bool {
 	return slices.ContainsFunc(c, func(n *Node) bool { return n.id == id })
 }
 
-// Add returns a new Configuration containing nodes from c plus nodes with the
-// specified IDs that exist in the manager. IDs not found in the manager are ignored.
+// Add returns a new Configuration containing nodes from c and nodes with the specified IDs.
+// Duplicate IDs and IDs not found in the manager are ignored.
 func (c Configuration) Add(ids ...uint32) Configuration {
 	if len(c) == 0 {
 		return nil
 	}
 	mgr := c.Manager()
 	nodes := slices.Clone(c)
+	// Track IDs already in the result to handle duplicates in input
+	seenIDs := make(map[uint32]struct{}, len(c)+len(ids))
+	for _, n := range c {
+		seenIDs[n.id] = struct{}{}
+	}
 	for _, id := range ids {
-		if !c.Contains(id) {
+		if _, ok := seenIDs[id]; !ok {
 			if node, found := mgr.Node(id); found {
 				nodes = append(nodes, node)
+				seenIDs[id] = struct{}{}
 			}
 		}
 	}
@@ -168,15 +191,21 @@ func (c Configuration) Add(ids ...uint32) Configuration {
 // Duplicate nodes are included only once.
 func (c Configuration) Union(other Configuration) Configuration {
 	if len(c) == 0 {
-		return other
+		return slices.Clone(other)
 	}
 	if len(other) == 0 {
-		return c
+		return slices.Clone(c)
 	}
 	nodes := slices.Clone(c)
+	// Track IDs already in the result to handle duplicates in other
+	seenIDs := make(map[uint32]struct{}, len(c)+len(other))
+	for _, n := range c {
+		seenIDs[n.id] = struct{}{}
+	}
 	for _, n := range other {
-		if !c.Contains(n.id) {
+		if _, ok := seenIDs[n.id]; !ok {
 			nodes = append(nodes, n)
+			seenIDs[n.id] = struct{}{}
 		}
 	}
 	OrderedBy(ID).Sort(nodes)
@@ -212,25 +241,6 @@ func (c Configuration) Difference(other Configuration) Configuration {
 		}
 	}
 	return nodes
-}
-
-// Extend returns a new Configuration combining c with new nodes from the option.
-// This is the only way to add nodes that are not yet registered with the manager.
-// When using WithNodeList, new IDs are generated starting from max(manager.NodeIDs())+1.
-// When using WithNodes, the provided IDs are used directly.
-func (c Configuration) Extend(opt NodeListOption) (Configuration, error) {
-	if len(c) == 0 {
-		return nil, fmt.Errorf("config: cannot extend empty configuration")
-	}
-	if opt == nil {
-		return c, nil
-	}
-	mgr := c.Manager()
-	newNodes, err := opt.newConfig(mgr)
-	if err != nil {
-		return nil, err
-	}
-	return c.Union(newNodes), nil
 }
 
 // WithoutErrors returns a new Configuration excluding nodes that failed in the

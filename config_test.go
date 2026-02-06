@@ -76,7 +76,7 @@ func TestNewConfiguration(t *testing.T) {
 				1: {addr: "127.0.0.1:9081"},
 				2: {addr: "127.0.0.1:9081"}, // Duplicate address
 			}),
-			wantErr: "config: address 127.0.0.1:9081 already in use by node 1",
+			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
 		},
 		{
 			name: "WithNodeList/Reject/DuplicateAddress",
@@ -84,7 +84,7 @@ func TestNewConfiguration(t *testing.T) {
 				"127.0.0.1:9081",
 				"127.0.0.1:9081", // Duplicate address
 			}),
-			wantErr: "config: address 127.0.0.1:9081 already in use by node 1",
+			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
 		},
 	}
 	for _, tt := range tests {
@@ -168,7 +168,7 @@ func TestConfigurationExtend(t *testing.T) {
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				3: {addr: "127.0.0.1:9081"}, // Same address as ID 1
 			}),
-			wantErr: "config: address 127.0.0.1:9081 already in use by node 1",
+			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
 		},
 	}
 	for _, tt := range tests {
