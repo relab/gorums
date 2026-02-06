@@ -86,6 +86,22 @@ func TestNewConfiguration(t *testing.T) {
 			}),
 			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
 		},
+		{
+			name: "WithNodes/Reject/NormalizedDuplicateAddress",
+			opt: gorums.WithNodes(map[uint32]testNode{
+				1: {addr: "localhost:9081"},
+				2: {addr: "127.0.0.1:9081"}, // Same resolved address
+			}),
+			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+		},
+		{
+			name: "WithNodeList/Reject/NormalizedDuplicateAddress",
+			opt: gorums.WithNodeList([]string{
+				"localhost:9081",
+				"127.0.0.1:9081", // Same resolved address
+			}),
+			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -167,6 +183,14 @@ func TestConfigurationExtend(t *testing.T) {
 			initialNodes: nodes12,
 			extendOpt: gorums.WithNodes(map[uint32]testNode{
 				3: {addr: "127.0.0.1:9081"}, // Same address as ID 1
+			}),
+			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
+		},
+		{
+			name:         "WithNodes/Reject/NormalizedAddressConflict",
+			initialNodes: nodes12,
+			extendOpt: gorums.WithNodes(map[uint32]testNode{
+				3: {addr: "localhost:9081"}, // Resolves to same as existing node 1
 			}),
 			wantErr: `config: address "127.0.0.1:9081" already in use by node 1`,
 		},
@@ -312,6 +336,101 @@ func TestConfigurationDifference(t *testing.T) {
 	c4 := c3.Difference(c1) // c4 = {4, 5}
 	if c4.Size() != c3.Size()-c1.Size() {
 		t.Errorf("c4.Size() = %d, want %d", c4.Size(), c3.Size()-c1.Size())
+	}
+}
+
+func TestConfigurationAddDuplicateIDs(t *testing.T) {
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(gorums.Closer(t, mgr))
+
+	// Create configuration with all three nodes
+	c2, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes)) // c2 = {1, 2, 3}
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Create c1 by removing node 3
+	c1 := c2.Remove(3) // c1 = {1, 2}
+
+	// Test Add with the same ID passed multiple times
+	// c1 = {1, 2}, we add ID 3 three times - should result in {1, 2, 3} not {1, 2, 3, 3, 3}
+	c3 := c1.Add(3, 3, 3)
+	if c3.Size() != 3 {
+		t.Errorf("c3.Size() = %d, want 3 (duplicates should be ignored)", c3.Size())
+	}
+
+	// Verify c2 and c3 have the same IDs
+	if !c2.Equal(c3) {
+		t.Errorf("c2.Equal(c3) = false, want true")
+	}
+}
+
+func TestConfigurationUnionDuplicateNodes(t *testing.T) {
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(gorums.Closer(t, mgr))
+
+	// Create configuration with nodes 1, 2, 3
+	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create subset configurations
+	c2 := c1.Remove(2, 3) // c2 = {1}
+	c3 := c1.Remove(2, 3) // c3 = {1}
+
+	// Union c2 with c3 - since both contain only node 1, result should be {1}
+	c4 := c2.Union(c3)
+	if c4.Size() != 1 {
+		t.Errorf("c4.Size() = %d, want 1", c4.Size())
+	}
+
+	// Test Union with overlapping nodes
+	c5 := c1.Remove(3) // c5 = {1, 2}
+	c6 := c1.Remove(1) // c6 = {2, 3}
+
+	// Union should give {1, 2, 3} - no duplicates
+	c7 := c5.Union(c6)
+	if c7.Size() != 3 {
+		t.Errorf("c7.Size() = %d, want 3", c7.Size())
+	}
+}
+
+func TestConfigurationImmutability(t *testing.T) {
+	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	t.Cleanup(gorums.Closer(t, mgr))
+
+	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test Union with empty returns a clone, not the original
+	var emptyConfig gorums.Configuration
+	c2 := c1.Union(emptyConfig)
+	if !c1.Equal(c2) {
+		t.Errorf("c1.Equal(c2) = false, want true")
+	}
+
+	// Check that the slices don't share the same backing array
+	c1Slice := c1.Nodes()
+	c2Slice := c2.Nodes()
+	if &c1Slice[0] == &c2Slice[0] {
+		t.Error("Union(empty) returns same backing array - violates immutability")
+	}
+
+	// Test Extend with nil opt returns a clone, not the original
+	c3, err := c1.Extend(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c1.Equal(c3) {
+		t.Errorf("c1.Equal(c3) = false, want true")
+	}
+
+	// Check that the slices don't share the same backing array
+	c3Slice := c3.Nodes()
+	if &c1Slice[0] == &c3Slice[0] {
+		t.Error("Extend(nil) returns same backing array - violates immutability")
 	}
 }
 
