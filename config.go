@@ -171,15 +171,12 @@ func (c Configuration) Add(ids ...uint32) Configuration {
 	mgr := c.Manager()
 	nodes := slices.Clone(c)
 	// Track IDs already in the result to handle duplicates in input
-	seenIDs := make(map[uint32]struct{}, len(c)+len(ids))
-	for _, n := range c {
-		seenIDs[n.id] = struct{}{}
-	}
+	seenIDs := newSet(c.NodeIDs()...)
 	for _, id := range ids {
-		if _, ok := seenIDs[id]; !ok {
+		if !seenIDs.contains(id) {
 			if node, found := mgr.Node(id); found {
 				nodes = append(nodes, node)
-				seenIDs[id] = struct{}{}
+				seenIDs.add(id)
 			}
 		}
 	}
@@ -198,14 +195,11 @@ func (c Configuration) Union(other Configuration) Configuration {
 	}
 	nodes := slices.Clone(c)
 	// Track IDs already in the result to handle duplicates in other
-	seenIDs := make(map[uint32]struct{}, len(c)+len(other))
-	for _, n := range c {
-		seenIDs[n.id] = struct{}{}
-	}
+	seenIDs := newSet(c.NodeIDs()...)
 	for _, n := range other {
-		if _, ok := seenIDs[n.id]; !ok {
+		if !seenIDs.contains(n.id) {
 			nodes = append(nodes, n)
-			seenIDs[n.id] = struct{}{}
+			seenIDs.add(n.id)
 		}
 	}
 	OrderedBy(ID).Sort(nodes)
@@ -217,9 +211,10 @@ func (c Configuration) Remove(ids ...uint32) Configuration {
 	if len(c) == 0 {
 		return nil
 	}
+	idSet := newSet(ids...)
 	nodes := make(Configuration, 0, len(c))
 	for _, n := range c {
-		if !slices.Contains(ids, n.id) {
+		if !idSet.contains(n.id) {
 			nodes = append(nodes, n)
 		}
 	}
@@ -234,9 +229,10 @@ func (c Configuration) Difference(other Configuration) Configuration {
 	if len(other) == 0 {
 		return slices.Clone(c)
 	}
+	idSet := newSet(other.NodeIDs()...)
 	nodes := make(Configuration, 0, len(c))
 	for _, n := range c {
-		if !other.Contains(n.id) {
+		if !idSet.contains(n.id) {
 			nodes = append(nodes, n)
 		}
 	}
@@ -263,19 +259,38 @@ func (c Configuration) WithoutErrors(err QuorumCallError, errorTypes ...error) C
 		}
 		return false
 	}
-
-	// Build a map of node IDs to exclude.
-	rm := make(map[uint32]bool, len(err.errors))
+	// Build a set of node IDs to exclude.
+	excludeSet := newSet[uint32]()
 	for _, ne := range err.errors {
-		rm[ne.nodeID] = exclude(ne.cause)
+		if exclude(ne.cause) {
+			excludeSet.add(ne.nodeID)
+		}
 	}
-
 	// Build configuration with remaining nodes.
 	nodes := make(Configuration, 0, len(c))
 	for _, node := range c {
-		if !rm[node.id] {
+		if !excludeSet.contains(node.id) {
 			nodes = append(nodes, node)
 		}
 	}
 	return nodes
+}
+
+type set[K comparable] map[K]struct{}
+
+func newSet[K comparable](elems ...K) set[K] {
+	set := make(set[K], len(elems))
+	for _, elem := range elems {
+		set.add(elem)
+	}
+	return set
+}
+
+func (s set[K]) add(k K) {
+	s[k] = struct{}{}
+}
+
+func (s set[K]) contains(k K) bool {
+	_, ok := s[k]
+	return ok
 }
