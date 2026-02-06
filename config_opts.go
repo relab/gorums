@@ -3,6 +3,7 @@ package gorums
 import (
 	"fmt"
 	"maps"
+	"net"
 	"slices"
 )
 
@@ -17,107 +18,154 @@ type NodeAddress interface {
 	Addr() string
 }
 
-type structNodeMap[T NodeAddress] struct {
-	nodes map[uint32]T
-}
-
-func (structNodeMap[T]) isOption() {}
-
-func (o structNodeMap[T]) newConfig(mgr *Manager) (nodes Configuration, err error) {
-	if len(o.nodes) == 0 {
-		return nil, fmt.Errorf("config: missing required node map")
-	}
-	// Build a map of addresses to IDs for the new nodes
-	addrToID := make(map[string]uint32, len(o.nodes))
-	// Also check for conflicts with existing nodes in the manager
-	for _, existingNode := range mgr.Nodes() {
-		addrToID[existingNode.Address()] = existingNode.ID()
-	}
-	// Sort IDs to ensure deterministic processing order
-	nodes = make(Configuration, 0, len(o.nodes))
-	for _, id := range slices.Sorted(maps.Keys(o.nodes)) {
-		n := o.nodes[id]
-		if id == 0 {
-			return nil, fmt.Errorf("config: node 0 is reserved")
-		}
-		// Check if ID already exists in manager
-		if existingNode, found := mgr.Node(id); found {
-			// Only error if this is a new node with existing ID (not same node)
-			if existingNode.Address() != n.Addr() {
-				return nil, fmt.Errorf("config: node %d already in use", id)
-			}
-			// Same node, just add to configuration
-			nodes = append(nodes, existingNode)
-			continue
-		}
-		// Check for duplicate address
-		if existingID, exists := addrToID[n.Addr()]; exists {
-			return nil, fmt.Errorf("config: address %s already in use by node %d", n.Addr(), existingID)
-		}
-		addrToID[n.Addr()] = id
-		node, err := mgr.newNode(n.Addr(), id)
-		if err != nil {
-			return nil, err
-		}
-		nodes = append(nodes, node)
-	}
-	// Sort nodes to ensure deterministic iteration.
-	OrderedBy(ID).Sort(mgr.nodes)
-	OrderedBy(ID).Sort(nodes)
-	return nodes, nil
-}
-
 // WithNodes returns a NodeListOption containing the provided mapping from
 // application-specific IDs to types implementing NodeAddress.
 // Node IDs must be greater than 0.
 func WithNodes[T NodeAddress](nodes map[uint32]T) NodeListOption {
-	return &structNodeMap[T]{nodes: nodes}
+	return nodeMap[T](nodes)
 }
 
-type nodeList struct {
-	addrsList []string
-}
+type nodeMap[T NodeAddress] map[uint32]T
 
-func (nodeList) isOption() {}
+func (nodeMap[T]) isOption() {}
 
-func (o nodeList) newConfig(mgr *Manager) (nodes Configuration, err error) {
-	if len(o.addrsList) == 0 {
-		return nil, fmt.Errorf("config: missing required node addresses")
+func (nm nodeMap[T]) newConfig(mgr *Manager) (Configuration, error) {
+	if len(nm) == 0 {
+		return nil, fmt.Errorf("config: missing required node map")
 	}
-	// Build a map of addresses to IDs to check for duplicates
-	addrToID := make(map[string]uint32, len(o.addrsList))
-	// Check for conflicts with existing nodes in the manager
-	for _, existingNode := range mgr.Nodes() {
-		addrToID[existingNode.Address()] = existingNode.ID()
-	}
-	// Find the highest ID currently in use; IDs start from max(nodeIDs) + 1
-	// If manager is empty, maxID is 0, so new IDs start from 1
-	maxID := uint32(0)
-	if nodeIDs := mgr.NodeIDs(); len(nodeIDs) > 0 {
-		maxID = slices.Max(nodeIDs)
-	}
-	nodes = make(Configuration, 0, len(o.addrsList))
-	for i, naddr := range o.addrsList {
-		// Check for duplicate address
-		if existingID, exists := addrToID[naddr]; exists {
-			return nil, fmt.Errorf("config: address %s already in use by node %d", naddr, existingID)
+	builder := newNodeBuilder(mgr, len(nm))
+	// Sort IDs to ensure deterministic processing order
+	for _, id := range slices.Sorted(maps.Keys(nm)) {
+		if id == 0 {
+			return nil, fmt.Errorf("config: node 0 is reserved")
 		}
-		id := maxID + uint32(i) + 1
-		addrToID[naddr] = id
-		node, err := mgr.newNode(naddr, id)
-		if err != nil {
+		node := nm[id]
+		// Check if ID already exists in manager
+		if _, found := mgr.Node(id); found {
+			if err := builder.addExisting(id, node.Addr()); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if err := builder.addNew(id, node.Addr()); err != nil {
 			return nil, err
 		}
-		nodes = append(nodes, node)
 	}
-	// Sort nodes to ensure deterministic iteration.
-	OrderedBy(ID).Sort(mgr.nodes)
-	OrderedBy(ID).Sort(nodes)
-	return nodes, nil
+	return builder.configuration(), nil
 }
 
 // WithNodeList returns a NodeListOption for the provided list of node addresses.
 // Unique Node IDs are generated preventing conflicts with existing nodes.
 func WithNodeList(addrsList []string) NodeListOption {
-	return &nodeList{addrsList: addrsList}
+	return nodeList(addrsList)
+}
+
+type nodeList []string
+
+func (nodeList) isOption() {}
+
+func (nl nodeList) newConfig(mgr *Manager) (Configuration, error) {
+	if len(nl) == 0 {
+		return nil, fmt.Errorf("config: missing required node addresses")
+	}
+	builder := newNodeBuilder(mgr, len(nl))
+	nextID := builder.nextID()
+	for i, addr := range nl {
+		id := nextID + uint32(i)
+		if err := builder.addNew(id, addr); err != nil {
+			return nil, err
+		}
+	}
+	return builder.configuration(), nil
+}
+
+// nodeBuilder helps construct a Configuration while tracking addresses to prevent duplicates.
+// It encapsulates the common logic shared between WithNodes and WithNodeList.
+type nodeBuilder struct {
+	mgr      *Manager
+	addrToID map[string]uint32 // normalized address -> node ID
+	nodes    Configuration
+}
+
+// newNodeBuilder creates a new nodeBuilder initialized with existing nodes from the manager.
+func newNodeBuilder(mgr *Manager, capacity int) *nodeBuilder {
+	addrToID := make(map[string]uint32, capacity)
+	// Populate with existing nodes from the manager (already normalized)
+	for _, existingNode := range mgr.Nodes() {
+		addrToID[existingNode.Address()] = existingNode.ID()
+	}
+	return &nodeBuilder{
+		mgr:      mgr,
+		addrToID: addrToID,
+		nodes:    make(Configuration, 0, capacity),
+	}
+}
+
+// addExisting adds an existing node (already in manager) to the configuration.
+// Returns an error if the ID exists but with a different address.
+func (b *nodeBuilder) addExisting(id uint32, addr string) error {
+	normalizedAddr, err := normalizeAddr(addr)
+	if err != nil {
+		return fmt.Errorf("config: invalid address %q: %w", addr, err)
+	}
+	existingNode, found := b.mgr.Node(id)
+	if !found {
+		return fmt.Errorf("config: node %d not found in manager", id)
+	}
+	if existingNode.Address() != normalizedAddr {
+		return fmt.Errorf("config: node %d already in use", id)
+	}
+	b.nodes = append(b.nodes, existingNode)
+	return nil
+}
+
+// addNew creates and adds a new node with the given ID and address.
+// Returns an error if the ID is reserved (0), if the address is invalid,
+// or if the normalized address is already in use.
+func (b *nodeBuilder) addNew(id uint32, addr string) error {
+	if id == 0 {
+		return fmt.Errorf("config: node 0 is reserved")
+	}
+	normalizedAddr, err := normalizeAddr(addr)
+	if err != nil {
+		return fmt.Errorf("config: invalid address %q: %w", addr, err)
+	}
+	// Check for duplicate address
+	if existingID, exists := b.addrToID[normalizedAddr]; exists {
+		return fmt.Errorf("config: address %q already in use by node %d", normalizedAddr, existingID)
+	}
+	b.addrToID[normalizedAddr] = id
+	node, err := b.mgr.newNode(addr, id)
+	if err != nil {
+		return err
+	}
+	b.nodes = append(b.nodes, node)
+	return nil
+}
+
+// configuration returns the built Configuration, sorted by ID.
+func (b *nodeBuilder) configuration() Configuration {
+	OrderedBy(ID).Sort(b.mgr.nodes)
+	OrderedBy(ID).Sort(b.nodes)
+	return b.nodes
+}
+
+// nextID returns the next available node ID (max existing ID + 1).
+func (b *nodeBuilder) nextID() uint32 {
+	if nodeIDs := b.mgr.NodeIDs(); len(nodeIDs) > 0 {
+		return slices.Max(nodeIDs) + 1
+	}
+	return 1
+}
+
+// normalizeAddr normalizes an address string to a canonical form using
+// net.ResolveTCPAddr. This ensures consistent address comparison for
+// duplicate detection. For example, "localhost:8080" and "127.0.0.1:8080"
+// may resolve to the same normalized address.
+func normalizeAddr(addr string) (string, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
+	if err != nil {
+		return "", err
+	}
+	return tcpAddr.String(), nil
 }
