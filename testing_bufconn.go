@@ -64,15 +64,15 @@ func (r *bufconnRegistry) registerDialer(t testing.TB, dialer bufconnDialer) (is
 	return true
 }
 
-// dial looks up the dialer for the given test and dials the address.
-func (r *bufconnRegistry) dial(t testing.TB, ctx context.Context, addr string) (net.Conn, error) {
+// getDialer returns the dialer for the given test, or an error if no dialer is registered.
+func (r *bufconnRegistry) getDialer(t testing.TB) (bufconnDialer, error) {
 	r.mu.Lock()
 	dialer, ok := r.dialers[t]
 	r.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("bufconn dialer not found for test")
 	}
-	return dialer(ctx, addr)
+	return dialer, nil
 }
 
 // cleanup removes the dialer for the given test.
@@ -84,12 +84,12 @@ func (r *bufconnRegistry) cleanup(t testing.TB) {
 
 // testSetupServers is the bufconn implementation of server setup.
 // It starts servers using bufconn and returns addresses and a variadic stop function.
-func testSetupServers(t testing.TB, numServers int, srvFn func(i int) ServerIface) ([]string, func(...int)) {
+func testSetupServers(t testing.TB, numServers int, srvFn func(int) ServerIface) ([]string, func(...int)) {
 	t.Helper()
 
 	addrToListener := make(map[string]*bufconn.Listener, numServers)
 
-	listenFn := func(i int) net.Listener {
+	listenFn := func(_ int) net.Listener {
 		lis := bufconn.Listen(bufSize)
 		addr := globalBufconnRegistry.nextAddress()
 		addrToListener[addr] = lis
@@ -127,7 +127,11 @@ func (to *testOptions) getOrCreateManager(t testing.TB) *Manager {
 	// Create an indirect dialer that looks up from the registry at dial time.
 	// This allows the manager to dial addresses that are registered after manager creation.
 	bufconnDialer := func(ctx context.Context, addr string) (net.Conn, error) {
-		return globalBufconnRegistry.dial(t, ctx, addr)
+		dialer, err := globalBufconnRegistry.getDialer(t)
+		if err != nil {
+			return nil, err
+		}
+		return dialer(ctx, addr)
 	}
 
 	// Create manager with bufconn dialer and register its cleanup LAST so it runs FIRST (LIFO)
