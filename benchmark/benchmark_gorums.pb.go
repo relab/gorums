@@ -46,9 +46,9 @@ func NewManager(opts ...gorums.ManagerOption) *Manager {
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
-// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
-// A new configuration can also be created from an existing configuration,
-// using the And, WithNewNodes, Except, and WithoutNodes methods.
+// Nodes can be supplied using WithNodes or WithNodeList.
+// A new configuration can also be created from an existing configuration
+// using the Add, Union, Remove, Difference, Extend, and WithoutErrors methods.
 func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, error) {
 	return gorums.NewConfiguration(mgr, opt)
 }
