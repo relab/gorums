@@ -22,8 +22,9 @@ func (c ConfigContext) Configuration() Configuration {
 }
 
 // Configuration represents a static set of nodes on which quorum calls may be invoked.
-//
-// Configuration is immutable; methods that modify the configuration return a new Configuration.
+// A configuration is created using [NewConfiguration] or [NewConfig]. A configuration
+// should be treated as immutable. Therefore, methods that operate on a configuration
+// always return a new Configuration instance.
 type Configuration []*Node
 
 // Context creates a new ConfigContext from the given parent context
@@ -34,11 +35,11 @@ type Configuration []*Node
 //	config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 //	cfgCtx := config.Context(context.Background())
 //	resp, err := paxos.Prepare(cfgCtx, req)
-func (cfg Configuration) Context(parent context.Context) *ConfigContext {
-	if len(cfg) == 0 {
+func (c Configuration) Context(parent context.Context) *ConfigContext {
+	if len(c) == 0 {
 		panic("gorums: Context called with empty configuration")
 	}
-	return &ConfigContext{Context: parent, cfg: cfg}
+	return &ConfigContext{Context: parent, cfg: c}
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
