@@ -55,24 +55,14 @@ func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) Ser
 }
 
 // nodeListOption returns the appropriate NodeListOption for the configuration.
-// It uses provided options if available, or generates defaults based on whether
-// an existing manager is being reused.
+// It uses provided options if available, otherwise defaults to WithNodeList.
 func (to *testOptions) nodeListOption(addrs []string) NodeListOption {
 	if len(to.nodeListOpts) > 0 {
 		// Use the last provided NodeListOption (allows overriding)
 		return to.nodeListOpts[len(to.nodeListOpts)-1]
 	}
-	if to.existingMgr != nil {
-		// When reusing a manager, use WithNodeList to auto-generate unique IDs
-		// based on addresses, avoiding conflicts with existing nodes
-		return WithNodeList(addrs)
-	}
-	// Default for new manager: build nodeMap with sequential IDs (0, 1, 2, ...)
-	nodeMap := make(map[string]uint32, len(addrs))
-	for i, addr := range addrs {
-		nodeMap[addr] = uint32(i)
-	}
-	return WithNodeMap(nodeMap)
+	// Default: use WithNodeList which generates unique IDs based on max(manager.NodeIDs()) + 1
+	return WithNodeList(addrs)
 }
 
 // extractTestOptions separates a slice of TestOption into their specific types.

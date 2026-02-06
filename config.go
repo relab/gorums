@@ -2,7 +2,9 @@ package gorums
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 )
 
 // ConfigContext is a context that carries a configuration for quorum calls.
@@ -21,8 +23,7 @@ func (c ConfigContext) Configuration() Configuration {
 
 // Configuration represents a static set of nodes on which quorum calls may be invoked.
 //
-// Mutating the configuration is not supported; instead, use NewConfiguration to create
-// a new configuration.
+// Configuration is immutable; methods that modify the configuration return a new Configuration.
 type Configuration []*Node
 
 // Context creates a new ConfigContext from the given parent context
@@ -41,9 +42,9 @@ func (cfg Configuration) Context(parent context.Context) *ConfigContext {
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
-// Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
-// A new configuration can also be created from an existing configuration,
-// using the And, WithNewNodes, Except, and WithoutNodes methods.
+// Nodes can be supplied using WithNodes or WithNodeList.
+// A new configuration can also be created from an existing configuration
+// using the Add, Union, Remove, Difference, Extend, and WithoutErrors methods.
 func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
 	if opt == nil {
 		return nil, fmt.Errorf("config: missing required node list")
@@ -136,4 +137,134 @@ func (c Configuration) Manager() *Manager {
 // nextMsgID returns the next message ID from this client's manager.
 func (c Configuration) nextMsgID() uint64 {
 	return c[0].msgIDGen()
+}
+
+// Contains reports whether c contains a node with the given ID.
+func (c Configuration) Contains(id uint32) bool {
+	return slices.ContainsFunc(c, func(n *Node) bool { return n.id == id })
+}
+
+// Add returns a new Configuration containing nodes from c plus nodes with the
+// specified IDs that exist in the manager. IDs not found in the manager are ignored.
+func (c Configuration) Add(ids ...uint32) Configuration {
+	if len(c) == 0 {
+		return nil
+	}
+	mgr := c.Manager()
+	nodes := slices.Clone(c)
+	for _, id := range ids {
+		if !c.Contains(id) {
+			if node, found := mgr.Node(id); found {
+				nodes = append(nodes, node)
+			}
+		}
+	}
+	OrderedBy(ID).Sort(nodes)
+	return nodes
+}
+
+// Union returns a new Configuration containing all nodes from both c and other.
+// Duplicate nodes are included only once.
+func (c Configuration) Union(other Configuration) Configuration {
+	if len(c) == 0 {
+		return other
+	}
+	if len(other) == 0 {
+		return c
+	}
+	nodes := slices.Clone(c)
+	for _, n := range other {
+		if !c.Contains(n.id) {
+			nodes = append(nodes, n)
+		}
+	}
+	OrderedBy(ID).Sort(nodes)
+	return nodes
+}
+
+// Remove returns a new Configuration excluding nodes with the specified IDs.
+func (c Configuration) Remove(ids ...uint32) Configuration {
+	if len(c) == 0 {
+		return nil
+	}
+	nodes := make(Configuration, 0, len(c))
+	for _, n := range c {
+		if !slices.Contains(ids, n.id) {
+			nodes = append(nodes, n)
+		}
+	}
+	return nodes
+}
+
+// Difference returns a new Configuration with nodes from c that are not in other.
+func (c Configuration) Difference(other Configuration) Configuration {
+	if len(c) == 0 {
+		return nil
+	}
+	if len(other) == 0 {
+		return slices.Clone(c)
+	}
+	nodes := make(Configuration, 0, len(c))
+	for _, n := range c {
+		if !other.Contains(n.id) {
+			nodes = append(nodes, n)
+		}
+	}
+	return nodes
+}
+
+// Extend returns a new Configuration combining c with new nodes from the option.
+// This is the only way to add nodes that are not yet registered with the manager.
+// When using WithNodeList, new IDs are generated starting from max(manager.NodeIDs())+1.
+// When using WithNodes, the provided IDs are used directly.
+func (c Configuration) Extend(opt NodeListOption) (Configuration, error) {
+	if len(c) == 0 {
+		return nil, fmt.Errorf("config: cannot extend empty configuration")
+	}
+	if opt == nil {
+		return c, nil
+	}
+	mgr := c.Manager()
+	newNodes, err := opt.newConfig(mgr)
+	if err != nil {
+		return nil, err
+	}
+	return c.Union(newNodes), nil
+}
+
+// WithoutErrors returns a new Configuration excluding nodes that failed in the
+// given QuorumCallError. If specific error types are provided, only nodes whose
+// errors match one of those types (using errors.Is) will be excluded.
+// If no error types are provided, all failed nodes are excluded.
+func (c Configuration) WithoutErrors(err QuorumCallError, errorTypes ...error) Configuration {
+	if len(c) == 0 {
+		return nil
+	}
+	// Decide whether an error should exclude a node.
+	exclude := func(cause error) bool {
+		if len(errorTypes) == 0 {
+			return true // no filter => exclude all failed nodes
+		}
+		for _, t := range errorTypes {
+			if errors.Is(cause, t) {
+				return true // match found
+			}
+		}
+		return false
+	}
+
+	// Build a map of node IDs to exclude.
+	rm := make(map[uint32]bool, len(err.errors))
+	for _, ne := range err.errors {
+		rm[ne.nodeID] = exclude(ne.cause)
+	}
+
+	// Build configuration with remaining nodes.
+	nodes := make(Configuration, 0, len(c))
+	for _, node := range c {
+		if !rm[node.id] {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
 }
