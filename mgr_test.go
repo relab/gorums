@@ -9,7 +9,11 @@ import (
 	"google.golang.org/grpc/encoding"
 )
 
-var nodeMap = map[string]uint32{"127.0.0.1:9080": 1, "127.0.0.1:9081": 2, "127.0.0.1:9082": 3, "127.0.0.1:9083": 4}
+var nodeMap = map[uint32]testAddr{1: {"127.0.0.1:9080"}, 2: {"127.0.0.1:9081"}, 3: {"127.0.0.1:9082"}, 4: {"127.0.0.1:9083"}}
+
+type testAddr struct{ addr string }
+
+func (t testAddr) Addr() string { return t.addr }
 
 func init() {
 	if encoding.GetCodec(ContentSubtype) == nil {
@@ -35,7 +39,7 @@ func TestManagerNewNode(t *testing.T) {
 	mgr := NewManager(InsecureDialOptions(t))
 	t.Cleanup(Closer(t, mgr))
 
-	_, err := NewConfiguration(mgr, WithNodeMap(nodeMap))
+	_, err := NewConfiguration(mgr, WithNodes(nodeMap))
 	if err != nil {
 		t.Fatal(err)
 	}

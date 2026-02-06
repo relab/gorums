@@ -50,20 +50,12 @@ func TestConfig(t *testing.T) {
 	callRPC(c2)
 
 	// Create c3 = c1 ∪ c2, using the same manager as c1 (and c2).
-	newNodeList := c1.And(c2)
-	c3, err := gorums.NewConfiguration(c1.Manager(), newNodeList)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c3 := c1.Union(c2)
 	fmt.Println("--- c3 ", c3.Nodes())
 	callRPC(c3)
 
 	// Create c4 = c3 \ c1, using the same manager as c1 (and c2, c3).
-	rmNodeList := c3.Except(c1)
-	c4, err := gorums.NewConfiguration(c1.Manager(), rmNodeList)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c4 := c3.Difference(c1)
 	fmt.Println("--- c4 ", c4.Nodes())
 	callRPC(c4)
 }
