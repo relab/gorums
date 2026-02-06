@@ -1,5 +1,14 @@
 package gengorums
 
+// nodeIDDataType is the template for the node ID type.
+var nodeIDDataType = `
+{{$gorums := use "gorums.EnforceVersion" .GenFile}}
+// NodeID is a type alias for the type used to identify nodes.
+{{- with index .Services 0 }}
+type NodeID = {{ nodeIDType . }}
+{{- end }}
+`
+
 // This type alias is generated only once per return type for an async call type.
 // That is, if multiple async calls use the same return type, this type alias
 // is only generated once.
@@ -22,4 +31,4 @@ type {{$correctableOut}} = *{{$correctable}}[*{{$customOut}}]
 {{end}}
 `
 
-var dataTypes = asyncDataType + correctableDataType
+var dataTypes = nodeIDDataType + asyncDataType + correctableDataType

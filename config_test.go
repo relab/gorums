@@ -2,6 +2,7 @@ package gorums_test
 
 import (
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 
@@ -25,7 +26,7 @@ var (
 
 func TestNewConfigurationEmptyNodeList(t *testing.T) {
 	wantErr := errors.New("config: missing required node addresses")
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	mgr := gorums.NewManager[uint32](gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
 	_, err := gorums.NewConfiguration(mgr, gorums.WithNodeList([]string{}))
@@ -38,7 +39,7 @@ func TestNewConfigurationEmptyNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeList(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	mgr := gorums.NewManager[uint32](gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
@@ -49,13 +50,10 @@ func TestNewConfigurationNodeList(t *testing.T) {
 		t.Errorf("cfg.Size() = %d, expected %d", cfg.Size(), len(nodes))
 	}
 
-	contains := func(nodes []*gorums.Node, addr string) bool {
-		for _, node := range nodes {
-			if addr == node.Address() {
-				return true
-			}
-		}
-		return false
+	contains := func(nodes []*gorums.Node[uint32], addr string) bool {
+		return slices.ContainsFunc(nodes, func(n *gorums.Node[uint32]) bool {
+			return n.Address() == addr
+		})
 	}
 	cfgNodes := cfg.Nodes()
 	for _, n := range nodes {
@@ -76,7 +74,7 @@ func TestNewConfigurationNodeList(t *testing.T) {
 }
 
 func TestNewConfigurationNodeMap(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	mgr := gorums.NewManager[uint32](gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
@@ -101,6 +99,8 @@ func TestNewConfigurationNodeMap(t *testing.T) {
 	}
 }
 
+type CustomID int
+
 type testNode struct {
 	addr string
 }
@@ -110,16 +110,15 @@ func (n testNode) Addr() string {
 }
 
 func TestNewConfigurationWithNodes(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	mgr := gorums.NewManager[CustomID](gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
-	nodes := map[uint32]testNode{
+	nodes := map[CustomID]testNode{
 		1: {addr: "127.0.0.1:9080"},
 		2: {addr: "127.0.0.1:9081"},
 		3: {addr: "127.0.0.1:9082"},
 		4: {addr: "127.0.0.1:9083"},
 	}
-
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodes(nodes))
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +142,7 @@ func TestNewConfigurationWithNodes(t *testing.T) {
 }
 
 func TestNewConfigurationNodeIDs(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	mgr := gorums.NewManager[uint32](gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
 	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
@@ -181,7 +180,7 @@ func TestNewConfigurationNodeIDs(t *testing.T) {
 }
 
 func TestNewConfigurationAnd(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	mgr := gorums.NewManager[uint32](gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
 	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
@@ -235,7 +234,7 @@ func TestNewConfigurationAnd(t *testing.T) {
 }
 
 func TestNewConfigurationExcept(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	mgr := gorums.NewManager[uint32](gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
 	c1, err := gorums.NewConfiguration(mgr, gorums.WithNodeList(nodes))
@@ -294,7 +293,7 @@ func TestConfigConcurrentAccess(t *testing.T) {
 }
 
 func TestConfigurationWithoutErrors(t *testing.T) {
-	mgr := gorums.NewManager(gorums.InsecureDialOptions(t))
+	mgr := gorums.NewManager[uint32](gorums.InsecureDialOptions(t))
 	t.Cleanup(gorums.Closer(t, mgr))
 
 	cfg, err := gorums.NewConfiguration(mgr, gorums.WithNodeMap(nodeMap))
@@ -309,7 +308,7 @@ func TestConfigurationWithoutErrors(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		qcErr        gorums.QuorumCallError
+		qcErr        gorums.QuorumCallError[uint32]
 		errorTypes   []error
 		wantExcluded []uint32
 	}{

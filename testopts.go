@@ -21,8 +21,8 @@ type TestOption any
 type testOptions struct {
 	managerOpts    []ManagerOption
 	serverOpts     []ServerOption
-	nodeListOpts   []NodeListOption
-	existingMgr    *Manager
+	nodeListOpts   []NodeListOption[uint32]
+	existingMgr    *Manager[uint32]
 	stopFuncPtr    *func(...int)       // pointer to capture the variadic stop function
 	preConnectHook func(stopFn func()) // called before connecting to servers
 	skipGoleak     bool                // skip goleak checks (useful for synctest)
@@ -57,7 +57,7 @@ func (to *testOptions) serverFunc(srvFn func(i int) ServerIface) func(i int) Ser
 // nodeListOption returns the appropriate NodeListOption for the configuration.
 // It uses provided options if available, or generates defaults based on whether
 // an existing manager is being reused.
-func (to *testOptions) nodeListOption(addrs []string) NodeListOption {
+func (to *testOptions) nodeListOption(addrs []string) NodeListOption[uint32] {
 	if len(to.nodeListOpts) > 0 {
 		// Use the last provided NodeListOption (allows overriding)
 		return to.nodeListOpts[len(to.nodeListOpts)-1]
@@ -84,9 +84,9 @@ func extractTestOptions(opts []TestOption) testOptions {
 			result.managerOpts = append(result.managerOpts, o)
 		case ServerOption:
 			result.serverOpts = append(result.serverOpts, o)
-		case NodeListOption:
+		case NodeListOption[uint32]:
 			result.nodeListOpts = append(result.nodeListOpts, o)
-		case *Manager:
+		case *Manager[uint32]:
 			result.existingMgr = o
 		case stopFuncProvider:
 			result.stopFuncPtr = o.stopFunc
@@ -107,7 +107,7 @@ func extractTestOptions(opts []TestOption) testOptions {
 // SetupConfiguration will NOT register a cleanup function for the manager.
 //
 // This option is intended for testing purposes only.
-func WithManager(_ testing.TB, mgr *Manager) TestOption {
+func WithManager(_ testing.TB, mgr *Manager[uint32]) TestOption {
 	if mgr == nil {
 		panic("gorums: WithManager called with nil manager")
 	}

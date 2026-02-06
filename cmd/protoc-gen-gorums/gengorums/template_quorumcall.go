@@ -35,10 +35,10 @@ var quorumCallVariables = `
 var quorumCallSignature = `func {{$method}}(` +
 	`ctx *{{$configContext}}, in *{{$in}}, ` +
 	`opts ...{{$callOption}})` +
-	` *{{$responses}}[*{{$out}}] {
+	` *{{$responses}}[NodeID, *{{$out}}] {
 `
 
-var quorumCallBody = `	return {{$quorumCall}}[*{{$in}}, *{{$out}}](
+var quorumCallBody = `	return {{$quorumCall}}[NodeID, *{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
 		opts...,
 	)
@@ -67,7 +67,7 @@ var quorumCallStreamComment = `
 {{end -}}
 `
 
-var quorumCallStreamBody = `	return {{$quorumCallStream}}[*{{$in}}, *{{$out}}](
+var quorumCallStreamBody = `	return {{$quorumCallStream}}[NodeID, *{{$in}}, *{{$out}}](
 		ctx, in, "{{$fullName}}",
 		opts...,
 	)

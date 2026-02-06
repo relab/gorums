@@ -16,7 +16,7 @@ import (
 // enqueueing the message (fire-and-forget semantics).
 //
 // This method should be used by generated code only.
-func Unicast[Req proto.Message](ctx *NodeContext, req Req, method string, opts ...CallOption) error {
+func Unicast[T NodeID, Req proto.Message](ctx *NodeContext[T], req Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Unicast, opts...)
 	md := ordering.NewGorumsMetadata(ctx, ctx.nextMsgID(), method)
 	msg := NewRequestMessage(md, req)
@@ -24,13 +24,13 @@ func Unicast[Req proto.Message](ctx *NodeContext, req Req, method string, opts .
 	waitSendDone := callOpts.mustWaitSendDone()
 	if !waitSendDone {
 		// Fire-and-forget: enqueue and return immediately
-		ctx.enqueue(request{ctx: ctx, msg: msg})
+		ctx.enqueue(request[T]{ctx: ctx, msg: msg})
 		return nil
 	}
 
 	// Default: block until send completes
-	replyChan := make(chan NodeResponse[proto.Message], 1)
-	ctx.enqueue(request{ctx: ctx, msg: msg, waitSendDone: true, responseChan: replyChan})
+	replyChan := make(chan NodeResponse[T, proto.Message], 1)
+	ctx.enqueue(request[T]{ctx: ctx, msg: msg, waitSendDone: true, responseChan: replyChan})
 
 	// Wait for send confirmation
 	select {

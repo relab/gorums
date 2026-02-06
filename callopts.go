@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/runtime/protoimpl"
 )
 
@@ -54,7 +53,7 @@ func IgnoreErrors() CallOption {
 //	resp, err := ReadQC(ctx, req,
 //	    gorums.Interceptors(loggingInterceptor, filterInterceptor),
 //	).Majority()
-func Interceptors[Req, Resp proto.Message](interceptors ...QuorumInterceptor[Req, Resp]) CallOption {
+func Interceptors[T NodeID, Req, Resp msg](interceptors ...QuorumInterceptor[T, Req, Resp]) CallOption {
 	return func(o *callOptions) {
 		for _, interceptor := range interceptors {
 			o.interceptors = append(o.interceptors, interceptor)

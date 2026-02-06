@@ -18,6 +18,9 @@ const (
 	_ = gorums.EnforceVersion(gorums.MaxVersion - 11)
 )
 
+// NodeID is a type alias for the type used to identify nodes.
+type NodeID = uint32
+
 // AsyncEmpty is a future for async quorum calls returning *emptypb.Empty.
 type AsyncEmpty = *gorums.Async[*emptypb.Empty]
 

@@ -9,13 +9,13 @@ import (
 // It embeds context.Context and provides access to the Configuration.
 //
 // Use [Configuration.Context] to create a ConfigContext from an existing context.
-type ConfigContext struct {
+type ConfigContext[T NodeID] struct {
 	context.Context
-	cfg Configuration
+	cfg Configuration[T]
 }
 
 // Configuration returns the Configuration associated with this context.
-func (c ConfigContext) Configuration() Configuration {
+func (c ConfigContext[T]) Configuration() Configuration[T] {
 	return c.cfg
 }
 
@@ -23,7 +23,7 @@ func (c ConfigContext) Configuration() Configuration {
 //
 // Mutating the configuration is not supported; instead, use NewConfiguration to create
 // a new configuration.
-type Configuration []*Node
+type Configuration[T NodeID] []*Node[T]
 
 // Context creates a new ConfigContext from the given parent context
 // and this configuration.
@@ -33,18 +33,18 @@ type Configuration []*Node
 //	config, _ := gorums.NewConfiguration(mgr, gorums.WithNodeList(addrs))
 //	cfgCtx := config.Context(context.Background())
 //	resp, err := paxos.Prepare(cfgCtx, req)
-func (cfg Configuration) Context(parent context.Context) *ConfigContext {
-	if len(cfg) == 0 {
+func (c Configuration[T]) Context(parent context.Context) *ConfigContext[T] {
+	if len(c) == 0 {
 		panic("gorums: Context called with empty configuration")
 	}
-	return &ConfigContext{Context: parent, cfg: cfg}
+	return &ConfigContext[T]{Context: parent, cfg: c}
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, err error) {
+func NewConfiguration[T NodeID](mgr *Manager[T], opt NodeListOption[T]) (nodes Configuration[T], err error) {
 	if opt == nil {
 		return nil, fmt.Errorf("config: missing required node list")
 	}
@@ -57,7 +57,7 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 //
 // Example:
 //
-//		cfg, err := NewConfig(
+//		cfg, err := NewConfig[uint32](
 //		    gorums.WithNodeList([]string{"localhost:8080", "localhost:8081", "localhost:8082"}),
 //	        gorums.WithDialOptions(grpc.WithTransportCredentials(insecure.NewCredentials())),
 //		)
@@ -67,16 +67,16 @@ func NewConfiguration(mgr *Manager, opt NodeListOption) (nodes Configuration, er
 // [Configuration.Manager] method. This method should only be used once since it
 // creates a new manager; if a manager already exists, use [NewConfiguration]
 // instead, and provide the existing manager as the first argument.
-func NewConfig(opts ...Option) (Configuration, error) {
+func NewConfig[T NodeID](opts ...Option) (Configuration[T], error) {
 	var (
 		managerOptions []ManagerOption
-		nodeListOption NodeListOption
+		nodeListOption NodeListOption[T]
 	)
 	for _, opt := range opts {
 		switch o := opt.(type) {
 		case ManagerOption:
 			managerOptions = append(managerOptions, o)
-		case NodeListOption:
+		case NodeListOption[T]:
 			if nodeListOption != nil {
 				return nil, fmt.Errorf("gorums: multiple NodeListOptions provided")
 			}
@@ -88,13 +88,13 @@ func NewConfig(opts ...Option) (Configuration, error) {
 	if nodeListOption == nil {
 		return nil, fmt.Errorf("gorums: missing required NodeListOption")
 	}
-	mgr := NewManager(managerOptions...)
+	mgr := NewManager[T](managerOptions...)
 	return NewConfiguration(mgr, nodeListOption)
 }
 
 // NodeIDs returns a slice of this configuration's Node IDs.
-func (c Configuration) NodeIDs() []uint32 {
-	ids := make([]uint32, len(c))
+func (c Configuration[T]) NodeIDs() []T {
+	ids := make([]T, len(c))
 	for i, node := range c {
 		ids[i] = node.ID()
 	}
@@ -102,17 +102,17 @@ func (c Configuration) NodeIDs() []uint32 {
 }
 
 // Nodes returns the nodes in this configuration.
-func (c Configuration) Nodes() []*Node {
+func (c Configuration[T]) Nodes() []*Node[T] {
 	return c
 }
 
 // Size returns the number of nodes in this configuration.
-func (c Configuration) Size() int {
+func (c Configuration[T]) Size() int {
 	return len(c)
 }
 
 // Equal returns true if configurations b and c have the same set of nodes.
-func (c Configuration) Equal(b Configuration) bool {
+func (c Configuration[T]) Equal(b Configuration[T]) bool {
 	if len(c) != len(b) {
 		return false
 	}
@@ -126,7 +126,7 @@ func (c Configuration) Equal(b Configuration) bool {
 
 // Manager returns the Manager that manages this configuration's nodes.
 // Returns nil if the configuration is empty.
-func (c Configuration) Manager() *Manager {
+func (c Configuration[T]) Manager() *Manager[T] {
 	if len(c) == 0 {
 		return nil
 	}
@@ -134,6 +134,6 @@ func (c Configuration) Manager() *Manager {
 }
 
 // nextMsgID returns the next message ID from this client's manager.
-func (c Configuration) nextMsgID() uint64 {
+func (c Configuration[T]) nextMsgID() uint64 {
 	return c[0].msgIDGen()
 }

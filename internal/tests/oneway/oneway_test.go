@@ -186,7 +186,7 @@ func TestMulticastPerNode(t *testing.T) {
 			for c := 1; c <= test.calls; c++ {
 				in := oneway.Request_builder{Num: uint64(c)}.Build()
 				cfgCtx := config.Context(context.Background())
-				mapInterceptor := gorums.MapRequest[*oneway.Request, *emptypb.Empty](test.mapFunc)
+				mapInterceptor := gorums.MapRequest[uint32, *oneway.Request, *emptypb.Empty](test.mapFunc)
 				if test.sendWait {
 					if err := oneway.Multicast(cfgCtx, in,
 						gorums.Interceptors(mapInterceptor),

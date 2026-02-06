@@ -8,10 +8,10 @@ import (
 // RPCCall executes a remote procedure call on the node.
 //
 // This method should be used by generated code only.
-func RPCCall(ctx *NodeContext, msg proto.Message, method string) (proto.Message, error) {
+func RPCCall[T NodeID](ctx *NodeContext[T], msg proto.Message, method string) (proto.Message, error) {
 	md := ordering.NewGorumsMetadata(ctx, ctx.nextMsgID(), method)
-	replyChan := make(chan NodeResponse[proto.Message], 1)
-	ctx.enqueue(request{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
+	replyChan := make(chan NodeResponse[T, proto.Message], 1)
+	ctx.enqueue(request[T]{ctx: ctx, msg: NewRequestMessage(md, msg), responseChan: replyChan})
 
 	select {
 	case r := <-replyChan:

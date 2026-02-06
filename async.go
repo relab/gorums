@@ -31,27 +31,27 @@ func (f *Async[Resp]) Done() bool {
 // AsyncMajority returns an Async future that resolves when a majority quorum is reached.
 // Messages are sent immediately (synchronously) to preserve ordering when multiple
 // async calls are created in sequence.
-func (r *Responses[Resp]) AsyncMajority() *Async[Resp] {
+func (r *Responses[T, Resp]) AsyncMajority() *Async[Resp] {
 	quorumSize := r.size/2 + 1
 	return r.AsyncThreshold(quorumSize)
 }
 
 // AsyncFirst returns an Async future that resolves when the first response is received.
 // Messages are sent immediately (synchronously) to preserve ordering.
-func (r *Responses[Resp]) AsyncFirst() *Async[Resp] {
+func (r *Responses[T, Resp]) AsyncFirst() *Async[Resp] {
 	return r.AsyncThreshold(1)
 }
 
 // AsyncAll returns an Async future that resolves when all nodes have responded.
 // Messages are sent immediately (synchronously) to preserve ordering.
-func (r *Responses[Resp]) AsyncAll() *Async[Resp] {
+func (r *Responses[T, Resp]) AsyncAll() *Async[Resp] {
 	return r.AsyncThreshold(r.size)
 }
 
 // AsyncThreshold returns an Async future that resolves when the threshold is reached.
 // Messages are sent immediately (synchronously) to preserve ordering when multiple
 // async calls are created in sequence.
-func (r *Responses[Resp]) AsyncThreshold(threshold int) *Async[Resp] {
+func (r *Responses[T, Resp]) AsyncThreshold(threshold int) *Async[Resp] {
 	// Send messages synchronously before spawning the goroutine to preserve ordering
 	r.sendNow()
 

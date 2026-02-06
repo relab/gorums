@@ -32,7 +32,7 @@ func checkQuorumCall(t *testing.T, gotErr, wantErr error, expectedNodeErrors ...
 		}
 		// Validate QuorumCallError details if expectedNodeErrors provided
 		if len(expectedNodeErrors) > 0 {
-			var qcErr gorums.QuorumCallError
+			var qcErr gorums.QuorumCallError[uint32]
 			if errors.As(gotErr, &qcErr) && qcErr.NodeErrors() != expectedNodeErrors[0] {
 				t.Errorf("Expected %d node errors, got %d", expectedNodeErrors[0], qcErr.NodeErrors())
 				return false
@@ -51,7 +51,7 @@ func checkQuorumCall(t *testing.T, gotErr, wantErr error, expectedNodeErrors ...
 
 func TestQuorumCall(t *testing.T) {
 	// type alias short hand for the responses type
-	type respType = *gorums.Responses[*pb.StringValue]
+	type respType = *gorums.Responses[uint32, *pb.StringValue]
 	tests := []struct {
 		name      string
 		call      func(respType) (*pb.StringValue, error)
@@ -82,7 +82,7 @@ func TestQuorumCall(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			config := gorums.TestConfiguration(t, tt.numNodes, gorums.EchoServerFn)
 			ctx := gorums.TestContext(t, 2*time.Second)
-			responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+			responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 				config.Context(ctx),
 				pb.String("test"),
 				mock.TestMethod,
@@ -104,19 +104,19 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 	// Function type for the call to test
 	type callInfo struct {
 		name     string
-		callFunc func(*gorums.ConfigContext, *pb.StringValue) error
+		callFunc func(*gorums.ConfigContext[uint32], *pb.StringValue) error
 	}
 
 	const numServers = 3
 
-	type respType = *gorums.Responses[*pb.StringValue]
+	type respType = *gorums.Responses[uint32, *pb.StringValue]
 
 	// Helper to create QuorumCall variants
 	quorumcall := func(name string, aggregateFunc func(respType) (*pb.StringValue, error)) callInfo {
 		return callInfo{
 			name: "QuorumCall/" + name,
-			callFunc: func(ctx *gorums.ConfigContext, req *pb.StringValue) error {
-				_, err := aggregateFunc(gorums.QuorumCall[*pb.StringValue, *pb.StringValue](ctx, req, mock.TestMethod))
+			callFunc: func(ctx *gorums.ConfigContext[uint32], req *pb.StringValue) error {
+				_, err := aggregateFunc(gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](ctx, req, mock.TestMethod))
 				return err
 			},
 		}
@@ -126,7 +126,7 @@ func TestQuorumCallPartialFailures(t *testing.T) {
 	multicast := func(name string, opts ...gorums.CallOption) callInfo {
 		return callInfo{
 			name: "Multicast/" + name,
-			callFunc: func(ctx *gorums.ConfigContext, req *pb.StringValue) error {
+			callFunc: func(ctx *gorums.ConfigContext[uint32], req *pb.StringValue) error {
 				return gorums.Multicast(ctx, req, mock.TestMethod, opts...)
 			},
 		}
@@ -210,7 +210,7 @@ func TestQuorumCallCustomAggregation(t *testing.T) {
 	config := gorums.TestConfiguration(t, 3, gorums.DefaultTestServer) // uses default server that returns (i+1)*10
 
 	ctx := gorums.TestContext(t, 2*time.Second)
-	responses := gorums.QuorumCall[*pb.Int32Value, *pb.Int32Value](
+	responses := gorums.QuorumCall[uint32, *pb.Int32Value, *pb.Int32Value](
 		config.Context(ctx),
 		pb.Int32(0),
 		mock.GetValueMethod,
@@ -233,7 +233,7 @@ func TestQuorumCallCollectAll(t *testing.T) {
 	config := gorums.TestConfiguration(t, 3, gorums.EchoServerFn)
 
 	ctx := gorums.TestContext(t, 2*time.Second)
-	responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+	responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 		config.Context(ctx),
 		pb.String("test"),
 		mock.TestMethod,
@@ -252,7 +252,7 @@ func TestQuorumCallSynctest(t *testing.T) {
 		ctx := gorums.TestContext(t, 2*time.Second)
 		cfgCtx := config.Context(ctx)
 
-		responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 			cfgCtx,
 			pb.String("synctest-demo"),
 			mock.TestMethod,
@@ -278,13 +278,13 @@ func TestQuorumCallAsyncSynctest(t *testing.T) {
 		cfgCtx := config.Context(ctx)
 
 		// Test async operations
-		future1 := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		future1 := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 			cfgCtx,
 			pb.String("async1"),
 			mock.TestMethod,
 		).AsyncMajority()
 
-		future2 := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+		future2 := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 			cfgCtx,
 			pb.String("async2"),
 			mock.TestMethod,
@@ -321,7 +321,7 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 		b.Run(fmt.Sprintf("Majority/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				resp, err := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -337,7 +337,7 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 			b.ReportAllocs()
 			threshold := numNodes/2 + 1
 			for b.Loop() {
-				resp, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				resp, err := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -352,7 +352,7 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 		b.Run(fmt.Sprintf("First/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				resp, err := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -367,7 +367,7 @@ func BenchmarkQuorumCallTerminalMethods(b *testing.B) {
 		b.Run(fmt.Sprintf("All/%d", numNodes), func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				resp, err := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				resp, err := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -392,7 +392,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 			b.ReportAllocs()
 			quorum := numNodes/2 + 1
 			for b.Loop() {
-				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -414,7 +414,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 			b.ReportAllocs()
 			quorum := numNodes/2 + 1
 			for b.Loop() {
-				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,
@@ -436,7 +436,7 @@ func BenchmarkQuorumCall(b *testing.B) {
 			b.ReportAllocs()
 			quorum := numNodes/2 + 1
 			for b.Loop() {
-				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+				responses := gorums.QuorumCall[uint32, *pb.StringValue, *pb.StringValue](
 					cfgCtx,
 					pb.String("test"),
 					mock.TestMethod,

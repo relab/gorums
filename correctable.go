@@ -99,7 +99,7 @@ func (c *Correctable[Resp]) update(reply Resp, level int, done bool, err error) 
 //	// Wait for level 2 to be reached
 //	<-corr.Watch(2)
 //	resp, level, err := corr.Get()
-func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
+func (r *Responses[T, Resp]) Correctable(threshold int) *Correctable[Resp] {
 	corr := &Correctable[Resp]{
 		level:  LevelNotSet,
 		donech: make(chan struct{}, 1),
@@ -109,12 +109,12 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 		var (
 			lastResp Resp
 			count    int
-			errs     []nodeError
+			errs     []nodeError[T]
 		)
 
 		for result := range r.ResponseSeq {
 			if result.Err != nil {
-				errs = append(errs, nodeError{nodeID: result.NodeID, cause: result.Err})
+				errs = append(errs, nodeError[T]{nodeID: result.NodeID, cause: result.Err})
 				continue
 			}
 
@@ -130,7 +130,7 @@ func (r *Responses[Resp]) Correctable(threshold int) *Correctable[Resp] {
 		}
 
 		// If we didn't reach the threshold, mark as done with error
-		corr.update(lastResp, count, true, QuorumCallError{cause: ErrIncomplete, errors: errs})
+		corr.update(lastResp, count, true, QuorumCallError[T]{cause: ErrIncomplete, errors: errs})
 	}()
 
 	return corr

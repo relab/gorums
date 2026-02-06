@@ -96,7 +96,7 @@ func gorumsGuard(file *protogen.File) bool {
 
 // GenerateFileContent generates the Gorums service definitions, excluding the package statement.
 func generateFileContent(file *protogen.File, g *protogen.GeneratedFile) {
-	// 1. Data Types (Async/Correctable aliases)
+	// 1. Data Types (NodeID/Async/Correctable aliases)
 	genGorumsType(g, file.Services, "types")
 
 	// 2. Reference Imports

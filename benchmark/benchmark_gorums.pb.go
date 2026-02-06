@@ -21,11 +21,11 @@ const (
 // Type aliases for important Gorums types to make them more accessible
 // from user code already interacting with the generated code.
 type (
-	Configuration = gorums.Configuration
-	Manager       = gorums.Manager
-	Node          = gorums.Node
-	NodeContext   = gorums.NodeContext
-	ConfigContext = gorums.ConfigContext
+	Configuration = gorums.Configuration[NodeID]
+	Manager       = gorums.Manager[NodeID]
+	Node          = gorums.Node[NodeID]
+	NodeContext   = gorums.NodeContext[NodeID]
+	ConfigContext = gorums.ConfigContext[NodeID]
 )
 
 // Use the aliased types to add them to the reserved identifiers list.
@@ -42,14 +42,14 @@ var (
 // to the manager. This function accepts manager options used to configure
 // various aspects of the manager.
 func NewManager(opts ...gorums.ManagerOption) *Manager {
-	return gorums.NewManager(opts...)
+	return gorums.NewManager[NodeID](opts...)
 }
 
 // NewConfiguration returns a configuration based on the provided list of nodes.
 // Nodes can be supplied using WithNodeMap or WithNodeList, or WithNodeIDs.
 // A new configuration can also be created from an existing configuration,
 // using the And, WithNewNodes, Except, and WithoutNodes methods.
-func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, error) {
+func NewConfiguration(mgr *Manager, opt gorums.NodeListOption[NodeID]) (Configuration, error) {
 	return gorums.NewConfiguration(mgr, opt)
 }
 
@@ -70,8 +70,11 @@ func NewConfiguration(mgr *Manager, opt gorums.NodeListOption) (Configuration, e
 // creates a new manager; if a manager already exists, use [NewConfiguration]
 // instead, and provide the existing manager as the first argument.
 func NewConfig(opts ...gorums.Option) (Configuration, error) {
-	return gorums.NewConfig(opts...)
+	return gorums.NewConfig[NodeID](opts...)
 }
+
+// NodeID is a type alias for the type used to identify nodes.
+type NodeID = uint32
 
 // AsyncEcho is a future for async quorum calls returning *Echo.
 type AsyncEcho = *gorums.Async[*Echo]
@@ -101,48 +104,48 @@ type CorrectableStartResponse = *gorums.Correctable[*StartResponse]
 var _ emptypb.Empty
 
 // StartServerBenchmark starts a server-side benchmark campaign.
-func StartServerBenchmark(ctx *ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
-	return gorums.QuorumCall[*StartRequest, *StartResponse](
+func StartServerBenchmark(ctx *ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[NodeID, *StartResponse] {
+	return gorums.QuorumCall[NodeID, *StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartServerBenchmark",
 		opts...,
 	)
 }
 
 // StopServerBenchmark stops a server-side benchmark campaign.
-func StopServerBenchmark(ctx *ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*Result] {
-	return gorums.QuorumCall[*StopRequest, *Result](
+func StopServerBenchmark(ctx *ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[NodeID, *Result] {
+	return gorums.QuorumCall[NodeID, *StopRequest, *Result](
 		ctx, in, "benchmark.Benchmark.StopServerBenchmark",
 		opts...,
 	)
 }
 
 // StartBenchmark starts a client-side benchmark campaign.
-func StartBenchmark(ctx *ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[*StartResponse] {
-	return gorums.QuorumCall[*StartRequest, *StartResponse](
+func StartBenchmark(ctx *ConfigContext, in *StartRequest, opts ...gorums.CallOption) *gorums.Responses[NodeID, *StartResponse] {
+	return gorums.QuorumCall[NodeID, *StartRequest, *StartResponse](
 		ctx, in, "benchmark.Benchmark.StartBenchmark",
 		opts...,
 	)
 }
 
 // StopBenchmark stops a client-side benchmark campaign.
-func StopBenchmark(ctx *ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[*MemoryStat] {
-	return gorums.QuorumCall[*StopRequest, *MemoryStat](
+func StopBenchmark(ctx *ConfigContext, in *StopRequest, opts ...gorums.CallOption) *gorums.Responses[NodeID, *MemoryStat] {
+	return gorums.QuorumCall[NodeID, *StopRequest, *MemoryStat](
 		ctx, in, "benchmark.Benchmark.StopBenchmark",
 		opts...,
 	)
 }
 
 // QuorumCall performs an echo quorum call on all servers.
-func QuorumCall(ctx *ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
-	return gorums.QuorumCall[*Echo, *Echo](
+func QuorumCall(ctx *ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[NodeID, *Echo] {
+	return gorums.QuorumCall[NodeID, *Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.QuorumCall",
 		opts...,
 	)
 }
 
 // SlowServer performs an echo quorum call on slow servers.
-func SlowServer(ctx *ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[*Echo] {
-	return gorums.QuorumCall[*Echo, *Echo](
+func SlowServer(ctx *ConfigContext, in *Echo, opts ...gorums.CallOption) *gorums.Responses[NodeID, *Echo] {
+	return gorums.QuorumCall[NodeID, *Echo, *Echo](
 		ctx, in, "benchmark.Benchmark.SlowServer",
 		opts...,
 	)
