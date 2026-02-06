@@ -3,7 +3,6 @@ package gorums
 import (
 	"context"
 	"fmt"
-	"hash/fnv"
 	"net"
 	"sort"
 	"strconv"
@@ -107,18 +106,6 @@ func newNode(addr string, opts nodeOptions) (*Node, error) {
 	// Create channel and establish gRPC node stream
 	n.channel = newChannel(ctx, conn, n.id, opts.SendBufferSize)
 	return n, nil
-}
-
-// nodeID returns the ID for the provided address.
-// It resolves the address to ensure the ID is consistent.
-func nodeID(addr string) (uint32, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	h := fnv.New32a()
-	_, _ = h.Write([]byte(tcpAddr.String()))
-	return h.Sum32(), nil
 }
 
 // close this node.
