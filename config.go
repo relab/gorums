@@ -170,7 +170,7 @@ func (c Configuration) Add(ids ...uint32) Configuration {
 	}
 	mgr := c.Manager()
 	nodes := slices.Clone(c)
-	// Track IDs already in the result to handle duplicates in input
+	// seenIDs is used to filter duplicate IDs and IDs already added
 	seenIDs := newSet(c.NodeIDs()...)
 	for _, id := range ids {
 		if !seenIDs.contains(id) {
@@ -193,17 +193,7 @@ func (c Configuration) Union(other Configuration) Configuration {
 	if len(other) == 0 {
 		return slices.Clone(c)
 	}
-	nodes := slices.Clone(c)
-	// Track IDs already in the result to handle duplicates in other
-	seenIDs := newSet(c.NodeIDs()...)
-	for _, n := range other {
-		if !seenIDs.contains(n.id) {
-			nodes = append(nodes, n)
-			seenIDs.add(n.id)
-		}
-	}
-	OrderedBy(ID).Sort(nodes)
-	return nodes
+	return c.Add(other.NodeIDs()...)
 }
 
 // Remove returns a new Configuration excluding nodes with the specified IDs.
@@ -211,10 +201,10 @@ func (c Configuration) Remove(ids ...uint32) Configuration {
 	if len(c) == 0 {
 		return nil
 	}
-	idSet := newSet(ids...)
+	removeSet := newSet(ids...)
 	nodes := make(Configuration, 0, len(c))
 	for _, n := range c {
-		if !idSet.contains(n.id) {
+		if !removeSet.contains(n.id) {
 			nodes = append(nodes, n)
 		}
 	}
@@ -229,14 +219,7 @@ func (c Configuration) Difference(other Configuration) Configuration {
 	if len(other) == 0 {
 		return slices.Clone(c)
 	}
-	idSet := newSet(other.NodeIDs()...)
-	nodes := make(Configuration, 0, len(c))
-	for _, n := range c {
-		if !idSet.contains(n.id) {
-			nodes = append(nodes, n)
-		}
-	}
-	return nodes
+	return c.Remove(other.NodeIDs()...)
 }
 
 // WithoutErrors returns a new Configuration excluding nodes that failed in the
