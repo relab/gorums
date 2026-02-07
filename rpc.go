@@ -15,11 +15,15 @@ func RPCCall[Req, Resp proto.Message](ctx *NodeContext, req Req, method string) 
 
 	select {
 	case r := <-replyChan:
+		var zero Resp
 		if r.Err != nil {
-			var zero Resp
 			return zero, r.Err
 		}
-		return r.Value.(Resp), r.Err
+		resp, ok := r.Value.(Resp)
+		if !ok {
+			return zero, ErrTypeMismatch
+		}
+		return resp, r.Err
 	case <-ctx.Done():
 		var zero Resp
 		return zero, ctx.Err()

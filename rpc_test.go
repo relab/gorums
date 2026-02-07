@@ -64,3 +64,17 @@ func TestRPCCallTimedOut(t *testing.T) {
 		t.Fatalf("Unexpected response, got: %v, want: %v", response, nil)
 	}
 }
+
+func TestRPCCallTypeMismatch(t *testing.T) {
+	node := gorums.TestNode(t, gorums.DefaultTestServer)
+
+	ctx := gorums.TestContext(t, 5*time.Second)
+	nodeCtx := node.Context(ctx)
+	response, err := gorums.RPCCall[*pb.StringValue, *pb.Int32Value](nodeCtx, pb.String(""), mock.TestMethod)
+	if err != gorums.ErrTypeMismatch {
+		t.Fatalf("Expected error, got: %v, want: %v", err, gorums.ErrTypeMismatch)
+	}
+	if response != nil {
+		t.Fatalf("Unexpected response, got: %v, want: %v", response, nil)
+	}
+}
