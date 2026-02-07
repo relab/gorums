@@ -11,7 +11,6 @@ import (
 
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/ordering"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -114,7 +113,7 @@ func routerExists(node *Node, msgID uint64) bool {
 	return exists
 }
 
-func getStream(node *Node) grpc.ClientStream {
+func getStream(node *Node) ordering.Gorums_NodeStreamClient {
 	return node.channel.getStream()
 }
 
@@ -324,7 +323,7 @@ func TestChannelEnsureStream(t *testing.T) {
 	}
 
 	// Helper to verify stream expectations
-	cmpStream := func(t *testing.T, first, second grpc.ClientStream, wantSame bool) {
+	cmpStream := func(t *testing.T, first, second ordering.Gorums_NodeStreamClient, wantSame bool) {
 		t.Helper()
 		// If second is nil, skip equality check (covered by UnconnectedNodeHasNoStream action)
 		if second == nil {
@@ -342,13 +341,13 @@ func TestChannelEnsureStream(t *testing.T) {
 	tests := []struct {
 		name     string
 		setup    func(t *testing.T) *Node
-		action   func(node *Node) (first, second grpc.ClientStream)
+		action   func(node *Node) (first, second ordering.Gorums_NodeStreamClient)
 		wantSame bool
 	}{
 		{
 			name:  "UnconnectedNodeHasNoStream",
 			setup: func(t *testing.T) *Node { return testNodeWithoutServer(t) },
-			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(node *Node) (ordering.Gorums_NodeStreamClient, ordering.Gorums_NodeStreamClient) {
 				if err := node.channel.ensureStream(); err == nil {
 					t.Error("ensureStream succeeded unexpectedly")
 				}
@@ -361,7 +360,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "CreatesStreamWhenConnected",
 			setup: newNodeWithoutStream,
-			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(node *Node) (ordering.Gorums_NodeStreamClient, ordering.Gorums_NodeStreamClient) {
 				if err := node.channel.ensureStream(); err != nil {
 					t.Errorf("ensureStream failed: %v", err)
 				}
@@ -371,7 +370,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "RepeatedCallsReturnSameStream",
 			setup: newNodeWithoutStream,
-			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(node *Node) (ordering.Gorums_NodeStreamClient, ordering.Gorums_NodeStreamClient) {
 				if err := node.channel.ensureStream(); err != nil {
 					t.Errorf("first ensureStream failed: %v", err)
 				}
@@ -386,7 +385,7 @@ func TestChannelEnsureStream(t *testing.T) {
 		{
 			name:  "StreamDisconnectionCreatesNewStream",
 			setup: newNodeWithoutStream,
-			action: func(node *Node) (grpc.ClientStream, grpc.ClientStream) {
+			action: func(node *Node) (ordering.Gorums_NodeStreamClient, ordering.Gorums_NodeStreamClient) {
 				if err := node.channel.ensureStream(); err != nil {
 					t.Errorf("initial ensureStream failed: %v", err)
 				}

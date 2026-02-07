@@ -37,9 +37,6 @@ func NewManager(opts ...ManagerOption) *Manager {
 	if m.opts.logger != nil {
 		m.logger = m.opts.logger
 	}
-	m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithDefaultCallOptions(
-		grpc.CallContentSubtype(ContentSubtype),
-	))
 	if m.opts.backoff != backoff.DefaultConfig {
 		m.opts.grpcDialOpts = append(m.opts.grpcDialOpts, grpc.WithConnectParams(
 			grpc.ConnectParams{Backoff: m.opts.backoff},

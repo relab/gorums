@@ -5,22 +5,13 @@ import (
 
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
-func init() {
-	encoding.RegisterCodec(NewCodec())
-}
-
-// ContentSubtype is the subtype used by gorums when sending messages via gRPC.
-const ContentSubtype = "gorums"
-
-type gorumsMsgType uint8
+type gorumsMsgType uint32
 
 const (
 	requestType gorumsMsgType = iota + 1
@@ -34,12 +25,6 @@ type Message struct {
 	metadata *ordering.Metadata
 	message  proto.Message
 	msgType  gorumsMsgType
-}
-
-// newMessage creates a new Message struct for unmarshaling.
-// msgType specifies the message type to be unmarshaled.
-func newMessage(msgType gorumsMsgType) *Message {
-	return &Message{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
 // NewRequestMessage creates a new Gorums Message for the given metadata and request message.
@@ -120,85 +105,39 @@ func (m *Message) setError(err error) {
 	m.metadata.SetStatus(errStatus.Proto())
 }
 
-// Codec is the gRPC codec used by gorums.
-type Codec struct {
-	marshaler   proto.MarshalOptions
-	unmarshaler proto.UnmarshalOptions
-}
-
-// NewCodec returns a new Codec.
-func NewCodec() *Codec {
-	return &Codec{
-		marshaler:   proto.MarshalOptions{AllowPartial: true},
-		unmarshaler: proto.UnmarshalOptions{AllowPartial: true},
+// toMetadata serializes the application message into the metadata's payload
+// field and returns the metadata, ready for sending via the type-safe Send method.
+func (m *Message) toMetadata() (*ordering.Metadata, error) {
+	md := m.metadata
+	md.SetMsgType(uint32(m.msgType))
+	if m.message != nil {
+		b, err := proto.MarshalOptions{AllowPartial: true}.Marshal(m.message)
+		if err != nil {
+			return nil, fmt.Errorf("gorums: failed to marshal payload: %w", err)
+		}
+		md.SetPayload(b)
 	}
+	return md, nil
 }
 
-// Name returns the name of the Codec.
-func (Codec) Name() string {
-	return ContentSubtype
-}
-
-func (Codec) String() string {
-	return ContentSubtype
-}
-
-// Marshal marshals the message m into a byte slice.
-func (c Codec) Marshal(m any) (b []byte, err error) {
-	switch msg := m.(type) {
-	case *Message:
-		return c.gorumsMarshal(msg)
-	case proto.Message:
-		return c.marshaler.Marshal(msg)
-	default:
-		return nil, fmt.Errorf("gorums: cannot marshal message of type '%T'", m)
-	}
-}
-
-// gorumsMarshal marshals a metadata and a data message into a single byte slice.
-func (c Codec) gorumsMarshal(msg *Message) (b []byte, err error) {
-	mdSize := c.marshaler.Size(msg.metadata)
-	b = protowire.AppendVarint(b, uint64(mdSize))
-	b, err = c.marshaler.MarshalAppend(b, msg.metadata)
-	if err != nil {
-		return nil, err
+// fromMetadata reconstructs a Message from a received Metadata by deserializing
+// the payload bytes into the appropriate protobuf message type, determined by
+// the method descriptor and message type (request or response) in the metadata.
+func fromMetadata(md *ordering.Metadata) (*Message, error) {
+	msg := &Message{
+		metadata: md,
+		msgType:  gorumsMsgType(md.GetMsgType()),
 	}
 
-	msgSize := c.marshaler.Size(msg.message)
-	b = protowire.AppendVarint(b, uint64(msgSize))
-	b, err = c.marshaler.MarshalAppend(b, msg.message)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
-}
-
-// Unmarshal unmarshals a byte slice into m.
-func (c Codec) Unmarshal(b []byte, m any) (err error) {
-	switch msg := m.(type) {
-	case *Message:
-		return c.gorumsUnmarshal(b, msg)
-	case proto.Message:
-		return c.unmarshaler.Unmarshal(b, msg)
-	default:
-		return fmt.Errorf("gorums: cannot unmarshal message of type '%T'", m)
-	}
-}
-
-// gorumsUnmarshal extracts metadata and message data from b and places the result in msg.
-func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
-	// unmarshal metadata
-	mdBuf, mdLen := protowire.ConsumeBytes(b)
-	err = c.unmarshaler.Unmarshal(mdBuf, msg.metadata)
-	if err != nil {
-		return fmt.Errorf("gorums: could not unmarshal metadata: %w", err)
+	method := msg.GetMethod()
+	if method == "" || method == "nil" {
+		return msg, nil
 	}
 
 	// get method descriptor from registry
-	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(msg.GetMethod()))
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(method))
 	if err != nil {
-		// err is a NotFound error with no method name information; return a more informative error
-		return fmt.Errorf("gorums: could not find method descriptor for %s", msg.GetMethod())
+		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", method)
 	}
 	methodDesc := desc.(protoreflect.MethodDescriptor)
 
@@ -210,18 +149,22 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	case responseType:
 		messageName = methodDesc.Output().FullName()
 	default:
-		return fmt.Errorf("gorums: unknown message type %d", msg.msgType)
+		return nil, fmt.Errorf("gorums: unknown message type %d", msg.msgType)
 	}
 
-	// now get the message type from the types registry
+	// get the message type from the types registry
 	msgType, err := protoregistry.GlobalTypes.FindMessageByName(messageName)
 	if err != nil {
-		// err is a NotFound error with no message name information; return a more informative error
-		return fmt.Errorf("gorums: could not find message type %s", messageName)
+		return nil, fmt.Errorf("gorums: could not find message type %s", messageName)
 	}
 	msg.message = msgType.New().Interface()
 
-	// unmarshal message
-	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
-	return c.unmarshaler.Unmarshal(msgBuf, msg.message)
+	// unmarshal payload into the message
+	payload := md.GetPayload()
+	if len(payload) > 0 {
+		if err := (proto.UnmarshalOptions{AllowPartial: true}).Unmarshal(payload, msg.message); err != nil {
+			return nil, fmt.Errorf("gorums: failed to unmarshal payload: %w", err)
+		}
+	}
+	return msg, nil
 }

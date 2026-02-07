@@ -5,15 +5,7 @@ import (
 	"log"
 	"strings"
 	"testing"
-
-	"google.golang.org/grpc/encoding"
 )
-
-func init() {
-	if encoding.GetCodec(ContentSubtype) == nil {
-		encoding.RegisterCodec(NewCodec())
-	}
-}
 
 func TestManagerLogging(t *testing.T) {
 	var (
@@ -23,7 +15,7 @@ func TestManagerLogging(t *testing.T) {
 	mgr := NewManager(InsecureDialOptions(t), WithLogger(logger))
 	t.Cleanup(Closer(t, mgr))
 
-	want := "logger: mgr.go:49: ready"
+	want := "logger: mgr.go:46: ready"
 	if strings.TrimSpace(buf.String()) != want {
 		t.Errorf("logger: got %q, want %q", buf.String(), want)
 	}

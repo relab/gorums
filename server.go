@@ -49,8 +49,11 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			case <-ctx.Done():
 				return
 			case msg := <-finished:
-				err := srv.SendMsg(msg)
+				md, err := msg.toMetadata()
 				if err != nil {
+					return
+				}
+				if err := srv.Send(md); err != nil {
 					return
 				}
 			}
@@ -62,8 +65,11 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	defer mut.Unlock()
 
 	for {
-		req := newMessage(requestType)
-		err := srv.RecvMsg(req)
+		md, err := srv.Recv()
+		if err != nil {
+			return err
+		}
+		req, err := fromMetadata(md)
 		if err != nil {
 			return err
 		}

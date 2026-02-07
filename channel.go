@@ -155,7 +155,7 @@ func (c *channel) ensureConnectedNodeStream() (err error) {
 }
 
 // getStream returns the current stream, or nil if no stream is available.
-func (c *channel) getStream() grpc.ClientStream {
+func (c *channel) getStream() ordering.Gorums_NodeStreamClient {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	return c.gorumsStream
@@ -280,14 +280,21 @@ func (c *channel) receiver() {
 			}
 		}
 
-		resp := newMessage(responseType)
-		if err := stream.RecvMsg(resp); err != nil {
+		md, err := stream.Recv()
+		if err != nil {
 			c.setLastErr(err)
 			c.cancelPendingMsgs(err)
 			c.clearStream()
 		} else {
-			err := resp.GetStatus().Err()
-			c.routeResponse(resp.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Value: resp.GetProtoMessage(), Err: err})
+			resp, err := fromMetadata(md)
+			if err != nil {
+				c.setLastErr(err)
+				c.cancelPendingMsgs(err)
+				c.clearStream()
+			} else {
+				err := resp.GetStatus().Err()
+				c.routeResponse(resp.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Value: resp.GetProtoMessage(), Err: err})
+			}
 		}
 
 		select {
@@ -354,7 +361,11 @@ func (c *channel) sendMsg(req request) (err error) {
 		}
 	}()
 
-	if err = stream.SendMsg(req.msg); err != nil {
+	md, err := req.msg.toMetadata()
+	if err != nil {
+		return err
+	}
+	if err = stream.Send(md); err != nil {
 		c.setLastErr(err)
 		c.clearStream()
 	}

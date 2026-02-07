@@ -7,15 +7,8 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/mock"
-	"google.golang.org/grpc/encoding"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
-
-func init() {
-	if encoding.GetCodec(gorums.ContentSubtype) == nil {
-		encoding.RegisterCodec(gorums.NewCodec())
-	}
-}
 
 var (
 	nodes   = []string{"127.0.0.1:9081", "127.0.0.1:9082", "127.0.0.1:9083"}
