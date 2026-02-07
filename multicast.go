@@ -18,11 +18,11 @@ import (
 // option. Use gorums.MapRequest to transform requests per-node.
 //
 // This method should be used by generated code only.
-func Multicast[Req msg](ctx *ConfigContext, msg Req, method string, opts ...CallOption) error {
+func Multicast[Req msg](ctx *ConfigContext, req Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Multicast, opts...)
 	waitSendDone := callOpts.mustWaitSendDone()
 
-	clientCtx := newClientCtxBuilder[Req, *emptypb.Empty](ctx, msg, method).WithWaitSendDone(waitSendDone).Build()
+	clientCtx := newClientCtxBuilder[Req, *emptypb.Empty](ctx, req, method).WithWaitSendDone(waitSendDone).Build()
 	clientCtx.applyInterceptors(callOpts.interceptors)
 
 	// Send messages immediately (multicast doesn't use lazy sending)
