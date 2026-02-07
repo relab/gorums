@@ -4,16 +4,15 @@ import (
 	"errors"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // makeClientCtx is a helper to create a ClientCtx with mock responses for unit tests.
 // It creates a channel with the provided responses and returns a ClientCtx.
-func makeClientCtx[Req, Resp proto.Message](t *testing.T, numNodes int, responses []NodeResponse[proto.Message]) *ClientCtx[Req, Resp] {
+func makeClientCtx[Req, Resp msg](t *testing.T, numNodes int, responses []NodeResponse[msg]) *ClientCtx[Req, Resp] {
 	t.Helper()
 
-	resultChan := make(chan NodeResponse[proto.Message], len(responses))
+	resultChan := make(chan NodeResponse[msg], len(responses))
 	for _, r := range responses {
 		resultChan <- r
 	}
@@ -67,7 +66,7 @@ func TestTerminalMethods(t *testing.T) {
 	tests := []struct {
 		name        string
 		numNodes    int
-		responses   []NodeResponse[proto.Message]
+		responses   []NodeResponse[msg]
 		call        func(resp respType) (*pb.StringValue, error)
 		wantValue   string
 		wantErr     bool
@@ -77,7 +76,7 @@ func TestTerminalMethods(t *testing.T) {
 		{
 			name:     "First_Success",
 			numNodes: 3,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			},
 			call:      respType.First,
@@ -86,7 +85,7 @@ func TestTerminalMethods(t *testing.T) {
 		{
 			name:     "First_Error",
 			numNodes: 3,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: nil, Err: errors.New("node error")},
 				{NodeID: 2, Value: nil, Err: errors.New("node error")},
 				{NodeID: 3, Value: nil, Err: errors.New("node error")},
@@ -99,7 +98,7 @@ func TestTerminalMethods(t *testing.T) {
 		{
 			name:     "Majority_Success_3Nodes",
 			numNodes: 3,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			},
@@ -109,7 +108,7 @@ func TestTerminalMethods(t *testing.T) {
 		{
 			name:     "Majority_Insufficient",
 			numNodes: 3,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: nil, Err: errors.New("node error")},
 				{NodeID: 3, Value: nil, Err: errors.New("node error")},
@@ -121,7 +120,7 @@ func TestTerminalMethods(t *testing.T) {
 		{
 			name:     "Majority_Even_Success",
 			numNodes: 4,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 				{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -133,7 +132,7 @@ func TestTerminalMethods(t *testing.T) {
 		{
 			name:     "All_Success",
 			numNodes: 3,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 				{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -144,7 +143,7 @@ func TestTerminalMethods(t *testing.T) {
 		{
 			name:     "All_PartialFailure",
 			numNodes: 3,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 				{NodeID: 3, Value: nil, Err: errors.New("node error")},
@@ -176,7 +175,7 @@ func TestTerminalMethodsThreshold(t *testing.T) {
 	tests := []struct {
 		name        string
 		numNodes    int
-		responses   []NodeResponse[proto.Message]
+		responses   []NodeResponse[msg]
 		call        func(resp respType, threshold int) (*pb.StringValue, error)
 		threshold   int
 		wantValue   string
@@ -186,7 +185,7 @@ func TestTerminalMethodsThreshold(t *testing.T) {
 		{
 			name:     "Threshold_Success",
 			numNodes: 3,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			},
@@ -197,7 +196,7 @@ func TestTerminalMethodsThreshold(t *testing.T) {
 		{
 			name:     "Threshold_Insufficient",
 			numNodes: 3,
-			responses: []NodeResponse[proto.Message]{
+			responses: []NodeResponse[msg]{
 				{NodeID: 1, Value: pb.String("response1"), Err: nil},
 				{NodeID: 2, Value: nil, Err: errors.New("node error")},
 				{NodeID: 3, Value: nil, Err: errors.New("node error")},
@@ -232,7 +231,7 @@ func TestTerminalMethodsThreshold(t *testing.T) {
 // TestIteratorMethods tests the iterator helper methods
 func TestIteratorMethods(t *testing.T) {
 	t.Run("IgnoreErrors", func(t *testing.T) {
-		responses := []NodeResponse[proto.Message]{
+		responses := []NodeResponse[msg]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: nil, Err: errors.New("node error")},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -250,7 +249,7 @@ func TestIteratorMethods(t *testing.T) {
 	})
 
 	t.Run("Filter", func(t *testing.T) {
-		responses := []NodeResponse[proto.Message]{
+		responses := []NodeResponse[msg]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -274,7 +273,7 @@ func TestIteratorMethods(t *testing.T) {
 	})
 
 	t.Run("CollectN", func(t *testing.T) {
-		responses := []NodeResponse[proto.Message]{
+		responses := []NodeResponse[msg]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -289,7 +288,7 @@ func TestIteratorMethods(t *testing.T) {
 	})
 
 	t.Run("CollectAll", func(t *testing.T) {
-		responses := []NodeResponse[proto.Message]{
+		responses := []NodeResponse[msg]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -324,7 +323,7 @@ func TestCustomAggregation(t *testing.T) {
 			return nil, ErrIncomplete
 		}
 
-		responses := []NodeResponse[proto.Message]{
+		responses := []NodeResponse[msg]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -357,7 +356,7 @@ func TestCustomAggregation(t *testing.T) {
 			return result, nil
 		}
 
-		responses := []NodeResponse[proto.Message]{
+		responses := []NodeResponse[msg]{
 			{NodeID: 1, Value: pb.String("alpha"), Err: nil},
 			{NodeID: 2, Value: pb.String("beta"), Err: nil},
 			{NodeID: 3, Value: pb.String("gamma"), Err: nil},
@@ -390,7 +389,7 @@ func TestCustomAggregation(t *testing.T) {
 			return count, nil
 		}
 
-		responses := []NodeResponse[proto.Message]{
+		responses := []NodeResponse[msg]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: pb.String("response2"), Err: nil},
 			{NodeID: 3, Value: pb.String("response3"), Err: nil},
@@ -426,7 +425,7 @@ func TestCustomAggregation(t *testing.T) {
 			return first, nil
 		}
 
-		responses := []NodeResponse[proto.Message]{
+		responses := []NodeResponse[msg]{
 			{NodeID: 1, Value: pb.String("response1"), Err: nil},
 			{NodeID: 2, Value: nil, Err: errors.New("node 2 failed")},
 		}

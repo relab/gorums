@@ -1,7 +1,6 @@
 package gorums
 
 import (
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -19,7 +18,7 @@ import (
 // option. Use gorums.MapRequest to transform requests per-node.
 //
 // This method should be used by generated code only.
-func Multicast[Req proto.Message](ctx *ConfigContext, msg Req, method string, opts ...CallOption) error {
+func Multicast[Req msg](ctx *ConfigContext, msg Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Multicast, opts...)
 	waitSendDone := callOpts.mustWaitSendDone()
 

@@ -55,13 +55,13 @@ func delayServerFn(delay time.Duration) func(_ int) ServerIface {
 	}
 }
 
-func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeResponse[proto.Message] {
+func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeResponse[msg] {
 	t.Helper()
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
 	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, mock.TestMethod), nil)
-	replyChan := make(chan NodeResponse[proto.Message], 1)
+	replyChan := make(chan NodeResponse[msg], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
 
@@ -70,13 +70,13 @@ func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeRespon
 		return resp
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("timeout waiting for response to message %d", msgID)
-		return NodeResponse[proto.Message]{}
+		return NodeResponse[msg]{}
 	}
 }
 
 type msgResponse struct {
 	msgID uint64
-	resp  NodeResponse[proto.Message]
+	resp  NodeResponse[msg]
 }
 
 func sendReq(t testing.TB, results chan<- msgResponse, node *Node, goroutineID, msgsToSend int, req request) {
@@ -802,7 +802,7 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 		ctx := TestContext(b, defaultTestTimeout)
 		req := request{ctx: ctx}
 		req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, 1, mock.TestMethod), nil)
-		replyChan := make(chan NodeResponse[proto.Message], 1)
+		replyChan := make(chan NodeResponse[msg], 1)
 		req.responseChan = replyChan
 		node.channel.enqueue(req)
 
@@ -852,7 +852,7 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 	ctx := context.Background()
 	req := request{ctx: ctx}
 	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, 0, mock.TestMethod), nil)
-	replyChan := make(chan NodeResponse[proto.Message], 1)
+	replyChan := make(chan NodeResponse[msg], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
 
@@ -878,7 +878,7 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 		ctx := context.Background()
 		req := request{ctx: ctx}
 		req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, uint64(i+1), mock.TestMethod), nil)
-		replyChan := make(chan NodeResponse[proto.Message], 1)
+		replyChan := make(chan NodeResponse[msg], 1)
 		req.responseChan = replyChan
 		node.channel.enqueue(req)
 
