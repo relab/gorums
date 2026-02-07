@@ -9,22 +9,17 @@ var rpcComment = `
 {{end -}}
 `
 
-var rpcSignature = `func {{$method}}(` +
-	`ctx *{{$nodeContext}}, in *{{$in}}) (resp *{{$out}}, err error) {
-`
-
 var rpcVar = `
 {{$genFile := .GenFile}}
 {{$nodeContext := "NodeContext"}}
-{{$rpcCall := use "gorums.RPCCall" .GenFile}}
+{{$rpc := use "gorums.RPCCall" .GenFile}}
 {{$_ := use "gorums.EnforceVersion" .GenFile}}
 `
 
-var rpcBody = `	res, err := {{$rpcCall}}(ctx, in, "{{$fullName}}")
-	if err != nil {
-		return nil, err
-	}
-	return res.(*{{$out}}), err
+var rpcSignature = `func {{$method}}(ctx *{{$nodeContext}}, in *{{$in}}) (*{{$out}}, error) {
+`
+
+var rpcBody = ` return {{$rpc}}[*{{$in}}, *{{$out}}](ctx, in, "{{$fullName}}")
 }
 `
 

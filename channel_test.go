@@ -177,7 +177,7 @@ func TestChannelSendBufferSize(t *testing.T) {
 			node := TestNode(t, EchoServerFn, WithSendBufferSize(size))
 
 			ctx := TestContext(t, time.Second)
-			_, err := RPCCall(node.Context(ctx), pb.String("test"), mock.TestMethod)
+			_, err := RPCCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("test"), mock.TestMethod)
 			if err != nil {
 				t.Errorf("RPCCall failed with buffer size %d: %v", size, err)
 			}
@@ -199,7 +199,7 @@ func TestChannelLatency(t *testing.T) {
 	// exponential weighted moving average to stabilize to the real RTT.
 	for i := range 10 {
 		ctx := TestContext(t, time.Second)
-		_, err := RPCCall(node.Context(ctx), pb.String("ping"), mock.TestMethod)
+		_, err := RPCCall[*pb.StringValue, *pb.StringValue](node.Context(ctx), pb.String("ping"), mock.TestMethod)
 		if err != nil {
 			t.Fatalf("RPCCall %d failed: %v", i, err)
 		}

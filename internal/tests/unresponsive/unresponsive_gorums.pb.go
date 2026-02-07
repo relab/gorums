@@ -74,11 +74,7 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 
 // TestUnresponsive is an RPC call invoked on the node in ctx.
 func TestUnresponsive(ctx *NodeContext, in *Empty) (resp *Empty, err error) {
-	res, err := gorums.RPCCall(ctx, in, "unresponsive.Unresponsive.TestUnresponsive")
-	if err != nil {
-		return nil, err
-	}
-	return res.(*Empty), err
+	return gorums.RPCCall[*Empty, *Empty](ctx, in, "unresponsive.Unresponsive.TestUnresponsive")
 }
 
 // Unresponsive is the server-side API for the Unresponsive Service

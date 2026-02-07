@@ -74,11 +74,7 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 
 // TestTLS is an RPC call invoked on the node in ctx.
 func TestTLS(ctx *NodeContext, in *Request) (resp *Response, err error) {
-	res, err := gorums.RPCCall(ctx, in, "tls.TLS.TestTLS")
-	if err != nil {
-		return nil, err
-	}
-	return res.(*Response), err
+	return gorums.RPCCall[*Request, *Response](ctx, in, "tls.TLS.TestTLS")
 }
 
 // TLS is the server-side API for the TLS Service
