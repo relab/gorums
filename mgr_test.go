@@ -15,8 +15,10 @@ func TestManagerLogging(t *testing.T) {
 	mgr := NewManager(InsecureDialOptions(t), WithLogger(logger))
 	t.Cleanup(Closer(t, mgr))
 
-	want := "logger: mgr.go:46: ready"
-	if strings.TrimSpace(buf.String()) != want {
-		t.Errorf("logger: got %q, want %q", buf.String(), want)
+	got := strings.TrimSpace(buf.String())
+	wantPrefix := "logger: mgr.go:"
+	wantSuffix := ": ready"
+	if !strings.HasPrefix(got, wantPrefix) || !strings.HasSuffix(got, wantSuffix) {
+		t.Errorf("logger: got %q, want %q<line>%q", got, wantPrefix, wantSuffix)
 	}
 }

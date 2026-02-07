@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
-type gorumsMsgType uint32
+type gorumsMsgType uint8
 
 const (
 	requestType gorumsMsgType = iota + 1
