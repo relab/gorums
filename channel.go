@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 // NodeResponse wraps a response value from node ID, and an error if any.
@@ -48,7 +47,7 @@ type request struct {
 	msg          *Message
 	waitSendDone bool
 	streaming    bool
-	responseChan chan<- NodeResponse[proto.Message]
+	responseChan chan<- NodeResponse[msg]
 	sendTime     time.Time
 }
 
@@ -191,7 +190,7 @@ func (c *channel) enqueue(req request) {
 	select {
 	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: nodeClosedErr})
+		c.routeResponse(req.msg.GetMessageID(), NodeResponse[msg]{NodeID: c.id, Err: nodeClosedErr})
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
@@ -200,7 +199,7 @@ func (c *channel) enqueue(req request) {
 
 // routeResponse routes the response to the appropriate response channel based on msgID.
 // If no matching request is found, the response is discarded.
-func (c *channel) routeResponse(msgID uint64, resp NodeResponse[proto.Message]) {
+func (c *channel) routeResponse(msgID uint64, resp NodeResponse[msg]) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	if req, ok := c.responseRouters[msgID]; ok {
@@ -221,7 +220,7 @@ func (c *channel) cancelPendingMsgs(err error) {
 	c.responseMut.Lock()
 	defer c.responseMut.Unlock()
 	for msgID, req := range c.responseRouters {
-		req.responseChan <- NodeResponse[proto.Message]{NodeID: c.id, Err: err}
+		req.responseChan <- NodeResponse[msg]{NodeID: c.id, Err: err}
 		// delete the router if we are only expecting a single reply message
 		if !req.streaming {
 			delete(c.responseRouters, msgID)
@@ -253,11 +252,11 @@ func (c *channel) sender() {
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: err})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[msg]{NodeID: c.id, Err: err})
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Err: err})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[msg]{NodeID: c.id, Err: err})
 		}
 	}
 }
@@ -287,7 +286,7 @@ func (c *channel) receiver() {
 			c.clearStream()
 		} else {
 			err := resp.GetStatus().Err()
-			c.routeResponse(resp.GetMessageID(), NodeResponse[proto.Message]{NodeID: c.id, Value: resp.GetProtoMessage(), Err: err})
+			c.routeResponse(resp.GetMessageID(), NodeResponse[msg]{NodeID: c.id, Value: resp.GetProtoMessage(), Err: err})
 		}
 
 		select {
@@ -317,7 +316,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// wait for actual server responses, so waitSendDone is false for them.
 		if req.waitSendDone && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[proto.Message]{})
+			c.routeResponse(req.msg.GetMessageID(), NodeResponse[msg]{})
 		}
 	}()
 
