@@ -75,20 +75,12 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 
 // IDFromMD returns the 'id' field from the metadata.
 func IDFromMD(ctx *NodeContext, in *emptypb.Empty) (resp *NodeID, err error) {
-	res, err := gorums.RPCCall(ctx, in, "metadata.MetadataTest.IDFromMD")
-	if err != nil {
-		return nil, err
-	}
-	return res.(*NodeID), err
+	return gorums.RPCCall[*emptypb.Empty, *NodeID](ctx, in, "metadata.MetadataTest.IDFromMD")
 }
 
 // WhatIP returns the address of the client that calls it.
 func WhatIP(ctx *NodeContext, in *emptypb.Empty) (resp *IPAddr, err error) {
-	res, err := gorums.RPCCall(ctx, in, "metadata.MetadataTest.WhatIP")
-	if err != nil {
-		return nil, err
-	}
-	return res.(*IPAddr), err
+	return gorums.RPCCall[*emptypb.Empty, *IPAddr](ctx, in, "metadata.MetadataTest.WhatIP")
 }
 
 // MetadataTest is the server-side API for the MetadataTest Service

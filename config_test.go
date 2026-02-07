@@ -441,7 +441,7 @@ func TestConfigConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 2 {
 		wg.Go(func() {
-			_, err := gorums.RPCCall(node.Context(t.Context()), pb.String(""), mock.TestMethod)
+			_, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](node.Context(t.Context()), pb.String(""), mock.TestMethod)
 			if err != nil {
 				errCh <- err
 			}

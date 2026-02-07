@@ -91,21 +91,13 @@ var _ emptypb.Empty
 // ReadRPC executes a Read RPC on a single node and
 // returns the value for the provided key.
 func ReadRPC(ctx *NodeContext, in *ReadRequest) (resp *ReadResponse, err error) {
-	res, err := gorums.RPCCall(ctx, in, "proto.Storage.ReadRPC")
-	if err != nil {
-		return nil, err
-	}
-	return res.(*ReadResponse), err
+	return gorums.RPCCall[*ReadRequest, *ReadResponse](ctx, in, "proto.Storage.ReadRPC")
 }
 
 // WriteRPC executes a Write RPC on a single node and
 // returns true if the value was updated.
 func WriteRPC(ctx *NodeContext, in *WriteRequest) (resp *WriteResponse, err error) {
-	res, err := gorums.RPCCall(ctx, in, "proto.Storage.WriteRPC")
-	if err != nil {
-		return nil, err
-	}
-	return res.(*WriteResponse), err
+	return gorums.RPCCall[*WriteRequest, *WriteResponse](ctx, in, "proto.Storage.WriteRPC")
 }
 
 // ReadQC executes a Read quorum call on a configuration of nodes and

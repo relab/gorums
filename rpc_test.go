@@ -23,7 +23,7 @@ func TestRPCCallSuccess(t *testing.T) {
 
 	ctx := gorums.TestContext(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	response, err := gorums.RPCCall(nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 	if err != nil {
 		t.Fatalf("Unexpected error, got: %v, want: %v", err, nil)
 	}
@@ -40,7 +40,7 @@ func TestRPCCallDownedNode(t *testing.T) {
 
 	ctx := gorums.TestContext(t, 5*time.Second)
 	nodeCtx := node.Context(ctx)
-	response, err := gorums.RPCCall(nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("rpc error: code = Unavailable desc = stream is down"))
 	}
@@ -56,7 +56,7 @@ func TestRPCCallTimedOut(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	defer cancel()
 	nodeCtx := node.Context(ctx)
-	response, err := gorums.RPCCall(nodeCtx, pb.String(""), mock.TestMethod)
+	response, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](nodeCtx, pb.String(""), mock.TestMethod)
 	if err == nil {
 		t.Fatalf("Expected error, got: %v, want: %v", err, fmt.Errorf("context deadline exceeded"))
 	}
