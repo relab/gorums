@@ -36,7 +36,7 @@ func newOrderingServer(opts *serverOptions) *orderingServer {
 // is any error with sending or receiving.
 func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error {
 	var mut sync.Mutex // used to achieve mutex between request handlers
-	finished := make(chan *Message, s.opts.buffer)
+	finished := make(chan *ordering.Metadata, s.opts.buffer)
 	ctx := srv.Context()
 
 	if s.opts.connectCallback != nil {
@@ -48,9 +48,8 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			select {
 			case <-ctx.Done():
 				return
-			case msg := <-finished:
-				err := srv.SendMsg(msg)
-				if err != nil {
+			case md := <-finished:
+				if err := srv.Send(md); err != nil {
 					return
 				}
 			}
@@ -62,8 +61,11 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 	defer mut.Unlock()
 
 	for {
-		req := newMessage(requestType)
-		err := srv.RecvMsg(req)
+		md, err := srv.Recv()
+		if err != nil {
+			return err
+		}
+		req, err := UnmarshalRequest(md)
 		if err != nil {
 			return err
 		}
@@ -219,11 +221,11 @@ type ServerCtx struct {
 	context.Context
 	once *sync.Once // must be a pointer to avoid passing ctx by value
 	mut  *sync.Mutex
-	c    chan<- *Message
+	c    chan<- *ordering.Metadata
 }
 
-// newServerCtx creates a new ServerCtx with the given context, mutex and message channel.
-func newServerCtx(ctx context.Context, mut *sync.Mutex, c chan<- *Message) ServerCtx {
+// newServerCtx creates a new ServerCtx with the given context, mutex and metadata channel.
+func newServerCtx(ctx context.Context, mut *sync.Mutex, c chan<- *ordering.Metadata) ServerCtx {
 	return ServerCtx{
 		Context: ctx,
 		once:    new(sync.Once),
@@ -244,8 +246,12 @@ func (ctx *ServerCtx) Release() {
 //
 // This function should be used by generated code only.
 func (ctx *ServerCtx) SendMessage(msg *Message) error {
+	md, err := MarshalResponseMetadata(msg)
+	if err != nil {
+		return err
+	}
 	select {
-	case ctx.c <- msg:
+	case ctx.c <- md:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
