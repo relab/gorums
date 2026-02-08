@@ -36,12 +36,6 @@ type Message struct {
 	msgType  gorumsMsgType
 }
 
-// newMessage creates a new Message struct for unmarshaling.
-// msgType specifies the message type to be unmarshaled.
-func newMessage(msgType gorumsMsgType) *Message {
-	return &Message{metadata: &ordering.Metadata{}, msgType: msgType}
-}
-
 // NewRequest creates a new Gorums Message for the given context, message ID, method, and request.
 // This is a convenience function that combines NewGorumsMetadata and NewRequestMessage.
 //
@@ -269,4 +263,54 @@ func UnmarshalResponse(md *ordering.Metadata) (proto.Message, error) {
 		}
 	}
 	return resp, nil
+}
+
+// UnmarshalRequest extracts and unmarshals the request proto message from metadata.
+// It uses the method name in metadata to look up the Input type from the proto registry.
+// Returns a *Message suitable for passing to handlers.
+//
+// This function should be used by server-side operations only.
+func UnmarshalRequest(md *ordering.Metadata) (*Message, error) {
+	// get method descriptor from registry
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(md.GetMethod()))
+	if err != nil {
+		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", md.GetMethod())
+	}
+	methodDesc := desc.(protoreflect.MethodDescriptor)
+
+	// get the request message type (Input type)
+	msgType, err := protoregistry.GlobalTypes.FindMessageByName(methodDesc.Input().FullName())
+	if err != nil {
+		return nil, fmt.Errorf("gorums: could not find message type %s", methodDesc.Input().FullName())
+	}
+	req := msgType.New().Interface()
+
+	// unmarshal message from metadata.message_data
+	msgData := md.GetMessageData()
+	if len(msgData) > 0 {
+		if err := proto.Unmarshal(msgData, req); err != nil {
+			return nil, fmt.Errorf("gorums: could not unmarshal request: %w", err)
+		}
+	}
+	return &Message{metadata: md, message: req, msgType: requestType}, nil
+}
+
+// MarshalResponseMetadata marshals a response message into metadata for type-safe Send.
+// It clones the metadata to avoid race conditions with concurrent send operations.
+//
+// This function should be used by server-side operations only.
+func MarshalResponseMetadata(msg *Message) (*ordering.Metadata, error) {
+	if msg == nil {
+		return nil, nil
+	}
+	// Clone metadata to avoid race with concurrent send operations
+	md := proto.CloneOf(msg.metadata)
+	if msg.message != nil {
+		msgData, err := proto.Marshal(msg.message)
+		if err != nil {
+			return nil, err
+		}
+		md.SetMessageData(msgData)
+	}
+	return md, nil
 }
