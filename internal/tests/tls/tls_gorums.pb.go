@@ -73,7 +73,7 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 }
 
 // TestTLS is an RPC call invoked on the node in ctx.
-func TestTLS(ctx *NodeContext, in *Request) (resp *Response, err error) {
+func TestTLS(ctx *NodeContext, in *Request) (*Response, error) {
 	return gorums.RPCCall[*Request, *Response](ctx, in, "tls.TLS.TestTLS")
 }
 

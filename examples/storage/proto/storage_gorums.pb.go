@@ -90,13 +90,13 @@ var _ emptypb.Empty
 
 // ReadRPC executes a Read RPC on a single node and
 // returns the value for the provided key.
-func ReadRPC(ctx *NodeContext, in *ReadRequest) (resp *ReadResponse, err error) {
+func ReadRPC(ctx *NodeContext, in *ReadRequest) (*ReadResponse, error) {
 	return gorums.RPCCall[*ReadRequest, *ReadResponse](ctx, in, "proto.Storage.ReadRPC")
 }
 
 // WriteRPC executes a Write RPC on a single node and
 // returns true if the value was updated.
-func WriteRPC(ctx *NodeContext, in *WriteRequest) (resp *WriteResponse, err error) {
+func WriteRPC(ctx *NodeContext, in *WriteRequest) (*WriteResponse, error) {
 	return gorums.RPCCall[*WriteRequest, *WriteResponse](ctx, in, "proto.Storage.WriteRPC")
 }
 

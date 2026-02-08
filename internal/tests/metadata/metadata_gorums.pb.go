@@ -74,12 +74,12 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 }
 
 // IDFromMD returns the 'id' field from the metadata.
-func IDFromMD(ctx *NodeContext, in *emptypb.Empty) (resp *NodeID, err error) {
+func IDFromMD(ctx *NodeContext, in *emptypb.Empty) (*NodeID, error) {
 	return gorums.RPCCall[*emptypb.Empty, *NodeID](ctx, in, "metadata.MetadataTest.IDFromMD")
 }
 
 // WhatIP returns the address of the client that calls it.
-func WhatIP(ctx *NodeContext, in *emptypb.Empty) (resp *IPAddr, err error) {
+func WhatIP(ctx *NodeContext, in *emptypb.Empty) (*IPAddr, error) {
 	return gorums.RPCCall[*emptypb.Empty, *IPAddr](ctx, in, "metadata.MetadataTest.WhatIP")
 }
 

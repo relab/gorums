@@ -93,7 +93,7 @@ func QuorumCall(ctx *ConfigContext, in *Request, opts ...gorums.CallOption) *gor
 }
 
 // UnaryRPC is an RPC call invoked on the node in ctx.
-func UnaryRPC(ctx *NodeContext, in *Request) (resp *Response, err error) {
+func UnaryRPC(ctx *NodeContext, in *Request) (*Response, error) {
 	return gorums.RPCCall[*Request, *Response](ctx, in, "ordering.GorumsTest.UnaryRPC")
 }
 

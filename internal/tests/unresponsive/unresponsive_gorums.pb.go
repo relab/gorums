@@ -73,7 +73,7 @@ func NewConfig(opts ...gorums.Option) (Configuration, error) {
 }
 
 // TestUnresponsive is an RPC call invoked on the node in ctx.
-func TestUnresponsive(ctx *NodeContext, in *Empty) (resp *Empty, err error) {
+func TestUnresponsive(ctx *NodeContext, in *Empty) (*Empty, error) {
 	return gorums.RPCCall[*Empty, *Empty](ctx, in, "unresponsive.Unresponsive.TestUnresponsive")
 }
 
