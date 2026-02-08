@@ -132,6 +132,17 @@ func (m *Message) setError(err error) {
 	m.metadata.SetStatus(errStatus.Proto())
 }
 
+// responseWithError ensures a response message exists and sets the error status.
+// If msg is nil, a new response message is created using the provided metadata.
+// This is used by the server to send error responses back to the client.
+func responseWithError(msg *Message, md *ordering.Metadata, err error) *Message {
+	if msg == nil {
+		msg = NewResponseMessage(md, nil)
+	}
+	msg.setError(err)
+	return msg
+}
+
 // Codec is the gRPC codec used by gorums.
 type Codec struct {
 	marshaler   proto.MarshalOptions

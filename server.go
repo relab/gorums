@@ -65,11 +65,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 		if err != nil {
 			return err
 		}
-		req, err := UnmarshalRequest(md)
-		if err != nil {
-			return err
-		}
-		if handler, ok := s.handlers[req.GetMethod()]; ok {
+		if handler, ok := s.handlers[md.GetMethod()]; ok {
 			// We start the handler in a new goroutine in order to allow multiple handlers to run concurrently.
 			// However, to preserve request ordering, the handler must unlock the shared mutex when it has either
 			// finished, or when it is safe to start processing the next request.
@@ -77,9 +73,14 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 			// This func() is the default interceptor; it is the first and last handler in the chain.
 			// It is responsible for releasing the mutex when the handler chain is done.
 			go func() {
-				metadata := req.GetMetadata()
-				srvCtx := newServerCtx(metadata.AppendToIncomingContext(ctx), &mut, finished)
+				srvCtx := newServerCtx(md.AppendToIncomingContext(ctx), &mut, finished)
 				defer srvCtx.Release()
+
+				req, err := UnmarshalRequest(md)
+				if err != nil {
+					_ = srvCtx.SendMessage(responseWithError(nil, md, err))
+					return
+				}
 
 				message, err := handler(srvCtx, req)
 				// If there is no message and no error, we do not send anything back to the client.
@@ -88,15 +89,9 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 				if message == nil && err == nil {
 					return
 				}
-				// If there was an error in the interceptor chain or the method handler, they may return a nil message.
-				// Thus, we need to create a response message to send the error back to the client.
-				if message == nil {
-					message = NewResponseMessage(metadata, nil)
-				}
-				message.setError(err)
-				_ = srvCtx.SendMessage(message) // to the client
+				_ = srvCtx.SendMessage(responseWithError(message, md, err))
 				// We ignore the error from SendMessage here; it means that the stream is closed.
-				// The for-loop above will exit on the next RecvMsg call.
+				// The for-loop above will exit on the next Recv call.
 			}()
 			// Wait until the handler releases the mutex.
 			mut.Lock()
