@@ -210,9 +210,12 @@ func (c *ClientCtx[Req, Resp]) send() {
 			continue // Skip node if transformation returns nil
 		}
 		expected++
+		// Clone metadata for each request to avoid race conditions during
+		// concurrent marshaling when gorumsMarshal calls SetMessageData.
+		md := proto.CloneOf(c.md)
 		n.channel.enqueue(request{
 			ctx:          c.Context,
-			msg:          NewRequestMessage(c.md, msg),
+			msg:          NewRequestMessage(md, msg),
 			streaming:    c.streaming,
 			waitSendDone: c.waitSendDone,
 			responseChan: c.replyChan,

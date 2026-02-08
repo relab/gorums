@@ -7,7 +7,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -155,22 +154,18 @@ func (c Codec) Marshal(m any) (b []byte, err error) {
 	}
 }
 
-// gorumsMarshal marshals a metadata and a data message into a single byte slice.
+// gorumsMarshal marshals a Message by serializing the application message
+// into metadata.message_data, then marshaling the metadata.
 func (c Codec) gorumsMarshal(msg *Message) (b []byte, err error) {
-	mdSize := c.marshaler.Size(msg.metadata)
-	b = protowire.AppendVarint(b, uint64(mdSize))
-	b, err = c.marshaler.MarshalAppend(b, msg.metadata)
-	if err != nil {
-		return nil, err
+	// serialize the application message into metadata.message_data
+	if msg.message != nil {
+		msgData, err := c.marshaler.Marshal(msg.message)
+		if err != nil {
+			return nil, fmt.Errorf("gorums: could not marshal message: %w", err)
+		}
+		msg.metadata.SetMessageData(msgData)
 	}
-
-	msgSize := c.marshaler.Size(msg.message)
-	b = protowire.AppendVarint(b, uint64(msgSize))
-	b, err = c.marshaler.MarshalAppend(b, msg.message)
-	if err != nil {
-		return nil, err
-	}
-	return b, nil
+	return c.marshaler.Marshal(msg.metadata)
 }
 
 // Unmarshal unmarshals a byte slice into m.
@@ -188,8 +183,7 @@ func (c Codec) Unmarshal(b []byte, m any) (err error) {
 // gorumsUnmarshal extracts metadata and message data from b and places the result in msg.
 func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	// unmarshal metadata
-	mdBuf, mdLen := protowire.ConsumeBytes(b)
-	err = c.unmarshaler.Unmarshal(mdBuf, msg.metadata)
+	err = c.unmarshaler.Unmarshal(b, msg.metadata)
 	if err != nil {
 		return fmt.Errorf("gorums: could not unmarshal metadata: %w", err)
 	}
@@ -221,7 +215,10 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 	}
 	msg.message = msgType.New().Interface()
 
-	// unmarshal message
-	msgBuf, _ := protowire.ConsumeBytes(b[mdLen:])
-	return c.unmarshaler.Unmarshal(msgBuf, msg.message)
+	// unmarshal message from metadata.message_data
+	msgData := msg.metadata.GetMessageData()
+	if len(msgData) > 0 {
+		return c.unmarshaler.Unmarshal(msgData, msg.message)
+	}
+	return nil
 }

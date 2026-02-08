@@ -29,6 +29,7 @@ type Metadata struct {
 	xxx_hidden_Method       string                 `protobuf:"bytes,2,opt,name=method"`
 	xxx_hidden_Status       *status.Status         `protobuf:"bytes,3,opt,name=status"`
 	xxx_hidden_Entry        *[]*MetadataEntry      `protobuf:"bytes,4,rep,name=entry"`
+	xxx_hidden_MessageData  []byte                 `protobuf:"bytes,5,opt,name=message_data,json=messageData"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
@@ -88,6 +89,13 @@ func (x *Metadata) GetEntry() []*MetadataEntry {
 	return nil
 }
 
+func (x *Metadata) GetMessageData() []byte {
+	if x != nil {
+		return x.xxx_hidden_MessageData
+	}
+	return nil
+}
+
 func (x *Metadata) SetMessageSeqNo(v uint64) {
 	x.xxx_hidden_MessageSeqNo = v
 }
@@ -102,6 +110,13 @@ func (x *Metadata) SetStatus(v *status.Status) {
 
 func (x *Metadata) SetEntry(v []*MetadataEntry) {
 	x.xxx_hidden_Entry = &v
+}
+
+func (x *Metadata) SetMessageData(v []byte) {
+	if v == nil {
+		v = []byte{}
+	}
+	x.xxx_hidden_MessageData = v
 }
 
 func (x *Metadata) HasStatus() bool {
@@ -122,6 +137,7 @@ type Metadata_builder struct {
 	Method       string
 	Status       *status.Status
 	Entry        []*MetadataEntry
+	MessageData  []byte
 }
 
 func (b0 Metadata_builder) Build() *Metadata {
@@ -132,6 +148,7 @@ func (b0 Metadata_builder) Build() *Metadata {
 	x.xxx_hidden_Method = b.Method
 	x.xxx_hidden_Status = b.Status
 	x.xxx_hidden_Entry = &b.Entry
+	x.xxx_hidden_MessageData = b.MessageData
 	return m0
 }
 
@@ -211,12 +228,13 @@ var File_ordering_ordering_proto protoreflect.FileDescriptor
 
 const file_ordering_ordering_proto_rawDesc = "" +
 	"\n" +
-	"\x17ordering/ordering.proto\x12\bordering\x1a\x17google/rpc/status.proto\"\xa3\x01\n" +
+	"\x17ordering/ordering.proto\x12\bordering\x1a\x17google/rpc/status.proto\"\xc6\x01\n" +
 	"\bMetadata\x12$\n" +
 	"\x0emessage_seq_no\x18\x01 \x01(\x04R\fmessageSeqNo\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12*\n" +
 	"\x06status\x18\x03 \x01(\v2\x12.google.rpc.StatusR\x06status\x12-\n" +
-	"\x05entry\x18\x04 \x03(\v2\x17.ordering.MetadataEntryR\x05entry\"7\n" +
+	"\x05entry\x18\x04 \x03(\v2\x17.ordering.MetadataEntryR\x05entry\x12!\n" +
+	"\fmessage_data\x18\x05 \x01(\fR\vmessageData\"7\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value2B\n" +
