@@ -117,8 +117,8 @@ func (b *clientCtxBuilder[Req, Resp]) WithWaitSendDone(waitSendDone bool) *clien
 // Build finalizes the ClientCtx configuration and returns the constructed instance.
 // It creates the metadata and reply channel, and sets up the appropriate response iterator.
 func (b *clientCtxBuilder[Req, Resp]) Build() *ClientCtx[Req, Resp] {
-	// Create metadata and reply channel at build time
-	b.c.md = ordering.NewGorumsMetadata(b.c.Context, b.c.config.nextMsgID(), b.c.method)
+	// Create metadata (without message) and reply channel at build time
+	b.c.md, _ = ordering.NewMetadata(b.c.Context, b.c.config.nextMsgID(), b.c.method, nil)
 	b.c.replyChan = make(chan NodeResponse[msg], b.c.config.Size()*b.chanMultiplier)
 
 	if b.c.streaming {

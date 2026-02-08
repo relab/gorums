@@ -106,16 +106,8 @@ func responseWithError(msg *Message, md *ordering.Metadata, err error) *Message 
 // It marshals the proto message into the metadata's message_data field.
 //
 // This function should be used by client-side operations only.
-func marshalRequest(ctx context.Context, msgID uint64, method string, msg proto.Message) (*ordering.Metadata, error) {
-	md := ordering.NewGorumsMetadata(ctx, msgID, method)
-	if msg != nil {
-		msgData, err := proto.Marshal(msg)
-		if err != nil {
-			return nil, err
-		}
-		md.SetMessageData(msgData)
-	}
-	return md, nil
+func marshalRequest(ctx context.Context, msgID uint64, method string, req proto.Message) (*ordering.Metadata, error) {
+	return ordering.NewMetadata(ctx, msgID, method, req)
 }
 
 // marshalResponse marshals the response message into metadata for type-safe Send.

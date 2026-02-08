@@ -4,32 +4,41 @@ import (
 	"context"
 
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
-// NewGorumsMetadata creates a new Gorums metadata object for the given method
-// and client message ID. It also appends any client-specific metadata from the
-// context to the Gorums metadata object.
+// NewMetadata creates a new [Metadata] proto message for the given method and message ID.
+// If a non-nil proto message is provided, it is marshaled and included in the metadata.
+// This function also extracts any client-specific metadata from the context and appends
+// it to the metadata, allowing client-specific metadata to be passed to the server.
 //
-// This is used to pass client-specific metadata to the server via Gorums.
-// This method should be used by generated code only.
-func NewGorumsMetadata(ctx context.Context, msgID uint64, method string) *Metadata {
-	gorumsMetadata := Metadata_builder{MessageSeqNo: msgID, Method: method}
+// This method is intended for Gorums internal use.
+func NewMetadata(ctx context.Context, msgID uint64, method string, msg proto.Message) (*Metadata, error) {
+	// Marshal the message to bytes (nil message returns nil bytes and no error)
+	msgBytes, err := proto.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	mdBuilder := Metadata_builder{
+		MessageSeqNo: msgID,
+		Method:       method,
+		MessageData:  msgBytes,
+	}
 	md, _ := metadata.FromOutgoingContext(ctx)
 	for k, vv := range md {
 		for _, v := range vv {
 			entry := MetadataEntry_builder{Key: k, Value: v}.Build()
-			gorumsMetadata.Entry = append(gorumsMetadata.Entry, entry)
+			mdBuilder.Entry = append(mdBuilder.Entry, entry)
 		}
 	}
-	return gorumsMetadata.Build()
+	return mdBuilder.Build(), nil
 }
 
-// AppendToIncomingContext appends client-specific metadata from the
-// Gorums metadata object to the incoming context.
+// AppendToIncomingContext appends client-specific metadata from the [Metadata] proto message
+// to the incoming gRPC context, allowing server implementations to extract and use said
+// metadata directly from the server method's context.
 //
-// This is used to pass client-specific metadata from the Gorums runtime
-// to the server implementation.
-// This method should be used by generated code only.
+// This method is intended for Gorums internal use.
 func (x *Metadata) AppendToIncomingContext(ctx context.Context) context.Context {
 	existingMD, _ := metadata.FromIncomingContext(ctx)
 	newMD := existingMD.Copy() // copy to avoid mutating the original
