@@ -2,13 +2,10 @@ package gorums_test
 
 import (
 	"errors"
-	"sync"
 	"testing"
 
 	"github.com/relab/gorums"
-	"github.com/relab/gorums/internal/testutils/mock"
 	"google.golang.org/grpc/encoding"
-	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func init() {
@@ -431,26 +428,6 @@ func TestConfigurationImmutability(t *testing.T) {
 	c3Slice := c3.Nodes()
 	if &c1Slice[0] == &c3Slice[0] {
 		t.Error("Extend(nil) returns same backing array - violates immutability")
-	}
-}
-
-func TestConfigConcurrentAccess(t *testing.T) {
-	node := gorums.TestNode(t, gorums.DefaultTestServer)
-
-	errCh := make(chan error, 2)
-	var wg sync.WaitGroup
-	for range 2 {
-		wg.Go(func() {
-			_, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](node.Context(t.Context()), pb.String(""), mock.TestMethod)
-			if err != nil {
-				errCh <- err
-			}
-		})
-	}
-	wg.Wait()
-	close(errCh)
-	for err := range errCh {
-		t.Error(err)
 	}
 }
 

@@ -3,6 +3,7 @@ package gorums_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,5 +77,26 @@ func TestRPCCallTypeMismatch(t *testing.T) {
 	}
 	if response != nil {
 		t.Fatalf("Unexpected response, got: %v, want: %v", response, nil)
+	}
+}
+
+func TestRPCCallConcurrentAccess(t *testing.T) {
+	node := gorums.TestNode(t, gorums.DefaultTestServer)
+
+	concurrency := 10
+	errCh := make(chan error, concurrency)
+	var wg sync.WaitGroup
+	for range concurrency {
+		wg.Go(func() {
+			_, err := gorums.RPCCall[*pb.StringValue, *pb.StringValue](node.Context(t.Context()), pb.String(""), mock.TestMethod)
+			if err != nil {
+				errCh <- err
+			}
+		})
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
 	}
 }
