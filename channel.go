@@ -288,7 +288,7 @@ func (c *channel) receiver() {
 			err := status.FromProto(md.GetStatus()).Err()
 			var resp msg
 			if err == nil {
-				resp, err = UnmarshalResponse(md)
+				resp, err = unmarshalResponse(md)
 			}
 			c.routeResponse(md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Value: resp, Err: err})
 		}
