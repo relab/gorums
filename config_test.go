@@ -5,14 +5,7 @@ import (
 	"testing"
 
 	"github.com/relab/gorums"
-	"google.golang.org/grpc/encoding"
 )
-
-func init() {
-	if encoding.GetCodec(gorums.ContentSubtype) == nil {
-		encoding.RegisterCodec(gorums.NewCodec())
-	}
-}
 
 var (
 	nodes   = []string{"127.0.0.1:9081", "127.0.0.1:9082", "127.0.0.1:9083"}
