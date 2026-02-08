@@ -42,13 +42,6 @@ func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
-// newRequestMessage creates a new Gorums Message for the given metadata and request message.
-//
-// This function should be used by generated code and tests only.
-func newRequestMessage(md *ordering.Metadata, req proto.Message) *Message {
-	return &Message{metadata: md, message: req, msgType: requestType}
-}
-
 // NewRequest creates a new Gorums Message for the given context, message ID, method, and request.
 // This is a convenience function that combines NewGorumsMetadata and NewRequestMessage.
 //
@@ -56,6 +49,22 @@ func newRequestMessage(md *ordering.Metadata, req proto.Message) *Message {
 func NewRequest(ctx context.Context, msgID uint64, method string, req proto.Message) *Message {
 	md := ordering.NewGorumsMetadata(ctx, msgID, method)
 	return &Message{metadata: md, message: req, msgType: requestType}
+}
+
+// MarshalMetadata creates metadata with the serialized proto message for type-safe Send.
+// It marshals the proto message into the metadata's message_data field.
+//
+// This function should be used by generated code and internal channel operations only.
+func MarshalMetadata(ctx context.Context, msgID uint64, method string, msg proto.Message) (*ordering.Metadata, error) {
+	md := ordering.NewGorumsMetadata(ctx, msgID, method)
+	if msg != nil {
+		msgData, err := proto.Marshal(msg)
+		if err != nil {
+			return nil, err
+		}
+		md.SetMessageData(msgData)
+	}
+	return md, nil
 }
 
 // NewResponseMessage creates a new Gorums Message for the given metadata and response message.
@@ -231,4 +240,33 @@ func (c Codec) gorumsUnmarshal(b []byte, msg *Message) (err error) {
 		return c.unmarshaler.Unmarshal(msgData, msg.message)
 	}
 	return nil
+}
+
+// UnmarshalResponse extracts and unmarshals the response proto message from metadata.
+// It uses the method name in metadata to look up the Output type from the proto registry.
+//
+// This function should be used by internal channel operations only.
+func UnmarshalResponse(md *ordering.Metadata) (proto.Message, error) {
+	// get method descriptor from registry
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(md.GetMethod()))
+	if err != nil {
+		return nil, fmt.Errorf("gorums: could not find method descriptor for %s", md.GetMethod())
+	}
+	methodDesc := desc.(protoreflect.MethodDescriptor)
+
+	// get the response message type (Output type)
+	msgType, err := protoregistry.GlobalTypes.FindMessageByName(methodDesc.Output().FullName())
+	if err != nil {
+		return nil, fmt.Errorf("gorums: could not find message type %s", methodDesc.Output().FullName())
+	}
+	resp := msgType.New().Interface()
+
+	// unmarshal message from metadata.message_data
+	msgData := md.GetMessageData()
+	if len(msgData) > 0 {
+		if err := proto.Unmarshal(msgData, resp); err != nil {
+			return nil, fmt.Errorf("gorums: could not unmarshal response: %w", err)
+		}
+	}
+	return resp, nil
 }

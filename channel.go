@@ -44,7 +44,7 @@ var (
 
 type request struct {
 	ctx          context.Context
-	msg          *Message
+	md           *ordering.Metadata
 	waitSendDone bool
 	streaming    bool
 	responseChan chan<- NodeResponse[msg]
@@ -154,7 +154,7 @@ func (c *channel) ensureConnectedNodeStream() (err error) {
 }
 
 // getStream returns the current stream, or nil if no stream is available.
-func (c *channel) getStream() grpc.ClientStream {
+func (c *channel) getStream() ordering.Gorums_NodeStreamClient {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
 	return c.stream
@@ -180,7 +180,7 @@ func (c *channel) isConnected() bool {
 func (c *channel) enqueue(req request) {
 	if req.responseChan != nil {
 		req.sendTime = time.Now()
-		msgID := req.msg.GetMessageID()
+		msgID := req.md.GetMessageSeqNo()
 		c.responseMut.Lock()
 		c.responseRouters[msgID] = req
 		c.responseMut.Unlock()
@@ -190,7 +190,7 @@ func (c *channel) enqueue(req request) {
 	select {
 	case <-c.connCtx.Done():
 		// the node's close() method was called: respond with error instead of enqueueing
-		c.routeResponse(req.msg.GetMessageID(), NodeResponse[msg]{NodeID: c.id, Err: nodeClosedErr})
+		c.routeResponse(req.md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: nodeClosedErr})
 		return
 	case c.sendQ <- req:
 		// enqueued successfully
@@ -252,11 +252,11 @@ func (c *channel) sender() {
 			// take next request from sendQ
 		}
 		if err := c.ensureStream(); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[msg]{NodeID: c.id, Err: err})
+			c.routeResponse(req.md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: err})
 			continue
 		}
 		if err := c.sendMsg(req); err != nil {
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[msg]{NodeID: c.id, Err: err})
+			c.routeResponse(req.md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Err: err})
 		}
 	}
 }
@@ -279,14 +279,18 @@ func (c *channel) receiver() {
 			}
 		}
 
-		resp := newMessage(responseType)
-		if err := stream.RecvMsg(resp); err != nil {
-			c.setLastErr(err)
-			c.cancelPendingMsgs(err)
+		md, e := stream.Recv()
+		if e != nil {
+			c.setLastErr(e)
+			c.cancelPendingMsgs(e)
 			c.clearStream()
 		} else {
-			err := resp.GetStatus().Err()
-			c.routeResponse(resp.GetMessageID(), NodeResponse[msg]{NodeID: c.id, Value: resp.GetProtoMessage(), Err: err})
+			err := status.FromProto(md.GetStatus()).Err()
+			var resp msg
+			if err == nil {
+				resp, err = UnmarshalResponse(md)
+			}
+			c.routeResponse(md.GetMessageSeqNo(), NodeResponse[msg]{NodeID: c.id, Value: resp, Err: err})
 		}
 
 		select {
@@ -316,7 +320,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		// wait for actual server responses, so waitSendDone is false for them.
 		if req.waitSendDone && err == nil {
 			// Send succeeded: unblock the caller and clean up the responseRouter
-			c.routeResponse(req.msg.GetMessageID(), NodeResponse[msg]{})
+			c.routeResponse(req.md.GetMessageSeqNo(), NodeResponse[msg]{})
 		}
 	}()
 
@@ -353,7 +357,7 @@ func (c *channel) sendMsg(req request) (err error) {
 		}
 	}()
 
-	if err = stream.SendMsg(req.msg); err != nil {
+	if err = stream.Send(req.md); err != nil {
 		c.setLastErr(err)
 		c.clearStream()
 	}
