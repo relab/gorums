@@ -12,7 +12,6 @@ import (
 	"github.com/relab/gorums/internal/testutils/mock"
 	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -36,8 +35,8 @@ func waitForConnection(node *Node, timeout time.Duration) bool {
 
 type mockSrv struct{}
 
-func (mockSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
-	return pb.String(mock.GetVal(req) + "-mocked-"), nil
+func (mockSrv) Test(_ ServerCtx, req *pb.StringValue) (*pb.StringValue, error) {
+	return pb.String(req.GetValue() + "-mocked-"), nil
 }
 
 // delayServerFn returns a server function that delays responses by the given duration.
@@ -48,7 +47,8 @@ func delayServerFn(delay time.Duration) func(_ int) ServerIface {
 		srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
 			// Simulate slow processing
 			time.Sleep(delay)
-			resp, err := mockSrv.Test(ctx, in.GetProtoMessage())
+			req := AsProto[*pb.StringValue](in)
+			resp, err := mockSrv.Test(ctx, req)
 			return NewResponseMessage(in.GetMetadata(), resp), err
 		})
 		return srv

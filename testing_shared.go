@@ -15,7 +15,6 @@ import (
 	"go.uber.org/goleak"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -246,11 +245,13 @@ func defaultTestServer(i int, opts ...ServerOption) ServerIface {
 	srv := NewServer(opts...)
 	ts := testSrv{val: int32((i + 1) * 10)}
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
-		resp, err := ts.Test(ctx, in.GetProtoMessage())
+		req := AsProto[*pb.StringValue](in)
+		resp, err := ts.Test(ctx, req)
 		return NewResponseMessage(in.GetMetadata(), resp), err
 	})
 	srv.RegisterHandler(mock.GetValueMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
-		resp, err := ts.GetValue(ctx, in.GetProtoMessage())
+		req := AsProto[*pb.Int32Value](in)
+		resp, err := ts.GetValue(ctx, req)
 		return NewResponseMessage(in.GetMetadata(), resp), err
 	})
 	return srv
@@ -260,18 +261,19 @@ type testSrv struct {
 	val int32
 }
 
-func (testSrv) Test(_ ServerCtx, _ proto.Message) (proto.Message, error) {
+func (testSrv) Test(_ ServerCtx, _ *pb.StringValue) (*pb.StringValue, error) {
 	return pb.String(""), nil
 }
 
-func (ts testSrv) GetValue(_ ServerCtx, _ proto.Message) (proto.Message, error) {
+func (ts testSrv) GetValue(_ ServerCtx, _ *pb.Int32Value) (*pb.Int32Value, error) {
 	return pb.Int32(ts.val), nil
 }
 
 func EchoServerFn(_ int) ServerIface {
 	srv := NewServer()
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
-		resp, err := echoSrv{}.Test(ctx, in.GetProtoMessage())
+		req := AsProto[*pb.StringValue](in)
+		resp, err := echoSrv{}.Test(ctx, req)
 		return NewResponseMessage(in.GetMetadata(), resp), err
 	})
 
@@ -281,15 +283,15 @@ func EchoServerFn(_ int) ServerIface {
 // echoSrv implements a simple echo server handler for testing
 type echoSrv struct{}
 
-func (echoSrv) Test(_ ServerCtx, req proto.Message) (proto.Message, error) {
-	return pb.String("echo: " + mock.GetVal(req)), nil
+func (echoSrv) Test(_ ServerCtx, req *pb.StringValue) (*pb.StringValue, error) {
+	return pb.String("echo: " + req.GetValue()), nil
 }
 
 func StreamServerFn(_ int) ServerIface {
 	srv := NewServer()
 	srv.RegisterHandler(mock.Stream, func(ctx ServerCtx, in *Message) (*Message, error) {
-		req := in.GetProtoMessage()
-		val := mock.GetVal(req)
+		req := AsProto[*pb.StringValue](in)
+		val := req.GetValue()
 
 		// Send 3 responses
 		for i := 1; i <= 3; i++ {
@@ -308,8 +310,8 @@ func StreamServerFn(_ int) ServerIface {
 func StreamBenchmarkServerFn(_ int) ServerIface {
 	srv := NewServer()
 	srv.RegisterHandler(mock.Stream, func(ctx ServerCtx, in *Message) (*Message, error) {
-		req := in.GetProtoMessage()
-		val := mock.GetVal(req)
+		req := AsProto[*pb.StringValue](in)
+		val := req.GetValue()
 
 		// Send 3 responses
 		for i := 1; i <= 3; i++ {

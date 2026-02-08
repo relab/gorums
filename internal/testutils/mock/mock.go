@@ -127,24 +127,3 @@ func RegisterServices(services []Service) error {
 	}
 	return nil
 }
-
-// Helpers for Mock messages
-
-func GetVal(msg proto.Message) string {
-	if msg == nil {
-		return ""
-	}
-	if m, ok := msg.(*pb.StringValue); ok {
-		return m.Value
-	}
-	return ""
-}
-
-func SetVal(msg proto.Message, val string) {
-	if msg == nil {
-		return
-	}
-	if m, ok := msg.(*pb.StringValue); ok {
-		m.Value = val
-	}
-}
