@@ -18,7 +18,7 @@ func TestAsProto(t *testing.T) {
 	}{
 		{
 			name:    "Success",
-			msg:     gorums.NewRequestMessage(nil, config.Request_builder{Num: 42}.Build()),
+			msg:     gorums.NewRequest(t.Context(), 0, "", config.Request_builder{Num: 42}.Build()),
 			wantNil: false,
 			wantNum: 42,
 		},

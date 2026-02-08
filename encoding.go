@@ -1,6 +1,7 @@
 package gorums
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/relab/gorums/ordering"
@@ -41,10 +42,19 @@ func newMessage(msgType gorumsMsgType) *Message {
 	return &Message{metadata: &ordering.Metadata{}, msgType: msgType}
 }
 
-// NewRequestMessage creates a new Gorums Message for the given metadata and request message.
+// newRequestMessage creates a new Gorums Message for the given metadata and request message.
 //
 // This function should be used by generated code and tests only.
-func NewRequestMessage(md *ordering.Metadata, req proto.Message) *Message {
+func newRequestMessage(md *ordering.Metadata, req proto.Message) *Message {
+	return &Message{metadata: md, message: req, msgType: requestType}
+}
+
+// NewRequest creates a new Gorums Message for the given context, message ID, method, and request.
+// This is a convenience function that combines NewGorumsMetadata and NewRequestMessage.
+//
+// This function should be used by generated code and tests only.
+func NewRequest(ctx context.Context, msgID uint64, method string, req proto.Message) *Message {
+	md := ordering.NewGorumsMetadata(ctx, msgID, method)
 	return &Message{metadata: md, message: req, msgType: requestType}
 }
 

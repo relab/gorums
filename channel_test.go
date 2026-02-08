@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/relab/gorums/internal/testutils/mock"
-	"github.com/relab/gorums/ordering"
 	"google.golang.org/grpc"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -60,7 +59,7 @@ func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeRespon
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
-	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(req.ctx, msgID, mock.TestMethod), nil)
+	req.msg = NewRequest(req.ctx, msgID, mock.TestMethod, nil)
 	replyChan := make(chan NodeResponse[msg], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
@@ -594,8 +593,7 @@ func TestChannelDeadlock(t *testing.T) {
 	for id := range 10 {
 		go func() {
 			ctx := TestContext(t, 3*time.Second)
-			md := ordering.NewGorumsMetadata(ctx, uint64(100+id), mock.TestMethod)
-			req := request{ctx: ctx, msg: NewRequestMessage(md, nil)}
+			req := request{ctx: ctx, msg: NewRequest(ctx, uint64(100+id), mock.TestMethod, nil)}
 
 			// try to enqueue
 			select {
@@ -800,8 +798,7 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 
 		// Use a fresh context for the benchmark request
 		ctx := TestContext(b, defaultTestTimeout)
-		req := request{ctx: ctx}
-		req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, 1, mock.TestMethod), nil)
+		req := request{ctx: ctx, msg: NewRequest(ctx, 1, mock.TestMethod, nil)}
 		replyChan := make(chan NodeResponse[msg], 1)
 		req.responseChan = replyChan
 		node.channel.enqueue(req)
@@ -850,8 +847,7 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 	// Establish initial stream with a fresh context
 	ctx := context.Background()
-	req := request{ctx: ctx}
-	req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, 0, mock.TestMethod), nil)
+	req := request{ctx: ctx, msg: NewRequest(ctx, 0, mock.TestMethod, nil)}
 	replyChan := make(chan NodeResponse[msg], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
@@ -876,8 +872,7 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 		// Now send a request which will trigger ensureStream -> newNodeStream -> signal
 		ctx := context.Background()
-		req := request{ctx: ctx}
-		req.msg = NewRequestMessage(ordering.NewGorumsMetadata(ctx, uint64(i+1), mock.TestMethod), nil)
+		req := request{ctx: ctx, msg: NewRequest(ctx, uint64(i+1), mock.TestMethod, nil)}
 		replyChan := make(chan NodeResponse[msg], 1)
 		req.responseChan = replyChan
 		node.channel.enqueue(req)

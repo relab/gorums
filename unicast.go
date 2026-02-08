@@ -1,9 +1,5 @@
 package gorums
 
-import (
-	"github.com/relab/gorums/ordering"
-)
-
 // Unicast is a one-way call; no replies are returned to the client.
 //
 // By default, this method blocks until the message has been sent to the node.
@@ -17,8 +13,7 @@ import (
 // This method should be used by generated code only.
 func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Unicast, opts...)
-	md := ordering.NewGorumsMetadata(ctx, ctx.nextMsgID(), method)
-	message := NewRequestMessage(md, req)
+	message := NewRequest(ctx, ctx.nextMsgID(), method, req)
 
 	waitSendDone := callOpts.mustWaitSendDone()
 	if !waitSendDone {

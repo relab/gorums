@@ -215,7 +215,7 @@ func (c *ClientCtx[Req, Resp]) send() {
 		md := proto.CloneOf(c.md)
 		n.channel.enqueue(request{
 			ctx:          c.Context,
-			msg:          NewRequestMessage(md, msg),
+			msg:          newRequestMessage(md, msg),
 			streaming:    c.streaming,
 			waitSendDone: c.waitSendDone,
 			responseChan: c.replyChan,
