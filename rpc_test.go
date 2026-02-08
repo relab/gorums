@@ -9,15 +9,8 @@ import (
 
 	"github.com/relab/gorums"
 	"github.com/relab/gorums/internal/testutils/mock"
-	"google.golang.org/grpc/encoding"
 	pb "google.golang.org/protobuf/types/known/wrapperspb"
 )
-
-func init() {
-	if encoding.GetCodec(gorums.ContentSubtype) == nil {
-		encoding.RegisterCodec(gorums.NewCodec())
-	}
-}
 
 func TestRPCCallSuccess(t *testing.T) {
 	node := gorums.TestNode(t, gorums.DefaultTestServer)
