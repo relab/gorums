@@ -20,15 +20,6 @@ type Message struct {
 	message  proto.Message
 }
 
-// NewRequest creates a new Gorums Message for the given context, message ID, method, and request.
-// This is a convenience function that combines NewGorumsMetadata and NewRequestMessage.
-//
-// This function should be used by generated code and tests only.
-func NewRequest(ctx context.Context, msgID uint64, method string, req proto.Message) *Message {
-	md := ordering.NewGorumsMetadata(ctx, msgID, method)
-	return &Message{metadata: md, message: req}
-}
-
 // NewResponseMessage creates a new Gorums Message for the given metadata and response message.
 //
 // This function should be used by generated code only.
