@@ -28,6 +28,7 @@ func startServer(address string) (*gorums.Server, string) {
 
 	// create Gorums server
 	srv := gorums.NewServer(gorums.WithInterceptors(
+		interceptors.LoggingInterceptor("abc"),
 		interceptors.LoggingSimpleInterceptor,
 		interceptors.NoFooAllowedInterceptor[*pb.WriteRequest],
 		interceptors.MetadataInterceptor,

@@ -17,7 +17,7 @@ func LoggingInterceptor(addr string) gorums.Interceptor {
 		resp, err := next(ctx, msg)
 
 		duration := time.Since(start)
-		log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, ResponseErr=%v, Message=%v, Type=%T", addr, msg.GetMethod(), duration, resp.GetMetadata(), resp.GetProtoMessage(), resp.GetProtoMessage())
+		log.Printf("[%s]: LoggingInterceptor(outgoing): Method=%s, Duration=%s, Err=%v, Message=%v, Type=%T", addr, msg.GetMethod(), duration, err, resp.GetProtoMessage(), resp.GetProtoMessage())
 		return resp, err
 	}
 }
@@ -25,7 +25,7 @@ func LoggingInterceptor(addr string) gorums.Interceptor {
 func LoggingSimpleInterceptor(ctx gorums.ServerCtx, msg *gorums.Message, next gorums.Handler) (*gorums.Message, error) {
 	log.Printf("LoggingSimpleInterceptor(incoming): Method=%s, Message=%v)", msg.GetMethod(), msg.GetProtoMessage())
 	resp, err := next(ctx, msg)
-	log.Printf("LoggingSimpleInterceptor(outgoing): Method=%s, ResponseErr=%v, Message=%v", msg.GetMethod(), err, resp.GetProtoMessage())
+	log.Printf("LoggingSimpleInterceptor(outgoing): Method=%s, Err=%v, Message=%v", msg.GetMethod(), err, resp.GetProtoMessage())
 	return resp, err
 }
 
