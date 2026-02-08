@@ -12,20 +12,12 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
-type gorumsMsgType uint8
-
-const (
-	requestType gorumsMsgType = iota + 1
-	responseType
-)
-
 // Message encapsulates a protobuf message and metadata.
 //
 // This struct should be used by generated code only.
 type Message struct {
 	metadata *ordering.Metadata
 	message  proto.Message
-	msgType  gorumsMsgType
 }
 
 // NewRequest creates a new Gorums Message for the given context, message ID, method, and request.
@@ -34,14 +26,14 @@ type Message struct {
 // This function should be used by generated code and tests only.
 func NewRequest(ctx context.Context, msgID uint64, method string, req proto.Message) *Message {
 	md := ordering.NewGorumsMetadata(ctx, msgID, method)
-	return &Message{metadata: md, message: req, msgType: requestType}
+	return &Message{metadata: md, message: req}
 }
 
 // NewResponseMessage creates a new Gorums Message for the given metadata and response message.
 //
 // This function should be used by generated code only.
 func NewResponseMessage(md *ordering.Metadata, resp proto.Message) *Message {
-	return &Message{metadata: md, message: resp, msgType: responseType}
+	return &Message{metadata: md, message: resp}
 }
 
 // AsProto returns msg's underlying protobuf message of the specified type T.
@@ -182,7 +174,7 @@ func unmarshalRequest(md *ordering.Metadata) (*Message, error) {
 			return nil, fmt.Errorf("gorums: could not unmarshal request: %w", err)
 		}
 	}
-	return &Message{metadata: md, message: req, msgType: requestType}, nil
+	return &Message{metadata: md, message: req}, nil
 }
 
 // unmarshalResponse unmarshals the response proto message from metadata.
