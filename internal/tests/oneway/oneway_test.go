@@ -3,6 +3,7 @@ package oneway_test
 import (
 	context "context"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -125,15 +126,8 @@ func TestMulticastPerNode(t *testing.T) {
 	add := func(n uint64, id uint32) uint64 { return n + uint64(id) }
 
 	// makeIgnoreFunc creates a function that checks if a node ID should be ignored.
-	// It captures its own copy of the ignoreNodes slice to avoid data races.
 	makeIgnoreFunc := func(ignoreNodes []uint32) func(uint32) bool {
-		ignoreSet := make(map[uint32]bool, len(ignoreNodes))
-		for _, id := range ignoreNodes {
-			ignoreSet[id] = true
-		}
-		return func(id uint32) bool {
-			return ignoreSet[id]
-		}
+		return func(id uint32) bool { return slices.Contains(ignoreNodes, id) }
 	}
 
 	// transformation function that uses the MapRequest interceptor
