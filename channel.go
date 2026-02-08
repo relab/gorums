@@ -67,9 +67,9 @@ type channel struct {
 	latency   time.Duration
 
 	// Stream lifecycle management for FIFO ordered message delivery
-	// gorumsStream is a bidirectional stream for
+	// stream is a bidirectional stream for
 	// sending and receiving ordering.Metadata messages.
-	gorumsStream ordering.Gorums_NodeStreamClient
+	stream       ordering.Gorums_NodeStreamClient
 	streamMut    sync.Mutex
 	streamCtx    context.Context
 	streamCancel context.CancelFunc
@@ -145,11 +145,11 @@ func (c *channel) ensureConnectedNodeStream() (err error) {
 	defer c.streamMut.Unlock()
 	// if we already have a ready connection and an active stream, do nothing
 	// (cannot reuse isConnected() here since it uses the streamMut lock)
-	if c.conn.GetState() == connectivity.Ready && c.gorumsStream != nil {
+	if c.conn.GetState() == connectivity.Ready && c.stream != nil {
 		return nil
 	}
 	c.streamCtx, c.streamCancel = context.WithCancel(c.connCtx)
-	c.gorumsStream, err = ordering.NewGorumsClient(c.conn).NodeStream(c.streamCtx)
+	c.stream, err = ordering.NewGorumsClient(c.conn).NodeStream(c.streamCtx)
 	return err
 }
 
@@ -157,7 +157,7 @@ func (c *channel) ensureConnectedNodeStream() (err error) {
 func (c *channel) getStream() grpc.ClientStream {
 	c.streamMut.Lock()
 	defer c.streamMut.Unlock()
-	return c.gorumsStream
+	return c.stream
 }
 
 // clearStream cancels the current stream context and clears the stream reference.
@@ -165,7 +165,7 @@ func (c *channel) getStream() grpc.ClientStream {
 func (c *channel) clearStream() {
 	c.streamMut.Lock()
 	c.streamCancel()
-	c.gorumsStream = nil
+	c.stream = nil
 	c.streamMut.Unlock()
 }
 
