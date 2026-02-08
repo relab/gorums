@@ -13,18 +13,21 @@ package gorums
 // This method should be used by generated code only.
 func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Unicast, opts...)
-	message := NewRequest(ctx, ctx.nextMsgID(), method, req)
+	md, err := MarshalMetadata(ctx, ctx.nextMsgID(), method, req)
+	if err != nil {
+		return err
+	}
 
 	waitSendDone := callOpts.mustWaitSendDone()
 	if !waitSendDone {
 		// Fire-and-forget: enqueue and return immediately
-		ctx.enqueue(request{ctx: ctx, msg: message})
+		ctx.enqueue(request{ctx: ctx, md: md})
 		return nil
 	}
 
 	// Default: block until send completes
 	replyChan := make(chan NodeResponse[msg], 1)
-	ctx.enqueue(request{ctx: ctx, msg: message, waitSendDone: true, responseChan: replyChan})
+	ctx.enqueue(request{ctx: ctx, md: md, waitSendDone: true, responseChan: replyChan})
 
 	// Wait for send confirmation
 	select {

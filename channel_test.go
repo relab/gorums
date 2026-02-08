@@ -59,7 +59,11 @@ func sendRequest(t testing.TB, node *Node, req request, msgID uint64) NodeRespon
 	if req.ctx == nil {
 		req.ctx = t.Context()
 	}
-	req.msg = NewRequest(req.ctx, msgID, mock.TestMethod, nil)
+	md, err := MarshalMetadata(req.ctx, msgID, mock.TestMethod, nil)
+	if err != nil {
+		t.Fatalf("MarshalMetadata failed: %v", err)
+	}
+	req.md = md
 	replyChan := make(chan NodeResponse[msg], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
@@ -593,7 +597,8 @@ func TestChannelDeadlock(t *testing.T) {
 	for id := range 10 {
 		go func() {
 			ctx := TestContext(t, 3*time.Second)
-			req := request{ctx: ctx, msg: NewRequest(ctx, uint64(100+id), mock.TestMethod, nil)}
+			md, _ := MarshalMetadata(ctx, uint64(100+id), mock.TestMethod, nil)
+			req := request{ctx: ctx, md: md}
 
 			// try to enqueue
 			select {
@@ -798,7 +803,8 @@ func BenchmarkChannelStreamReadyFirstRequest(b *testing.B) {
 
 		// Use a fresh context for the benchmark request
 		ctx := TestContext(b, defaultTestTimeout)
-		req := request{ctx: ctx, msg: NewRequest(ctx, 1, mock.TestMethod, nil)}
+		md, _ := MarshalMetadata(ctx, 1, mock.TestMethod, nil)
+		req := request{ctx: ctx, md: md}
 		replyChan := make(chan NodeResponse[msg], 1)
 		req.responseChan = replyChan
 		node.channel.enqueue(req)
@@ -847,7 +853,8 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 	// Establish initial stream with a fresh context
 	ctx := context.Background()
-	req := request{ctx: ctx, msg: NewRequest(ctx, 0, mock.TestMethod, nil)}
+	md, _ := MarshalMetadata(ctx, 0, mock.TestMethod, nil)
+	req := request{ctx: ctx, md: md}
 	replyChan := make(chan NodeResponse[msg], 1)
 	req.responseChan = replyChan
 	node.channel.enqueue(req)
@@ -872,7 +879,8 @@ func BenchmarkChannelStreamReadyReconnect(b *testing.B) {
 
 		// Now send a request which will trigger ensureStream -> newNodeStream -> signal
 		ctx := context.Background()
-		req := request{ctx: ctx, msg: NewRequest(ctx, uint64(i+1), mock.TestMethod, nil)}
+		md, _ := MarshalMetadata(ctx, uint64(i+1), mock.TestMethod, nil)
+		req := request{ctx: ctx, md: md}
 		replyChan := make(chan NodeResponse[msg], 1)
 		req.responseChan = replyChan
 		node.channel.enqueue(req)

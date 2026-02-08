@@ -211,11 +211,17 @@ func (c *ClientCtx[Req, Resp]) send() {
 		}
 		expected++
 		// Clone metadata for each request to avoid race conditions during
-		// concurrent marshaling when gorumsMarshal calls SetMessageData.
+		// concurrent marshaling when SetMessageData is called.
 		md := proto.CloneOf(c.md)
+		// Marshal the proto message into the metadata's message_data field
+		msgData, err := proto.Marshal(msg)
+		if err != nil {
+			continue // Skip node if marshaling fails
+		}
+		md.SetMessageData(msgData)
 		n.channel.enqueue(request{
 			ctx:          c.Context,
-			msg:          newRequestMessage(md, msg),
+			md:           md,
 			streaming:    c.streaming,
 			waitSendDone: c.waitSendDone,
 			responseChan: c.replyChan,
