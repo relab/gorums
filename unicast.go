@@ -13,7 +13,7 @@ package gorums
 // This method should be used by generated code only.
 func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Unicast, opts...)
-	md, err := MarshalMetadata(ctx, ctx.nextMsgID(), method, req)
+	md, err := marshalRequest(ctx, ctx.nextMsgID(), method, req)
 	if err != nil {
 		return err
 	}

@@ -76,7 +76,7 @@ func (s *orderingServer) NodeStream(srv ordering.Gorums_NodeStreamServer) error 
 				srvCtx := newServerCtx(md.AppendToIncomingContext(ctx), &mut, finished)
 				defer srvCtx.Release()
 
-				req, err := UnmarshalRequest(md)
+				req, err := unmarshalRequest(md)
 				if err != nil {
 					_ = srvCtx.SendMessage(responseWithError(nil, md, err))
 					return
@@ -241,7 +241,7 @@ func (ctx *ServerCtx) Release() {
 //
 // This function should be used by generated code only.
 func (ctx *ServerCtx) SendMessage(msg *Message) error {
-	md, err := MarshalResponseMetadata(msg)
+	md, err := marshalResponse(msg)
 	if err != nil {
 		return err
 	}

@@ -119,11 +119,11 @@ func responseWithError(msg *Message, md *ordering.Metadata, err error) *Message 
 	return msg
 }
 
-// MarshalMetadata creates metadata with the serialized proto message for type-safe Send.
+// marshalRequest marshals the request proto message into metadata for type-safe Send.
 // It marshals the proto message into the metadata's message_data field.
 //
 // This function should be used by client-side operations only.
-func MarshalMetadata(ctx context.Context, msgID uint64, method string, msg proto.Message) (*ordering.Metadata, error) {
+func marshalRequest(ctx context.Context, msgID uint64, method string, msg proto.Message) (*ordering.Metadata, error) {
 	md := ordering.NewGorumsMetadata(ctx, msgID, method)
 	if msg != nil {
 		msgData, err := proto.Marshal(msg)
@@ -135,11 +135,11 @@ func MarshalMetadata(ctx context.Context, msgID uint64, method string, msg proto
 	return md, nil
 }
 
-// MarshalResponseMetadata marshals a response message into metadata for type-safe Send.
+// marshalResponse marshals the response message into metadata for type-safe Send.
 // It clones the metadata to avoid race conditions with concurrent send operations.
 //
 // This function should be used by server-side operations only.
-func MarshalResponseMetadata(msg *Message) (*ordering.Metadata, error) {
+func marshalResponse(msg *Message) (*ordering.Metadata, error) {
 	if msg == nil {
 		return nil, nil
 	}
@@ -155,12 +155,12 @@ func MarshalResponseMetadata(msg *Message) (*ordering.Metadata, error) {
 	return md, nil
 }
 
-// UnmarshalRequest extracts and unmarshals the request proto message from metadata.
+// unmarshalRequest unmarshals the request proto message from metadata.
 // It uses the method name in metadata to look up the Input type from the proto registry.
 // Returns a *Message suitable for passing to handlers.
 //
 // This function should be used by server-side operations only.
-func UnmarshalRequest(md *ordering.Metadata) (*Message, error) {
+func unmarshalRequest(md *ordering.Metadata) (*Message, error) {
 	// get method descriptor from registry
 	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(md.GetMethod()))
 	if err != nil {
@@ -185,11 +185,11 @@ func UnmarshalRequest(md *ordering.Metadata) (*Message, error) {
 	return &Message{metadata: md, message: req, msgType: requestType}, nil
 }
 
-// UnmarshalResponse extracts and unmarshals the response proto message from metadata.
+// unmarshalResponse unmarshals the response proto message from metadata.
 // It uses the method name in metadata to look up the Output type from the proto registry.
 //
 // This function should be used by internal channel operations only.
-func UnmarshalResponse(md *ordering.Metadata) (proto.Message, error) {
+func unmarshalResponse(md *ordering.Metadata) (proto.Message, error) {
 	// get method descriptor from registry
 	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(md.GetMethod()))
 	if err != nil {
