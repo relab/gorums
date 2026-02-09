@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.33.4
-// source: ordering/ordering.proto
+// source: stream/stream.proto
 
-package ordering
+package stream
 
 import (
 	status "google.golang.org/genproto/googleapis/rpc/status"
@@ -21,34 +21,34 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Metadata is sent together with application-specific message types,
+// Message is sent together with application-specific message types,
 // and contains information necessary for Gorums to handle the messages.
-type Metadata struct {
+type Message struct {
 	state                   protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_MessageSeqNo uint64                 `protobuf:"varint,1,opt,name=message_seq_no,json=messageSeqNo"`
 	xxx_hidden_Method       string                 `protobuf:"bytes,2,opt,name=method"`
 	xxx_hidden_Status       *status.Status         `protobuf:"bytes,3,opt,name=status"`
 	xxx_hidden_Entry        *[]*MetadataEntry      `protobuf:"bytes,4,rep,name=entry"`
-	xxx_hidden_MessageData  []byte                 `protobuf:"bytes,5,opt,name=message_data,json=messageData"`
+	xxx_hidden_Payload      []byte                 `protobuf:"bytes,5,opt,name=payload"`
 	unknownFields           protoimpl.UnknownFields
 	sizeCache               protoimpl.SizeCache
 }
 
-func (x *Metadata) Reset() {
-	*x = Metadata{}
-	mi := &file_ordering_ordering_proto_msgTypes[0]
+func (x *Message) Reset() {
+	*x = Message{}
+	mi := &file_stream_stream_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Metadata) String() string {
+func (x *Message) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Metadata) ProtoMessage() {}
+func (*Message) ProtoMessage() {}
 
-func (x *Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_ordering_ordering_proto_msgTypes[0]
+func (x *Message) ProtoReflect() protoreflect.Message {
+	mi := &file_stream_stream_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59,28 +59,28 @@ func (x *Metadata) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *Metadata) GetMessageSeqNo() uint64 {
+func (x *Message) GetMessageSeqNo() uint64 {
 	if x != nil {
 		return x.xxx_hidden_MessageSeqNo
 	}
 	return 0
 }
 
-func (x *Metadata) GetMethod() string {
+func (x *Message) GetMethod() string {
 	if x != nil {
 		return x.xxx_hidden_Method
 	}
 	return ""
 }
 
-func (x *Metadata) GetStatus() *status.Status {
+func (x *Message) GetStatus() *status.Status {
 	if x != nil {
 		return x.xxx_hidden_Status
 	}
 	return nil
 }
 
-func (x *Metadata) GetEntry() []*MetadataEntry {
+func (x *Message) GetEntry() []*MetadataEntry {
 	if x != nil {
 		if x.xxx_hidden_Entry != nil {
 			return *x.xxx_hidden_Entry
@@ -89,66 +89,66 @@ func (x *Metadata) GetEntry() []*MetadataEntry {
 	return nil
 }
 
-func (x *Metadata) GetMessageData() []byte {
+func (x *Message) GetPayload() []byte {
 	if x != nil {
-		return x.xxx_hidden_MessageData
+		return x.xxx_hidden_Payload
 	}
 	return nil
 }
 
-func (x *Metadata) SetMessageSeqNo(v uint64) {
+func (x *Message) SetMessageSeqNo(v uint64) {
 	x.xxx_hidden_MessageSeqNo = v
 }
 
-func (x *Metadata) SetMethod(v string) {
+func (x *Message) SetMethod(v string) {
 	x.xxx_hidden_Method = v
 }
 
-func (x *Metadata) SetStatus(v *status.Status) {
+func (x *Message) SetStatus(v *status.Status) {
 	x.xxx_hidden_Status = v
 }
 
-func (x *Metadata) SetEntry(v []*MetadataEntry) {
+func (x *Message) SetEntry(v []*MetadataEntry) {
 	x.xxx_hidden_Entry = &v
 }
 
-func (x *Metadata) SetMessageData(v []byte) {
+func (x *Message) SetPayload(v []byte) {
 	if v == nil {
 		v = []byte{}
 	}
-	x.xxx_hidden_MessageData = v
+	x.xxx_hidden_Payload = v
 }
 
-func (x *Metadata) HasStatus() bool {
+func (x *Message) HasStatus() bool {
 	if x == nil {
 		return false
 	}
 	return x.xxx_hidden_Status != nil
 }
 
-func (x *Metadata) ClearStatus() {
+func (x *Message) ClearStatus() {
 	x.xxx_hidden_Status = nil
 }
 
-type Metadata_builder struct {
+type Message_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	MessageSeqNo uint64
 	Method       string
 	Status       *status.Status
 	Entry        []*MetadataEntry
-	MessageData  []byte
+	Payload      []byte
 }
 
-func (b0 Metadata_builder) Build() *Metadata {
-	m0 := &Metadata{}
+func (b0 Message_builder) Build() *Message {
+	m0 := &Message{}
 	b, x := &b0, m0
 	_, _ = b, x
 	x.xxx_hidden_MessageSeqNo = b.MessageSeqNo
 	x.xxx_hidden_Method = b.Method
 	x.xxx_hidden_Status = b.Status
 	x.xxx_hidden_Entry = &b.Entry
-	x.xxx_hidden_MessageData = b.MessageData
+	x.xxx_hidden_Payload = b.Payload
 	return m0
 }
 
@@ -163,7 +163,7 @@ type MetadataEntry struct {
 
 func (x *MetadataEntry) Reset() {
 	*x = MetadataEntry{}
-	mi := &file_ordering_ordering_proto_msgTypes[1]
+	mi := &file_stream_stream_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -175,7 +175,7 @@ func (x *MetadataEntry) String() string {
 func (*MetadataEntry) ProtoMessage() {}
 
 func (x *MetadataEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_ordering_ordering_proto_msgTypes[1]
+	mi := &file_stream_stream_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -224,35 +224,35 @@ func (b0 MetadataEntry_builder) Build() *MetadataEntry {
 	return m0
 }
 
-var File_ordering_ordering_proto protoreflect.FileDescriptor
+var File_stream_stream_proto protoreflect.FileDescriptor
 
-const file_ordering_ordering_proto_rawDesc = "" +
+const file_stream_stream_proto_rawDesc = "" +
 	"\n" +
-	"\x17ordering/ordering.proto\x12\bordering\x1a\x17google/rpc/status.proto\"\xc6\x01\n" +
-	"\bMetadata\x12$\n" +
+	"\x13stream/stream.proto\x12\x06stream\x1a\x17google/rpc/status.proto\"\xba\x01\n" +
+	"\aMessage\x12$\n" +
 	"\x0emessage_seq_no\x18\x01 \x01(\x04R\fmessageSeqNo\x12\x16\n" +
 	"\x06method\x18\x02 \x01(\tR\x06method\x12*\n" +
-	"\x06status\x18\x03 \x01(\v2\x12.google.rpc.StatusR\x06status\x12-\n" +
-	"\x05entry\x18\x04 \x03(\v2\x17.ordering.MetadataEntryR\x05entry\x12!\n" +
-	"\fmessage_data\x18\x05 \x01(\fR\vmessageData\"7\n" +
+	"\x06status\x18\x03 \x01(\v2\x12.google.rpc.StatusR\x06status\x12+\n" +
+	"\x05entry\x18\x04 \x03(\v2\x15.stream.MetadataEntryR\x05entry\x12\x18\n" +
+	"\apayload\x18\x05 \x01(\fR\apayload\"7\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value2B\n" +
-	"\x06Gorums\x128\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value2<\n" +
+	"\x06Gorums\x122\n" +
 	"\n" +
-	"NodeStream\x12\x12.ordering.Metadata\x1a\x12.ordering.Metadata(\x010\x01B'Z github.com/relab/gorums/ordering\x92\x03\x02\b\x02b\beditionsp\xe8\a"
+	"NodeStream\x12\x0f.stream.Message\x1a\x0f.stream.Message(\x010\x01B%Z\x1egithub.com/relab/gorums/stream\x92\x03\x02\b\x02b\beditionsp\xe8\a"
 
-var file_ordering_ordering_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_ordering_ordering_proto_goTypes = []any{
-	(*Metadata)(nil),      // 0: ordering.Metadata
-	(*MetadataEntry)(nil), // 1: ordering.MetadataEntry
+var file_stream_stream_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_stream_stream_proto_goTypes = []any{
+	(*Message)(nil),       // 0: stream.Message
+	(*MetadataEntry)(nil), // 1: stream.MetadataEntry
 	(*status.Status)(nil), // 2: google.rpc.Status
 }
-var file_ordering_ordering_proto_depIdxs = []int32{
-	2, // 0: ordering.Metadata.status:type_name -> google.rpc.Status
-	1, // 1: ordering.Metadata.entry:type_name -> ordering.MetadataEntry
-	0, // 2: ordering.Gorums.NodeStream:input_type -> ordering.Metadata
-	0, // 3: ordering.Gorums.NodeStream:output_type -> ordering.Metadata
+var file_stream_stream_proto_depIdxs = []int32{
+	2, // 0: stream.Message.status:type_name -> google.rpc.Status
+	1, // 1: stream.Message.entry:type_name -> stream.MetadataEntry
+	0, // 2: stream.Gorums.NodeStream:input_type -> stream.Message
+	0, // 3: stream.Gorums.NodeStream:output_type -> stream.Message
 	3, // [3:4] is the sub-list for method output_type
 	2, // [2:3] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -260,26 +260,26 @@ var file_ordering_ordering_proto_depIdxs = []int32{
 	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_ordering_ordering_proto_init() }
-func file_ordering_ordering_proto_init() {
-	if File_ordering_ordering_proto != nil {
+func init() { file_stream_stream_proto_init() }
+func file_stream_stream_proto_init() {
+	if File_stream_stream_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ordering_ordering_proto_rawDesc), len(file_ordering_ordering_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stream_stream_proto_rawDesc), len(file_stream_stream_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_ordering_ordering_proto_goTypes,
-		DependencyIndexes: file_ordering_ordering_proto_depIdxs,
-		MessageInfos:      file_ordering_ordering_proto_msgTypes,
+		GoTypes:           file_stream_stream_proto_goTypes,
+		DependencyIndexes: file_stream_stream_proto_depIdxs,
+		MessageInfos:      file_stream_stream_proto_msgTypes,
 	}.Build()
-	File_ordering_ordering_proto = out.File
-	file_ordering_ordering_proto_goTypes = nil
-	file_ordering_ordering_proto_depIdxs = nil
+	File_stream_stream_proto = out.File
+	file_stream_stream_proto_goTypes = nil
+	file_stream_stream_proto_depIdxs = nil
 }

@@ -247,12 +247,18 @@ func defaultTestServer(i int, opts ...ServerOption) ServerIface {
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
 		req := AsProto[*pb.StringValue](in)
 		resp, err := ts.Test(ctx, req)
-		return NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return NewResponseMessage(in, resp), nil
 	})
 	srv.RegisterHandler(mock.GetValueMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
 		req := AsProto[*pb.Int32Value](in)
 		resp, err := ts.GetValue(ctx, req)
-		return NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return NewResponseMessage(in, resp), nil
 	})
 	return srv
 }
@@ -274,7 +280,10 @@ func EchoServerFn(_ int) ServerIface {
 	srv.RegisterHandler(mock.TestMethod, func(ctx ServerCtx, in *Message) (*Message, error) {
 		req := AsProto[*pb.StringValue](in)
 		resp, err := echoSrv{}.Test(ctx, req)
-		return NewResponseMessage(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return NewResponseMessage(in, resp), nil
 	})
 
 	return srv
@@ -296,8 +305,8 @@ func StreamServerFn(_ int) ServerIface {
 		// Send 3 responses
 		for i := 1; i <= 3; i++ {
 			resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
-			msg := NewResponseMessage(in.GetMetadata(), resp)
-			if err := ctx.SendMessage(msg); err != nil {
+			out := NewResponseMessage(in, resp)
+			if err := ctx.SendMessage(out); err != nil {
 				return nil, err
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -316,8 +325,8 @@ func StreamBenchmarkServerFn(_ int) ServerIface {
 		// Send 3 responses
 		for i := 1; i <= 3; i++ {
 			resp := pb.String(fmt.Sprintf("echo: %s-%d", val, i))
-			msg := NewResponseMessage(in.GetMetadata(), resp)
-			if err := ctx.SendMessage(msg); err != nil {
+			out := NewResponseMessage(in, resp)
+			if err := ctx.SendMessage(out); err != nil {
 				return nil, err
 			}
 		}

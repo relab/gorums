@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.0
 // - protoc             v6.33.4
-// source: ordering/ordering.proto
+// source: stream/stream.proto
 
-package ordering
+package stream
 
 import (
 	context "context"
@@ -19,7 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Gorums_NodeStream_FullMethodName = "/ordering.Gorums/NodeStream"
+	Gorums_NodeStream_FullMethodName = "/stream.Gorums/NodeStream"
 )
 
 // GorumsClient is the client API for Gorums service.
@@ -31,7 +31,7 @@ type GorumsClient interface {
 	// NodeStream is a stream that connects a client to a Node.
 	// The messages that are sent on the stream contain both Metadata
 	// and an application-specific message.
-	NodeStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Metadata, Metadata], error)
+	NodeStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Message, Message], error)
 }
 
 type gorumsClient struct {
@@ -42,18 +42,18 @@ func NewGorumsClient(cc grpc.ClientConnInterface) GorumsClient {
 	return &gorumsClient{cc}
 }
 
-func (c *gorumsClient) NodeStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Metadata, Metadata], error) {
+func (c *gorumsClient) NodeStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[Message, Message], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &Gorums_ServiceDesc.Streams[0], Gorums_NodeStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[Metadata, Metadata]{ClientStream: stream}
+	x := &grpc.GenericClientStream[Message, Message]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Gorums_NodeStreamClient = grpc.BidiStreamingClient[Metadata, Metadata]
+type Gorums_NodeStreamClient = grpc.BidiStreamingClient[Message, Message]
 
 // GorumsServer is the server API for Gorums service.
 // All implementations must embed UnimplementedGorumsServer
@@ -64,7 +64,7 @@ type GorumsServer interface {
 	// NodeStream is a stream that connects a client to a Node.
 	// The messages that are sent on the stream contain both Metadata
 	// and an application-specific message.
-	NodeStream(grpc.BidiStreamingServer[Metadata, Metadata]) error
+	NodeStream(grpc.BidiStreamingServer[Message, Message]) error
 	mustEmbedUnimplementedGorumsServer()
 }
 
@@ -75,7 +75,7 @@ type GorumsServer interface {
 // pointer dereference when methods are called.
 type UnimplementedGorumsServer struct{}
 
-func (UnimplementedGorumsServer) NodeStream(grpc.BidiStreamingServer[Metadata, Metadata]) error {
+func (UnimplementedGorumsServer) NodeStream(grpc.BidiStreamingServer[Message, Message]) error {
 	return status.Error(codes.Unimplemented, "method NodeStream not implemented")
 }
 func (UnimplementedGorumsServer) mustEmbedUnimplementedGorumsServer() {}
@@ -100,17 +100,17 @@ func RegisterGorumsServer(s grpc.ServiceRegistrar, srv GorumsServer) {
 }
 
 func _Gorums_NodeStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(GorumsServer).NodeStream(&grpc.GenericServerStream[Metadata, Metadata]{ServerStream: stream})
+	return srv.(GorumsServer).NodeStream(&grpc.GenericServerStream[Message, Message]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Gorums_NodeStreamServer = grpc.BidiStreamingServer[Metadata, Metadata]
+type Gorums_NodeStreamServer = grpc.BidiStreamingServer[Message, Message]
 
 // Gorums_ServiceDesc is the grpc.ServiceDesc for Gorums service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var Gorums_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "ordering.Gorums",
+	ServiceName: "stream.Gorums",
 	HandlerType: (*GorumsServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
@@ -121,5 +121,5 @@ var Gorums_ServiceDesc = grpc.ServiceDesc{
 			ClientStreams: true,
 		},
 	},
-	Metadata: "ordering/ordering.proto",
+	Metadata: "stream/stream.proto",
 }

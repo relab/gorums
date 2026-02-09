@@ -1,5 +1,7 @@
 package gorums
 
+import "github.com/relab/gorums/stream"
+
 // Unicast is a one-way call; no replies are returned to the client.
 //
 // By default, this method blocks until the message has been sent to the node.
@@ -13,7 +15,7 @@ package gorums
 // This method should be used by generated code only.
 func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOption) error {
 	callOpts := getCallOptions(E_Unicast, opts...)
-	md, err := marshalRequest(ctx, ctx.nextMsgID(), method, req)
+	reqMsg, err := stream.NewMessage(ctx, ctx.nextMsgID(), method, req)
 	if err != nil {
 		return err
 	}
@@ -21,13 +23,13 @@ func Unicast[Req msg](ctx *NodeContext, req Req, method string, opts ...CallOpti
 	waitSendDone := callOpts.mustWaitSendDone()
 	if !waitSendDone {
 		// Fire-and-forget: enqueue and return immediately
-		ctx.enqueue(request{ctx: ctx, md: md})
+		ctx.enqueue(request{ctx: ctx, msg: reqMsg})
 		return nil
 	}
 
 	// Default: block until send completes
 	replyChan := make(chan NodeResponse[msg], 1)
-	ctx.enqueue(request{ctx: ctx, md: md, waitSendDone: true, responseChan: replyChan})
+	ctx.enqueue(request{ctx: ctx, msg: reqMsg, waitSendDone: true, responseChan: replyChan})
 
 	// Wait for send confirmation
 	select {

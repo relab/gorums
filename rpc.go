@@ -1,16 +1,18 @@
 package gorums
 
+import "github.com/relab/gorums/stream"
+
 // RPCCall executes a remote procedure call on the node.
 //
 // This method should be used by generated code only.
 func RPCCall[Req, Resp msg](ctx *NodeContext, req Req, method string) (Resp, error) {
 	replyChan := make(chan NodeResponse[msg], 1)
-	md, err := marshalRequest(ctx, ctx.nextMsgID(), method, req)
+	reqMsg, err := stream.NewMessage(ctx, ctx.nextMsgID(), method, req)
 	if err != nil {
 		var zero Resp
 		return zero, err
 	}
-	ctx.enqueue(request{ctx: ctx, md: md, responseChan: replyChan})
+	ctx.enqueue(request{ctx: ctx, msg: reqMsg, responseChan: replyChan})
 
 	select {
 	case r := <-replyChan:

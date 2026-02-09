@@ -39,14 +39,16 @@ func Register{{$service}}Server(srv *{{use "gorums.Server" $genFile}}, impl {{$s
 		return nil, nil
 		{{- else if isStreamingServer .}}
 		err := impl.{{.GoName}}(ctx, req, func(resp *{{out $genFile .}}) error {
-			// create a copy of the metadata, to avoid a data race between NewResponseMessage and SendMsg
-			md := {{use "proto.CloneOf" $genFile}}(in.GetMetadata())
-			return ctx.SendMessage({{$newMessage}}(md, resp))
+			out := {{$newMessage}}(in, resp)
+			return ctx.SendMessage(out)
 		})
 		return nil, err
 		{{- else }}
 		resp, err := impl.{{.GoName}}(ctx, req)
-		return {{$newMessage}}(in.GetMetadata(), resp), err
+		if err != nil {
+			return nil, err
+		}
+		return {{$newMessage}}(in, resp), nil
 		{{- end}}
 	})
 	{{- end}}

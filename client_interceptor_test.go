@@ -1,6 +1,7 @@
 package gorums_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -177,5 +178,75 @@ func TestCustomInterceptorWithMapRequest(t *testing.T) {
 	// All requires 3 responses
 	if count != 3 {
 		t.Errorf("Expected 3 responses counted, got %d", count)
+	}
+}
+
+// BenchmarkQuorumCallMapRequest compares the performance of quorum calls
+// with and without per-node MapRequest interceptors.
+// Without MapRequest, the request is marshaled once and shared across all nodes.
+// With MapRequest, each node gets a cloned message with individually marshaled payload.
+func BenchmarkQuorumCallMapRequest(b *testing.B) {
+	for _, numNodes := range []int{3, 7, 13} {
+		config := gorums.TestConfiguration(b, numNodes, gorums.EchoServerFn)
+		cfgCtx := config.Context(b.Context())
+
+		// Baseline: no interceptors — single marshal, shared message
+		b.Run(fmt.Sprintf("NoTransform/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("benchmark payload"),
+					mock.TestMethod,
+				)
+				if _, err := responses.Majority(); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+
+		// With MapRequest identity transform — per-node clone + marshal
+		b.Run(fmt.Sprintf("MapRequestIdentity/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("benchmark payload"),
+					mock.TestMethod,
+					gorums.Interceptors(
+						gorums.MapRequest[*pb.StringValue, *pb.StringValue](
+							func(req *pb.StringValue, _ *gorums.Node) *pb.StringValue {
+								return req
+							},
+						),
+					),
+				)
+				if _, err := responses.Majority(); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+
+		// With MapRequest that modifies the request per node
+		b.Run(fmt.Sprintf("MapRequestPerNode/%d", numNodes), func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				responses := gorums.QuorumCall[*pb.StringValue, *pb.StringValue](
+					cfgCtx,
+					pb.String("benchmark payload"),
+					mock.TestMethod,
+					gorums.Interceptors(
+						gorums.MapRequest[*pb.StringValue, *pb.StringValue](
+							func(req *pb.StringValue, n *gorums.Node) *pb.StringValue {
+								return pb.String(fmt.Sprintf("%s-node-%d", req.GetValue(), n.ID()))
+							},
+						),
+					),
+				)
+				if _, err := responses.Majority(); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

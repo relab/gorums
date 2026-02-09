@@ -1,7 +1,7 @@
 edition = "2023";
 
-package ordering;
-option go_package = "github.com/relab/gorums/ordering";
+package stream;
+option go_package = "github.com/relab/gorums/stream";
 option features.field_presence = IMPLICIT;
 
 import "google/rpc/status.proto";
@@ -11,17 +11,17 @@ service Gorums {
     // NodeStream is a stream that connects a client to a Node.
     // The messages that are sent on the stream contain both Metadata
     // and an application-specific message.
-  rpc NodeStream(stream Metadata) returns (stream Metadata);
+  rpc NodeStream(stream Message) returns (stream Message);
 }
 
-// Metadata is sent together with application-specific message types,
+// Message is sent together with application-specific message types,
 // and contains information necessary for Gorums to handle the messages.
-message Metadata {
+message Message {
   uint64                 message_seq_no = 1; // sequence number for this message
   string                 method         = 2; // method name to invoke on the server
   google.rpc.Status      status         = 3; // status of an invocation (for responses)
   repeated MetadataEntry entry          = 4; // per message client-generated metadata
-  bytes                  message_data   = 5; // serialized application message
+  bytes                  payload        = 5; // serialized application message
 }
 
 // MetadataEntry is a key-value pair for Metadata entries.

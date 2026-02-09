@@ -25,7 +25,7 @@ func quorumCallServer(_ int) gorums.ServerIface {
 		req := gorums.AsProto[*dev.Request](in)
 		resp := &dev.Response{}
 		resp.SetResult(int64(len(req.GetValue())))
-		return gorums.NewResponseMessage(in.GetMetadata(), resp), nil
+		return gorums.NewResponseMessage(in, resp), nil
 	})
 	return srv
 }
